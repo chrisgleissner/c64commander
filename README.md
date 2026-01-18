@@ -21,57 +21,31 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 ![Documentation](doc/img/app-documentation.png)
 ![Settings](doc/img/app-settings.png)
 
-## Run it in Android Emulator (Linux)
+## Build the Android APK
 
 ```sh
-npm install
-./scripts/android-emulator.sh
+./linux-build.sh
 ```
 
-If you already have the Android SDK installed, set one of these before running Android commands:
-
-```sh
-export ANDROID_HOME="$HOME/Android/Sdk"
-export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
-```
-
-Alternatively, create android/local.properties with:
-
-```text
-sdk.dir=/home/you/Android/Sdk
-```
-
-## Build the Android APK (Linux)
-
-```sh
-java -version
-export ANDROID_HOME="$HOME/Android/Sdk"
-export ANDROID_SDK_ROOT="$HOME/Android/Sdk"
-npm run android:apk
-```
-
-You can then find the APK at
+You can then find it at:
 
 ```text
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Install + run an APK on a physical Android phone via ADB (Samsung / One UI)
-
-Phone (one-time): Auto Blocker Off (Samsung), enable Developer options, enable USB debugging, approve the USB prompt.
-
-Linux (one-time):
+## Run it in Android Emulator
 
 ```sh
-sudo apt update
-sudo apt install google-android-platform-tools-installer
-adb version
+./linux-build.sh --emulator
 ```
 
-Install + launch:
+## Run it on your Device
+
+Device (one-time): Auto Blocker Off (Samsung), enable Developer options, enable USB debugging, approve the USB prompt.
+
+Then run:
 
 ```sh
-adb devices
-adb -s <DEVICE_ID> install -r path/to/app.apk
-adb -s <DEVICE_ID> shell monkey -p <PACKAGE_NAME> -c android.intent.category.LAUNCHER 1
+./linux-build.sh --install
 ```
+
