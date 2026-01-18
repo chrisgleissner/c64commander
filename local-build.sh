@@ -118,6 +118,11 @@ fi
 
 require_cmd npm
 
+if [[ -x /usr/lib/jvm/java-17-openjdk-amd64/bin/jlink ]]; then
+  export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
   (cd "$ROOT_DIR" && npm install)
