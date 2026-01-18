@@ -1,10 +1,10 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { ConfigItemRow } from './ConfigItemRow';
 import { createMockC64Server, type MockC64Server } from '@/test/mockC64Server';
 import { createOpenApiGeneratedClient } from '@/test/openapiGeneratedClient';
-import { getC64API, updateC64APIConfig } from '@/lib/c64api';
+import { updateC64APIConfig } from '@/lib/c64api';
 
 function renderWithQuery(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -25,6 +25,12 @@ describe('ConfigItemRow control selection + REST updates', () => {
         'Video Mode': 'PAL',
         Hostname: 'c64u',
       },
+    }, {
+      'Test Category': {
+        Drive: { options: ['Enabled', 'Disabled'] },
+        'Video Mode': { options: ['PAL', 'NTSC'] },
+        'Network Password': { options: ['Enabled', 'Disabled'] },
+      },
     });
     updateC64APIConfig(server.baseUrl);
     openapiClient = await createOpenApiGeneratedClient(server.baseUrl);
@@ -34,9 +40,15 @@ describe('ConfigItemRow control selection + REST updates', () => {
     await server.close();
   });
 
-  it('renders a password input when name contains "password" and updates via REST on change', async () => {
-    vi.useFakeTimers();
+  const putValue = async (category: string, item: string, value: string | number) => {
+    await openapiClient.request({
+      method: 'PUT',
+      url: `/v1/configs/${encodeURIComponent(category)}/${encodeURIComponent(item)}`,
+      params: { value: String(value) },
+    });
+  };
 
+  it('renders a password input when name contains "password" and updates via REST on change', async () => {
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
@@ -44,7 +56,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         value="secret"
         options={['Enabled', 'Disabled']}
         details={{ presets: [] }}
-        onValueChange={(v) => void getC64API().setConfigValue('Test Category', 'Network Password', v)}
+        onValueChange={(v) => void putValue('Test Category', 'Network Password', v)}
       />,
     );
 
@@ -53,8 +65,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
     expect(input.value).toBe('secret');
 
     fireEvent.change(input, { target: { value: 'newpass' } });
-    await vi.advanceTimersByTimeAsync(350);
-    vi.useRealTimers();
+    fireEvent.blur(input);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
@@ -74,7 +85,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         value="Enabled"
         options={['Enabled', 'Disabled']}
         details={{ presets: [] }}
-        onValueChange={(v) => void getC64API().setConfigValue('Test Category', 'Drive', v)}
+        onValueChange={(v) => void putValue('Test Category', 'Drive', v)}
       />,
     );
 
@@ -101,7 +112,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         value="PAL"
         options={['PAL', 'NTSC']}
         details={{ presets: [] }}
-        onValueChange={(v) => void getC64API().setConfigValue('Test Category', 'Video Mode', v)}
+        onValueChange={(v) => void putValue('Test Category', 'Video Mode', v)}
       />,
     );
 
@@ -122,8 +133,6 @@ describe('ConfigItemRow control selection + REST updates', () => {
   });
 
   it('renders a text input for remaining cases and updates via REST on edit', async () => {
-    vi.useFakeTimers();
-
     renderWithQuery(
       <ConfigItemRow
         category="Test Category"
@@ -131,7 +140,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         value="c64u"
         options={[]}
         details={{ presets: [] }}
-        onValueChange={(v) => void getC64API().setConfigValue('Test Category', 'Hostname', v)}
+        onValueChange={(v) => void putValue('Test Category', 'Hostname', v)}
       />,
     );
 
@@ -140,8 +149,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
     expect(input.value).toBe('c64u');
 
     fireEvent.change(input, { target: { value: 'u64' } });
-    await vi.advanceTimersByTimeAsync(350);
-    vi.useRealTimers();
+    fireEvent.blur(input);
 
     await waitFor(async () => {
       const resp = await openapiClient.request({
@@ -149,6 +157,45 @@ describe('ConfigItemRow control selection + REST updates', () => {
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
       expect(resp.data['Test Category'].Hostname).toBe('u64');
+    });
+  });
+
+  it('fetches item details (options) when missing and upgrades rendering to checkbox/select', async () => {
+    // No options passed: should fetch `/v1/configs/{category}/{item}` and render checkbox.
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Drive"
+        value="Enabled"
+        onValueChange={(v) => void putValue('Test Category', 'Drive', v)}
+      />,
+    );
+
+    const checkbox = await screen.findByLabelText('Drive checkbox');
+    expect(checkbox).toHaveAttribute('role', 'checkbox');
+
+    // No options passed: should fetch `/v1/configs/{category}/{item}` and render select.
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Video Mode"
+        value="PAL"
+        onValueChange={(v) => void putValue('Test Category', 'Video Mode', v)}
+      />,
+    );
+
+    const trigger = await screen.findByLabelText('Video Mode select');
+    fireEvent.mouseDown(trigger);
+    fireEvent.click(trigger);
+    const option = await screen.findByRole('option', { name: 'NTSC' });
+    fireEvent.click(option);
+
+    await waitFor(async () => {
+      const resp = await openapiClient.request({
+        method: 'GET',
+        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+      });
+      expect(resp.data['Test Category']['Video Mode']).toBe('NTSC');
     });
   });
 });

@@ -8,7 +8,16 @@ export interface MockC64Server {
 
 type CategoryState = Record<string, Record<string, string | number>>;
 
-export function createMockC64Server(initial: CategoryState): Promise<MockC64Server> {
+type ItemDetails = {
+  options?: string[];
+};
+
+type ItemDetailsState = Record<string, Record<string, ItemDetails>>;
+
+export function createMockC64Server(
+  initial: CategoryState,
+  itemDetails: ItemDetailsState = {},
+): Promise<MockC64Server> {
   const requests: Array<{ method: string; url: string }> = [];
   const state: CategoryState = JSON.parse(JSON.stringify(initial));
 
@@ -53,12 +62,13 @@ export function createMockC64Server(initial: CategoryState): Promise<MockC64Serv
 
       if (method === 'GET') {
         const current = state[category]?.[item];
+        const details = itemDetails?.[category]?.[item];
         return sendJson(200, {
           [category]: {
             items: {
               [item]: {
                 selected: current ?? '',
-                options: [],
+                options: details?.options ?? [],
               },
             },
           },
