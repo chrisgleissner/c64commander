@@ -3,13 +3,13 @@
 [![Build](https://github.com/chrisgleissner/c64commander/actions/workflows/android-apk.yml/badge.svg?branch=main)](https://github.com/chrisgleissner/c64commander/actions/workflows/android-apk.yml)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
-Control your C64 Ultimate device from Android with fast access to settings and device actions.
+Control your Commodore 64 Ultimate from your Android device
 
 <img src="./doc/img/c64commander.png" alt="C64 Commander Logo" width="200"/>
 
 C64 Commander is an Android app that connects to a C64 Ultimate device on your local network:
 
-- Browse and edit the entire C64U config
+- Browse and edit the entire C64U configuration.
 - Quick access to key settings (SID, VIC, CPU, drives) and device actions.
 
 ## Screenshots
