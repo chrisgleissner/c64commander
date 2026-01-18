@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
@@ -6,6 +6,7 @@ import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import { useRefreshControl } from '@/hooks/useRefreshControl';
 
 type NormalizedConfigItem = {
   value: string | number;
@@ -51,10 +52,20 @@ const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
   return { value: selected, options, details };
 };
 
-function CategorySection({ categoryName }: { categoryName: string }) {
+function CategorySection({ categoryName, onOpenChange }: { categoryName: string; onOpenChange: (isOpen: boolean) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
+
+  useEffect(() => {
+    if (isOpen) {
+      refetch();
+    }
+  }, [isOpen, refetch]);
+
+  useEffect(() => {
+    onOpenChange(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const items = useMemo(() => {
     if (!categoryData) return [];
@@ -170,6 +181,7 @@ export default function ConfigBrowserPage() {
   const { status } = useC64Connection();
   const { data: categoriesData, isLoading, refetch } = useC64Categories();
   const [searchQuery, setSearchQuery] = useState('');
+  const { setConfigExpanded } = useRefreshControl();
 
   const filteredCategories = useMemo(() => {
     if (!categoriesData?.categories) return [];
@@ -237,7 +249,10 @@ export default function ConfigBrowserPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.03 }}
             >
-              <CategorySection categoryName={category} />
+              <CategorySection
+                categoryName={category}
+                onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
+              />
             </motion.div>
           ))
         )}

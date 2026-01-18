@@ -131,6 +131,7 @@ export function ConfigItemRow({
   );
 
   const displayValue = inputValue;
+  const isReadOnly = name.startsWith('SID Detected Socket');
 
   if (controlKind === 'checkbox' && checkboxMapping) {
     const checked =
@@ -146,8 +147,9 @@ export function ConfigItemRow({
         </div>
         <Checkbox
           checked={checked}
-          disabled={isLoading || isItemLoading}
+          disabled={isLoading || isItemLoading || isReadOnly}
           onCheckedChange={(next) => {
+            if (isReadOnly) return;
             const nextValue = next === true ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue;
             setInputValue(String(nextValue));
             lastCommittedRef.current = String(nextValue);
@@ -169,11 +171,12 @@ export function ConfigItemRow({
           <Select
             value={selectedValue}
             onValueChange={(newValue) => {
+              if (isReadOnly) return;
               setInputValue(String(newValue));
               lastCommittedRef.current = String(newValue);
               onValueChange(newValue);
             }}
-            disabled={isLoading || isItemLoading}
+            disabled={isLoading || isItemLoading || isReadOnly}
           >
             <SelectTrigger aria-label={`${name} select`}>
               <SelectValue placeholder={isItemLoading ? 'Loading…' : displayValue || 'Select'} />
@@ -200,8 +203,9 @@ export function ConfigItemRow({
         <Input
           type={inputType}
           value={inputValue}
-          disabled={isLoading || isItemLoading}
+          disabled={isLoading || isItemLoading || isReadOnly}
           onChange={(e) => {
+            if (isReadOnly) return;
             const nextValue = e.target.value;
             setInputValue(nextValue);
             if (debounceTimerRef.current !== undefined) {
@@ -215,6 +219,7 @@ export function ConfigItemRow({
           }}
           onKeyDown={(e) => {
             if (e.key !== 'Enter') return;
+            if (isReadOnly) return;
             const nextValue = inputValue;
             if (nextValue === lastCommittedRef.current) return;
             if (debounceTimerRef.current !== undefined) {
@@ -225,6 +230,7 @@ export function ConfigItemRow({
             onValueChange(nextValue);
           }}
           onBlur={() => {
+            if (isReadOnly) return;
             const nextValue = inputValue;
             if (nextValue === lastCommittedRef.current) return;
             if (debounceTimerRef.current !== undefined) {

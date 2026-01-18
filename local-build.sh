@@ -22,7 +22,7 @@ Usage:
 
 Default (no options):
   - Install deps
-  - Build web app
+  - Build web app + sync
   - Run tests
   - Build debug APK
 
@@ -33,7 +33,7 @@ Options:
   --apk-path <path>     APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
 
   --skip-install        Skip npm install
-  --skip-build          Skip npm run build
+  --skip-build          Skip npm run cap:build
   --skip-tests          Skip npm test
   --skip-apk            Skip npm run android:apk
 
@@ -123,14 +123,19 @@ if [[ -x /usr/lib/jvm/java-17-openjdk-amd64/bin/jlink ]]; then
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
+if command -v git >/dev/null 2>&1; then
+  export VITE_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+fi
+export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
   (cd "$ROOT_DIR" && npm install)
 fi
 
 if [[ "$RUN_BUILD" == "true" ]]; then
-  log "Building web app"
-  (cd "$ROOT_DIR" && npm run build)
+  log "Building web app + syncing Capacitor"
+  (cd "$ROOT_DIR" && npm run cap:build)
 fi
 
 if [[ "$RUN_TEST" == "true" ]]; then

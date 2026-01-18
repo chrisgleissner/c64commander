@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Cpu, 
@@ -13,6 +13,7 @@ import { useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC6
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
+import { useRefreshControl } from '@/hooks/useRefreshControl';
 
 type NormalizedConfigItem = {
   value: string | number;
@@ -120,11 +121,21 @@ const quickSections: QuickSection[] = [
   },
 ];
 
-function QuickSectionCard({ section }: { section: QuickSection }) {
+function QuickSectionCard({ section, onOpenChange }: { section: QuickSection; onOpenChange: (isOpen: boolean) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const { status } = useC64Connection();
   const { data: categoryData, isLoading, refetch } = useC64Category(section.category, isOpen);
   const setConfig = useC64SetConfig();
+
+  useEffect(() => {
+    if (isOpen) {
+      refetch();
+    }
+  }, [isOpen, refetch]);
+
+  useEffect(() => {
+    onOpenChange(isOpen);
+  }, [isOpen, onOpenChange]);
 
   const items = useMemo(() => {
     if (!categoryData) return [];
@@ -241,6 +252,7 @@ function QuickSectionCard({ section }: { section: QuickSection }) {
 
 export default function QuickSettingsPage() {
   const { status } = useC64Connection();
+  const { setQuickExpanded } = useRefreshControl();
 
   return (
     <div className="min-h-screen pb-24">
@@ -263,7 +275,11 @@ export default function QuickSettingsPage() {
           </div>
         ) : (
           quickSections.map((section) => (
-            <QuickSectionCard key={section.id} section={section} />
+            <QuickSectionCard
+              key={section.id}
+              section={section}
+              onOpenChange={(isOpen) => setQuickExpanded(section.id, isOpen)}
+            />
           ))
         )}
       </main>

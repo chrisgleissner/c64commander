@@ -21,13 +21,14 @@ import { toast } from '@/hooks/use-toast';
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
-  const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, password, deviceHost, refreshIntervalSec, updateRefreshInterval, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
   const [isSaving, setIsSaving] = useState(false);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
+  const [refreshIntervalInput, setRefreshIntervalInput] = useState(String(refreshIntervalSec));
 
   const handleSaveConnection = async () => {
     setIsSaving(true);
@@ -123,6 +124,22 @@ export default function SettingsPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Required if network password is set on firmware 3.12+
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="refreshInterval" className="text-sm">Auto-refresh (seconds)</Label>
+              <Input
+                id="refreshInterval"
+                type="number"
+                min={1}
+                value={refreshIntervalInput}
+                onChange={(e) => setRefreshIntervalInput(e.target.value)}
+                onBlur={() => updateRefreshInterval(Number(refreshIntervalInput))}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Refreshes config, status, and drives. Default: 20s.
               </p>
             </div>
           </div>
