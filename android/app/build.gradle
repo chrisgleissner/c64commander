@@ -36,36 +36,39 @@ android {
     }
     signingConfigs {
         release {
+            def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
             def storeFilePathValue = (keystoreProps["storeFile"] ?: keystoreProps["KEYSTORE_STORE_FILE"] ?: "../keystore/release.keystore")?.toString()
             def storePasswordValue = (keystoreProps["storePassword"] ?: keystoreProps["KEYSTORE_STORE_PASSWORD"] ?: System.getenv("KEYSTORE_STORE_PASSWORD"))?.toString()
             def keyAliasValue = (keystoreProps["keyAlias"] ?: keystoreProps["KEYSTORE_KEY_ALIAS"] ?: System.getenv("KEYSTORE_KEY_ALIAS") ?: "c64commander")?.toString()
             def keyPasswordValue = (keystoreProps["keyPassword"] ?: keystoreProps["KEYSTORE_KEY_PASSWORD"] ?: System.getenv("KEYSTORE_KEY_PASSWORD") ?: storePasswordValue)?.toString()
 
-            if (!storeFilePathValue) {
-                throw new RuntimeException("Missing keystore file path. Set KEYSTORE_STORE_FILE or storeFile.")
-            }
-            if (!storePasswordValue) {
-                throw new RuntimeException("Missing keystore password. Set KEYSTORE_STORE_PASSWORD or storePassword.")
-            }
-            if (!keyAliasValue) {
-                throw new RuntimeException("Missing key alias. Set KEYSTORE_KEY_ALIAS or keyAlias.")
-            }
-            if (!keyPasswordValue) {
-                throw new RuntimeException("Missing key password. Set KEYSTORE_KEY_PASSWORD or keyPassword.")
-            }
+            if (isReleaseBuild) {
+                if (!storeFilePathValue) {
+                    throw new RuntimeException("Missing keystore file path. Set KEYSTORE_STORE_FILE or storeFile.")
+                }
+                if (!storePasswordValue) {
+                    throw new RuntimeException("Missing keystore password. Set KEYSTORE_STORE_PASSWORD or storePassword.")
+                }
+                if (!keyAliasValue) {
+                    throw new RuntimeException("Missing key alias. Set KEYSTORE_KEY_ALIAS or keyAlias.")
+                }
+                if (!keyPasswordValue) {
+                    throw new RuntimeException("Missing key password. Set KEYSTORE_KEY_PASSWORD or keyPassword.")
+                }
 
-            def resolvedStoreFile = file(storeFilePathValue).absoluteFile
-            if (!resolvedStoreFile.exists()) {
-                throw new RuntimeException("Keystore not found at: ${resolvedStoreFile}")
+                def resolvedStoreFile = file(storeFilePathValue).absoluteFile
+                if (!resolvedStoreFile.exists()) {
+                    throw new RuntimeException("Keystore not found at: ${resolvedStoreFile}")
+                }
+
+                logger.lifecycle("Signing config: storeFileExists=${resolvedStoreFile.exists()}, storePasswordSet=${storePasswordValue != null}, keyAliasSet=${keyAliasValue != null}, keyPasswordSet=${keyPasswordValue != null}")
+
+                storeFile = resolvedStoreFile
+                storePassword = storePasswordValue
+                keyAlias = keyAliasValue
+                keyPassword = keyPasswordValue
+                storeType = "PKCS12"
             }
-
-            logger.lifecycle("Signing config: storeFileExists=${resolvedStoreFile.exists()}, storePasswordSet=${storePasswordValue != null}, keyAliasSet=${keyAliasValue != null}, keyPasswordSet=${keyPasswordValue != null}")
-
-            storeFile = resolvedStoreFile
-            storePassword = storePasswordValue
-            keyAlias = keyAliasValue
-            keyPassword = keyPasswordValue
-            storeType = "PKCS12"
         }
     }
     buildTypes {

@@ -1,0 +1,108 @@
+openapi: 3.1.0
+info:
+  title: Ultimate 64 REST API (subset for tests)
+  version: "1.0.0"
+servers:
+  - url: http://c64u
+components:
+  securitySchemes:
+    NetworkPassword:
+      type: apiKey
+      in: header
+      name: X-Password
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: array
+          items: { type: string }
+    ConfigListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          properties:
+            categories:
+              type: array
+              items: { type: string }
+    ConfigCategoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          additionalProperties: true
+    ConfigItemResponse:
+      allOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          additionalProperties: true
+security:
+  - NetworkPassword: []
+paths:
+  /v1/configs:
+    get:
+      summary: List configuration categories
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigListResponse'
+  /v1/configs/{category}:
+    get:
+      summary: Get category
+      parameters:
+        - in: path
+          name: category
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigCategoryResponse'
+  /v1/configs/{category}/{item}:
+    get:
+      summary: Get item details
+      parameters:
+        - in: path
+          name: category
+          required: true
+          schema: { type: string }
+        - in: path
+          name: item
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigItemResponse'
+    put:
+      summary: Update item
+      parameters:
+        - in: path
+          name: category
+          required: true
+          schema: { type: string }
+        - in: path
+          name: item
+          required: true
+          schema: { type: string }
+        - in: query
+          name: value
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+

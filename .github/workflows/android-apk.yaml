@@ -1,0 +1,81 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Decode keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            mkdir -p android/keystore
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/keystore/release.keystore
+          else
+            echo "ANDROID_KEYSTORE_BASE64 is not set. Skipping keystore setup."
+          fi
+
+      - name: Export signing env
+        env:
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_STORE_PASSWORD=$KEYSTORE_STORE_PASSWORD" >> $GITHUB_ENV
+            echo "KEYSTORE_KEY_PASSWORD=$KEYSTORE_KEY_PASSWORD" >> $GITHUB_ENV
+            echo "KEYSTORE_KEY_ALIAS=c64commander" >> $GITHUB_ENV
+            echo "KEYSTORE_STORE_FILE=${{ github.workspace }}/android/keystore/release.keystore" >> $GITHUB_ENV
+          else
+            echo "Signing secrets not set. Skipping signing env export."
+          fi
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install SDK components
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Build web + sync
+        run: npm run cap:build
+
+      - name: Build APK (debug)
+        run: npm run android:apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: c64-commander-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
