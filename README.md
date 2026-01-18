@@ -1,4 +1,4 @@
-# C64U Commander
+# C64 Commander
 
 > [!NOTE]
 > Experimental: this project is under active development and may change rapidly.
