@@ -1,8 +1,5 @@
 # C64 Commander
 
-> [!NOTE]
-> Experimental: this project is under active development and may change rapidly.
-
 ## What This Is
 
 C64 Commander is an Android app that connects to a C64 Ultimate device on your local network:
