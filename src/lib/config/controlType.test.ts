@@ -62,6 +62,45 @@ describe('inferControlKind (strict rule ordering)', () => {
     ).toBe('select');
   });
 
+  it('renders slider for Audio Mixer volume lists', () => {
+    expect(
+      inferControlKind({
+        name: 'Vol UltiSid 1',
+        category: 'Audio Mixer',
+        currentValue: 'OFF',
+        possibleValues: ['OFF', '+1 dB', ' 0 dB', '-1 dB'],
+      }),
+    ).toBe('slider');
+  });
+
+  it('renders slider for Off/Low/Medium/High lists', () => {
+    expect(
+      inferControlKind({
+        name: 'Drive Speed',
+        currentValue: 'Medium',
+        possibleValues: ['Off', 'Low', 'Medium', 'High'],
+      }),
+    ).toBe('slider');
+  });
+
+  it('renders slider for numeric lists (including MHz)', () => {
+    expect(
+      inferControlKind({
+        name: 'Clock Rate',
+        currentValue: '8 MHz',
+        possibleValues: ['1 MHz', '2 MHz', '4 MHz', '8 MHz'],
+      }),
+    ).toBe('slider');
+
+    expect(
+      inferControlKind({
+        name: 'Buffer Size',
+        currentValue: '64',
+        possibleValues: ['16', '32', '64', '128'],
+      }),
+    ).toBe('slider');
+  });
+
   it('renders text for all remaining cases', () => {
     expect(
       inferControlKind({

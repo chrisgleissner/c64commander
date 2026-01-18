@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -124,14 +125,62 @@ export function ConfigItemRow({
     () =>
       inferControlKind({
         name,
+        category,
         currentValue: mergedValue,
         possibleValues: optionList,
       }),
-    [name, mergedValue, optionList],
+    [name, category, mergedValue, optionList],
   );
 
   const displayValue = inputValue;
   const isReadOnly = name.startsWith('SID Detected Socket');
+  const normalizeOption = (option: string) => option.trim().replace(/\s+/g, ' ').toLowerCase();
+  const parseNumeric = (option: string) => {
+    const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : undefined;
+  };
+  const isOffLowMediumHigh = (options: string[]) => {
+    const normalized = new Set(options.map(normalizeOption));
+    return (
+      normalized.size === 4 &&
+      normalized.has('off') &&
+      normalized.has('low') &&
+      normalized.has('medium') &&
+      normalized.has('high')
+    );
+  };
+  const getSliderOptions = (options: string[]) => {
+    if (isOffLowMediumHigh(options)) {
+      const order = ['off', 'low', 'medium', 'high'];
+      return order
+        .map((key) => options.find((option) => normalizeOption(option) === key))
+        .filter((option): option is string => Boolean(option));
+    }
+
+    const entries = options.map((option) => ({ option, numeric: parseNumeric(option) }));
+    const numericEntries = entries.filter((entry) => entry.numeric !== undefined) as Array<{
+      option: string;
+      numeric: number;
+    }>;
+    const nonNumeric = entries.filter((entry) => entry.numeric === undefined);
+    const nonNumericNormalized = nonNumeric.map((entry) => normalizeOption(entry.option));
+    const hasOnlyOff = nonNumeric.length > 0 && nonNumericNormalized.every((value) => value === 'off');
+
+    if (numericEntries.length >= 2 && (nonNumeric.length === 0 || hasOnlyOff)) {
+      const sortedNumeric = [...numericEntries].sort((a, b) => a.numeric - b.numeric);
+      const offEntry = nonNumeric.find((entry) => normalizeOption(entry.option) === 'off');
+      return [
+        ...(offEntry ? [offEntry.option] : []),
+        ...sortedNumeric.map((entry) => entry.option),
+      ];
+    }
+
+    return options;
+  };
+  const sliderOptions = useMemo(
+    () => (controlKind === 'slider' ? getSliderOptions(optionList) : optionList),
+    [controlKind, optionList],
+  );
 
   if (controlKind === 'checkbox' && checkboxMapping) {
     const checked =
@@ -189,6 +238,58 @@ export function ConfigItemRow({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+    );
+  }
+
+  if (controlKind === 'slider' && sliderOptions.length >= 2) {
+    const normalizedOptions = sliderOptions.map(normalizeOption);
+    const displayNormalized = normalizeOption(displayValue);
+    let selectedIndex = normalizedOptions.indexOf(displayNormalized);
+
+    if (selectedIndex < 0) {
+      const displayNumber = parseNumeric(displayValue);
+      if (displayNumber !== undefined) {
+        const numericIndex = sliderOptions.findIndex((opt) => parseNumeric(opt) === displayNumber);
+        if (numericIndex >= 0) selectedIndex = numericIndex;
+      }
+    }
+
+    if (selectedIndex < 0) selectedIndex = 0;
+
+    const currentLabel = sliderOptions[selectedIndex] ?? displayValue;
+
+    return (
+      <div className="settings-row w-full flex items-center justify-between gap-3">
+        <div className="flex flex-col flex-1 pr-4">
+          <span className="text-sm font-medium">{name}</span>
+          <span className="text-xs text-muted-foreground font-mono">{currentLabel}</span>
+        </div>
+        <div className="min-w-[180px] max-w-[260px] w-full">
+          <Slider
+            value={[selectedIndex]}
+            min={0}
+            max={sliderOptions.length - 1}
+            step={1}
+            disabled={isLoading || isItemLoading || isReadOnly}
+            onValueChange={(values) => {
+              if (isReadOnly) return;
+              const nextIndex = values[0] ?? 0;
+              const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
+              setInputValue(String(nextValue));
+            }}
+            onValueCommit={(values) => {
+              if (isReadOnly) return;
+              const nextIndex = values[0] ?? 0;
+              const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
+              if (String(nextValue) === lastCommittedRef.current) return;
+              lastCommittedRef.current = String(nextValue);
+              setInputValue(String(nextValue));
+              onValueChange(nextValue);
+            }}
+            aria-label={`${name} slider`}
+          />
         </div>
       </div>
     );

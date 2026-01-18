@@ -10,6 +10,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
+import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -121,8 +122,17 @@ const quickSections: QuickSection[] = [
   },
 ];
 
-function QuickSectionCard({ section, onOpenChange }: { section: QuickSection; onOpenChange: (isOpen: boolean) => void }) {
+function QuickSectionCard({
+  section,
+  onOpenChange,
+  markChanged,
+}: {
+  section: QuickSection;
+  onOpenChange: (isOpen: boolean) => void;
+  markChanged: () => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const { status } = useC64Connection();
   const { data: categoryData, isLoading, refetch } = useC64Category(section.category, isOpen);
   const setConfig = useC64SetConfig();
@@ -167,6 +177,40 @@ function QuickSectionCard({ section, onOpenChange }: { section: QuickSection; on
         description: (error as Error).message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const resetAudioMixer = async () => {
+    if (section.category !== 'Audio Mixer') return;
+    setIsResetting(true);
+    try {
+      const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+      const findOption = (options: string[] | undefined, target: string) => {
+        if (!options) return undefined;
+        const targetNorm = normalize(target);
+        return options.find((opt) => normalize(opt) === targetNorm);
+      };
+
+      for (const item of items) {
+        if (item.name.startsWith('Vol ')) {
+          const target = findOption(item.options, '0 dB') ?? findOption(item.options, '0db') ?? '0 dB';
+          await setConfig.mutateAsync({ category: section.category, item: item.name, value: target });
+        } else if (item.name.startsWith('Pan ')) {
+          const target = findOption(item.options, 'Center') ?? 'Center';
+          await setConfig.mutateAsync({ category: section.category, item: item.name, value: target });
+        }
+      }
+
+      markChanged();
+      toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -231,7 +275,18 @@ function QuickSectionCard({ section, onOpenChange }: { section: QuickSection; on
                 </div>
               )}
               
-              <div className="flex justify-end pt-2">
+              <div className="flex justify-between pt-2">
+                {section.category === 'Audio Mixer' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetAudioMixer}
+                    disabled={isResetting || isLoading || items.length === 0}
+                    className="text-xs"
+                  >
+                    Reset Audio Mixer
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -253,15 +308,33 @@ function QuickSectionCard({ section, onOpenChange }: { section: QuickSection; on
 export default function QuickSettingsPage() {
   const { status } = useC64Connection();
   const { setQuickExpanded } = useRefreshControl();
+  const { hasChanges, revertToInitial, isApplying, markChanged } = useAppConfigState();
 
   return (
     <div className="min-h-screen pb-24">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="container py-4">
-          <h1 className="c64-header text-xl">Quick Settings</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            High-value VIC, SID, CPU & Drive settings
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="c64-header text-xl">Quick Settings</h1>
+              <p className="text-xs text-muted-foreground mt-1">
+                High-value VIC, SID, CPU & Drive settings
+              </p>
+            </div>
+            {hasChanges && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => revertToInitial()}
+                disabled={!status.isConnected || isApplying}
+              >
+                <span className="flex flex-col leading-tight">
+                  <span className="text-xs font-semibold">Revert</span>
+                  <span className="text-[10px] text-muted-foreground">Changes</span>
+                </span>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -279,6 +352,7 @@ export default function QuickSettingsPage() {
               key={section.id}
               section={section}
               onOpenChange={(isOpen) => setQuickExpanded(section.id, isOpen)}
+              markChanged={markChanged}
             />
           ))
         )}

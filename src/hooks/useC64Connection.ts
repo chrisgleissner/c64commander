@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
+import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
 
 const DEFAULT_REFRESH_INTERVAL_SEC = 20;
 let refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_SEC * 1000;
@@ -146,6 +147,7 @@ export function useC64SetConfig() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['c64-category', variables.category] });
       queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+      updateHasChanges(getActiveBaseUrl(), true);
     },
   });
 }
@@ -214,6 +216,7 @@ export function useC64MachineControl() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['c64-category'] });
         queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+        updateHasChanges(getActiveBaseUrl(), true);
       },
     }),
     resetConfig: useMutation({
@@ -221,6 +224,7 @@ export function useC64MachineControl() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['c64-category'] });
         queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+        updateHasChanges(getActiveBaseUrl(), true);
       },
     }),
   };

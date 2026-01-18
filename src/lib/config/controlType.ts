@@ -1,7 +1,8 @@
-export type ControlKind = 'password' | 'checkbox' | 'select' | 'text';
+export type ControlKind = 'password' | 'checkbox' | 'slider' | 'select' | 'text';
 
 export interface MenuItemDescriptor {
   name: string;
+  category?: string;
   currentValue: string | number;
   possibleValues?: string[];
 }
@@ -12,6 +13,51 @@ export interface CheckboxMapping {
 }
 
 const norm = (v: string) => v.trim().toLowerCase();
+const normalizeOption = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
+const numericWithUnitPattern = /^\s*[+-]?\d+(?:\.\d+)?\s*(db|mhz|khz|hz|%|ms|s)?\s*$/i;
+const maxSliderOptions = 40;
+
+const getNormalizedOptions = (values: string[] | undefined) =>
+  (values ?? []).map((v) => normalizeOption(String(v)));
+
+const isNumericLike = (value: string) => numericWithUnitPattern.test(value);
+
+const isAllNumericLike = (values: string[]) => values.length > 0 && values.every(isNumericLike);
+
+const isOffLowMediumHigh = (values: string[]) => {
+  const normalized = new Set(values.map(normalizeOption));
+  return (
+    normalized.size === 4 &&
+    normalized.has('off') &&
+    normalized.has('low') &&
+    normalized.has('medium') &&
+    normalized.has('high')
+  );
+};
+
+const isAudioMixerVolume = (name: string, category?: string) => {
+  const normalizedName = normalizeOption(name);
+  const normalizedCategory = category ? normalizeOption(category) : '';
+  if (normalizedCategory === 'audio mixer' && normalizedName.startsWith('vol ')) return true;
+  return normalizedName.includes('volume') || normalizedName.startsWith('vol ');
+};
+
+const shouldUseSlider = (item: MenuItemDescriptor) => {
+  const possibleValues = (item.possibleValues ?? []).map(String);
+  if (possibleValues.length < 2 || possibleValues.length > maxSliderOptions) return false;
+
+  if (isAudioMixerVolume(item.name, item.category)) return true;
+
+  const normalizedOptions = getNormalizedOptions(possibleValues);
+  if (isOffLowMediumHigh(normalizedOptions)) return true;
+
+  if (isAllNumericLike(possibleValues)) return true;
+
+  const hasMhz = normalizedOptions.some((opt) => opt.includes('mhz'));
+  if (hasMhz && isAllNumericLike(possibleValues)) return true;
+
+  return false;
+};
 
 export function getCheckboxMapping(possibleValues: string[] | undefined): CheckboxMapping | undefined {
   const values = (possibleValues ?? []).map(String);
@@ -50,11 +96,14 @@ export function inferControlKind(item: MenuItemDescriptor): ControlKind {
   const checkbox = getCheckboxMapping(item.possibleValues);
   if (checkbox) return 'checkbox';
 
-  // Rule 3: combo box for 2+ values
+  // Rule 3: slider for volume, Off/Low/Medium/High, numeric lists, and MHz values
+  if (shouldUseSlider(item)) return 'slider';
+
+  // Rule 4: combo box for 2+ values
   const possibleValues = (item.possibleValues ?? []).map(String);
   if (possibleValues.length >= 2) return 'select';
 
-  // Rule 4: text field fallback
+  // Rule 5: text field fallback
   return 'text';
 }
 

@@ -1,24 +1,56 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  RotateCcw, 
-  Power, 
-  PowerOff, 
-  Pause, 
-  Play, 
+import {
+  RotateCcw,
+  Power,
+  PowerOff,
+  Pause,
+  Play,
   Menu,
   Save,
   RefreshCw,
-  Trash2
+  Trash2,
+  FolderOpen,
+  Download,
+  Upload
 } from 'lucide-react';
 import { useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { ConnectionBadge } from '@/components/ConnectionBadge';
 import { QuickActionCard } from '@/components/QuickActionCard';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { useAppConfigState } from '@/hooks/useAppConfigState';
 
 export default function HomePage() {
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const controls = useC64MachineControl();
+  const {
+    appConfigs,
+    hasChanges,
+    isApplying,
+    isSaving,
+    revertToInitial,
+    saveCurrentConfig,
+    loadAppConfig,
+    renameAppConfig,
+    deleteAppConfig,
+  } = useAppConfigState();
+
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [renameValues, setRenameValues] = useState<Record<string, string>>({});
 
   const appVersion = __APP_VERSION__ || '';
   const gitSha = __GIT_SHA__ || '';
@@ -39,6 +71,52 @@ export default function HomePage() {
 
   const driveA = drivesData?.drives?.find(d => 'a' in d)?.a;
   const driveB = drivesData?.drives?.find(d => 'b' in d)?.b;
+
+  useEffect(() => {
+    if (!manageDialogOpen) return;
+    const next: Record<string, string> = {};
+    appConfigs.forEach((config) => {
+      next[config.id] = config.name;
+    });
+    setRenameValues(next);
+  }, [manageDialogOpen, appConfigs]);
+
+  const handleSaveToApp = async () => {
+    const trimmed = saveName.trim();
+    if (!trimmed) {
+      toast({ title: 'Name required', description: 'Enter a name for this config.' });
+      return;
+    }
+
+    try {
+      await saveCurrentConfig(trimmed);
+      toast({ title: 'Saved to app', description: trimmed });
+      setSaveDialogOpen(false);
+      setSaveName('');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleLoadFromApp = async (configId: string) => {
+    const entry = appConfigs.find((config) => config.id === configId);
+    if (!entry) return;
+    try {
+      await loadAppConfig(entry);
+      toast({ title: 'Config loaded', description: entry.name });
+      setLoadDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <div className="min-h-screen pb-24">
@@ -272,6 +350,39 @@ export default function HomePage() {
               disabled={!status.isConnected}
               loading={controls.resetConfig.isPending}
             />
+            {hasChanges && (
+              <QuickActionCard
+                icon={RotateCcw}
+                label="Revert"
+                description="Changes"
+                onClick={() => handleAction(() => revertToInitial(), 'Config reverted')}
+                disabled={!status.isConnected || isApplying}
+                loading={isApplying}
+              />
+            )}
+            <QuickActionCard
+              icon={Upload}
+              label="Save"
+              description="To App"
+              variant="success"
+              onClick={() => setSaveDialogOpen(true)}
+              disabled={!status.isConnected || isSaving}
+              loading={isSaving}
+            />
+            <QuickActionCard
+              icon={Download}
+              label="Load"
+              description="From App"
+              onClick={() => setLoadDialogOpen(true)}
+              disabled={!status.isConnected || appConfigs.length === 0}
+            />
+            <QuickActionCard
+              icon={FolderOpen}
+              label="Manage"
+              description="App Configs"
+              onClick={() => setManageDialogOpen(true)}
+              disabled={!status.isConnected || appConfigs.length === 0}
+            />
           </div>
         </motion.div>
 
@@ -289,6 +400,108 @@ export default function HomePage() {
           </motion.div>
         )}
       </main>
+
+      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save to App</DialogTitle>
+            <DialogDescription>Store the current C64U configuration in this app.</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Config name"
+            value={saveName}
+            onChange={(e) => setSaveName(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveToApp} disabled={isSaving}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Load from App</DialogTitle>
+            <DialogDescription>Select a saved configuration to apply to the C64U.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {appConfigs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
+            ) : (
+              appConfigs.map((config) => (
+                <Button
+                  key={config.id}
+                  variant="outline"
+                  className="w-full justify-between"
+                  onClick={() => handleLoadFromApp(config.id)}
+                  disabled={isApplying}
+                >
+                  <span className="text-left">
+                    <span className="block font-medium">{config.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {new Date(config.savedAt).toLocaleString()}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">Load</span>
+                </Button>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLoadDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={manageDialogOpen} onOpenChange={setManageDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Manage App Configs</DialogTitle>
+            <DialogDescription>Rename or delete saved configurations.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {appConfigs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
+            ) : (
+              appConfigs.map((config) => (
+                <div key={config.id} className="flex flex-col gap-2 border border-border rounded-lg p-3">
+                  <Input
+                    value={renameValues[config.id] ?? config.name}
+                    onChange={(e) =>
+                      setRenameValues((prev) => ({ ...prev, [config.id]: e.target.value }))
+                    }
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(config.savedAt).toLocaleString()}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => renameAppConfig(config.id, renameValues[config.id]?.trim() || config.name)}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => deleteAppConfig(config.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManageDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

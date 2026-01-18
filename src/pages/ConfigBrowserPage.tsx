@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
+import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -52,8 +53,17 @@ const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
   return { value: selected, options, details };
 };
 
-function CategorySection({ categoryName, onOpenChange }: { categoryName: string; onOpenChange: (isOpen: boolean) => void }) {
+function CategorySection({
+  categoryName,
+  onOpenChange,
+  markChanged,
+}: {
+  categoryName: string;
+  onOpenChange: (isOpen: boolean) => void;
+  markChanged: () => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
 
@@ -97,6 +107,40 @@ function CategorySection({ categoryName, onOpenChange }: { categoryName: string;
         description: (error as Error).message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const resetAudioMixer = async () => {
+    if (categoryName !== 'Audio Mixer') return;
+    setIsResetting(true);
+    try {
+      const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+      const findOption = (options: string[] | undefined, target: string) => {
+        if (!options) return undefined;
+        const targetNorm = normalize(target);
+        return options.find((opt) => normalize(opt) === targetNorm);
+      };
+
+      for (const item of items) {
+        if (item.name.startsWith('Vol ')) {
+          const target = findOption(item.options, '0 dB') ?? findOption(item.options, '0db') ?? '0 dB';
+          await setConfig.mutateAsync({ category: categoryName, item: item.name, value: target });
+        } else if (item.name.startsWith('Pan ')) {
+          const target = findOption(item.options, 'Center') ?? 'Center';
+          await setConfig.mutateAsync({ category: categoryName, item: item.name, value: target });
+        }
+      }
+
+      markChanged();
+      toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -158,7 +202,18 @@ function CategorySection({ categoryName, onOpenChange }: { categoryName: string;
                 </div>
               )}
               
-              <div className="flex justify-end pt-2">
+              <div className="flex justify-between pt-2">
+                {categoryName === 'Audio Mixer' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetAudioMixer}
+                    disabled={isResetting || isLoading || items.length === 0}
+                    className="text-xs"
+                  >
+                    Reset Audio Mixer
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -182,6 +237,7 @@ export default function ConfigBrowserPage() {
   const { data: categoriesData, isLoading, refetch } = useC64Categories();
   const [searchQuery, setSearchQuery] = useState('');
   const { setConfigExpanded } = useRefreshControl();
+  const { hasChanges, revertToInitial, isApplying, markChanged } = useAppConfigState();
 
   const filteredCategories = useMemo(() => {
     if (!categoriesData?.categories) return [];
@@ -203,14 +259,29 @@ export default function ConfigBrowserPage() {
                 {categoriesData?.categories.length || 0} categories
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetch()}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex items-center gap-2">
+              {hasChanges && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => revertToInitial()}
+                  disabled={!status.isConnected || isApplying}
+                >
+                  <span className="flex flex-col leading-tight">
+                    <span className="text-xs font-semibold">Revert</span>
+                    <span className="text-[10px] text-muted-foreground">Changes</span>
+                  </span>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
           
           <div className="relative">
@@ -252,6 +323,7 @@ export default function ConfigBrowserPage() {
               <CategorySection
                 categoryName={category}
                 onOpenChange={(isOpen) => setConfigExpanded(category, isOpen)}
+                markChanged={markChanged}
               />
             </motion.div>
           ))
