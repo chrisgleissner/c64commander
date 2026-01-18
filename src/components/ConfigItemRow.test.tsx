@@ -23,6 +23,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         'Network Password': 'secret',
         Drive: 'Enabled',
         'Video Mode': 'PAL',
+        Power: 'On',
         Hostname: 'c64u',
       },
     }, {
@@ -30,6 +31,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         Drive: { options: ['Enabled', 'Disabled'] },
         'Video Mode': { options: ['PAL', 'NTSC'] },
         'Network Password': { options: ['Enabled', 'Disabled'] },
+        Power: { options: ['On', 'Off'] },
       },
     });
     updateC64APIConfig(server.baseUrl);
@@ -101,6 +103,43 @@ describe('ConfigItemRow control selection + REST updates', () => {
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
       expect(resp.data['Test Category'].Drive).toBe('Disabled');
+    });
+  });
+
+  it('renders a checkbox for On/Off and maps checked=On, unchecked=Off', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Power"
+        value="On"
+        options={['On', 'Off']}
+        onValueChange={(v) => void putValue('Test Category', 'Power', v)}
+      />,
+    );
+
+    const checkbox = screen.getByLabelText('Power checkbox');
+    expect(checkbox).toHaveAttribute('role', 'checkbox');
+
+    // Toggle to Off
+    fireEvent.click(checkbox);
+
+    await waitFor(async () => {
+      const resp = await openapiClient.request({
+        method: 'GET',
+        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+      });
+      expect(resp.data['Test Category'].Power).toBe('Off');
+    });
+
+    // Toggle back to On (keep shared test state stable)
+    fireEvent.click(checkbox);
+
+    await waitFor(async () => {
+      const resp = await openapiClient.request({
+        method: 'GET',
+        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+      });
+      expect(resp.data['Test Category'].Power).toBe('On');
     });
   });
 
