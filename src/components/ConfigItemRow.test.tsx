@@ -15,6 +15,7 @@ function renderWithQuery(ui: React.ReactElement) {
 
 describe('ConfigItemRow control selection + REST updates', () => {
   let server: MockC64Server;
+  let openapiClient: any;
 
   beforeAll(async () => {
     server = await createMockC64Server({
@@ -26,6 +27,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
       },
     });
     updateC64APIConfig(server.baseUrl);
+    openapiClient = await createOpenApiGeneratedClient(server.baseUrl);
   });
 
   afterAll(async () => {
@@ -52,20 +54,16 @@ describe('ConfigItemRow control selection + REST updates', () => {
 
     fireEvent.change(input, { target: { value: 'newpass' } });
     await vi.advanceTimersByTimeAsync(350);
-
-    await waitFor(() => {
-      expect(server.requests.some((r) => r.method === 'PUT' && r.url.includes('/v1/configs/'))).toBe(true);
-    });
-
-    const client = await createOpenApiGeneratedClient(server.baseUrl);
-    const resp = await client.request({
-      method: 'GET',
-      url: `/v1/configs/${encodeURIComponent('Test Category')}`,
-    });
-    expect(resp.status).toBe(200);
-    expect(resp.data['Test Category']['Network Password']).toBe('newpass');
-
     vi.useRealTimers();
+
+    await waitFor(async () => {
+      const resp = await openapiClient.request({
+        method: 'GET',
+        url: `/v1/configs/${encodeURIComponent('Test Category')}`,
+      });
+      expect(resp.status).toBe(200);
+      expect(resp.data['Test Category']['Network Password']).toBe('newpass');
+    });
   });
 
   it('renders a checkbox for Enabled/Disabled and updates via REST immediately', async () => {
@@ -83,11 +81,11 @@ describe('ConfigItemRow control selection + REST updates', () => {
     const checkbox = screen.getByLabelText('Drive checkbox');
     expect(checkbox).toHaveAttribute('role', 'checkbox');
 
+    fireEvent.pointerDown(checkbox);
     fireEvent.click(checkbox);
 
     await waitFor(async () => {
-      const client = await createOpenApiGeneratedClient(server.baseUrl);
-      const resp = await client.request({
+      const resp = await openapiClient.request({
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
@@ -109,12 +107,13 @@ describe('ConfigItemRow control selection + REST updates', () => {
 
     const trigger = screen.getByLabelText('Video Mode select');
     fireEvent.mouseDown(trigger);
-    const option = await screen.findByText('NTSC');
+    fireEvent.click(trigger);
+
+    const option = await screen.findByRole('option', { name: 'NTSC' });
     fireEvent.click(option);
 
     await waitFor(async () => {
-      const client = await createOpenApiGeneratedClient(server.baseUrl);
-      const resp = await client.request({
+      const resp = await openapiClient.request({
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
@@ -142,17 +141,15 @@ describe('ConfigItemRow control selection + REST updates', () => {
 
     fireEvent.change(input, { target: { value: 'u64' } });
     await vi.advanceTimersByTimeAsync(350);
+    vi.useRealTimers();
 
     await waitFor(async () => {
-      const client = await createOpenApiGeneratedClient(server.baseUrl);
-      const resp = await client.request({
+      const resp = await openapiClient.request({
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
       expect(resp.data['Test Category'].Hostname).toBe('u64');
     });
-
-    vi.useRealTimers();
   });
 });
 

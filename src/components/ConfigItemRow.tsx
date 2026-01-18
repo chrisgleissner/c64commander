@@ -36,14 +36,9 @@ export function ConfigItemRow({
   onValueChange,
   isLoading = false,
 }: ConfigItemRowProps) {
-  const [inputValue, setInputValue] = useState(String(value));
+  const [inputValue, setInputValue] = useState(() => String(value));
   const lastCommittedRef = useRef<string>(String(value));
   const debounceTimerRef = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    setInputValue(String(value));
-    lastCommittedRef.current = String(value);
-  }, [value]);
 
   const extractConfigFromResponse = (data: unknown) => {
     if (!data || typeof data !== 'object') return undefined;
@@ -103,6 +98,11 @@ export function ConfigItemRow({
     return selected ?? value;
   }, [value, fetchedConfig]);
 
+  useEffect(() => {
+    setInputValue(String(mergedValue));
+    lastCommittedRef.current = String(mergedValue);
+  }, [mergedValue]);
+
   const optionList = useMemo(() => {
     const combined = [
       ...(options ?? []),
@@ -130,7 +130,7 @@ export function ConfigItemRow({
     [name, mergedValue, optionList],
   );
 
-  const displayValue = typeof mergedValue === 'string' ? mergedValue : String(mergedValue);
+  const displayValue = inputValue;
 
   if (controlKind === 'checkbox' && checkboxMapping) {
     const checked =
