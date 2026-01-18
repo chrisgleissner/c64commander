@@ -1,0 +1,212 @@
+import { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
+import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
+import { ConfigItemRow } from '@/components/ConfigItemRow';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/hooks/use-toast';
+
+function CategorySection({ categoryName }: { categoryName: string }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
+  const setConfig = useC64SetConfig();
+
+  const items = useMemo(() => {
+    if (!categoryData) return [];
+    
+    const catData = categoryData[categoryName];
+    if (!catData || typeof catData !== 'object') return [];
+    
+    return Object.entries(catData)
+      .filter(([key]) => key !== 'errors')
+      .map(([name, config]) => {
+        if (typeof config === 'object' && config !== null && !Array.isArray(config)) {
+          return {
+            name,
+            value: (config as any).selected ?? '',
+            options: (config as any).options,
+            details: (config as any).details,
+          };
+        }
+        return {
+          name,
+          value: config as string | number,
+          options: undefined,
+          details: undefined,
+        };
+      });
+  }, [categoryData, categoryName]);
+
+  const handleValueChange = async (itemName: string, value: string | number) => {
+    try {
+      await setConfig.mutateAsync({
+        category: categoryName,
+        item: itemName,
+        value,
+      });
+      toast({ title: `${itemName} updated` });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-card border border-border rounded-xl overflow-hidden"
+    >
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between p-4 text-left"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-muted">
+            <FolderOpen className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <span className="font-medium text-sm">{categoryName}</span>
+        </div>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+        </motion.div>
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="border-t border-border px-4 pb-2">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : items.length === 0 ? (
+                <div className="py-4 text-center text-sm text-muted-foreground">
+                  No settings available
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {items.map((item) => (
+                    <ConfigItemRow
+                      key={item.name}
+                      name={item.name}
+                      value={item.value}
+                      options={item.options}
+                      details={item.details}
+                      onValueChange={(v) => handleValueChange(item.name, v)}
+                      isLoading={setConfig.isPending}
+                    />
+                  ))}
+                </div>
+              )}
+              
+              <div className="flex justify-end pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetch()}
+                  className="text-xs"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Refresh
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+export default function ConfigBrowserPage() {
+  const { status } = useC64Connection();
+  const { data: categoriesData, isLoading, refetch } = useC64Categories();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredCategories = useMemo(() => {
+    if (!categoriesData?.categories) return [];
+    if (!searchQuery) return categoriesData.categories;
+    
+    return categoriesData.categories.filter((cat) =>
+      cat.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [categoriesData?.categories, searchQuery]);
+
+  return (
+    <div className="min-h-screen pb-24">
+      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
+        <div className="container py-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="c64-header text-xl">Configuration</h1>
+              <p className="text-xs text-muted-foreground mt-1">
+                {categoriesData?.categories.length || 0} categories
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+          
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search categories..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+        </div>
+      </header>
+
+      <main className="container py-4 space-y-3">
+        {!status.isConnected ? (
+          <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 text-center">
+            <p className="text-sm text-destructive font-medium">Not connected</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Configure connection in Settings
+            </p>
+          </div>
+        ) : isLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredCategories.length === 0 ? (
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {searchQuery ? 'No categories match your search' : 'No categories available'}
+          </div>
+        ) : (
+          filteredCategories.map((category, index) => (
+            <motion.div
+              key={category}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.03 }}
+            >
+              <CategorySection categoryName={category} />
+            </motion.div>
+          ))
+        )}
+      </main>
+    </div>
+  );
+}

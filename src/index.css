@@ -2,95 +2,128 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+/* C64 Ultimate Controller - Design System */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* C64-inspired color palette with modern touches */
+    --background: 220 20% 97%;
+    --foreground: 230 25% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 230 25% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 230 25% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* C64 light blue inspired primary */
+    --primary: 228 35% 57%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* C64 cream/beige secondary */
+    --secondary: 45 20% 88%;
+    --secondary-foreground: 230 25% 15%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* C64 border blue accent */
+    --accent: 228 45% 65%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    /* Success green */
+    --success: 145 65% 42%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    /* Warning amber */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    --sidebar-background: 0 0% 98%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 228 35% 57%;
 
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --radius: 0.75rem;
 
-    --sidebar-primary: 240 5.9% 10%;
+    /* C64 Special colors */
+    --c64-blue: 228 35% 57%;
+    --c64-dark-blue: 237 35% 25%;
+    --c64-cream: 45 20% 88%;
+    --c64-brown: 25 35% 35%;
+    --c64-green: 145 50% 45%;
+    --c64-red: 0 65% 50%;
 
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Sidebar */
+    --sidebar-background: 230 25% 12%;
+    --sidebar-foreground: 220 15% 92%;
+    --sidebar-primary: 228 35% 57%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 228 25% 20%;
+    --sidebar-accent-foreground: 220 15% 92%;
+    --sidebar-border: 228 20% 18%;
+    --sidebar-ring: 228 35% 57%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Deep C64-inspired dark theme */
+    --background: 237 35% 10%;
+    --foreground: 220 20% 92%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 237 30% 14%;
+    --card-foreground: 220 20% 92%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 237 30% 14%;
+    --popover-foreground: 220 20% 92%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* Brighter C64 blue for dark mode */
+    --primary: 228 50% 62%;
+    --primary-foreground: 237 35% 10%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    /* Muted cream for dark mode */
+    --secondary: 237 20% 20%;
+    --secondary-foreground: 220 20% 92%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 237 25% 18%;
+    --muted-foreground: 220 15% 60%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 228 45% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --success: 145 55% 38%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 82% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 237 20% 22%;
+    --input: 237 20% 22%;
+    --ring: 228 50% 62%;
+
+    /* C64 Special colors - dark mode */
+    --c64-blue: 228 50% 62%;
+    --c64-dark-blue: 237 35% 18%;
+    --c64-cream: 45 15% 75%;
+    --c64-brown: 25 25% 45%;
+    --c64-green: 145 45% 50%;
+    --c64-red: 0 55% 55%;
+
+    /* Sidebar dark */
+    --sidebar-background: 237 35% 8%;
+    --sidebar-foreground: 220 15% 88%;
+    --sidebar-primary: 228 50% 62%;
+    --sidebar-primary-foreground: 237 35% 8%;
+    --sidebar-accent: 237 25% 15%;
+    --sidebar-accent-foreground: 220 15% 88%;
+    --sidebar-border: 237 25% 14%;
+    --sidebar-ring: 228 50% 62%;
   }
 }
 
@@ -100,6 +133,131 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom font families */
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  .font-sans {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* C64 styled header */
+  .c64-header {
+    @apply font-mono font-bold tracking-wide uppercase;
+  }
+
+  /* Retro button style */
+  .c64-button {
+    @apply relative font-mono font-medium uppercase tracking-wider px-4 py-2 
+           bg-primary text-primary-foreground rounded-md
+           shadow-[0_4px_0_0_hsl(var(--c64-dark-blue))]
+           active:translate-y-1 active:shadow-none
+           transition-all duration-100;
+  }
+
+  /* Status indicator */
+  .status-dot {
+    @apply w-2.5 h-2.5 rounded-full animate-pulse;
+  }
+
+  .status-online {
+    @apply bg-[hsl(var(--success))];
+  }
+
+  .status-offline {
+    @apply bg-[hsl(var(--destructive))];
+  }
+
+  /* Config item card */
+  .config-card {
+    @apply bg-card border border-border rounded-lg p-4 
+           hover:border-primary/50 transition-colors;
+  }
+
+  /* Category header */
+  .category-header {
+    @apply flex items-center gap-2 font-mono text-sm font-semibold 
+           text-muted-foreground uppercase tracking-wider;
+  }
+
+  /* Value display */
+  .value-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md 
+           bg-secondary text-secondary-foreground font-mono text-sm;
+  }
+
+  /* Quick action button */
+  .quick-action {
+    @apply flex flex-col items-center justify-center gap-2 p-4
+           bg-card border border-border rounded-xl
+           hover:border-primary hover:bg-primary/5
+           active:scale-95 transition-all duration-150;
+  }
+
+  /* Settings row */
+  .settings-row {
+    @apply flex items-center justify-between py-3 px-1
+           border-b border-border last:border-0;
+  }
+
+  /* Tab navigation (mobile-native feel) */
+  .tab-bar {
+    @apply fixed bottom-0 left-0 right-0 z-50
+           flex items-center justify-around
+           bg-card border-t border-border
+           px-2 pb-safe pt-2;
+  }
+
+  .tab-item {
+    @apply flex flex-col items-center gap-1 py-1 px-3
+           text-muted-foreground transition-colors;
+  }
+
+  .tab-item.active {
+    @apply text-primary;
+  }
+
+  /* Safe area padding for mobile */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .pt-safe {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+
+  /* Scrollable area with fade */
+  .scroll-fade {
+    @apply relative;
+    mask-image: linear-gradient(to bottom, transparent, black 1rem, black calc(100% - 1rem), transparent);
+  }
+}
+
+@layer utilities {
+  /* C64 scanline effect for headers */
+  .scanlines {
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      hsl(var(--foreground) / 0.03) 2px,
+      hsl(var(--foreground) / 0.03) 4px
+    );
+  }
+
+  /* Glow effect */
+  .glow-primary {
+    box-shadow: 0 0 20px -5px hsl(var(--primary) / 0.4);
+  }
+
+  /* Touch highlight removal for mobile */
+  .touch-none {
+    -webkit-tap-highlight-color: transparent;
   }
 }
