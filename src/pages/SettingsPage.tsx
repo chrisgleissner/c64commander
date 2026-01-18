@@ -11,6 +11,7 @@ import {
   Info
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
+import { C64_DEFAULTS } from '@/lib/c64api';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -20,17 +21,18 @@ import { toast } from '@/hooks/use-toast';
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
-  const { status, baseUrl, password, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
   const [isSaving, setIsSaving] = useState(false);
+  const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
 
   const handleSaveConnection = async () => {
     setIsSaving(true);
     try {
-      updateConfig(urlInput, passwordInput || undefined);
+      updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
       toast({ title: 'Connection settings saved' });
     } catch (error) {
       toast({
@@ -81,11 +83,28 @@ export default function SettingsPage() {
                 id="baseUrl"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="http://c64u"
+                placeholder={C64_DEFAULTS.DEFAULT_BASE_URL}
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                Default: http://c64u
+                Default: {C64_DEFAULTS.DEFAULT_BASE_URL}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Local proxy: {C64_DEFAULTS.DEFAULT_PROXY_URL}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="deviceHost" className="text-sm">Device Hostname</Label>
+              <Input
+                id="deviceHost"
+                value={deviceHostInput}
+                onChange={(e) => setDeviceHostInput(e.target.value)}
+                placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Used when connected via local proxy. Default: {C64_DEFAULTS.DEFAULT_DEVICE_HOST}
               </p>
             </div>
 
@@ -139,7 +158,7 @@ export default function SettingsPage() {
             {status.isConnecting ? (
               'Connecting...'
             ) : status.isConnected ? (
-              `Connected to ${status.deviceInfo?.hostname || baseUrl}`
+              `Connected to ${status.deviceInfo?.hostname || deviceHost || baseUrl}`
             ) : (
               status.error || 'Not connected'
             )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse } from '@/lib/c64api';
+import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
 
 export interface ConnectionStatus {
   isConnected: boolean;
@@ -10,11 +10,14 @@ export interface ConnectionStatus {
 }
 
 export function useC64Connection() {
-  const [baseUrl, setBaseUrl] = useState(() => 
-    localStorage.getItem('c64u_base_url') || 'http://c64u'
+  const [baseUrl, setBaseUrl] = useState(() =>
+    localStorage.getItem('c64u_base_url') || getDefaultBaseUrl()
   );
   const [password, setPassword] = useState(() => 
     localStorage.getItem('c64u_password') || ''
+  );
+  const [deviceHost, setDeviceHost] = useState(() =>
+    localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST
   );
 
   const queryClient = useQueryClient();
@@ -30,10 +33,11 @@ export function useC64Connection() {
     staleTime: 30000,
   });
 
-  const updateConfig = useCallback((newUrl: string, newPassword?: string) => {
+  const updateConfig = useCallback((newUrl: string, newPassword?: string, newDeviceHost?: string) => {
     setBaseUrl(newUrl);
     setPassword(newPassword || '');
-    updateC64APIConfig(newUrl, newPassword);
+    setDeviceHost(newDeviceHost || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+    updateC64APIConfig(newUrl, newPassword, newDeviceHost);
     queryClient.invalidateQueries({ queryKey: ['c64'] });
     refetch();
   }, [queryClient, refetch]);
@@ -49,6 +53,7 @@ export function useC64Connection() {
     status,
     baseUrl,
     password,
+    deviceHost,
     updateConfig,
     refetch,
   };

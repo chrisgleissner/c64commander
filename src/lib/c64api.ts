@@ -1,5 +1,30 @@
 // C64 Ultimate REST API Client
 
+import { CapacitorHttp } from '@capacitor/core';
+
+const DEFAULT_BASE_URL = 'http://c64u';
+const DEFAULT_DEVICE_HOST = 'c64u';
+const DEFAULT_PROXY_URL = 'http://127.0.0.1:8787';
+
+const isLocalProxy = (baseUrl: string) => {
+  try {
+    const url = new URL(baseUrl);
+    return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+  } catch {
+    return false;
+  }
+};
+
+const isNativePlatform = () => {
+  try {
+    return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
+};
+
+export const getDefaultBaseUrl = () => DEFAULT_BASE_URL;
+
 export interface DeviceInfo {
   product?: string;
   firmware_version?: string;
@@ -60,10 +85,16 @@ export interface DrivesResponse {
 export class C64API {
   private baseUrl: string;
   private password?: string;
+  private deviceHost?: string;
 
-  constructor(baseUrl: string = 'http://c64u', password?: string) {
+  constructor(
+    baseUrl: string = DEFAULT_BASE_URL,
+    password?: string,
+    deviceHost: string = DEFAULT_DEVICE_HOST
+  ) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.password = password;
+    this.deviceHost = deviceHost;
   }
 
   setBaseUrl(url: string) {
@@ -72,6 +103,10 @@ export class C64API {
 
   setPassword(password?: string) {
     this.password = password;
+  }
+
+  setDeviceHost(deviceHost?: string) {
+    this.deviceHost = deviceHost || DEFAULT_DEVICE_HOST;
   }
 
   private async request<T>(
@@ -87,7 +122,34 @@ export class C64API {
       headers['X-Password'] = this.password;
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
+    if (this.deviceHost && isLocalProxy(this.baseUrl)) {
+      headers['X-C64U-Host'] = this.deviceHost;
+    }
+
+    const url = `${this.baseUrl}${path}`;
+
+    if (isNativePlatform()) {
+      const method = (options.method || 'GET') as string;
+      const body = options.body ? options.body : undefined;
+      const nativeResponse = await CapacitorHttp.request({
+        url,
+        method,
+        headers,
+        data: typeof body === 'string' ? JSON.parse(body) : body,
+      });
+
+      if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+        throw new Error(`HTTP ${nativeResponse.status}`);
+      }
+
+      if (typeof nativeResponse.data === 'string') {
+        return JSON.parse(nativeResponse.data) as T;
+      }
+
+      return nativeResponse.data as T;
+    }
+
+    const response = await fetch(url, {
       ...options,
       headers,
     });
@@ -232,21 +294,35 @@ let apiInstance: C64API | null = null;
 
 export function getC64API(): C64API {
   if (!apiInstance) {
-    const savedUrl = localStorage.getItem('c64u_base_url') || 'http://c64u';
+    const savedUrl = localStorage.getItem('c64u_base_url') || getDefaultBaseUrl();
     const savedPassword = localStorage.getItem('c64u_password') || undefined;
-    apiInstance = new C64API(savedUrl, savedPassword);
+    const savedDeviceHost = localStorage.getItem('c64u_device_host') || DEFAULT_DEVICE_HOST;
+    apiInstance = new C64API(savedUrl, savedPassword, savedDeviceHost);
   }
   return apiInstance;
 }
 
-export function updateC64APIConfig(baseUrl: string, password?: string) {
+export function updateC64APIConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
   api.setBaseUrl(baseUrl);
   api.setPassword(password);
+  api.setDeviceHost(deviceHost);
   localStorage.setItem('c64u_base_url', baseUrl);
   if (password) {
     localStorage.setItem('c64u_password', password);
   } else {
     localStorage.removeItem('c64u_password');
   }
+
+  if (deviceHost) {
+    localStorage.setItem('c64u_device_host', deviceHost);
+  } else {
+    localStorage.removeItem('c64u_device_host');
+  }
 }
+
+export const C64_DEFAULTS = {
+  DEFAULT_BASE_URL,
+  DEFAULT_DEVICE_HOST,
+  DEFAULT_PROXY_URL,
+};
