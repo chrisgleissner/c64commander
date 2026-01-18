@@ -135,6 +135,7 @@ function CategorySection({ categoryName }: { categoryName: string }) {
                   {items.map((item) => (
                     <ConfigItemRow
                       key={item.name}
+                      category={categoryName}
                       name={item.name}
                       value={item.value}
                       options={item.options}

@@ -11,9 +11,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useC64ConfigItem } from '@/hooks/useC64Connection';
 
 interface ConfigItemRowProps {
   name: string;
+  category?: string;
   value: string | number;
   options?: string[];
   details?: {
@@ -28,6 +30,7 @@ interface ConfigItemRowProps {
 
 export function ConfigItemRow({
   name,
+  category,
   value,
   options,
   details,
@@ -41,8 +44,70 @@ export function ConfigItemRow({
     setInputValue(String(value));
   }, [value]);
 
+  const extractConfigFromResponse = (data: unknown) => {
+    if (!data || typeof data !== 'object') return undefined;
+    const payload = data as Record<string, any>;
+    const categoryBlock = category ? payload[category] : undefined;
+    const itemBlock =
+      (categoryBlock && (categoryBlock.items ?? categoryBlock)[name]) ??
+      payload[name] ??
+      payload.item ??
+      payload.value ??
+      payload;
+    if (!itemBlock || typeof itemBlock !== 'object') return undefined;
+    return itemBlock as Record<string, any>;
+  };
+
+  const needsDetailFetch = (!options || options.length === 0) && !details?.presets;
+  const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
+    category,
+    name,
+    needsDetailFetch,
+  );
+
+  const fetchedConfig = useMemo(() => extractConfigFromResponse(itemData), [itemData]);
+
+  const fetchedOptions = useMemo(() => {
+    if (!fetchedConfig) return [] as string[];
+    const optionsCandidate = fetchedConfig.options ?? fetchedConfig.values ?? fetchedConfig.choices;
+    const presetsCandidate = fetchedConfig.details?.presets ?? fetchedConfig.presets;
+    const list = [...(optionsCandidate ?? []), ...(presetsCandidate ?? [])]
+      .map((opt: string) => String(opt));
+    return Array.isArray(list) ? list : [];
+  }, [fetchedConfig]);
+
+  const mergedDetails = useMemo(() => {
+    if (!fetchedConfig) return details;
+    const min = fetchedConfig.details?.min ?? fetchedConfig.min ?? details?.min;
+    const max = fetchedConfig.details?.max ?? fetchedConfig.max ?? details?.max;
+    const format = fetchedConfig.details?.format ?? fetchedConfig.format ?? details?.format;
+    const presets = fetchedConfig.details?.presets ?? fetchedConfig.presets ?? details?.presets;
+    if (min !== undefined || max !== undefined || format || presets) {
+      return { min, max, format, presets };
+    }
+    return details;
+  }, [fetchedConfig, details]);
+
+  const mergedValue = useMemo(() => {
+    if (String(value).length > 0) return value;
+    if (!fetchedConfig) return value;
+    const selected =
+      fetchedConfig.selected ??
+      fetchedConfig.value ??
+      fetchedConfig.current ??
+      fetchedConfig.current_value ??
+      fetchedConfig.currentValue ??
+      fetchedConfig.default ??
+      fetchedConfig.default_value;
+    return selected ?? value;
+  }, [value, fetchedConfig]);
+
   const optionList = useMemo(() => {
-    const combined = [...(options ?? []), ...(details?.presets ?? [])]
+    const combined = [
+      ...(options ?? []),
+      ...(details?.presets ?? []),
+      ...fetchedOptions,
+    ]
       .map((opt) => String(opt))
       .filter((opt) => opt.length > 0 || opt === '');
     const seen = new Set<string>();
@@ -54,11 +119,11 @@ export function ConfigItemRow({
   }, [options, details?.presets]);
 
   const hasOptions = optionList.length > 0;
-  const hasPresets = details?.presets !== undefined && details?.presets.length > 0;
+  const hasPresets = mergedDetails?.presets !== undefined && mergedDetails?.presets.length > 0;
   const isNumeric =
-    (details?.min !== undefined && details?.max !== undefined) ||
-    (typeof value === 'number' && !hasOptions && !hasPresets);
-  const isPreset = details?.presets !== undefined;
+    (mergedDetails?.min !== undefined && mergedDetails?.max !== undefined) ||
+    (typeof mergedValue === 'number' && !hasOptions && !hasPresets);
+  const isPreset = mergedDetails?.presets !== undefined;
   const isEditable = true;
 
   const getBooleanOptions = (choices: string[]) => {
@@ -89,8 +154,8 @@ export function ConfigItemRow({
   const isBoolean = Boolean(booleanOptions);
   const isChecked = (() => {
     if (!isBoolean || !booleanOptions) return false;
-    if (typeof value === 'number') return value !== 0;
-    return String(value).trim().toLowerCase() === booleanOptions.trueOption.trim().toLowerCase();
+    if (typeof mergedValue === 'number') return mergedValue !== 0;
+    return String(mergedValue).trim().toLowerCase() === booleanOptions.trueOption.trim().toLowerCase();
   })();
 
   const handleSelect = (newValue: string) => {
@@ -118,7 +183,7 @@ export function ConfigItemRow({
     setIsOpen(false);
   };
 
-  const displayValue = typeof value === 'string' ? value : String(value);
+  const displayValue = typeof mergedValue === 'string' ? mergedValue : String(mergedValue);
   const selectedValue = optionList.includes(displayValue) ? displayValue : undefined;
 
   if (isBoolean && booleanOptions) {
@@ -149,10 +214,10 @@ export function ConfigItemRow({
           <Select
             value={selectedValue}
             onValueChange={handleSelect}
-            disabled={isLoading}
+            disabled={isLoading || isItemLoading}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select" />
+              <SelectValue placeholder={isItemLoading ? 'Loading…' : 'Select'} />
             </SelectTrigger>
             <SelectContent>
               {optionList.map((option) => (
@@ -200,19 +265,19 @@ export function ConfigItemRow({
         {isNumeric ? (
           <div className="space-y-4 p-4">
             <div className="text-sm text-muted-foreground">
-              {details?.min !== undefined && details?.max !== undefined ? (
-                <>Range: {details.min} — {details.max}</>
+              {mergedDetails?.min !== undefined && mergedDetails?.max !== undefined ? (
+                <>Range: {mergedDetails.min} — {mergedDetails.max}</>
               ) : (
                 <>Enter a numeric value</>
               )}
-              {details?.format && ` (${details.format})`}
+              {mergedDetails?.format && ` (${mergedDetails.format})`}
             </div>
             <Input
               type="number"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              min={details?.min}
-              max={details?.max}
+              min={mergedDetails?.min}
+              max={mergedDetails?.max}
               className="font-mono text-lg"
             />
             <Button onClick={handleNumericSubmit} className="w-full">

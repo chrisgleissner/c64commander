@@ -122,6 +122,21 @@ export function useC64SetConfig() {
   });
 }
 
+export function useC64ConfigItem(category?: string, item?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['c64-config-item', category, item],
+    queryFn: async () => {
+      const api = getC64API();
+      if (!category || !item) {
+        return null;
+      }
+      return api.getConfigItem(category, item);
+    },
+    enabled: enabled && !!category && !!item,
+    staleTime: 30000,
+  });
+}
+
 export function useC64Drives() {
   return useQuery({
     queryKey: ['c64-drives'],

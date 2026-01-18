@@ -208,6 +208,7 @@ function QuickSectionCard({ section }: { section: QuickSection }) {
                   {items.map((item) => (
                     <ConfigItemRow
                       key={item.name}
+                      category={section.category}
                       name={item.name}
                       value={item.value}
                       options={item.options}
