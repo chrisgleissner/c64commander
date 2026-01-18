@@ -71,6 +71,11 @@ export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
 export PATH="$JAVA_HOME/bin:$PATH"
 
 install_prereqs() {
+  if ! command -v sudo >/dev/null 2>&1; then
+    echo "sudo is required to install prerequisites." >&2
+    exit 1
+  fi
+  echo "Installing missing emulator prerequisites (requires sudo)..."
   sudo apt update
   sudo apt install -y openjdk-17-jdk unzip wget curl git \
     libgl1-mesa-dev libpulse0 libx11-6 libxcb1 libxcomposite1 libxdamage1 \
@@ -78,6 +83,25 @@ install_prereqs() {
     libnss3 libnspr4 libdrm2 libgbm1 libasound2t64 libxtst6 libx11-xcb1 \
     qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils
   sudo usermod -aG kvm,libvirt "$USER" || true
+}
+
+check_prereqs() {
+  local missing=()
+
+  for cmd in java unzip wget curl git; do
+    command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
+  done
+
+  if [[ ! -x "/dev/kvm" ]]; then
+    missing+=("kvm")
+  fi
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Missing prerequisites: ${missing[*]}"
+    return 1
+  fi
+
+  return 0
 }
 
 install_sdk_tools() {
@@ -91,7 +115,7 @@ install_sdk_tools() {
     mv /tmp/android-cmdline/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
   fi
 
-  yes | sdkmanager --licenses
+  yes | sdkmanager --licenses || true
   sdkmanager \
     "platform-tools" \
     "platforms;android-${API_LEVEL}" \
@@ -130,12 +154,21 @@ start_emulator() {
   fi
 }
 
+get_emulator_id() {
+  adb devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1}' | head -n 1
+}
+
 wait_for_boot() {
-  adb wait-for-device
+  local emulator_id
+  emulator_id="$(get_emulator_id)"
+  if [[ -z "$emulator_id" ]]; then
+    adb wait-for-device
+    emulator_id="$(get_emulator_id)"
+  fi
   local boot_completed=""
   local attempts=0
   while [[ "$boot_completed" != "1" && $attempts -lt 120 ]]; do
-    boot_completed="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+    boot_completed="$(adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
     if [[ "$boot_completed" != "1" ]]; then
       sleep 2
       attempts=$((attempts + 1))
@@ -149,13 +182,23 @@ wait_for_boot() {
 
 install_apk() {
   local apk_path="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+  local emulator_id
+  emulator_id="$(get_emulator_id)"
+  if [[ -z "$emulator_id" ]]; then
+    echo "No emulator found. Start one or enable --emulator." >&2
+    exit 1
+  fi
   wait_for_boot
-  adb install -r "$apk_path"
-  adb shell am start -n com.c64.commander/.MainActivity
+  adb -s "$emulator_id" install -r "$apk_path"
+  adb -s "$emulator_id" shell am start -n com.c64.commander/.MainActivity
 }
 
 if [[ $WITH_PREREQS -eq 1 ]]; then
-  install_prereqs
+  if ! check_prereqs; then
+    install_prereqs
+  else
+    echo "Prerequisites already installed. Skipping sudo."
+  fi
 fi
 
 if [[ $WITH_SDK -eq 1 ]]; then

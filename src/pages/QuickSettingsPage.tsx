@@ -14,6 +14,50 @@ import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { toast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 
+type NormalizedConfigItem = {
+  value: string | number;
+  options?: string[];
+  details?: {
+    min?: number;
+    max?: number;
+    format?: string;
+    presets?: string[];
+  };
+};
+
+const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
+  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+    return { value: config as string | number };
+  }
+
+  const cfg = config as Record<string, any>;
+  const selected =
+    cfg.selected ??
+    cfg.value ??
+    cfg.current ??
+    cfg.current_value ??
+    cfg.currentValue ??
+    cfg.default ??
+    cfg.default_value ??
+    '';
+
+  const optionsCandidate = cfg.options ?? cfg.values ?? cfg.choices;
+  const presetsCandidate = cfg.details?.presets ?? cfg.presets ?? cfg.values ?? cfg.choices;
+  const options = Array.isArray(optionsCandidate) ? optionsCandidate : undefined;
+  const presets = Array.isArray(presetsCandidate) ? presetsCandidate : undefined;
+
+  const min = cfg.details?.min ?? cfg.min ?? cfg.minimum;
+  const max = cfg.details?.max ?? cfg.max ?? cfg.maximum;
+  const format = cfg.details?.format ?? cfg.format;
+
+  const details =
+    min !== undefined || max !== undefined || format || presets
+      ? { min, max, format, presets }
+      : undefined;
+
+  return { value: selected, options, details };
+};
+
 interface QuickSection {
   id: string;
   title: string;
@@ -85,27 +129,17 @@ function QuickSectionCard({ section }: { section: QuickSection }) {
   const items = useMemo(() => {
     if (!categoryData) return [];
     
-    const catData = categoryData[section.category];
+    const catData = categoryData[section.category] as any;
     if (!catData || typeof catData !== 'object') return [];
+
+    const itemsData = (catData as any).items ?? catData;
     
-    return Object.entries(catData)
+    return Object.entries(itemsData)
       .filter(([name]) => section.itemFilter(name))
-      .map(([name, config]) => {
-        if (typeof config === 'object' && config !== null && !Array.isArray(config)) {
-          return {
-            name,
-            value: (config as any).selected ?? '',
-            options: (config as any).options,
-            details: (config as any).details,
-          };
-        }
-        return {
-          name,
-          value: config as string | number,
-          options: undefined,
-          details: undefined,
-        };
-      });
+      .map(([name, config]) => ({
+        name,
+        ...normalizeConfigItem(config),
+      }));
   }, [categoryData, section.category, section.itemFilter]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {

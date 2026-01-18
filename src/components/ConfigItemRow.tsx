@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronRight, Check, Loader2 } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ChevronRight, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface ConfigItemRowProps {
   name: string;
@@ -31,10 +37,61 @@ export function ConfigItemRow({
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState(String(value));
 
-  const isNumeric = details?.min !== undefined && details?.max !== undefined;
+  useEffect(() => {
+    setInputValue(String(value));
+  }, [value]);
+
+  const optionList = useMemo(() => {
+    const combined = [...(options ?? []), ...(details?.presets ?? [])]
+      .map((opt) => String(opt))
+      .filter((opt) => opt.length > 0 || opt === '');
+    const seen = new Set<string>();
+    return combined.filter((opt) => {
+      if (seen.has(opt)) return false;
+      seen.add(opt);
+      return true;
+    });
+  }, [options, details?.presets]);
+
+  const hasOptions = optionList.length > 0;
+  const hasPresets = details?.presets !== undefined && details?.presets.length > 0;
+  const isNumeric =
+    (details?.min !== undefined && details?.max !== undefined) ||
+    (typeof value === 'number' && !hasOptions && !hasPresets);
   const isPreset = details?.presets !== undefined;
-  const hasOptions = options && options.length > 0;
-  const isEditable = hasOptions || isNumeric || isPreset;
+  const isEditable = true;
+
+  const getBooleanOptions = (choices: string[]) => {
+    if (!choices || choices.length !== 2) return undefined;
+    const normalize = (v: string) => v.trim().toLowerCase();
+    const trueValues = new Set(['on', 'enabled', 'enable', 'yes', 'true', '1', 'checked']);
+    const falseValues = new Set(['off', 'disabled', 'disable', 'no', 'false', '0', 'unchecked']);
+
+    const [a, b] = choices;
+    const aNorm = normalize(a);
+    const bNorm = normalize(b);
+
+    const aIsTrue = trueValues.has(aNorm);
+    const aIsFalse = falseValues.has(aNorm);
+    const bIsTrue = trueValues.has(bNorm);
+    const bIsFalse = falseValues.has(bNorm);
+
+    if ((aIsTrue && bIsFalse) || (aIsFalse && bIsTrue)) {
+      const trueOption = aIsTrue ? a : b;
+      const falseOption = aIsFalse ? a : b;
+      return { trueOption, falseOption };
+    }
+
+    return undefined;
+  };
+
+  const booleanOptions = getBooleanOptions(optionList);
+  const isBoolean = Boolean(booleanOptions);
+  const isChecked = (() => {
+    if (!isBoolean || !booleanOptions) return false;
+    if (typeof value === 'number') return value !== 0;
+    return String(value).trim().toLowerCase() === booleanOptions.trueOption.trim().toLowerCase();
+  })();
 
   const handleSelect = (newValue: string) => {
     onValueChange(newValue);
@@ -43,15 +100,72 @@ export function ConfigItemRow({
 
   const handleNumericSubmit = () => {
     const numVal = parseFloat(inputValue);
-    if (!isNaN(numVal) && details?.min !== undefined && details?.max !== undefined) {
-      const clamped = Math.max(details.min, Math.min(details.max, numVal));
-      onValueChange(clamped);
-      setInputValue(String(clamped));
+    if (!isNaN(numVal)) {
+      if (details?.min !== undefined && details?.max !== undefined) {
+        const clamped = Math.max(details.min, Math.min(details.max, numVal));
+        onValueChange(clamped);
+        setInputValue(String(clamped));
+      } else {
+        onValueChange(numVal);
+        setInputValue(String(numVal));
+      }
     }
     setIsOpen(false);
   };
 
+  const handleTextSubmit = () => {
+    onValueChange(inputValue);
+    setIsOpen(false);
+  };
+
   const displayValue = typeof value === 'string' ? value : String(value);
+  const selectedValue = optionList.includes(displayValue) ? displayValue : undefined;
+
+  if (isBoolean && booleanOptions) {
+    return (
+      <div className="settings-row w-full flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-sm font-medium">{name}</span>
+          <span className="text-xs text-muted-foreground">
+            {isChecked ? booleanOptions.trueOption : booleanOptions.falseOption}
+          </span>
+        </div>
+        <Switch
+          checked={isChecked}
+          disabled={isLoading}
+          onCheckedChange={(checked) =>
+            onValueChange(checked ? booleanOptions.trueOption : booleanOptions.falseOption)
+          }
+        />
+      </div>
+    );
+  }
+
+  if (hasOptions || isPreset) {
+    return (
+      <div className="settings-row w-full flex items-center justify-between gap-3">
+        <span className="text-sm font-medium flex-1 pr-4">{name}</span>
+        <div className="min-w-[160px] max-w-[220px]">
+          <Select
+            value={selectedValue}
+            onValueChange={handleSelect}
+            disabled={isLoading}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select" />
+            </SelectTrigger>
+            <SelectContent>
+              {optionList.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option || '(empty)'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -86,7 +200,11 @@ export function ConfigItemRow({
         {isNumeric ? (
           <div className="space-y-4 p-4">
             <div className="text-sm text-muted-foreground">
-              Range: {details?.min} — {details?.max}
+              {details?.min !== undefined && details?.max !== undefined ? (
+                <>Range: {details.min} — {details.max}</>
+              ) : (
+                <>Enter a numeric value</>
+              )}
               {details?.format && ` (${details.format})`}
             </div>
             <Input
@@ -102,32 +220,18 @@ export function ConfigItemRow({
             </Button>
           </div>
         ) : (
-          <ScrollArea className="h-[calc(70vh-100px)]">
-            <div className="space-y-1 p-2">
-              <AnimatePresence>
-                {(options || details?.presets || []).map((option, index) => {
-                  const isSelected = option === displayValue;
-                  return (
-                    <motion.button
-                      key={option}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.02 }}
-                      onClick={() => handleSelect(option)}
-                      className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
-                        isSelected 
-                          ? 'bg-primary/10 text-primary' 
-                          : 'hover:bg-muted'
-                      }`}
-                    >
-                      <span className="font-mono text-sm">{option || '(empty)'}</span>
-                      {isSelected && <Check className="h-5 w-5" />}
-                    </motion.button>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          </ScrollArea>
+          <div className="space-y-4 p-4">
+            <div className="text-sm text-muted-foreground">Enter a new value</div>
+            <Input
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="font-mono text-lg"
+            />
+            <Button onClick={handleTextSubmit} className="w-full">
+              Apply
+            </Button>
+          </div>
         )}
       </SheetContent>
     </Sheet>

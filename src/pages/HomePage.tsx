@@ -20,6 +20,10 @@ export default function HomePage() {
   const { data: drivesData } = useC64Drives();
   const controls = useC64MachineControl();
 
+  const appVersion = __APP_VERSION__ || '';
+  const gitSha = __GIT_SHA__ || '';
+  const buildTime = __BUILD_TIME__ || '';
+
   const handleAction = async (action: () => Promise<any>, successMsg: string) => {
     try {
       await action();
@@ -42,9 +46,16 @@ export default function HomePage() {
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="container py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="c64-header text-xl text-primary">C64 Ultimate</h1>
-              <p className="text-xs text-muted-foreground">Controller</p>
+            <div className="flex items-center gap-3">
+              <img
+                src="/c64commander.png"
+                alt="C64 Commander"
+                className="h-9 w-9 rounded-md"
+              />
+              <div>
+                <h1 className="c64-header text-xl text-primary">C64 Commander</h1>
+                <p className="text-xs text-muted-foreground">Controller</p>
+              </div>
             </div>
             <ConnectionBadge status={status} />
           </div>
@@ -52,6 +63,30 @@ export default function HomePage() {
       </header>
 
       <main className="container py-6 space-y-6">
+        {/* Build Info */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-card border border-border rounded-xl p-3"
+        >
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div className="bg-muted/50 rounded-lg p-2">
+              <span className="text-muted-foreground">Version</span>
+              <p className="font-mono font-medium truncate">{appVersion || '—'}</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-2">
+              <span className="text-muted-foreground">Git</span>
+              <p className="font-mono font-medium truncate">
+                {gitSha ? gitSha.slice(0, 8) : '—'}
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-2">
+              <span className="text-muted-foreground">Build</span>
+              <p className="font-mono font-medium truncate">{buildTime || '—'}</p>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Device Info Card */}
         {status.deviceInfo && (
           <motion.div

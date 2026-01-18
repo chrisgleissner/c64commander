@@ -1,6 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import fs from "fs";
+
+const pkg = JSON.parse(
+  fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
+);
+
+const appVersion = process.env.VITE_APP_VERSION || pkg.version || "";
+const gitSha =
+  process.env.VITE_GIT_SHA ||
+  process.env.GIT_SHA ||
+  process.env.GITHUB_SHA ||
+  "";
+const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
@@ -15,6 +28,11 @@ export default defineConfig(() => ({
     outDir: "dist",
   },
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+    __GIT_SHA__: JSON.stringify(gitSha),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
