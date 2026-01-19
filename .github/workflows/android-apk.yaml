@@ -131,7 +131,7 @@ jobs:
           fi
           if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk "apk-release/c64commander-${APK_VERSION}.apk"
-          elif [[ "$GITHUB_REF" == refs/tags/* && "$HAS_KEYSTORE" == "true" ]]; then
+          elif [[ "$GITHUB_REF" == refs/tags/* && $HAS_KEYSTORE == "true" ]]; then
             echo "Release APK not found; build may have failed." >&2
             exit 1
           else
