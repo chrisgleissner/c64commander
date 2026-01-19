@@ -77,6 +77,16 @@ jobs:
       - name: Build web + sync
         run: npm run cap:build
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run screenshot tests
+        env:
+          VITE_GIT_SHA: "ci"
+          VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+          SOURCE_DATE_EPOCH: "0"
+        run: npm run screenshots
+
       - name: Build APK (debug)
         run: npm run android:apk
 
