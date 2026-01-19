@@ -62,6 +62,7 @@ class AndroidHvscDatabase(context: Context) : SQLiteOpenHelper(
     ingestionState: String?,
     lastUpdateCheckUtcMs: Long?,
     ingestionError: String?,
+    clearIngestionError: Boolean,
   ) {
     val values = ContentValues()
     if (installedBaselineVersion != null) values.put("installed_baseline_version", installedBaselineVersion)
@@ -70,7 +71,7 @@ class AndroidHvscDatabase(context: Context) : SQLiteOpenHelper(
     if (lastUpdateCheckUtcMs != null) values.put("last_update_check_utc_ms", lastUpdateCheckUtcMs)
     if (ingestionError != null) {
       values.put("ingestion_error", ingestionError)
-    } else if (ingestionError == null && (ingestionState == "idle" || ingestionState == "ready")) {
+    } else if (clearIngestionError) {
       values.putNull("ingestion_error")
     }
     writableDatabase.update(HvscSchema.TABLE_META, values, "id = 1", emptyArray())

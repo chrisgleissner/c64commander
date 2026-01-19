@@ -11,6 +11,7 @@ declare global {
 test.describe('HVSC Play page', () => {
   let c64Server: Awaited<ReturnType<typeof createMockC64Server>>;
   let hvscServer: Awaited<ReturnType<typeof createMockHvscServer>>;
+  const consoleErrors = new WeakMap<Page, string[]>();
 
   test.beforeAll(async () => {
     c64Server = await createMockC64Server({});
@@ -28,11 +29,11 @@ test.describe('HVSC Play page', () => {
       if (msg.type() === 'error') errors.push(msg.text());
     });
     page.on('pageerror', (err: Error) => errors.push(err.message));
-    (page as Page & { __consoleErrors?: string[] }).__consoleErrors = errors;
+    consoleErrors.set(page, errors);
   });
 
   test.afterEach(async ({ page }: { page: Page }) => {
-    const errors: string[] = (page as Page & { __consoleErrors?: string[] }).__consoleErrors || [];
+    const errors = consoleErrors.get(page) ?? [];
     expect(errors, `Console errors: ${errors.join('\n')}`).toEqual([]);
   });
 

@@ -50,6 +50,7 @@ class JdbcHvscDatabase(private val connection: Connection) : HvscDatabase {
     ingestionState: String?,
     lastUpdateCheckUtcMs: Long?,
     ingestionError: String?,
+    clearIngestionError: Boolean,
   ) {
     val fields = mutableListOf<String>()
     val values = mutableListOf<Any?>()
@@ -72,7 +73,7 @@ class JdbcHvscDatabase(private val connection: Connection) : HvscDatabase {
     if (ingestionError != null) {
       fields.add("ingestion_error = ?")
       values.add(ingestionError)
-    } else if (ingestionState == "idle" || ingestionState == "ready") {
+    } else if (clearIngestionError) {
       fields.add("ingestion_error = NULL")
     }
     if (fields.isEmpty()) return

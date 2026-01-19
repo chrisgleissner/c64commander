@@ -78,7 +78,7 @@ class HvscIngestionService(
     cancelToken: HvscCancelRegistry.CancellationToken?,
     onProgress: (Progress) -> Unit,
   ) {
-    database.updateMeta(ingestionState = "installing", ingestionError = null)
+    database.updateMeta(ingestionState = "installing", ingestionError = null, clearIngestionError = true)
     val archive = File(workDir, "hvsc-baseline-$version.7z")
     onProgress(Progress("download", "Downloading HVSC $version…", 0))
     downloader.download(releaseService.buildBaselineUrl(version), archive) { percent ->
@@ -149,6 +149,7 @@ class HvscIngestionService(
         installedVersion = version,
         ingestionState = "ready",
         ingestionError = null,
+        clearIngestionError = true,
       )
     }
   }
@@ -160,7 +161,7 @@ class HvscIngestionService(
     onProgress: (Progress) -> Unit,
   ) {
     if (database.isUpdateApplied(version)) return
-    database.updateMeta(ingestionState = "updating", ingestionError = null)
+    database.updateMeta(ingestionState = "updating", ingestionError = null, clearIngestionError = true)
     val archive = File(workDir, "hvsc-update-$version.7z")
     onProgress(Progress("download", "Downloading update $version…", 0))
     downloader.download(releaseService.buildUpdateUrl(version), archive) { percent ->
@@ -225,6 +226,7 @@ class HvscIngestionService(
           installedVersion = version,
           ingestionState = "ready",
           ingestionError = null,
+          clearIngestionError = true,
         )
         database.markUpdateApplied(version, "success")
       }

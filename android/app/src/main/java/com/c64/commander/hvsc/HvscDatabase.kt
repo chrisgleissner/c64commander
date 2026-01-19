@@ -8,6 +8,7 @@ interface HvscDatabase {
     ingestionState: String? = null,
     lastUpdateCheckUtcMs: Long? = null,
     ingestionError: String? = null,
+    clearIngestionError: Boolean = false,
   )
 
   fun markUpdateApplied(version: Int, status: String, error: String? = null)

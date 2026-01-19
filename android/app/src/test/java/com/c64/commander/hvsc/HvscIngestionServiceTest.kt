@@ -30,6 +30,7 @@ class HvscIngestionServiceTest {
     val service = HvscIngestionService(db, releaseProvider, downloader)
     service.installOrUpdate(tempDir, null) { }
 
+    // installOrUpdate runs baseline + updates, so baseline stays 83 while installed version advances to 84.
     val meta = db.getMeta()
     assertEquals(83, meta.installedBaselineVersion)
     assertEquals(84, meta.installedVersion)
