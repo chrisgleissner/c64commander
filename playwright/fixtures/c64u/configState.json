@@ -1,15 +1,61 @@
 {
   "U64 Specific Settings": {
-    "System Mode": { "value": "PAL", "options": ["PAL", "NTSC"] },
-    "CPU Turbo": { "value": "Off", "options": ["Off", "On"] },
-    "HDMI Mode": { "value": "Auto", "options": ["Auto", "1080p"] }
+    "System Mode": {
+      "value": "PAL",
+      "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
+    },
+    "Digital Video Mode": {
+      "value": "Auto",
+      "options": ["Auto", "HDMI", "DVI"]
+    },
+    "HDMI Scan lines": {
+      "value": "Enabled",
+      "options": ["Disabled", "Enabled"]
+    }
   },
   "Audio Mixer": {
-    "Vol 1": { "value": "0 dB", "options": ["-6 dB", "0 dB", "6 dB"] },
-    "Pan 1": { "value": "Center", "options": ["Left", "Center", "Right"] }
+    "Vol UltiSid 1": {
+      "value": "OFF",
+      "options": [
+        "OFF",
+        "+6 dB",
+        "+5 dB",
+        "+4 dB",
+        "+3 dB",
+        "+2 dB",
+        "+1 dB",
+        " 0 dB",
+        "-1 dB",
+        "-2 dB",
+        "-3 dB",
+        "-4 dB",
+        "-5 dB",
+        "-6 dB",
+        "-7 dB",
+        "-8 dB",
+        "-9 dB",
+        "-10 dB",
+        "-11 dB",
+        "-12 dB",
+        "-13 dB",
+        "-14 dB",
+        "-15 dB",
+        "-16 dB",
+        "-17 dB",
+        "-18 dB",
+        "-24 dB",
+        "-27 dB",
+        "-30 dB",
+        "-36 dB",
+        "-42 dB"
+      ]
+    }
   },
   "UltiSID Configuration": {
-    "SID Model": { "value": "6581", "options": ["6581", "8580"] }
+    "UltiSID 1 Filter Curve": {
+      "value": "U2 High",
+      "options": ["8580 Lo", "8580 Hi", "6581", "6581 Alt", "U2 Low", "U2 Mid", "U2 High"]
+    }
   },
   "Drive A Settings": {
     "Drive Type": { "value": "1541", "options": ["1541", "1571", "1581"] }

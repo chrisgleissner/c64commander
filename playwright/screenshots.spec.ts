@@ -66,7 +66,7 @@ test.describe('App screenshots', () => {
     await page.screenshot({ path: screenshotPath('app-configuration.png') });
 
     await page.getByRole('button', { name: 'Audio Mixer', exact: true }).click();
-    const slider = page.getByLabel('Vol 1 slider');
+    const slider = page.getByLabel('Vol UltiSid 1 slider');
     await expect(slider).toBeVisible();
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {

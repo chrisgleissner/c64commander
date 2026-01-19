@@ -24,6 +24,7 @@ test.describe('UI coverage', () => {
     const locator = 'locator' in scope ? scope.locator('button') : scope.locator('button');
     const handles = await locator.elementHandles();
     for (const handle of handles) {
+      if (page.isClosed()) return;
       const isClickable = await handle.evaluate((el: Element) => {
         const button = el as HTMLButtonElement;
         const ariaDisabled = button.getAttribute('aria-disabled') === 'true';
@@ -38,8 +39,12 @@ test.describe('UI coverage', () => {
       }
 
       const closeButton = page.getByRole('button', { name: /close|cancel|done|dismiss|back/i }).first();
-      if (await closeButton.isVisible()) {
-        await closeButton.click();
+      try {
+        if (!page.isClosed() && (await closeButton.isVisible())) {
+          await closeButton.click();
+        }
+      } catch {
+        // Ignore navigation/teardown edge cases
       }
     }
   };
@@ -51,21 +56,21 @@ test.describe('UI coverage', () => {
 
     const selectTrigger = page.getByLabel('System Mode select');
     await selectTrigger.click();
-    await page.getByRole('option', { name: 'NTSC' }).click();
+    await page.getByRole('option', { name: /^NTSC$/ }).click();
 
-    const checkbox = page.getByLabel('CPU Turbo checkbox');
+    const checkbox = page.getByLabel('HDMI Scan lines checkbox');
     await checkbox.click();
 
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
-    const slider = page.getByLabel('Vol 1 slider');
+    const slider = page.getByLabel('Vol UltiSid 1 slider');
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {
       await slider.click({ position: { x: sliderBox.width - 2, y: sliderBox.height / 2 } });
     }
 
     await expect.poll(() => server.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');
-    await expect.poll(() => server.getState()['U64 Specific Settings']['CPU Turbo'].value).toBe('On');
-    await expect.poll(() => server.getState()['Audio Mixer']['Vol 1'].value).toBe('6 dB');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['HDMI Scan lines'].value).toBe('Disabled');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe('+6 dB');
 
     const refreshCount = server.requests.length;
     const refreshButton = page.getByRole('button', { name: 'Refresh' }).first();
@@ -77,14 +82,14 @@ test.describe('UI coverage', () => {
     await expect(revertButton).toBeEnabled();
     await revertButton.click();
     await expect.poll(() => server.getState()['U64 Specific Settings']['System Mode'].value).toBe('PAL');
-    await expect.poll(() => server.getState()['U64 Specific Settings']['CPU Turbo'].value).toBe('Off');
-    await expect.poll(() => server.getState()['Audio Mixer']['Vol 1'].value).toBe('0 dB');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['HDMI Scan lines'].value).toBe('Enabled');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe('OFF');
 
     await page.goto('/config');
     await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
     await expect(page.getByLabel('System Mode select')).toContainText('PAL');
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
-    await expect(page.getByText('Vol 1').locator('..').getByText('0 dB')).toBeVisible();
+    await expect(page.getByText('Vol UltiSid 1').locator('..').getByText('OFF')).toBeVisible();
   });
 
   test('clicks widgets across all pages', async ({ page }: { page: Page }) => {
