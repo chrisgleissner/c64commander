@@ -4,10 +4,14 @@ import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-reac
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
+import { useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import { addErrorLog } from '@/lib/logging';
+import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
 import { useRefreshControl } from '@/hooks/useRefreshControl';
+import { isAudioMixerValueEqual } from '@/lib/config/audioMixer';
 
 type NormalizedConfigItem = {
   value: string | number;
@@ -66,6 +70,7 @@ function CategorySection({
   const [isResetting, setIsResetting] = useState(false);
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
+  const updateConfigBatch = useC64UpdateConfigBatch();
 
   useEffect(() => {
     if (isOpen) {
@@ -114,26 +119,27 @@ function CategorySection({
     if (categoryName !== 'Audio Mixer') return;
     setIsResetting(true);
     try {
-      const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
-      const findOption = (options: string[] | undefined, target: string) => {
-        if (!options) return undefined;
-        const targetNorm = normalize(target);
-        return options.find((opt) => normalize(opt) === targetNorm);
-      };
-
+      const updates: Record<string, string | number> = {};
       for (const item of items) {
-        if (item.name.startsWith('Vol ')) {
-          const target = findOption(item.options, '0 dB') ?? findOption(item.options, '0db') ?? '0 dB';
-          await setConfig.mutateAsync({ category: categoryName, item: item.name, value: target });
-        } else if (item.name.startsWith('Pan ')) {
-          const target = findOption(item.options, 'Center') ?? 'Center';
-          await setConfig.mutateAsync({ category: categoryName, item: item.name, value: target });
-        }
+        const target = await resolveAudioMixerResetValue(categoryName, item.name, item.options);
+        if (target === undefined) continue;
+        if (isAudioMixerValueEqual(item.value, target)) continue;
+        updates[item.name] = target;
       }
 
+      if (Object.keys(updates).length === 0) {
+        toast({ title: 'Audio Mixer already at defaults', description: 'No changes needed.' });
+        return;
+      }
+
+      await updateConfigBatch.mutateAsync({ category: categoryName, updates });
       markChanged();
       toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
     } catch (error) {
+      addErrorLog('Audio Mixer reset failed', {
+        error: (error as Error).message,
+        category: categoryName,
+      });
       toast({
         title: 'Error',
         description: (error as Error).message,

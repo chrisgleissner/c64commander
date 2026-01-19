@@ -58,6 +58,10 @@ class HvscIngestionPlugin : Plugin() {
           payload.put("phase", progress.phase)
           payload.put("message", progress.message)
           progress.percent?.let { payload.put("percent", it) }
+          progress.downloadedBytes?.let { payload.put("downloadedBytes", it) }
+          progress.totalBytes?.let { payload.put("totalBytes", it) }
+          progress.songsUpserted?.let { payload.put("songsUpserted", it) }
+          progress.songsDeleted?.let { payload.put("songsDeleted", it) }
           notifyListeners("progress", payload)
         }
         db.close()

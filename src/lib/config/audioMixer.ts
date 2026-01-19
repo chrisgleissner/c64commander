@@ -1,0 +1,80 @@
+import { ConfigResponse, getC64API } from '@/lib/c64api';
+
+const normalizeOption = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const parseNumeric = (option: string) => {
+  const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : undefined;
+};
+
+export const normalizeAudioMixerValue = (value: string | number | undefined) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value === 'number') return value;
+  const trimmed = value.trim();
+  const normalized = normalizeOption(trimmed);
+  if (normalized === 'center') return 'center';
+  const numeric = parseNumeric(trimmed);
+  return numeric ?? normalized;
+};
+
+export const isAudioMixerValueEqual = (
+  left: string | number | undefined,
+  right: string | number | undefined,
+) => normalizeAudioMixerValue(left) === normalizeAudioMixerValue(right);
+
+const asRecord = (value: unknown): Record<string, unknown> | null =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+
+const extractOptions = (response: ConfigResponse, category: string, item: string) => {
+  const payload = response as Record<string, unknown>;
+  const categoryBlock = payload[category] ?? payload;
+  const categoryRecord = asRecord(categoryBlock);
+  const itemBlock =
+    (asRecord(categoryRecord?.items ?? categoryBlock) ?? {})[item] ??
+    payload[item] ??
+    payload['item'] ??
+    payload['value'] ??
+    payload;
+
+  const itemRecord = asRecord(itemBlock);
+  if (!itemRecord) return [] as string[];
+
+  const optionsCandidate = itemRecord.options ?? itemRecord.values ?? itemRecord.choices ?? [];
+  const detailsRecord = asRecord(itemRecord.details);
+  const presetsCandidate = detailsRecord?.presets ?? itemRecord.presets ?? [];
+  const optionsList = Array.isArray(optionsCandidate) ? optionsCandidate : [];
+  const presetsList = Array.isArray(presetsCandidate) ? presetsCandidate : [];
+  return [...optionsList, ...presetsList].map((opt) => String(opt));
+};
+
+export const resolveAudioMixerResetValue = async (
+  category: string,
+  itemName: string,
+  itemOptions?: string[],
+): Promise<string | number | undefined> => {
+  let options = itemOptions ?? [];
+  if (!options.length) {
+    try {
+      const api = getC64API();
+      const response = await api.getConfigItem(category, itemName);
+      options = extractOptions(response, category, itemName);
+    } catch {
+      // Fall back to defaults below.
+    }
+  }
+
+  if (itemName.startsWith('Vol ')) {
+    const zeroOption = options.find((option) => {
+      const normalized = normalizeOption(option);
+      return normalized === '0 db' || normalized === '0db' || parseNumeric(option) === 0;
+    });
+    return zeroOption ?? 0;
+  }
+
+  if (itemName.startsWith('Pan ')) {
+    const centerOption = options.find((option) => normalizeOption(option) === 'center');
+    return centerOption ?? 'Center';
+  }
+
+  return undefined;
+};

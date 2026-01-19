@@ -32,4 +32,8 @@ export type HvscProgressEvent = {
   phase: string;
   message: string;
   percent?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  songsUpserted?: number;
+  songsDeleted?: number;
 };

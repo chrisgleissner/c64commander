@@ -91,7 +91,10 @@ test.describe('HVSC Play page', () => {
         const emit = (payload: any) => listeners.forEach((listener) => listener(payload));
 
         window.__hvscMock__ = {
-          addListener: (_event: string, listener: (event: any) => void) => listeners.push(listener),
+          addListener: (_event: string, listener: (event: any) => void) => {
+            listeners.push(listener);
+            return { remove: async () => {} };
+          },
           getHvscStatus: async () => ({
             installedBaselineVersion: state.installedBaselineVersion,
             installedVersion: state.installedVersion,
@@ -199,6 +202,27 @@ test.describe('HVSC Play page', () => {
     await page.goto('/music');
     await page.getByRole('button', { name: 'Install' }).click();
     await expect(page.getByText('Version 84 installed.', { exact: true }).first()).toBeVisible();
+  });
+
+  test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }) => {
+    await installMocks(page, { installedVersion: 0 });
+    await page.goto('/music');
+    await page.getByRole('button', { name: 'Install' }).click();
+    await expect(page.getByText('Version 84 installed.', { exact: true }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
+    const firstTrack = page.getByText('/DEMOS/0-9/10_Orbyte.sid', { exact: true });
+    await expect(firstTrack).toBeVisible();
+    await firstTrack.locator('..').getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByText('Now Playing')).toBeVisible();
+
+    const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
+    await expect
+      .poll(() => c64Server.sidplayRequests.length)
+      .toBeGreaterThan(0);
+    const lastRequest = c64Server.sidplayRequests[c64Server.sidplayRequests.length - 1];
+    expect(lastRequest.method).toBe('POST');
+    expect(lastRequest.body.includes(expectedPayload)).toBe(true);
   });
 
   test('HVSC up-to-date -> browse -> play track', async ({ page }: { page: Page }) => {

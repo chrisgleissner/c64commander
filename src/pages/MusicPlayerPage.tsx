@@ -8,7 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSidPlayer } from '@/hooks/useSidPlayer';
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -32,6 +32,19 @@ const formatTime = (ms?: number) => {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
 
+const formatBytes = (bytes?: number | null) => {
+  if (bytes === null || bytes === undefined) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return `${value.toFixed(1)} ${units[index]}`;
+};
+
 export default function MusicPlayerPage() {
   const {
     queue,
@@ -51,6 +64,14 @@ export default function MusicPlayerPage() {
   const [hvscLoading, setHvscLoading] = useState(false);
   const [hvscProgress, setHvscProgress] = useState<number | null>(null);
   const [hvscActionLabel, setHvscActionLabel] = useState<string | null>(null);
+  const [hvscDownloadedBytes, setHvscDownloadedBytes] = useState<number | null>(null);
+  const [hvscSongsUpserted, setHvscSongsUpserted] = useState<number | null>(null);
+  const [hvscSongsDeleted, setHvscSongsDeleted] = useState<number | null>(null);
+  const hvscStatsRef = useRef({
+    downloadedBytes: null as number | null,
+    songsUpserted: null as number | null,
+    songsDeleted: null as number | null,
+  });
   const [hvscFolderFilter, setHvscFolderFilter] = useState('');
   const [hvscFolders, setHvscFolders] = useState<SongFolder[]>([]);
   const [hvscSongs, setHvscSongs] = useState<SongEntry[]>([]);
@@ -65,8 +86,20 @@ export default function MusicPlayerPage() {
   useEffect(() => {
     getHvscStatus()
       .then(setHvscStatus)
-      .catch(() => setHvscStatus(null));
+      .catch((error) => {
+        addErrorLog('HVSC status fetch failed', { error: (error as Error).message });
+        setHvscStatus(null);
+      });
   }, []);
+
+  useEffect(() => {
+    if (hvscStatus?.ingestionState === 'error' && hvscStatus.ingestionError) {
+      addErrorLog('HVSC ingestion error', {
+        error: hvscStatus.ingestionError,
+        installedVersion: hvscStatus.installedVersion,
+      });
+    }
+  }, [hvscStatus?.ingestionError, hvscStatus?.ingestionState, hvscStatus?.installedVersion]);
 
   useEffect(() => {
     let removeListener: (() => Promise<void>) | null = null;
@@ -78,6 +111,30 @@ export default function MusicPlayerPage() {
         setHvscProgress(event.percent);
       } else {
         setHvscProgress(null);
+      }
+      if (typeof event.downloadedBytes === 'number') {
+        hvscStatsRef.current.downloadedBytes = event.downloadedBytes;
+        setHvscDownloadedBytes(event.downloadedBytes);
+        addLog('info', 'HVSC download complete', {
+          bytes: event.downloadedBytes,
+          totalBytes: event.totalBytes ?? event.downloadedBytes,
+          message: event.message,
+        });
+      }
+      if (typeof event.songsUpserted === 'number') {
+        hvscStatsRef.current.songsUpserted = event.songsUpserted;
+        setHvscSongsUpserted(event.songsUpserted);
+      }
+      if (typeof event.songsDeleted === 'number') {
+        hvscStatsRef.current.songsDeleted = event.songsDeleted;
+        setHvscSongsDeleted(event.songsDeleted);
+      }
+      if (event.phase === 'summary') {
+        addLog('info', 'HVSC ingestion summary', {
+          message: event.message,
+          songsUpserted: event.songsUpserted,
+          songsDeleted: event.songsDeleted,
+        });
       }
     }).then((listener) => {
       removeListener = listener.remove;
@@ -171,11 +228,26 @@ export default function MusicPlayerPage() {
     try {
       setHvscLoading(true);
       setHvscProgress(0);
+      hvscStatsRef.current = { downloadedBytes: null, songsUpserted: null, songsDeleted: null };
+      setHvscDownloadedBytes(null);
+      setHvscSongsUpserted(null);
+      setHvscSongsDeleted(null);
+      addLog('info', 'HVSC update started', {
+        installedVersion: hvscStatus?.installedVersion ?? 0,
+        ingestionState: hvscStatus?.ingestionState,
+      });
       currentAction = 'Checking for updates…';
       setHvscActionLabel(currentAction);
       const updateStatus: HvscUpdateStatus = await checkForHvscUpdates();
+      addLog('info', 'HVSC update check complete', {
+        installedVersion: updateStatus.installedVersion,
+        latestVersion: updateStatus.latestVersion,
+        requiredUpdates: updateStatus.requiredUpdates,
+        baselineVersion: updateStatus.baselineVersion,
+      });
       if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
         toast({ title: 'HVSC up to date', description: 'No new updates detected.' });
+        addLog('info', 'HVSC up to date', { installedVersion: updateStatus.installedVersion });
         const status = await getHvscStatus();
         setHvscStatus(status);
         return;
@@ -185,9 +257,26 @@ export default function MusicPlayerPage() {
       await installOrUpdateHvsc('hvsc-install');
       const status = await getHvscStatus();
       setHvscStatus(status);
+      const stats = hvscStatsRef.current;
+      const statsDescription = [
+        stats.downloadedBytes !== null ? `Downloaded ${formatBytes(stats.downloadedBytes)}` : null,
+        stats.songsUpserted !== null ? `${stats.songsUpserted.toLocaleString()} songs indexed` : null,
+        stats.songsDeleted !== null ? `${stats.songsDeleted.toLocaleString()} removed` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      if (statsDescription) {
+        addLog('info', 'HVSC update details', {
+          downloadedBytes: stats.downloadedBytes,
+          songsUpserted: stats.songsUpserted,
+          songsDeleted: stats.songsDeleted,
+        });
+      }
       toast({
         title: 'HVSC ready',
-        description: `Version ${status.installedVersion} installed.`,
+        description: statsDescription
+          ? `Version ${status.installedVersion} installed. ${statsDescription}`
+          : `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
       addErrorLog('HVSC update failed', {
@@ -496,6 +585,22 @@ export default function MusicPlayerPage() {
               )}
               {hvscProgress !== null && (
                 <Progress value={hvscProgress} />
+              )}
+              {hvscStatus?.lastUpdateCheckUtcMs && (
+                <p className="text-xs text-muted-foreground">
+                  Last checked: {new Date(hvscStatus.lastUpdateCheckUtcMs).toLocaleString()}
+                </p>
+              )}
+              {hvscDownloadedBytes !== null && (
+                <p className="text-xs text-muted-foreground">
+                  Last download: {formatBytes(hvscDownloadedBytes)}
+                </p>
+              )}
+              {hvscSongsUpserted !== null && (
+                <p className="text-xs text-muted-foreground">
+                  Songs indexed: {hvscSongsUpserted.toLocaleString()}
+                  {hvscSongsDeleted !== null ? ` · Removed ${hvscSongsDeleted.toLocaleString()}` : ''}
+                </p>
               )}
               {hvscStatus?.ingestionState === 'error' && hvscStatus.ingestionError && (
                 <p className="text-xs text-destructive">

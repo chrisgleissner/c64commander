@@ -13,6 +13,10 @@ class HvscIngestionService(
     val phase: String,
     val message: String,
     val percent: Int? = null,
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
+    val songsUpserted: Int? = null,
+    val songsDeleted: Int? = null,
   )
 
   fun getStatus(): HvscMeta = database.getMeta()
@@ -85,6 +89,8 @@ class HvscIngestionService(
       onProgress(Progress("download", "Downloading HVSC $version…", percent))
       cancelIfNeeded(cancelToken)
     }
+    val baselineBytes = archive.length()
+    onProgress(Progress("download", "Downloaded HVSC $version", 100, baselineBytes, baselineBytes))
 
     onProgress(Progress("ingest", "Ingesting HVSC $version…", 0))
     val songlengths = mutableMapOf<String, Int>()
@@ -152,6 +158,15 @@ class HvscIngestionService(
         clearIngestionError = true,
       )
     }
+    onProgress(
+      Progress(
+        "summary",
+        "HVSC $version indexed",
+        100,
+        songsUpserted = songs.size,
+        songsDeleted = 0,
+      ),
+    )
   }
 
   private fun applyUpdate(
@@ -168,6 +183,8 @@ class HvscIngestionService(
       onProgress(Progress("download", "Downloading update $version…", percent))
       cancelIfNeeded(cancelToken)
     }
+    val updateBytes = archive.length()
+    onProgress(Progress("download", "Downloaded update $version", 100, updateBytes, updateBytes))
 
     val songs = mutableListOf<HvscSongRecord>()
     val md5Durations = mutableMapOf<String, Int>()
@@ -230,6 +247,15 @@ class HvscIngestionService(
         )
         database.markUpdateApplied(version, "success")
       }
+      onProgress(
+        Progress(
+          "summary",
+          "HVSC update $version indexed",
+          100,
+          songsUpserted = songs.size,
+          songsDeleted = deletions.size,
+        ),
+      )
     } catch (error: Exception) {
       database.markUpdateApplied(version, "failed", error.message)
       throw error

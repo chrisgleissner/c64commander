@@ -123,6 +123,28 @@ export function useC64SetConfig() {
   });
 }
 
+export function useC64UpdateConfigBatch() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      category,
+      updates,
+    }: {
+      category: string;
+      updates: Record<string, string | number>;
+    }) => {
+      const api = getC64API();
+      return api.updateConfigBatch({ [category]: updates });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['c64-category', variables.category] });
+      queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });
+      updateHasChanges(getActiveBaseUrl(), true);
+    },
+  });
+}
+
 export function useC64ConfigItem(category?: string, item?: string, enabled = true) {
   return useQuery({
     queryKey: ['c64-config-item', category, item],
