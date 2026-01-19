@@ -15,6 +15,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set APK version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="$(git rev-parse --short HEAD)"
+          fi
+          echo "APK_VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -107,36 +116,44 @@ jobs:
       - name: Build APK (debug)
         run: npm run android:apk
 
+      - name: Build APK (release)
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        run: cd android && ./gradlew assembleRelease
+
+      - name: Prepare APK artifacts
+        run: |
+          mkdir -p apk-release
+          cp android/app/build/outputs/apk/debug/app-debug.apk "apk-release/c64commander-${APK_VERSION}-debug.apk"
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk "apk-release/c64commander-${APK_VERSION}.apk"
+          fi
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: c64-commander-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Build APK (release)
-        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
-        run: cd android && ./gradlew assembleRelease
+          path: apk-release/c64commander-${{ env.APK_VERSION }}-debug.apk
 
       - name: Upload APK artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: c64-commander-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: apk-release/c64commander-${{ env.APK_VERSION }}.apk
 
       - name: Upload debug APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2.5.0
         with:
           files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
+            apk-release/c64commander-${{ env.APK_VERSION }}-debug.apk
 
       - name: Upload release APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: softprops/action-gh-release@v2.5.0
         with:
           files: |
-            android/app/build/outputs/apk/release/app-release.apk
+            apk-release/c64commander-${{ env.APK_VERSION }}.apk
 
       # TODO: Uncomment once release signing secrets and distribution flow are finalized.
       # - name: Build AAB (release)
