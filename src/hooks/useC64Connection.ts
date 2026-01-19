@@ -22,6 +22,17 @@ export function useC64Connection() {
   );
   const queryClient = useQueryClient();
 
+  const { data: deviceInfo, error, isLoading, refetch } = useQuery({
+    queryKey: ['c64-info', baseUrl],
+    queryFn: async () => {
+      const api = getC64API();
+      return api.getInfo();
+    },
+    retry: 1,
+    retryDelay: 1000,
+    staleTime: 30000,
+  });
+
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as {
@@ -44,17 +55,6 @@ export function useC64Connection() {
     window.addEventListener('c64u-connection-change', handler as EventListener);
     return () => window.removeEventListener('c64u-connection-change', handler as EventListener);
   }, [queryClient, refetch]);
-
-  const { data: deviceInfo, error, isLoading, refetch } = useQuery({
-    queryKey: ['c64-info', baseUrl],
-    queryFn: async () => {
-      const api = getC64API();
-      return api.getInfo();
-    },
-    retry: 1,
-    retryDelay: 1000,
-    staleTime: 30000,
-  });
 
   const updateConfig = useCallback((newUrl: string, newPassword?: string, newDeviceHost?: string) => {
     setBaseUrl(newUrl);
