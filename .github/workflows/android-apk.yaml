@@ -17,8 +17,8 @@ jobs:
 
       - name: Set APK version
         run: |
-          if ${{ startsWith(github.ref, 'refs/tags/') }}; then
-            VERSION="${{ github.ref_name }}"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF_NAME}"
           else
             VERSION="$(git rev-parse --short HEAD)"
           fi
@@ -131,7 +131,7 @@ jobs:
           fi
           if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk "apk-release/c64commander-${APK_VERSION}.apk"
-          elif ${{ startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true' }}; then
+          elif [[ "$GITHUB_REF" == refs/tags/* && "$HAS_KEYSTORE" == "true" ]]; then
             echo "Release APK not found; build may have failed." >&2
             exit 1
           else
