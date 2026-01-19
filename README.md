@@ -23,7 +23,6 @@ The app ingests HVSC archives directly on-device via native Kotlin code and stor
 ![Quick Settings](doc/img/app-quick-settings.png)
 ![Configuration](doc/img/app-configuration.png)
 ![Configuration Expanded](doc/img/app-configuration-expanded.png)
-![Configuration U64 Specific](doc/img/app-configuration-u64-specific.png)
 ![Music](doc/img/app-music.png)
 ![Settings](doc/img/app-settings.png)
 ![Documentation](doc/img/app-documentation.png)
