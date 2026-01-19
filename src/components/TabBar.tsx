@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Home, Sliders, Settings, BookOpen, Cpu, Music } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { MockModeBanner } from '@/components/MockModeBanner';
 
 const tabs = [
   { path: '/', icon: Home, label: 'Home' },
@@ -16,31 +17,34 @@ export function TabBar() {
   const navigate = useNavigate();
 
   return (
-    <nav className="tab-bar">
-      {tabs.map((tab) => {
-        const isActive = location.pathname === tab.path;
-        const Icon = tab.icon;
+    <div className="fixed bottom-0 left-0 right-0 z-50">
+      <MockModeBanner />
+      <nav className="tab-bar">
+        {tabs.map((tab) => {
+          const isActive = location.pathname === tab.path;
+          const Icon = tab.icon;
 
-        return (
-          <button
-            key={tab.path}
-            onClick={() => navigate(tab.path)}
-            className={`tab-item touch-none ${isActive ? 'active' : ''}`}
-          >
-            <div className="relative">
-              <Icon className="h-6 w-6" />
-              {isActive && (
-                <motion.div
-                  layoutId="tab-indicator"
-                  className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary"
-                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                />
-              )}
-            </div>
-            <span className="text-[10px] font-medium">{tab.label}</span>
-          </button>
-        );
-      })}
-    </nav>
+          return (
+            <button
+              key={tab.path}
+              onClick={() => navigate(tab.path)}
+              className={`tab-item touch-none ${isActive ? 'active' : ''}`}
+            >
+              <div className="relative">
+                <Icon className="h-6 w-6" />
+                {isActive && (
+                  <motion.div
+                    layoutId="tab-indicator"
+                    className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary"
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                )}
+              </div>
+              <span className="text-[10px] font-medium">{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </div>
   );
 }

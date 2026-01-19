@@ -209,8 +209,7 @@
 
   /* Tab navigation (mobile-native feel) */
   .tab-bar {
-    @apply fixed bottom-0 left-0 right-0 z-50
-           flex items-center justify-around
+    @apply flex items-center justify-around
            bg-card border-t border-border
            px-2 pb-safe pt-2;
   }

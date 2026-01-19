@@ -375,6 +375,16 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
   } else {
     localStorage.removeItem('c64u_device_host');
   }
+
+  window.dispatchEvent(
+    new CustomEvent('c64u-connection-change', {
+      detail: {
+        baseUrl,
+        password: password || '',
+        deviceHost: deviceHost || DEFAULT_DEVICE_HOST,
+      },
+    }),
+  );
 }
 
 export const C64_DEFAULTS = {

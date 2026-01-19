@@ -16,6 +16,7 @@ import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog } from "@/lib/logging";
 import MusicPlayerPage from "./pages/MusicPlayerPage";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
+import { MockModeProvider } from "@/hooks/useMockMode";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,20 +67,22 @@ const App = () => (
         <Sonner />
         <RefreshControlProvider>
           <SidPlayerProvider>
-            <BrowserRouter>
-              <ErrorBoundary />
-              <RouteRefresher />
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/quick" element={<QuickSettingsPage />} />
-                <Route path="/config" element={<ConfigBrowserPage />} />
-                <Route path="/music" element={<MusicPlayerPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/docs" element={<DocsPage />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              <TabBar />
-            </BrowserRouter>
+            <MockModeProvider>
+              <BrowserRouter>
+                <ErrorBoundary />
+                <RouteRefresher />
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/quick" element={<QuickSettingsPage />} />
+                  <Route path="/config" element={<ConfigBrowserPage />} />
+                  <Route path="/music" element={<MusicPlayerPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/docs" element={<DocsPage />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+                <TabBar />
+              </BrowserRouter>
+            </MockModeProvider>
           </SidPlayerProvider>
         </RefreshControlProvider>
       </TooltipProvider>
