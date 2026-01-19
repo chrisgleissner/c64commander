@@ -1,9 +1,9 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
-import { ConfigItemRow } from './ConfigItemRow';
-import { createMockC64Server, type MockC64Server } from '@/test/mockC64Server';
-import { createOpenApiGeneratedClient } from '@/test/openapiGeneratedClient';
+import { ConfigItemRow } from '@/components/ConfigItemRow';
+import { createMockC64Server, type MockC64Server } from '../../mocks/mockC64Server';
+import { createOpenApiGeneratedClient } from '../../helpers/openapiGeneratedClient';
 import { updateC64APIConfig } from '@/lib/c64api';
 
 function renderWithQuery(ui: React.ReactElement) {
@@ -18,22 +18,25 @@ describe('ConfigItemRow control selection + REST updates', () => {
   let openapiClient: any;
 
   beforeAll(async () => {
-    server = await createMockC64Server({
-      'Test Category': {
-        'Network Password': 'secret',
-        Drive: 'Enabled',
-        'Video Mode': 'PAL',
-        Power: 'On',
-        Hostname: 'c64u',
+    server = await createMockC64Server(
+      {
+        'Test Category': {
+          'Network Password': 'secret',
+          Drive: 'Enabled',
+          'Video Mode': 'PAL',
+          Power: 'On',
+          Hostname: 'c64u',
+        },
       },
-    }, {
-      'Test Category': {
-        Drive: { options: ['Enabled', 'Disabled'] },
-        'Video Mode': { options: ['PAL', 'NTSC'] },
-        'Network Password': { options: ['Enabled', 'Disabled'] },
-        Power: { options: ['On', 'Off'] },
+      {
+        'Test Category': {
+          Drive: { options: ['Enabled', 'Disabled'] },
+          'Video Mode': { options: ['PAL', 'NTSC'] },
+          'Network Password': { options: ['Enabled', 'Disabled'] },
+          Power: { options: ['On', 'Off'] },
+        },
       },
-    });
+    );
     updateC64APIConfig(server.baseUrl);
     openapiClient = await createOpenApiGeneratedClient(server.baseUrl);
   });
@@ -75,7 +78,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
       expect(resp.status).toBe(200);
-      expect(resp.data['Test Category']['Network Password']).toBe('newpass');
+      expect(resp.data['Test Category'].items['Network Password'].selected).toBe('newpass');
     });
   });
 
@@ -102,7 +105,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
-      expect(resp.data['Test Category'].Drive).toBe('Disabled');
+      expect(resp.data['Test Category'].items.Drive.selected).toBe('Disabled');
     });
   });
 
@@ -128,7 +131,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
-      expect(resp.data['Test Category'].Power).toBe('Off');
+      expect(resp.data['Test Category'].items.Power.selected).toBe('Off');
     });
 
     // Toggle back to On (keep shared test state stable)
@@ -139,7 +142,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
-      expect(resp.data['Test Category'].Power).toBe('On');
+      expect(resp.data['Test Category'].items.Power.selected).toBe('On');
     });
   });
 
@@ -167,7 +170,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
-      expect(resp.data['Test Category']['Video Mode']).toBe('NTSC');
+      expect(resp.data['Test Category'].items['Video Mode'].selected).toBe('NTSC');
     });
   });
 
@@ -195,7 +198,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
-      expect(resp.data['Test Category'].Hostname).toBe('u64');
+      expect(resp.data['Test Category'].items.Hostname.selected).toBe('u64');
     });
   });
 
@@ -234,8 +237,7 @@ describe('ConfigItemRow control selection + REST updates', () => {
         method: 'GET',
         url: `/v1/configs/${encodeURIComponent('Test Category')}`,
       });
-      expect(resp.data['Test Category']['Video Mode']).toBe('NTSC');
+      expect(resp.data['Test Category'].items['Video Mode'].selected).toBe('NTSC');
     });
   });
 });
-

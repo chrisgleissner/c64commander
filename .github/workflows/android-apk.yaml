@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
       - name: Decode keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -70,6 +73,24 @@ jobs:
 
       - name: Build web + sync
         run: npm run cap:build
+
+      - name: Run unit tests
+        run: npm run test
+
+      - name: Run Playwright tests
+        run: npm run test:e2e
+
+      - name: Run Android JVM tests
+        run: cd android && ./gradlew test
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
 
       - name: Build APK (debug)
         run: npm run android:apk

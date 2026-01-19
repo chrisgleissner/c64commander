@@ -141,6 +141,9 @@ fi
 if [[ "$RUN_TEST" == "true" ]]; then
   log "Running tests"
   (cd "$ROOT_DIR" && npm test)
+  (cd "$ROOT_DIR" && npx playwright install --with-deps)
+  (cd "$ROOT_DIR" && npm run test:e2e)
+  (cd "$ROOT_DIR/android" && ./gradlew test)
 fi
 
 if [[ "$RUN_APK" == "true" ]]; then

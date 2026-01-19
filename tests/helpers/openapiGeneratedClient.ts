@@ -20,4 +20,3 @@ export async function createOpenApiGeneratedClient(baseURL: string) {
 
   return api.init<any>();
 }
-

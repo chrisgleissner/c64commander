@@ -11,6 +11,11 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 
 - Browse and edit the entire C64U configuration.
 - Quick access to key settings (SID, VIC, CPU, drives) and device actions.
+- Play SID files from local folders or the HVSC library.
+
+## HVSC Library
+
+The app ingests HVSC archives directly on-device via native Kotlin code and stores metadata and SID binaries in a local SQLite database. Baseline installs and incremental updates are applied atomically, and the Play page remains source-agnostic between local folders and HVSC.
 
 ## Screenshots
 
@@ -49,5 +54,13 @@ Then run:
 
 ```sh
 ./linux-build.sh --install
+```
+
+## Tests
+
+```sh
+npm run test
+npm run test:e2e
+cd android && ./gradlew test
 ```
 

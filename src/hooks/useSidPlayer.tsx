@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getC64API } from '@/lib/c64api';
-import { createSslPayload } from '@/lib/sid/hvsc';
+import { createSslPayload } from '@/lib/sid/sidUtils';
 
 export type SidTrack = {
   id: string;

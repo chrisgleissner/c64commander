@@ -5,7 +5,7 @@ import com.getcapacitor.BridgeActivity
 
 class MainActivity : BridgeActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
-    registerPlugin(HvscExtractorPlugin::class.java)
+    registerPlugin(HvscIngestionPlugin::class.java)
     registerPlugin(FolderPickerPlugin::class.java)
     super.onCreate(savedInstanceState)
   }

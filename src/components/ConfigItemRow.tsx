@@ -304,6 +304,7 @@ export function ConfigItemRow({
         <Input
           type={inputType}
           value={inputValue}
+          aria-label={`${name} ${controlKind === 'password' ? 'password' : 'text'} input`}
           disabled={isLoading || isItemLoading || isReadOnly}
           onChange={(e) => {
             if (isReadOnly) return;
@@ -342,7 +343,6 @@ export function ConfigItemRow({
             onValueChange(nextValue);
           }}
           className="font-mono"
-          aria-label={`${name} ${controlKind === 'password' ? 'password' : 'text'} input`}
         />
         {(isLoading || isItemLoading) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>

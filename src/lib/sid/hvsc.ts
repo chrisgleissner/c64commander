@@ -1,3 +1,5 @@
+throw new Error('Deprecated legacy HVSC module. Do not import.');
+
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { CapacitorHttp, registerPlugin } from '@capacitor/core';
 import SparkMD5 from 'spark-md5';
