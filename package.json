@@ -23,6 +23,7 @@
     "android:apk": "cd android && ./gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor/filesystem": "^6.0.4",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
@@ -51,8 +52,9 @@
     "@radix-ui/react-toggle": "^1.1.9",
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
-    "@capacitor/filesystem": "^6.0.4",
     "@tanstack/react-query": "^5.83.0",
+    "baseline-browser-mapping": "^2.9.15",
+    "caniuse-lite": "^1.0.30001765",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
