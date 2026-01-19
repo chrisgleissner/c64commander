@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Music, Shuffle, SkipBack, SkipForward, Play, Folder, FolderOpen } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -10,16 +9,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSidPlayer } from '@/hooks/useSidPlayer';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
-import { FolderPicker } from '@/lib/native/folderPicker';
-import { HvscIngestion, type HvscStatus, type HvscUpdateStatus } from '@/lib/native/hvscIngestion';
 import {
-  createLocalFsSongSource,
+  addHvscProgressListener,
+  checkForHvscUpdates,
+  getHvscDurationByMd5Seconds,
+  getHvscStatus,
+  installOrUpdateHvsc,
+  isHvscBridgeAvailable,
+  type HvscStatus,
+  type HvscUpdateStatus,
   HvscSongSource,
-  type LocalSidFile,
-  type SongEntry,
-  type SongFolder,
-  type SongSource,
-} from '@/lib/sid/songSources';
+} from '@/lib/hvsc';
+import { createLocalFsSongSource, type LocalSidFile } from '@/lib/sources/LocalFsSongSource';
+import { browseLocalSidFiles, filterSidFiles, prepareDirectoryInput } from '@/lib/sources/localFsPicker';
+import type { SongEntry, SongFolder, SongSource } from '@/lib/sources/SongSource';
 
 const formatTime = (ms?: number) => {
   if (!ms && ms !== 0) return '—';
@@ -27,33 +30,6 @@ const formatTime = (ms?: number) => {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-};
-
-type FileSystemHandleLike = {
-  kind: 'file' | 'directory';
-  name: string;
-};
-
-type FileSystemFileHandleLike = FileSystemHandleLike & {
-  kind: 'file';
-  getFile: () => Promise<File>;
-};
-
-type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
-  kind: 'directory';
-  entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
-};
-
-const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
-  handle.kind === 'directory' && 'entries' in handle;
-
-const base64ToArrayBuffer = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
 };
 
 export default function MusicPlayerPage() {
@@ -87,14 +63,14 @@ export default function MusicPlayerPage() {
   const localInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    HvscIngestion.getHvscStatus()
+    getHvscStatus()
       .then(setHvscStatus)
       .catch(() => setHvscStatus(null));
   }, []);
 
   useEffect(() => {
     let removeListener: (() => Promise<void>) | null = null;
-    HvscIngestion.addListener('progress', (event) => {
+    addHvscProgressListener((event) => {
       if (event.message) {
         setHvscActionLabel(event.message);
       }
@@ -125,10 +101,13 @@ export default function MusicPlayerPage() {
   const hvscSource = HvscSongSource;
   const hvscInstalled = Boolean(hvscStatus?.installedVersion);
   const hvscUpdating = hvscLoading || ['installing', 'updating'].includes(hvscStatus?.ingestionState ?? '');
-  const hvscBridgeAvailable = Capacitor.getPlatform() !== 'web' || Boolean((window as any)?.__hvscMock__);
+  const hvscBridgeAvailable = isHvscBridgeAvailable();
 
   const localSource = useMemo(
-    () => createLocalFsSongSource(localFiles, Boolean(hvscStatus?.installedVersion)),
+    () =>
+      createLocalFsSongSource(localFiles, {
+        lookupDurationSeconds: hvscStatus?.installedVersion ? getHvscDurationByMd5Seconds : undefined,
+      }),
     [localFiles, hvscStatus?.installedVersion],
   );
 
@@ -194,17 +173,17 @@ export default function MusicPlayerPage() {
       setHvscProgress(0);
       currentAction = 'Checking for updates…';
       setHvscActionLabel(currentAction);
-      const updateStatus: HvscUpdateStatus = await HvscIngestion.checkForHvscUpdates();
+      const updateStatus: HvscUpdateStatus = await checkForHvscUpdates();
       if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
         toast({ title: 'HVSC up to date', description: 'No new updates detected.' });
-        const status = await HvscIngestion.getHvscStatus();
+        const status = await getHvscStatus();
         setHvscStatus(status);
         return;
       }
       currentAction = updateStatus.installedVersion > 0 ? 'Applying updates…' : 'Installing HVSC…';
       setHvscActionLabel(currentAction);
-      await HvscIngestion.installOrUpdateHvsc({ cancelToken: 'hvsc-install' });
-      const status = await HvscIngestion.getHvscStatus();
+      await installOrUpdateHvsc('hvsc-install');
+      const status = await getHvscStatus();
       setHvscStatus(status);
       toast({
         title: 'HVSC ready',
@@ -292,63 +271,11 @@ export default function MusicPlayerPage() {
   };
 
   const handleLocalFolderBrowse = async () => {
-    if (Capacitor.getPlatform() === 'android') {
-      try {
-        const result = await FolderPicker.pickDirectory();
-        const files: LocalSidFile[] = result.files.map((entry) => ({
-          name: entry.name,
-          webkitRelativePath: entry.path,
-          lastModified: Date.now(),
-          arrayBuffer: async () => {
-            const data = await FolderPicker.readFile({ uri: entry.uri });
-            return base64ToArrayBuffer(data.data);
-          },
-        }));
-        setLocalFiles(files);
-      } catch (error) {
-        addErrorLog('Local folder pick failed', {
-          error: {
-            name: (error as Error).name,
-            message: (error as Error).message,
-            stack: (error as Error).stack,
-          },
-        });
-        toast({
-          title: 'Folder selection failed',
-          description: (error as Error).message,
-          variant: 'destructive',
-        });
-      }
-      return;
-    }
-    const picker = (window as Window & {
-      showDirectoryPicker?: () => Promise<FileSystemDirectoryHandleLike>;
-    }).showDirectoryPicker;
-    if (!picker) {
-      localInputRef.current?.click();
-      return;
-    }
     try {
-      const directoryHandle = await picker();
-      const files: File[] = [];
-
-      const walkDirectory = async (dirHandle: FileSystemDirectoryHandleLike, prefix: string) => {
-        for await (const [name, handle] of dirHandle.entries()) {
-          if (handle.kind === 'file') {
-            const file = await (handle as FileSystemFileHandleLike).getFile();
-            if (!file.name.toLowerCase().endsWith('.sid')) continue;
-            Object.defineProperty(file, 'webkitRelativePath', {
-              value: `${prefix}${name}`,
-            });
-            files.push(file);
-          } else if (isDirectoryHandle(handle)) {
-            await walkDirectory(handle, `${prefix}${name}/`);
-          }
-        }
-      };
-
-      await walkDirectory(directoryHandle, '');
-      setLocalFiles(files);
+      const files = await browseLocalSidFiles(localInputRef.current);
+      if (files) {
+        setLocalFiles(files);
+      }
     } catch (error) {
       addErrorLog('Local folder pick failed', {
         error: {
@@ -357,20 +284,22 @@ export default function MusicPlayerPage() {
           stack: (error as Error).stack,
         },
       });
-      localInputRef.current?.click();
+      toast({
+        title: 'Folder selection failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
     }
   };
 
   const handleLocalFolderPick = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const list = Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.sid'));
+    const list = filterSidFiles(files);
     setLocalFiles(list);
   };
 
   useEffect(() => {
-    if (!localInputRef.current) return;
-    localInputRef.current.setAttribute('webkitdirectory', '');
-    localInputRef.current.setAttribute('directory', '');
+    prepareDirectoryInput(localInputRef.current);
   }, []);
 
   const handlePlayLocalFolder = async () => {

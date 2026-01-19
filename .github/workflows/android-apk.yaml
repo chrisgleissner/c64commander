@@ -91,6 +91,7 @@ jobs:
           path: |
             playwright-report
             test-results
+          if-no-files-found: ignore
 
       - name: Build APK (debug)
         run: npm run android:apk

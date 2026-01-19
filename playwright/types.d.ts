@@ -1,3 +1,1 @@
-declare module '7zip-bin' {
-  export const path7za: string;
-}
+// Deprecated: 7zip-bin fixtures removed.

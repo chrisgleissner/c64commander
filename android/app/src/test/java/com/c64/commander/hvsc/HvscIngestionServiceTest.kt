@@ -15,14 +15,8 @@ class HvscIngestionServiceTest {
     val baselineArchive = File(tempDir, "hvsc-baseline.7z")
     val updateArchive = File(tempDir, "hvsc-update.7z")
 
-    createArchiveFromDir(
-      resolveFixture("hvsc/complete"),
-      baselineArchive,
-    )
-    createArchiveFromDir(
-      resolveFixture("hvsc/update/update"),
-      updateArchive,
-    )
+    createArchiveFromDir(resolveFixtureDir("baseline"), baselineArchive)
+    createArchiveFromDir(resolveFixtureDir("update"), updateArchive)
 
     val db = JdbcHvscDatabase.inMemory()
     val downloader = TestDownloader(
@@ -41,7 +35,7 @@ class HvscIngestionServiceTest {
     assertEquals(84, meta.installedVersion)
 
     val listing = db.listSongs("/DEMOS/0-9")
-    assertEquals("Songs: ${listing.map { it.virtualPath }}", 3, listing.size)
+    assertEquals("Songs: ${listing.map { it.virtualPath }}", 2, listing.size)
     val song = db.getSongByVirtualPath("/DEMOS/0-9/8-Bit_Bard.sid")
     assertNotNull(song)
     assertEquals(34, song?.durationSeconds)
@@ -53,14 +47,8 @@ class HvscIngestionServiceTest {
     val baselineArchive = File(tempDir, "hvsc-baseline.7z")
     val updateArchive = File(tempDir, "hvsc-update.7z")
 
-    createArchiveFromDir(
-      resolveFixture("hvsc/complete"),
-      baselineArchive,
-    )
-    createArchiveFromDir(
-      resolveFixture("hvsc/update/update"),
-      updateArchive,
-    )
+    createArchiveFromDir(resolveFixtureDir("baseline"), baselineArchive)
+    createArchiveFromDir(resolveFixtureDir("update"), updateArchive)
 
     val db = JdbcHvscDatabase.inMemory()
     val downloader = TestDownloader(
@@ -78,7 +66,7 @@ class HvscIngestionServiceTest {
     val meta = db.getMeta()
     assertEquals(84, meta.installedVersion)
     val listing = db.listSongs("/DEMOS/0-9")
-    assertEquals("Songs: ${listing.map { it.virtualPath }}", 3, listing.size)
+    assertEquals("Songs: ${listing.map { it.virtualPath }}", 2, listing.size)
   }
 
   @Test
@@ -87,14 +75,8 @@ class HvscIngestionServiceTest {
     val baselineArchive = File(tempDir, "hvsc-baseline.7z")
     val updateArchive = File(tempDir, "hvsc-update.7z")
 
-    createArchiveFromDir(
-      resolveFixture("hvsc/complete"),
-      baselineArchive,
-    )
-    createArchiveFromDir(
-      resolveFixture("hvsc/update/update"),
-      updateArchive,
-    )
+    createArchiveFromDir(resolveFixtureDir("baseline"), baselineArchive)
+    createArchiveFromDir(resolveFixtureDir("update"), updateArchive)
 
     val db = JdbcHvscDatabase.inMemory()
     val downloader = FailingUpdateDownloader(
@@ -119,16 +101,8 @@ class HvscIngestionServiceTest {
     val baselineArchive = File(tempDir, "hvsc-baseline.7z")
     val updateArchive = File(tempDir, "hvsc-update.7z")
 
-    createArchiveFromDir(
-      resolveFixture("hvsc/complete"),
-      baselineArchive,
-    )
-
-    val updateRoot = File(tempDir, "update-fixture").apply { mkdirs() }
-    val newDir = File(updateRoot, "new/DEMOS/0-9").apply { mkdirs() }
-    File(updateRoot, "delete.txt").writeText("/DEMOS/0-9/10_Orbyte.sid\n")
-    File(newDir, "New.sid").writeBytes(byteArrayOf(0x01, 0x02, 0x03))
-    createArchiveFromDir(updateRoot, updateArchive)
+    createArchiveFromDir(resolveFixtureDir("baseline"), baselineArchive)
+    createArchiveFromDir(resolveFixtureDir("update"), updateArchive)
 
     val db = JdbcHvscDatabase.inMemory()
     val downloader = TestDownloader(
@@ -143,7 +117,7 @@ class HvscIngestionServiceTest {
     service.installOrUpdate(tempDir, null) { }
 
     assertEquals(null, db.getSongByVirtualPath("/DEMOS/0-9/10_Orbyte.sid"))
-    assertNotNull(db.getSongByVirtualPath("/DEMOS/0-9/New.sid"))
+    assertNotNull(db.getSongByVirtualPath("/DEMOS/0-9/8-Bit_Bard.sid"))
   }
 
   private fun createArchiveFromDir(sourceDir: File, targetArchive: File) {
@@ -153,15 +127,17 @@ class HvscIngestionServiceTest {
     }
   }
 
-  private fun resolveFixture(relativePath: String): File {
+  private fun resolveFixtureDir(name: String): File {
     val cwd = File(System.getProperty("user.dir") ?: ".")
     val candidates = listOf(
-      cwd.resolve("tests/fixtures/$relativePath"),
-      cwd.resolve("../tests/fixtures/$relativePath"),
-      cwd.resolve("../../tests/fixtures/$relativePath"),
+      cwd.resolve("app/src/test/fixtures/hvsc/$name"),
+      cwd.resolve("android/app/src/test/fixtures/hvsc/$name"),
+      cwd.resolve("src/test/fixtures/hvsc/$name"),
+      cwd.resolve("../app/src/test/fixtures/hvsc/$name"),
+      cwd.resolve("../android/app/src/test/fixtures/hvsc/$name"),
     )
     return candidates.firstOrNull { it.exists() }
-      ?: throw IllegalStateException("Fixture not found: $relativePath (cwd=${cwd.path})")
+      ?: throw IllegalStateException("Fixture directory not found: $name (cwd=${cwd.path})")
   }
 
   private fun addDirectory(output: SevenZOutputFile, dir: File, prefix: String) {

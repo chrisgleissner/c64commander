@@ -1,39 +1,23 @@
 import { test, expect, type Page } from '@playwright/test';
-import fs from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 
-const fixturePath = path.resolve('tests/fixtures/hvsc/complete/C64Music/DEMOS/0-9/10_Orbyte.sid');
-const fixtureData = fs.readFileSync(fixturePath);
-const fixtureBase64 = fixtureData.toString('base64');
-
-const configState = {
-  'Test Controls': {
-    'Volume Level': { value: '1', options: ['0', '1', '2', '3'] },
-    Mode: { value: 'Classic', options: ['Classic', 'Modern'] },
-    'Enable Feature': { value: 'Enabled', options: ['Enabled', 'Disabled'] },
-    'Custom Label': { value: 'Hello' },
-    'Network Password': { value: 'secret' },
-  },
-  'U64 Specific Settings': {
-    'System Mode': { value: 'PAL', options: ['PAL', 'NTSC'] },
-    'CPU Turbo': { value: 'Off', options: ['Off', 'On'] },
-    'HDMI Mode': { value: 'Auto', options: ['Auto', '1080p'] },
-  },
-  'Audio Mixer': {
-    'Vol 1': { value: '0 dB', options: ['-6 dB', '0 dB', '6 dB'] },
-    'Pan 1': { value: 'Center', options: ['Left', 'Center', 'Right'] },
-  },
-  'UltiSID Configuration': {
-    'SID Model': { value: '6581', options: ['6581', '8580'] },
-  },
-  'Drive A Settings': {
-    'Drive Type': { value: '1541', options: ['1541', '1571', '1581'] },
-  },
-  'Drive B Settings': {
-    'Drive Type': { value: '1541', options: ['1541', '1571', '1581'] },
-  },
+type HvscFixture = {
+  version: number;
+  songs: Array<{ virtualPath: string; fileName: string; dataBase64: string; durationSeconds?: number }>;
 };
+
+const configState = JSON.parse(
+  fs.readFileSync(path.resolve('playwright/fixtures/c64u/configState.json'), 'utf8'),
+) as Record<string, Record<string, any>>;
+
+const baselineFixture = JSON.parse(
+  fs.readFileSync(path.resolve('playwright/fixtures/hvsc/baseline.json'), 'utf8'),
+) as HvscFixture;
+
+const primarySong = baselineFixture.songs[0];
+const fixtureBase64 = primarySong.dataBase64;
 
 const buildSnapshotData = () => {
   const data: Record<string, any> = {};
@@ -67,9 +51,15 @@ test.describe('UI coverage', () => {
     await server.close();
   });
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }: { page: Page }) => {
     await page.addInitScript(
-      ({ baseUrl, songData, snapshot }) => {
+      ({ baseUrl, songData, snapshot }: { baseUrl: string; songData: string; snapshot: typeof initialSnapshot }) => {
+        // Force input-based picker flow in Playwright.
+        try {
+          delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
+        } catch {
+          // ignore
+        }
         localStorage.setItem('c64u_base_url', baseUrl);
         localStorage.setItem('c64u_password', '');
         localStorage.setItem('c64u_device_host', 'c64u');
@@ -95,26 +85,26 @@ test.describe('UI coverage', () => {
             installedVersion: 84,
             ingestionState: 'ready',
             lastUpdateCheckUtcMs: Date.now(),
-            ingestionError: null,
+            ingestionError: null as string | null,
           }),
           checkForHvscUpdates: async () => ({
             latestVersion: 84,
             installedVersion: 84,
-            baselineVersion: null,
-            requiredUpdates: [],
+            baselineVersion: null as number | null,
+            requiredUpdates: [] as number[],
           }),
           installOrUpdateHvsc: async () => ({
             installedBaselineVersion: 83,
             installedVersion: 84,
             ingestionState: 'ready',
             lastUpdateCheckUtcMs: Date.now(),
-            ingestionError: null,
+            ingestionError: null as string | null,
           }),
           cancelHvscInstall: async () => {},
           getHvscFolderListing: async ({ path }: { path: string }) => {
             const normalized = path || '/';
             if (normalized === '/') {
-              return { path: '/', folders: ['/DEMOS/0-9'], songs: [] };
+              return { path: '/', folders: ['/DEMOS/0-9'], songs: [] as Array<any> };
             }
             if (normalized === '/DEMOS/0-9') {
               return {
@@ -152,7 +142,7 @@ test.describe('UI coverage', () => {
     const locator = 'locator' in scope ? scope.locator('button') : scope.locator('button');
     const handles = await locator.elementHandles();
     for (const handle of handles) {
-      const isClickable = await handle.evaluate((el) => {
+      const isClickable = await handle.evaluate((el: Element) => {
         const button = el as HTMLButtonElement;
         const ariaDisabled = button.getAttribute('aria-disabled') === 'true';
         return !button.disabled && !ariaDisabled && button.offsetParent !== null;
@@ -172,7 +162,7 @@ test.describe('UI coverage', () => {
     }
   };
 
-  test('config widgets read/write, refresh, and revert defaults', async ({ page }) => {
+  test('config widgets read/write, refresh, and revert defaults', async ({ page }: { page: Page }) => {
     await page.goto('/config');
     await expect(page.getByRole('button', { name: 'Test Controls' })).toBeVisible();
     await page.getByRole('button', { name: 'Test Controls' }).click();
@@ -221,7 +211,7 @@ test.describe('UI coverage', () => {
     await expect(page.getByLabel('Custom Label text input')).toHaveValue('Hello');
   });
 
-  test('clicks widgets across all pages', async ({ page }) => {
+  test('clicks widgets across all pages', async ({ page }: { page: Page }) => {
     await page.goto('/');
     await clickAllButtons(page, page.locator('main'));
 
@@ -241,7 +231,9 @@ test.describe('UI coverage', () => {
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Pick folder' }).click();
     const chooser = await fileChooserPromise;
-    await chooser.setFiles([{ name: 'local.sid', mimeType: 'audio/sid', buffer: fixtureData }]);
+    await chooser.setFiles([
+      { name: 'local.sid', mimeType: 'audio/sid', buffer: Buffer.from(fixtureBase64, 'base64') },
+    ]);
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.getByRole('textbox', { name: 'Base URL' }).fill(server.baseUrl);

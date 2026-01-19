@@ -1,9 +1,5 @@
-throw new Error('Deprecated legacy HVSC module. Do not import.');
-
-import { Directory, Filesystem } from '@capacitor/filesystem';
-import { CapacitorHttp, registerPlugin } from '@capacitor/core';
-import SparkMD5 from 'spark-md5';
-import { addErrorLog } from '@/lib/logging';
+export {};
+/* Deprecated legacy HVSC module. All HVSC logic moved to src/lib/hvsc.
 
 const HVSC_ARCHIVE_URL = 'https://hvsc.brona.dk/HVSC/HVSC_84-all-of-them.7z';
 const HVSC_UPDATE_URL = 'https://hvsc.brona.dk/HVSC/HVSC_Update_84.7z';
@@ -409,3 +405,5 @@ export const resolveDurationMs = async (
   const md5 = await computeSidMd5(fileBuffer);
   return index.md5ToLengthMs[md5];
 };
+
+*/
