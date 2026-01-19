@@ -34,4 +34,4 @@ If this policy changes, we will update this page.
 
 Email: apps@gleissner.uk
 
-Support: https://github.com/chris/dev/c64/c64commander/issues
+Support: https://github.com/chrisgleissner/c64commander/issues
