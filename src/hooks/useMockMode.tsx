@@ -32,6 +32,13 @@ const MockModeContext = createContext<MockModeContextValue | null>(null);
 const getStoredPassword = () => localStorage.getItem('c64u_password') || undefined;
 const getStoredDeviceHost = () =>
   localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
+const getMockAvailability = () => {
+  try {
+    return Boolean((Capacitor as { isNativePlatform?: () => boolean })?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
+};
 
 const invalidateC64Queries = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({
@@ -43,7 +50,7 @@ const invalidateC64Queries = (queryClient: ReturnType<typeof useQueryClient>) =>
 
 export const MockModeProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
-  const isMockAvailable = Capacitor.isNativePlatform();
+  const isMockAvailable = getMockAvailability();
   const [isDeveloperModeEnabled, setIsDeveloperModeEnabled] = useState(() =>
     getDeveloperModeEnabled(),
   );
