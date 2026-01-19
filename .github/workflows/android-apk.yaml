@@ -94,6 +94,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: cd android && ./gradlew assembleRelease
 
+      - name: Build App Bundle (release)
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: ${{ github.ref_name }}
+        run: cd android && ./gradlew bundleRelease
+
       - name: Upload APK artifact (debug)
         uses: actions/upload-artifact@v4
         with:
@@ -106,6 +113,13 @@ jobs:
         with:
           name: c64-commander-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload AAB artifact (release)
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: c64-commander-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
 
       - name: Upload debug APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
@@ -121,3 +135,20 @@ jobs:
         with:
           files: |
             android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload release AAB to GitHub release
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          files: |
+            android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload AAB to Google Play (internal)
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ secrets.PLAY_PACKAGE_NAME }}
+          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ secrets.PLAY_TRACK }}
+          status: completed

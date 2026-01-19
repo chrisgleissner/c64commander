@@ -26,8 +26,10 @@ android {
         applicationId "com.c64.commander"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        def envVersionCode = System.getenv("VERSION_CODE")
+        def envVersionName = System.getenv("VERSION_NAME")
+        versionCode (envVersionCode ? envVersionCode.toInteger() : 2)
+        versionName (envVersionName ?: "0.1.1")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
