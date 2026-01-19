@@ -139,6 +139,26 @@ export function ConfigItemRow({
     const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : undefined;
   };
+  const isLeftRightCenter = (options: string[]) => {
+    const normalized = options.map(normalizeOption);
+    const hasCenter = normalized.some((value) => value === 'center' || value === 'centre');
+    const hasLeft = normalized.some((value) => value.startsWith('left'));
+    const hasRight = normalized.some((value) => value.startsWith('right'));
+    return hasCenter && hasLeft && hasRight;
+  };
+  const parseLeftRight = (option: string) => {
+    const normalized = normalizeOption(option);
+    if (normalized.startsWith('left')) {
+      return { side: 'left' as const, value: parseNumeric(option) ?? 0 };
+    }
+    if (normalized.startsWith('right')) {
+      return { side: 'right' as const, value: parseNumeric(option) ?? 0 };
+    }
+    if (normalized === 'center' || normalized === 'centre') {
+      return { side: 'center' as const, value: 0 };
+    }
+    return null;
+  };
   const isOffLowMediumHigh = (options: string[]) => {
     const normalized = new Set(options.map(normalizeOption));
     return (
@@ -173,6 +193,24 @@ export function ConfigItemRow({
         ...(offEntry ? [offEntry.option] : []),
         ...sortedNumeric.map((entry) => entry.option),
       ];
+    }
+
+    if (isLeftRightCenter(options)) {
+      const left = options
+        .map((option) => ({ option, parsed: parseLeftRight(option) }))
+        .filter((entry) => entry.parsed?.side === 'left')
+        .sort((a, b) => (b.parsed?.value ?? 0) - (a.parsed?.value ?? 0))
+        .map((entry) => entry.option);
+      const right = options
+        .map((option) => ({ option, parsed: parseLeftRight(option) }))
+        .filter((entry) => entry.parsed?.side === 'right')
+        .sort((a, b) => (a.parsed?.value ?? 0) - (b.parsed?.value ?? 0))
+        .map((entry) => entry.option);
+      const center = options.find((option) => {
+        const parsed = parseLeftRight(option);
+        return parsed?.side === 'center';
+      });
+      return [...left, ...(center ? [center] : []), ...right];
     }
 
     return options;
@@ -211,7 +249,17 @@ export function ConfigItemRow({
   }
 
   if (controlKind === 'select') {
-    const selectedValue = optionList.includes(displayValue) ? displayValue : undefined;
+    const emptySentinel = '__empty__';
+    const selectOptions = optionList.map((option) => ({
+      raw: option,
+      value: option === '' ? emptySentinel : option,
+      label: option === '' ? '(empty)' : option,
+    }));
+    const selectedValue = optionList.includes(displayValue)
+      ? displayValue === ''
+        ? emptySentinel
+        : displayValue
+      : undefined;
 
     return (
       <div className="settings-row w-full flex items-center justify-between gap-3">
@@ -221,9 +269,10 @@ export function ConfigItemRow({
             value={selectedValue}
             onValueChange={(newValue) => {
               if (isReadOnly) return;
-              setInputValue(String(newValue));
-              lastCommittedRef.current = String(newValue);
-              onValueChange(newValue);
+              const nextValue = newValue === emptySentinel ? '' : newValue;
+              setInputValue(String(nextValue));
+              lastCommittedRef.current = String(nextValue);
+              onValueChange(nextValue);
             }}
             disabled={isLoading || isItemLoading || isReadOnly}
           >
@@ -231,9 +280,9 @@ export function ConfigItemRow({
               <SelectValue placeholder={isItemLoading ? 'Loading…' : displayValue || 'Select'} />
             </SelectTrigger>
             <SelectContent>
-              {optionList.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option || '(empty)'}
+              {selectOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
                 </SelectItem>
               ))}
             </SelectContent>

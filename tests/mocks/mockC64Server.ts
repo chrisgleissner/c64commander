@@ -4,6 +4,12 @@ export interface MockC64Server {
   baseUrl: string;
   close: () => Promise<void>;
   requests: Array<{ method: string; url: string }>;
+  sidplayRequests: Array<{
+    method: string;
+    url: string;
+    headers: Record<string, string | string[] | undefined>;
+    body: Buffer;
+  }>;
   getState: () => CategoryState;
   resetState: () => void;
 }
@@ -56,8 +62,15 @@ export function createMockC64Server(
   itemDetails: ItemDetailsState = {},
 ): Promise<MockC64Server> {
   const requests: Array<{ method: string; url: string }> = [];
+  const sidplayRequests: Array<{
+    method: string;
+    url: string;
+    headers: Record<string, string | string[] | undefined>;
+    body: Buffer;
+  }> = [];
   const defaults = normalizeInitialState(initial);
   let state: CategoryState = clone(defaults);
+  const sockets = new Set<import('node:net').Socket>();
 
   const server = http.createServer((req, res) => {
     const method = req.method ?? 'GET';
@@ -138,7 +151,18 @@ export function createMockC64Server(
     }
 
     if (parsed.pathname === '/v1/runners:sidplay' && (method === 'POST' || method === 'PUT')) {
-      return sendJson(200, { errors: [] });
+      const chunks: Buffer[] = [];
+      req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      req.on('end', () => {
+        sidplayRequests.push({
+          method,
+          url,
+          headers: req.headers as Record<string, string | string[] | undefined>,
+          body: Buffer.concat(chunks),
+        });
+        sendJson(200, { errors: [] });
+      });
+      return;
     }
 
     if (method === 'GET' && parsed.pathname === '/v1/configs') {
@@ -222,6 +246,11 @@ export function createMockC64Server(
     return sendJson(404, { errors: ['Not found'] });
   });
 
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
+
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address();
@@ -230,12 +259,18 @@ export function createMockC64Server(
       resolve({
         baseUrl,
         requests,
+        sidplayRequests,
         getState: () => clone(state),
         resetState: () => {
           state = clone(defaults);
         },
         close: () =>
           new Promise<void>((resClose) => {
+            if (!server.listening) {
+              resClose();
+              return;
+            }
+            sockets.forEach((socket) => socket.destroy());
             server.close(() => resClose());
           }),
       });

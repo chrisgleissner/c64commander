@@ -1,5 +1,6 @@
 import { WebPlugin } from '@capacitor/core';
 import type {
+  HvscCacheStatus,
   HvscFolderListing,
   HvscProgressEvent,
   HvscSong,
@@ -13,12 +14,20 @@ export class HvscIngestionWeb extends WebPlugin implements HvscIngestionPlugin {
     return this.withMock('getHvscStatus');
   }
 
+  async getHvscCacheStatus(): Promise<HvscCacheStatus> {
+    return this.withMock('getHvscCacheStatus');
+  }
+
   async checkForHvscUpdates(): Promise<HvscUpdateStatus> {
     return this.withMock('checkForHvscUpdates');
   }
 
   async installOrUpdateHvsc(options: { cancelToken: string }): Promise<HvscStatus> {
     return this.withMock('installOrUpdateHvsc', options);
+  }
+
+  async ingestCachedHvsc(options: { cancelToken: string }): Promise<HvscStatus> {
+    return this.withMock('ingestCachedHvsc', options);
   }
 
   async cancelHvscInstall(options: { cancelToken: string }): Promise<void> {

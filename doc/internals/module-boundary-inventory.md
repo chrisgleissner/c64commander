@@ -14,7 +14,6 @@
 
 - src/lib/sid/sidUtils.ts — SID hashing + SSL payload helpers (Domain logic)
 - src/hooks/useSidPlayer.tsx — playback queue + device upload orchestration (Domain logic)
-- src/lib/sid/hvsc.ts — deprecated stub (Domain logic, legacy shim)
 - src/lib/sid/songSources.ts — deprecated shim re-exporting new sources (Domain logic, legacy shim)
 
 ## Song source abstraction

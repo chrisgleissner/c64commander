@@ -85,19 +85,28 @@ test.describe('HVSC Play page', () => {
           ingestionState: 'idle',
           lastUpdateCheckUtcMs: null as number | null,
           ingestionError: null as string | null,
+          cachedBaselineVersion: null as number | null,
+          cachedUpdateVersions: [] as number[],
           songs: installedVersion ? mergeSongs([...baseline.songs, ...update.songs]) : [],
         };
 
         const emit = (payload: any) => listeners.forEach((listener) => listener(payload));
 
         window.__hvscMock__ = {
-          addListener: (_event: string, listener: (event: any) => void) => listeners.push(listener),
+          addListener: (_event: string, listener: (event: any) => void) => {
+            listeners.push(listener);
+            return { remove: async () => {} };
+          },
           getHvscStatus: async () => ({
             installedBaselineVersion: state.installedBaselineVersion,
             installedVersion: state.installedVersion,
             ingestionState: state.ingestionState,
             lastUpdateCheckUtcMs: state.lastUpdateCheckUtcMs,
             ingestionError: state.ingestionError,
+          }),
+          getHvscCacheStatus: async () => ({
+            baselineVersion: state.cachedBaselineVersion,
+            updateVersions: state.cachedUpdateVersions,
           }),
           checkForHvscUpdates: async () => {
             if (failCheck) throw new Error('Simulated update check failure');
@@ -115,12 +124,17 @@ test.describe('HVSC Play page', () => {
             };
           },
           installOrUpdateHvsc: async () => {
-            if (failInstall) throw new Error('Simulated ingestion failure');
             state.ingestionState = 'installing';
             if (state.installedVersion === 0) {
               emit({ phase: 'download', message: 'Downloading HVSC…', percent: 10 });
               await fetch(`${baseUrl}/hvsc/archive/baseline`).then((res) => res.arrayBuffer());
+              state.cachedBaselineVersion = baseline.version;
               emit({ phase: 'ingest', message: 'Ingesting HVSC…', percent: 60 });
+              if (failInstall) {
+                state.ingestionState = 'error';
+                state.ingestionError = 'Simulated ingestion failure';
+                throw new Error('Simulated ingestion failure');
+              }
               state.songs = mergeSongs([...baseline.songs]);
               state.installedBaselineVersion = baseline.version;
               state.installedVersion = baseline.version;
@@ -128,10 +142,32 @@ test.describe('HVSC Play page', () => {
             if (state.installedVersion < update.version) {
               emit({ phase: 'download', message: 'Downloading update…', percent: 70 });
               await fetch(`${baseUrl}/hvsc/archive/update`).then((res) => res.arrayBuffer());
+              state.cachedUpdateVersions = Array.from(new Set([...state.cachedUpdateVersions, update.version]));
               emit({ phase: 'ingest', message: 'Applying update…', percent: 90 });
               state.songs = mergeSongs([...state.songs, ...update.songs]);
               state.installedVersion = update.version;
             }
+            state.ingestionState = 'ready';
+            emit({ phase: 'done', message: 'Ready', percent: 100 });
+            return {
+              installedBaselineVersion: state.installedBaselineVersion,
+              installedVersion: state.installedVersion,
+              ingestionState: state.ingestionState,
+              lastUpdateCheckUtcMs: state.lastUpdateCheckUtcMs,
+              ingestionError: state.ingestionError,
+            };
+          },
+          ingestCachedHvsc: async () => {
+            state.ingestionState = 'installing';
+            if (!state.cachedBaselineVersion) {
+              throw new Error('No cached HVSC archive found');
+            }
+            emit({ phase: 'ingest', message: 'Ingesting cached HVSC…', percent: 60 });
+            state.songs = mergeSongs([...baseline.songs]);
+            state.installedBaselineVersion = baseline.version;
+            state.installedVersion = baseline.version;
+            state.cachedBaselineVersion = null;
+            state.cachedUpdateVersions = [];
             state.ingestionState = 'ready';
             emit({ phase: 'done', message: 'Ready', percent: 100 });
             return {
@@ -199,6 +235,50 @@ test.describe('HVSC Play page', () => {
     await page.goto('/music');
     await page.getByRole('button', { name: 'Install' }).click();
     await expect(page.getByText('Version 84 installed.', { exact: true }).first()).toBeVisible();
+  });
+
+  test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }) => {
+    await installMocks(page, { installedVersion: 0 });
+    await page.goto('/music');
+    await page.getByRole('button', { name: 'Install' }).click();
+    await expect(page.getByText('Version 84 installed.', { exact: true }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
+    const firstTrack = page.getByText('/DEMOS/0-9/10_Orbyte.sid', { exact: true });
+    await expect(firstTrack).toBeVisible();
+    await firstTrack.locator('..').getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByText('Now Playing')).toBeVisible();
+
+    const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
+    await expect
+      .poll(() => c64Server.sidplayRequests.length)
+      .toBeGreaterThan(0);
+    const lastRequest = c64Server.sidplayRequests[c64Server.sidplayRequests.length - 1];
+    expect(lastRequest.method).toBe('POST');
+    expect(lastRequest.body.includes(expectedPayload)).toBe(true);
+  });
+
+  test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }) => {
+    await installMocks(page, { installedVersion: 0, failInstall: true });
+    await page.goto('/music');
+    await page.getByRole('button', { name: 'Install' }).click();
+    await expect(page.getByText('Simulated ingestion failure', { exact: true }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: 'Ingest', exact: true }).click();
+    await expect(page.getByText('Version 83 installed.', { exact: true }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
+    const firstTrack = page.getByText('/DEMOS/0-9/10_Orbyte.sid', { exact: true });
+    await expect(firstTrack).toBeVisible();
+    await firstTrack.locator('..').getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByText('Now Playing')).toBeVisible();
+
+    const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
+    await expect
+      .poll(() => c64Server.sidplayRequests.length)
+      .toBeGreaterThan(0);
+    const lastRequest = c64Server.sidplayRequests[c64Server.sidplayRequests.length - 1];
+    expect(lastRequest.body.includes(expectedPayload)).toBe(true);
   });
 
   test('HVSC up-to-date -> browse -> play track', async ({ page }: { page: Page }) => {

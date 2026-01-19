@@ -1,5 +1,6 @@
 import { registerPlugin } from '@capacitor/core';
 import type {
+  HvscCacheStatus,
   HvscFolderListing,
   HvscProgressEvent,
   HvscSong,
@@ -9,8 +10,10 @@ import type {
 
 export type HvscIngestionPlugin = {
   getHvscStatus: () => Promise<HvscStatus>;
+  getHvscCacheStatus: () => Promise<HvscCacheStatus>;
   checkForHvscUpdates: () => Promise<HvscUpdateStatus>;
   installOrUpdateHvsc: (options: { cancelToken: string }) => Promise<HvscStatus>;
+  ingestCachedHvsc: (options: { cancelToken: string }) => Promise<HvscStatus>;
   cancelHvscInstall: (options: { cancelToken: string }) => Promise<void>;
   getHvscFolderListing: (options: { path: string }) => Promise<HvscFolderListing>;
   getHvscSong: (options: { id?: number; virtualPath?: string }) => Promise<HvscSong>;

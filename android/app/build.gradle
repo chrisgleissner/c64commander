@@ -23,11 +23,13 @@ android {
     namespace "com.c64.commander"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.c64.commander"
+        applicationId "uk.gleissner.c64commander"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        def envVersionCode = System.getenv("VERSION_CODE")
+        def envVersionName = System.getenv("VERSION_NAME")
+        versionCode (envVersionCode ? envVersionCode.toInteger() : 2)
+        versionName (envVersionName ?: "0.1.1")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -93,7 +95,7 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.documentfile:documentfile:1.0.1"
-    implementation "org.apache.commons:commons-compress:1.26.1"
+    implementation "org.apache.commons:commons-compress:1.27.1"
     implementation "org.tukaani:xz:1.10"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"

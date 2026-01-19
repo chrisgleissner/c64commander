@@ -40,7 +40,6 @@ export default function SettingsPage() {
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
   const [isSaving, setIsSaving] = useState(false);
-  const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
   const [logs, setLogs] = useState(getLogs());
@@ -95,7 +94,7 @@ export default function SettingsPage() {
   const handleSaveConnection = async () => {
     setIsSaving(true);
     try {
-      updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+      updateConfig(urlInput, passwordInput || undefined, deviceHost);
       toast({ title: 'Connection settings saved' });
     } catch (error) {
       toast({
@@ -158,20 +157,6 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="deviceHost" className="text-sm">Device Hostname</Label>
-              <Input
-                id="deviceHost"
-                value={deviceHostInput}
-                onChange={(e) => setDeviceHostInput(e.target.value)}
-                placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Used when connected via local proxy. Default: {C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-              </p>
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="password" className="text-sm flex items-center gap-1">
                 <Lock className="h-3 w-3" />
                 Network Password
@@ -222,7 +207,7 @@ export default function SettingsPage() {
             {status.isConnecting ? (
               'Connecting...'
             ) : status.isConnected ? (
-              `Connected to ${status.deviceInfo?.hostname || deviceHost || baseUrl}`
+              `Connected to ${baseUrl}`
             ) : (
               status.error || 'Not connected'
             )}

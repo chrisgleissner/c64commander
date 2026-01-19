@@ -9,13 +9,42 @@ class HvscIngestionService(
   private val releaseService: HvscReleaseProvider = HvscReleaseService(),
   private val downloader: HvscDownloadClient = HvscDownloader(),
 ) {
+  data class CacheStatus(
+    val baselineVersion: Int?,
+    val updateVersions: List<Int>,
+  )
   data class Progress(
     val phase: String,
     val message: String,
     val percent: Int? = null,
+    val downloadedBytes: Long? = null,
+    val totalBytes: Long? = null,
+    val songsUpserted: Int? = null,
+    val songsDeleted: Int? = null,
   )
 
   fun getStatus(): HvscMeta = database.getMeta()
+
+  fun getCacheStatus(workDir: File): CacheStatus {
+    if (!workDir.exists()) return CacheStatus(null, emptyList())
+    val baselineVersions = mutableListOf<Int>()
+    val updateVersions = mutableListOf<Int>()
+    workDir.listFiles()?.forEach { file ->
+      val name = file.name
+      if (!name.endsWith(".7z", ignoreCase = true)) return@forEach
+      val baselineMatch = Regex("hvsc-baseline-(\\d+)\\.7z", RegexOption.IGNORE_CASE).find(name)
+      if (baselineMatch != null) {
+        baselineVersions.add(baselineMatch.groupValues[1].toInt())
+        return@forEach
+      }
+      val updateMatch = Regex("hvsc-update-(\\d+)\\.7z", RegexOption.IGNORE_CASE).find(name)
+      if (updateMatch != null) {
+        updateVersions.add(updateMatch.groupValues[1].toInt())
+      }
+    }
+    val baseline = baselineVersions.maxOrNull()
+    return CacheStatus(baseline, updateVersions.sorted())
+  }
 
   fun checkForUpdates(): HvscUpdateStatus {
     val (baselineLatest, updateLatest) = releaseService.fetchLatestVersions()
@@ -72,18 +101,58 @@ class HvscIngestionService(
 
   fun getDurationByMd5(md5: String): Int? = database.getDurationByMd5(md5)
 
+  fun ingestCached(
+    workDir: File,
+    cancelToken: HvscCancelRegistry.CancellationToken?,
+    onProgress: (Progress) -> Unit,
+  ): HvscMeta {
+    try {
+      val meta = database.getMeta()
+      val (baselineLatest, updateLatest) = releaseService.fetchLatestVersions()
+      if (meta.installedVersion == 0) {
+        val baselineArchive = File(workDir, "hvsc-baseline-$baselineLatest.7z")
+        if (!baselineArchive.exists() || baselineArchive.length() == 0L) {
+          throw IllegalStateException("No cached HVSC baseline archive found.")
+        }
+        installBaseline(workDir, baselineLatest, cancelToken, onProgress, useCached = true)
+      }
+
+      var installed = database.getMeta().installedVersion
+      while (installed < updateLatest) {
+        val nextVersion = installed + 1
+        val updateArchive = File(workDir, "hvsc-update-$nextVersion.7z")
+        if (!updateArchive.exists() || updateArchive.length() == 0L) break
+        applyUpdate(workDir, nextVersion, cancelToken, onProgress, useCached = true)
+        installed = database.getMeta().installedVersion
+      }
+      return database.getMeta()
+    } catch (error: Exception) {
+      database.updateMeta(ingestionState = "error", ingestionError = error.message)
+      throw error
+    }
+  }
+
   private fun installBaseline(
     workDir: File,
     version: Int,
     cancelToken: HvscCancelRegistry.CancellationToken?,
     onProgress: (Progress) -> Unit,
+    useCached: Boolean = false,
   ) {
     database.updateMeta(ingestionState = "installing", ingestionError = null, clearIngestionError = true)
     val archive = File(workDir, "hvsc-baseline-$version.7z")
-    onProgress(Progress("download", "Downloading HVSC $version…", 0))
-    downloader.download(releaseService.buildBaselineUrl(version), archive) { percent ->
-      onProgress(Progress("download", "Downloading HVSC $version…", percent))
-      cancelIfNeeded(cancelToken)
+    val hasCached = archive.exists() && archive.length() > 0
+    var success = false
+    if (useCached || hasCached) {
+      onProgress(Progress("download", "Using cached HVSC $version", 100, archive.length(), archive.length()))
+    } else {
+      onProgress(Progress("download", "Downloading HVSC $version…", 0))
+      downloader.download(releaseService.buildBaselineUrl(version), archive) { percent ->
+        onProgress(Progress("download", "Downloading HVSC $version…", percent))
+        cancelIfNeeded(cancelToken)
+      }
+      val baselineBytes = archive.length()
+      onProgress(Progress("download", "Downloaded HVSC $version", 100, baselineBytes, baselineBytes))
     }
 
     onProgress(Progress("ingest", "Ingesting HVSC $version…", 0))
@@ -137,8 +206,11 @@ class HvscIngestionService(
           entry = reader.nextEntry()
         }
       }
+      success = true
     } finally {
-      archive.delete()
+      if (success) {
+        archive.delete()
+      }
     }
 
     database.withTransaction {
@@ -152,6 +224,15 @@ class HvscIngestionService(
         clearIngestionError = true,
       )
     }
+    onProgress(
+      Progress(
+        "summary",
+        "HVSC $version indexed",
+        100,
+        songsUpserted = songs.size,
+        songsDeleted = 0,
+      ),
+    )
   }
 
   private fun applyUpdate(
@@ -159,14 +240,23 @@ class HvscIngestionService(
     version: Int,
     cancelToken: HvscCancelRegistry.CancellationToken?,
     onProgress: (Progress) -> Unit,
+    useCached: Boolean = false,
   ) {
     if (database.isUpdateApplied(version)) return
     database.updateMeta(ingestionState = "updating", ingestionError = null, clearIngestionError = true)
     val archive = File(workDir, "hvsc-update-$version.7z")
-    onProgress(Progress("download", "Downloading update $version…", 0))
-    downloader.download(releaseService.buildUpdateUrl(version), archive) { percent ->
-      onProgress(Progress("download", "Downloading update $version…", percent))
-      cancelIfNeeded(cancelToken)
+    val hasCached = archive.exists() && archive.length() > 0
+    var success = false
+    if (useCached || hasCached) {
+      onProgress(Progress("download", "Using cached update $version", 100, archive.length(), archive.length()))
+    } else {
+      onProgress(Progress("download", "Downloading update $version…", 0))
+      downloader.download(releaseService.buildUpdateUrl(version), archive) { percent ->
+        onProgress(Progress("download", "Downloading update $version…", percent))
+        cancelIfNeeded(cancelToken)
+      }
+      val updateBytes = archive.length()
+      onProgress(Progress("download", "Downloaded update $version", 100, updateBytes, updateBytes))
     }
 
     val songs = mutableListOf<HvscSongRecord>()
@@ -230,11 +320,23 @@ class HvscIngestionService(
         )
         database.markUpdateApplied(version, "success")
       }
+      onProgress(
+        Progress(
+          "summary",
+          "HVSC update $version indexed",
+          100,
+          songsUpserted = songs.size,
+          songsDeleted = deletions.size,
+        ),
+      )
+      success = true
     } catch (error: Exception) {
       database.markUpdateApplied(version, "failed", error.message)
       throw error
     } finally {
-      archive.delete()
+      if (success) {
+        archive.delete()
+      }
     }
   }
 

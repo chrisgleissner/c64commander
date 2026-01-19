@@ -26,6 +26,8 @@ export default defineConfig(() => ({
   },
   build: {
     outDir: "dist",
+    // Adjust warning threshold to avoid noisy chunk warnings while keeping defaults.
+    chunkSizeWarningLimit: 700,
   },
   plugins: [react()],
   define: {

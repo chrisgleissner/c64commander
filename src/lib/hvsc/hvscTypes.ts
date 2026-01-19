@@ -13,6 +13,11 @@ export type HvscUpdateStatus = {
   requiredUpdates: number[];
 };
 
+export type HvscCacheStatus = {
+  baselineVersion?: number | null;
+  updateVersions: number[];
+};
+
 export type HvscFolderListing = {
   path: string;
   folders: string[];
@@ -32,4 +37,8 @@ export type HvscProgressEvent = {
   phase: string;
   message: string;
   percent?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
+  songsUpserted?: number;
+  songsDeleted?: number;
 };

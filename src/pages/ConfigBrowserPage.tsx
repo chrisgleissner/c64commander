@@ -4,10 +4,14 @@ import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-reac
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
+import { useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import { addErrorLog } from '@/lib/logging';
+import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
 import { useRefreshControl } from '@/hooks/useRefreshControl';
+import { isAudioMixerValueEqual } from '@/lib/config/audioMixer';
 
 type NormalizedConfigItem = {
   value: string | number;
@@ -66,6 +70,7 @@ function CategorySection({
   const [isResetting, setIsResetting] = useState(false);
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
+  const updateConfigBatch = useC64UpdateConfigBatch();
 
   useEffect(() => {
     if (isOpen) {
@@ -110,30 +115,81 @@ function CategorySection({
     }
   };
 
+  const handleSyncClock = async () => {
+    if (categoryName !== 'Clock Settings') return;
+    const now = new Date();
+    const updates: Record<string, string | number> = {};
+    const normalizedItems = items.map((item) => ({
+      item,
+      name: item.name.toLowerCase(),
+    }));
+
+    const setIfMatch = (matcher: (name: string) => boolean, value: number) => {
+      normalizedItems
+        .filter((entry) => matcher(entry.name))
+        .forEach((entry) => {
+          updates[entry.item.name] = value;
+        });
+    };
+
+    setIfMatch((name) => name.includes('year'), now.getFullYear());
+    setIfMatch((name) => name.includes('month'), now.getMonth() + 1);
+    setIfMatch((name) => name.includes('day'), now.getDate());
+    setIfMatch((name) => name.includes('hour'), now.getHours());
+    setIfMatch((name) => name.includes('minute'), now.getMinutes());
+    setIfMatch((name) => name.includes('second'), now.getSeconds());
+
+    if (Object.keys(updates).length === 0) {
+      toast({
+        title: 'Clock sync unavailable',
+        description: 'No matching clock fields found in this section.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await updateConfigBatch.mutateAsync({ category: categoryName, updates });
+      markChanged();
+      toast({ title: 'Clock synced', description: 'C64U clock updated from device time.' });
+    } catch (error) {
+      addErrorLog('Clock sync failed', {
+        error: (error as Error).message,
+        category: categoryName,
+      });
+      toast({
+        title: 'Clock sync failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const resetAudioMixer = async () => {
     if (categoryName !== 'Audio Mixer') return;
     setIsResetting(true);
     try {
-      const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
-      const findOption = (options: string[] | undefined, target: string) => {
-        if (!options) return undefined;
-        const targetNorm = normalize(target);
-        return options.find((opt) => normalize(opt) === targetNorm);
-      };
-
+      const updates: Record<string, string | number> = {};
       for (const item of items) {
-        if (item.name.startsWith('Vol ')) {
-          const target = findOption(item.options, '0 dB') ?? findOption(item.options, '0db') ?? '0 dB';
-          await setConfig.mutateAsync({ category: categoryName, item: item.name, value: target });
-        } else if (item.name.startsWith('Pan ')) {
-          const target = findOption(item.options, 'Center') ?? 'Center';
-          await setConfig.mutateAsync({ category: categoryName, item: item.name, value: target });
-        }
+        const target = await resolveAudioMixerResetValue(categoryName, item.name, item.options);
+        if (target === undefined) continue;
+        if (isAudioMixerValueEqual(item.value, target)) continue;
+        updates[item.name] = target;
       }
 
+      if (Object.keys(updates).length === 0) {
+        toast({ title: 'Audio Mixer already at defaults', description: 'No changes needed.' });
+        return;
+      }
+
+      await updateConfigBatch.mutateAsync({ category: categoryName, updates });
       markChanged();
       toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
     } catch (error) {
+      addErrorLog('Audio Mixer reset failed', {
+        error: (error as Error).message,
+        category: categoryName,
+      });
       toast({
         title: 'Error',
         description: (error as Error).message,
@@ -212,6 +268,17 @@ function CategorySection({
                     className="text-xs"
                   >
                     Reset Audio Mixer
+                  </Button>
+                )}
+                {categoryName === 'Clock Settings' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncClock}
+                    disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
+                    className="text-xs"
+                  >
+                    Sync clock
                   </Button>
                 )}
                 <Button

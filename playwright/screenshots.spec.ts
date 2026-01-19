@@ -42,13 +42,13 @@ test.describe('App screenshots', () => {
     await expect(page.getByRole('button', { name: 'Quick', exact: true })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-home.png') });
+    await page.screenshot({ path: screenshotPath('app-home.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Quick', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Quick Settings' })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-quick-settings.png') });
+    await page.screenshot({ path: screenshotPath('app-quick-settings.png'), animations: 'disabled', caret: 'hide' });
 
     const u64Card = page.getByRole('button', { name: 'Video (VIC)', exact: true });
     if (await u64Card.isVisible()) {
@@ -56,14 +56,14 @@ test.describe('App screenshots', () => {
       await expect(page.getByText('System Mode')).toBeVisible();
       await waitForStableRender(page);
       await waitForOverlaysToClear(page);
-      await page.screenshot({ path: screenshotPath('app-configuration-u64-specific.png') });
+      await page.screenshot({ path: screenshotPath('app-configuration-u64-specific.png'), animations: 'disabled', caret: 'hide' });
     }
 
     await page.getByRole('button', { name: 'Config', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-configuration.png') });
+    await page.screenshot({ path: screenshotPath('app-configuration.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Audio Mixer', exact: true }).click();
     const slider = page.getByLabel('Vol UltiSid 1 slider');
@@ -74,24 +74,24 @@ test.describe('App screenshots', () => {
     }
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-configuration-expanded.png') });
+    await page.screenshot({ path: screenshotPath('app-configuration-expanded.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'SID', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'HVSC Library' })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-music.png') });
+    await page.screenshot({ path: screenshotPath('app-music.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-settings.png') });
+    await page.screenshot({ path: screenshotPath('app-settings.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Docs', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Documentation' })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-documentation.png') });
+    await page.screenshot({ path: screenshotPath('app-documentation.png'), animations: 'disabled', caret: 'hide' });
   });
 });

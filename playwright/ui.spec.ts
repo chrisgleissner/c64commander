@@ -3,21 +3,20 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 
 test.describe('UI coverage', () => {
+  test.describe.configure({ mode: 'parallel' });
+
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeAll(async () => {
-    server = await createMockC64Server(uiFixtures.configState);
-  });
-
-  test.afterAll(async () => {
-    await server.close();
-  });
-
   test.beforeEach(async ({ page }: { page: Page }) => {
+    server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
     await page.addStyleTag({
       content: '[aria-label="Notifications (F8)"] { pointer-events: none !important; }',
     });
+  });
+
+  test.afterEach(async () => {
+    await server.close();
   });
 
   const clickAllButtons = async (page: Page, scope: Page | ReturnType<Page['locator']>) => {
@@ -92,17 +91,21 @@ test.describe('UI coverage', () => {
     await expect(page.getByText('Vol UltiSid 1').locator('..').getByText('OFF')).toBeVisible();
   });
 
-  test('clicks widgets across all pages', async ({ page }: { page: Page }) => {
+  test('clicks widgets on home and quick pages', async ({ page }: { page: Page }) => {
     await page.goto('/');
     await clickAllButtons(page, page.locator('main'));
 
     await page.getByRole('button', { name: 'Quick', exact: true }).click();
     await clickAllButtons(page, page.locator('main'));
+  });
 
-    await page.getByRole('button', { name: 'Config', exact: true }).click();
+  test('clicks widgets on config page', async ({ page }: { page: Page }) => {
+    await page.goto('/config');
     await clickAllButtons(page, page.locator('main'));
+  });
 
-    await page.getByRole('button', { name: 'SID', exact: true }).click();
+  test('clicks widgets on music page', async ({ page }: { page: Page }) => {
+    await page.goto('/music');
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     const songRow = page.getByText('10_Orbyte.sid');
     await expect(songRow).toBeVisible();
@@ -115,10 +118,11 @@ test.describe('UI coverage', () => {
     await chooser.setFiles([
       { name: 'local.sid', mimeType: 'audio/sid', buffer: Buffer.from(uiFixtures.fixtureBase64, 'base64') },
     ]);
+  });
 
-    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  test('clicks widgets on settings and docs pages', async ({ page }: { page: Page }) => {
+    await page.goto('/settings');
     await page.getByRole('textbox', { name: 'Base URL' }).fill(server.baseUrl);
-    await page.getByRole('textbox', { name: 'Device Hostname' }).fill('c64u');
     await page.getByLabel('Network Password').fill('pw');
     await page.getByRole('button', { name: 'Save & Connect' }).click();
     await page.getByRole('button', { name: 'Diagnostics' }).click();

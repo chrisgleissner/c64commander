@@ -131,9 +131,13 @@ if [[ -x /usr/lib/jvm/java-17-openjdk-amd64/bin/jlink ]]; then
 fi
 
 if command -v git >/dev/null 2>&1; then
-  export VITE_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+  if [[ -z "${VITE_GIT_SHA:-}" ]]; then
+    export VITE_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+  fi
 fi
-export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if [[ -z "${VITE_BUILD_TIME:-}" ]]; then
+  export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+fi
 
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
@@ -149,14 +153,22 @@ if [[ "$RUN_TEST" == "true" ]]; then
   log "Running tests"
   (cd "$ROOT_DIR" && npm test)
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && npm run test:e2e)
+  if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
+    (cd "$ROOT_DIR" && npm run test:e2e)
+  else
+    (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
+  fi
   (cd "$ROOT_DIR/android" && ./gradlew test)
 fi
 
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
   log "Capturing screenshots"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && npm run screenshots)
+  (cd "$ROOT_DIR" && \
+    VITE_GIT_SHA="screenshots" \
+    VITE_BUILD_TIME="1970-01-01T00:00:00Z" \
+    SOURCE_DATE_EPOCH="0" \
+    npm run screenshots)
 fi
 
 if [[ "$RUN_APK" == "true" ]]; then
@@ -186,7 +198,7 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   adb -s "$DEVICE_ID" install -r "$APK_PATH"
 
   log "Launching app"
-  adb -s "$DEVICE_ID" shell monkey -p com.c64.commander -c android.intent.category.LAUNCHER 1
+  adb -s "$DEVICE_ID" shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
 fi
 
 log "Done"

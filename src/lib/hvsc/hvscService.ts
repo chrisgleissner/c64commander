@@ -1,5 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import type {
+  HvscCacheStatus,
   HvscFolderListing,
   HvscProgressEvent,
   HvscSong,
@@ -16,11 +17,17 @@ export const isHvscBridgeAvailable = () => Capacitor.getPlatform() !== 'web' || 
 
 export const getHvscStatus = async (): Promise<HvscStatus> => HvscIngestion.getHvscStatus();
 
+export const getHvscCacheStatus = async (): Promise<HvscCacheStatus> =>
+  HvscIngestion.getHvscCacheStatus();
+
 export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> =>
   HvscIngestion.checkForHvscUpdates();
 
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> =>
   HvscIngestion.installOrUpdateHvsc({ cancelToken });
+
+export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> =>
+  HvscIngestion.ingestCachedHvsc({ cancelToken });
 
 export const cancelHvscInstall = async (cancelToken: string): Promise<void> =>
   HvscIngestion.cancelHvscInstall({ cancelToken });

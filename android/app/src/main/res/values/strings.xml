@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">C64 Commander</string>
     <string name="title_activity_main">C64 Commander</string>
-    <string name="package_name">com.c64.commander</string>
-    <string name="custom_url_scheme">com.c64.commander</string>
+    <string name="package_name">uk.gleissner.c64commander</string>
+    <string name="custom_url_scheme">uk.gleissner.c64commander</string>
 </resources>
