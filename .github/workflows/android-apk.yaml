@@ -17,8 +17,8 @@ jobs:
 
       - name: Set APK version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF_NAME}"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
           else
             VERSION="$(git rev-parse --short HEAD)"
           fi
@@ -126,6 +126,8 @@ jobs:
           cp android/app/build/outputs/apk/debug/app-debug.apk "apk-release/c64commander-${APK_VERSION}-debug.apk"
           if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk "apk-release/c64commander-${APK_VERSION}.apk"
+          else
+            echo "Release APK not found; skipping release rename."
           fi
 
       - name: Upload APK artifact
