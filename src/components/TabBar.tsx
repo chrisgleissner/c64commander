@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion';
-import { Home, Sliders, Settings, BookOpen, Cpu } from 'lucide-react';
+import { Home, Sliders, Settings, BookOpen, Cpu, Music } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 const tabs = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/quick', icon: Cpu, label: 'Quick' },
   { path: '/config', icon: Sliders, label: 'Config' },
+  { path: '/music', icon: Music, label: 'SID' },
   { path: '/settings', icon: Settings, label: 'Settings' },
   { path: '/docs', icon: BookOpen, label: 'Docs' },
 ];

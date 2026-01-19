@@ -1,20 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
 import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
-
-const DEFAULT_REFRESH_INTERVAL_SEC = 20;
-let refreshIntervalMs = DEFAULT_REFRESH_INTERVAL_SEC * 1000;
-
-const loadRefreshInterval = () => {
-  const raw = localStorage.getItem('c64u_refresh_interval_sec');
-  const parsed = raw ? Number(raw) : DEFAULT_REFRESH_INTERVAL_SEC;
-  const normalized = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_REFRESH_INTERVAL_SEC;
-  refreshIntervalMs = normalized * 1000;
-  return normalized;
-};
-
-export const getRefreshIntervalMs = () => refreshIntervalMs;
 
 export interface ConnectionStatus {
   isConnected: boolean;
@@ -33,8 +20,6 @@ export function useC64Connection() {
   const [deviceHost, setDeviceHost] = useState(() =>
     localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST
   );
-  const [refreshIntervalSec, setRefreshIntervalSec] = useState(() => loadRefreshInterval());
-
   const queryClient = useQueryClient();
 
   const { data: deviceInfo, error, isLoading, refetch } = useQuery({
@@ -46,7 +31,6 @@ export function useC64Connection() {
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
-    refetchInterval: () => getRefreshIntervalMs(),
   });
 
   const updateConfig = useCallback((newUrl: string, newPassword?: string, newDeviceHost?: string) => {
@@ -57,14 +41,6 @@ export function useC64Connection() {
     queryClient.invalidateQueries({ queryKey: ['c64'] });
     refetch();
   }, [queryClient, refetch]);
-
-  const updateRefreshInterval = useCallback((seconds: number) => {
-    const normalized = Number.isFinite(seconds) && seconds > 0 ? seconds : DEFAULT_REFRESH_INTERVAL_SEC;
-    localStorage.setItem('c64u_refresh_interval_sec', String(normalized));
-    refreshIntervalMs = normalized * 1000;
-    setRefreshIntervalSec(normalized);
-    queryClient.invalidateQueries({ predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0]?.toString().startsWith('c64') });
-  }, [queryClient]);
 
   const status: ConnectionStatus = {
     isConnected: !!deviceInfo && !error,
@@ -78,8 +54,6 @@ export function useC64Connection() {
     baseUrl,
     password,
     deviceHost,
-    refreshIntervalSec,
-    updateRefreshInterval,
     updateConfig,
     refetch,
   };
@@ -93,7 +67,6 @@ export function useC64Categories() {
       return api.getCategories();
     },
     staleTime: 60000,
-    refetchInterval: () => getRefreshIntervalMs(),
   });
 }
 
@@ -106,7 +79,6 @@ export function useC64Category(category: string, enabled = true) {
     },
     enabled: enabled && !!category,
     staleTime: 30000,
-    refetchInterval: () => getRefreshIntervalMs(),
   });
 }
 
@@ -132,7 +104,6 @@ export function useC64AllConfig() {
     },
     enabled: !!categories,
     staleTime: 30000,
-    refetchInterval: () => getRefreshIntervalMs(),
   });
 }
 
@@ -164,7 +135,6 @@ export function useC64ConfigItem(category?: string, item?: string, enabled = tru
     },
     enabled: enabled && !!category && !!item,
     staleTime: 30000,
-    refetchInterval: () => getRefreshIntervalMs(),
   });
 }
 
@@ -176,7 +146,6 @@ export function useC64Drives() {
       return api.getDrives();
     },
     staleTime: 10000,
-    refetchInterval: () => getRefreshIntervalMs(),
   });
 }
 

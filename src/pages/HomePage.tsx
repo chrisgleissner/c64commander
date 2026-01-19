@@ -51,6 +51,7 @@ export default function HomePage() {
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [renameValues, setRenameValues] = useState<Record<string, string>>({});
+  const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
   const appVersion = __APP_VERSION__ || '';
   const gitSha = __GIT_SHA__ || '';
@@ -105,6 +106,7 @@ export default function HomePage() {
   const handleLoadFromApp = async (configId: string) => {
     const entry = appConfigs.find((config) => config.id === configId);
     if (!entry) return;
+    setApplyingConfigId(configId);
     try {
       await loadAppConfig(entry);
       toast({ title: 'Config loaded', description: entry.name });
@@ -115,6 +117,8 @@ export default function HomePage() {
         description: (error as Error).message,
         variant: 'destructive',
       });
+    } finally {
+      setApplyingConfigId(null);
     }
   };
 
@@ -322,6 +326,9 @@ export default function HomePage() {
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Configuration
+            {isApplying && (
+              <span className="ml-2 text-xs text-muted-foreground">Applying…</span>
+            )}
           </h3>
           <div className="grid grid-cols-3 gap-3">
             <QuickActionCard
@@ -350,16 +357,6 @@ export default function HomePage() {
               disabled={!status.isConnected}
               loading={controls.resetConfig.isPending}
             />
-            {hasChanges && (
-              <QuickActionCard
-                icon={RotateCcw}
-                label="Revert"
-                description="Changes"
-                onClick={() => handleAction(() => revertToInitial(), 'Config reverted')}
-                disabled={!status.isConnected || isApplying}
-                loading={isApplying}
-              />
-            )}
             <QuickActionCard
               icon={Upload}
               label="Save"
@@ -375,6 +372,14 @@ export default function HomePage() {
               description="From App"
               onClick={() => setLoadDialogOpen(true)}
               disabled={!status.isConnected || appConfigs.length === 0}
+            />
+            <QuickActionCard
+              icon={RotateCcw}
+              label="Revert"
+              description="Changes"
+              onClick={() => handleAction(() => revertToInitial(), 'Config reverted')}
+              disabled={!status.isConnected || isApplying || !hasChanges}
+              loading={isApplying}
             />
             <QuickActionCard
               icon={FolderOpen}
@@ -435,7 +440,7 @@ export default function HomePage() {
                   variant="outline"
                   className="w-full justify-between"
                   onClick={() => handleLoadFromApp(config.id)}
-                  disabled={isApplying}
+                  disabled={isApplying || applyingConfigId !== null}
                 >
                   <span className="text-left">
                     <span className="block font-medium">{config.name}</span>
@@ -443,7 +448,9 @@ export default function HomePage() {
                       {new Date(config.savedAt).toLocaleString()}
                     </span>
                   </span>
-                  <span className="text-xs text-muted-foreground">Load</span>
+                  <span className="text-xs text-muted-foreground">
+                    {applyingConfigId === config.id ? 'Applying…' : 'Load'}
+                  </span>
                 </Button>
               ))
             )}

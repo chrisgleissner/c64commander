@@ -1,6 +1,7 @@
 // C64 Ultimate REST API Client
 
 import { CapacitorHttp } from '@capacitor/core';
+import { addErrorLog } from '@/lib/logging';
 
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
@@ -128,37 +129,46 @@ export class C64API {
 
     const url = `${this.baseUrl}${path}`;
 
-    if (isNativePlatform()) {
-      const method = (options.method || 'GET') as string;
-      const body = options.body ? options.body : undefined;
-      const nativeResponse = await CapacitorHttp.request({
-        url,
-        method,
+    try {
+      if (isNativePlatform()) {
+        const method = (options.method || 'GET') as string;
+        const body = options.body ? options.body : undefined;
+        const nativeResponse = await CapacitorHttp.request({
+          url,
+          method,
+          headers,
+          data: typeof body === 'string' ? JSON.parse(body) : body,
+        });
+
+        if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+          throw new Error(`HTTP ${nativeResponse.status}`);
+        }
+
+        if (typeof nativeResponse.data === 'string') {
+          return JSON.parse(nativeResponse.data) as T;
+        }
+
+        return nativeResponse.data as T;
+      }
+
+      const response = await fetch(url, {
+        ...options,
         headers,
-        data: typeof body === 'string' ? JSON.parse(body) : body,
       });
 
-      if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
-        throw new Error(`HTTP ${nativeResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      if (typeof nativeResponse.data === 'string') {
-        return JSON.parse(nativeResponse.data) as T;
-      }
-
-      return nativeResponse.data as T;
+      return response.json();
+    } catch (error) {
+      addErrorLog('C64 API request failed', {
+        path,
+        url,
+        error: (error as Error).message,
+      });
+      throw error;
     }
-
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return response.json();
   }
 
   // About endpoints
@@ -205,6 +215,13 @@ export class C64API {
 
   async resetConfig(): Promise<{ errors: string[] }> {
     return this.request('/v1/configs:reset_to_default', { method: 'PUT' });
+  }
+
+  async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
+    return this.request('/v1/configs', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
   }
 
   // Machine control endpoints
@@ -274,6 +291,45 @@ export class C64API {
     let path = `/v1/runners:sidplay?file=${encodeURIComponent(file)}`;
     if (songNr !== undefined) path += `&songnr=${songNr}`;
     return this.request(path, { method: 'PUT' });
+  }
+
+  async playSidUpload(
+    sidFile: Blob,
+    songNr?: number,
+    sslFile?: Blob,
+  ): Promise<{ errors: string[] }> {
+    const url = new URL(`${this.baseUrl}/v1/runners:sidplay`);
+    if (songNr !== undefined) {
+      url.searchParams.set('songnr', String(songNr));
+    }
+
+    const headers: Record<string, string> = {};
+    if (this.password) {
+      headers['X-Password'] = this.password;
+    }
+    if (this.deviceHost && isLocalProxy(this.baseUrl)) {
+      headers['X-C64U-Host'] = this.deviceHost;
+    }
+
+    const form = new FormData();
+    form.append('file', sidFile, (sidFile as any).name ?? 'track.sid');
+    if (sslFile) {
+      form.append('file', sslFile, (sslFile as any).name ?? 'songlengths.ssl');
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('SID upload failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return response.json();
   }
 
   async runPrg(file: string): Promise<{ errors: string[] }> {

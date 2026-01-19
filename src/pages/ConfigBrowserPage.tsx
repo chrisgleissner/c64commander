@@ -234,10 +234,10 @@ function CategorySection({
 
 export default function ConfigBrowserPage() {
   const { status } = useC64Connection();
-  const { data: categoriesData, isLoading, refetch } = useC64Categories();
+  const { data: categoriesData, isLoading } = useC64Categories();
   const [searchQuery, setSearchQuery] = useState('');
   const { setConfigExpanded } = useRefreshControl();
-  const { hasChanges, revertToInitial, isApplying, markChanged } = useAppConfigState();
+  const { isApplying, markChanged } = useAppConfigState();
 
   const filteredCategories = useMemo(() => {
     if (!categoriesData?.categories) return [];
@@ -258,29 +258,9 @@ export default function ConfigBrowserPage() {
               <p className="text-xs text-muted-foreground mt-1">
                 {categoriesData?.categories.length || 0} categories
               </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {hasChanges && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => revertToInitial()}
-                  disabled={!status.isConnected || isApplying}
-                >
-                  <span className="flex flex-col leading-tight">
-                    <span className="text-xs font-semibold">Revert</span>
-                    <span className="text-[10px] text-muted-foreground">Changes</span>
-                  </span>
-                </Button>
+              {isApplying && (
+                <p className="text-[11px] text-muted-foreground mt-1">Applying changes…</p>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={isLoading}
-              >
-                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              </Button>
             </div>
           </div>
           

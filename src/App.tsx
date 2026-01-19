@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import HomePage from "./pages/HomePage";
@@ -12,8 +12,10 @@ import ConfigBrowserPage from "./pages/ConfigBrowserPage";
 import SettingsPage from "./pages/SettingsPage";
 import DocsPage from "./pages/DocsPage";
 import NotFound from "./pages/NotFound";
-import { RefreshControlProvider, useRefreshControl } from "@/hooks/useRefreshControl";
-import { getRefreshIntervalMs } from "@/hooks/useC64Connection";
+import { RefreshControlProvider } from "@/hooks/useRefreshControl";
+import { addErrorLog } from "@/lib/logging";
+import MusicPlayerPage from "./pages/MusicPlayerPage";
+import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,20 +29,7 @@ const queryClient = new QueryClient({
 const RouteRefresher = () => {
   const location = useLocation();
   const client = useQueryClient();
-  const { quickExpandedCount, configExpandedCount } = useRefreshControl();
   const [isVisible, setIsVisible] = useState(() => !document.hidden);
-
-  const isHome = location.pathname === '/';
-  const isQuick = location.pathname.startsWith('/quick');
-  const isConfig = location.pathname.startsWith('/config');
-
-  const shouldPoll = useMemo(() => {
-    if (!isVisible) return false;
-    if (isHome) return true;
-    if (isQuick && quickExpandedCount > 0) return true;
-    if (isConfig && configExpandedCount > 0) return true;
-    return false;
-  }, [isVisible, isHome, isQuick, isConfig, quickExpandedCount, configExpandedCount]);
 
   useEffect(() => {
     client.invalidateQueries({
@@ -66,21 +55,6 @@ const RouteRefresher = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [client]);
 
-  useEffect(() => {
-    if (!shouldPoll) {
-      return;
-    }
-    const interval = window.setInterval(() => {
-      client.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0]?.toString().startsWith("c64"),
-      });
-    }, getRefreshIntervalMs());
-
-    return () => window.clearInterval(interval);
-  }, [client, shouldPoll]);
-
   return null;
 };
 
@@ -91,22 +65,53 @@ const App = () => (
         <Toaster />
         <Sonner />
         <RefreshControlProvider>
-          <BrowserRouter>
-            <RouteRefresher />
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/quick" element={<QuickSettingsPage />} />
-              <Route path="/config" element={<ConfigBrowserPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/docs" element={<DocsPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <TabBar />
-          </BrowserRouter>
+          <SidPlayerProvider>
+            <BrowserRouter>
+              <ErrorBoundary />
+              <RouteRefresher />
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/quick" element={<QuickSettingsPage />} />
+                <Route path="/config" element={<ConfigBrowserPage />} />
+                <Route path="/music" element={<MusicPlayerPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/docs" element={<DocsPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              <TabBar />
+            </BrowserRouter>
+          </SidPlayerProvider>
         </RefreshControlProvider>
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );
+
+const ErrorBoundary = () => {
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      addErrorLog('Window error', {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error?.stack,
+      });
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      addErrorLog('Unhandled promise rejection', {
+        reason: event.reason,
+      });
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
+
+  return null;
+};
 
 export default App;

@@ -135,15 +135,24 @@ export function useAppConfigState() {
   const applyConfigData = useCallback(
     async (data: Record<string, ConfigResponse>) => {
       const api = getC64API();
+      const payload: Record<string, Record<string, string | number>> = {};
 
       for (const [categoryName, response] of Object.entries(data)) {
         const items = extractItems(categoryName, response);
+        if (!items.length) continue;
+        const categoryPayload: Record<string, string | number> = {};
 
         for (const item of items) {
           if (isReadOnlyItem(item.name)) continue;
-          await api.setConfigValue(categoryName, item.name, item.value);
+          categoryPayload[item.name] = item.value;
+        }
+
+        if (Object.keys(categoryPayload).length > 0) {
+          payload[categoryName] = categoryPayload;
         }
       }
+
+      await api.updateConfigBatch(payload);
 
       queryClient.invalidateQueries({ queryKey: ['c64-category'] });
       queryClient.invalidateQueries({ queryKey: ['c64-all-config'] });

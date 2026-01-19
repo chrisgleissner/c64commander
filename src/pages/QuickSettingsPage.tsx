@@ -308,32 +308,17 @@ function QuickSectionCard({
 export default function QuickSettingsPage() {
   const { status } = useC64Connection();
   const { setQuickExpanded } = useRefreshControl();
-  const { hasChanges, revertToInitial, isApplying, markChanged } = useAppConfigState();
+  const { markChanged } = useAppConfigState();
 
   return (
     <div className="min-h-screen pb-24">
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
         <div className="container py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="c64-header text-xl">Quick Settings</h1>
-              <p className="text-xs text-muted-foreground mt-1">
-                High-value VIC, SID, CPU & Drive settings
-              </p>
-            </div>
-            {hasChanges && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => revertToInitial()}
-                disabled={!status.isConnected || isApplying}
-              >
-                <span className="flex flex-col leading-tight">
-                  <span className="text-xs font-semibold">Revert</span>
-                  <span className="text-[10px] text-muted-foreground">Changes</span>
-                </span>
-              </Button>
-            )}
+          <div>
+            <h1 className="c64-header text-xl">Quick Settings</h1>
+            <p className="text-xs text-muted-foreground mt-1">
+              High-value VIC, SID, CPU & Drive settings
+            </p>
           </div>
         </div>
       </header>

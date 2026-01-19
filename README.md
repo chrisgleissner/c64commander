@@ -23,6 +23,8 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 
 ## Build the Android APK
 
+Ensure JDK 17 is installed (Gradle requires it for Android builds).
+
 ```sh
 ./linux-build.sh
 ```

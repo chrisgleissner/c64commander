@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Wifi, 
-  Moon, 
-  Sun, 
+import {
+  Wifi,
+  Moon,
+  Sun,
   Monitor,
   Lock,
   RefreshCw,
   ExternalLink,
-  Info
+  Info,
+  FileText,
+  Share2,
+  Trash2
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { C64_DEFAULTS } from '@/lib/c64api';
@@ -17,18 +20,77 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
-  const { status, baseUrl, password, deviceHost, refreshIntervalSec, updateRefreshInterval, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
   const [isSaving, setIsSaving] = useState(false);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
-  const [refreshIntervalInput, setRefreshIntervalInput] = useState(String(refreshIntervalSec));
+  const [logsDialogOpen, setLogsDialogOpen] = useState(false);
+  const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
+  const [logs, setLogs] = useState(getLogs());
+  const [errorLogs, setErrorLogs] = useState(getErrorLogs());
+
+  useEffect(() => {
+    const handler = () => {
+      setLogs(getLogs());
+      setErrorLogs(getErrorLogs());
+    };
+    window.addEventListener('c64u-logs-updated', handler);
+    return () => window.removeEventListener('c64u-logs-updated', handler);
+  }, []);
+
+  const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
+  const errorsPayload = useMemo(() => formatLogsForShare(errorLogs), [errorLogs]);
+  const activePayload = diagnosticsTab === 'errors' ? errorsPayload : logsPayload;
+
+  const handleShareActive = async () => {
+    const content = activePayload || 'No entries recorded.';
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'C64 Commander error report',
+          text: content,
+        });
+        return;
+      }
+    } catch (error) {
+      addErrorLog('Share failed', { error: (error as Error).message });
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      toast({ title: 'Copied error details to clipboard' });
+    } catch (error) {
+      toast({
+        title: 'Unable to share',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleShareViaEmail = () => {
+    const address = ['apps', 'gleissner.uk'].join('@');
+    const subject = encodeURIComponent('C64 Commander diagnostics');
+    const body = encodeURIComponent(activePayload || 'No entries recorded.');
+    window.location.href = `mailto:${address}?subject=${subject}&body=${body}`;
+  };
 
   const handleSaveConnection = async () => {
     setIsSaving(true);
@@ -127,21 +189,6 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="refreshInterval" className="text-sm">Auto-refresh (seconds)</Label>
-              <Input
-                id="refreshInterval"
-                type="number"
-                min={1}
-                value={refreshIntervalInput}
-                onChange={(e) => setRefreshIntervalInput(e.target.value)}
-                onBlur={() => updateRefreshInterval(Number(refreshIntervalInput))}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Refreshes config, status, and drives. Default: 20s.
-              </p>
-            </div>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -179,6 +226,28 @@ export default function SettingsPage() {
             ) : (
               status.error || 'Not connected'
             )}
+          </div>
+        </motion.div>
+
+        {/* Logs & Diagnostics */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Diagnostics</h2>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2">
+            <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
+              <FileText className="h-4 w-4 mr-2" />
+              Diagnostics
+            </Button>
           </div>
         </motion.div>
 
@@ -257,6 +326,88 @@ export default function SettingsPage() {
           </a>
         </motion.div>
       </main>
+
+      <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Diagnostics</DialogTitle>
+            <DialogDescription>Review app logs and error history.</DialogDescription>
+          </DialogHeader>
+          <Tabs
+            value={diagnosticsTab}
+            onValueChange={(value) => setDiagnosticsTab(value as 'errors' | 'logs')}
+            className="space-y-3"
+          >
+            <TabsList className="grid grid-cols-2 w-full">
+              <TabsTrigger value="errors">Errors</TabsTrigger>
+              <TabsTrigger value="logs">All logs</TabsTrigger>
+            </TabsList>
+            <TabsContent value="errors" className="space-y-2 max-h-[360px] overflow-y-auto">
+              {errorLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No errors recorded.</p>
+              ) : (
+                errorLogs.map((entry) => (
+                  <div key={entry.id} className="rounded-lg border border-border p-3">
+                    <p className="text-sm font-medium">{entry.message}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</p>
+                    {entry.details && (
+                      <pre className="mt-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                        {JSON.stringify(entry.details, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="logs" className="space-y-2 max-h-[360px] overflow-y-auto">
+              {logs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No logs recorded.</p>
+              ) : (
+                logs.map((entry) => (
+                  <div key={entry.id} className="rounded-lg border border-border p-3">
+                    <p className="text-sm font-medium">{entry.message}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {entry.level.toUpperCase()} · {new Date(entry.timestamp).toLocaleString()}
+                    </p>
+                    {entry.details && (
+                      <pre className="mt-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                        {JSON.stringify(entry.details, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))
+              )}
+            </TabsContent>
+          </Tabs>
+          <DialogFooter>
+            <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-between">
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleShareActive}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </Button>
+                <Button variant="outline" onClick={handleShareViaEmail}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share via email
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    clearLogs();
+                    toast({ title: 'Logs cleared' });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear logs
+                </Button>
+                <Button variant="outline" onClick={() => setLogsDialogOpen(false)}>Close</Button>
+              </div>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
