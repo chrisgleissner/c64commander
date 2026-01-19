@@ -131,6 +131,9 @@ jobs:
           fi
           if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk "apk-release/c64commander-${APK_VERSION}.apk"
+          elif [[ "${{ github.ref }}" == refs/tags/* && "${HAS_KEYSTORE}" == "true" ]]; then
+            echo "Release APK not found; build may have failed." >&2
+            exit 1
           else
             echo "Release APK not found; skipping release rename."
           fi
