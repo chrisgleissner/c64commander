@@ -27,6 +27,13 @@ The app ingests HVSC archives directly on-device via native Kotlin code and stor
 ![Settings](doc/img/app-settings.png)
 ![Documentation](doc/img/app-documentation.png)
 
+## Install the APK on your Android phone
+
+1. Download the APK from the latest GitHub release (`c64commander-<version>.apk` for normal installs; use `c64commander-<version>-debug.apk` only if you need a debug build).
+2. Open the downloaded file on your phone (Files app or notification).
+3. If prompted, allow installs from unknown sources for the browser/files app.
+4. Tap Install to finish.
+
 ## Build the Android APK
 
 Ensure JDK 17 is installed (Gradle requires it for Android builds).
