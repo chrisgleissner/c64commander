@@ -198,7 +198,7 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   adb -s "$DEVICE_ID" install -r "$APK_PATH"
 
   log "Launching app"
-  adb -s "$DEVICE_ID" shell monkey -p com.c64.commander -c android.intent.category.LAUNCHER 1
+  adb -s "$DEVICE_ID" shell monkey -p uk.gleissner.c64commander -c android.intent.category.LAUNCHER 1
 fi
 
 log "Done"

@@ -23,7 +23,7 @@ android {
     namespace "com.c64.commander"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.c64.commander"
+        applicationId "uk.gleissner.c64commander"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         def envVersionCode = System.getenv("VERSION_CODE")

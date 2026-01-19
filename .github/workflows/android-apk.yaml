@@ -148,7 +148,7 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: ${{ secrets.PLAY_PACKAGE_NAME }}
+          packageName: uk.gleissner.c64commander
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          track: ${{ secrets.PLAY_TRACK }}
+          track: internal
           status: completed

@@ -17,7 +17,7 @@
     "screenshots": "playwright test --grep @screenshots",
     "proxy": "node proxy/server.mjs",
     "dev:proxy": "npm run proxy",
-    "cap:init": "cap init \"C64 Commander\" \"com.c64.commander\" --web-dir dist",
+    "cap:init": "cap init \"C64 Commander\" \"uk.gleissner.c64commander\" --web-dir dist",
     "cap:add:android": "cap add android",
     "cap:sync": "cap sync",
     "cap:open:android": "cap open android",
