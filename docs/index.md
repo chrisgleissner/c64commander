@@ -11,7 +11,7 @@ C64 Commander is a companion app for the C64 Ultimate. It provides configuration
 ## Support
 
 - Email: apps@gleissner.uk
-- Issues: https://github.com/chris/dev/c64/c64commander/issues
+- Issues: https://github.com/chrisgleissner/c64commander/issues
 
 ## Privacy
 
