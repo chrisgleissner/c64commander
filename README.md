@@ -22,9 +22,11 @@ The app ingests HVSC archives directly on-device via native Kotlin code and stor
 ![Home](doc/img/app-home.png)
 ![Quick Settings](doc/img/app-quick-settings.png)
 ![Configuration](doc/img/app-configuration.png)
-![U64 Specific](doc/img/app-configuration-u64-specific.png)
-![Documentation](doc/img/app-documentation.png)
+![Configuration Expanded](doc/img/app-configuration-expanded.png)
+![Configuration U64 Specific](doc/img/app-configuration-u64-specific.png)
+![Music](doc/img/app-music.png)
 ![Settings](doc/img/app-settings.png)
+![Documentation](doc/img/app-documentation.png)
 
 ## Build the Android APK
 
@@ -64,3 +66,10 @@ npm run test:e2e
 cd android && ./gradlew test
 ```
 
+## Update screenshots
+
+This refreshes the app screenshots in `doc/img` and captures extra states (including expanded configuration sliders).
+
+```sh
+./local-build.sh --screenshots
+```

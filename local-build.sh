@@ -10,6 +10,7 @@ RUN_TEST=true
 RUN_APK=true
 RUN_INSTALL_APK=false
 RUN_EMULATOR=false
+RUN_SCREENSHOTS=false
 APK_PATH=""
 DEVICE_ID=""
 
@@ -36,6 +37,7 @@ Options:
   --skip-build          Skip npm run cap:build
   --skip-tests          Skip npm test
   --skip-apk            Skip npm run android:apk
+  --screenshots         Capture app screenshots into doc/img
 
   -h, --help            Show this help
 
@@ -45,6 +47,7 @@ Examples:
   ./local-build.sh --install --device R5CRC3ZY9XH
   ./local-build.sh --apk-path /path/to/app-debug.apk --install
   ./local-build.sh --emulator
+  ./local-build.sh --screenshots
 EOF
 }
 
@@ -98,6 +101,10 @@ while [[ $# -gt 0 ]]; do
       RUN_APK=false
       shift
       ;;
+    --screenshots)
+      RUN_SCREENSHOTS=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -144,6 +151,12 @@ if [[ "$RUN_TEST" == "true" ]]; then
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   (cd "$ROOT_DIR" && npm run test:e2e)
   (cd "$ROOT_DIR/android" && ./gradlew test)
+fi
+
+if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
+  log "Capturing screenshots"
+  (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
+  (cd "$ROOT_DIR" && npm run screenshots)
 fi
 
 if [[ "$RUN_APK" == "true" ]]; then

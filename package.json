@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "screenshots": "playwright test --grep @screenshots",
     "proxy": "node proxy/server.mjs",
     "dev:proxy": "npm run proxy",
     "cap:init": "cap init \"C64 Commander\" \"com.c64.commander\" --web-dir dist",

@@ -1,50 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
-
-type HvscFixture = {
-  version: number;
-  songs: Array<{ virtualPath: string; fileName: string; dataBase64: string; durationSeconds?: number }>;
-};
-
-const configState = JSON.parse(
-  fs.readFileSync(path.resolve('playwright/fixtures/c64u/configState.json'), 'utf8'),
-) as Record<string, Record<string, any>>;
-
-const baselineFixture = JSON.parse(
-  fs.readFileSync(path.resolve('playwright/fixtures/hvsc/baseline.json'), 'utf8'),
-) as HvscFixture;
-
-const primarySong = baselineFixture.songs[0];
-const fixtureBase64 = primarySong.dataBase64;
-
-const buildSnapshotData = () => {
-  const data: Record<string, any> = {};
-  Object.entries(configState).forEach(([category, items]) => {
-    const payloadItems: Record<string, any> = {};
-    Object.entries(items).forEach(([name, entry]) => {
-      payloadItems[name] = {
-        selected: entry.value,
-        options: entry.options ?? [],
-        details: entry.details ?? undefined,
-      };
-    });
-    data[category] = { [category]: { items: payloadItems }, errors: [] };
-  });
-  return data;
-};
-
-const initialSnapshot = {
-  savedAt: new Date().toISOString(),
-  data: buildSnapshotData(),
-};
+import { seedUiMocks, uiFixtures } from './uiMocks';
 
 test.describe('UI coverage', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeAll(async () => {
-    server = await createMockC64Server(configState);
+    server = await createMockC64Server(uiFixtures.configState);
   });
 
   test.afterAll(async () => {
@@ -52,90 +14,10 @@ test.describe('UI coverage', () => {
   });
 
   test.beforeEach(async ({ page }: { page: Page }) => {
-    await page.addInitScript(
-      ({ baseUrl, songData, snapshot }: { baseUrl: string; songData: string; snapshot: typeof initialSnapshot }) => {
-        // Force input-based picker flow in Playwright.
-        try {
-          delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
-        } catch {
-          // ignore
-        }
-        localStorage.setItem('c64u_base_url', baseUrl);
-        localStorage.setItem('c64u_password', '');
-        localStorage.setItem('c64u_device_host', 'c64u');
-        localStorage.setItem(`c64u_initial_snapshot:${baseUrl}`, JSON.stringify(snapshot));
-        sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrl}`, '1');
-
-        const listeners: Array<(event: any) => void> = [];
-        const song = {
-          id: 1,
-          virtualPath: '/DEMOS/0-9/10_Orbyte.sid',
-          fileName: '10_Orbyte.sid',
-          durationSeconds: 77,
-          dataBase64: songData,
-        };
-
-        window.__hvscMock__ = {
-          addListener: (_event: string, listener: (event: any) => void) => {
-            listeners.push(listener);
-            return { remove: async () => {} };
-          },
-          getHvscStatus: async () => ({
-            installedBaselineVersion: 83,
-            installedVersion: 84,
-            ingestionState: 'ready',
-            lastUpdateCheckUtcMs: Date.now(),
-            ingestionError: null as string | null,
-          }),
-          checkForHvscUpdates: async () => ({
-            latestVersion: 84,
-            installedVersion: 84,
-            baselineVersion: null as number | null,
-            requiredUpdates: [] as number[],
-          }),
-          installOrUpdateHvsc: async () => ({
-            installedBaselineVersion: 83,
-            installedVersion: 84,
-            ingestionState: 'ready',
-            lastUpdateCheckUtcMs: Date.now(),
-            ingestionError: null as string | null,
-          }),
-          cancelHvscInstall: async () => {},
-          getHvscFolderListing: async ({ path }: { path: string }) => {
-            const normalized = path || '/';
-            if (normalized === '/') {
-              return { path: '/', folders: ['/DEMOS/0-9'], songs: [] as Array<any> };
-            }
-            if (normalized === '/DEMOS/0-9') {
-              return {
-                path: normalized,
-                folders: [],
-                songs: [
-                  {
-                    id: song.id,
-                    virtualPath: song.virtualPath,
-                    fileName: song.fileName,
-                    durationSeconds: song.durationSeconds,
-                  },
-                ],
-              };
-            }
-            return { path: normalized, folders: [], songs: [] };
-          },
-          getHvscSong: async ({ id }: { id?: number }) => {
-            if (id !== song.id) throw new Error('Song not found');
-            return {
-              id: song.id,
-              virtualPath: song.virtualPath,
-              fileName: song.fileName,
-              durationSeconds: song.durationSeconds,
-              dataBase64: song.dataBase64,
-            };
-          },
-        };
-      },
-      { baseUrl: server.baseUrl, songData: fixtureBase64, snapshot: initialSnapshot },
-    );
+    await seedUiMocks(page, server.baseUrl);
+    await page.addStyleTag({
+      content: '[aria-label="Notifications (F8)"] { pointer-events: none !important; }',
+    });
   });
 
   const clickAllButtons = async (page: Page, scope: Page | ReturnType<Page['locator']>) => {
@@ -164,34 +46,26 @@ test.describe('UI coverage', () => {
 
   test('config widgets read/write, refresh, and revert defaults', async ({ page }: { page: Page }) => {
     await page.goto('/config');
-    await expect(page.getByRole('button', { name: 'Test Controls' })).toBeVisible();
-    await page.getByRole('button', { name: 'Test Controls' }).click();
+    await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
 
-    const selectTrigger = page.getByLabel('Mode select');
+    const selectTrigger = page.getByLabel('System Mode select');
     await selectTrigger.click();
-    await page.getByRole('option', { name: 'Modern' }).click();
+    await page.getByRole('option', { name: 'NTSC' }).click();
 
-    const checkbox = page.getByLabel('Enable Feature checkbox');
+    const checkbox = page.getByLabel('CPU Turbo checkbox');
     await checkbox.click();
 
-    const slider = page.getByLabel('Volume Level slider');
+    await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    const slider = page.getByLabel('Vol 1 slider');
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {
       await slider.click({ position: { x: sliderBox.width - 2, y: sliderBox.height / 2 } });
     }
 
-    const labelInput = page.getByLabel('Custom Label text input');
-    await labelInput.fill('World');
-    await labelInput.blur();
-
-    const passwordInput = page.getByLabel('Network Password password input');
-    await passwordInput.fill('secret2');
-    await passwordInput.blur();
-
-    await expect.poll(() => server.getState()['Test Controls']['Mode'].value).toBe('Modern');
-    await expect.poll(() => server.getState()['Test Controls']['Enable Feature'].value).toBe('Disabled');
-    await expect.poll(() => server.getState()['Test Controls']['Custom Label'].value).toBe('World');
-    await expect.poll(() => server.getState()['Test Controls']['Network Password'].value).toBe('secret2');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['CPU Turbo'].value).toBe('On');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol 1'].value).toBe('6 dB');
 
     const refreshCount = server.requests.length;
     const refreshButton = page.getByRole('button', { name: 'Refresh' }).first();
@@ -202,13 +76,15 @@ test.describe('UI coverage', () => {
     const revertButton = page.getByRole('button', { name: 'Revert' }).first();
     await expect(revertButton).toBeEnabled();
     await revertButton.click();
-    await expect.poll(() => server.getState()['Test Controls']['Mode'].value).toBe('Classic');
-    await expect.poll(() => server.getState()['Test Controls']['Custom Label'].value).toBe('Hello');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['System Mode'].value).toBe('PAL');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['CPU Turbo'].value).toBe('Off');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol 1'].value).toBe('0 dB');
 
     await page.goto('/config');
-    await page.getByRole('button', { name: 'Test Controls' }).click();
-    await expect(page.getByLabel('Mode select')).toContainText('Classic');
-    await expect(page.getByLabel('Custom Label text input')).toHaveValue('Hello');
+    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
+    await expect(page.getByLabel('System Mode select')).toContainText('PAL');
+    await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    await expect(page.getByText('Vol 1').locator('..').getByText('0 dB')).toBeVisible();
   });
 
   test('clicks widgets across all pages', async ({ page }: { page: Page }) => {
@@ -232,7 +108,7 @@ test.describe('UI coverage', () => {
     await page.getByRole('button', { name: 'Pick folder' }).click();
     const chooser = await fileChooserPromise;
     await chooser.setFiles([
-      { name: 'local.sid', mimeType: 'audio/sid', buffer: Buffer.from(fixtureBase64, 'base64') },
+      { name: 'local.sid', mimeType: 'audio/sid', buffer: Buffer.from(uiFixtures.fixtureBase64, 'base64') },
     ]);
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();

@@ -1,11 +1,4 @@
 {
-  "Test Controls": {
-    "Volume Level": { "value": "1", "options": ["0", "1", "2", "3"] },
-    "Mode": { "value": "Classic", "options": ["Classic", "Modern"] },
-    "Enable Feature": { "value": "Enabled", "options": ["Enabled", "Disabled"] },
-    "Custom Label": { "value": "Hello" },
-    "Network Password": { "value": "secret" }
-  },
   "U64 Specific Settings": {
     "System Mode": { "value": "PAL", "options": ["PAL", "NTSC"] },
     "CPU Turbo": { "value": "Off", "options": ["Off", "On"] },
