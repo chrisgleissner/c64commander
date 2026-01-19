@@ -124,12 +124,18 @@ jobs:
           name: c64-commander-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
 
-      - name: Upload APKs to GitHub release
-        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+      - name: Upload debug APK to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2.5.0
         with:
           files: |
             android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload release APK to GitHub release
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        uses: softprops/action-gh-release@v2.5.0
+        with:
+          files: |
             android/app/build/outputs/apk/release/app-release.apk
 
       # TODO: Uncomment once release signing secrets and distribution flow are finalized.
