@@ -162,7 +162,7 @@ class HvscIngestionService(
     val now = System.currentTimeMillis()
 
     try {
-      SevenZArchiveReader(archive, null).use { reader ->
+      HvscArchiveReaderFactory.open(archive, null).use { reader ->
         var entry = reader.nextEntry()
         var processed = 0
         while (entry != null) {
@@ -265,7 +265,7 @@ class HvscIngestionService(
     val now = System.currentTimeMillis()
 
     try {
-      SevenZArchiveReader(archive, null).use { reader ->
+      HvscArchiveReaderFactory.open(archive, null).use { reader ->
         var entry = reader.nextEntry()
         while (entry != null) {
           cancelIfNeeded(cancelToken)
