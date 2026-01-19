@@ -123,7 +123,12 @@ jobs:
       - name: Prepare APK artifacts
         run: |
           mkdir -p apk-release
-          cp android/app/build/outputs/apk/debug/app-debug.apk "apk-release/c64commander-${APK_VERSION}-debug.apk"
+          if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp android/app/build/outputs/apk/debug/app-debug.apk "apk-release/c64commander-${APK_VERSION}-debug.apk"
+          else
+            echo "Debug APK not found; build may have failed." >&2
+            exit 1
+          fi
           if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
             cp android/app/build/outputs/apk/release/app-release.apk "apk-release/c64commander-${APK_VERSION}.apk"
           else
