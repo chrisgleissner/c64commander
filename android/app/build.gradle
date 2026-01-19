@@ -97,6 +97,7 @@ dependencies {
     implementation "androidx.documentfile:documentfile:1.0.1"
     implementation "org.apache.commons:commons-compress:1.27.1"
     implementation "org.tukaani:xz:1.10"
+    implementation "com.sorrowblue.sevenzipjbinding:7-Zip-JBinding-4Android:16.02-2.03"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     testImplementation "org.xerial:sqlite-jdbc:3.46.0.0"

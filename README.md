@@ -64,6 +64,13 @@ Then run:
 ./linux-build.sh --install
 ```
 
+## Internal developer testing mode (mocked C64U)
+
+1. Open Settings and tap the About panel 7 times quickly.
+2. A Developer section appears with "Enable mocked C64U (internal testing)".
+3. Enabling it starts a local mock REST service on 127.0.0.1 and routes all API calls to the mock.
+4. Disable it to stop the mock server and restore the previous device base URL.
+
 ## Tests
 
 ```sh

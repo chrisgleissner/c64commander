@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
 import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
@@ -33,12 +33,39 @@ export function useC64Connection() {
     staleTime: 30000,
   });
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        baseUrl?: string;
+        password?: string;
+        deviceHost?: string;
+      } | undefined;
+      if (!detail) return;
+      if (detail.baseUrl) setBaseUrl(detail.baseUrl);
+      if (typeof detail.password === 'string') setPassword(detail.password);
+      if (detail.deviceHost) setDeviceHost(detail.deviceHost);
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0]?.toString().startsWith('c64'),
+      });
+      refetch();
+    };
+
+    window.addEventListener('c64u-connection-change', handler as EventListener);
+    return () => window.removeEventListener('c64u-connection-change', handler as EventListener);
+  }, [queryClient, refetch]);
+
   const updateConfig = useCallback((newUrl: string, newPassword?: string, newDeviceHost?: string) => {
     setBaseUrl(newUrl);
     setPassword(newPassword || '');
     setDeviceHost(newDeviceHost || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     updateC64APIConfig(newUrl, newPassword, newDeviceHost);
-    queryClient.invalidateQueries({ queryKey: ['c64'] });
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey[0]?.toString().startsWith('c64'),
+    });
     refetch();
   }, [queryClient, refetch]);
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Wifi,
@@ -11,7 +11,8 @@ import {
   Info,
   FileText,
   Share2,
-  Trash2
+  Trash2,
+  Cpu,
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { C64_DEFAULTS } from '@/lib/c64api';
@@ -19,6 +20,7 @@ import { useThemeContext } from '@/components/ThemeProvider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -30,12 +32,23 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
+import { useDeveloperMode } from '@/hooks/useDeveloperMode';
+import { useMockMode } from '@/hooks/useMockMode';
 
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
   const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
+  const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
+  const {
+    isMockMode,
+    isMockAvailable,
+    isBusy: isMockBusy,
+    mockBaseUrl,
+    enableMockMode,
+    disableMockMode,
+  } = useMockMode();
   
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
@@ -44,6 +57,15 @@ export default function SettingsPage() {
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
+  const devTapTimestamps = useRef<number[]>([]);
+
+  useEffect(() => {
+    setUrlInput(baseUrl);
+  }, [baseUrl]);
+
+  useEffect(() => {
+    setPasswordInput(password);
+  }, [password]);
 
   useEffect(() => {
     const handler = () => {
@@ -104,6 +126,39 @@ export default function SettingsPage() {
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeveloperTap = () => {
+    if (isDeveloperModeEnabled) return;
+    const now = Date.now();
+    const windowMs = 3000;
+    const taps = devTapTimestamps.current.filter((timestamp) => now - timestamp < windowMs);
+    taps.push(now);
+    devTapTimestamps.current = taps;
+
+    if (taps.length >= 7) {
+      enableDeveloperMode();
+      devTapTimestamps.current = [];
+      toast({ title: 'Developer mode enabled' });
+    }
+  };
+
+  const handleMockToggle = async (checked: boolean) => {
+    try {
+      if (checked) {
+        await enableMockMode();
+        toast({ title: 'Mocked C64U enabled' });
+      } else {
+        await disableMockMode();
+        toast({ title: 'Mocked C64U disabled' });
+      }
+    } catch (error) {
+      toast({
+        title: 'Unable to update mock mode',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
     }
   };
 
@@ -275,12 +330,64 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
+        {isDeveloperModeEnabled && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.18 }}
+            className="bg-card border border-border rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Cpu className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="font-medium">Developer</h2>
+            </div>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="font-medium">Enable mocked C64U (internal testing)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Starts a local REST service and routes all requests to it.
+                  </p>
+                  {mockBaseUrl ? (
+                    <p className="text-xs font-mono text-muted-foreground">{mockBaseUrl}</p>
+                  ) : null}
+                  {!isMockAvailable ? (
+                    <p className="text-xs text-muted-foreground">
+                      Available on Android native builds only.
+                    </p>
+                  ) : null}
+                </div>
+                <Checkbox
+                  checked={isMockMode}
+                  disabled={isMockBusy || !isMockAvailable}
+                  onCheckedChange={(checked) => handleMockToggle(checked === true)}
+                />
+              </div>
+              {isMockMode ? (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                  Internal testing mode is active. No real hardware is being controlled.
+                </div>
+              ) : null}
+            </div>
+          </motion.div>
+        )}
+
         {/* About */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
+          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
+          onClick={handleDeveloperTap}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              handleDeveloperTap();
+            }
+          }}
         >
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-lg bg-primary/10">
@@ -298,6 +405,9 @@ export default function SettingsPage() {
               <span className="text-muted-foreground">REST API</span>
               <span className="font-mono">v0.1</span>
             </div>
+            {isDeveloperModeEnabled ? (
+              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
+            ) : null}
           </div>
 
           <a
