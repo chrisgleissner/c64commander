@@ -29,7 +29,7 @@ The app ingests HVSC archives directly on-device via native Kotlin code and stor
 
 ## Install the APK on your Android phone
 
-1. Download the APK from the latest GitHub release (`app-release.apk` for normal installs).
+1. Download the APK from the latest GitHub release (`app-release.apk` for normal installs; use `app-debug.apk` only if you need a debug build).
 2. Open the downloaded file on your phone (Files app or notification).
 3. If prompted, allow installs from unknown sources for the browser/files app.
 4. Tap Install to finish.
