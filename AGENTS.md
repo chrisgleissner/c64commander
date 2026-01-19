@@ -8,7 +8,8 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 2. REST API details live in `doc/c64/c64u-openapi.yaml` and `doc/c64/c64u-rest-api.md`.
 3. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
 4. Networking + data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
-5. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
+5. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
+6. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
 
 ## Source of truth
 
@@ -17,7 +18,32 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - **App entry**: `src/main.tsx`, `src/App.tsx`
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
+- **Song sources**: `src/lib/sources/`
+- **HVSC module**: `src/lib/hvsc/`, `android/app/src/main/java/com/c64/commander/hvsc/`
 - **SID player**: `src/pages/MusicPlayerPage.tsx`, `src/hooks/useSidPlayer.tsx`, `src/lib/sid/`
+
+## Architecture map
+
+- **UI**: `src/pages/`, `src/components/`
+- **Hooks + data fetching**: `src/hooks/`, `src/lib/c64api.ts`
+- **Song sources**: `src/lib/sources/` (local FS + HVSC)
+- **HVSC ingestion + metadata**: `src/lib/hvsc/` (service/types/native bridge)
+- **Native bridges**: `src/lib/native/`, `src/lib/hvsc/native/`
+- **Android HVSC engine**: `android/app/src/main/java/com/c64/commander/hvsc/`
+- **SID playback utilities**: `src/lib/sid/`
+
+## Tests and fixtures
+
+- **Unit**: `npm run test` (Vitest) with specs in `src/**` and `test/`
+- **E2E**: `npm run test:e2e` with specs in `playwright/` and fixtures in `playwright/fixtures/`
+- **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
+- **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
+
+## Release tag APKs
+
+- CI builds a debug APK for all runs.
+- Tag builds attempt a release APK only when signing secrets are present.
+- TODO: set `ANDROID_KEYSTORE_BASE64`, `KEYSTORE_STORE_PASSWORD`, `KEYSTORE_KEY_PASSWORD`, and `KEYSTORE_KEY_ALIAS` before enabling signed release distribution.
 
 ## MANDATORY: Code Style
 

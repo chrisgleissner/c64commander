@@ -317,7 +317,7 @@ export default function QuickSettingsPage() {
           <div>
             <h1 className="c64-header text-xl">Quick Settings</h1>
             <p className="text-xs text-muted-foreground mt-1">
-              High-value VIC, SID, CPU & Drive settings
+              Important VIC, SID, CPU & Drive settings
             </p>
           </div>
         </div>
