@@ -28,6 +28,18 @@ class HvscIngestionPlugin : Plugin() {
   }
 
   @PluginMethod
+  fun getHvscCacheStatus(call: PluginCall) {
+    val db = AndroidHvscDatabase(context)
+    val service = HvscIngestionService(db)
+    val cache = service.getCacheStatus(File(context.filesDir, "hvsc"))
+    db.close()
+    val payload = JSObject()
+    payload.put("baselineVersion", cache.baselineVersion)
+    payload.put("updateVersions", JSArray(cache.updateVersions))
+    call.resolve(payload)
+  }
+
+  @PluginMethod
   fun checkForHvscUpdates(call: PluginCall) {
     val db = AndroidHvscDatabase(context)
     val service = HvscIngestionService(db)
@@ -54,6 +66,40 @@ class HvscIngestionPlugin : Plugin() {
       try {
         val workDir = File(context.filesDir, "hvsc")
         val meta = service.installOrUpdate(workDir, cancelToken) { progress ->
+          val payload = JSObject()
+          payload.put("phase", progress.phase)
+          payload.put("message", progress.message)
+          progress.percent?.let { payload.put("percent", it) }
+          progress.downloadedBytes?.let { payload.put("downloadedBytes", it) }
+          progress.totalBytes?.let { payload.put("totalBytes", it) }
+          progress.songsUpserted?.let { payload.put("songsUpserted", it) }
+          progress.songsDeleted?.let { payload.put("songsDeleted", it) }
+          notifyListeners("progress", payload)
+        }
+        db.close()
+        cancelRegistry.remove(token)
+        call.resolve(metaToJs(meta))
+      } catch (error: Exception) {
+        db.close()
+        cancelRegistry.remove(token)
+        call.reject(error.message, error)
+      }
+    }
+  }
+
+  @PluginMethod
+  fun ingestCachedHvsc(call: PluginCall) {
+    val token = call.getString("cancelToken") ?: "default"
+    val cancelToken = cancelRegistry.register(token)
+
+    call.setKeepAlive(true)
+
+    executor.execute {
+      val db = AndroidHvscDatabase(context)
+      val service = HvscIngestionService(db)
+      try {
+        val workDir = File(context.filesDir, "hvsc")
+        val meta = service.ingestCached(workDir, cancelToken) { progress ->
           val payload = JSObject()
           payload.put("phase", progress.phase)
           payload.put("message", progress.message)

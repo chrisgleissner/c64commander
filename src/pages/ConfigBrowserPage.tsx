@@ -115,6 +115,56 @@ function CategorySection({
     }
   };
 
+  const handleSyncClock = async () => {
+    if (categoryName !== 'Clock Settings') return;
+    const now = new Date();
+    const updates: Record<string, string | number> = {};
+    const normalizedItems = items.map((item) => ({
+      item,
+      name: item.name.toLowerCase(),
+    }));
+
+    const setIfMatch = (matcher: (name: string) => boolean, value: number) => {
+      normalizedItems
+        .filter((entry) => matcher(entry.name))
+        .forEach((entry) => {
+          updates[entry.item.name] = value;
+        });
+    };
+
+    setIfMatch((name) => name.includes('year'), now.getFullYear());
+    setIfMatch((name) => name.includes('month'), now.getMonth() + 1);
+    setIfMatch((name) => name.includes('day'), now.getDate());
+    setIfMatch((name) => name.includes('hour'), now.getHours());
+    setIfMatch((name) => name.includes('minute'), now.getMinutes());
+    setIfMatch((name) => name.includes('second'), now.getSeconds());
+
+    if (Object.keys(updates).length === 0) {
+      toast({
+        title: 'Clock sync unavailable',
+        description: 'No matching clock fields found in this section.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await updateConfigBatch.mutateAsync({ category: categoryName, updates });
+      markChanged();
+      toast({ title: 'Clock synced', description: 'C64U clock updated from device time.' });
+    } catch (error) {
+      addErrorLog('Clock sync failed', {
+        error: (error as Error).message,
+        category: categoryName,
+      });
+      toast({
+        title: 'Clock sync failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const resetAudioMixer = async () => {
     if (categoryName !== 'Audio Mixer') return;
     setIsResetting(true);
@@ -218,6 +268,17 @@ function CategorySection({
                     className="text-xs"
                   >
                     Reset Audio Mixer
+                  </Button>
+                )}
+                {categoryName === 'Clock Settings' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncClock}
+                    disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
+                    className="text-xs"
+                  >
+                    Sync clock
                   </Button>
                 )}
                 <Button

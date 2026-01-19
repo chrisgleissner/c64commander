@@ -35,6 +35,14 @@ const isOffLowMediumHigh = (values: string[]) => {
   );
 };
 
+const isLeftRightCenter = (values: string[]) => {
+  const normalized = values.map((value) => normalizeOption(value));
+  const hasCenter = normalized.some((value) => value === 'center' || value === 'centre');
+  const hasLeft = normalized.some((value) => value.startsWith('left'));
+  const hasRight = normalized.some((value) => value.startsWith('right'));
+  return hasCenter && hasLeft && hasRight;
+};
+
 const isAudioMixerVolume = (name: string, category?: string) => {
   const normalizedName = normalizeOption(name);
   const normalizedCategory = category ? normalizeOption(category) : '';
@@ -50,6 +58,8 @@ const shouldUseSlider = (item: MenuItemDescriptor) => {
 
   const normalizedOptions = getNormalizedOptions(possibleValues);
   if (isOffLowMediumHigh(normalizedOptions)) return true;
+
+  if (isLeftRightCenter(normalizedOptions)) return true;
 
   if (isAllNumericLike(possibleValues)) return true;
 

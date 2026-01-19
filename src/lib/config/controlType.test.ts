@@ -83,6 +83,17 @@ describe('inferControlKind (strict rule ordering)', () => {
     ).toBe('slider');
   });
 
+  it('renders slider for Left/Center/Right lists', () => {
+    expect(
+      inferControlKind({
+        name: 'Pan Test',
+        category: 'Audio Mixer',
+        currentValue: 'Center',
+        possibleValues: ['Left 5', 'Left 4', 'Center', 'Right 4', 'Right 5'],
+      }),
+    ).toBe('slider');
+  });
+
   it('renders slider for numeric lists (including MHz)', () => {
     expect(
       inferControlKind({

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Music, Shuffle, SkipBack, SkipForward, Play, Folder, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,8 +12,10 @@ import { addErrorLog, addLog } from '@/lib/logging';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
+  getHvscCacheStatus,
   getHvscDurationByMd5Seconds,
   getHvscStatus,
+  ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
   type HvscStatus,
@@ -67,6 +69,8 @@ export default function MusicPlayerPage() {
   const [hvscDownloadedBytes, setHvscDownloadedBytes] = useState<number | null>(null);
   const [hvscSongsUpserted, setHvscSongsUpserted] = useState<number | null>(null);
   const [hvscSongsDeleted, setHvscSongsDeleted] = useState<number | null>(null);
+  const [hvscCacheBaseline, setHvscCacheBaseline] = useState<number | null>(null);
+  const [hvscCacheUpdates, setHvscCacheUpdates] = useState<number[]>([]);
   const hvscStatsRef = useRef({
     downloadedBytes: null as number | null,
     songsUpserted: null as number | null,
@@ -91,6 +95,24 @@ export default function MusicPlayerPage() {
         setHvscStatus(null);
       });
   }, []);
+
+  const refreshHvscCacheStatus = useCallback(() => {
+    if (!isHvscBridgeAvailable()) return;
+    getHvscCacheStatus()
+      .then((cache) => {
+        setHvscCacheBaseline(cache.baselineVersion ?? null);
+        setHvscCacheUpdates(cache.updateVersions ?? []);
+      })
+      .catch((error) => {
+        addErrorLog('HVSC cache status fetch failed', { error: (error as Error).message });
+        setHvscCacheBaseline(null);
+        setHvscCacheUpdates([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    refreshHvscCacheStatus();
+  }, [refreshHvscCacheStatus, hvscStatus?.installedVersion, hvscStatus?.ingestionState]);
 
   useEffect(() => {
     if (hvscStatus?.ingestionState === 'error' && hvscStatus.ingestionError) {
@@ -159,6 +181,8 @@ export default function MusicPlayerPage() {
   const hvscInstalled = Boolean(hvscStatus?.installedVersion);
   const hvscUpdating = hvscLoading || ['installing', 'updating'].includes(hvscStatus?.ingestionState ?? '');
   const hvscBridgeAvailable = isHvscBridgeAvailable();
+  const hvscHasCache = Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0;
+  const hvscCanIngest = hvscBridgeAvailable && !hvscInstalled && hvscHasCache && !hvscUpdating;
 
   const localSource = useMemo(
     () =>
@@ -257,6 +281,7 @@ export default function MusicPlayerPage() {
       await installOrUpdateHvsc('hvsc-install');
       const status = await getHvscStatus();
       setHvscStatus(status);
+      refreshHvscCacheStatus();
       const stats = hvscStatsRef.current;
       const statsDescription = [
         stats.downloadedBytes !== null ? `Downloaded ${formatBytes(stats.downloadedBytes)}` : null,
@@ -297,6 +322,34 @@ export default function MusicPlayerPage() {
       setHvscLoading(false);
       setHvscProgress(null);
       setHvscActionLabel(null);
+      refreshHvscCacheStatus();
+    }
+  };
+
+  const handleHvscIngest = async () => {
+    try {
+      setHvscLoading(true);
+      setHvscProgress(0);
+      setHvscActionLabel('Ingesting cached HVSC…');
+      await ingestCachedHvsc('hvsc-ingest');
+      const status = await getHvscStatus();
+      setHvscStatus(status);
+      toast({
+        title: 'HVSC ready',
+        description: `Version ${status.installedVersion} installed.`,
+      });
+    } catch (error) {
+      addErrorLog('HVSC cached ingest failed', { error: (error as Error).message });
+      toast({
+        title: 'Ingest failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setHvscLoading(false);
+      setHvscProgress(null);
+      setHvscActionLabel(null);
+      refreshHvscCacheStatus();
     }
   };
 
@@ -573,6 +626,16 @@ export default function MusicPlayerPage() {
                   >
                     {hvscLoading ? 'Updating…' : hvscInstalled ? 'Update' : 'Install'}
                   </Button>
+                  {hvscCanIngest && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleHvscIngest}
+                      disabled={hvscLoading || hvscUpdating}
+                    >
+                      Ingest
+                    </Button>
+                  )}
                 </div>
               </div>
               {!hvscBridgeAvailable && (

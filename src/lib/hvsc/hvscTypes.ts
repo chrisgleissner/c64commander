@@ -13,6 +13,11 @@ export type HvscUpdateStatus = {
   requiredUpdates: number[];
 };
 
+export type HvscCacheStatus = {
+  baselineVersion?: number | null;
+  updateVersions: number[];
+};
+
 export type HvscFolderListing = {
   path: string;
   folders: string[];

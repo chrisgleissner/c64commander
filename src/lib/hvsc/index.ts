@@ -1,4 +1,5 @@
 export type {
+  HvscCacheStatus,
   HvscFolderListing,
   HvscProgressEvent,
   HvscSong,
@@ -9,10 +10,12 @@ export {
   addHvscProgressListener,
   cancelHvscInstall,
   checkForHvscUpdates,
+  getHvscCacheStatus,
   getHvscDurationByMd5Seconds,
   getHvscFolderListing,
   getHvscSong,
   getHvscStatus,
+  ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
 } from './hvscService';
