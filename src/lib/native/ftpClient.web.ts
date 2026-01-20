@@ -1,19 +1,32 @@
 import type { FtpClientPlugin, FtpListOptions, FtpEntry } from './ftpClient';
-
-declare global {
-  interface Window {
-    __ftpMock__?: {
-      listDirectory: (options: FtpListOptions) => Promise<FtpEntry[]> | FtpEntry[];
-    };
-  }
-}
+import { getFtpBridgeUrl } from '@/lib/ftp/ftpConfig';
 
 export class FtpClientWeb implements FtpClientPlugin {
   async listDirectory(options: FtpListOptions): Promise<{ entries: FtpEntry[] }> {
-    if (window.__ftpMock__) {
-      const result = await window.__ftpMock__.listDirectory(options);
-      return { entries: result };
+    const bridgeUrl = getFtpBridgeUrl();
+    if (!bridgeUrl) {
+      throw new Error('FTP browsing is unavailable: missing FTP bridge URL.');
     }
-    throw new Error('FTP browsing is only available on native devices.');
+
+    const response = await fetch(`${bridgeUrl.replace(/\/$/, '')}/v1/ftp/list`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host: options.host,
+        port: options.port,
+        username: options.username,
+        password: options.password,
+        path: options.path,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      const message = errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const payload = (await response.json()) as { entries: FtpEntry[] };
+    return { entries: payload.entries || [] };
   }
 }

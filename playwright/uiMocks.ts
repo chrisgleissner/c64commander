@@ -54,8 +54,12 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         // ignore
       }
       localStorage.setItem('c64u_base_url', baseUrlArg);
-      localStorage.setItem('c64u_password', '');
-      localStorage.setItem('c64u_device_host', 'c64u');
+      if (!localStorage.getItem('c64u_password')) {
+        localStorage.setItem('c64u_password', '');
+      }
+      if (!localStorage.getItem('c64u_device_host')) {
+        localStorage.setItem('c64u_device_host', 'c64u');
+      }
       localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
       sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
 
@@ -127,31 +131,6 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         },
       };
 
-      window.__ftpMock__ = {
-        listDirectory: async ({ path }: { path?: string }) => {
-          const normalized = path || '/';
-          if (normalized === '/') {
-            return [
-              { name: 'GAMES', path: '/GAMES', type: 'dir' },
-              { name: 'demo.sid', path: '/demo.sid', type: 'file' },
-              { name: 'demo.d64', path: '/demo.d64', type: 'file' },
-              { name: 'README.txt', path: '/README.txt', type: 'file' },
-            ];
-          }
-          if (normalized === '/GAMES') {
-            return [
-              { name: 'MUSIC', path: '/GAMES/MUSIC', type: 'dir' },
-              { name: 'ELITE.PRG', path: '/GAMES/ELITE.PRG', type: 'file' },
-            ];
-          }
-          if (normalized === '/GAMES/MUSIC') {
-            return [
-              { name: 'TRACK.MOD', path: '/GAMES/MUSIC/TRACK.MOD', type: 'file' },
-            ];
-          }
-          return [];
-        },
-      };
     },
     { baseUrl: baseUrl, songData: fixtureBase64, snapshot: initialSnapshot },
   );

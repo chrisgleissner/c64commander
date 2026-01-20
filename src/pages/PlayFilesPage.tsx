@@ -7,6 +7,7 @@ import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
 import { getC64API, C64_DEFAULTS } from '@/lib/c64api';
 import { listFtpDirectory } from '@/lib/ftp/ftpClient';
+import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { browseLocalPlayFiles, filterPlayInputFiles, prepareDirectoryInput } from '@/lib/playback/localFilePicker';
 import { getParentPath, listLocalFiles, listLocalFolders } from '@/lib/playback/localFileBrowser';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
@@ -33,10 +34,11 @@ export default function PlayFilesPage() {
   const [isRemoteLoading, setIsRemoteLoading] = useState(false);
   const [isLocalLoading, setIsLocalLoading] = useState(false);
 
-  const localInputRef = useRef<HTMLInputElement | null>(null);
+  const localFolderInputRef = useRef<HTMLInputElement | null>(null);
+  const localFileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    prepareDirectoryInput(localInputRef.current);
+    prepareDirectoryInput(localFolderInputRef.current);
   }, []);
 
   const localFolders = useMemo(() => listLocalFolders(localFiles, localPath), [localFiles, localPath]);
@@ -45,10 +47,18 @@ export default function PlayFilesPage() {
   const handleLocalBrowse = async () => {
     setIsLocalLoading(true);
     try {
-      const files = await browseLocalPlayFiles(localInputRef.current);
-      if (files) {
+      const files = await browseLocalPlayFiles(localFolderInputRef.current);
+      if (files && files.length > 0) {
         setLocalFiles(files);
         setLocalPath('/');
+        return;
+      }
+      if (files) {
+        toast({
+          title: 'No supported files',
+          description: 'Found no supported files.',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
       addErrorLog('Local file browsing failed', { error: (error as Error).message });
@@ -65,6 +75,14 @@ export default function PlayFilesPage() {
   const handleLocalInput = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const filtered = filterPlayInputFiles(files);
+    if (!filtered.length) {
+      toast({
+        title: 'No supported files',
+        description: 'Found no supported files.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setLocalFiles(filtered);
     setLocalPath('/');
   };
@@ -74,7 +92,7 @@ export default function PlayFilesPage() {
     try {
       const deviceHost = localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
       const password = localStorage.getItem('c64u_password') || '';
-      const result = await listFtpDirectory({ host: deviceHost, port: 21, password, path });
+      const result = await listFtpDirectory({ host: deviceHost, port: getStoredFtpPort(), password, path });
       setRemoteEntries(result.entries);
       setRemotePath(result.path);
     } catch (error) {
@@ -164,12 +182,30 @@ export default function PlayFilesPage() {
               </div>
               <div className="flex items-center gap-2">
                 <input
-                  ref={localInputRef}
+                  ref={localFolderInputRef}
                   type="file"
                   multiple
                   className="hidden"
+                  data-testid="play-folder-input"
                   onChange={(e) => void handleLocalInput(e.target.files)}
                 />
+                <input
+                  ref={localFileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  data-testid="play-file-input"
+                  onChange={(e) => void handleLocalInput(e.target.files)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => localFileInputRef.current?.click()}
+                  disabled={isLocalLoading}
+                >
+                  <FolderOpen className="h-4 w-4 mr-1" />
+                  Pick files
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleLocalBrowse} disabled={isLocalLoading}>
                   <FolderOpen className="h-4 w-4 mr-1" />
                   {isLocalLoading ? 'Browsing…' : 'Pick folder'}
@@ -211,9 +247,9 @@ export default function PlayFilesPage() {
                 )}
                 {localVisibleFiles.map((entry) => (
                   <div key={entry.path} className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium truncate">{entry.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{entry.path}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
                     </div>
                     <Button
                       variant="default"
@@ -268,9 +304,9 @@ export default function PlayFilesPage() {
                 )}
                 {remoteVisibleEntries.map((entry) => (
                   <div key={entry.path} className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium truncate">{entry.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{entry.path}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
                     </div>
                     {entry.type === 'dir' ? (
                       <Button variant="outline" size="sm" onClick={() => void loadRemoteEntries(entry.path)}>

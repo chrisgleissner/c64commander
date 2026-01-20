@@ -2,6 +2,8 @@ import { addErrorLog } from '@/lib/logging';
 import type { C64API } from '@/lib/c64api';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import { formatPlayCategory, getMountTypeForExtension, getPlayCategory, type PlayFileCategory } from './fileTypes';
+import { mountDiskToDrive } from '@/lib/disks/diskMount';
+import { createDiskEntry } from '@/lib/disks/diskTypes';
 
 export type PlaySource = 'local' | 'ultimate';
 
@@ -122,13 +124,12 @@ export const executePlayPlan = async (
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
-        if (plan.source === 'ultimate') {
-          await api.mountDrive(drive, plan.path, plan.mountType, 'readwrite');
-        } else {
-          const blob = await toBlob(plan.file);
-          if (!blob) throw new Error('Missing local image data.');
-          await api.mountDriveUpload(drive, blob, plan.mountType, 'readwrite');
-        }
+        const diskEntry = createDiskEntry({
+          path: plan.path,
+          location: plan.source === 'ultimate' ? 'ultimate' : 'local',
+        });
+        const runtimeFile = plan.file instanceof File ? plan.file : undefined;
+        await mountDiskToDrive(api, drive, diskEntry, runtimeFile);
 
         await injectAutostart(api, AUTOSTART_SEQUENCE);
         return;

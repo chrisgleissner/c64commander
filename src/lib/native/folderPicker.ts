@@ -7,7 +7,7 @@ export type PickedFolderEntry = {
 };
 
 type FolderPickerPlugin = {
-  pickDirectory: (options?: { extensions?: string[] }) => Promise<{ uri: string; files: PickedFolderEntry[] }>;
+  pickDirectory: (options?: { extensions?: string[] }) => Promise<{ uri: string; files: PickedFolderEntry[]; rootName?: string }>;
   readFile: (options: { uri: string }) => Promise<{ data: string }>;
 };
 

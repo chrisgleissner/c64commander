@@ -51,7 +51,10 @@ const normalizeFolderPickerEntries = (result: FolderPickerResult | null): Picked
   if (typeof files === 'object' && 'length' in files) {
     return Array.from(files as ArrayLike<PickedFolderEntry>);
   }
-  throw new Error('Folder picker returned an invalid file list.');
+  if (typeof files === 'object' && Symbol.iterator in files) {
+    return Array.from(files as Iterable<PickedFolderEntry>);
+  }
+  return [];
 };
 
 const toLocalFile = (entry: PickedFolderEntry): LocalPlayFile => {

@@ -163,6 +163,11 @@ class MockC64UState private constructor(
     refreshDriveState()
   }
 
+  fun getNetworkPassword(): String? {
+    val value = config["Network Settings"]?.get("Network Password")?.value?.toString() ?: ""
+    return value
+  }
+
   private fun refreshDriveState(category: String? = null) {
     val targets = when (category) {
       "Drive A Settings" -> listOf("a")

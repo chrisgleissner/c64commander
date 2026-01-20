@@ -5,6 +5,7 @@ export type MockC64UPlugin = {
   startServer: (options: { config: MockConfigPayload; preferredPort?: number }) => Promise<{
     baseUrl: string;
     port: number;
+    ftpPort?: number;
   }>;
   stopServer: () => Promise<void>;
 };

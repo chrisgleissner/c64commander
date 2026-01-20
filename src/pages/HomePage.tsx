@@ -15,7 +15,7 @@ import {
   Download,
   Upload
 } from 'lucide-react';
-import { useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64Connection, useC64MachineControl } from '@/hooks/useC64Connection';
 import { ConnectionBadge } from '@/components/ConnectionBadge';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
@@ -30,11 +30,11 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
+import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
-  const { data: drivesData } = useC64Drives();
   const controls = useC64MachineControl();
   const {
     appConfigs,
@@ -59,35 +59,27 @@ export default function HomePage() {
   const gitSha = __GIT_SHA__ || '';
   const buildTime = __BUILD_TIME__ || '';
 
-  const handleAction = async (action: () => Promise<any>, successMsg: string) => {
+  const handleAction = async (action: () => Promise<unknown>, successMessage: string) => {
     try {
       await action();
-      toast({ title: successMsg });
+      toast({ title: successMessage });
     } catch (error) {
-      toast({ 
-        title: 'Error', 
+      toast({
+        title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive' 
+        variant: 'destructive',
       });
     }
   };
 
-  const driveA = drivesData?.drives?.find(d => 'a' in d)?.a;
-  const driveB = drivesData?.drives?.find(d => 'b' in d)?.b;
-
-  useEffect(() => {
-    if (!manageDialogOpen) return;
-    const next: Record<string, string> = {};
-    appConfigs.forEach((config) => {
-      next[config.id] = config.name;
-    });
-    setRenameValues(next);
-  }, [manageDialogOpen, appConfigs]);
-
   const handleSaveToApp = async () => {
     const trimmed = saveName.trim();
     if (!trimmed) {
-      toast({ title: 'Name required', description: 'Enter a name for this config.' });
+      toast({ title: 'Name required', description: 'Enter a config name first.' });
+      return;
+    }
+    if (appConfigs.some((entry) => entry.name === trimmed)) {
+      toast({ title: 'Name already used', description: 'Choose a unique config name.' });
       return;
     }
 
@@ -211,56 +203,7 @@ export default function HomePage() {
           </motion.div>
         )}
 
-        {/* Drive Status */}
-        {(driveA || driveB) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="space-y-3"
-          >
-            <h3 className="category-header">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              Drives
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {driveA && (
-                <div className="config-card">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono font-bold text-sm">Drive A</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      driveA.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {driveA.enabled ? 'ON' : 'OFF'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Type: {driveA.type}</p>
-                  {driveA.image_file && (
-                    <p className="text-xs text-primary truncate mt-1">{driveA.image_file}</p>
-                  )}
-                </div>
-              )}
-              {driveB && (
-                <div className="config-card">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-mono font-bold text-sm">Drive B</span>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      driveB.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                    }`}>
-                      {driveB.enabled ? 'ON' : 'OFF'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Type: {driveB.type}</p>
-                  {driveB.image_file && (
-                    <p className="text-xs text-primary truncate mt-1">{driveB.image_file}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-
-        {/* Quick Actions */}
+        {/* Machine */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -269,7 +212,7 @@ export default function HomePage() {
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Machine Control
+            Machine
           </h3>
           <div className="grid grid-cols-3 gap-3">
             <QuickActionCard
@@ -346,16 +289,24 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* Config Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
+        >
+          <HomeDiskManager />
+        </motion.div>
+
+        {/* Config Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
           className="space-y-3"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Configuration
+            Config
             {isApplying && (
               <span className="ml-2 text-xs text-muted-foreground">Applying…</span>
             )}

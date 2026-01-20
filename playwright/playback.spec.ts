@@ -2,16 +2,37 @@ import { test, expect, type Page } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
+import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
 };
 
+const openRemoteFolder = async (page: Page, name: string) => {
+  const row = page.getByText(name, { exact: true }).locator('..').locator('..');
+  await row.getByRole('button', { name: 'Open' }).click();
+};
+
 test.describe('Playback file browser', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
+  let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
+
+  test.beforeAll(async () => {
+    ftpServers = await startFtpTestServers();
+  });
+
+  test.afterAll(async () => {
+    await ftpServers.close();
+  });
 
   test.beforeEach(async ({ page }: { page: Page }) => {
     server = await createMockC64Server({});
+    await seedFtpConfig(page, {
+      host: ftpServers.ftpServer.host,
+      port: ftpServers.ftpServer.port,
+      bridgeUrl: ftpServers.bridgeServer.baseUrl,
+      password: '',
+    });
     await seedUiMocks(page, server.baseUrl);
   });
 
@@ -19,11 +40,11 @@ test.describe('Playback file browser', () => {
     await server.close();
   });
 
-  test('home shows Play section between Machine Control and Configuration', async ({ page }: { page: Page }) => {
+  test('home shows Play section between Machine and Config', async ({ page }: { page: Page }) => {
     await page.goto('/');
-    const machine = page.getByRole('heading', { name: 'Machine Control' });
+    const machine = page.getByRole('heading', { name: 'Machine' });
     const play = page.getByRole('heading', { name: 'Play' });
-    const config = page.getByRole('heading', { name: 'Configuration' });
+    const config = page.getByRole('heading', { name: 'Config' });
 
     await expect(machine).toBeVisible();
     await expect(play).toBeVisible();
@@ -56,13 +77,35 @@ test.describe('Playback file browser', () => {
     expect(server.sidplayRequests[0].method).toBe('POST');
   });
 
-  test('ultimate browsing lists FTP entries and plays remote SID', async ({ page }: { page: Page }) => {
-    await page.goto('/play?source=ultimate');
-    await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
+  test('local file picker accepts individual files', async ({ page }: { page: Page }) => {
+    await page.goto('/play?source=local');
+    const input = page.getByTestId('play-file-input');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play/demo.sid')]);
 
+    await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
     await page.getByText('demo.sid', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
-    expect(server.sidplayRequests[0].method).toBe('PUT');
+  });
+
+  test('local folder without supported files shows warning', async ({ page }: { page: Page }) => {
+    await page.goto('/play?source=local');
+    const folderInput = page.getByTestId('play-folder-input');
+    await folderInput.setInputFiles([path.resolve('playwright/fixtures/local-play-unsupported')]);
+    await expect(page.getByText('Found no supported files.', { exact: true })).toBeVisible();
+  });
+
+  test('ultimate browsing lists FTP entries and mounts remote disk image', async ({ page }: { page: Page }) => {
+    await page.goto('/play?source=ultimate');
+    await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
+    await openRemoteFolder(page, 'Usb0');
+    await openRemoteFolder(page, 'Games');
+    await openRemoteFolder(page, 'Turrican II');
+    await expect(page.getByText('Disk 1.d64', { exact: true })).toBeVisible();
+
+    await page.getByText('Disk 1.d64', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await waitForRequests(() =>
+      server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),
+    );
   });
 
   test('disk image triggers mount and autostart sequence', async ({ page }: { page: Page }) => {
@@ -86,13 +129,13 @@ test.describe('Playback file browser', () => {
   });
 
   test('FTP failure shows error toast', async ({ page }: { page: Page }) => {
-    await page.addInitScript(() => {
-      window.__ftpMock__ = {
-        listDirectory: async () => {
-          throw new Error('FTP unreachable');
-        },
-      };
+    await seedFtpConfig(page, {
+      host: ftpServers.ftpServer.host,
+      port: ftpServers.ftpServer.port + 25,
+      bridgeUrl: ftpServers.bridgeServer.baseUrl,
+      password: '',
     });
+    await seedUiMocks(page, server.baseUrl);
 
     await page.goto('/play?source=ultimate');
     await expect(page.getByText('FTP browse failed', { exact: true }).first()).toBeVisible();

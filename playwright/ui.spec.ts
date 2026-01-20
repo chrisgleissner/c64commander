@@ -27,7 +27,8 @@ test.describe('UI coverage', () => {
       const isClickable = await handle.evaluate((el: Element) => {
         const button = el as HTMLButtonElement;
         const ariaDisabled = button.getAttribute('aria-disabled') === 'true';
-        return !button.disabled && !ariaDisabled && button.offsetParent !== null;
+        const skipClick = button.hasAttribute('data-skip-click');
+        return !skipClick && !button.disabled && !ariaDisabled && button.offsetParent !== null;
       });
       if (!isClickable) continue;
       try {

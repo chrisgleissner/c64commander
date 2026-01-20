@@ -6,6 +6,8 @@ type DeviceModeEventDetail = { mode: DeviceMode };
 const DEV_MODE_KEY = 'c64u_dev_mode_enabled';
 const DEVICE_MODE_KEY = 'c64u_device_mode';
 const REAL_BASE_URL_KEY = 'c64u_real_base_url';
+const REAL_DEVICE_HOST_KEY = 'c64u_real_device_host';
+const REAL_FTP_PORT_KEY = 'c64u_real_ftp_port';
 const MOCK_BASE_URL_KEY = 'c64u_mock_base_url';
 
 const DEV_MODE_EVENT = 'c64u-dev-mode-change';
@@ -52,6 +54,26 @@ export const getStoredRealBaseUrl = () => localStorage.getItem(REAL_BASE_URL_KEY
 
 export const setStoredRealBaseUrl = (baseUrl: string) => {
   localStorage.setItem(REAL_BASE_URL_KEY, baseUrl);
+};
+
+export const getStoredRealDeviceHost = () => localStorage.getItem(REAL_DEVICE_HOST_KEY);
+
+export const setStoredRealDeviceHost = (host: string) => {
+  localStorage.setItem(REAL_DEVICE_HOST_KEY, host);
+};
+
+export const clearStoredRealDeviceHost = () => {
+  localStorage.removeItem(REAL_DEVICE_HOST_KEY);
+};
+
+export const getStoredRealFtpPort = () => localStorage.getItem(REAL_FTP_PORT_KEY);
+
+export const setStoredRealFtpPort = (port: number) => {
+  localStorage.setItem(REAL_FTP_PORT_KEY, String(port));
+};
+
+export const clearStoredRealFtpPort = () => {
+  localStorage.removeItem(REAL_FTP_PORT_KEY);
 };
 
 export const getStoredMockBaseUrl = () => localStorage.getItem(MOCK_BASE_URL_KEY);

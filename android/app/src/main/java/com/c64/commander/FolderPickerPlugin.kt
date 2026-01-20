@@ -58,6 +58,7 @@ class FolderPickerPlugin : Plugin() {
         collectFiles(root, "", files, extensions)
         val response = JSObject()
         response.put("uri", treeUri.toString())
+        response.put("rootName", root.name ?: "")
         response.put("files", files)
         call.resolve(response)
       } catch (error: Exception) {

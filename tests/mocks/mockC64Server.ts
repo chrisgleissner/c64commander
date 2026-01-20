@@ -70,6 +70,10 @@ export function createMockC64Server(
   }> = [];
   const defaults = normalizeInitialState(initial);
   let state: CategoryState = clone(defaults);
+  const driveState: Record<'a' | 'b', { enabled: boolean; bus_id: number; type: string; image_file?: string; image_path?: string }> = {
+    a: { enabled: true, bus_id: 8, type: '1541' },
+    b: { enabled: true, bus_id: 9, type: '1541' },
+  };
   const sockets = new Set<import('node:net').Socket>();
 
   const server = http.createServer((req, res) => {
@@ -117,8 +121,8 @@ export function createMockC64Server(
     if (method === 'GET' && parsed.pathname === '/v1/drives') {
       return sendJson(200, {
         drives: [
-          { a: { enabled: true, bus_id: 8, type: '1541', image_file: 'demo.d64' } },
-          { b: { enabled: false, bus_id: 9, type: '1541' } },
+          { a: { ...driveState.a } },
+          { b: { ...driveState.b } },
         ],
         errors: [],
       });
@@ -150,6 +154,31 @@ export function createMockC64Server(
       return sendJson(200, { errors: [] });
     }
 
+    const driveMountMatch = parsed.pathname.match(/^\/v1\/drives\/([ab]):mount$/);
+    if (driveMountMatch && (method === 'PUT' || method === 'POST')) {
+      const driveKey = driveMountMatch[1] as 'a' | 'b';
+      if (method === 'PUT') {
+        const image = parsed.searchParams.get('image');
+        if (!image) return sendJson(400, { errors: ['Missing image'] });
+        const normalized = image.startsWith('/') ? image : `/${image}`;
+        const parts = normalized.split('/').filter(Boolean);
+        driveState[driveKey].image_file = parts[parts.length - 1];
+        driveState[driveKey].image_path = parts.length > 1 ? `/${parts.slice(0, -1).join('/')}` : '/';
+      } else {
+        driveState[driveKey].image_file = 'upload.d64';
+        driveState[driveKey].image_path = '/';
+      }
+      return sendJson(200, { errors: [] });
+    }
+
+    const driveRemoveMatch = parsed.pathname.match(/^\/v1\/drives\/([ab]):remove$/);
+    if (driveRemoveMatch && method === 'PUT') {
+      const driveKey = driveRemoveMatch[1] as 'a' | 'b';
+      delete driveState[driveKey].image_file;
+      delete driveState[driveKey].image_path;
+      return sendJson(200, { errors: [] });
+    }
+
     if (parsed.pathname === '/v1/runners:sidplay' && (method === 'POST' || method === 'PUT')) {
       const chunks: Buffer[] = [];
       req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
@@ -171,10 +200,6 @@ export function createMockC64Server(
       ) &&
       (method === 'POST' || method === 'PUT')
     ) {
-      return sendJson(200, { errors: [] });
-    }
-
-    if (parsed.pathname.match(/^\/v1\/drives\/[ab]:mount$/) && (method === 'POST' || method === 'PUT')) {
       return sendJson(200, { errors: [] });
     }
 

@@ -6,7 +6,7 @@ const SID_EXTENSIONS = new Set(['sid']);
 const MOD_EXTENSIONS = new Set(['mod']);
 const PRG_EXTENSIONS = new Set(['prg']);
 const CRT_EXTENSIONS = new Set(['crt']);
-const DISK_IMAGE_EXTENSIONS = new Set(['d64', 'g64', 'd71', 'g71', 'd81']);
+export const DISK_IMAGE_EXTENSIONS = new Set(['d64', 'g64', 'd71', 'g71', 'd81']);
 const VOLUME_IMAGE_EXTENSIONS = new Set(['dnp', 'p64', 'gcr', 'nib']);
 
 export const SUPPORTED_PLAY_EXTENSIONS = new Set([
