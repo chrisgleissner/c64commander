@@ -1141,7 +1141,7 @@ export default function PlayFilesPage() {
           title="Add items"
           confirmLabel="Add to library"
           sourceGroups={sourceGroups}
-          onAddLocalSource={() => void addSourceFromPicker(localSourceInputRef.current)}
+          onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
           onConfirm={handleAddFileSelections}
           filterEntry={(entry) => entry.type === 'dir' || isSupportedPlayFile(entry.path)}
           allowFolderSelection

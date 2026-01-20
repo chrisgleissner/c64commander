@@ -419,15 +419,17 @@ export const HomeDiskManager = () => {
             >
               {allSelected ? 'Deselect all' : 'Select all'}
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setBulkDeleteOpen(true)}
-              disabled={!selectedCount}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Remove from library
-            </Button>
+            {selectedCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBulkDeleteOpen(true)}
+                className="text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Remove from library
+              </Button>
+            )}
           </div>
         </div>
 
@@ -540,7 +542,7 @@ export const HomeDiskManager = () => {
         title="Add items"
         confirmLabel="Add to library"
         sourceGroups={sourceGroups}
-        onAddLocalSource={() => void addSourceFromPicker(localSourceInputRef.current)}
+          onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) => entry.type === 'dir' || isDiskImagePath(entry.path)}
         allowFolderSelection

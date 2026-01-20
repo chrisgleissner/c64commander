@@ -10,8 +10,8 @@ import {
 
 export type UseLocalSourcesState = {
   sources: LocalSourceRecord[];
-  addSourceFromPicker: (input: HTMLInputElement | null) => Promise<void>;
-  addSourceFromFiles: (files: FileList | File[], label?: string) => void;
+  addSourceFromPicker: (input: HTMLInputElement | null) => Promise<LocalSourceRecord | null>;
+  addSourceFromFiles: (files: FileList | File[], label?: string) => LocalSourceRecord | null;
   removeSource: (sourceId: string) => void;
   replaceSources: (sources: LocalSourceRecord[]) => void;
 };
@@ -30,16 +30,18 @@ export const useLocalSources = (): UseLocalSourcesState => {
 
   const addSourceFromPicker = useCallback(async (input: HTMLInputElement | null) => {
     const result = await createLocalSourceFromPicker(input);
-    if (!result) return;
+    if (!result) return null;
     setLocalSourceRuntimeFiles(result.source.id, result.runtimeFiles);
     persist([result.source, ...sources]);
+    return result.source;
   }, [persist, sources]);
 
   const addSourceFromFiles = useCallback((files: FileList | File[], label?: string) => {
-    if (!files || (Array.isArray(files) && files.length === 0)) return;
+    if (!files || (Array.isArray(files) && files.length === 0)) return null;
     const result = createLocalSourceFromFileList(files, label);
     setLocalSourceRuntimeFiles(result.source.id, result.runtimeFiles);
     persist([result.source, ...sources]);
+    return result.source;
   }, [persist, sources]);
 
   const removeSource = useCallback((sourceId: string) => {

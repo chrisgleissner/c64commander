@@ -62,7 +62,7 @@ test.describe('Playback file browser', () => {
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
-    await page.getByRole('button', { name: 'local-play' }).click();
+    await expect(page.getByText('Select items', { exact: true })).toBeVisible();
     await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
     await expect(page.getByText('demo.txt')).toHaveCount(0);
     await selectEntryCheckbox(page, 'demo.sid');
@@ -79,7 +79,7 @@ test.describe('Playback file browser', () => {
     await page.getByRole('button', { name: 'Add folder' }).click();
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
-    await page.getByRole('button', { name: 'local-play' }).click();
+    await expect(page.getByText('Select items', { exact: true })).toBeVisible();
     await selectEntryCheckbox(page, 'demo.sid');
     await selectEntryCheckbox(page, 'demo.d64');
     await page.getByRole('button', { name: 'Add to library' }).click();
@@ -96,7 +96,6 @@ test.describe('Playback file browser', () => {
     await page.getByRole('button', { name: 'Add folder' }).click();
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
-    await page.getByRole('button', { name: 'local-play' }).click();
     await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
   });
 
@@ -106,7 +105,6 @@ test.describe('Playback file browser', () => {
     await page.getByRole('button', { name: 'Add folder' }).click();
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play-unsupported')]);
-    await page.getByRole('button', { name: 'local-play-unsupported' }).click();
     await expect(page.getByText('No matching items in this folder.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Add to library' }).click();
     await expect(page.getByRole('dialog').getByText('Select items', { exact: true })).toBeVisible();
@@ -135,7 +133,6 @@ test.describe('Playback file browser', () => {
     await page.getByRole('button', { name: 'Add folder' }).click();
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
-    await page.getByRole('button', { name: 'local-play' }).click();
     await selectEntryCheckbox(page, 'demo.d64');
     await page.getByRole('button', { name: 'Add to library' }).click();
     await page.getByText('demo.d64', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
@@ -163,5 +160,52 @@ test.describe('Playback file browser', () => {
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
     await expect(page.getByText('Browse failed', { exact: true }).first()).toBeVisible();
+  });
+
+  test('end-to-end add, browse, and play (local + remote)', async ({ page }, testInfo) => {
+    const capture = async (label: string) => {
+      await testInfo.attach(label, {
+        body: await page.screenshot({ fullPage: true }),
+        contentType: 'image/png',
+      });
+    };
+
+    await page.goto('/play');
+    await capture('play-page');
+
+    await openAddItemsDialog(page);
+    await capture('add-items-dialog');
+
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByText('Select items', { exact: true })).toBeVisible();
+    await capture('local-browser');
+
+    await selectEntryCheckbox(page, 'demo.sid');
+    await page.getByRole('button', { name: 'Add to library' }).click();
+    await capture('local-library-added');
+
+    await page.getByText('demo.sid', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+    await capture('local-playback');
+
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
+    await openRemoteFolder(page, 'Usb0');
+    await openRemoteFolder(page, 'Games');
+    await openRemoteFolder(page, 'Turrican II');
+    await capture('remote-browser');
+
+    await selectEntryCheckbox(page, 'Disk 1.d64');
+    await page.getByRole('button', { name: 'Add to library' }).click();
+    await capture('remote-library-added');
+
+    await page.getByText('Disk 1.d64', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await waitForRequests(() =>
+      server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),
+    );
+    await capture('remote-playback');
   });
 });

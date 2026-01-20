@@ -55,8 +55,7 @@ const addLocalFolder = async (page: Page, folderPath: string, diskNames: string[
   const input = page.locator('input[type="file"][webkitdirectory]');
   await expect(input).toHaveCount(1);
   await input.setInputFiles(folderPath);
-  const folderName = path.basename(folderPath);
-  await page.getByRole('button', { name: folderName }).click();
+  await expect(page.getByText('Select items', { exact: true })).toBeVisible();
   for (const diskName of diskNames) {
     await selectEntryCheckbox(page, diskName);
   }
@@ -264,7 +263,7 @@ test.describe('Disk management', () => {
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles(path.resolve('playwright/fixtures/disks-local/EmptyFolder'));
-    await page.getByRole('button', { name: 'EmptyFolder' }).click();
+    await expect(page.getByText('Select items', { exact: true })).toBeVisible();
     await expect(page.getByText('No matching items in this folder.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Add to library' }).click();
     await expect(page.getByRole('dialog').getByText('Select items', { exact: true })).toBeVisible();
