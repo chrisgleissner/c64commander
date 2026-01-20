@@ -402,10 +402,10 @@ test.describe('HVSC Play page', () => {
   });
 
   test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }) => {
-    await installMocks(page, { installedVersion: 0, failInstall: true });
+    await installMocks(page, { installedVersion: 0, failInstall: true, failStage: 'extract' });
     await page.goto('/music');
     await page.getByRole('button', { name: 'Install' }).click();
-    await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
+    await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Ingest', exact: true }).click();
     await expect(page.getByText(/Version 83 installed/i).first()).toBeVisible();
