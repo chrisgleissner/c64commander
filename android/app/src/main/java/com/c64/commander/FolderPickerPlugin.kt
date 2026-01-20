@@ -86,7 +86,7 @@ class FolderPickerPlugin : Plugin() {
       val name = entry.name ?: return@forEach
       if (entry.isDirectory) {
         collectSidFiles(entry, "$prefix$name/", out)
-      } else if (entry.isFile && name.lowercase().endsWith(".sid")) {
+      } else if (entry.isFile && isSupportedLocalFile(name)) {
         val payload = JSObject()
         payload.put("uri", entry.uri.toString())
         payload.put("name", name)
@@ -94,5 +94,10 @@ class FolderPickerPlugin : Plugin() {
         out.add(payload)
       }
     }
+  }
+
+  private fun isSupportedLocalFile(name: String): Boolean {
+    val lowered = name.lowercase()
+    return lowered.endsWith(".sid") || lowered.endsWith(".zip") || lowered.endsWith(".7z")
   }
 }

@@ -1,6 +1,7 @@
 import { Capacitor } from '@capacitor/core';
-import { FolderPicker } from '@/lib/native/folderPicker';
+import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
 import type { LocalSidFile } from './LocalFsSongSource';
+import { ingestLocalArchives, isSupportedLocalArchive } from './localArchiveIngestion';
 
 type FileSystemHandleLike = {
   kind: 'file' | 'directory';
@@ -15,6 +16,11 @@ type FileSystemFileHandleLike = FileSystemHandleLike & {
 type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
   kind: 'directory';
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
+};
+
+type FolderPickerResult = {
+  uri?: string;
+  files?: unknown;
 };
 
 const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
@@ -35,23 +41,49 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute('directory', '');
 };
 
-export const filterSidFiles = (files: FileList | null): LocalSidFile[] => {
+const isSupportedLocalFile = (name: string) =>
+  name.toLowerCase().endsWith('.sid') || isSupportedLocalArchive(name);
+
+export const filterLocalInputFiles = (files: FileList | null): LocalSidFile[] => {
   if (!files || files.length === 0) return [];
-  return Array.from(files).filter((file) => file.name.toLowerCase().endsWith('.sid'));
+  return Array.from(files).filter((file) => isSupportedLocalFile(file.name));
+};
+
+const normalizeFolderPickerEntries = (result: FolderPickerResult | null): PickedFolderEntry[] => {
+  if (!result) {
+    throw new Error('Folder picker returned no data.');
+  }
+  const files = result.files;
+  if (!files) return [];
+  if (Array.isArray(files)) return files as PickedFolderEntry[];
+  if (typeof files === 'object' && 'length' in files) {
+    return Array.from(files as ArrayLike<PickedFolderEntry>);
+  }
+  throw new Error('Folder picker returned an invalid file list.');
+};
+
+const toLocalFile = (entry: FolderPicker.PickedFolderEntry): LocalSidFile => {
+  if (!entry?.uri || !entry.name || !entry.path) {
+    throw new Error('Folder picker entry is missing required fields.');
+  }
+  return {
+    name: entry.name,
+    webkitRelativePath: entry.path,
+    lastModified: Date.now(),
+    arrayBuffer: async () => {
+      const data = await FolderPicker.readFile({ uri: entry.uri });
+      return base64ToArrayBuffer(data.data);
+    },
+  };
 };
 
 export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promise<LocalSidFile[] | null> => {
   if (Capacitor.getPlatform() === 'android') {
     const result = await FolderPicker.pickDirectory();
-    return result.files.map((entry) => ({
-      name: entry.name,
-      webkitRelativePath: entry.path,
-      lastModified: Date.now(),
-      arrayBuffer: async () => {
-        const data = await FolderPicker.readFile({ uri: entry.uri });
-        return base64ToArrayBuffer(data.data);
-      },
-    }));
+    const entries = normalizeFolderPickerEntries(result);
+    const candidates = entries.filter((entry) => isSupportedLocalFile(entry.name)).map(toLocalFile);
+    const ingestion = await ingestLocalArchives(candidates);
+    return ingestion.files;
   }
 
   const picker = (window as Window & {
@@ -70,7 +102,7 @@ export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promi
     for await (const [name, handle] of dirHandle.entries()) {
       if (handle.kind === 'file') {
         const file = await (handle as FileSystemFileHandleLike).getFile();
-        if (!file.name.toLowerCase().endsWith('.sid')) continue;
+        if (!isSupportedLocalFile(file.name)) continue;
         Object.defineProperty(file, 'webkitRelativePath', {
           value: `${prefix}${name}`,
         });
@@ -82,5 +114,6 @@ export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promi
   };
 
   await walkDirectory(directoryHandle, '');
-  return files;
+  const ingestion = await ingestLocalArchives(files);
+  return ingestion.files;
 };

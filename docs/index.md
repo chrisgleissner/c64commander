@@ -7,6 +7,8 @@ C64 Commander is a companion app for the C64 Ultimate. It provides configuration
 - Discover and edit device configuration categories.
 - Control core actions (reset, pause/resume, drive actions).
 - Browse and play SID music (including HVSC when installed).
+- Ingest HVSC archives with staged progress and logs.
+- Import local SID collections from folders or ZIP/7Z archives.
 
 ## Support
 

@@ -66,15 +66,7 @@ class HvscIngestionPlugin : Plugin() {
       try {
         val workDir = File(context.filesDir, "hvsc")
         val meta = service.installOrUpdate(workDir, cancelToken) { progress ->
-          val payload = JSObject()
-          payload.put("phase", progress.phase)
-          payload.put("message", progress.message)
-          progress.percent?.let { payload.put("percent", it) }
-          progress.downloadedBytes?.let { payload.put("downloadedBytes", it) }
-          progress.totalBytes?.let { payload.put("totalBytes", it) }
-          progress.songsUpserted?.let { payload.put("songsUpserted", it) }
-          progress.songsDeleted?.let { payload.put("songsDeleted", it) }
-          notifyListeners("progress", payload)
+          notifyListeners("progress", progressToJs(progress))
         }
         db.close()
         cancelRegistry.remove(token)
@@ -100,15 +92,7 @@ class HvscIngestionPlugin : Plugin() {
       try {
         val workDir = File(context.filesDir, "hvsc")
         val meta = service.ingestCached(workDir, cancelToken) { progress ->
-          val payload = JSObject()
-          payload.put("phase", progress.phase)
-          payload.put("message", progress.message)
-          progress.percent?.let { payload.put("percent", it) }
-          progress.downloadedBytes?.let { payload.put("downloadedBytes", it) }
-          progress.totalBytes?.let { payload.put("totalBytes", it) }
-          progress.songsUpserted?.let { payload.put("songsUpserted", it) }
-          progress.songsDeleted?.let { payload.put("songsDeleted", it) }
-          notifyListeners("progress", payload)
+          notifyListeners("progress", progressToJs(progress))
         }
         db.close()
         cancelRegistry.remove(token)
@@ -211,6 +195,26 @@ class HvscIngestionPlugin : Plugin() {
     payload.put("installedVersion", status.installedVersion)
     payload.put("baselineVersion", status.baselineVersion)
     payload.put("requiredUpdates", JSArray(status.requiredUpdates))
+    return payload
+  }
+
+  private fun progressToJs(progress: com.c64.commander.hvsc.HvscIngestionService.Progress): JSObject {
+    val payload = JSObject()
+    payload.put("ingestionId", progress.ingestionId)
+    payload.put("stage", progress.stage)
+    payload.put("message", progress.message)
+    progress.archiveName?.let { payload.put("archiveName", it) }
+    progress.currentFile?.let { payload.put("currentFile", it) }
+    progress.processedCount?.let { payload.put("processedCount", it) }
+    progress.totalCount?.let { payload.put("totalCount", it) }
+    progress.percent?.let { payload.put("percent", it) }
+    progress.downloadedBytes?.let { payload.put("downloadedBytes", it) }
+    progress.totalBytes?.let { payload.put("totalBytes", it) }
+    progress.songsUpserted?.let { payload.put("songsUpserted", it) }
+    progress.songsDeleted?.let { payload.put("songsDeleted", it) }
+    progress.elapsedTimeMs?.let { payload.put("elapsedTimeMs", it) }
+    progress.errorType?.let { payload.put("errorType", it) }
+    progress.errorCause?.let { payload.put("errorCause", it) }
     return payload
   }
 }

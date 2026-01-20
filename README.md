@@ -15,7 +15,7 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 
 ## HVSC Library
 
-The app ingests HVSC archives directly on-device via native Kotlin code and stores metadata and SID binaries in a local SQLite database. Baseline installs and incremental updates are applied atomically, and the Play page remains source-agnostic between local folders and HVSC.
+The app ingests HVSC archives directly on-device via native Kotlin code and stores metadata and SID binaries in a local SQLite database. Baseline installs and incremental updates are applied atomically, and the Play page remains source-agnostic between local folders and HVSC. Ingestion runs as a staged pipeline (discovery, validation, extraction, enumeration, metadata parsing, database insertion) with live progress and structured logs. Cached ingestion runs offline after downloads complete, and the local library picker accepts SID files plus ZIP and 7Z archives.
 
 ## Screenshots
 
