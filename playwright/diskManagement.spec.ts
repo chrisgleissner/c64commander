@@ -244,7 +244,7 @@ test.describe('Disk management', () => {
     await openDiskMenu(page, 'Disk 1.d64');
     await expect(page.getByText('Size:', { exact: false })).toBeVisible();
     await expect(page.getByText('Date:', { exact: false })).toBeVisible();
-    await page.getByRole('menuitem', { name: 'Rename…' }).click();
+    await page.getByRole('menuitem', { name: 'Rename disk…' }).click();
     const dialog = page.getByRole('dialog', { name: 'Rename disk' });
     await dialog.getByRole('textbox').fill('Disk One');
     await dialog.getByRole('button', { name: 'Save' }).click();

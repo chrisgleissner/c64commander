@@ -1,5 +1,6 @@
 import { Monitor, Smartphone, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +46,9 @@ export type DiskTreeProps = {
   onDiskDelete?: (disk: DiskEntry) => void;
   onDiskGroup?: (disk: DiskEntry) => void;
   onDiskRename?: (disk: DiskEntry) => void;
+  showSelection?: boolean;
+  selectedDiskIds?: Set<string>;
+  onDiskSelect?: (disk: DiskEntry, selected: boolean) => void;
   disableActions?: boolean;
 };
 
@@ -90,16 +94,21 @@ const DiskRow = ({
   disk,
   matches,
   filter,
-  onSelect,
+  selected,
+  onSelectToggle,
   onDelete,
   onGroup,
   onRename,
   onMount,
+  showSelection,
   disableActions,
 }: {
   disk: DiskEntry;
   matches: boolean;
   filter: string;
+  selected: boolean;
+  onSelectToggle?: (disk: DiskEntry, selected: boolean) => void;
+  showSelection: boolean;
   onMount?: (disk: DiskEntry) => void;
   onDelete?: (disk: DiskEntry) => void;
   onGroup?: (disk: DiskEntry) => void;
@@ -116,22 +125,58 @@ const DiskRow = ({
         isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
     >
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 px-2 text-xs"
-        onClick={() => onMount?.(disk)}
-        disabled={isDimmed || disableActions}
-        aria-label={`Mount ${disk.name}`}
-      >
-        Mount
-      </Button>
+      <div className="flex items-center gap-2 pt-0.5">
+        {showSelection ? (
+          <Checkbox
+            checked={selected}
+            onCheckedChange={(value) => onSelectToggle?.(disk, Boolean(value))}
+            aria-label={`Select ${disk.name}`}
+          />
+        ) : null}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label="Disk actions"
+              disabled={disableActions}
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Details</DropdownMenuLabel>
+            <DropdownMenuItem disabled>Size: {formatBytes(disk.sizeBytes)}</DropdownMenuItem>
+            <DropdownMenuItem disabled>Date: {formatDate(detailsDate)}</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onGroup?.(disk)} disabled={disableActions}>
+              Set group…
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onRename?.(disk)} disabled={disableActions}>
+              Rename disk…
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => onDelete?.(disk)}
+              disabled={disableActions}
+              className="text-destructive focus:text-destructive"
+            >
+              Delete disk
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <div className="flex flex-1 items-start gap-2 min-w-0">
         <LocationIcon location={disk.location} />
         <div className="min-w-0">
-          <div className="text-sm font-medium break-words whitespace-normal">
+          <button
+            type="button"
+            className="text-sm font-medium break-words whitespace-normal text-left hover:underline"
+            onClick={() => onMount?.(disk)}
+            disabled={isDimmed || disableActions}
+          >
             {highlightText(disk.name, filter)}
-          </div>
+          </button>
           <div className="text-[11px] text-muted-foreground break-words whitespace-normal">
             {highlightText(disk.path, filter)}
           </div>
@@ -146,38 +191,16 @@ const DiskRow = ({
           ) : null}
         </div>
       </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            aria-label="Disk actions"
-            disabled={disableActions}
-          >
-            <MoreVertical className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuLabel>Details</DropdownMenuLabel>
-          <DropdownMenuItem disabled>Size: {formatBytes(disk.sizeBytes)}</DropdownMenuItem>
-          <DropdownMenuItem disabled>Date: {formatDate(detailsDate)}</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onGroup?.(disk)} disabled={disableActions}>
-            Set group…
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onRename?.(disk)} disabled={disableActions}>
-            Rename…
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => onDelete?.(disk)}
-            disabled={disableActions}
-            className="text-destructive focus:text-destructive"
-          >
-            Delete disk
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 px-2 text-xs"
+        onClick={() => onMount?.(disk)}
+        disabled={isDimmed || disableActions}
+        aria-label={`Mount ${disk.name}`}
+      >
+        Mount
+      </Button>
     </div>
   );
 };
@@ -192,6 +215,9 @@ const FolderNode = ({
   onDiskGroup,
   onDiskRename,
   onDiskMount,
+  showSelection,
+  selectedDiskIds,
+  onDiskSelect,
   disableActions,
 }: {
   node: DiskTreeNode;
@@ -203,6 +229,9 @@ const FolderNode = ({
   onDiskDelete?: (disk: DiskEntry) => void;
   onDiskGroup?: (disk: DiskEntry) => void;
   onDiskRename?: (disk: DiskEntry) => void;
+  showSelection?: boolean;
+  selectedDiskIds?: Set<string>;
+  onDiskSelect?: (disk: DiskEntry, selected: boolean) => void;
   disableActions?: boolean;
 }) => {
   if (node.type === 'disk') {
@@ -215,6 +244,9 @@ const FolderNode = ({
           disk={disk}
           matches={matchInfo}
           filter={filter}
+          selected={selectedDiskIds?.has(disk.id) ?? false}
+          onSelectToggle={onDiskSelect}
+          showSelection={showSelection ?? true}
           onMount={onDiskMount}
           onDelete={onDiskDelete}
           onGroup={onDiskGroup}
@@ -228,27 +260,42 @@ const FolderNode = ({
   const hasMatch = tree.hasMatch(node);
   const isDimmed = filter.length > 0 && !hasMatch;
   return (
-    <div style={{ paddingLeft: depth * 12 }}>
+    <div
+      className={cn('space-y-1', depth > 0 && 'border-l border-border/40 pl-3')}
+      style={{ paddingLeft: depth * 12 }}
+    >
       {node.id !== 'root' && (
         <div className={cn('text-xs font-semibold text-muted-foreground py-1', isDimmed && 'opacity-40')}>
           {highlightText(node.name, filter)}
         </div>
       )}
-      {node.children?.map((child) => (
-        <FolderNode
-          key={child.id}
-          node={child}
-          depth={node.id === 'root' ? depth : depth + 1}
-          tree={tree}
-          disksById={disksById}
-          filter={filter}
-          onDiskMount={onDiskMount}
-          onDiskDelete={onDiskDelete}
-          onDiskGroup={onDiskGroup}
-          onDiskRename={onDiskRename}
-          disableActions={disableActions}
-        />
-      ))}
+      {node.children?.map((child, index) => {
+        const prev = node.children?.[index - 1];
+        const disk = child.type === 'disk' && child.diskId ? disksById[child.diskId] : null;
+        const prevDisk = prev?.type === 'disk' && prev.diskId ? disksById[prev.diskId] : null;
+        const showSeparator =
+          disk && prevDisk && disk.group !== prevDisk.group && (disk.group || prevDisk.group);
+        return (
+          <div key={child.id}>
+            {showSeparator ? <div className="my-2 border-t border-border/60" /> : null}
+            <FolderNode
+              node={child}
+              depth={node.id === 'root' ? depth : depth + 1}
+              tree={tree}
+              disksById={disksById}
+              filter={filter}
+              onDiskMount={onDiskMount}
+              onDiskDelete={onDiskDelete}
+              onDiskGroup={onDiskGroup}
+              onDiskRename={onDiskRename}
+              showSelection={showSelection}
+              selectedDiskIds={selectedDiskIds}
+              onDiskSelect={onDiskSelect}
+              disableActions={disableActions}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -261,7 +308,10 @@ export const DiskTree = ({
   onDiskDelete,
   onDiskGroup,
   onDiskRename,
+  showSelection,
   disableActions,
+  selectedDiskIds,
+  onDiskSelect,
 }: DiskTreeProps) => {
   return (
     <div className="space-y-1">
@@ -275,6 +325,9 @@ export const DiskTree = ({
         onDiskDelete={onDiskDelete}
         onDiskGroup={onDiskGroup}
         onDiskRename={onDiskRename}
+        showSelection={showSelection}
+        selectedDiskIds={selectedDiskIds}
+        onDiskSelect={onDiskSelect}
         disableActions={disableActions}
       />
       {tree.root.children?.length === 0 && (

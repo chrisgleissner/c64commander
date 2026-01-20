@@ -1,10 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
-import { Disc, ArrowLeftRight, ArrowRightLeft, FolderOpen, HardDrive, PlugZap, X } from 'lucide-react';
-import { Capacitor } from '@capacitor/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, ArrowUp, FolderOpen, HardDrive, PlugZap, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { getC64API } from '@/lib/c64api';
@@ -12,14 +10,12 @@ import { addErrorLog } from '@/lib/logging';
 import { DiskTree } from '@/components/disks/DiskTree';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import {
-  importLocalDiskFiles,
-  importLocalDiskFolder,
-  importLocalDiskFolderFromInput,
   prepareDiskDirectoryInput,
 } from '@/lib/disks/localDiskPicker';
 import { importFtpFile, importFtpFolder, listFtpEntries } from '@/lib/disks/ftpDiskImport';
-import { normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
+import { createDiskEntry, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
+import { getParentPath, listLocalFiles, listLocalFolders } from '@/lib/playback/localFileBrowser';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
@@ -52,8 +48,8 @@ export const HomeDiskManager = () => {
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
-  const [localDialogOpen, setLocalDialogOpen] = useState(false);
-  const [ftpDrawerOpen, setFtpDrawerOpen] = useState(false);
+  const [localBrowserOpen, setLocalBrowserOpen] = useState(false);
+  const [ftpBrowserOpen, setFtpBrowserOpen] = useState(false);
   const [ftpPath, setFtpPath] = useState('/');
   const [ftpEntries, setFtpEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'dir' }>>([]);
   const [ftpLoading, setFtpLoading] = useState(false);
@@ -62,17 +58,45 @@ export const HomeDiskManager = () => {
   const [renameDialogDisk, setRenameDialogDisk] = useState<DiskEntry | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteDialogDisk, setDeleteDialogDisk] = useState<DiskEntry | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [selectedDiskIds, setSelectedDiskIds] = useState<Set<string>>(new Set());
+  const [localBrowserPath, setLocalBrowserPath] = useState('/');
+  const [localBrowserFiles, setLocalBrowserFiles] = useState<File[]>([]);
 
   const localInputRef = useRef<HTMLInputElement | null>(null);
   const localFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const api = getC64API();
 
+  useEffect(() => {
+    setSelectedDiskIds((prev) => {
+      if (!prev.size) return prev;
+      const next = new Set(Array.from(prev).filter((id) => Boolean(disksById[id])));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [disksById]);
+
   const showNoDiskWarning = () => {
     toast({
       title: 'No disks found',
       description: 'Found no disk file.',
       variant: 'destructive',
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedDiskIds(allSelected ? new Set() : new Set(allDiskIds));
+  };
+
+  const handleDiskSelect = (disk: DiskEntry, selected: boolean) => {
+    setSelectedDiskIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(disk.id);
+      } else {
+        next.delete(disk.id);
+      }
+      return next;
     });
   };
 
@@ -87,6 +111,28 @@ export const HomeDiskManager = () => {
       ),
     [ftpEntries],
   );
+
+  const localBrowserEntries = useMemo(() => {
+    if (!localBrowserFiles.length) return [] as Array<{ type: 'file' | 'dir'; name: string; path: string; file?: File }>;
+    const folders = listLocalFolders(localBrowserFiles, localBrowserPath).map((folder) => ({
+      type: 'dir' as const,
+      name: folder.replace(localBrowserPath, '').replace(/\/$/, '') || folder,
+      path: folder,
+    }));
+    const files = listLocalFiles(localBrowserFiles, localBrowserPath)
+      .filter((entry) => isDiskImagePath(entry.path))
+      .map((entry) => ({
+        type: 'file' as const,
+        name: entry.name,
+        path: entry.path,
+        file: entry.file as File,
+      }));
+    return [...folders, ...files].sort((a, b) => a.name.localeCompare(b.name));
+  }, [localBrowserFiles, localBrowserPath]);
+
+  const allDiskIds = useMemo(() => diskLibrary.disks.map((disk) => disk.id), [diskLibrary.disks]);
+  const selectedCount = selectedDiskIds.size;
+  const allSelected = selectedCount > 0 && selectedCount === allDiskIds.length;
 
   const refreshFtp = async (path: string) => {
     setFtpLoading(true);
@@ -145,12 +191,14 @@ export const HomeDiskManager = () => {
 
   const resolveMountedDiskId = (drive: DriveKey) => {
     const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
-    if (!driveInfo?.image_file) return mountedByDrive[drive] || null;
+    const mountedOverride = mountedByDrive[drive];
+    if (mountedOverride === '') return null;
+    if (mountedOverride) return mountedOverride;
+    if (!driveInfo?.image_file) return null;
     const fullPath = buildDrivePath(driveInfo.image_path, driveInfo.image_file);
     if (!fullPath) return null;
     const disk = diskLibrary.disks.find((entry) => entry.location === 'ultimate' && entry.path === fullPath);
-    if (disk?.id) return disk.id;
-    return mountedByDrive[drive] || null;
+    return disk?.id ?? null;
   };
 
   const handleRotate = async (drive: DriveKey, direction: 1 | -1) => {
@@ -179,7 +227,7 @@ export const HomeDiskManager = () => {
     await handleMountDisk(drive, nextDisk);
   };
 
-  const handleDeleteDisk = async (disk: DiskEntry) => {
+  const handleDeleteDisk = async (disk: DiskEntry, options: { suppressToast?: boolean } = {}) => {
     const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
     if (mountedDrives.length > 0) {
       try {
@@ -191,10 +239,12 @@ export const HomeDiskManager = () => {
           });
           return next;
         });
-        toast({
-          title: 'Disk removed',
-          description: 'Disk ejected from mounted drives.',
-        });
+        if (!options.suppressToast) {
+          toast({
+            title: 'Disk removed',
+            description: 'Disk ejected from mounted drives.',
+          });
+        }
       } catch (error) {
         addErrorLog('Disk eject failed', { error: (error as Error).message });
       }
@@ -202,44 +252,77 @@ export const HomeDiskManager = () => {
     diskLibrary.removeDisk(disk.id);
   };
 
-  const handleLocalFiles = (files: FileList | null) => {
-    const selection = importLocalDiskFiles(files);
-    if (!selection.disks.length) {
-      showNoDiskWarning();
+  const handleBulkDelete = async () => {
+    const disksToRemove = diskLibrary.disks.filter((disk) => selectedDiskIds.has(disk.id));
+    if (!disksToRemove.length) {
+      setBulkDeleteOpen(false);
       return;
     }
-    diskLibrary.addDisks(selection.disks, selection.runtimeFiles);
-    toast({ title: 'Disks imported', description: `${selection.disks.length} disk(s) added.` });
-    setLocalDialogOpen(false);
+    await Promise.all(disksToRemove.map((disk) => handleDeleteDisk(disk, { suppressToast: true })));
+    setSelectedDiskIds(new Set());
+    setBulkDeleteOpen(false);
+    toast({
+      title: 'Disks removed',
+      description: `${disksToRemove.length} disk(s) removed from the library.`,
+    });
   };
 
-  const handleLocalFolderInput = (files: FileList | null) => {
-    const selection = importLocalDiskFolderFromInput(files);
-    if (!selection.disks.length) {
+  const getLocalFilePath = (file: File) =>
+    normalizeDiskPath((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name);
+
+  const buildLocalDiskEntries = (files: File[], groupName?: string | null) => {
+    const runtimeFiles: Record<string, File> = {};
+    const disks = files.map((file, index) => {
+      const entry = createDiskEntry({
+        path: getLocalFilePath(file),
+        location: 'local',
+        group: groupName ?? null,
+        sizeBytes: file.size,
+        modifiedAt: new Date(file.lastModified).toISOString(),
+        importOrder: index,
+      });
+      runtimeFiles[entry.id] = file;
+      return entry;
+    });
+    return { disks, runtimeFiles };
+  };
+
+  const handleLocalBrowserInput = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const diskFiles = Array.from(files).filter((file) => isDiskImagePath(file.name));
+    if (!diskFiles.length) {
       showNoDiskWarning();
       return;
     }
+    setLocalBrowserFiles(diskFiles);
+    setLocalBrowserPath('/');
+  };
+
+  const handleLocalBrowserAddFile = (file: File) => {
+    if (!isDiskImagePath(file.name)) {
+      showNoDiskWarning();
+      return;
+    }
+    const selection = buildLocalDiskEntries([file]);
+    diskLibrary.addDisks(selection.disks, selection.runtimeFiles);
+    toast({ title: 'Disk added', description: selection.disks[0]?.name ?? 'Disk added.' });
+  };
+
+  const handleLocalBrowserImportFolder = (path: string) => {
+    const normalized = normalizeDiskPath(path);
+    const folderPrefix = normalized.endsWith('/') ? normalized : `${normalized}/`;
+    const folderFiles = localBrowserFiles
+      .filter((file) => getLocalFilePath(file).startsWith(folderPrefix))
+      .slice()
+      .sort((a, b) => getLocalFilePath(a).localeCompare(getLocalFilePath(b)));
+    if (!folderFiles.length) {
+      showNoDiskWarning();
+      return;
+    }
+    const groupName = folderPrefix.split('/').filter(Boolean).pop() || null;
+    const selection = buildLocalDiskEntries(folderFiles, groupName);
     diskLibrary.addDisks(selection.disks, selection.runtimeFiles);
     toast({ title: 'Folder imported', description: `${selection.disks.length} disk(s) added.` });
-    setLocalDialogOpen(false);
-  };
-
-  const handleLocalFolder = async () => {
-    try {
-      const selection = await importLocalDiskFolder();
-      if (!selection || !selection.disks.length) {
-        showNoDiskWarning();
-        return;
-      }
-      diskLibrary.addDisks(selection.disks, selection.runtimeFiles);
-      toast({ title: 'Folder imported', description: `${selection.disks.length} disk(s) added.` });
-    } catch (error) {
-      toast({
-        title: 'Folder import failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    }
   };
 
   const handleFtpImportFile = (path: string) => {
@@ -283,12 +366,14 @@ export const HomeDiskManager = () => {
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
     const mountedDiskId = resolveMountedDiskId(key);
-    const mounted = Boolean(info?.image_file || mountedDiskId);
+    const forcedEmpty = mountedByDrive[key] === '';
+    const mounted = forcedEmpty ? false : Boolean(info?.image_file || mountedDiskId);
     const mountedDisk = mountedDiskId ? disksById[mountedDiskId] : null;
     const groupSize = mountedDisk?.group
       ? diskLibrary.disks.filter((disk) => disk.group === mountedDisk.group).length
       : 0;
     const canRotate = Boolean(mountedDisk?.group && groupSize > 1);
+    const mountedLabel = forcedEmpty ? '--' : mountedDisk?.name || info?.image_file || '--';
 
     return {
       key,
@@ -296,6 +381,7 @@ export const HomeDiskManager = () => {
       mounted,
       mountedDisk,
       canRotate,
+      mountedLabel,
     };
   });
 
@@ -309,7 +395,7 @@ export const HomeDiskManager = () => {
           Drives
         </h3>
         <div className="grid gap-3">
-          {driveRows.map(({ key, info, mounted, mountedDisk, canRotate }) => (
+          {driveRows.map(({ key, info, mounted, mountedDisk, canRotate, mountedLabel }) => (
             <div key={key} className="config-card space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -332,7 +418,7 @@ export const HomeDiskManager = () => {
                 <div>
                   <p className="text-xs text-muted-foreground">Mounted disk</p>
                   <p className="text-sm font-medium truncate">
-                    {info?.image_file || mountedDisk?.name || '—'}
+                    {mountedLabel}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -392,11 +478,38 @@ export const HomeDiskManager = () => {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground">
+            {selectedCount ? `${selectedCount} selected` : 'No disks selected'}
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSelectAll}
+              disabled={!diskLibrary.disks.length}
+            >
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={!selectedCount}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Remove from library
+            </Button>
+          </div>
+        </div>
+
         <div className="bg-card border border-border rounded-xl p-4" data-testid="disk-library-tree">
           <DiskTree
             tree={diskLibrary.tree}
             disksById={disksByIdMap}
             filter={diskLibrary.filter}
+            selectedDiskIds={selectedDiskIds}
+            onDiskSelect={handleDiskSelect}
             onDiskMount={(disk) => {
               if (!status.isConnected) {
                 toast({ title: 'Offline', description: 'Connect to mount disks.', variant: 'destructive' });
@@ -417,13 +530,13 @@ export const HomeDiskManager = () => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Button variant="outline" onClick={() => setLocalDialogOpen(true)}>
+          <Button variant="outline" onClick={() => setLocalBrowserOpen(true)}>
             + Add from local device
           </Button>
           <Button
             variant="outline"
             onClick={() => {
-              setFtpDrawerOpen(true);
+              setFtpBrowserOpen(true);
               void refreshFtp('/');
             }}
             disabled={!status.isConnected}
@@ -433,46 +546,50 @@ export const HomeDiskManager = () => {
         </div>
       </section>
 
-      <Drawer open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ''}</DrawerTitle>
-          </DrawerHeader>
-          <div className="p-4">
-            <DiskTree
-              tree={diskLibrary.tree}
-              disksById={disksByIdMap}
-              filter={diskLibrary.filter}
-              onDiskMount={(disk) => {
-                if (!activeDrive) return;
-                void handleMountDisk(activeDrive, disk).finally(() => setActiveDrive(null));
-              }}
-              onDiskDelete={(disk) => setDeleteDialogDisk(disk)}
-              onDiskGroup={(disk) => {
-                setGroupDialogDisk(disk);
-                setGroupName(disk.group || '');
-              }}
-              onDiskRename={(disk) => {
-                setRenameDialogDisk(disk);
-                setRenameValue(disk.name || '');
-              }}
-              disableActions={!status.isConnected}
-            />
-            <div className="pt-3">
-              <Button variant="ghost" onClick={() => setActiveDrive(null)}>
-                Close
+      <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ''}</DialogTitle>
+              <Button variant="ghost" size="icon" onClick={() => setActiveDrive(null)} aria-label="Close">
+                <X className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-        </DrawerContent>
-      </Drawer>
+          </DialogHeader>
+          <DiskTree
+            tree={diskLibrary.tree}
+            disksById={disksByIdMap}
+            filter={diskLibrary.filter}
+            showSelection={false}
+            onDiskMount={(disk) => {
+              if (!activeDrive) return;
+              void handleMountDisk(activeDrive, disk).finally(() => setActiveDrive(null));
+            }}
+            onDiskDelete={(disk) => setDeleteDialogDisk(disk)}
+            onDiskGroup={(disk) => {
+              setGroupDialogDisk(disk);
+              setGroupName(disk.group || '');
+            }}
+            onDiskRename={(disk) => {
+              setRenameDialogDisk(disk);
+              setRenameValue(disk.name || '');
+            }}
+            disableActions={!status.isConnected}
+          />
+        </DialogContent>
+      </Dialog>
 
-      <Drawer open={Boolean(activeDisk)} onOpenChange={(open) => !open && setActiveDisk(null)}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Mount {activeDisk?.name}</DrawerTitle>
-          </DrawerHeader>
-          <div className="p-4 space-y-2">
+      <Dialog open={Boolean(activeDisk)} onOpenChange={(open) => !open && setActiveDisk(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>Mount {activeDisk?.name}</DialogTitle>
+              <Button variant="ghost" size="icon" onClick={() => setActiveDisk(null)} aria-label="Close">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="space-y-2">
             {driveRows.map(({ key, info, mounted }) => (
               <Button
                 key={key}
@@ -487,80 +604,115 @@ export const HomeDiskManager = () => {
                 {buildDriveLabel(key)} (#{info?.bus_id ?? '—'}) {mounted ? '• mounted' : ''}
               </Button>
             ))}
-            <Button variant="ghost" onClick={() => setActiveDisk(null)}>
-              Close
-            </Button>
           </div>
-        </DrawerContent>
-      </Drawer>
+        </DialogContent>
+      </Dialog>
 
-      <Dialog open={localDialogOpen} onOpenChange={setLocalDialogOpen}>
-        <DialogContent>
+      <Dialog open={localBrowserOpen} onOpenChange={setLocalBrowserOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add local disks</DialogTitle>
-            <DialogDescription>Select disk files or an entire folder.</DialogDescription>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <DialogTitle>Browse local disks</DialogTitle>
+                <DialogDescription>Select disk images from your device.</DialogDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setLocalBrowserOpen(false)} aria-label="Close">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </DialogHeader>
           <input
             ref={localInputRef}
             type="file"
             multiple
             className="hidden"
-            onChange={(event) => handleLocalFiles(event.target.files)}
+            onChange={(event) => handleLocalBrowserInput(event.target.files)}
           />
           <input
             ref={handleFolderInputRef}
             type="file"
             multiple
             className="hidden"
-            onChange={(event) => handleLocalFolderInput(event.target.files)}
+            onChange={(event) => handleLocalBrowserInput(event.target.files)}
           />
-          <div className="space-y-2">
-            <Button
-              variant="outline"
-              data-skip-click
-              onClick={() => {
-                localInputRef.current?.click();
-                setLocalDialogOpen(false);
-              }}
-            >
-              <FolderOpen className="h-4 w-4 mr-2" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => localInputRef.current?.click()}>
+              <FolderOpen className="h-4 w-4 mr-1" />
               Pick files
             </Button>
-            <Button
-              variant="outline"
-              data-skip-click
-              onClick={() => {
-                setLocalDialogOpen(false);
-                if (Capacitor.getPlatform() === 'android') {
-                  void handleLocalFolder();
-                  return;
-                }
-                if (localFolderInputRef.current) {
-                  localFolderInputRef.current.click();
-                  return;
-                }
-                void handleLocalFolder();
-              }}
-            >
-              <PlugZap className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onClick={() => localFolderInputRef.current?.click()}>
+              <PlugZap className="h-4 w-4 mr-1" />
               Pick folder
             </Button>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setLocalDialogOpen(false)}>Close</Button>
-          </DialogFooter>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Path: {localBrowserPath}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setLocalBrowserPath(getParentPath(localBrowserPath))}
+                disabled={localBrowserPath === '/'}
+              >
+                <ArrowUp className="h-4 w-4 mr-1" />
+                Up
+              </Button>
+            </div>
+            {localBrowserFiles.length === 0 && (
+              <p className="text-xs text-muted-foreground">Pick files or a folder to view disk images.</p>
+            )}
+            {localBrowserEntries.map((entry) => (
+              <div key={entry.path} className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                  <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
+                </div>
+                {entry.type === 'dir' ? (
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setLocalBrowserPath(entry.path)}>
+                      Open
+                    </Button>
+                    <Button variant="default" size="sm" onClick={() => handleLocalBrowserImportFolder(entry.path)}>
+                      Import
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="default" size="sm" onClick={() => entry.file && handleLocalBrowserAddFile(entry.file)}>
+                    Add
+                  </Button>
+                )}
+              </div>
+            ))}
+            {localBrowserFiles.length > 0 && localBrowserEntries.length === 0 && (
+              <p className="text-xs text-muted-foreground">No disk images in this folder.</p>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
-      <Drawer open={ftpDrawerOpen} onOpenChange={setFtpDrawerOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Browse C64 Ultimate</DrawerTitle>
-          </DrawerHeader>
-          <div className="p-4 space-y-2">
+      <Dialog open={ftpBrowserOpen} onOpenChange={setFtpBrowserOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3">
+              <DialogTitle>Browse C64 Ultimate</DialogTitle>
+              <Button variant="ghost" size="icon" onClick={() => setFtpBrowserOpen(false)} aria-label="Close">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+          <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Path: {ftpPath}</span>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void refreshFtp(getParentPath(ftpPath))}
+                  disabled={ftpPath === '/'}
+                >
+                  <ArrowUp className="h-4 w-4 mr-1" />
+                  Up
+                </Button>
                 {ftpPath !== '/' && (
                   <Button
                     variant="default"
@@ -603,14 +755,9 @@ export const HomeDiskManager = () => {
                 <p className="text-xs text-muted-foreground">No disk images in this folder.</p>
               )}
             </div>
-            <div className="pt-2">
-              <Button variant="ghost" onClick={() => setFtpDrawerOpen(false)}>
-                Close
-              </Button>
-            </div>
           </div>
-        </DrawerContent>
-      </Drawer>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(groupDialogDisk)} onOpenChange={(open) => !open && setGroupDialogDisk(null)}>
         <DialogContent>
@@ -678,6 +825,25 @@ export const HomeDiskManager = () => {
               Delete
             </Button>
             <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove selected disks?</DialogTitle>
+            <DialogDescription>
+              {selectedCount
+                ? `This removes ${selectedCount} disk(s) from your library. Files are not deleted.`
+                : 'No disks selected.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
+              Remove
+            </Button>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

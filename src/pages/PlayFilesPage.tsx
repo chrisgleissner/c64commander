@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowUp, FolderOpen, Play, RefreshCw, Shuffle, SkipBack, SkipForward } from 'lucide-react';
+import { ArrowLeft, ArrowUp, FolderOpen, Play, RefreshCw, Repeat, Shuffle, SkipBack, SkipForward, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -18,6 +18,7 @@ import { getParentPath, listLocalFiles, listLocalFolders } from '@/lib/playback/
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
+import { parseSonglengths } from '@/lib/sid/songlengths';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -58,7 +59,7 @@ type PlaylistItem = {
   subsongCount?: number;
 };
 
-const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk', 'volume'];
+const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 
 const formatTime = (ms?: number) => {
   if (ms === undefined) return '—';
@@ -89,6 +90,15 @@ const parseDurationInput = (value: string) => {
   const seconds = Number(trimmed);
   if (Number.isNaN(seconds)) return undefined;
   return Math.max(0, seconds * 1000);
+};
+
+const shuffleArray = <T,>(items: T[]) => {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 };
 
 const getSidSongCount = (buffer: ArrayBuffer) => {
@@ -132,6 +142,7 @@ export default function PlayFilesPage() {
   const [songNrInput, setSongNrInput] = useState('');
   const [recurseFolders, setRecurseFolders] = useState(true);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [shuffleCategories, setShuffleCategories] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   const [playlistDialogOpen, setPlaylistDialogOpen] = useState(false);
@@ -166,10 +177,72 @@ export default function PlayFilesPage() {
   const localFileInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playlistStartedAtRef = useRef<number | null>(null);
+  const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
 
   useEffect(() => {
     prepareDirectoryInput(localFolderInputRef.current);
   }, []);
+
+  useEffect(() => {
+    songlengthsCacheRef.current.clear();
+  }, [localFiles]);
+
+  const songlengthsFilesByDir = useMemo(() => {
+    const map = new Map<string, LocalPlayFile>();
+    localFiles.forEach((file) => {
+      const name = (file as File).name || (file as { name?: string }).name;
+      if (!name || name.toLowerCase() !== 'songlengths.md5') return;
+      const path = getLocalFilePath(file);
+      const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
+      map.set(folder, file);
+    });
+    return map;
+  }, [localFiles]);
+
+  const readLocalText = useCallback(async (file: LocalPlayFile) => {
+    if (file instanceof File && typeof file.text === 'function') {
+      return file.text();
+    }
+    const buffer = await file.arrayBuffer();
+    return new TextDecoder().decode(new Uint8Array(buffer));
+  }, []);
+
+  const loadSonglengthsForPath = useCallback(async (path: string) => {
+    const normalized = normalizeLocalPath(path || '/');
+    const folderPath = normalized.endsWith('/') ? normalized : `${normalized.slice(0, normalized.lastIndexOf('/') + 1)}`;
+    const cacheKey = folderPath || '/';
+    if (songlengthsCacheRef.current.has(cacheKey)) {
+      return songlengthsCacheRef.current.get(cacheKey) ?? null;
+    }
+
+    const loader = (async () => {
+      const files: LocalPlayFile[] = [];
+      let current = cacheKey;
+      while (current) {
+        const candidate = songlengthsFilesByDir.get(current);
+        if (candidate) files.push(candidate);
+        if (current === '/') break;
+        current = getParentPath(current);
+      }
+      if (!files.length) return null;
+      const merged = { md5ToSeconds: new Map<string, number>(), pathToSeconds: new Map<string, number>() };
+      const ordered = files.slice().reverse();
+      for (const file of ordered) {
+        try {
+          const content = await readLocalText(file);
+          const parsed = parseSonglengths(content);
+          parsed.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
+          parsed.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
+        } catch {
+          // Ignore malformed songlengths files.
+        }
+      }
+      return merged;
+    })();
+
+    songlengthsCacheRef.current.set(cacheKey, loader);
+    return loader;
+  }, [readLocalText, songlengthsFilesByDir]);
 
   const handleLocalBrowse = async () => {
     setIsLocalLoading(true);
@@ -343,13 +416,39 @@ export default function PlayFilesPage() {
       if (override !== undefined) {
         return { durationMs: override, subsongCount } as const;
       }
+
+      const filePath = getLocalFilePath(file);
+      const songlengths = await loadSonglengthsForPath(filePath);
+      if (songlengths?.pathToSeconds.has(filePath)) {
+        const seconds = songlengths.pathToSeconds.get(filePath);
+        return { durationMs: seconds ? seconds * 1000 : undefined, subsongCount } as const;
+      }
+
       const md5 = await computeSidMd5(buffer);
+      const md5Duration = songlengths?.md5ToSeconds.get(md5);
+      if (md5Duration) {
+        return { durationMs: md5Duration * 1000, subsongCount } as const;
+      }
       const seconds = await getHvscDurationByMd5Seconds(md5);
       return { durationMs: seconds ? seconds * 1000 : undefined, subsongCount } as const;
     } catch {
       return { durationMs: override, subsongCount: undefined } as const;
     }
-  }, [durationInput]);
+  }, [durationInput, loadSonglengthsForPath]);
+
+  const applySonglengthsToItems = useCallback(async (items: PlaylistItem[]) => {
+    const updated = await Promise.all(
+      items.map(async (item) => {
+        if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
+        const filePath = getLocalFilePath(item.request.file);
+        const songlengths = await loadSonglengthsForPath(filePath);
+        const seconds = songlengths?.pathToSeconds.get(filePath);
+        if (!seconds) return item;
+        return { ...item, durationMs: seconds * 1000 };
+      }),
+    );
+    return updated;
+  }, [loadSonglengthsForPath]);
 
   const buildPlaylistItem = useCallback((entry: BrowserEntry): PlaylistItem | null => {
     const category = getPlayCategory(entry.path);
@@ -403,28 +502,34 @@ export default function PlayFilesPage() {
 
   const startPlaylist = useCallback(async (items: PlaylistItem[], startIndex = 0) => {
     if (!items.length) return;
-    setPlaylist(items);
+    const resolvedItems = await applySonglengthsToItems(items);
+    setPlaylist(resolvedItems);
     setCurrentIndex(startIndex);
     playlistStartedAtRef.current = Date.now();
     setPlaylistElapsedMs(0);
     setIsPlaylistLoading(true);
     try {
-      await playItem(items[startIndex]);
+      await playItem(resolvedItems[startIndex]);
     } finally {
       setIsPlaylistLoading(false);
     }
-  }, [playItem]);
+  }, [applySonglengthsToItems, playItem]);
 
   const handleNext = useCallback(async () => {
     if (!playlist.length) return;
-    const nextIndex = currentIndex + 1;
+    let nextIndex = currentIndex + 1;
     if (nextIndex >= playlist.length) {
-      setIsPlaying(false);
-      return;
+      if (!repeatEnabled) {
+        setIsPlaying(false);
+        return;
+      }
+      nextIndex = 0;
+      playlistStartedAtRef.current = Date.now();
+      setPlaylistElapsedMs(0);
     }
     setCurrentIndex(nextIndex);
     await playItem(playlist[nextIndex]);
-  }, [currentIndex, playItem, playlist]);
+  }, [currentIndex, playItem, playlist, repeatEnabled]);
 
   const handlePrevious = useCallback(async () => {
     if (!playlist.length) return;
@@ -446,10 +551,37 @@ export default function PlayFilesPage() {
       if (prev.length < 2) return prev;
       const head = prev.slice(0, currentIndex + 1);
       const tail = prev.slice(currentIndex + 1);
-      const shuffled = [...tail].sort(() => Math.random() - 0.5);
+      const shuffled = shuffleArray(tail);
       return [...head, ...shuffled];
     });
   }, [currentIndex, playlist.length, shuffleEnabled]);
+
+  const handleRemovePlaylistItem = useCallback((index: number) => {
+    setPlaylist((prev) => prev.filter((_, entryIndex) => entryIndex !== index));
+    setCurrentIndex((prevIndex) => {
+      if (prevIndex < 0) return prevIndex;
+      if (index === prevIndex) return -1;
+      if (index < prevIndex) return prevIndex - 1;
+      return prevIndex;
+    });
+    if (index === currentIndex) {
+      setIsPlaying(false);
+      setElapsedMs(0);
+      setDurationMs(undefined);
+      trackStartedAtRef.current = null;
+    }
+  }, [currentIndex]);
+
+  const handleClearPlaylist = useCallback(() => {
+    setPlaylist([]);
+    setCurrentIndex(-1);
+    setIsPlaying(false);
+    setElapsedMs(0);
+    setDurationMs(undefined);
+    setPlaylistElapsedMs(0);
+    trackStartedAtRef.current = null;
+    playlistStartedAtRef.current = null;
+  }, []);
 
   const handlePlayEntry = useCallback(async (entry: BrowserEntry) => {
     try {
@@ -623,7 +755,7 @@ export default function PlayFilesPage() {
           .map(buildPlaylistItem)
           .filter((item): item is PlaylistItem => Boolean(item));
         if (!items.length) return;
-        const queueItems = shuffleEnabled ? [...items].sort(() => Math.random() - 0.5) : items;
+        const queueItems = shuffleEnabled ? shuffleArray(items) : items;
         await startPlaylist(queueItems);
         toast({
           title: 'Playback started',
@@ -660,7 +792,7 @@ export default function PlayFilesPage() {
         .map(buildPlaylistItem)
         .filter((item): item is PlaylistItem => Boolean(item));
       if (!items.length) return;
-      const queueItems = shuffleEnabled ? [...items].sort(() => Math.random() - 0.5) : items;
+      const queueItems = shuffleEnabled ? shuffleArray(items) : items;
       await startPlaylist(queueItems);
       toast({
         title: 'Playback started',
@@ -706,7 +838,7 @@ export default function PlayFilesPage() {
         .map(buildPlaylistItem)
         .filter((item): item is PlaylistItem => Boolean(item));
       if (!items.length) return;
-      const playlistItems = shuffleEnabled ? [...items].sort(() => Math.random() - 0.5) : items;
+      const playlistItems = shuffleEnabled ? shuffleArray(items) : items;
       await startPlaylist(playlistItems);
       toast({
         title: 'Playback started',
@@ -889,6 +1021,10 @@ export default function PlayFilesPage() {
                 <Checkbox checked={shuffleEnabled} onCheckedChange={(value) => setShuffleEnabled(Boolean(value))} />
                 <span className="text-xs flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> Shuffle</span>
               </div>
+              <div className="flex items-center gap-2">
+                <Checkbox checked={repeatEnabled} onCheckedChange={(value) => setRepeatEnabled(Boolean(value))} />
+                <span className="text-xs flex items-center gap-1"><Repeat className="h-3.5 w-3.5" /> Repeat</span>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {CATEGORY_OPTIONS.map((category) => (
                   <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -951,6 +1087,20 @@ export default function PlayFilesPage() {
             <DialogHeader>
               <DialogTitle>Playlist</DialogTitle>
             </DialogHeader>
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {playlist.length ? `${playlist.length} items` : 'No items'}
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearPlaylist}
+                disabled={!playlist.length}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Clear playlist
+              </Button>
+            </div>
             <div className="max-h-[60vh] overflow-y-auto space-y-2">
               {playlist.map((item, index) => (
                 <div key={item.id} className="flex items-start justify-between gap-3 border-b border-border pb-2">
@@ -969,6 +1119,14 @@ export default function PlayFilesPage() {
                       }}
                     >
                       Play
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemovePlaylistItem(index)}
+                      aria-label="Remove from playlist"
+                    >
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
@@ -1231,7 +1389,8 @@ export default function PlayFilesPage() {
           </div>
         )}
 
-        <div className="space-y-4">
+        {hvscControlsEnabled && (
+          <div className="space-y-4">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium">HVSC library</p>
@@ -1241,33 +1400,25 @@ export default function PlayFilesPage() {
                     : 'Install HVSC to browse the SID collection.'}
                 </p>
               </div>
-              {hvscControlsEnabled && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => void handleHvscInstall()}
-                    disabled={hvscUpdating || !hvscAvailable}
-                  >
-                    {hvscInstalled ? 'Check updates' : 'Install HVSC'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleHvscIngest()}
-                    disabled={hvscUpdating || !hvscAvailable}
-                  >
-                    Ingest cached
-                  </Button>
-                </div>
-              )}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => void handleHvscInstall()}
+                  disabled={hvscUpdating || !hvscAvailable}
+                >
+                  {hvscInstalled ? 'Check updates' : 'Install HVSC'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleHvscIngest()}
+                  disabled={hvscUpdating || !hvscAvailable}
+                >
+                  Ingest cached
+                </Button>
+              </div>
             </div>
-
-            {!hvscControlsEnabled && (
-              <p className="text-xs text-muted-foreground">
-                HVSC downloads are disabled. Enable them in Settings to install the library.
-              </p>
-            )}
 
             {!hvscAvailable && (
               <p className="text-xs text-muted-foreground">
@@ -1378,6 +1529,7 @@ export default function PlayFilesPage() {
               </div>
             )}
           </div>
+        )}
       </main>
     </div>
   );

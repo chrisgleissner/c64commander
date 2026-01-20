@@ -8,7 +8,7 @@ describe('fileTypes', () => {
     expect(getPlayCategory('game.PRG')).toBe('prg');
     expect(getPlayCategory('cart.CRT')).toBe('crt');
     expect(getPlayCategory('disk.D64')).toBe('disk');
-    expect(getPlayCategory('volume.DNP')).toBe('volume');
+    expect(getPlayCategory('volume.DNP')).toBeNull();
   });
 
   it('filters supported file types', () => {

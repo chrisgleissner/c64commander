@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
@@ -31,6 +32,7 @@ import { toast } from '@/hooks/use-toast';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 
 export default function HomePage() {
+  const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const controls = useC64MachineControl();
@@ -275,7 +277,12 @@ export default function HomePage() {
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Drives
           </h3>
-          <div className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm">
+          <button
+            type="button"
+            className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
+            onClick={() => navigate('/disks')}
+            aria-label="Open Disks"
+          >
             <p>
               <span className="font-medium">Drive A:</span>{' '}
               <span className={driveA?.enabled ? 'text-success' : 'text-muted-foreground'}>
@@ -292,7 +299,7 @@ export default function HomePage() {
                 {driveB?.enabled ? 'ON' : 'OFF'}
               </span>
             </p>
-          </div>
+          </button>
         </motion.div>
 
         {/* Config Actions */}

@@ -124,8 +124,7 @@ export const executePlayPlan = async (
         await api.runCartridgeUpload(blob);
         return;
       }
-      case 'disk':
-      case 'volume': {
+      case 'disk': {
         if (resetBeforeMount) {
           await api.machineReset();
           await new Promise((resolve) => setTimeout(resolve, 500));

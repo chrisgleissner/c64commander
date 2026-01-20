@@ -1,4 +1,4 @@
-export type PlayFileCategory = 'sid' | 'mod' | 'prg' | 'crt' | 'disk' | 'volume';
+export type PlayFileCategory = 'sid' | 'mod' | 'prg' | 'crt' | 'disk';
 
 const normalizeExtension = (value: string) => value.replace(/^\./, '').toLowerCase();
 
@@ -7,7 +7,6 @@ const MOD_EXTENSIONS = new Set(['mod']);
 const PRG_EXTENSIONS = new Set(['prg']);
 const CRT_EXTENSIONS = new Set(['crt']);
 export const DISK_IMAGE_EXTENSIONS = new Set(['d64', 'g64', 'd71', 'g71', 'd81']);
-const VOLUME_IMAGE_EXTENSIONS = new Set(['dnp', 'p64', 'gcr', 'nib']);
 
 export const SUPPORTED_PLAY_EXTENSIONS = new Set([
   ...SID_EXTENSIONS,
@@ -15,7 +14,6 @@ export const SUPPORTED_PLAY_EXTENSIONS = new Set([
   ...PRG_EXTENSIONS,
   ...CRT_EXTENSIONS,
   ...DISK_IMAGE_EXTENSIONS,
-  ...VOLUME_IMAGE_EXTENSIONS,
 ]);
 
 export const getFileExtension = (value: string) => {
@@ -34,7 +32,6 @@ export const getPlayCategory = (value: string): PlayFileCategory | null => {
   if (PRG_EXTENSIONS.has(ext)) return 'prg';
   if (CRT_EXTENSIONS.has(ext)) return 'crt';
   if (DISK_IMAGE_EXTENSIONS.has(ext)) return 'disk';
-  if (VOLUME_IMAGE_EXTENSIONS.has(ext)) return 'volume';
   return null;
 };
 
@@ -56,8 +53,6 @@ export const formatPlayCategory = (category: PlayFileCategory) => {
       return 'CRT cartridge';
     case 'disk':
       return 'Disk image';
-    case 'volume':
-      return 'Volume image';
     default:
       return 'File';
   }
