@@ -364,8 +364,10 @@ export default function SettingsPage() {
                     try {
                       localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
                       sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
-                    } catch {
-                      // ignore storage failures
+                    } catch (error) {
+                      addErrorLog('Feature flag storage failed', {
+                        error: (error as Error).message,
+                      });
                     }
                   }}
                 />

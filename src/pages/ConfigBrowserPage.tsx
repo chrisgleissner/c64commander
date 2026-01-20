@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
@@ -7,11 +7,20 @@ import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
 import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
 import { useRefreshControl } from '@/hooks/useRefreshControl';
 import { isAudioMixerValueEqual } from '@/lib/config/audioMixer';
+import { getC64API } from '@/lib/c64api';
+import { cn } from '@/lib/utils';
+import {
+  buildSoloRoutingUpdates,
+  isSidVolumeName,
+  soloReducer,
+} from '@/lib/config/audioMixerSolo';
 
 type NormalizedConfigItem = {
   value: string | number;
@@ -22,6 +31,13 @@ type NormalizedConfigItem = {
     format?: string;
     presets?: string[];
   };
+};
+
+type ConfigListItem = {
+  name: string;
+  value: string | number;
+  options?: string[];
+  details?: NormalizedConfigItem['details'];
 };
 
 const normalizeConfigItem = (config: unknown): NormalizedConfigItem => {
@@ -71,6 +87,13 @@ function CategorySection({
   const { data: categoryData, isLoading, refetch } = useC64Category(categoryName, isOpen);
   const setConfig = useC64SetConfig();
   const updateConfigBatch = useC64UpdateConfigBatch();
+  const isAudioMixer = categoryName === 'Audio Mixer';
+  const [soloState, dispatchSolo] = useReducer(soloReducer, { soloItem: null });
+  const [audioConfiguredItems, setAudioConfiguredItems] = useState<ConfigListItem[]>([]);
+  const audioConfiguredRef = useRef<ConfigListItem[]>([]);
+  const soloSnapshotRef = useRef<ConfigListItem[]>([]);
+  const wasSoloActiveRef = useRef(false);
+  const soloSnapshotKey = 'c64u_audio_mixer_solo_snapshot';
 
   useEffect(() => {
     if (isOpen) {
@@ -82,7 +105,7 @@ function CategorySection({
     onOpenChange(isOpen);
   }, [isOpen, onOpenChange]);
 
-  const items = useMemo(() => {
+  const items = useMemo<ConfigListItem[]>(() => {
     if (!categoryData) return [];
     
     const catData = categoryData[categoryName] as any;
@@ -98,6 +121,102 @@ function CategorySection({
       }));
   }, [categoryData, categoryName]);
 
+  useEffect(() => {
+    if (!isAudioMixer) return;
+    if (items.length === 0) {
+      setAudioConfiguredItems([]);
+      audioConfiguredRef.current = [];
+      soloSnapshotRef.current = [];
+      return;
+    }
+    if (!soloState.soloItem || audioConfiguredItems.length === 0) {
+      setAudioConfiguredItems(items);
+      audioConfiguredRef.current = items;
+    }
+    if (!soloState.soloItem) {
+      soloSnapshotRef.current = items;
+    }
+  }, [isAudioMixer, items, soloState.soloItem, audioConfiguredItems.length]);
+
+  useEffect(() => {
+    if (!isAudioMixer) return;
+    audioConfiguredRef.current = audioConfiguredItems;
+  }, [isAudioMixer, audioConfiguredItems]);
+
+  const applySoloRouting = useCallback(
+    async (soloItem: string | null, configuredOverride?: ConfigListItem[]) => {
+      if (!isAudioMixer) return;
+      const configured = configuredOverride && configuredOverride.length > 0
+        ? configuredOverride
+        : audioConfiguredRef.current;
+      if (!configured.length) return;
+      if (soloItem) {
+        soloSnapshotRef.current = configured;
+        try {
+          sessionStorage.setItem(soloSnapshotKey, JSON.stringify(configured));
+        } catch (error) {
+          addErrorLog('Solo snapshot save failed', { error: (error as Error).message });
+        }
+      }
+      const updates = buildSoloRoutingUpdates(configured, soloItem);
+      if (Object.keys(updates).length === 0) return;
+      try {
+        const api = getC64API();
+        await api.updateConfigBatch({ [categoryName]: updates });
+        if (!soloItem) {
+          try {
+            sessionStorage.removeItem(soloSnapshotKey);
+          } catch (error) {
+            addErrorLog('Solo snapshot cleanup failed', { error: (error as Error).message });
+          }
+        }
+      } catch (error) {
+        addErrorLog('Solo routing update failed', {
+          error: (error as Error).message,
+          category: categoryName,
+          soloItem: soloItem ?? 'none',
+        });
+        toast({
+          title: 'Audio routing error',
+          description: (error as Error).message,
+          variant: 'destructive',
+        });
+      }
+    },
+    [isAudioMixer, categoryName],
+  );
+
+  useEffect(() => {
+    if (!isAudioMixer) return;
+    const isActive = Boolean(soloState.soloItem);
+    if (isActive || wasSoloActiveRef.current) {
+      void applySoloRouting(soloState.soloItem);
+    }
+    wasSoloActiveRef.current = isActive;
+  }, [isAudioMixer, soloState.soloItem, applySoloRouting]);
+
+  useEffect(() => {
+    if (!isAudioMixer) return undefined;
+    return () => {
+      const configured = audioConfiguredRef.current.length
+        ? audioConfiguredRef.current
+        : items;
+      let snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
+      try {
+        const stored = sessionStorage.getItem(soloSnapshotKey);
+        if (stored) {
+          const parsed = JSON.parse(stored) as ConfigListItem[];
+          if (Array.isArray(parsed) && parsed.length) snapshot = parsed;
+        }
+      } catch (error) {
+        addErrorLog('Solo snapshot restore failed', { error: (error as Error).message });
+      }
+      if (snapshot.length) {
+        void applySoloRouting(null, snapshot);
+      }
+    };
+  }, [isAudioMixer, applySoloRouting, items]);
+
   const handleValueChange = async (itemName: string, value: string | number) => {
     try {
       await setConfig.mutateAsync({
@@ -112,6 +231,26 @@ function CategorySection({
         description: (error as Error).message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const updateAudioConfiguredValue = useCallback(
+    (itemName: string, value: string | number) => {
+      setAudioConfiguredItems((prev) => {
+        const source = prev.length ? prev : items;
+        const next = source.map((item) => (item.name === itemName ? { ...item, value } : item));
+        audioConfiguredRef.current = next;
+        return next;
+      });
+    },
+    [items],
+  );
+
+  const handleAudioValueChange = async (itemName: string, value: string | number) => {
+    updateAudioConfiguredValue(itemName, value);
+    await handleValueChange(itemName, value);
+    if (!soloState.soloItem) {
+      soloSnapshotRef.current = items;
     }
   };
 
@@ -200,6 +339,8 @@ function CategorySection({
     }
   };
 
+  const displayItems = isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -243,18 +384,52 @@ function CategorySection({
                 </div>
               ) : (
                 <div className="divide-y divide-border">
-                  {items.map((item) => (
-                    <ConfigItemRow
-                      key={item.name}
-                      category={categoryName}
-                      name={item.name}
-                      value={item.value}
-                      options={item.options}
-                      details={item.details}
-                      onValueChange={(v) => handleValueChange(item.name, v)}
-                      isLoading={setConfig.isPending}
-                    />
-                  ))}
+                  {displayItems.map((item) => {
+                    const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
+                    const isSoloed = isSidVolume && soloState.soloItem === item.name;
+                    const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
+                    const rowClassName = cn(
+                      isSidVolume && 'rounded-md px-2',
+                      isSoloed && 'bg-primary/10',
+                      isMutedBySolo && 'bg-muted/20',
+                    );
+
+                    const rightAccessory = isSidVolume ? (
+                      <div className="flex items-center gap-3">
+                        {isMutedBySolo && (
+                          <span className="text-[11px] font-medium text-muted-foreground">Muted</span>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`solo-${item.name}`} className="text-[11px] uppercase tracking-wide">
+                            Solo
+                          </Label>
+                          <Switch
+                            id={`solo-${item.name}`}
+                            checked={isSoloed}
+                            aria-label={`Solo ${item.name}`}
+                            onCheckedChange={() => dispatchSolo({ type: 'toggle', item: item.name })}
+                          />
+                        </div>
+                      </div>
+                    ) : undefined;
+
+                    return (
+                      <ConfigItemRow
+                        key={item.name}
+                        category={categoryName}
+                        name={item.name}
+                        value={item.value}
+                        options={item.options}
+                        details={item.details}
+                        onValueChange={(v) =>
+                          isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
+                        }
+                        isLoading={setConfig.isPending}
+                        className={rowClassName}
+                        rightAccessory={rightAccessory}
+                      />
+                    );
+                  })}
                 </div>
               )}
               

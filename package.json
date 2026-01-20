@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test --grep-invert @screenshots",
     "screenshots": "playwright test --grep @screenshots",
     "proxy": "node proxy/server.mjs",
     "dev:proxy": "npm run proxy",

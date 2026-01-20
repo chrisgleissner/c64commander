@@ -1,5 +1,6 @@
 package uk.gleissner.c64commander
 
+import android.util.Log
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -24,6 +25,9 @@ class MockFtpServer(
   @Volatile private var running = false
   var port: Int = 0
     private set
+  private companion object {
+    const val LOG_TAG = "MockFtpServer"
+  }
 
   fun start(preferredPort: Int? = null): Int {
     if (running) return port
@@ -40,14 +44,14 @@ class MockFtpServer(
     running = false
     try {
       serverSocket?.close()
-    } catch (_: Exception) {
-      // ignore
+    } catch (error: Exception) {
+      Log.w(LOG_TAG, "Failed to close server socket", error)
     }
     sockets.forEach { socket ->
       try {
         socket.close()
-      } catch (_: Exception) {
-        // ignore
+      } catch (error: Exception) {
+        Log.w(LOG_TAG, "Failed to close client socket", error)
       }
     }
     sockets.clear()
@@ -58,7 +62,8 @@ class MockFtpServer(
     while (running) {
       val socket = try {
         serverSocket?.accept()
-      } catch (_: Exception) {
+      } catch (error: Exception) {
+        Log.w(LOG_TAG, "Accept loop failed", error)
         null
       }
       if (socket != null) {
@@ -82,13 +87,13 @@ class MockFtpServer(
         session.handleCommand(trimmed)
         if (session.isClosed) break
       }
-    } catch (_: Exception) {
-      // ignore
+    } catch (error: Exception) {
+      Log.w(LOG_TAG, "FTP session error", error)
     } finally {
       try {
         socket.close()
-      } catch (_: Exception) {
-        // ignore
+      } catch (error: Exception) {
+        Log.w(LOG_TAG, "Failed to close FTP socket", error)
       }
       sockets.remove(socket)
       session.cleanup()
@@ -114,8 +119,8 @@ class MockFtpServer(
     fun cleanup() {
       try {
         passiveServer?.close()
-      } catch (_: Exception) {
-        // ignore
+      } catch (error: Exception) {
+        Log.w(LOG_TAG, "Failed to close passive server", error)
       }
       passiveServer = null
     }
@@ -249,8 +254,8 @@ class MockFtpServer(
       } finally {
         try {
           dataSocket.close()
-        } catch (_: Exception) {
-          // ignore
+        } catch (error: Exception) {
+          Log.w(LOG_TAG, "Failed to close data socket", error)
         }
         cleanup()
       }

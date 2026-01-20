@@ -42,18 +42,24 @@ test.describe('App screenshots', () => {
     const screenshotPath = (fileName: string) => path.resolve('doc/img', fileName);
 
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Quick', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Disks', exact: true })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-home.png'), animations: 'disabled', caret: 'hide' });
 
-    await page.getByRole('button', { name: 'Quick', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Quick Settings' })).toBeVisible();
+    await page.getByRole('button', { name: 'Disks', exact: true }).click();
+    await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-quick-settings.png'), animations: 'disabled', caret: 'hide' });
+    await page.screenshot({ path: screenshotPath('app-disks.png'), animations: 'disabled', caret: 'hide' });
 
-    const u64Card = page.getByRole('button', { name: 'Video (VIC)', exact: true });
+    await page.getByRole('button', { name: 'Config', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
+    await waitForStableRender(page);
+    await waitForOverlaysToClear(page);
+    await page.screenshot({ path: screenshotPath('app-configuration.png'), animations: 'disabled', caret: 'hide' });
+
+    const u64Card = page.getByRole('button', { name: 'U64 Specific Settings', exact: true });
     if (await u64Card.isVisible()) {
       await u64Card.click();
       await expect(page.getByText('System Mode')).toBeVisible();
@@ -61,12 +67,6 @@ test.describe('App screenshots', () => {
       await waitForOverlaysToClear(page);
       await page.screenshot({ path: screenshotPath('app-configuration-u64-specific.png'), animations: 'disabled', caret: 'hide' });
     }
-
-    await page.getByRole('button', { name: 'Config', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
-    await waitForStableRender(page);
-    await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-configuration.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Audio Mixer', exact: true }).click();
     const slider = page.getByLabel('Vol UltiSid 1 slider');
@@ -84,7 +84,7 @@ test.describe('App screenshots', () => {
     await expect(page.getByText('HVSC library')).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-music.png'), animations: 'disabled', caret: 'hide' });
+    await page.screenshot({ path: screenshotPath('app-play.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();

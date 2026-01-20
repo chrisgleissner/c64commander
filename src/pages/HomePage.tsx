@@ -14,7 +14,7 @@ import {
   Download,
   FolderOpen
 } from 'lucide-react';
-import { useC64Connection, useC64MachineControl } from '@/hooks/useC64Connection';
+import { useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { ConnectionBadge } from '@/components/ConnectionBadge';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,10 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
-import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
 
 export default function HomePage() {
   const { status } = useC64Connection();
+  const { data: drivesData } = useC64Drives();
   const controls = useC64MachineControl();
   const {
     appConfigs,
@@ -113,6 +113,12 @@ export default function HomePage() {
       setApplyingConfigId(null);
     }
   };
+
+  const resolveDrive = (key: 'a' | 'b') =>
+    drivesData?.drives?.find((entry) => entry[key])?.[key];
+
+  const driveA = resolveDrive('a');
+  const driveB = resolveDrive('b');
 
   return (
     <div className="min-h-screen pb-24">
@@ -263,8 +269,30 @@ export default function HomePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          className="space-y-3"
         >
-          <HomeDiskManager />
+          <h3 className="category-header">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            Drives
+          </h3>
+          <div className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm">
+            <p>
+              <span className="font-medium">Drive A:</span>{' '}
+              <span className={driveA?.enabled ? 'text-success' : 'text-muted-foreground'}>
+                {driveA?.enabled ? 'ON' : 'OFF'}
+              </span>
+              {' '}–{' '}
+              <span className="font-medium truncate">
+                {driveA?.enabled ? driveA?.image_file || '—' : '—'}
+              </span>
+            </p>
+            <p>
+              <span className="font-medium">Drive B:</span>{' '}
+              <span className={driveB?.enabled ? 'text-success' : 'text-muted-foreground'}>
+                {driveB?.enabled ? 'ON' : 'OFF'}
+              </span>
+            </p>
+          </div>
         </motion.div>
 
         {/* Config Actions */}

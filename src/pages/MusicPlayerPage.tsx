@@ -76,9 +76,9 @@ export default function MusicPlayerPage() {
   const [hvscProcessedCount, setHvscProcessedCount] = useState<number | null>(null);
   const [hvscTotalCount, setHvscTotalCount] = useState<number | null>(null);
   const [hvscDownloadedBytes, setHvscDownloadedBytes] = useState<number | null>(null);
+  const [hvscErrorMessage, setHvscErrorMessage] = useState<string | null>(null);
   const [hvscSongsUpserted, setHvscSongsUpserted] = useState<number | null>(null);
   const [hvscSongsDeleted, setHvscSongsDeleted] = useState<number | null>(null);
-  const [hvscErrorMessage, setHvscErrorMessage] = useState<string | null>(null);
   const [hvscLastAction, setHvscLastAction] = useState<'update' | 'ingest' | null>(null);
   const [hvscCacheBaseline, setHvscCacheBaseline] = useState<number | null>(null);
   const [hvscCacheUpdates, setHvscCacheUpdates] = useState<number[]>([]);
@@ -240,8 +240,10 @@ export default function MusicPlayerPage() {
       }
     }).then((listener) => {
       removeListener = listener.remove;
-    }).catch(() => {
-      // ignore listener failures on web
+    }).catch((error) => {
+      addErrorLog('HVSC listener registration failed', {
+        error: (error as Error).message,
+      });
     });
     return () => {
       if (removeListener) {

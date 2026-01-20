@@ -1,4 +1,5 @@
 import { unzipSync } from 'fflate';
+import { addErrorLog } from '@/lib/logging';
 import type { LocalSidFile } from './LocalFsSongSource';
 
 export type LocalArchiveIngestionResult = {
@@ -13,8 +14,11 @@ const SEVEN_Z_EXTENSION = '.7z';
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '');
 
-const toArrayBuffer = (data: Uint8Array) =>
-  data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+const toArrayBuffer = (data: Uint8Array) => {
+  const buffer = new ArrayBuffer(data.byteLength);
+  new Uint8Array(buffer).set(data);
+  return buffer;
+};
 
 const isSidFile = (name: string) => name.toLowerCase().endsWith(SID_EXTENSION);
 const isZipFile = (name: string) => name.toLowerCase().endsWith(ZIP_EXTENSION);
@@ -131,23 +135,35 @@ const extractSevenZArchive = async (archive: LocalSidFile): Promise<LocalSidFile
   } finally {
     try {
       cleanupDir(outputDir);
-    } catch {
-      // ignore cleanup errors
+    } catch (error) {
+      addErrorLog('SevenZip cleanup failed', {
+        error: (error as Error).message,
+        step: 'cleanupDir',
+      });
     }
     try {
       module.FS.rmdir(outputDir);
-    } catch {
-      // ignore cleanup errors
+    } catch (error) {
+      addErrorLog('SevenZip cleanup failed', {
+        error: (error as Error).message,
+        step: 'rmdir-output',
+      });
     }
     try {
       module.FS.unlink(archivePath);
-    } catch {
-      // ignore cleanup errors
+    } catch (error) {
+      addErrorLog('SevenZip cleanup failed', {
+        error: (error as Error).message,
+        step: 'unlink-archive',
+      });
     }
     try {
       module.FS.rmdir(workingDir);
-    } catch {
-      // ignore cleanup errors
+    } catch (error) {
+      addErrorLog('SevenZip cleanup failed', {
+        error: (error as Error).message,
+        step: 'rmdir-workdir',
+      });
     }
   }
 };

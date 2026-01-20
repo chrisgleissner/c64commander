@@ -63,10 +63,10 @@ const main = async () => {
 
   const screenshots = [
     'app-home.png',
-    'app-quick-settings.png',
+    'app-play.png',
+    'app-disks.png',
     'app-configuration.png',
     'app-configuration-expanded.png',
-    'app-music.png',
     'app-settings.png',
     'app-documentation.png',
   ];

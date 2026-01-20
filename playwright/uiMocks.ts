@@ -50,8 +50,8 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
     ({ baseUrl: baseUrlArg, songData, snapshot }) => {
       try {
         delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('Unable to clear showDirectoryPicker', error);
       }
       localStorage.setItem('c64u_base_url', baseUrlArg);
       if (!localStorage.getItem('c64u_password')) {

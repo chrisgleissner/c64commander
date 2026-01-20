@@ -68,6 +68,7 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - Always investigate errors, warnings, and assertion failures.
 - Fix root causes. Do not skip tests or suppress warnings.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
+- Exceptions must never be ignored; log them or let them bubble up.
 
 ## Output wording rules
 

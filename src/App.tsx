@@ -6,13 +6,14 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-route
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
+import { MockModeBanner } from '@/components/MockModeBanner';
 import HomePage from './pages/HomePage';
-import QuickSettingsPage from "./pages/QuickSettingsPage";
 import ConfigBrowserPage from "./pages/ConfigBrowserPage";
 import SettingsPage from "./pages/SettingsPage";
 import DocsPage from "./pages/DocsPage";
 import NotFound from "./pages/NotFound";
 import PlayFilesPage from './pages/PlayFilesPage';
+import DisksPage from './pages/DisksPage.tsx';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog } from "@/lib/logging";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
@@ -64,12 +65,12 @@ const AppRoutes = () => (
   <BrowserRouter>
     <ErrorBoundary />
     <RouteRefresher />
+    <MockModeBanner />
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/quick" element={<QuickSettingsPage />} />
       <Route path="/config" element={<ConfigBrowserPage />} />
       <Route path="/play" element={<PlayFilesPage />} />
-      <Route path="/music" element={<Navigate to="/play" replace />} />
+      <Route path="/disks" element={<DisksPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/docs" element={<DocsPage />} />
       <Route path="*" element={<NotFound />} />

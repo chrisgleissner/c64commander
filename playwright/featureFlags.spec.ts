@@ -60,9 +60,9 @@ test.describe('Feature flags', () => {
     await expect(page.getByRole('button', { name: 'Install HVSC' })).toHaveCount(0);
   });
 
-  test('legacy /music route redirects to Play page', async ({ page }: { page: Page }) => {
+  test('legacy /music route shows 404 page', async ({ page }: { page: Page }) => {
     await page.goto('/music');
-    await expect(page).toHaveURL(/\/play/);
-    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '404' })).toBeVisible();
+    await expect(page.getByText('Oops! Page not found')).toBeVisible();
   });
 });

@@ -1,5 +1,6 @@
 package uk.gleissner.c64commander
 
+import android.util.Log
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -17,6 +18,7 @@ import java.util.concurrent.Executors
 @CapacitorPlugin(name = "FtpClient")
 class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
+  private val logTag = "FtpClientPlugin"
 
   @PluginMethod
   fun listDirectory(call: PluginCall) {
@@ -69,8 +71,8 @@ class FtpClientPlugin : Plugin() {
       } finally {
         try {
           if (client.isConnected) client.disconnect()
-        } catch (_: Exception) {
-          // ignore
+        } catch (error: Exception) {
+          Log.w(logTag, "Failed to disconnect FTP client", error)
         }
       }
     }
