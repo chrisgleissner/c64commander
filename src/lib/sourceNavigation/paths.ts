@@ -1,4 +1,4 @@
-export const normalizeScopedPath = (value: string) => {
+export const normalizeSourcePath = (value: string) => {
   if (!value) return '/';
   const trimmed = value.replace(/\s+/g, ' ').trim();
   const leading = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
@@ -6,21 +6,21 @@ export const normalizeScopedPath = (value: string) => {
 };
 
 const normalizeRoot = (root: string) => {
-  const normalized = normalizeScopedPath(root || '/');
+  const normalized = normalizeSourcePath(root || '/');
   if (normalized === '/') return '/';
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
 };
 
 export const isPathWithinRoot = (path: string, root: string) => {
   const normalizedRoot = normalizeRoot(root);
-  const normalizedPath = normalizeScopedPath(path);
+  const normalizedPath = normalizeSourcePath(path);
   if (normalizedRoot === '/') return normalizedPath.startsWith('/');
   return normalizedPath === normalizedRoot.slice(0, -1) || normalizedPath.startsWith(normalizedRoot);
 };
 
 export const getParentPathWithinRoot = (path: string, root: string) => {
   const normalizedRoot = normalizeRoot(root);
-  const normalizedPath = normalizeScopedPath(path);
+  const normalizedPath = normalizeSourcePath(path);
   if (!isPathWithinRoot(normalizedPath, normalizedRoot)) return normalizedRoot;
   if (normalizedPath === normalizedRoot || normalizedPath === normalizedRoot.slice(0, -1)) return normalizedRoot;
   const trimmed = normalizedPath.replace(/\/$/, '');
@@ -32,4 +32,4 @@ export const getParentPathWithinRoot = (path: string, root: string) => {
 };
 
 export const ensureWithinRoot = (path: string, root: string) =>
-  (isPathWithinRoot(path, root) ? normalizeScopedPath(path) : normalizeRoot(root));
+  (isPathWithinRoot(path, root) ? normalizeSourcePath(path) : normalizeRoot(root));

@@ -4,28 +4,28 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
-import type { ScopedEntry, ScopedSelection, ScopedSource } from '@/lib/scopedBrowser/types';
-import { useScopedBrowser } from '@/lib/scopedBrowser/useScopedBrowser';
-import { ScopedBrowserView } from './ScopedBrowserView';
+import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
+import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
+import { ItemSelectionView } from './ItemSelectionView';
 
-export type ScopedSourceGroup = {
+export type SourceGroup = {
   label: string;
-  sources: ScopedSource[];
+  sources: SourceLocation[];
 };
 
-export type ScopedBrowserDialogProps = {
+export type ItemSelectionDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   confirmLabel: string;
-  sourceGroups: ScopedSourceGroup[];
+  sourceGroups: SourceGroup[];
   onAddLocalSource: () => void;
-  onConfirm: (source: ScopedSource, selections: ScopedSelection[]) => Promise<void>;
-  filterEntry?: (entry: ScopedEntry) => boolean;
+  onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<void>;
+  filterEntry?: (entry: SourceEntry) => boolean;
   allowFolderSelection?: boolean;
 };
 
-export const ScopedBrowserDialog = ({
+export const ItemSelectionDialog = ({
   open,
   onOpenChange,
   title,
@@ -35,9 +35,9 @@ export const ScopedBrowserDialog = ({
   onConfirm,
   filterEntry,
   allowFolderSelection = true,
-}: ScopedBrowserDialogProps) => {
+}: ItemSelectionDialogProps) => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
-  const [selection, setSelection] = useState<Map<string, ScopedEntry>>(new Map());
+  const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [filterText, setFilterText] = useState('');
 
   const source = useMemo(() => {
@@ -48,7 +48,7 @@ export const ScopedBrowserDialog = ({
     return null;
   }, [sourceGroups, selectedSourceId]);
 
-  const browser = useScopedBrowser(source);
+  const browser = useSourceNavigator(source);
 
   useEffect(() => {
     if (browser.error) {
@@ -76,7 +76,7 @@ export const ScopedBrowserDialog = ({
     return filesFiltered.filter((entry) => entry.name.toLowerCase().includes(lower) || entry.path.toLowerCase().includes(lower));
   }, [browser.entries, filterEntry, filterText]);
 
-  const toggleSelection = (entry: ScopedEntry) => {
+  const toggleSelection = (entry: SourceEntry) => {
     setSelection((prev) => {
       const next = new Map(prev);
       if (next.has(entry.path)) {
@@ -94,7 +94,7 @@ export const ScopedBrowserDialog = ({
       toast({ title: 'Select items', description: 'Choose at least one item to add.', variant: 'destructive' });
       return;
     }
-    const selections: ScopedSelection[] = Array.from(selection.values()).map((entry) => ({
+    const selections: SelectedItem[] = Array.from(selection.values()).map((entry) => ({
       type: entry.type,
       name: entry.name,
       path: entry.path,
@@ -158,7 +158,7 @@ export const ScopedBrowserDialog = ({
               onChange={(event) => setFilterText(event.target.value)}
             />
 
-            <ScopedBrowserView
+            <ItemSelectionView
               path={browser.path}
               rootPath={source.rootPath}
               entries={visibleEntries}

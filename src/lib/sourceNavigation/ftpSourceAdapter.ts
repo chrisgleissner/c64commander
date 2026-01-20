@@ -1,8 +1,8 @@
 import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
-import type { ScopedEntry, ScopedSource } from './types';
+import type { SourceEntry, SourceLocation } from './types';
 
-const listEntries = async (path: string): Promise<ScopedEntry[]> => {
+const listEntries = async (path: string): Promise<SourceEntry[]> => {
   const host = localStorage.getItem('c64u_device_host') || 'c64u';
   const password = localStorage.getItem('c64u_password') || '';
   const result = await listFtpDirectory({
@@ -20,10 +20,10 @@ const listEntries = async (path: string): Promise<ScopedEntry[]> => {
   }));
 };
 
-const listFilesRecursive = async (path: string): Promise<ScopedEntry[]> => {
+const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
   const queue = [path || '/'];
   const visited = new Set<string>();
-  const results: ScopedEntry[] = [];
+  const results: SourceEntry[] = [];
   while (queue.length) {
     const current = queue.shift();
     if (!current || visited.has(current)) continue;
@@ -40,7 +40,7 @@ const listFilesRecursive = async (path: string): Promise<ScopedEntry[]> => {
   return results;
 };
 
-export const createUltimateScopedSource = (): ScopedSource => ({
+export const createUltimateSourceLocation = (): SourceLocation => ({
   id: 'ultimate',
   type: 'ultimate',
   name: 'C64 Ultimate',

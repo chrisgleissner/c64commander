@@ -1,15 +1,15 @@
 import { ArrowUp, FolderOpen, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { ScopedEntry } from '@/lib/scopedBrowser/types';
+import type { SourceEntry } from '@/lib/sourceNavigation/types';
 
-export type ScopedBrowserViewProps = {
+export type ItemSelectionViewProps = {
   path: string;
   rootPath: string;
-  entries: ScopedEntry[];
+  entries: SourceEntry[];
   isLoading: boolean;
-  selection: Map<string, ScopedEntry>;
-  onToggleSelect: (entry: ScopedEntry) => void;
+  selection: Map<string, SourceEntry>;
+  onToggleSelect: (entry: SourceEntry) => void;
   onOpen: (path: string) => void;
   onNavigateUp: () => void;
   onRefresh: () => void;
@@ -17,7 +17,7 @@ export type ScopedBrowserViewProps = {
   emptyLabel: string;
 };
 
-export const ScopedBrowserView = ({
+export const ItemSelectionView = ({
   path,
   rootPath,
   entries,
@@ -29,7 +29,7 @@ export const ScopedBrowserView = ({
   onRefresh,
   showFolderSelect,
   emptyLabel,
-}: ScopedBrowserViewProps) => {
+}: ItemSelectionViewProps) => {
   const atRoot = path === rootPath || path === rootPath.replace(/\/$/, '');
 
   return (

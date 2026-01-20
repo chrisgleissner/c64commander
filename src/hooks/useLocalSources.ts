@@ -6,7 +6,7 @@ import {
   saveLocalSources,
   setLocalSourceRuntimeFiles,
   type LocalSourceRecord,
-} from '@/lib/scopedBrowser/localSourcesStore';
+} from '@/lib/sourceNavigation/localSourcesStore';
 
 export type UseLocalSourcesState = {
   sources: LocalSourceRecord[];

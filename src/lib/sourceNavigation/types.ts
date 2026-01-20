@@ -1,27 +1,27 @@
-export type ScopedEntryType = 'file' | 'dir';
+export type SourceEntryType = 'file' | 'dir';
 
-export type ScopedEntry = {
-  type: ScopedEntryType;
+export type SourceEntry = {
+  type: SourceEntryType;
   name: string;
   path: string;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
 };
 
-export type ScopedSourceType = 'ultimate' | 'local';
+export type SourceLocationType = 'ultimate' | 'local';
 
-export type ScopedSelection = {
-  type: ScopedEntryType;
+export type SelectedItem = {
+  type: SourceEntryType;
   name: string;
   path: string;
 };
 
-export type ScopedSource = {
+export type SourceLocation = {
   id: string;
-  type: ScopedSourceType;
+  type: SourceLocationType;
   name: string;
   rootPath: string;
   isAvailable: boolean;
-  listEntries: (path: string) => Promise<ScopedEntry[]>;
-  listFilesRecursive: (path: string) => Promise<ScopedEntry[]>;
+  listEntries: (path: string) => Promise<SourceEntry[]>;
+  listFilesRecursive: (path: string) => Promise<SourceEntry[]>;
 };

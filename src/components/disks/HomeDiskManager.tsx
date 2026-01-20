@@ -3,7 +3,7 @@ import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, Trash2, X } from 'luci
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScopedBrowserDialog, type ScopedSourceGroup } from '@/components/scoped/ScopedBrowserDialog';
+import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useLocalSources } from '@/hooks/useLocalSources';
@@ -13,11 +13,11 @@ import { DiskTree } from '@/components/disks/DiskTree';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
-import { createUltimateScopedSource } from '@/lib/scopedBrowser/ftpSourceAdapter';
-import { createLocalScopedSource, resolveLocalRuntimeFile } from '@/lib/scopedBrowser/localSourceAdapter';
-import { normalizeScopedPath } from '@/lib/scopedBrowser/paths';
-import { prepareScopedDirectoryInput } from '@/lib/scopedBrowser/localSourcesStore';
-import type { ScopedSelection, ScopedSource } from '@/lib/scopedBrowser/types';
+import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
+import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
+import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
+import type { SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
@@ -68,9 +68,9 @@ export const HomeDiskManager = () => {
     [localSources],
   );
 
-  const sourceGroups: ScopedSourceGroup[] = useMemo(() => {
-    const ultimateSource = createUltimateScopedSource();
-    const localGroupSources = localSources.map((source) => createLocalScopedSource(source));
+  const sourceGroups: SourceGroup[] = useMemo(() => {
+    const ultimateSource = createUltimateSourceLocation();
+    const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     return [
       { label: 'C64 Ultimate', sources: [ultimateSource] },
       { label: 'This device', sources: localGroupSources },
@@ -86,7 +86,7 @@ export const HomeDiskManager = () => {
   }, [disksById]);
 
   useEffect(() => {
-    prepareScopedDirectoryInput(localSourceInputRef.current);
+    prepareDirectoryInput(localSourceInputRef.current);
   }, []);
 
   const showNoDiskWarning = () => {
@@ -236,7 +236,7 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const handleAddDiskSelections = useCallback(async (source: ScopedSource, selections: ScopedSelection[]) => {
+  const handleAddDiskSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     try {
       const files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
       for (const selection of selections) {
@@ -247,7 +247,7 @@ export const HomeDiskManager = () => {
             files.push({ path: entry.path, name: entry.name, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt, sourceId: source.id });
           });
         } else {
-          const entryPath = normalizeScopedPath(selection.path);
+          const entryPath = normalizeSourcePath(selection.path);
           files.push({ path: entryPath, name: selection.name, sourceId: source.id });
         }
       }
@@ -263,7 +263,7 @@ export const HomeDiskManager = () => {
         const normalized = normalizeDiskPath(entry.path);
         const groupName = getLeafFolderName(normalized);
         const localSource = source.type === 'local' ? localSourcesById.get(source.id) : null;
-        const localEntry = localSource?.entries.find((item) => normalizeScopedPath(item.relativePath) === normalized);
+        const localEntry = localSource?.entries.find((item) => normalizeSourcePath(item.relativePath) === normalized);
         const diskEntry = createDiskEntry({
           path: normalized,
           location: source.type === 'ultimate' ? 'ultimate' : 'local',
@@ -534,7 +534,7 @@ export const HomeDiskManager = () => {
         </DialogContent>
       </Dialog>
 
-      <ScopedBrowserDialog
+      <ItemSelectionDialog
         open={browserOpen}
         onOpenChange={setBrowserOpen}
         title="Add items"

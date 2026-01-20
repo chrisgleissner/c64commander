@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { ScopedBrowserDialog, type ScopedSourceGroup } from '@/components/scoped/ScopedBrowserDialog';
+import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useFileLibrary } from '@/hooks/useFileLibrary';
@@ -19,11 +19,11 @@ import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
 import type { FileLibraryEntry } from '@/lib/playback/fileLibraryTypes';
 import { buildFileLibraryId, resolvePlayRequestFromLibrary } from '@/lib/playback/fileLibraryUtils';
-import { createUltimateScopedSource } from '@/lib/scopedBrowser/ftpSourceAdapter';
-import { createLocalScopedSource, resolveLocalRuntimeFile } from '@/lib/scopedBrowser/localSourceAdapter';
-import { normalizeScopedPath } from '@/lib/scopedBrowser/paths';
-import { prepareScopedDirectoryInput } from '@/lib/scopedBrowser/localSourcesStore';
-import type { ScopedSelection, ScopedSource } from '@/lib/scopedBrowser/types';
+import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
+import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
+import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
+import type { SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
 import {
@@ -171,7 +171,7 @@ export default function PlayFilesPage() {
   const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
 
   useEffect(() => {
-    prepareScopedDirectoryInput(localSourceInputRef.current);
+    prepareDirectoryInput(localSourceInputRef.current);
   }, []);
 
   useEffect(() => {
@@ -241,9 +241,9 @@ export default function PlayFilesPage() {
     [localSources],
   );
 
-  const sourceGroups: ScopedSourceGroup[] = useMemo(() => {
-    const ultimateSource = createUltimateScopedSource();
-    const localGroupSources = localSources.map((source) => createLocalScopedSource(source));
+  const sourceGroups: SourceGroup[] = useMemo(() => {
+    const ultimateSource = createUltimateSourceLocation();
+    const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     return [
       { label: 'C64 Ultimate', sources: [ultimateSource] },
       { label: 'This device', sources: localGroupSources },
@@ -255,7 +255,7 @@ export default function PlayFilesPage() {
     addSourceFromFiles(files);
   }, [addSourceFromFiles]);
 
-  const handleAddFileSelections = useCallback(async (source: ScopedSource, selections: ScopedSelection[]) => {
+  const handleAddFileSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     try {
       const selectedFiles: Array<{ path: string; name: string; sourceId?: string | null; sizeBytes?: number | null; modifiedAt?: string | null }> = [];
       for (const selection of selections) {
@@ -266,7 +266,7 @@ export default function PlayFilesPage() {
             selectedFiles.push({ path: entry.path, name: entry.name, sourceId: source.id, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt });
           });
         } else {
-          const normalized = normalizeScopedPath(selection.path);
+          const normalized = normalizeSourcePath(selection.path);
           selectedFiles.push({ path: normalized, name: selection.name, sourceId: source.id });
         }
       }
@@ -280,7 +280,7 @@ export default function PlayFilesPage() {
         const sourceId = source.type === 'local' ? source.id : undefined;
         const id = buildFileLibraryId(source.type === 'ultimate' ? 'ultimate' : 'local', file.path, sourceId);
         const localSource = source.type === 'local' ? localSourcesById.get(source.id) : null;
-        const localEntry = localSource?.entries.find((item) => normalizeScopedPath(item.relativePath) === normalizeScopedPath(file.path));
+        const localEntry = localSource?.entries.find((item) => normalizeSourcePath(item.relativePath) === normalizeSourcePath(file.path));
         const entry: FileLibraryEntry = {
           id,
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
@@ -1135,7 +1135,7 @@ export default function PlayFilesPage() {
           onChange={(event) => handleLocalSourceInput(event.target.files)}
         />
 
-        <ScopedBrowserDialog
+        <ItemSelectionDialog
           open={browserOpen}
           onOpenChange={setBrowserOpen}
           title="Add items"

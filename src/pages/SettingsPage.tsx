@@ -288,7 +288,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 gap-2">
             <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-2" />
-              Diagnostics
+              Logs
             </Button>
           </div>
         </motion.div>

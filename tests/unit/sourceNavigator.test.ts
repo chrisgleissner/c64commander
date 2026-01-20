@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createLocalScopedSource } from '@/lib/scopedBrowser/localSourceAdapter';
-import { ensureWithinRoot, getParentPathWithinRoot, isPathWithinRoot } from '@/lib/scopedBrowser/paths';
-import type { LocalSourceRecord } from '@/lib/scopedBrowser/localSourcesStore';
+import { createLocalSourceLocation } from '@/lib/sourceNavigation/localSourceAdapter';
+import { ensureWithinRoot, getParentPathWithinRoot, isPathWithinRoot } from '@/lib/sourceNavigation/paths';
+import type { LocalSourceRecord } from '@/lib/sourceNavigation/localSourcesStore';
 
 describe('scoped browser paths', () => {
   it('keeps navigation within root', () => {
@@ -30,7 +30,7 @@ describe('local scoped source', () => {
   };
 
   it('lists folders and files under root', async () => {
-    const scoped = createLocalScopedSource(localSource);
+    const scoped = createLocalSourceLocation(localSource);
     const entries = await scoped.listEntries('/Test Folder/');
     const names = entries.map((entry) => entry.name).sort();
     expect(names).toContain('Disk 1.d64');
@@ -38,7 +38,7 @@ describe('local scoped source', () => {
   });
 
   it('lists files recursively for a folder', async () => {
-    const scoped = createLocalScopedSource(localSource);
+    const scoped = createLocalSourceLocation(localSource);
     const entries = await scoped.listFilesRecursive('/Test Folder/Sub Folder/');
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Demo.sid');

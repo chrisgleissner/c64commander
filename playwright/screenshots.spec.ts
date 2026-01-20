@@ -47,6 +47,12 @@ test.describe('App screenshots', () => {
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-home.png'), animations: 'disabled', caret: 'hide' });
 
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await waitForStableRender(page);
+    await waitForOverlaysToClear(page);
+    await page.screenshot({ path: screenshotPath('app-home-dark.png'), animations: 'disabled', caret: 'hide' });
+    await page.emulateMedia({ colorScheme: 'light' });
+
     await page.getByRole('button', { name: 'Disks', exact: true }).click();
     await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
     await waitForStableRender(page);

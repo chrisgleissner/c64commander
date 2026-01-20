@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core';
 import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
-import { normalizeScopedPath } from './paths';
+import { normalizeSourcePath } from './paths';
 
 export type LocalSourceEntry = {
   name: string;
@@ -47,7 +47,7 @@ const normalizeFolderPickerEntries = (result: { files?: unknown } | null): Picke
 
 const buildRootPath = (rootName: string | null) => {
   if (!rootName) return '/';
-  const normalized = normalizeScopedPath(rootName);
+  const normalized = normalizeSourcePath(rootName);
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
 };
 
@@ -73,7 +73,7 @@ export const setLocalSourceRuntimeFiles = (sourceId: string, files: Record<strin
 };
 
 export const getLocalSourceRuntimeFile = (sourceId: string, path: string) => {
-  const normalized = normalizeScopedPath(path);
+  const normalized = normalizeSourcePath(path);
   return runtimeFilesBySource.get(sourceId)?.[normalized];
 };
 
@@ -87,7 +87,7 @@ export const createLocalSourceFromFileList = (files: FileList | File[], label?: 
   const entries: LocalSourceEntry[] = list.map((file) => {
     const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
     const relativePath = relative.replace(/^\/+/, '');
-    const normalizedPath = normalizeScopedPath(relativePath);
+    const normalizedPath = normalizeSourcePath(relativePath);
     runtimeFiles[normalizedPath] = file;
     return {
       name: file.name,
@@ -107,7 +107,7 @@ export const createLocalSourceFromFileList = (files: FileList | File[], label?: 
   return { source, runtimeFiles };
 };
 
-export const prepareScopedDirectoryInput = (input: HTMLInputElement | null) => {
+export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
   if (!input) return;
   input.setAttribute('webkitdirectory', '');
   input.setAttribute('directory', '');

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ensureWithinRoot, getParentPathWithinRoot } from './paths';
-import type { ScopedEntry, ScopedSource } from './types';
+import type { SourceEntry, SourceLocation } from './types';
 
-export type ScopedBrowserState = {
+export type SourceNavigatorState = {
   path: string;
-  entries: ScopedEntry[];
+  entries: SourceEntry[];
   isLoading: boolean;
   error: string | null;
   navigateTo: (path: string) => void;
@@ -12,9 +12,9 @@ export type ScopedBrowserState = {
   refresh: () => void;
 };
 
-export const useScopedBrowser = (source: ScopedSource | null): ScopedBrowserState => {
+export const useSourceNavigator = (source: SourceLocation | null): SourceNavigatorState => {
   const [path, setPath] = useState('/');
-  const [entries, setEntries] = useState<ScopedEntry[]>([]);
+  const [entries, setEntries] = useState<SourceEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
