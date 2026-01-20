@@ -1,6 +1,5 @@
 import { unzipSync } from 'fflate';
 import type { LocalSidFile } from './LocalFsSongSource';
-import SevenZip from '7z-wasm';
 
 export type LocalArchiveIngestionResult = {
   files: LocalSidFile[];
@@ -61,12 +60,15 @@ const extractZipArchive = async (archive: LocalSidFile): Promise<LocalSidFile[]>
   }
 };
 
-let sevenZipModulePromise: ReturnType<typeof SevenZip> | null = null;
+type SevenZipFactory = (options: { locateFile: (url: string) => string }) => Promise<any> | any;
 
-const getSevenZipModule = () => {
+let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
+
+const getSevenZipModule = async () => {
   if (!sevenZipModulePromise) {
+    const { default: SevenZip } = await import('7z-wasm');
     const wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
-    sevenZipModulePromise = SevenZip({
+    sevenZipModulePromise = (SevenZip as SevenZipFactory)({
       locateFile: (url) => (url.endsWith('.wasm') ? wasmUrl : url),
     });
   }

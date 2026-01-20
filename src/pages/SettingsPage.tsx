@@ -42,7 +42,7 @@ export default function SettingsPage() {
   const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
-  const { value: isSidPlayerEnabled, setValue: setSidPlayerEnabled } = useFeatureFlag('sid_player_enabled');
+  const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const {
     isMockMode,
     isMockAvailable,
@@ -348,17 +348,26 @@ export default function SettingsPage() {
             <div className="space-y-3 text-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="sid-player-flag" className="font-medium">
-                    Enable SID player (experimental)
+                  <Label htmlFor="hvsc-flag" className="font-medium">
+                    Enable HVSC downloads
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    Shows the SID player page in navigation.
+                    Shows HVSC download and ingest controls on the Play page.
                   </p>
                 </div>
                 <Checkbox
-                  id="sid-player-flag"
-                  checked={isSidPlayerEnabled}
-                  onCheckedChange={(checked) => void setSidPlayerEnabled(checked === true)}
+                  id="hvsc-flag"
+                  checked={isHvscEnabled}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    void setHvscEnabled(enabled);
+                    try {
+                      localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+                      sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+                    } catch {
+                      // ignore storage failures
+                    }
+                  }}
                 />
               </div>
               <div className="flex items-start justify-between gap-3">

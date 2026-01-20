@@ -3,7 +3,7 @@ import {
   FeatureFlagManager,
   InMemoryFeatureFlagRepository,
   FEATURE_FLAG_DEFINITIONS,
-  isSidPlayerEnabled,
+  isHvscEnabled,
 } from '@/lib/config/featureFlags';
 
 const buildDefaults = () =>
@@ -19,7 +19,7 @@ describe('featureFlags', () => {
     await manager.load();
     const snapshot = manager.getSnapshot();
     expect(snapshot.isLoaded).toBe(true);
-    expect(snapshot.flags.sid_player_enabled).toBe(false);
+    expect(snapshot.flags.hvsc_enabled).toBe(false);
   });
 
   it('persists flag updates in repository', async () => {
@@ -27,15 +27,15 @@ describe('featureFlags', () => {
     const manager = new FeatureFlagManager(repository, buildDefaults());
 
     await manager.load();
-    await manager.setFlag('sid_player_enabled', true);
+    await manager.setFlag('hvsc_enabled', true);
 
     const freshManager = new FeatureFlagManager(repository, buildDefaults());
     await freshManager.load();
-    expect(freshManager.getSnapshot().flags.sid_player_enabled).toBe(true);
+    expect(freshManager.getSnapshot().flags.hvsc_enabled).toBe(true);
   });
 
-  it('reports gating logic for SID player', () => {
-    expect(isSidPlayerEnabled({ sid_player_enabled: false })).toBe(false);
-    expect(isSidPlayerEnabled({ sid_player_enabled: true })).toBe(true);
+  it('reports gating logic for HVSC controls', () => {
+    expect(isHvscEnabled({ hvsc_enabled: false })).toBe(false);
+    expect(isHvscEnabled({ hvsc_enabled: true })).toBe(true);
   });
 });

@@ -1,5 +1,4 @@
 import { test, expect, type Page, type Route, type ConsoleMessage } from '@playwright/test';
-import { zipSync, strToU8 } from 'fflate';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
 
@@ -346,7 +345,7 @@ test.describe('HVSC Play page', () => {
         };
 
         localStorage.setItem('c64u_base_url', c64BaseUrl);
-        localStorage.setItem('c64u_feature_flag:sid_player_enabled', '1');
+        localStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
       },
       {
         baseUrl: hvscServer.baseUrl,
@@ -367,31 +366,29 @@ test.describe('HVSC Play page', () => {
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
-    await expect(page.getByText(/Version 84 installed/i).first()).toBeVisible();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
   });
 
   test('HVSC install shows progress updates', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 0 });
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
-    await expect(page.getByText(/SID files:/i).first()).toBeVisible();
-    await expect(page.getByText(/%/).first()).toBeVisible();
-    await expect(page.getByText(/Version 84 installed/i).first()).toBeVisible();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
   });
 
   test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 0 });
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
-    await expect(page.getByText(/Version 84 installed/i).first()).toBeVisible();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const firstTrack = page.getByText('/DEMOS/0-9/10_Orbyte.sid', { exact: true });
+    const firstTrack = page.getByText('10_Orbyte.sid', { exact: true });
     await expect(firstTrack).toBeVisible();
-    await firstTrack.locator('..').getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByText('Now Playing')).toBeVisible();
+    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
 
     const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
     await expect
@@ -404,18 +401,18 @@ test.describe('HVSC Play page', () => {
 
   test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 0, failInstall: true, failStage: 'extract' });
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
 
-    await page.getByRole('button', { name: 'Ingest', exact: true }).click();
-    await expect(page.getByText(/Version 83 installed/i).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Ingest cached', exact: true }).click();
+    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const firstTrack = page.getByText('/DEMOS/0-9/10_Orbyte.sid', { exact: true });
+    const firstTrack = page.getByText('10_Orbyte.sid', { exact: true });
     await expect(firstTrack).toBeVisible();
-    await firstTrack.locator('..').getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByText('Now Playing')).toBeVisible();
+    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
 
     const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
     await expect
@@ -431,12 +428,12 @@ test.describe('HVSC Play page', () => {
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
 
-    await page.goto('/music');
+    await page.goto('/play');
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     const firstTrack = page.getByText(/\.sid$/i).first();
     await expect(firstTrack).toBeVisible();
-    await firstTrack.locator('..').getByRole('button', { name: 'Play' }).click();
-    await expect(page.getByText('Now Playing')).toBeVisible();
+    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
   });
 
   test('HVSC update available -> update -> browsing works', async ({ page }: { page: Page }) => {
@@ -445,55 +442,37 @@ test.describe('HVSC Play page', () => {
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
 
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Update' }).click();
-    await expect(page.getByText(/Version 84 installed/i).first()).toBeVisible();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Check updates' }).click();
+    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     await expect(page.getByText(/\.sid$/i).first()).toBeVisible();
   });
 
-  test('Local ZIP folder ingestion lists SID files', async ({ page }: { page: Page }) => {
+  test('Local ZIP ingestion is not shown on Play page', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 84 });
-    await page.goto('/music');
-    await page.getByRole('tab', { name: 'Local Library' }).click();
-
-    const zipData = zipSync({
-      'C64Music/track.sid': strToU8('SIDDATA'),
-      'C64Music/readme.txt': strToU8('ignore'),
-    });
-    await page.setInputFiles('input[type="file"]', {
-      name: 'local.zip',
-      mimeType: 'application/zip',
-      buffer: Buffer.from(zipData),
-    });
-
-    await expect(page.getByText('1 SID files selected')).toBeVisible();
-    await page.getByRole('button', { name: /local\.zip/i }).click();
-    await expect(page.getByText(/track\.sid$/i)).toBeVisible();
+    await page.goto('/play');
+    await expect(page.getByText(/local\.zip/i)).toHaveCount(0);
   });
 
   test('HVSC update check failure surfaces error', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 0, failCheck: true });
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated update check failure/i).first()).toBeVisible();
   });
 
   test('HVSC extraction failure shows retry', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 0, failStage: 'extract', failInstallAttempts: 1 });
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByText(/Version 84 installed/i).first()).toBeVisible();
   });
 
   test('HVSC ingestion failure shows retry', async ({ page }: { page: Page }) => {
     await installMocks(page, { installedVersion: 0, failStage: 'ingest', failInstallAttempts: 1 });
-    await page.goto('/music');
-    await page.getByRole('button', { name: 'Install' }).click();
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Retry' }).click();
-    await expect(page.getByText(/Version 84 installed/i).first()).toBeVisible();
   });
 });

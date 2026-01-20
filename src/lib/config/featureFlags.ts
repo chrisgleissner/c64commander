@@ -2,7 +2,7 @@ import { FeatureFlags as FeatureFlagsPlugin } from '@/lib/native/featureFlags';
 import { addErrorLog } from '@/lib/logging';
 
 export const FEATURE_FLAG_DEFINITIONS = {
-  sid_player_enabled: {
+  hvsc_enabled: {
     defaultValue: false,
   },
 } as const;
@@ -139,4 +139,4 @@ export const featureFlagManager = new FeatureFlagManager(
   buildDefaultFlags(),
 );
 
-export const isSidPlayerEnabled = (flags: FeatureFlags) => Boolean(flags.sid_player_enabled);
+export const isHvscEnabled = (flags: FeatureFlags) => Boolean(flags.hvsc_enabled);

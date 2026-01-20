@@ -17,7 +17,7 @@ test.describe('App screenshots', () => {
   test.beforeEach(async ({ page }: { page: Page }) => {
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_feature_flag:sid_player_enabled', '1');
+      localStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
     });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -79,8 +79,9 @@ test.describe('App screenshots', () => {
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-configuration-expanded.png'), animations: 'disabled', caret: 'hide' });
 
-    await page.getByRole('button', { name: 'SID', exact: true }).click();
-    await expect(page.getByRole('tab', { name: 'HVSC Library' })).toBeVisible();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    await expect(page.getByText('HVSC library')).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-music.png'), animations: 'disabled', caret: 'hide' });

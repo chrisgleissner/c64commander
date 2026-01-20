@@ -69,6 +69,10 @@
     --sidebar-ring: 228 35% 57%;
   }
 
+  main {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
   .dark {
     /* Deep C64-inspired dark theme */
     --background: 237 35% 10%;

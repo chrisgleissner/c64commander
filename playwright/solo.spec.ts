@@ -15,8 +15,7 @@ test.describe('Quick page SID solo routing', () => {
   });
 
   const openQuickAudio = async (page: Page) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Quick', exact: true }).click();
+    await page.goto('/quick');
     await page.getByRole('button', { name: 'Audio (SID)' }).click();
   };
 
@@ -65,7 +64,7 @@ test.describe('Quick page SID solo routing', () => {
     await page.getByLabel('Solo Vol Socket 1').click();
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe('OFF');
 
-    await page.getByRole('button', { name: 'Home', exact: true }).click();
+    await page.goto('/');
     await openQuickAudio(page);
 
     await expect(page.getByLabel('Solo Vol Socket 1')).not.toBeChecked();

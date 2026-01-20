@@ -27,7 +27,7 @@ export default defineConfig(() => ({
   build: {
     outDir: "dist",
     // Adjust warning threshold to avoid noisy chunk warnings while keeping defaults.
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 1200,
   },
   plugins: [react()],
   define: {
@@ -38,6 +38,7 @@ export default defineConfig(() => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      module: path.resolve(__dirname, "./src/lib/polyfills/module.ts"),
     },
   },
 }));

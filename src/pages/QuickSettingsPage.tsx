@@ -155,7 +155,9 @@ function QuickSectionCard({
     Array<{ name: string; value: string | number; options?: string[]; details?: NormalizedConfigItem['details'] }>
   >([]);
   const audioConfiguredRef = useRef<AudioMixerVolumeItem[]>([]);
+  const soloSnapshotRef = useRef<AudioMixerVolumeItem[]>([]);
   const wasSoloActiveRef = useRef(false);
+  const soloSnapshotKey = 'c64u_audio_mixer_solo_snapshot';
 
   useEffect(() => {
     if (isOpen) {
@@ -188,11 +190,15 @@ function QuickSectionCard({
     if (items.length === 0) {
       setAudioConfiguredItems([]);
       audioConfiguredRef.current = [];
+      soloSnapshotRef.current = [];
       return;
     }
     if (!soloState.soloItem || audioConfiguredItems.length === 0) {
       setAudioConfiguredItems(items);
       audioConfiguredRef.current = items;
+    }
+    if (!soloState.soloItem) {
+      soloSnapshotRef.current = items;
     }
   }, [isAudioMixer, items, soloState.soloItem, audioConfiguredItems.length]);
 
@@ -202,15 +208,32 @@ function QuickSectionCard({
   }, [isAudioMixer, audioConfiguredItems]);
 
   const applySoloRouting = useCallback(
-    async (soloItem: string | null) => {
+    async (soloItem: string | null, configuredOverride?: AudioMixerVolumeItem[]) => {
       if (!isAudioMixer) return;
-      const configured = audioConfiguredRef.current;
+      const configured = configuredOverride && configuredOverride.length > 0
+        ? configuredOverride
+        : audioConfiguredRef.current;
       if (!configured.length) return;
+      if (soloItem) {
+        soloSnapshotRef.current = configured;
+        try {
+          sessionStorage.setItem(soloSnapshotKey, JSON.stringify(configured));
+        } catch {
+          // ignore storage failures
+        }
+      }
       const updates = buildSoloRoutingUpdates(configured, soloItem);
       if (Object.keys(updates).length === 0) return;
       try {
         const api = getC64API();
         await api.updateConfigBatch({ [section.category]: updates });
+        if (!soloItem) {
+          try {
+            sessionStorage.removeItem(soloSnapshotKey);
+          } catch {
+            // ignore storage failures
+          }
+        }
       } catch (error) {
         addErrorLog('Solo routing update failed', {
           error: (error as Error).message,
@@ -239,10 +262,24 @@ function QuickSectionCard({
   useEffect(() => {
     if (!isAudioMixer) return undefined;
     return () => {
-      if (!wasSoloActiveRef.current) return;
-      void applySoloRouting(null);
+      const configured = audioConfiguredRef.current.length
+        ? audioConfiguredRef.current
+        : (items as AudioMixerVolumeItem[]);
+      let snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : configured;
+      try {
+        const stored = sessionStorage.getItem(soloSnapshotKey);
+        if (stored) {
+          const parsed = JSON.parse(stored) as AudioMixerVolumeItem[];
+          if (Array.isArray(parsed) && parsed.length) snapshot = parsed;
+        }
+      } catch {
+        // ignore storage failures
+      }
+      if (snapshot.length) {
+        void applySoloRouting(null, snapshot);
+      }
     };
-  }, [isAudioMixer, applySoloRouting]);
+  }, [isAudioMixer, applySoloRouting, items]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
     try {
@@ -276,8 +313,8 @@ function QuickSectionCard({
   const handleAudioValueChange = async (itemName: string, value: string | number) => {
     updateAudioConfiguredValue(itemName, value);
     await handleValueChange(itemName, value);
-    if (soloState.soloItem) {
-      void applySoloRouting(soloState.soloItem);
+    if (!soloState.soloItem) {
+      soloSnapshotRef.current = items;
     }
   };
 

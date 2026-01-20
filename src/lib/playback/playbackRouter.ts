@@ -4,6 +4,7 @@ import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import { formatPlayCategory, getMountTypeForExtension, getPlayCategory, type PlayFileCategory } from './fileTypes';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
+import { createSslPayload } from '@/lib/sid/sidUtils';
 
 export type PlaySource = 'local' | 'ultimate';
 
@@ -19,6 +20,7 @@ export type PlayRequest = {
   path: string;
   file?: LocalPlayFile;
   songNr?: number;
+  durationMs?: number;
 };
 
 export type PlayPlan = {
@@ -28,6 +30,7 @@ export type PlayPlan = {
   mountType?: string;
   file?: LocalPlayFile;
   songNr?: number;
+  durationMs?: number;
 };
 
 export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
@@ -42,6 +45,7 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
     file: request.file,
     mountType: getMountTypeForExtension(request.path),
     songNr: request.songNr,
+    durationMs: request.durationMs,
   };
 };
 
@@ -76,7 +80,10 @@ export const executePlayPlan = async (
         }
         const blob = await toBlob(plan.file);
         if (!blob) throw new Error('Missing local SID data.');
-        await api.playSidUpload(blob, plan.songNr);
+        const sslBlob = plan.durationMs && plan.durationMs > 0
+          ? new Blob([createSslPayload(plan.durationMs)], { type: 'application/octet-stream' })
+          : undefined;
+        await api.playSidUpload(blob, plan.songNr, sslBlob);
         return;
       }
       case 'mod': {

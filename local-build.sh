@@ -141,12 +141,17 @@ fi
 
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
-  (cd "$ROOT_DIR" && npm install)
+  (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
 fi
 
 if [[ "$RUN_BUILD" == "true" ]]; then
   log "Building web app + syncing Capacitor"
   (cd "$ROOT_DIR" && npm run cap:build)
+
+  if [[ -f "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle" ]]; then
+    sed -i.bak '/flatDir{/,/}/d' "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle"
+    rm -f "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle.bak"
+  fi
 fi
 
 if [[ "$RUN_TEST" == "true" ]]; then
@@ -158,7 +163,7 @@ if [[ "$RUN_TEST" == "true" ]]; then
   else
     (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
   fi
-  (cd "$ROOT_DIR/android" && ./gradlew test)
+  (cd "$ROOT_DIR/android" && ./gradlew test --warning-mode none)
 fi
 
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
@@ -173,7 +178,7 @@ fi
 
 if [[ "$RUN_APK" == "true" ]]; then
   log "Building debug APK"
-  (cd "$ROOT_DIR" && npm run android:apk)
+  (cd "$ROOT_DIR" && npm run android:apk -- --warning-mode none)
 fi
 
 if [[ "$RUN_INSTALL_APK" == "true" ]]; then

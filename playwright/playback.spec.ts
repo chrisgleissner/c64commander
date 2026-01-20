@@ -13,6 +13,11 @@ const openRemoteFolder = async (page: Page, name: string) => {
   await row.getByRole('button', { name: 'Open' }).click();
 };
 
+const openLocalFolder = async (page: Page, name: string) => {
+  const row = page.getByText(name, { exact: true }).locator('..').locator('..');
+  await row.getByRole('button', { name: 'Open' }).click();
+};
+
 test.describe('Playback file browser', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -40,35 +45,19 @@ test.describe('Playback file browser', () => {
     await server.close();
   });
 
-  test('home shows Play section between Machine and Config', async ({ page }: { page: Page }) => {
-    await page.goto('/');
-    const machine = page.getByRole('heading', { name: 'Machine' });
-    const play = page.getByRole('heading', { name: 'Play' });
-    const config = page.getByRole('heading', { name: 'Config' });
-
-    await expect(machine).toBeVisible();
-    await expect(play).toBeVisible();
-    await expect(config).toBeVisible();
-
-    const machineBox = await machine.boundingBox();
-    const playBox = await play.boundingBox();
-    const configBox = await config.boundingBox();
-
-    expect(machineBox && playBox && configBox).toBeTruthy();
-    if (machineBox && playBox && configBox) {
-      expect(machineBox.y).toBeLessThan(playBox.y);
-      expect(playBox.y).toBeLessThan(configBox.y);
-    }
+  test('play page is available from tab bar', async ({ page }: { page: Page }) => {
+    await page.goto('/play');
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
   });
 
   test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }) => {
     await page.goto('/play?source=local');
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Pick folder' }).click();
+    await page.getByRole('button', { name: 'Browse local folders' }).click();
     const chooser = await fileChooserPromise;
     await chooser.setFiles([path.resolve('playwright/fixtures/local-play')]);
 
-    await page.getByRole('button', { name: 'local-play/' }).click();
+    await openLocalFolder(page, 'local-play');
     await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
     await expect(page.getByText('demo.txt')).toHaveCount(0);
 
@@ -77,14 +66,26 @@ test.describe('Playback file browser', () => {
     expect(server.sidplayRequests[0].method).toBe('POST');
   });
 
-  test('local file picker accepts individual files', async ({ page }: { page: Page }) => {
+  test('folder play populates playlist dialog', async ({ page }: { page: Page }) => {
     await page.goto('/play?source=local');
-    const input = page.getByTestId('play-file-input');
-    await input.setInputFiles([path.resolve('playwright/fixtures/local-play/demo.sid')]);
+    const fileChooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Browse local folders' }).click();
+    const chooser = await fileChooserPromise;
+    await chooser.setFiles([path.resolve('playwright/fixtures/local-play')]);
 
+    const row = page.getByText('local-play', { exact: true }).locator('..').locator('..');
+    await row.getByRole('button', { name: 'Play' }).click();
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('demo.sid', { exact: true })).toBeVisible();
+  });
+
+  test('local folder input accepts directory', async ({ page }: { page: Page }) => {
+    await page.goto('/play?source=local');
+    const input = page.getByTestId('play-folder-input');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await openLocalFolder(page, 'local-play');
     await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
-    await page.getByText('demo.sid', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
-    await waitForRequests(() => server.sidplayRequests.length > 0);
   });
 
   test('local folder without supported files shows warning', async ({ page }: { page: Page }) => {
@@ -111,11 +112,11 @@ test.describe('Playback file browser', () => {
   test('disk image triggers mount and autostart sequence', async ({ page }: { page: Page }) => {
     await page.goto('/play?source=local');
     const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Pick folder' }).click();
+    await page.getByRole('button', { name: 'Browse local folders' }).click();
     const chooser = await fileChooserPromise;
     await chooser.setFiles([path.resolve('playwright/fixtures/local-play')]);
 
-    await page.getByRole('button', { name: 'local-play/' }).click();
+    await openLocalFolder(page, 'local-play');
     await page.getByText('demo.d64', { exact: true }).locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
     await waitForRequests(() =>
       server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),

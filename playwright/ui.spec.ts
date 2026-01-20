@@ -57,9 +57,9 @@ test.describe('UI coverage', () => {
     }
   };
 
-  const enableSidPlayer = async (page: Page) => {
+  const enableHvscDownloads = async (page: Page) => {
     await enableDeveloperMode(page);
-    const toggle = page.getByLabel('Enable SID player (experimental)');
+    const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeVisible();
     if (!(await toggle.isChecked())) {
       await toggle.click();
@@ -114,7 +114,7 @@ test.describe('UI coverage', () => {
     await page.goto('/');
     await clickAllButtons(page, page.locator('main'));
 
-    await page.getByRole('button', { name: 'Quick', exact: true }).click();
+    await page.goto('/quick');
     await clickAllButtons(page, page.locator('main'));
   });
 
@@ -123,21 +123,11 @@ test.describe('UI coverage', () => {
     await clickAllButtons(page, page.locator('main'));
   });
 
-  test('clicks widgets on music page', async ({ page }: { page: Page }) => {
-    await enableSidPlayer(page);
-    await page.goto('/music');
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const songRow = page.getByText('10_Orbyte.sid');
-    await expect(songRow).toBeVisible();
-    await songRow.locator('..').getByRole('button', { name: 'Play' }).click();
-
-    await page.getByRole('tab', { name: 'Local Library' }).click();
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Pick folder' }).click();
-    const chooser = await fileChooserPromise;
-    await chooser.setFiles([
-      { name: 'local.sid', mimeType: 'audio/sid', buffer: Buffer.from(uiFixtures.fixtureBase64, 'base64') },
-    ]);
+  test('clicks widgets on play page', async ({ page }: { page: Page }) => {
+    await enableHvscDownloads(page);
+    await page.goto('/play');
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    await clickAllButtons(page, page.locator('main'));
   });
 
   test('clicks widgets on settings and docs pages', async ({ page }: { page: Page }) => {

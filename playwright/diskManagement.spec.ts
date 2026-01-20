@@ -22,7 +22,7 @@ const removeDriveRequest = (requests: Array<{ method: string; url: string }>, dr
   );
 
 const openLocalDialog = async (page: Page) => {
-  await page.getByRole('button', { name: '+ Add from local device' }).click();
+  await page.getByRole('button', { name: /Add from local device/i }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
@@ -97,7 +97,7 @@ test.describe('Disk management', () => {
 
   test('FTP directory listing shows hierarchy', async ({ page }: { page: Page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await expect(page.getByText('Browse C64 Ultimate')).toBeVisible();
     await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
     await openRemoteFolder(page, 'Usb0');
@@ -107,7 +107,7 @@ test.describe('Disk management', () => {
 
   test('importing C64U folders preserves hierarchy and paths', async ({ page }: { page: Page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await expect(page.getByText('Browse C64 Ultimate')).toBeVisible();
     await openRemoteFolder(page, 'Usb0');
     await openRemoteFolder(page, 'Games');
@@ -152,7 +152,7 @@ test.describe('Disk management', () => {
     const localMount = mountDriveRequest(server.requests, 'a');
     expect(localMount?.method).toBe('POST');
 
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await openRemoteFolder(page, 'Usb0');
     await openRemoteFolder(page, 'Games');
     await openRemoteFolder(page, 'Turrican II');
@@ -174,7 +174,7 @@ test.describe('Disk management', () => {
 
   test('multi-drive mounting and rotation within group', async ({ page }: { page: Page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await openRemoteFolder(page, 'Usb0');
     await openRemoteFolder(page, 'Games');
     await openRemoteFolder(page, 'Turrican II');
@@ -209,7 +209,7 @@ test.describe('Disk management', () => {
 
   test('disk presence indicator and deletion ejects mounted disks', async ({ page }: { page: Page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await openRemoteFolder(page, 'Usb0');
     await openRemoteFolder(page, 'Games');
     await openRemoteFolder(page, 'Turrican II');
@@ -273,7 +273,7 @@ test.describe('Disk management', () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto('/');
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await expect(page.getByText('FTP browse failed', { exact: true })).toBeVisible();
 
     await protectedServers.close();
@@ -289,7 +289,7 @@ test.describe('Disk management', () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto('/');
-    await page.getByRole('button', { name: '+ Add from C64 Ultimate' }).click();
+    await page.getByRole('button', { name: /Add from C64 Ultimate/i }).click();
     await expect(page.getByText('FTP browse failed', { exact: true })).toBeVisible();
   });
 });

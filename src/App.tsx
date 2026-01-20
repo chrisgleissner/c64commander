@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
@@ -15,11 +15,9 @@ import NotFound from "./pages/NotFound";
 import PlayFilesPage from './pages/PlayFilesPage';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog } from "@/lib/logging";
-import MusicPlayerPage from "./pages/MusicPlayerPage";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { MockModeProvider } from "@/hooks/useMockMode";
-import { FeatureFlagsProvider, useFeatureFlags } from "@/hooks/useFeatureFlags";
-import { isSidPlayerEnabled } from "@/lib/config/featureFlags";
+import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,25 +60,6 @@ const RouteRefresher = () => {
   return null;
 };
 
-const SidPlayerRoute = () => {
-  const { flags, isLoaded } = useFeatureFlags();
-  const location = useLocation();
-  const enabled = isSidPlayerEnabled(flags);
-
-  useEffect(() => {
-    if (!isLoaded || enabled) return;
-    addErrorLog('SID player blocked', {
-      reason: 'sid_player_enabled=false',
-      path: location.pathname,
-    });
-    console.warn('SID player blocked: sid_player_enabled=false');
-  }, [enabled, isLoaded, location.pathname]);
-
-  if (!isLoaded) return null;
-  if (!enabled) return <NotFound />;
-  return <MusicPlayerPage />;
-};
-
 const AppRoutes = () => (
   <BrowserRouter>
     <ErrorBoundary />
@@ -90,7 +69,7 @@ const AppRoutes = () => (
       <Route path="/quick" element={<QuickSettingsPage />} />
       <Route path="/config" element={<ConfigBrowserPage />} />
       <Route path="/play" element={<PlayFilesPage />} />
-      <Route path="/music" element={<SidPlayerRoute />} />
+      <Route path="/music" element={<Navigate to="/play" replace />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/docs" element={<DocsPage />} />
       <Route path="*" element={<NotFound />} />

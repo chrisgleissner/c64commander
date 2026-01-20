@@ -1,15 +1,13 @@
 import { motion } from 'framer-motion';
-import { Home, Sliders, Settings, BookOpen, Cpu, Music } from 'lucide-react';
+import { Home, Sliders, Settings, BookOpen, Cpu, Play } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { MockModeBanner } from '@/components/MockModeBanner';
-import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { isSidPlayerEnabled } from '@/lib/config/featureFlags';
 
 const baseTabs = [
   { path: '/', icon: Home, label: 'Home' },
   { path: '/quick', icon: Cpu, label: 'Quick' },
   { path: '/config', icon: Sliders, label: 'Config' },
-  { path: '/music', icon: Music, label: 'SID' },
+  { path: '/play', icon: Play, label: 'Play' },
   { path: '/settings', icon: Settings, label: 'Settings' },
   { path: '/docs', icon: BookOpen, label: 'Docs' },
 ];
@@ -17,9 +15,7 @@ const baseTabs = [
 export function TabBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { flags } = useFeatureFlags();
-  const sidEnabled = isSidPlayerEnabled(flags);
-  const tabs = sidEnabled ? baseTabs : baseTabs.filter((tab) => tab.path !== '/music');
+  const tabs = baseTabs;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50">

@@ -1,4 +1,4 @@
-import { test, expect, type Page, type ConsoleMessage } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 
@@ -8,7 +8,7 @@ test.describe('Feature flags', () => {
   test.beforeEach(async ({ page }: { page: Page }) => {
     server = await createMockC64Server(uiFixtures.configState);
     await page.addInitScript(() => {
-      localStorage.removeItem('c64u_feature_flag:sid_player_enabled');
+      localStorage.removeItem('c64u_feature_flag:hvsc_enabled');
       localStorage.removeItem('c64u_dev_mode_enabled');
     });
     await seedUiMocks(page, server.baseUrl);
@@ -26,50 +26,43 @@ test.describe('Feature flags', () => {
     }
   };
 
-  test('developer mode gating hides SID toggle', async ({ page }: { page: Page }) => {
+  test('developer mode gating hides HVSC toggle', async ({ page }: { page: Page }) => {
     await page.goto('/settings');
-    await expect(page.getByLabel('Enable SID player (experimental)')).toHaveCount(0);
+    await expect(page.getByLabel('Enable HVSC downloads')).toHaveCount(0);
   });
 
   test('developer mode shows toggle and default is off', async ({ page }: { page: Page }) => {
     await enableDeveloperMode(page);
-    const toggle = page.getByLabel('Enable SID player (experimental)');
+    const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeVisible();
     await expect(toggle).not.toBeChecked();
-    await expect(page.getByRole('button', { name: 'SID', exact: true })).toHaveCount(0);
+    await page.goto('/play');
+    await expect(page.getByText('Install HVSC')).toHaveCount(0);
   });
 
-  test('dynamic enablement shows SID tab', async ({ page }: { page: Page }) => {
+  test('dynamic enablement shows HVSC controls', async ({ page }: { page: Page }) => {
     await enableDeveloperMode(page);
-    const toggle = page.getByLabel('Enable SID player (experimental)');
+    const toggle = page.getByLabel('Enable HVSC downloads');
     await toggle.click();
     await expect(toggle).toBeChecked();
-    await expect(page.getByRole('button', { name: 'SID', exact: true })).toBeVisible();
+    await page.goto('/play');
+    await expect(page.getByRole('button', { name: /Install HVSC|Check updates/ })).toBeVisible();
   });
 
-  test('dynamic disablement hides SID tab', async ({ page }: { page: Page }) => {
+  test('dynamic disablement hides HVSC controls', async ({ page }: { page: Page }) => {
     await enableDeveloperMode(page);
-    const toggle = page.getByLabel('Enable SID player (experimental)');
+    const toggle = page.getByLabel('Enable HVSC downloads');
     await toggle.click();
     await expect(toggle).toBeChecked();
     await toggle.click();
     await expect(toggle).not.toBeChecked();
-    await expect(page.getByRole('button', { name: 'SID', exact: true })).toHaveCount(0);
+    await page.goto('/play');
+    await expect(page.getByRole('button', { name: 'Install HVSC' })).toHaveCount(0);
   });
 
-  test('route safety logs when SID disabled', async ({ page }: { page: Page }) => {
-    const messages: string[] = [];
-    page.on('console', (msg: ConsoleMessage) => {
-      if (msg.type() === 'warning') {
-        messages.push(msg.text());
-      }
-    });
-
+  test('legacy /music route redirects to Play page', async ({ page }: { page: Page }) => {
     await page.goto('/music');
-    await expect(page.getByText('Oops! Page not found')).toBeVisible();
-
-    await expect.poll(() => messages.some((msg) => msg.includes('SID player blocked'))).toBe(true);
-    const logs = await page.evaluate(() => localStorage.getItem('c64u_app_logs'));
-    expect(logs).toContain('SID player blocked');
+    await expect(page).toHaveURL(/\/play/);
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
   });
 });

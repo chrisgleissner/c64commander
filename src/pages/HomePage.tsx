@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
   Power,
   PowerOff,
   Pause,
-  Play,
   Menu,
   Save,
   RefreshCw,
   Trash2,
-  FolderOpen,
+  Upload,
+  Play,
   Download,
-  Upload
+  FolderOpen
 } from 'lucide-react';
 import { useC64Connection, useC64MachineControl } from '@/hooks/useC64Connection';
 import { ConnectionBadge } from '@/components/ConnectionBadge';
@@ -33,7 +32,6 @@ import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
 
 export default function HomePage() {
-  const navigate = useNavigate();
   const { status } = useC64Connection();
   const controls = useC64MachineControl();
   const {
@@ -261,38 +259,10 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* Play */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="space-y-3"
-        >
-          <h3 className="category-header">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Play
-          </h3>
-          <div className="grid grid-cols-2 gap-3">
-            <QuickActionCard
-              icon={FolderOpen}
-              label="Browse"
-              description="Local device"
-              onClick={() => navigate('/play?source=local')}
-            />
-            <QuickActionCard
-              icon={Download}
-              label="Browse"
-              description="Ultimate 64"
-              onClick={() => navigate('/play?source=ultimate')}
-              disabled={!status.isConnected}
-            />
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
         >
           <HomeDiskManager />
         </motion.div>
@@ -301,7 +271,7 @@ export default function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.4 }}
           className="space-y-3"
         >
           <h3 className="category-header">
