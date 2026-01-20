@@ -1,4 +1,5 @@
 import { computeSidMd5 } from '@/lib/sid/sidUtils';
+import { addErrorLog } from '@/lib/logging';
 import type { SongEntry, SongFolder, SongSource } from './SongSource';
 
 export type LocalSidFile = File | {
@@ -62,8 +63,10 @@ export const createLocalFsSongSource = (
         const md5 = await computeSidMd5(buffer);
         const result = await options.lookupDurationSeconds(md5);
         if (result) durationMs = result * 1000;
-      } catch {
-        // ignore lookup failures on web/mock
+      } catch (error) {
+        addErrorLog('SID duration lookup failed', {
+          error: (error as Error).message,
+        });
       }
     }
     return { data, durationMs, title: entry.title, path: entry.path };

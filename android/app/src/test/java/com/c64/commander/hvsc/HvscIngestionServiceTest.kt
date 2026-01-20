@@ -1,9 +1,10 @@
-package com.c64.commander.hvsc
+package uk.gleissner.c64commander.hvsc
 
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
@@ -121,6 +122,52 @@ class HvscIngestionServiceTest {
     assertNotNull(db.getSongByVirtualPath("/DEMOS/0-9/8-Bit_Bard.sid"))
   }
 
+  @Test
+  fun emitsStructuredProgressEvents() {
+    val tempDir = Files.createTempDirectory("hvsc-test5").toFile()
+    val baselineArchive = File(tempDir, "hvsc-baseline.7z")
+    val updateArchive = File(tempDir, "hvsc-update.7z")
+
+    createArchiveFromDir(resolveFixtureDir("baseline"), baselineArchive)
+    createArchiveFromDir(resolveFixtureDir("update"), updateArchive)
+
+    val db = JdbcHvscDatabase.inMemory()
+    val downloader = TestDownloader(
+      mapOf(
+        "baseline" to baselineArchive,
+        "update" to updateArchive,
+      ),
+    )
+    val releaseProvider = TestReleaseProvider(baselineVersion = 83, updateVersion = 84)
+    val service = HvscIngestionService(db, releaseProvider, downloader)
+    val events = mutableListOf<HvscIngestionService.Progress>()
+
+    service.installOrUpdate(tempDir, null) { event ->
+      events.add(event)
+    }
+
+    assertTrue(events.any { it.stage == "archive_validation" })
+    assertTrue(events.any { it.stage == "sid_metadata_parsing" })
+    assertTrue(events.any { it.stage == "database_insertion" })
+    assertTrue(events.any { it.stage == "complete" })
+    val sample = events.firstOrNull()
+    assertNotNull(sample?.ingestionId)
+    assertTrue(events.any { it.processedCount != null })
+    assertTrue(events.any { it.totalCount != null })
+  }
+
+  @Test
+  fun archiveInspectorDetectsHvscContents() {
+    val tempDir = Files.createTempDirectory("hvsc-test6").toFile()
+    val baselineArchive = File(tempDir, "hvsc-baseline.7z")
+    createArchiveFromDir(resolveFixtureDir("baseline"), baselineArchive)
+
+    val inspection = HvscArchiveInspector.inspect(baselineArchive)
+    assertTrue(inspection.sidEntries > 0)
+    assertTrue(inspection.hasSonglengths)
+    assertTrue(inspection.compressionMethods.isNotEmpty())
+  }
+
   private fun createArchiveFromDir(sourceDir: File, targetArchive: File) {
     if (targetArchive.exists()) targetArchive.delete()
     SevenZOutputFile(targetArchive).use { output ->
@@ -180,7 +227,7 @@ class HvscIngestionServiceTest {
   private class TestDownloader(
     private val mapping: Map<String, File>,
   ) : HvscDownloadClient {
-    override fun download(url: String, target: File, onProgress: ((percent: Int) -> Unit)?) {
+    override fun download(url: String, target: File, onProgress: ((progress: DownloadProgress) -> Unit)?) {
       val source = mapping[url] ?: throw IllegalStateException("Missing fixture for $url")
       source.inputStream().use { input ->
         target.outputStream().use { output ->
@@ -192,14 +239,15 @@ class HvscIngestionServiceTest {
           }
         }
       }
-      onProgress?.invoke(100)
+      val size = target.length()
+      onProgress?.invoke(DownloadProgress(100, size, size))
     }
   }
 
   private class FailingUpdateDownloader(
     private val baselineArchive: File,
   ) : HvscDownloadClient {
-    override fun download(url: String, target: File, onProgress: ((percent: Int) -> Unit)?) {
+    override fun download(url: String, target: File, onProgress: ((progress: DownloadProgress) -> Unit)?) {
       if (url == "update") {
         throw IllegalStateException("Simulated download failure")
       }
@@ -213,7 +261,8 @@ class HvscIngestionServiceTest {
           }
         }
       }
-      onProgress?.invoke(100)
+      val size = target.length()
+      onProgress?.invoke(DownloadProgress(100, size, size))
     }
   }
 }

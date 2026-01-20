@@ -50,12 +50,16 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
     ({ baseUrl: baseUrlArg, songData, snapshot }) => {
       try {
         delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
-      } catch {
-        // ignore
+      } catch (error) {
+        console.warn('Unable to clear showDirectoryPicker', error);
       }
       localStorage.setItem('c64u_base_url', baseUrlArg);
-      localStorage.setItem('c64u_password', '');
-      localStorage.setItem('c64u_device_host', 'c64u');
+      if (!localStorage.getItem('c64u_password')) {
+        localStorage.setItem('c64u_password', '');
+      }
+      if (!localStorage.getItem('c64u_device_host')) {
+        localStorage.setItem('c64u_device_host', 'c64u');
+      }
       localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
       sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
 
@@ -126,6 +130,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           };
         },
       };
+
     },
     { baseUrl: baseUrl, songData: fixtureBase64, snapshot: initialSnapshot },
   );

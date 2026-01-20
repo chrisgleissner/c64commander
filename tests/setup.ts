@@ -16,15 +16,12 @@ Object.defineProperty(window, "matchMedia", {
 
 // Radix UI (Select) relies on pointer capture APIs that are missing in JSDOM.
 if (!Element.prototype.hasPointerCapture) {
-  // eslint-disable-next-line no-extend-native
   Element.prototype.hasPointerCapture = () => false;
 }
 if (!Element.prototype.setPointerCapture) {
-  // eslint-disable-next-line no-extend-native
   Element.prototype.setPointerCapture = () => {};
 }
 if (!Element.prototype.releasePointerCapture) {
-  // eslint-disable-next-line no-extend-native
   Element.prototype.releasePointerCapture = () => {};
 }
 
@@ -36,6 +33,5 @@ if (typeof (window as any).PointerEvent === "undefined") {
 
 // Used by Radix Select to bring the active item into view.
 if (!Element.prototype.scrollIntoView) {
-  // eslint-disable-next-line no-extend-native
   Element.prototype.scrollIntoView = () => {};
 }

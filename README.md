@@ -10,20 +10,18 @@ Control your Commodore 64 Ultimate from your Android device
 C64 Commander is an Android app that connects to a C64 Ultimate device on your local network:
 
 - Browse and edit the entire C64U configuration.
-- Quick access to key settings (SID, VIC, CPU, drives) and device actions.
-- Play SID files from local folders or the HVSC library.
-
-## HVSC Library
-
-The app ingests HVSC archives directly on-device via native Kotlin code and stores metadata and SID binaries in a local SQLite database. Baseline installs and incremental updates are applied atomically, and the Play page remains source-agnostic between local folders and HVSC.
+- Device controls and disk management from a mobile-friendly dashboard.
+- Play files from local storage or the Ultimate 64 with a playlist-first workflow.
+- Diagnostics and developer tools for troubleshooting.
 
 ## Screenshots
 
 ![Home](doc/img/app-home.png)
-![Quick Settings](doc/img/app-quick-settings.png)
+![Home (Dark)](doc/img/app-home-dark.png)
+![Play](doc/img/app-play.png)
+![Disks](doc/img/app-disks.png)
 ![Configuration](doc/img/app-configuration.png)
 ![Configuration Expanded](doc/img/app-configuration-expanded.png)
-![Music](doc/img/app-music.png)
 ![Settings](doc/img/app-settings.png)
 ![Documentation](doc/img/app-documentation.png)
 
@@ -68,8 +66,9 @@ Then run:
 
 1. Open Settings and tap the About panel 7 times quickly.
 2. A Developer section appears with "Enable mocked C64U (internal testing)".
-3. Enabling it starts a local mock REST service on 127.0.0.1 and routes all API calls to the mock.
-4. Disable it to stop the mock server and restore the previous device base URL.
+3. Enabling it starts a local mock REST service on 127.0.0.1 and a local FTP server backed by fixture files.
+4. FTP logins use the Network Password from the mock configuration (blank allows anonymous).
+5. Disable it to stop the mock servers and restore the previous device base URL.
 
 ## Tests
 

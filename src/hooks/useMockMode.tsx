@@ -9,12 +9,19 @@ import {
   getDeveloperModeEnabled,
   getStoredMockBaseUrl,
   getStoredRealBaseUrl,
+  getStoredRealDeviceHost,
+  getStoredRealFtpPort,
   setDeviceMode,
   setStoredRealBaseUrl,
+  setStoredRealDeviceHost,
+  setStoredRealFtpPort,
+  clearStoredRealDeviceHost,
+  clearStoredRealFtpPort,
   subscribeDeviceMode,
   subscribeDeveloperMode,
 } from '@/lib/config/developerModeStore';
 import { startMockServer, stopMockServer } from '@/lib/mock/mockServer';
+import { getStoredFtpPort, setStoredFtpPort } from '@/lib/ftp/ftpConfig';
 
 type MockModeContextValue = {
   isDeveloperModeEnabled: boolean;
@@ -69,8 +76,8 @@ export const MockModeProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const applyConnectionBaseUrl = useCallback(
-    (baseUrl: string) => {
-      updateC64APIConfig(baseUrl, getStoredPassword(), getStoredDeviceHost());
+    (baseUrl: string, deviceHostOverride?: string) => {
+      updateC64APIConfig(baseUrl, getStoredPassword(), deviceHostOverride || getStoredDeviceHost());
       invalidateC64Queries(queryClient);
     },
     [queryClient],
@@ -84,9 +91,17 @@ export const MockModeProvider = ({ children }: { children: ReactNode }) => {
     setIsBusy(true);
     try {
       const currentBaseUrl = localStorage.getItem('c64u_base_url') || getDefaultBaseUrl();
+      const currentHost = getStoredDeviceHost();
+      const currentFtpPort = getStoredFtpPort();
       setStoredRealBaseUrl(currentBaseUrl);
-      const baseUrl = await startMockServer();
-      applyConnectionBaseUrl(baseUrl);
+      setStoredRealDeviceHost(currentHost);
+      setStoredRealFtpPort(currentFtpPort);
+
+      const { baseUrl, ftpPort } = await startMockServer();
+      const mockHost = '127.0.0.1';
+      localStorage.setItem('c64u_device_host', mockHost);
+      if (ftpPort) setStoredFtpPort(ftpPort);
+      applyConnectionBaseUrl(baseUrl, mockHost);
       setDeviceMode('MOCK_DEVICE');
       setMockBaseUrl(baseUrl);
     } finally {
@@ -100,9 +115,15 @@ export const MockModeProvider = ({ children }: { children: ReactNode }) => {
     try {
       await stopMockServer();
       const fallbackUrl = getStoredRealBaseUrl() || getDefaultBaseUrl();
-      applyConnectionBaseUrl(fallbackUrl);
+      const fallbackHost = getStoredRealDeviceHost() || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
+      const fallbackFtpPort = Number(getStoredRealFtpPort() || '') || 21;
+      localStorage.setItem('c64u_device_host', fallbackHost);
+      setStoredFtpPort(fallbackFtpPort);
+      applyConnectionBaseUrl(fallbackUrl, fallbackHost);
       setDeviceMode('REAL_DEVICE');
       setMockBaseUrl(null);
+      clearStoredRealDeviceHost();
+      clearStoredRealFtpPort();
     } finally {
       setIsBusy(false);
     }
@@ -116,9 +137,15 @@ export const MockModeProvider = ({ children }: { children: ReactNode }) => {
         })
         .finally(() => {
           const fallbackUrl = getStoredRealBaseUrl() || getDefaultBaseUrl();
-          applyConnectionBaseUrl(fallbackUrl);
+          const fallbackHost = getStoredRealDeviceHost() || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
+          const fallbackFtpPort = Number(getStoredRealFtpPort() || '') || 21;
+          localStorage.setItem('c64u_device_host', fallbackHost);
+          setStoredFtpPort(fallbackFtpPort);
+          applyConnectionBaseUrl(fallbackUrl, fallbackHost);
           setDeviceMode('REAL_DEVICE');
           setMockBaseUrl(null);
+          clearStoredRealDeviceHost();
+          clearStoredRealFtpPort();
         });
       return;
     }
@@ -127,9 +154,12 @@ export const MockModeProvider = ({ children }: { children: ReactNode }) => {
     let cancelled = false;
     setIsBusy(true);
     startMockServer()
-      .then((baseUrl) => {
+      .then(({ baseUrl, ftpPort }) => {
         if (cancelled) return;
-        applyConnectionBaseUrl(baseUrl);
+        const mockHost = '127.0.0.1';
+        localStorage.setItem('c64u_device_host', mockHost);
+        if (ftpPort) setStoredFtpPort(ftpPort);
+        applyConnectionBaseUrl(baseUrl, mockHost);
         setMockBaseUrl(baseUrl);
       })
       .catch((error) => {

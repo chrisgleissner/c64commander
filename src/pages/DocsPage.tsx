@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ChevronDown, 
-  ExternalLink, 
-  Terminal, 
-  Wifi, 
-  Settings, 
-  HardDrive,
+import {
+  ChevronDown,
+  ExternalLink,
+  Wifi,
+  Settings,
   Play,
-  Cpu,
-  Volume2
+  Home,
+  Disc,
+  Sliders,
 } from 'lucide-react';
 
 interface DocSection {
@@ -47,12 +46,12 @@ const docSections: DocSection[] = [
   },
   {
     id: 'home',
-    title: 'Home Dashboard',
-    icon: Terminal,
+    title: 'Home',
+    icon: Home,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          The home screen shows your device info and provides quick machine controls:
+          The Home page shows your device info, machine controls, and a minimal drive summary.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li><strong>Reset</strong> - Soft reset the C64</li>
@@ -67,155 +66,79 @@ const docSections: DocSection[] = [
           <li><strong>Load</strong> - Restore config from flash</li>
           <li><strong>Reset</strong> - Reset to factory defaults</li>
         </ul>
+        <p className="text-muted-foreground">
+          Drive summary shows Drive A and Drive B status with the mounted image name.
+        </p>
       </div>
     ),
   },
   {
-    id: 'quick-settings',
-    title: 'Quick Settings',
-    icon: Cpu,
+    id: 'play',
+    title: 'Play',
+    icon: Play,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Quick access to the most commonly used settings:
+          Browse and play files from local storage or the C64 Ultimate.
         </p>
-        <div className="space-y-2">
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">Video (VIC)</p>
-            <p className="text-xs text-muted-foreground">
-              System mode (PAL/NTSC), HDMI settings, palette
-            </p>
-          </div>
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">Audio (SID)</p>
-            <p className="text-xs text-muted-foreground">
-              Volume and pan for all audio sources
-            </p>
-          </div>
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">SID Configuration</p>
-            <p className="text-xs text-muted-foreground">
-              UltiSID filter curves, resonance, combined waveforms
-            </p>
-          </div>
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">CPU Settings</p>
-            <p className="text-xs text-muted-foreground">
-              CPU speed (1-48 MHz), turbo control, badline timing
-            </p>
-          </div>
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">Drives A & B</p>
-            <p className="text-xs text-muted-foreground">
-              Drive type, bus ID, ROM selection
-            </p>
-          </div>
-        </div>
+        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <li><strong>Play SID/PRG/CRT</strong> from local or Ultimate storage</li>
+          <li><strong>Upload files</strong> directly to the device</li>
+          <li><strong>HVSC controls</strong> appear when enabled in Settings</li>
+        </ul>
       </div>
     ),
   },
   {
-    id: 'config-browser',
-    title: 'Configuration Browser',
-    icon: Settings,
+    id: 'disks',
+    title: 'Disks',
+    icon: Disc,
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>
+          Manage drives and disk images in one place.
+        </p>
+        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <li>Mount and eject disk images</li>
+          <li>Enable/disable Drive A & B</li>
+          <li>Rotate disks in a group</li>
+          <li>Import from local storage or the Ultimate</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'config',
+    title: 'Config',
+    icon: Sliders,
     content: (
       <div className="space-y-3 text-sm">
         <p>
           Browse and modify <strong>all</strong> configuration settings on your C64U.
           Settings are auto-discovered from the device at runtime.
         </p>
-        <p className="font-medium">Categories include:</p>
-        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>Audio Mixer - Volume and pan controls</li>
-          <li>SID Configuration - Socket and UltiSID settings</li>
-          <li>U64 Specific - Video mode, CPU speed, features</li>
-          <li>C64 and Cartridge - ROMs, REU, cartridge</li>
-          <li>Network & WiFi - Connectivity settings</li>
-          <li>Drive A & B - Floppy emulation settings</li>
-          <li>...and more</li>
-        </ul>
         <p className="text-muted-foreground">
-          Tap any category to expand it and modify settings.
-          Changes are applied immediately but not saved to flash automatically.
+          Audio Mixer includes solo toggles for the two physical SID sockets and two UltiSID chips.
+          Changes apply immediately but are not saved to flash automatically.
         </p>
       </div>
     ),
   },
   {
-    id: 'drives',
-    title: 'Drive Control',
-    icon: HardDrive,
+    id: 'settings',
+    title: 'Settings',
+    icon: Settings,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          The C64U supports two virtual floppy drives (A and B), each supporting:
+          Configure connection details, appearance, diagnostics, and internal testing options.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>1541</strong> - Standard C64 drive</li>
-          <li><strong>1571</strong> - C128 double-sided drive</li>
-          <li><strong>1581</strong> - 3.5" 800KB drive</li>
+          <li><strong>Connection</strong> - Hostname/IP and password</li>
+          <li><strong>Appearance</strong> - Light/dark/system theme</li>
+          <li><strong>Diagnostics</strong> - Logs and error reports</li>
+          <li><strong>Developer</strong> - HVSC and internal testing controls</li>
         </ul>
-        <p className="font-medium">Drive Settings:</p>
-        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>Bus ID (8-11)</li>
-          <li>ROM file selection</li>
-          <li>Extra RAM enable</li>
-          <li>Disk swap delay</li>
-        </ul>
-      </div>
-    ),
-  },
-  {
-    id: 'sid',
-    title: 'SID Audio',
-    icon: Volume2,
-    content: (
-      <div className="space-y-3 text-sm">
-        <p>
-          The Ultimate 64 has 2 physical SID sockets plus 2 UltiSIDs (FPGA emulation).
-        </p>
-        <div className="space-y-2">
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">Physical Sockets</p>
-            <p className="text-xs text-muted-foreground">
-              Socket 1 & 2 - For real 6581/8580 SID chips.
-              Auto-detected, enable/disable, volume control.
-            </p>
-          </div>
-          <div className="p-2 bg-muted/50 rounded-lg">
-            <p className="font-medium">UltiSID 1 & 2</p>
-            <p className="text-xs text-muted-foreground">
-              FPGA emulated SIDs with configurable:
-              Filter curve, resonance, combined waveforms, digis level.
-            </p>
-          </div>
-        </div>
-        <p className="text-muted-foreground">
-          Volume ranges from OFF to +6 dB in 1dB steps.
-          Pan control allows stereo positioning.
-        </p>
-      </div>
-    ),
-  },
-  {
-    id: 'runners',
-    title: 'Running Programs',
-    icon: Play,
-    content: (
-      <div className="space-y-3 text-sm">
-        <p>
-          The REST API supports running programs directly:
-        </p>
-        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>SID Play</strong> - Play SID music files</li>
-          <li><strong>MOD Play</strong> - Play Amiga MOD files</li>
-          <li><strong>Load PRG</strong> - DMA load a program</li>
-          <li><strong>Run PRG</strong> - Load and run a program</li>
-          <li><strong>Run CRT</strong> - Run a cartridge image</li>
-        </ul>
-        <p className="text-muted-foreground">
-          Programs can be loaded from the Ultimate's filesystem or uploaded directly.
-        </p>
       </div>
     ),
   },

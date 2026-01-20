@@ -1,7 +1,7 @@
 import type { MockC64UPlugin } from './mockC64u';
 
 export class MockC64UWeb implements MockC64UPlugin {
-  async startServer(): Promise<{ baseUrl: string; port: number }> {
+  async startServer(): Promise<{ baseUrl: string; port: number; ftpPort?: number }> {
     throw new Error('Mock C64U server is only available on native platforms.');
   }
 

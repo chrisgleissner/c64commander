@@ -34,11 +34,19 @@ export type HvscSong = {
 };
 
 export type HvscProgressEvent = {
-  phase: string;
+  ingestionId: string;
+  stage: string;
   message: string;
+  archiveName?: string;
+  currentFile?: string;
+  processedCount?: number;
+  totalCount?: number;
   percent?: number;
   downloadedBytes?: number;
   totalBytes?: number;
   songsUpserted?: number;
   songsDeleted?: number;
+  elapsedTimeMs?: number;
+  errorType?: string;
+  errorCause?: string;
 };

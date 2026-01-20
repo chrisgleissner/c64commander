@@ -5,11 +5,12 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 ## Quick orientation
 
 1. Start with `README.md` for overview, local build steps, and Android notes.
-2. REST API details live in `doc/c64/c64u-openapi.yaml` and `doc/c64/c64u-rest-api.md`.
-3. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
-4. Networking + data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
-5. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
-6. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
+2. REST API details live in `doc/c64/c64u-openapi.yaml`
+3. Read the UX design in `doc/ux-guidelines.md` before any UX work.
+4. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
+5. Networking + data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
+6. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
+7. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
 
 ## Source of truth
 
@@ -68,6 +69,7 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - Always investigate errors, warnings, and assertion failures.
 - Fix root causes. Do not skip tests or suppress warnings.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
+- Exceptions must never be ignored; log them or let them bubble up.
 
 ## Output wording rules
 

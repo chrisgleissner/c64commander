@@ -1,13 +1,12 @@
 import { motion } from 'framer-motion';
-import { Home, Sliders, Settings, BookOpen, Cpu, Music } from 'lucide-react';
+import { Home, Sliders, Settings, BookOpen, Play, Disc } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { MockModeBanner } from '@/components/MockModeBanner';
 
-const tabs = [
+const baseTabs = [
   { path: '/', icon: Home, label: 'Home' },
-  { path: '/quick', icon: Cpu, label: 'Quick' },
+  { path: '/play', icon: Play, label: 'Play' },
+  { path: '/disks', icon: Disc, label: 'Disks' },
   { path: '/config', icon: Sliders, label: 'Config' },
-  { path: '/music', icon: Music, label: 'SID' },
   { path: '/settings', icon: Settings, label: 'Settings' },
   { path: '/docs', icon: BookOpen, label: 'Docs' },
 ];
@@ -15,10 +14,10 @@ const tabs = [
 export function TabBar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const tabs = baseTabs;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50">
-      <MockModeBanner />
       <nav className="tab-bar">
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;

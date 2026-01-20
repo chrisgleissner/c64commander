@@ -1,5 +1,6 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -37,6 +38,7 @@ class MockC64UServer(private val state: MockC64UState) {
   private val sockets = Collections.synchronizedSet(mutableSetOf<Socket>())
   private var serverSocket: ServerSocket? = null
   @Volatile private var running = false
+  private val logTag = "MockC64UServer"
   var port: Int = 0
     private set
 
@@ -60,8 +62,8 @@ class MockC64UServer(private val state: MockC64UState) {
     sockets.forEach { socket ->
       try {
         socket.close()
-      } catch (_: Exception) {
-        // Ignore cleanup errors
+      } catch (error: Exception) {
+        Log.w(logTag, "Failed to close socket during shutdown", error)
       }
     }
     sockets.clear()
@@ -76,9 +78,9 @@ class MockC64UServer(private val state: MockC64UState) {
         val socket = serverSocket?.accept() ?: break
         sockets.add(socket)
         executor.execute { handleClient(socket) }
-      } catch (_: Exception) {
+      } catch (error: Exception) {
         if (running) {
-          // Ignore intermittent accept errors while running.
+          Log.w(logTag, "Accept loop error while running", error)
         }
       }
     }

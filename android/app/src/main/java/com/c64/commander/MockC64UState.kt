@@ -1,4 +1,4 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -161,6 +161,11 @@ class MockC64UState private constructor(
   fun resetConfig() {
     config = cloneConfig(defaults)
     refreshDriveState()
+  }
+
+  fun getNetworkPassword(): String? {
+    val value = config["Network Settings"]?.get("Network Password")?.value?.toString() ?: ""
+    return value
   }
 
   private fun refreshDriveState(category: String? = null) {

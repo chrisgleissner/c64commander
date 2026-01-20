@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useMockMode } from '@/hooks/useMockMode';
+import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
+  const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const {
     isMockMode,
     isMockAvailable,
@@ -286,7 +288,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 gap-2">
             <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-2" />
-              Diagnostics
+              Logs
             </Button>
           </div>
         </motion.div>
@@ -344,6 +346,32 @@ export default function SettingsPage() {
               <h2 className="font-medium">Developer</h2>
             </div>
             <div className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="hvsc-flag" className="font-medium">
+                    Enable HVSC downloads
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Shows HVSC download and ingest controls on the Play page.
+                  </p>
+                </div>
+                <Checkbox
+                  id="hvsc-flag"
+                  checked={isHvscEnabled}
+                  onCheckedChange={(checked) => {
+                    const enabled = checked === true;
+                    void setHvscEnabled(enabled);
+                    try {
+                      localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+                      sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+                    } catch (error) {
+                      addErrorLog('Feature flag storage failed', {
+                        error: (error as Error).message,
+                      });
+                    }
+                  }}
+                />
+              </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p className="font-medium">Enable mocked C64U (internal testing)</p>

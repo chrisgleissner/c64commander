@@ -16,6 +16,9 @@ test.describe('App screenshots', () => {
 
   test.beforeEach(async ({ page }: { page: Page }) => {
     await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
+    });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });
@@ -39,18 +42,30 @@ test.describe('App screenshots', () => {
     const screenshotPath = (fileName: string) => path.resolve('doc/img', fileName);
 
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Quick', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Disks', exact: true })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-home.png'), animations: 'disabled', caret: 'hide' });
 
-    await page.getByRole('button', { name: 'Quick', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Quick Settings' })).toBeVisible();
+    await page.emulateMedia({ colorScheme: 'dark' });
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-quick-settings.png'), animations: 'disabled', caret: 'hide' });
+    await page.screenshot({ path: screenshotPath('app-home-dark.png'), animations: 'disabled', caret: 'hide' });
+    await page.emulateMedia({ colorScheme: 'light' });
 
-    const u64Card = page.getByRole('button', { name: 'Video (VIC)', exact: true });
+    await page.getByRole('button', { name: 'Disks', exact: true }).click();
+    await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
+    await waitForStableRender(page);
+    await waitForOverlaysToClear(page);
+    await page.screenshot({ path: screenshotPath('app-disks.png'), animations: 'disabled', caret: 'hide' });
+
+    await page.getByRole('button', { name: 'Config', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
+    await waitForStableRender(page);
+    await waitForOverlaysToClear(page);
+    await page.screenshot({ path: screenshotPath('app-configuration.png'), animations: 'disabled', caret: 'hide' });
+
+    const u64Card = page.getByRole('button', { name: 'U64 Specific Settings', exact: true });
     if (await u64Card.isVisible()) {
       await u64Card.click();
       await expect(page.getByText('System Mode')).toBeVisible();
@@ -58,12 +73,6 @@ test.describe('App screenshots', () => {
       await waitForOverlaysToClear(page);
       await page.screenshot({ path: screenshotPath('app-configuration-u64-specific.png'), animations: 'disabled', caret: 'hide' });
     }
-
-    await page.getByRole('button', { name: 'Config', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
-    await waitForStableRender(page);
-    await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-configuration.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Audio Mixer', exact: true }).click();
     const slider = page.getByLabel('Vol UltiSid 1 slider');
@@ -76,11 +85,12 @@ test.describe('App screenshots', () => {
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-configuration-expanded.png'), animations: 'disabled', caret: 'hide' });
 
-    await page.getByRole('button', { name: 'SID', exact: true }).click();
-    await expect(page.getByRole('tab', { name: 'HVSC Library' })).toBeVisible();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    await expect(page.getByText('HVSC library')).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
-    await page.screenshot({ path: screenshotPath('app-music.png'), animations: 'disabled', caret: 'hide' });
+    await page.screenshot({ path: screenshotPath('app-play.png'), animations: 'disabled', caret: 'hide' });
 
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();

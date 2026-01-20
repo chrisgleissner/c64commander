@@ -78,6 +78,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  // eslint-disable-next-line no-console
   console.log(`C64U local proxy listening on http://127.0.0.1:${PORT}`);
 });

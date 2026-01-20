@@ -1,4 +1,4 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
 import android.os.Bundle
 import com.getcapacitor.BridgeActivity
@@ -8,6 +8,8 @@ class MainActivity : BridgeActivity() {
     registerPlugin(HvscIngestionPlugin::class.java)
     registerPlugin(FolderPickerPlugin::class.java)
     registerPlugin(MockC64UPlugin::class.java)
+    registerPlugin(FeatureFlagsPlugin::class.java)
+    registerPlugin(FtpClientPlugin::class.java)
     super.onCreate(savedInstanceState)
   }
 }

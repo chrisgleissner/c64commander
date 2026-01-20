@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { useC64ConfigItem } from '@/hooks/useC64Connection';
 import { getCheckboxMapping, inferControlKind } from '@/lib/config/controlType';
+import { cn } from '@/lib/utils';
 
 interface ConfigItemRowProps {
   name: string;
@@ -26,6 +27,8 @@ interface ConfigItemRowProps {
   };
   onValueChange: (value: string | number) => void;
   isLoading?: boolean;
+  className?: string;
+  rightAccessory?: React.ReactNode;
 }
 
 export function ConfigItemRow({
@@ -36,6 +39,8 @@ export function ConfigItemRow({
   details,
   onValueChange,
   isLoading = false,
+  className,
+  rightAccessory,
 }: ConfigItemRowProps) {
   const [inputValue, setInputValue] = useState(() => String(value));
   const lastCommittedRef = useRef<string>(String(value));
@@ -225,7 +230,7 @@ export function ConfigItemRow({
       String(displayValue).trim().toLowerCase() === checkboxMapping.checkedValue.trim().toLowerCase();
 
     return (
-      <div className="settings-row w-full flex items-center justify-between gap-3">
+      <div className={cn('settings-row w-full flex items-center justify-between gap-3', className)}>
         <div className="flex flex-col flex-1 pr-4">
           <span className="text-sm font-medium">{name}</span>
           <span className="text-xs text-muted-foreground">
@@ -262,7 +267,7 @@ export function ConfigItemRow({
       : undefined;
 
     return (
-      <div className="settings-row w-full flex items-center justify-between gap-3">
+      <div className={cn('settings-row w-full flex items-center justify-between gap-3', className)}>
         <span className="text-sm font-medium flex-1 pr-4">{name}</span>
         <div className="min-w-[160px] max-w-[220px]">
           <Select
@@ -310,35 +315,38 @@ export function ConfigItemRow({
     const currentLabel = sliderOptions[selectedIndex] ?? displayValue;
 
     return (
-      <div className="settings-row w-full flex items-center justify-between gap-3">
+      <div className={cn('settings-row w-full flex items-center justify-between gap-3', className)}>
         <div className="flex flex-col flex-1 pr-4">
           <span className="text-sm font-medium">{name}</span>
           <span className="text-xs text-muted-foreground font-mono">{currentLabel}</span>
         </div>
-        <div className="min-w-[180px] max-w-[260px] w-full">
-          <Slider
-            value={[selectedIndex]}
-            min={0}
-            max={sliderOptions.length - 1}
-            step={1}
-            disabled={isLoading || isItemLoading || isReadOnly}
-            onValueChange={(values) => {
-              if (isReadOnly) return;
-              const nextIndex = values[0] ?? 0;
-              const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
-              setInputValue(String(nextValue));
-            }}
-            onValueCommit={(values) => {
-              if (isReadOnly) return;
-              const nextIndex = values[0] ?? 0;
-              const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
-              if (String(nextValue) === lastCommittedRef.current) return;
-              lastCommittedRef.current = String(nextValue);
-              setInputValue(String(nextValue));
-              onValueChange(nextValue);
-            }}
-            aria-label={`${name} slider`}
-          />
+        <div className="flex items-center gap-3 min-w-[220px] max-w-[320px] w-full">
+          <div className="min-w-[180px] max-w-[260px] w-full">
+            <Slider
+              value={[selectedIndex]}
+              min={0}
+              max={sliderOptions.length - 1}
+              step={1}
+              disabled={isLoading || isItemLoading || isReadOnly}
+              onValueChange={(values) => {
+                if (isReadOnly) return;
+                const nextIndex = values[0] ?? 0;
+                const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
+                setInputValue(String(nextValue));
+              }}
+              onValueCommit={(values) => {
+                if (isReadOnly) return;
+                const nextIndex = values[0] ?? 0;
+                const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
+                if (String(nextValue) === lastCommittedRef.current) return;
+                lastCommittedRef.current = String(nextValue);
+                setInputValue(String(nextValue));
+                onValueChange(nextValue);
+              }}
+              aria-label={`${name} slider`}
+            />
+          </div>
+          {rightAccessory ? <div className="flex items-center gap-2">{rightAccessory}</div> : null}
         </div>
       </div>
     );
@@ -347,7 +355,7 @@ export function ConfigItemRow({
   const inputType = controlKind === 'password' ? 'password' : 'text';
 
   return (
-    <div className="settings-row w-full flex items-center justify-between gap-3">
+    <div className={cn('settings-row w-full flex items-center justify-between gap-3', className)}>
       <span className="text-sm font-medium flex-1 pr-4">{name}</span>
       <div className="min-w-[160px] max-w-[220px] flex items-center gap-2">
         <Input

@@ -22,8 +22,10 @@ import {
   type HvscUpdateStatus,
   HvscSongSource,
 } from '@/lib/hvsc';
+import { calculateHvscProgress } from '@/lib/hvsc/hvscProgress';
 import { createLocalFsSongSource, type LocalSidFile } from '@/lib/sources/LocalFsSongSource';
-import { browseLocalSidFiles, filterSidFiles, prepareDirectoryInput } from '@/lib/sources/localFsPicker';
+import { ingestLocalArchives } from '@/lib/sources/localArchiveIngestion';
+import { browseLocalSidFiles, filterLocalInputFiles, prepareDirectoryInput } from '@/lib/sources/localFsPicker';
 import type { SongEntry, SongFolder, SongSource } from '@/lib/sources/SongSource';
 
 const formatTime = (ms?: number) => {
@@ -47,6 +49,8 @@ const formatBytes = (bytes?: number | null) => {
   return `${value.toFixed(1)} ${units[index]}`;
 };
 
+const HVSC_PROGRESS_LOG_INTERVAL = 500;
+
 export default function MusicPlayerPage() {
   const {
     queue,
@@ -65,16 +69,28 @@ export default function MusicPlayerPage() {
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscLoading, setHvscLoading] = useState(false);
   const [hvscProgress, setHvscProgress] = useState<number | null>(null);
+  const [hvscStage, setHvscStage] = useState<string | null>(null);
+  const [hvscIngestionId, setHvscIngestionId] = useState<string | null>(null);
   const [hvscActionLabel, setHvscActionLabel] = useState<string | null>(null);
+  const [hvscCurrentFile, setHvscCurrentFile] = useState<string | null>(null);
+  const [hvscProcessedCount, setHvscProcessedCount] = useState<number | null>(null);
+  const [hvscTotalCount, setHvscTotalCount] = useState<number | null>(null);
   const [hvscDownloadedBytes, setHvscDownloadedBytes] = useState<number | null>(null);
+  const [hvscErrorMessage, setHvscErrorMessage] = useState<string | null>(null);
   const [hvscSongsUpserted, setHvscSongsUpserted] = useState<number | null>(null);
   const [hvscSongsDeleted, setHvscSongsDeleted] = useState<number | null>(null);
+  const [hvscLastAction, setHvscLastAction] = useState<'update' | 'ingest' | null>(null);
   const [hvscCacheBaseline, setHvscCacheBaseline] = useState<number | null>(null);
   const [hvscCacheUpdates, setHvscCacheUpdates] = useState<number[]>([]);
   const hvscStatsRef = useRef({
     downloadedBytes: null as number | null,
     songsUpserted: null as number | null,
     songsDeleted: null as number | null,
+  });
+  const hvscLogRef = useRef({
+    ingestionId: null as string | null,
+    lastStage: null as string | null,
+    lastProcessed: 0,
   });
   const [hvscFolderFilter, setHvscFolderFilter] = useState('');
   const [hvscFolders, setHvscFolders] = useState<SongFolder[]>([]);
@@ -116,6 +132,7 @@ export default function MusicPlayerPage() {
 
   useEffect(() => {
     if (hvscStatus?.ingestionState === 'error' && hvscStatus.ingestionError) {
+      setHvscErrorMessage(hvscStatus.ingestionError);
       addErrorLog('HVSC ingestion error', {
         error: hvscStatus.ingestionError,
         installedVersion: hvscStatus.installedVersion,
@@ -126,42 +143,107 @@ export default function MusicPlayerPage() {
   useEffect(() => {
     let removeListener: (() => Promise<void>) | null = null;
     addHvscProgressListener((event) => {
-      if (event.message) {
-        setHvscActionLabel(event.message);
-      }
-      if (typeof event.percent === 'number') {
-        setHvscProgress(event.percent);
-      } else {
-        setHvscProgress(null);
-      }
-      if (typeof event.downloadedBytes === 'number') {
-        hvscStatsRef.current.downloadedBytes = event.downloadedBytes;
-        setHvscDownloadedBytes(event.downloadedBytes);
-        addLog('info', 'HVSC download complete', {
-          bytes: event.downloadedBytes,
-          totalBytes: event.totalBytes ?? event.downloadedBytes,
-          message: event.message,
-        });
-      }
-      if (typeof event.songsUpserted === 'number') {
-        hvscStatsRef.current.songsUpserted = event.songsUpserted;
-        setHvscSongsUpserted(event.songsUpserted);
-      }
-      if (typeof event.songsDeleted === 'number') {
-        hvscStatsRef.current.songsDeleted = event.songsDeleted;
-        setHvscSongsDeleted(event.songsDeleted);
-      }
-      if (event.phase === 'summary') {
-        addLog('info', 'HVSC ingestion summary', {
-          message: event.message,
-          songsUpserted: event.songsUpserted,
-          songsDeleted: event.songsDeleted,
+      try {
+        const logPayload = {
+          ingestionId: event.ingestionId,
+          stage: event.stage,
+          archiveName: event.archiveName,
+          currentFile: event.currentFile,
+          processedCount: event.processedCount,
+          totalCount: event.totalCount,
+          elapsedTime: event.elapsedTimeMs,
+          errorType: event.errorType,
+          errorCause: event.errorCause,
+        };
+
+        if (event.ingestionId && event.ingestionId !== hvscLogRef.current.ingestionId) {
+          hvscLogRef.current = { ingestionId: event.ingestionId, lastStage: null, lastProcessed: 0 };
+          setHvscIngestionId(event.ingestionId);
+          setHvscStage(null);
+          setHvscProcessedCount(0);
+          setHvscTotalCount(null);
+          setHvscProgress(0);
+          setHvscCurrentFile(null);
+          setHvscErrorMessage(null);
+          addLog('info', 'HVSC ingestion started', logPayload);
+        }
+
+        if (event.stage) {
+          setHvscStage(event.stage);
+        }
+        if (event.message) {
+          setHvscActionLabel(event.message);
+        }
+        if (event.currentFile) {
+          setHvscCurrentFile(event.currentFile);
+        }
+        if (typeof event.processedCount === 'number') {
+          setHvscProcessedCount(event.processedCount);
+        }
+        if (typeof event.totalCount === 'number') {
+          setHvscTotalCount(event.totalCount);
+        }
+
+        const derivedPercent = calculateHvscProgress(event.processedCount, event.totalCount, event.percent);
+        if (derivedPercent !== null) {
+          setHvscProgress(derivedPercent);
+        }
+
+        if (typeof event.downloadedBytes === 'number') {
+          hvscStatsRef.current.downloadedBytes = event.downloadedBytes;
+          setHvscDownloadedBytes(event.downloadedBytes);
+          if (event.stage === 'download' && event.percent === 100) {
+            addLog('info', 'HVSC download complete', {
+              ...logPayload,
+              bytes: event.downloadedBytes,
+              totalBytes: event.totalBytes ?? event.downloadedBytes,
+            });
+          }
+        }
+        if (typeof event.songsUpserted === 'number') {
+          hvscStatsRef.current.songsUpserted = event.songsUpserted;
+          setHvscSongsUpserted(event.songsUpserted);
+        }
+        if (typeof event.songsDeleted === 'number') {
+          hvscStatsRef.current.songsDeleted = event.songsDeleted;
+          setHvscSongsDeleted(event.songsDeleted);
+        }
+
+        if (event.stage && event.stage !== hvscLogRef.current.lastStage) {
+          addLog('info', 'HVSC ingestion stage', logPayload);
+          hvscLogRef.current.lastStage = event.stage;
+        }
+
+        if (typeof event.processedCount === 'number' && typeof event.totalCount === 'number') {
+          if (event.processedCount - hvscLogRef.current.lastProcessed >= HVSC_PROGRESS_LOG_INTERVAL) {
+            hvscLogRef.current.lastProcessed = event.processedCount;
+            addLog('info', 'HVSC ingestion progress', logPayload);
+          }
+        }
+
+        if (event.stage === 'error') {
+          setHvscErrorMessage(event.errorCause || event.message);
+          addErrorLog('HVSC ingestion failed', logPayload);
+        }
+
+        if (event.stage === 'complete') {
+          addLog('info', 'HVSC ingestion complete', logPayload);
+        }
+      } catch (error) {
+        addErrorLog('HVSC progress handler failed', {
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
         });
       }
     }).then((listener) => {
       removeListener = listener.remove;
-    }).catch(() => {
-      // ignore listener failures on web
+    }).catch((error) => {
+      addErrorLog('HVSC listener registration failed', {
+        error: (error as Error).message,
+      });
     });
     return () => {
       if (removeListener) {
@@ -183,6 +265,16 @@ export default function MusicPlayerPage() {
   const hvscBridgeAvailable = isHvscBridgeAvailable();
   const hvscHasCache = Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0;
   const hvscCanIngest = hvscBridgeAvailable && !hvscInstalled && hvscHasCache && !hvscUpdating;
+  const hvscProgressPercent = calculateHvscProgress(hvscProcessedCount, hvscTotalCount, hvscProgress);
+  const hvscProgressVisible = Boolean(
+    hvscLoading ||
+      hvscStage ||
+      hvscProcessedCount !== null ||
+      hvscTotalCount !== null ||
+      hvscProgressPercent !== null,
+  );
+  const hvscInlineError = hvscErrorMessage ||
+    (!hvscLoading && hvscStatus?.ingestionState === 'error' ? hvscStatus.ingestionError : null);
 
   const localSource = useMemo(
     () =>
@@ -252,6 +344,13 @@ export default function MusicPlayerPage() {
     try {
       setHvscLoading(true);
       setHvscProgress(0);
+      setHvscStage(null);
+      setHvscIngestionId(null);
+      setHvscCurrentFile(null);
+      setHvscProcessedCount(null);
+      setHvscTotalCount(null);
+      setHvscErrorMessage(null);
+      setHvscLastAction('update');
       hvscStatsRef.current = { downloadedBytes: null, songsUpserted: null, songsDeleted: null };
       setHvscDownloadedBytes(null);
       setHvscSongsUpserted(null);
@@ -304,6 +403,7 @@ export default function MusicPlayerPage() {
           : `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
+      setHvscErrorMessage((error as Error).message);
       addErrorLog('HVSC update failed', {
         error: {
           name: (error as Error).name,
@@ -312,6 +412,9 @@ export default function MusicPlayerPage() {
         },
         online: navigator.onLine,
         action: currentAction ?? hvscActionLabel,
+        ingestionId: hvscIngestionId,
+        stage: hvscStage,
+        archiveName: hvscCurrentFile,
       });
       toast({
         title: 'Error',
@@ -320,8 +423,6 @@ export default function MusicPlayerPage() {
       });
     } finally {
       setHvscLoading(false);
-      setHvscProgress(null);
-      setHvscActionLabel(null);
       refreshHvscCacheStatus();
     }
   };
@@ -330,6 +431,13 @@ export default function MusicPlayerPage() {
     try {
       setHvscLoading(true);
       setHvscProgress(0);
+      setHvscStage(null);
+      setHvscIngestionId(null);
+      setHvscCurrentFile(null);
+      setHvscProcessedCount(null);
+      setHvscTotalCount(null);
+      setHvscErrorMessage(null);
+      setHvscLastAction('ingest');
       setHvscActionLabel('Ingesting cached HVSC…');
       await ingestCachedHvsc('hvsc-ingest');
       const status = await getHvscStatus();
@@ -339,7 +447,13 @@ export default function MusicPlayerPage() {
         description: `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
-      addErrorLog('HVSC cached ingest failed', { error: (error as Error).message });
+      setHvscErrorMessage((error as Error).message);
+      addErrorLog('HVSC cached ingest failed', {
+        error: (error as Error).message,
+        ingestionId: hvscIngestionId,
+        stage: hvscStage,
+        archiveName: hvscCurrentFile,
+      });
       toast({
         title: 'Ingest failed',
         description: (error as Error).message,
@@ -347,8 +461,6 @@ export default function MusicPlayerPage() {
       });
     } finally {
       setHvscLoading(false);
-      setHvscProgress(null);
-      setHvscActionLabel(null);
       refreshHvscCacheStatus();
     }
   };
@@ -434,10 +546,32 @@ export default function MusicPlayerPage() {
     }
   };
 
-  const handleLocalFolderPick = (files: FileList | null) => {
+  const handleLocalFolderPick = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const list = filterSidFiles(files);
-    setLocalFiles(list);
+    try {
+      const candidates = filterLocalInputFiles(files);
+      const ingestion = await ingestLocalArchives(candidates);
+      setLocalFiles(ingestion.files);
+      if (ingestion.archiveCount > 0) {
+        addLog('info', 'Local archives ingested', {
+          archives: ingestion.archiveCount,
+          extracted: ingestion.extractedCount,
+        });
+      }
+    } catch (error) {
+      addErrorLog('Local archive ingest failed', {
+        error: {
+          name: (error as Error).name,
+          message: (error as Error).message,
+          stack: (error as Error).stack,
+        },
+      });
+      toast({
+        title: 'Archive ingest failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
   };
 
   useEffect(() => {
@@ -523,6 +657,9 @@ export default function MusicPlayerPage() {
       });
     }
   };
+
+  const hvscRetryHandler = hvscLastAction === 'ingest' ? handleHvscIngest : handleHvscUpdate;
+  const hvscCanRetry = Boolean(hvscInlineError && hvscLastAction && !hvscLoading);
 
   const progressPercent = durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0;
 
@@ -646,8 +783,25 @@ export default function MusicPlayerPage() {
               {hvscActionLabel && (
                 <p className="text-xs text-muted-foreground">{hvscActionLabel}</p>
               )}
-              {hvscProgress !== null && (
-                <Progress value={hvscProgress} />
+              {hvscProgressVisible && (
+                <div className="space-y-1">
+                  <Progress value={hvscProgressPercent ?? 0} />
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {hvscTotalCount !== null
+                        ? `SID files: ${(hvscProcessedCount ?? 0).toLocaleString()} / ${hvscTotalCount.toLocaleString()}`
+                        : 'Discovering SID files…'}
+                    </span>
+                    {hvscProgressPercent !== null && (
+                      <span>{hvscProgressPercent}%</span>
+                    )}
+                  </div>
+                  {hvscCurrentFile && (
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      Current: {hvscCurrentFile}
+                    </p>
+                  )}
+                </div>
               )}
               {hvscStatus?.lastUpdateCheckUtcMs && (
                 <p className="text-xs text-muted-foreground">
@@ -665,10 +819,17 @@ export default function MusicPlayerPage() {
                   {hvscSongsDeleted !== null ? ` · Removed ${hvscSongsDeleted.toLocaleString()}` : ''}
                 </p>
               )}
-              {hvscStatus?.ingestionState === 'error' && hvscStatus.ingestionError && (
-                <p className="text-xs text-destructive">
-                  {hvscStatus.ingestionError}
-                </p>
+              {hvscInlineError && (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-destructive">
+                    {hvscInlineError}
+                  </p>
+                  {hvscCanRetry && (
+                    <Button variant="outline" size="sm" onClick={hvscRetryHandler}>
+                      Retry
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
 
@@ -757,7 +918,7 @@ export default function MusicPlayerPage() {
                     type="file"
                     multiple
                     className="hidden"
-                    onChange={(e) => handleLocalFolderPick(e.target.files)}
+                    onChange={(e) => void handleLocalFolderPick(e.target.files)}
                   />
                   <Button
                     variant="outline"

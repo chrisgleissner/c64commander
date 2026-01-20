@@ -2,21 +2,23 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
-import HomePage from "./pages/HomePage";
-import QuickSettingsPage from "./pages/QuickSettingsPage";
+import { MockModeBanner } from '@/components/MockModeBanner';
+import HomePage from './pages/HomePage';
 import ConfigBrowserPage from "./pages/ConfigBrowserPage";
 import SettingsPage from "./pages/SettingsPage";
 import DocsPage from "./pages/DocsPage";
 import NotFound from "./pages/NotFound";
+import PlayFilesPage from './pages/PlayFilesPage';
+import DisksPage from './pages/DisksPage.tsx';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog } from "@/lib/logging";
-import MusicPlayerPage from "./pages/MusicPlayerPage";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { MockModeProvider } from "@/hooks/useMockMode";
+import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,32 +61,39 @@ const RouteRefresher = () => {
   return null;
 };
 
+const AppRoutes = () => (
+  <BrowserRouter>
+    <ErrorBoundary />
+    <RouteRefresher />
+    <MockModeBanner />
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/config" element={<ConfigBrowserPage />} />
+      <Route path="/play" element={<PlayFilesPage />} />
+      <Route path="/disks" element={<DisksPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/docs" element={<DocsPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+    <TabBar />
+  </BrowserRouter>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <RefreshControlProvider>
-          <SidPlayerProvider>
-            <MockModeProvider>
-              <BrowserRouter>
-                <ErrorBoundary />
-                <RouteRefresher />
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/quick" element={<QuickSettingsPage />} />
-                  <Route path="/config" element={<ConfigBrowserPage />} />
-                  <Route path="/music" element={<MusicPlayerPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/docs" element={<DocsPage />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-                <TabBar />
-              </BrowserRouter>
-            </MockModeProvider>
-          </SidPlayerProvider>
-        </RefreshControlProvider>
+        <FeatureFlagsProvider>
+          <RefreshControlProvider>
+            <SidPlayerProvider>
+              <MockModeProvider>
+                <AppRoutes />
+              </MockModeProvider>
+            </SidPlayerProvider>
+          </RefreshControlProvider>
+        </FeatureFlagsProvider>
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>
