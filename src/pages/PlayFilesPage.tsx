@@ -1,22 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowUp, FolderOpen, Play, RefreshCw, Repeat, Shuffle, SkipBack, SkipForward, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, FolderOpen, Play, Repeat, Shuffle, SkipBack, SkipForward, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { ScopedBrowserDialog, type ScopedSourceGroup } from '@/components/scoped/ScopedBrowserDialog';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useFileLibrary } from '@/hooks/useFileLibrary';
+import { useLocalSources } from '@/hooks/useLocalSources';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
-import { getC64API, C64_DEFAULTS } from '@/lib/c64api';
-import { listFtpDirectory } from '@/lib/ftp/ftpClient';
-import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
-import { browseLocalPlayFiles, filterPlayInputFiles, prepareDirectoryInput } from '@/lib/playback/localFilePicker';
-import { getParentPath, listLocalFiles, listLocalFolders } from '@/lib/playback/localFileBrowser';
+import { getC64API } from '@/lib/c64api';
+import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
+import type { FileLibraryEntry } from '@/lib/playback/fileLibraryTypes';
+import { buildFileLibraryId, resolvePlayRequestFromLibrary } from '@/lib/playback/fileLibraryUtils';
+import { createUltimateScopedSource } from '@/lib/scopedBrowser/ftpSourceAdapter';
+import { createLocalScopedSource, resolveLocalRuntimeFile } from '@/lib/scopedBrowser/localSourceAdapter';
+import { normalizeScopedPath } from '@/lib/scopedBrowser/paths';
+import { prepareScopedDirectoryInput } from '@/lib/scopedBrowser/localSourcesStore';
+import type { ScopedSelection, ScopedSource } from '@/lib/scopedBrowser/types';
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
 import {
@@ -32,17 +39,8 @@ import {
   type HvscStatus,
 } from '@/lib/hvsc';
 
-const useInitialSource = () => {
-  const location = useLocation();
-  const params = new URLSearchParams(location.search);
-  const sourceParam = params.get('source');
-  if (sourceParam === 'ultimate' || sourceParam === 'local') return sourceParam;
-  return 'local' as PlaySource;
-};
-
-type BrowserEntry = {
+type PlayableEntry = {
   source: PlaySource;
-  type: 'file' | 'dir';
   name: string;
   path: string;
   file?: LocalPlayFile;
@@ -122,16 +120,10 @@ const getSidSongCount = (buffer: ArrayBuffer) => {
 export default function PlayFilesPage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
-  const initialSource = useInitialSource();
-
-  const [source, setSource] = useState<PlaySource>(initialSource);
-  const [localFiles, setLocalFiles] = useState<LocalPlayFile[]>([]);
-  const [localPath, setLocalPath] = useState('/');
-  const [remotePath, setRemotePath] = useState('/');
-  const [remoteEntries, setRemoteEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'dir' }>>([]);
-  const [isRemoteLoading, setIsRemoteLoading] = useState(false);
-  const [isLocalLoading, setIsLocalLoading] = useState(false);
-  const [remoteInitialized, setRemoteInitialized] = useState(false);
+  const uniqueId = status.deviceInfo?.unique_id || 'default';
+  const fileLibrary = useFileLibrary(uniqueId);
+  const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -173,31 +165,31 @@ export default function PlayFilesPage() {
   const [hvscSongs, setHvscSongs] = useState<Array<{ id: number; virtualPath: string; fileName: string; durationSeconds?: number | null }>>([]);
   const [selectedHvscFolder, setSelectedHvscFolder] = useState('/');
 
-  const localFolderInputRef = useRef<HTMLInputElement | null>(null);
-  const localFileInputRef = useRef<HTMLInputElement | null>(null);
+  const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playlistStartedAtRef = useRef<number | null>(null);
   const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
 
   useEffect(() => {
-    prepareDirectoryInput(localFolderInputRef.current);
+    prepareScopedDirectoryInput(localSourceInputRef.current);
   }, []);
 
   useEffect(() => {
     songlengthsCacheRef.current.clear();
-  }, [localFiles]);
+  }, [fileLibrary.entries]);
 
   const songlengthsFilesByDir = useMemo(() => {
     const map = new Map<string, LocalPlayFile>();
-    localFiles.forEach((file) => {
-      const name = (file as File).name || (file as { name?: string }).name;
-      if (!name || name.toLowerCase() !== 'songlengths.md5') return;
-      const path = getLocalFilePath(file);
+    fileLibrary.entries.forEach((entry) => {
+      if (entry.name.toLowerCase() !== 'songlengths.md5') return;
+      const runtime = fileLibrary.runtimeFiles[entry.id];
+      if (!runtime) return;
+      const path = getLocalFilePath(runtime);
       const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
-      map.set(folder, file);
+      map.set(folder, runtime);
     });
     return map;
-  }, [localFiles]);
+  }, [fileLibrary.entries, fileLibrary.runtimeFiles]);
 
   const readLocalText = useCallback(async (file: LocalPlayFile) => {
     if (file instanceof File && typeof file.text === 'function') {
@@ -244,74 +236,80 @@ export default function PlayFilesPage() {
     return loader;
   }, [readLocalText, songlengthsFilesByDir]);
 
-  const handleLocalBrowse = async () => {
-    setIsLocalLoading(true);
+  const localSourcesById = useMemo(
+    () => new Map(localSources.map((source) => [source.id, source])),
+    [localSources],
+  );
+
+  const sourceGroups: ScopedSourceGroup[] = useMemo(() => {
+    const ultimateSource = createUltimateScopedSource();
+    const localGroupSources = localSources.map((source) => createLocalScopedSource(source));
+    return [
+      { label: 'C64 Ultimate', sources: [ultimateSource] },
+      { label: 'This device', sources: localGroupSources },
+    ];
+  }, [localSources]);
+
+  const handleLocalSourceInput = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    addSourceFromFiles(files);
+  }, [addSourceFromFiles]);
+
+  const handleAddFileSelections = useCallback(async (source: ScopedSource, selections: ScopedSelection[]) => {
     try {
-      const files = await browseLocalPlayFiles(localFolderInputRef.current);
-      if (files && files.length > 0) {
-        setLocalFiles(files);
-        setLocalPath('/');
+      const selectedFiles: Array<{ path: string; name: string; sourceId?: string | null; sizeBytes?: number | null; modifiedAt?: string | null }> = [];
+      for (const selection of selections) {
+        if (selection.type === 'dir') {
+          const nested = await source.listFilesRecursive(selection.path);
+          nested.forEach((entry) => {
+            if (entry.type !== 'file') return;
+            selectedFiles.push({ path: entry.path, name: entry.name, sourceId: source.id, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt });
+          });
+        } else {
+          const normalized = normalizeScopedPath(selection.path);
+          selectedFiles.push({ path: normalized, name: selection.name, sourceId: source.id });
+        }
+      }
+
+      const libraryEntries: FileLibraryEntry[] = [];
+      const runtimeFiles: Record<string, LocalPlayFile> = {};
+
+      selectedFiles.forEach((file) => {
+        const category = getPlayCategory(file.path);
+        if (!category) return;
+        const sourceId = source.type === 'local' ? source.id : undefined;
+        const id = buildFileLibraryId(source.type === 'ultimate' ? 'ultimate' : 'local', file.path, sourceId);
+        const localSource = source.type === 'local' ? localSourcesById.get(source.id) : null;
+        const localEntry = localSource?.entries.find((item) => normalizeScopedPath(item.relativePath) === normalizeScopedPath(file.path));
+        const entry: FileLibraryEntry = {
+          id,
+          source: source.type === 'ultimate' ? 'ultimate' : 'local',
+          sourceId: sourceId ?? null,
+          name: file.name,
+          path: file.path,
+          category,
+          localUri: localEntry?.uri ?? null,
+          addedAt: new Date().toISOString(),
+        };
+        if (source.type === 'local') {
+          const runtime = resolveLocalRuntimeFile(source.id, file.path);
+          if (runtime) runtimeFiles[id] = runtime;
+        }
+        libraryEntries.push(entry);
+      });
+
+      if (!libraryEntries.length) {
+        toast({ title: 'No supported files', description: 'Found no supported files.', variant: 'destructive' });
         return;
       }
-      if (files) {
-        toast({
-          title: 'No supported files',
-          description: 'Found no supported files.',
-          variant: 'destructive',
-        });
-      }
+
+      fileLibrary.addEntries(libraryEntries, runtimeFiles);
+      toast({ title: 'Items added', description: `${libraryEntries.length} file(s) added to library.` });
     } catch (error) {
-      addErrorLog('Local file browsing failed', { error: (error as Error).message });
-      toast({
-        title: 'Local browse failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLocalLoading(false);
+      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
     }
-  };
+  }, [fileLibrary, localSourcesById]);
 
-  const handleLocalFolderInput = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const filtered = filterPlayInputFiles(files);
-    if (!filtered.length) {
-      toast({
-        title: 'No supported files',
-        description: 'Found no supported files.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    setLocalFiles(filtered);
-    setLocalPath('/');
-  };
-
-  const loadRemoteEntries = async (path: string) => {
-    setIsRemoteLoading(true);
-    try {
-      const deviceHost = localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
-      const password = localStorage.getItem('c64u_password') || '';
-      const result = await listFtpDirectory({ host: deviceHost, port: getStoredFtpPort(), password, path });
-      setRemoteEntries(result.entries);
-      setRemotePath(result.path);
-      setRemoteInitialized(true);
-    } catch (error) {
-      toast({
-        title: 'FTP browse failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    } finally {
-      setIsRemoteLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (source === 'ultimate' && !remoteInitialized) {
-      void loadRemoteEntries(remotePath);
-    }
-  }, [source, remoteInitialized, remotePath]);
 
   const refreshHvscStatus = useCallback(() => {
     if (!isHvscBridgeAvailable()) return;
@@ -450,7 +448,7 @@ export default function PlayFilesPage() {
     return updated;
   }, [loadSonglengthsForPath]);
 
-  const buildPlaylistItem = useCallback((entry: BrowserEntry): PlaylistItem | null => {
+  const buildPlaylistItem = useCallback((entry: PlayableEntry): PlaylistItem | null => {
     const category = getPlayCategory(entry.path);
     if (!category) return null;
     const songNrValue = songNrInput.trim() === '' ? undefined : Math.max(1, Number(songNrInput));
@@ -469,6 +467,22 @@ export default function PlayFilesPage() {
       durationMs: entry.durationMs,
     };
   }, [songNrInput]);
+
+  const toPlayableEntry = useCallback((entry: FileLibraryEntry): PlayableEntry => {
+    const request = resolvePlayRequestFromLibrary(entry, fileLibrary.runtimeFiles);
+    return {
+      source: request.source,
+      name: entry.name,
+      path: request.path,
+      file: request.file,
+      durationMs: entry.durationMs,
+    };
+  }, [fileLibrary.runtimeFiles]);
+
+  const buildPlaylistItemFromLibrary = useCallback((entry: FileLibraryEntry) => {
+    const playable = toPlayableEntry(entry);
+    return buildPlaylistItem(playable);
+  }, [buildPlaylistItem, toPlayableEntry]);
 
   const playItem = useCallback(async (item: PlaylistItem) => {
     const api = getC64API();
@@ -583,7 +597,7 @@ export default function PlayFilesPage() {
     playlistStartedAtRef.current = null;
   }, []);
 
-  const handlePlayEntry = useCallback(async (entry: BrowserEntry) => {
+  const handlePlayEntry = useCallback(async (entry: PlayableEntry) => {
     try {
       const item = buildPlaylistItem(entry);
       if (!item) throw new Error('Unsupported file format.');
@@ -601,44 +615,28 @@ export default function PlayFilesPage() {
     }
   }, [buildPlaylistItem, startPlaylist]);
 
-  const collectLocalFiles = useCallback((rootPath: string) => {
-    const normalized = normalizeLocalPath(rootPath || '/');
-    return localFiles
-      .map((file) => ({ file, path: getLocalFilePath(file) }))
-      .filter((entry) => entry.path.startsWith(normalized))
-      .filter((entry) => {
-        if (!recurseFolders) {
-          const suffix = entry.path.slice(normalized.length);
-          if (suffix.includes('/')) return false;
-        }
-        return isSupportedPlayFile(entry.path) && shouldIncludeCategory(entry.path);
-      });
-  }, [localFiles, recurseFolders, shouldIncludeCategory]);
-
-  const collectRemoteFiles = useCallback(async (rootPath: string) => {
-    const deviceHost = localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
-    const password = localStorage.getItem('c64u_password') || '';
-    const queuePaths = [rootPath || '/'];
-    const results: Array<{ path: string; name: string }> = [];
-    const visited = new Set<string>();
-    while (queuePaths.length) {
-      const currentPath = queuePaths.shift();
-      if (!currentPath || visited.has(currentPath)) continue;
-      visited.add(currentPath);
-      const listing = await listFtpDirectory({ host: deviceHost, port: getStoredFtpPort(), password, path: currentPath });
-      for (const entry of listing.entries) {
-        if (entry.type === 'dir') {
-          if (recurseFolders) {
-            queuePaths.push(entry.path);
-          }
-          continue;
-        }
-        if (!isSupportedPlayFile(entry.name) || !shouldIncludeCategory(entry.path)) continue;
-        results.push({ path: entry.path, name: entry.name });
+  const handlePlayLibrary = useCallback(async () => {
+    try {
+      if (!fileLibrary.entries.length) {
+        toast({ title: 'Library empty', description: 'Add items to the file library first.', variant: 'destructive' });
+        return;
       }
+      const items = fileLibrary.entries
+        .filter((entry) => shouldIncludeCategory(entry.path))
+        .map(buildPlaylistItemFromLibrary)
+        .filter((item): item is PlaylistItem => Boolean(item));
+      if (!items.length) {
+        toast({ title: 'No playable items', description: 'No items match the current filters.', variant: 'destructive' });
+        return;
+      }
+      const queueItems = shuffleEnabled ? shuffleArray(items) : items;
+      await startPlaylist(queueItems);
+      toast({ title: 'Playback started', description: `${queueItems.length} files added to playlist` });
+    } catch (error) {
+      toast({ title: 'Playback failed', description: (error as Error).message, variant: 'destructive' });
     }
-    return results;
-  }, [recurseFolders, shouldIncludeCategory]);
+  }, [buildPlaylistItemFromLibrary, fileLibrary.entries, shouldIncludeCategory, shuffleEnabled, startPlaylist]);
+
 
   const handleHvscInstall = useCallback(async () => {
     try {
@@ -732,80 +730,6 @@ export default function PlayFilesPage() {
     return results;
   }, [recurseFolders]);
 
-  const handlePlayFolder = useCallback(async (targetSource: PlaySource, targetPath: string) => {
-    try {
-      if (targetSource === 'local') {
-        const files = collectLocalFiles(targetPath);
-        if (!files.length) {
-          toast({
-            title: 'No playable files',
-            description: 'No supported files in this folder.',
-            variant: 'destructive',
-          });
-          return;
-        }
-        const entries = files.map((entry) => ({
-          source: 'local' as PlaySource,
-          type: 'file' as const,
-          name: entry.path.split('/').pop() || entry.path,
-          path: entry.path,
-          file: entry.file,
-        }));
-        const items = entries
-          .map(buildPlaylistItem)
-          .filter((item): item is PlaylistItem => Boolean(item));
-        if (!items.length) return;
-        const queueItems = shuffleEnabled ? shuffleArray(items) : items;
-        await startPlaylist(queueItems);
-        toast({
-          title: 'Playback started',
-          description: `${queueItems.length} files added to playlist`,
-        });
-        return;
-      }
-
-      if (!status.isConnected) {
-        toast({
-          title: 'Device offline',
-          description: 'Connect to your Ultimate 64 to play files.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const files = await collectRemoteFiles(targetPath);
-      if (!files.length) {
-        toast({
-          title: 'No playable files',
-          description: 'No supported files in this folder.',
-          variant: 'destructive',
-        });
-        return;
-      }
-      const entries = files.map((entry) => ({
-        source: 'ultimate' as PlaySource,
-        type: 'file' as const,
-        name: entry.name,
-        path: entry.path,
-      }));
-      const items = entries
-        .map(buildPlaylistItem)
-        .filter((item): item is PlaylistItem => Boolean(item));
-      if (!items.length) return;
-      const queueItems = shuffleEnabled ? shuffleArray(items) : items;
-      await startPlaylist(queueItems);
-      toast({
-        title: 'Playback started',
-        description: `${queueItems.length} files added to playlist`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Playback failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    }
-  }, [buildPlaylistItem, collectLocalFiles, collectRemoteFiles, shuffleEnabled, startPlaylist, status.isConnected]);
 
   const handlePlayHvscFolder = useCallback(async (path: string) => {
     try {
@@ -826,9 +750,8 @@ export default function PlayFilesPage() {
         });
         return;
       }
-      const entries: BrowserEntry[] = songs.map((song) => ({
+      const entries: PlayableEntry[] = songs.map((song) => ({
         source: 'local',
-        type: 'file',
         name: song.fileName,
         path: song.virtualPath,
         file: buildHvscFile(song),
@@ -852,42 +775,6 @@ export default function PlayFilesPage() {
       });
     }
   }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscStatus?.installedVersion, shuffleEnabled, startPlaylist]);
-
-  const remoteVisibleEntries = useMemo(
-    () =>
-      remoteEntries
-        .filter((entry) => entry.type === 'dir' || isSupportedPlayFile(entry.name))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [remoteEntries],
-  );
-
-  const localEntries = useMemo<BrowserEntry[]>(() => {
-    const folders = listLocalFolders(localFiles, localPath).map((folder) => ({
-      source: 'local' as PlaySource,
-      type: 'dir' as const,
-      name: folder.replace(localPath, '').replace(/\/$/, '') || folder,
-      path: folder,
-    }));
-    const files = listLocalFiles(localFiles, localPath).map((entry) => ({
-      source: 'local' as PlaySource,
-      type: 'file' as const,
-      name: entry.name,
-      path: entry.path,
-      file: entry.file,
-    }));
-    return [...folders, ...files].sort((a, b) => a.name.localeCompare(b.name));
-  }, [localFiles, localPath]);
-
-  const remoteEntriesView = useMemo<BrowserEntry[]>(
-    () =>
-      remoteVisibleEntries.map((entry) => ({
-        source: 'ultimate' as PlaySource,
-        type: entry.type,
-        name: entry.name,
-        path: entry.path,
-      })),
-    [remoteVisibleEntries],
-  );
 
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
@@ -940,29 +827,12 @@ export default function PlayFilesPage() {
           </span>
         </div>
 
-        <div className="flex items-center gap-2 rounded-lg border border-border p-1 bg-muted/30">
-          <Button
-            variant={source === 'local' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setSource('local')}
-          >
-            Browse local device
-          </Button>
-          <Button
-            variant={source === 'ultimate' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setSource('ultimate')}
-          >
-            Browse Ultimate 64
-          </Button>
-        </div>
-
         <div className="bg-card border border-border rounded-xl p-4 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Playback controls</p>
               <p className="text-xs text-muted-foreground">
-                {currentItem ? currentItem.label : 'Select a file or folder to start'}
+                {currentItem ? currentItem.label : 'Select a library item to start'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -1193,201 +1063,89 @@ export default function PlayFilesPage() {
           </DialogContent>
         </Dialog>
 
-        {source === 'local' ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">Local files</p>
-                <p className="text-xs text-muted-foreground">
-                  {localFiles.length ? `${localFiles.length} supported files selected` : 'Pick a folder to begin'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  ref={localFolderInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  data-testid="play-folder-input"
-                  onChange={(e) => void handleLocalFolderInput(e.target.files)}
-                />
-                <input
-                  ref={localFileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  data-testid="play-file-input"
-                  onChange={(e) => void handleLocalFolderInput(e.target.files)}
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLocalBrowse}
-                  disabled={isLocalLoading}
-                >
-                  <FolderOpen className="h-4 w-4 mr-1" />
-                  {isLocalLoading ? 'Browsing…' : 'Browse local folders'}
-                </Button>
-                <Button variant="default" size="sm" onClick={() => void handlePlayFolder('local', localPath)} disabled={isLocalLoading || !localFiles.length}>
-                  <Play className="h-4 w-4 mr-1" />
-                  Play folder
-                </Button>
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">File library</p>
+              <p className="text-xs text-muted-foreground">
+                {fileLibrary.entries.length ? `${fileLibrary.entries.length} item(s) in the library` : 'Add items to start playback.'}
+              </p>
             </div>
-
-            <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-muted-foreground">Path: {localPath}</div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setLocalPath(getParentPath(localPath))}
-                  disabled={localPath === '/'}
-                >
-                  <ArrowUp className="h-4 w-4 mr-1" />
-                  Up
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {localEntries.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No supported files in this folder.</p>
-                )}
-                {localEntries.map((entry) => (
-                  <div key={entry.path} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
-                    </div>
-                    {entry.type === 'dir' ? (
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => setLocalPath(entry.path)}>
-                          <FolderOpen className="h-4 w-4 mr-1" />
-                          Open
-                        </Button>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => void handlePlayFolder('local', entry.path)}
-                          disabled={isLocalLoading}
-                        >
-                          <Play className="h-4 w-4 mr-1" />
-                          Play
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() =>
-                          void handlePlayEntry({
-                            source: 'local',
-                            type: 'file',
-                            name: entry.name,
-                            path: entry.path,
-                            file: entry.file,
-                            durationMs: entry.durationMs,
-                          })
-                        }
-                        disabled={!status.isConnected}
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Play
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+                {fileLibrary.entries.length ? 'Add more items' : 'Add items'}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => void handlePlayLibrary()}
+                disabled={!fileLibrary.entries.length || !status.isConnected}
+              >
+                <Play className="h-4 w-4 mr-1" />
+                Play library
+              </Button>
             </div>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">Ultimate 64 FTP</p>
-                <p className="text-xs text-muted-foreground">Browse files available on the device.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => void handlePlayFolder('ultimate', remotePath)}
-                  disabled={isRemoteLoading || !status.isConnected}
-                >
-                  <Play className="h-4 w-4 mr-1" />
-                  Play folder
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void loadRemoteEntries(remotePath)} disabled={isRemoteLoading}>
-                  <RefreshCw className="h-4 w-4 mr-1" />
-                  {isRemoteLoading ? 'Loading…' : 'Refresh'}
-                </Button>
-              </div>
-            </div>
 
-            <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="text-xs text-muted-foreground">Path: {remotePath}</div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void loadRemoteEntries(getParentPath(remotePath))}
-                  disabled={remotePath === '/'}
-                >
-                  <ArrowUp className="h-4 w-4 mr-1" />
-                  Up
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {remoteEntriesView.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No supported files in this folder.</p>
-                )}
-                {remoteEntriesView.map((entry) => (
-                  <div key={entry.path} className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
-                    </div>
-                    {entry.type === 'dir' ? (
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => void loadRemoteEntries(entry.path)}>
-                          <FolderOpen className="h-4 w-4 mr-1" />
-                          Open
-                        </Button>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => void handlePlayFolder('ultimate', entry.path)}
-                          disabled={!status.isConnected || isRemoteLoading}
-                        >
-                          <Play className="h-4 w-4 mr-1" />
-                          Play
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() =>
-                          void handlePlayEntry({
-                            source: 'ultimate',
-                            type: 'file',
-                            name: entry.name,
-                            path: entry.path,
-                          })
-                        }
-                        disabled={!status.isConnected}
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Play
-                      </Button>
-                    )}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            {fileLibrary.entries.length === 0 && (
+              <p className="text-xs text-muted-foreground">No items yet. Add items to begin.</p>
+            )}
+            {fileLibrary.entries.map((entry) => {
+              const sourceLabel = entry.source === 'ultimate'
+                ? 'C64 Ultimate'
+                : localSourcesById.get(entry.sourceId || '')?.name || 'This device';
+              return (
+                <div key={entry.id} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+                    <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
+                    <p className="text-[11px] text-muted-foreground">{sourceLabel}</p>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handlePlayEntry(toPlayableEntry(entry))}
+                      disabled={!status.isConnected}
+                    >
+                      <Play className="h-4 w-4 mr-1" />
+                      Play
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => fileLibrary.removeEntry(entry.id)}
+                      aria-label="Remove from library"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
+
+        <input
+          ref={localSourceInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          onChange={(event) => handleLocalSourceInput(event.target.files)}
+        />
+
+        <ScopedBrowserDialog
+          open={browserOpen}
+          onOpenChange={setBrowserOpen}
+          title="Add items"
+          confirmLabel="Add to library"
+          sourceGroups={sourceGroups}
+          onAddLocalSource={() => void addSourceFromPicker(localSourceInputRef.current)}
+          onConfirm={handleAddFileSelections}
+          filterEntry={(entry) => entry.type === 'dir' || isSupportedPlayFile(entry.path)}
+          allowFolderSelection
+        />
 
         {hvscControlsEnabled && (
           <div className="space-y-4">
@@ -1511,7 +1269,6 @@ export default function PlayFilesPage() {
                         onClick={() =>
                           void handlePlayEntry({
                             source: 'local',
-                            type: 'file',
                             name: song.fileName,
                             path: song.virtualPath,
                             file: buildHvscFile(song),

@@ -1,21 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Disc, ArrowLeftRight, ArrowRightLeft, ArrowUp, FolderOpen, HardDrive, PlugZap, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScopedBrowserDialog, type ScopedSourceGroup } from '@/components/scoped/ScopedBrowserDialog';
 import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
+import { useLocalSources } from '@/hooks/useLocalSources';
 import { getC64API } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
 import { DiskTree } from '@/components/disks/DiskTree';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
-import {
-  prepareDiskDirectoryInput,
-} from '@/lib/disks/localDiskPicker';
-import { importFtpFile, importFtpFolder, listFtpEntries } from '@/lib/disks/ftpDiskImport';
-import { createDiskEntry, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
+import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
-import { getParentPath, listLocalFiles, listLocalFolders } from '@/lib/playback/localFileBrowser';
+import { createUltimateScopedSource } from '@/lib/scopedBrowser/ftpSourceAdapter';
+import { createLocalScopedSource, resolveLocalRuntimeFile } from '@/lib/scopedBrowser/localSourceAdapter';
+import { normalizeScopedPath } from '@/lib/scopedBrowser/paths';
+import { prepareScopedDirectoryInput } from '@/lib/scopedBrowser/localSourcesStore';
+import type { ScopedSelection, ScopedSource } from '@/lib/scopedBrowser/types';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
@@ -48,11 +50,7 @@ export const HomeDiskManager = () => {
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
-  const [localBrowserOpen, setLocalBrowserOpen] = useState(false);
-  const [ftpBrowserOpen, setFtpBrowserOpen] = useState(false);
-  const [ftpPath, setFtpPath] = useState('/');
-  const [ftpEntries, setFtpEntries] = useState<Array<{ name: string; path: string; type: 'file' | 'dir' }>>([]);
-  const [ftpLoading, setFtpLoading] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
   const [groupDialogDisk, setGroupDialogDisk] = useState<DiskEntry | null>(null);
   const [groupName, setGroupName] = useState('');
   const [renameDialogDisk, setRenameDialogDisk] = useState<DiskEntry | null>(null);
@@ -60,13 +58,24 @@ export const HomeDiskManager = () => {
   const [deleteDialogDisk, setDeleteDialogDisk] = useState<DiskEntry | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectedDiskIds, setSelectedDiskIds] = useState<Set<string>>(new Set());
-  const [localBrowserPath, setLocalBrowserPath] = useState('/');
-  const [localBrowserFiles, setLocalBrowserFiles] = useState<File[]>([]);
-
-  const localInputRef = useRef<HTMLInputElement | null>(null);
-  const localFolderInputRef = useRef<HTMLInputElement | null>(null);
+  const localSourceInputRef = useRef<HTMLInputElement | null>(null);
+  const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
 
   const api = getC64API();
+
+  const localSourcesById = useMemo(
+    () => new Map(localSources.map((source) => [source.id, source])),
+    [localSources],
+  );
+
+  const sourceGroups: ScopedSourceGroup[] = useMemo(() => {
+    const ultimateSource = createUltimateScopedSource();
+    const localGroupSources = localSources.map((source) => createLocalScopedSource(source));
+    return [
+      { label: 'C64 Ultimate', sources: [ultimateSource] },
+      { label: 'This device', sources: localGroupSources },
+    ];
+  }, [localSources]);
 
   useEffect(() => {
     setSelectedDiskIds((prev) => {
@@ -75,6 +84,10 @@ export const HomeDiskManager = () => {
       return next.size === prev.size ? prev : next;
     });
   }, [disksById]);
+
+  useEffect(() => {
+    prepareScopedDirectoryInput(localSourceInputRef.current);
+  }, []);
 
   const showNoDiskWarning = () => {
     toast({
@@ -100,58 +113,14 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const handleFolderInputRef = (input: HTMLInputElement | null) => {
-    localFolderInputRef.current = input;
-    prepareDiskDirectoryInput(input);
+  const handleLocalSourceInput = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    addSourceFromFiles(files);
   };
-  const ftpVisibleEntries = useMemo(
-    () =>
-      ftpEntries.filter(
-        (entry) => entry.type === 'dir' || entry.name.toLowerCase().match(/\.(d64|g64|d71|g71|d81)$/),
-      ),
-    [ftpEntries],
-  );
-
-  const localBrowserEntries = useMemo(() => {
-    if (!localBrowserFiles.length) return [] as Array<{ type: 'file' | 'dir'; name: string; path: string; file?: File }>;
-    const folders = listLocalFolders(localBrowserFiles, localBrowserPath).map((folder) => ({
-      type: 'dir' as const,
-      name: folder.replace(localBrowserPath, '').replace(/\/$/, '') || folder,
-      path: folder,
-    }));
-    const files = listLocalFiles(localBrowserFiles, localBrowserPath)
-      .filter((entry) => isDiskImagePath(entry.path))
-      .map((entry) => ({
-        type: 'file' as const,
-        name: entry.name,
-        path: entry.path,
-        file: entry.file as File,
-      }));
-    return [...folders, ...files].sort((a, b) => a.name.localeCompare(b.name));
-  }, [localBrowserFiles, localBrowserPath]);
 
   const allDiskIds = useMemo(() => diskLibrary.disks.map((disk) => disk.id), [diskLibrary.disks]);
   const selectedCount = selectedDiskIds.size;
   const allSelected = selectedCount > 0 && selectedCount === allDiskIds.length;
-
-  const refreshFtp = async (path: string) => {
-    setFtpLoading(true);
-    setFtpPath(path);
-    try {
-      const host = localStorage.getItem('c64u_device_host') || 'c64u';
-      const password = localStorage.getItem('c64u_password') || '';
-      const entries = await listFtpEntries({ host, password, path });
-      setFtpEntries(entries);
-    } catch (error) {
-      toast({
-        title: 'FTP browse failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    } finally {
-      setFtpLoading(false);
-    }
-  };
 
   const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) => {
     try {
@@ -267,101 +236,60 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const getLocalFilePath = (file: File) =>
-    normalizeDiskPath((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name);
-
-  const buildLocalDiskEntries = (files: File[], groupName?: string | null) => {
-    const runtimeFiles: Record<string, File> = {};
-    const disks = files.map((file, index) => {
-      const entry = createDiskEntry({
-        path: getLocalFilePath(file),
-        location: 'local',
-        group: groupName ?? null,
-        sizeBytes: file.size,
-        modifiedAt: new Date(file.lastModified).toISOString(),
-        importOrder: index,
-      });
-      runtimeFiles[entry.id] = file;
-      return entry;
-    });
-    return { disks, runtimeFiles };
-  };
-
-  const handleLocalBrowserInput = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const diskFiles = Array.from(files).filter((file) => isDiskImagePath(file.name));
-    if (!diskFiles.length) {
-      showNoDiskWarning();
-      return;
-    }
-    setLocalBrowserFiles(diskFiles);
-    setLocalBrowserPath('/');
-  };
-
-  const handleLocalBrowserAddFile = (file: File) => {
-    if (!isDiskImagePath(file.name)) {
-      showNoDiskWarning();
-      return;
-    }
-    const selection = buildLocalDiskEntries([file]);
-    diskLibrary.addDisks(selection.disks, selection.runtimeFiles);
-    toast({ title: 'Disk added', description: selection.disks[0]?.name ?? 'Disk added.' });
-  };
-
-  const handleLocalBrowserImportFolder = (path: string) => {
-    const normalized = normalizeDiskPath(path);
-    const folderPrefix = normalized.endsWith('/') ? normalized : `${normalized}/`;
-    const folderFiles = localBrowserFiles
-      .filter((file) => getLocalFilePath(file).startsWith(folderPrefix))
-      .slice()
-      .sort((a, b) => getLocalFilePath(a).localeCompare(getLocalFilePath(b)));
-    if (!folderFiles.length) {
-      showNoDiskWarning();
-      return;
-    }
-    const groupName = folderPrefix.split('/').filter(Boolean).pop() || null;
-    const selection = buildLocalDiskEntries(folderFiles, groupName);
-    diskLibrary.addDisks(selection.disks, selection.runtimeFiles);
-    toast({ title: 'Folder imported', description: `${selection.disks.length} disk(s) added.` });
-  };
-
-  const handleFtpImportFile = (path: string) => {
+  const handleAddDiskSelections = useCallback(async (source: ScopedSource, selections: ScopedSelection[]) => {
     try {
-      const disk = importFtpFile(path);
-      diskLibrary.addDisks([disk]);
-      toast({ title: 'Disk added', description: disk.name });
-    } catch (error) {
-      if ((error as Error).message.includes('Found no disk file')) {
+      const files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
+      for (const selection of selections) {
+        if (selection.type === 'dir') {
+          const nested = await source.listFilesRecursive(selection.path);
+          nested.forEach((entry) => {
+            if (entry.type !== 'file') return;
+            files.push({ path: entry.path, name: entry.name, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt, sourceId: source.id });
+          });
+        } else {
+          const entryPath = normalizeScopedPath(selection.path);
+          files.push({ path: entryPath, name: selection.name, sourceId: source.id });
+        }
+      }
+
+      const diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
+      if (!diskCandidates.length) {
         showNoDiskWarning();
         return;
       }
+
+      const runtimeFiles: Record<string, File> = {};
+      const disks = diskCandidates.map((entry, index) => {
+        const normalized = normalizeDiskPath(entry.path);
+        const groupName = getLeafFolderName(normalized);
+        const localSource = source.type === 'local' ? localSourcesById.get(source.id) : null;
+        const localEntry = localSource?.entries.find((item) => normalizeScopedPath(item.relativePath) === normalized);
+        const diskEntry = createDiskEntry({
+          path: normalized,
+          location: source.type === 'ultimate' ? 'ultimate' : 'local',
+          group: groupName ?? null,
+          localUri: localEntry?.uri ?? null,
+          sizeBytes: entry.sizeBytes ?? null,
+          modifiedAt: entry.modifiedAt ?? null,
+          importOrder: index,
+        });
+        if (source.type === 'local') {
+          const runtime = resolveLocalRuntimeFile(source.id, normalized);
+          if (runtime) runtimeFiles[diskEntry.id] = runtime;
+        }
+        return diskEntry;
+      });
+
+      diskLibrary.addDisks(disks, runtimeFiles);
+      toast({ title: 'Items added', description: `${disks.length} disk(s) added to library.` });
+    } catch (error) {
       toast({
-        title: 'Import failed',
+        title: 'Add items failed',
         description: (error as Error).message,
         variant: 'destructive',
       });
     }
-  };
-
-  const handleFtpImportFolder = async (path: string) => {
-    try {
-      const host = localStorage.getItem('c64u_device_host') || 'c64u';
-      const password = localStorage.getItem('c64u_password') || '';
-      const disks = await importFtpFolder({ host, password, path });
-      if (!disks.length) {
-        showNoDiskWarning();
-        return;
-      }
-      diskLibrary.addDisks(disks);
-      toast({ title: 'Folder imported', description: `${disks.length} disk(s) added.` });
-    } catch (error) {
-      toast({
-        title: 'FTP import failed',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    }
-  };
+  }, [diskLibrary, localSourcesById]);
 
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
@@ -530,21 +458,19 @@ export const HomeDiskManager = () => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <Button variant="outline" onClick={() => setLocalBrowserOpen(true)}>
-            + Add from local device
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setFtpBrowserOpen(true);
-              void refreshFtp('/');
-            }}
-            disabled={!status.isConnected}
-          >
-            + Add from C64 Ultimate
+          <Button variant="outline" onClick={() => setBrowserOpen(true)}>
+            {diskLibrary.disks.length ? 'Add more items' : 'Add items'}
           </Button>
         </div>
       </section>
+
+      <input
+        ref={localSourceInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(event) => handleLocalSourceInput(event.target.files)}
+      />
 
       <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
         <DialogContent className="max-w-2xl">
@@ -608,156 +534,17 @@ export const HomeDiskManager = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={localBrowserOpen} onOpenChange={setLocalBrowserOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <DialogTitle>Browse local disks</DialogTitle>
-                <DialogDescription>Select disk images from your device.</DialogDescription>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setLocalBrowserOpen(false)} aria-label="Close">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </DialogHeader>
-          <input
-            ref={localInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => handleLocalBrowserInput(event.target.files)}
-          />
-          <input
-            ref={handleFolderInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(event) => handleLocalBrowserInput(event.target.files)}
-          />
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => localInputRef.current?.click()}>
-              <FolderOpen className="h-4 w-4 mr-1" />
-              Pick files
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => localFolderInputRef.current?.click()}>
-              <PlugZap className="h-4 w-4 mr-1" />
-              Pick folder
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Path: {localBrowserPath}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setLocalBrowserPath(getParentPath(localBrowserPath))}
-                disabled={localBrowserPath === '/'}
-              >
-                <ArrowUp className="h-4 w-4 mr-1" />
-                Up
-              </Button>
-            </div>
-            {localBrowserFiles.length === 0 && (
-              <p className="text-xs text-muted-foreground">Pick files or a folder to view disk images.</p>
-            )}
-            {localBrowserEntries.map((entry) => (
-              <div key={entry.path} className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                  <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
-                </div>
-                {entry.type === 'dir' ? (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setLocalBrowserPath(entry.path)}>
-                      Open
-                    </Button>
-                    <Button variant="default" size="sm" onClick={() => handleLocalBrowserImportFolder(entry.path)}>
-                      Import
-                    </Button>
-                  </div>
-                ) : (
-                  <Button variant="default" size="sm" onClick={() => entry.file && handleLocalBrowserAddFile(entry.file)}>
-                    Add
-                  </Button>
-                )}
-              </div>
-            ))}
-            {localBrowserFiles.length > 0 && localBrowserEntries.length === 0 && (
-              <p className="text-xs text-muted-foreground">No disk images in this folder.</p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={ftpBrowserOpen} onOpenChange={setFtpBrowserOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <div className="flex items-center justify-between gap-3">
-              <DialogTitle>Browse C64 Ultimate</DialogTitle>
-              <Button variant="ghost" size="icon" onClick={() => setFtpBrowserOpen(false)} aria-label="Close">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </DialogHeader>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Path: {ftpPath}</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => void refreshFtp(getParentPath(ftpPath))}
-                  disabled={ftpPath === '/'}
-                >
-                  <ArrowUp className="h-4 w-4 mr-1" />
-                  Up
-                </Button>
-                {ftpPath !== '/' && (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => void handleFtpImportFolder(ftpPath)}
-                    disabled={ftpLoading}
-                  >
-                    Import
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => void refreshFtp(ftpPath)} disabled={ftpLoading}>
-                  Refresh
-                </Button>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {ftpVisibleEntries.map((entry) => (
-                <div key={entry.path} className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                    <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
-                  </div>
-                  {entry.type === 'dir' ? (
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => void refreshFtp(entry.path)}>
-                        Open
-                      </Button>
-                      <Button variant="default" size="sm" onClick={() => void handleFtpImportFolder(entry.path)}>
-                        Import
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button variant="default" size="sm" onClick={() => handleFtpImportFile(entry.path)}>
-                      Add
-                    </Button>
-                  )}
-                </div>
-              ))}
-              {ftpVisibleEntries.length === 0 && (
-                <p className="text-xs text-muted-foreground">No disk images in this folder.</p>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ScopedBrowserDialog
+        open={browserOpen}
+        onOpenChange={setBrowserOpen}
+        title="Add items"
+        confirmLabel="Add to library"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={() => void addSourceFromPicker(localSourceInputRef.current)}
+        onConfirm={handleAddDiskSelections}
+        filterEntry={(entry) => entry.type === 'dir' || isDiskImagePath(entry.path)}
+        allowFolderSelection
+      />
 
       <Dialog open={Boolean(groupDialogDisk)} onOpenChange={(open) => !open && setGroupDialogDisk(null)}>
         <DialogContent>
