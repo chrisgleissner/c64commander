@@ -1,4 +1,4 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
 import android.app.Activity
 import android.content.Intent
@@ -47,7 +47,15 @@ class FolderPickerPlugin : Plugin() {
         val root = DocumentFile.fromTreeUri(context, treeUri)
           ?: throw IllegalStateException("Unable to access selected directory")
         val files = mutableListOf<JSObject>()
-        collectSidFiles(root, "", files)
+        val extensions = call.getArray("extensions")?.let { array ->
+          val values = mutableSetOf<String>()
+          for (idx in 0 until array.length()) {
+            val value = array.optString(idx, "").lowercase()
+            if (value.isNotBlank()) values.add(value)
+          }
+          values
+        }
+        collectFiles(root, "", files, extensions)
         val response = JSObject()
         response.put("uri", treeUri.toString())
         response.put("files", files)
@@ -81,12 +89,17 @@ class FolderPickerPlugin : Plugin() {
     }
   }
 
-  private fun collectSidFiles(dir: DocumentFile, prefix: String, out: MutableList<JSObject>) {
+  private fun collectFiles(
+    dir: DocumentFile,
+    prefix: String,
+    out: MutableList<JSObject>,
+    allowedExtensions: Set<String>?
+  ) {
     dir.listFiles().forEach { entry ->
       val name = entry.name ?: return@forEach
       if (entry.isDirectory) {
-        collectSidFiles(entry, "$prefix$name/", out)
-      } else if (entry.isFile && isSupportedLocalFile(name)) {
+        collectFiles(entry, "$prefix$name/", out, allowedExtensions)
+      } else if (entry.isFile && isSupportedLocalFile(name, allowedExtensions)) {
         val payload = JSObject()
         payload.put("uri", entry.uri.toString())
         payload.put("name", name)
@@ -96,8 +109,12 @@ class FolderPickerPlugin : Plugin() {
     }
   }
 
-  private fun isSupportedLocalFile(name: String): Boolean {
+  private fun isSupportedLocalFile(name: String, allowedExtensions: Set<String>?): Boolean {
     val lowered = name.lowercase()
+    val ext = lowered.substringAfterLast('.', "")
+    if (allowedExtensions != null && allowedExtensions.isNotEmpty()) {
+      return allowedExtensions.contains(ext)
+    }
     return lowered.endsWith(".sid") || lowered.endsWith(".zip") || lowered.endsWith(".7z")
   }
 }

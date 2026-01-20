@@ -165,6 +165,33 @@ export function createMockC64Server(
       return;
     }
 
+    if (
+      ['/v1/runners:modplay', '/v1/runners:load_prg', '/v1/runners:run_prg', '/v1/runners:run_crt'].includes(
+        parsed.pathname,
+      ) &&
+      (method === 'POST' || method === 'PUT')
+    ) {
+      return sendJson(200, { errors: [] });
+    }
+
+    if (parsed.pathname.match(/^\/v1\/drives\/[ab]:mount$/) && (method === 'POST' || method === 'PUT')) {
+      return sendJson(200, { errors: [] });
+    }
+
+    if (parsed.pathname === '/v1/machine:writemem' && (method === 'POST' || method === 'PUT')) {
+      return sendJson(200, { errors: [] });
+    }
+
+    if (parsed.pathname === '/v1/machine:readmem' && method === 'GET') {
+      const length = Number(parsed.searchParams.get('length') || '1');
+      const address = (parsed.searchParams.get('address') || '').toUpperCase();
+      const data = new Array(Math.max(1, length)).fill(0);
+      if (address === '00C6') {
+        data[0] = 0;
+      }
+      return sendJson(200, { data, errors: [] });
+    }
+
     if (method === 'GET' && parsed.pathname === '/v1/configs') {
       return sendJson(200, { categories: Object.keys(state), errors: [] });
     }

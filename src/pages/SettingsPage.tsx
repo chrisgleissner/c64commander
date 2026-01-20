@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useMockMode } from '@/hooks/useMockMode';
+import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -41,6 +42,7 @@ export default function SettingsPage() {
   const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
+  const { value: isSidPlayerEnabled, setValue: setSidPlayerEnabled } = useFeatureFlag('sid_player_enabled');
   const {
     isMockMode,
     isMockAvailable,
@@ -344,6 +346,21 @@ export default function SettingsPage() {
               <h2 className="font-medium">Developer</h2>
             </div>
             <div className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="sid-player-flag" className="font-medium">
+                    Enable SID player (experimental)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Shows the SID player page in navigation.
+                  </p>
+                </div>
+                <Checkbox
+                  id="sid-player-flag"
+                  checked={isSidPlayerEnabled}
+                  onCheckedChange={(checked) => void setSidPlayerEnabled(checked === true)}
+                />
+              </div>
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <p className="font-medium">Enable mocked C64U (internal testing)</p>

@@ -1,4 +1,4 @@
-package com.c64.commander.hvsc
+package uk.gleissner.c64commander.hvsc
 
 import java.io.File
 

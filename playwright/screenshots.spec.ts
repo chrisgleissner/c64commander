@@ -16,6 +16,9 @@ test.describe('App screenshots', () => {
 
   test.beforeEach(async ({ page }: { page: Page }) => {
     await seedUiMocks(page, server.baseUrl);
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_feature_flag:sid_player_enabled', '1');
+    });
     await page.setViewportSize({ width: 360, height: 800 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });

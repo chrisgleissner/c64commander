@@ -1,4 +1,4 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin

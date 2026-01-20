@@ -6,17 +6,20 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
-import HomePage from "./pages/HomePage";
+import HomePage from './pages/HomePage';
 import QuickSettingsPage from "./pages/QuickSettingsPage";
 import ConfigBrowserPage from "./pages/ConfigBrowserPage";
 import SettingsPage from "./pages/SettingsPage";
 import DocsPage from "./pages/DocsPage";
 import NotFound from "./pages/NotFound";
+import PlayFilesPage from './pages/PlayFilesPage';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog } from "@/lib/logging";
 import MusicPlayerPage from "./pages/MusicPlayerPage";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { MockModeProvider } from "@/hooks/useMockMode";
+import { FeatureFlagsProvider, useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { isSidPlayerEnabled } from "@/lib/config/featureFlags";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,32 +62,58 @@ const RouteRefresher = () => {
   return null;
 };
 
+const SidPlayerRoute = () => {
+  const { flags, isLoaded } = useFeatureFlags();
+  const location = useLocation();
+  const enabled = isSidPlayerEnabled(flags);
+
+  useEffect(() => {
+    if (!isLoaded || enabled) return;
+    addErrorLog('SID player blocked', {
+      reason: 'sid_player_enabled=false',
+      path: location.pathname,
+    });
+    console.warn('SID player blocked: sid_player_enabled=false');
+  }, [enabled, isLoaded, location.pathname]);
+
+  if (!isLoaded) return null;
+  if (!enabled) return <NotFound />;
+  return <MusicPlayerPage />;
+};
+
+const AppRoutes = () => (
+  <BrowserRouter>
+    <ErrorBoundary />
+    <RouteRefresher />
+    <Routes>
+      <Route path="/" element={<HomePage />} />
+      <Route path="/quick" element={<QuickSettingsPage />} />
+      <Route path="/config" element={<ConfigBrowserPage />} />
+      <Route path="/play" element={<PlayFilesPage />} />
+      <Route path="/music" element={<SidPlayerRoute />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/docs" element={<DocsPage />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+    <TabBar />
+  </BrowserRouter>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <RefreshControlProvider>
-          <SidPlayerProvider>
-            <MockModeProvider>
-              <BrowserRouter>
-                <ErrorBoundary />
-                <RouteRefresher />
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/quick" element={<QuickSettingsPage />} />
-                  <Route path="/config" element={<ConfigBrowserPage />} />
-                  <Route path="/music" element={<MusicPlayerPage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/docs" element={<DocsPage />} />
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-                <TabBar />
-              </BrowserRouter>
-            </MockModeProvider>
-          </SidPlayerProvider>
-        </RefreshControlProvider>
+        <FeatureFlagsProvider>
+          <RefreshControlProvider>
+            <SidPlayerProvider>
+              <MockModeProvider>
+                <AppRoutes />
+              </MockModeProvider>
+            </SidPlayerProvider>
+          </RefreshControlProvider>
+        </FeatureFlagsProvider>
       </TooltipProvider>
     </ThemeProvider>
   </QueryClientProvider>

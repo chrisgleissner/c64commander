@@ -48,6 +48,24 @@ test.describe('UI coverage', () => {
     }
   };
 
+  const enableDeveloperMode = async (page: Page) => {
+    await page.goto('/settings');
+    const aboutButton = page.getByRole('button', { name: 'About' });
+    for (let i = 0; i < 7; i += 1) {
+      await aboutButton.click();
+    }
+  };
+
+  const enableSidPlayer = async (page: Page) => {
+    await enableDeveloperMode(page);
+    const toggle = page.getByLabel('Enable SID player (experimental)');
+    await expect(toggle).toBeVisible();
+    if (!(await toggle.isChecked())) {
+      await toggle.click();
+    }
+    await expect(toggle).toBeChecked();
+  };
+
   test('config widgets read/write, refresh, and revert defaults', async ({ page }: { page: Page }) => {
     await page.goto('/config');
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
@@ -105,6 +123,7 @@ test.describe('UI coverage', () => {
   });
 
   test('clicks widgets on music page', async ({ page }: { page: Page }) => {
+    await enableSidPlayer(page);
     await page.goto('/music');
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     const songRow = page.getByText('10_Orbyte.sid');

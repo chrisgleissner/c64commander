@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   RotateCcw,
@@ -31,6 +32,7 @@ import { toast } from '@/hooks/use-toast';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 
 export default function HomePage() {
+  const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const controls = useC64MachineControl();
@@ -316,11 +318,39 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* Config Actions */}
+        {/* Play */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
+          className="space-y-3"
+        >
+          <h3 className="category-header">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            Play
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <QuickActionCard
+              icon={FolderOpen}
+              label="Browse"
+              description="Local device"
+              onClick={() => navigate('/play?source=local')}
+            />
+            <QuickActionCard
+              icon={Download}
+              label="Browse"
+              description="Ultimate 64"
+              onClick={() => navigate('/play?source=ultimate')}
+              disabled={!status.isConnected}
+            />
+          </div>
+        </motion.div>
+
+        {/* Config Actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
           className="space-y-3"
         >
           <h3 className="category-header">

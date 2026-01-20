@@ -1,4 +1,4 @@
-package com.c64.commander.hvsc
+package uk.gleissner.c64commander.hvsc
 
 import java.io.File
 import java.security.MessageDigest
@@ -65,7 +65,7 @@ class HvscIngestionService(
     const val BATCH_SIZE = 250
   }
 
-  private class ProgressEmitter(
+  private inner class ProgressEmitter(
     private val ingestionId: String,
     private val onProgress: (Progress) -> Unit,
   ) {

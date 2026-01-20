@@ -110,22 +110,26 @@ export class C64API {
     this.deviceHost = deviceHost || DEFAULT_DEVICE_HOST;
   }
 
+  private buildAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    if (this.password) {
+      headers['X-Password'] = this.password;
+    }
+    if (this.deviceHost && isLocalProxy(this.baseUrl)) {
+      headers['X-C64U-Host'] = this.deviceHost;
+    }
+    return headers;
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...this.buildAuthHeaders(),
       ...((options.headers as Record<string, string>) || {}),
     };
-
-    if (this.password) {
-      headers['X-Password'] = this.password;
-    }
-
-    if (this.deviceHost && isLocalProxy(this.baseUrl)) {
-      headers['X-C64U-Host'] = this.deviceHost;
-    }
 
     const url = `${this.baseUrl}${path}`;
 
@@ -249,6 +253,30 @@ export class C64API {
     return this.request('/v1/machine:menu_button', { method: 'PUT' });
   }
 
+  async readMemory(address: string, length = 1): Promise<Uint8Array> {
+    const payload = await this.request<{ data?: string | number[] }>(
+      `/v1/machine:readmem?address=${address}&length=${length}`
+    );
+    const data = payload.data;
+    if (!data) return new Uint8Array();
+    if (typeof data === 'string') {
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return bytes;
+    }
+    return new Uint8Array(data);
+  }
+
+  async writeMemory(address: string, data: Uint8Array): Promise<{ errors: string[] }> {
+    const hex = Array.from(data)
+      .map((value) => value.toString(16).padStart(2, '0'))
+      .join('');
+    return this.request(`/v1/machine:writemem?address=${address}&data=${hex}`, { method: 'PUT' });
+  }
+
   // Drive endpoints
   async getDrives(): Promise<DrivesResponse> {
     return this.request('/v1/drives');
@@ -264,6 +292,38 @@ export class C64API {
     if (type) path += `&type=${encodeURIComponent(type)}`;
     if (mode) path += `&mode=${encodeURIComponent(mode)}`;
     return this.request(path, { method: 'PUT' });
+  }
+
+  async mountDriveUpload(
+    drive: 'a' | 'b',
+    image: Blob,
+    type?: string,
+    mode?: 'readwrite' | 'readonly' | 'unlinked'
+  ): Promise<{ errors: string[] }> {
+    let path = `/v1/drives/${drive}:mount`;
+    if (type || mode) {
+      const params = new URLSearchParams();
+      if (type) params.set('type', type);
+      if (mode) params.set('mode', mode);
+      path = `${path}?${params.toString()}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        ...this.buildAuthHeaders(),
+        'Content-Type': 'application/octet-stream',
+      },
+      body: image,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('Drive mount upload failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return response.json();
   }
 
   async unmountDrive(drive: 'a' | 'b'): Promise<{ errors: string[] }> {
@@ -302,14 +362,7 @@ export class C64API {
     if (songNr !== undefined) {
       url.searchParams.set('songnr', String(songNr));
     }
-
-    const headers: Record<string, string> = {};
-    if (this.password) {
-      headers['X-Password'] = this.password;
-    }
-    if (this.deviceHost && isLocalProxy(this.baseUrl)) {
-      headers['X-C64U-Host'] = this.deviceHost;
-    }
+    const headers = this.buildAuthHeaders();
 
     const form = new FormData();
     form.append('file', sidFile, (sidFile as any).name ?? 'track.sid');
@@ -332,16 +385,96 @@ export class C64API {
     return response.json();
   }
 
+  async playMod(file: string): Promise<{ errors: string[] }> {
+    return this.request(`/v1/runners:modplay?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+  }
+
+  async playModUpload(modFile: Blob): Promise<{ errors: string[] }> {
+    const response = await fetch(`${this.baseUrl}/v1/runners:modplay`, {
+      method: 'POST',
+      headers: {
+        ...this.buildAuthHeaders(),
+        'Content-Type': 'application/octet-stream',
+      },
+      body: modFile,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('MOD upload failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return response.json();
+  }
+
   async runPrg(file: string): Promise<{ errors: string[] }> {
     return this.request(`/v1/runners:run_prg?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+  }
+
+  async runPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
+    const response = await fetch(`${this.baseUrl}/v1/runners:run_prg`, {
+      method: 'POST',
+      headers: {
+        ...this.buildAuthHeaders(),
+        'Content-Type': 'application/octet-stream',
+      },
+      body: prgFile,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('PRG upload failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return response.json();
   }
 
   async loadPrg(file: string): Promise<{ errors: string[] }> {
     return this.request(`/v1/runners:load_prg?file=${encodeURIComponent(file)}`, { method: 'PUT' });
   }
 
+  async loadPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
+    const response = await fetch(`${this.baseUrl}/v1/runners:load_prg`, {
+      method: 'POST',
+      headers: {
+        ...this.buildAuthHeaders(),
+        'Content-Type': 'application/octet-stream',
+      },
+      body: prgFile,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('PRG upload failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return response.json();
+  }
+
   async runCartridge(file: string): Promise<{ errors: string[] }> {
     return this.request(`/v1/runners:run_crt?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+  }
+
+  async runCartridgeUpload(crtFile: Blob): Promise<{ errors: string[] }> {
+    const response = await fetch(`${this.baseUrl}/v1/runners:run_crt`, {
+      method: 'POST',
+      headers: {
+        ...this.buildAuthHeaders(),
+        'Content-Type': 'application/octet-stream',
+      },
+      body: crtFile,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('CRT upload failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return response.json();
   }
 }
 

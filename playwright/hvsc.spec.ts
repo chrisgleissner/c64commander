@@ -346,6 +346,7 @@ test.describe('HVSC Play page', () => {
         };
 
         localStorage.setItem('c64u_base_url', c64BaseUrl);
+        localStorage.setItem('c64u_feature_flag:sid_player_enabled', '1');
       },
       {
         baseUrl: hvscServer.baseUrl,

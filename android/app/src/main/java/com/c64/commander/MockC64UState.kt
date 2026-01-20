@@ -1,4 +1,4 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
 import org.json.JSONArray
 import org.json.JSONObject

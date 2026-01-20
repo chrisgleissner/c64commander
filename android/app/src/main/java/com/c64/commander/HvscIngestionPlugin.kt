@@ -1,9 +1,9 @@
-package com.c64.commander
+package uk.gleissner.c64commander
 
 import android.util.Base64
-import com.c64.commander.hvsc.AndroidHvscDatabase
-import com.c64.commander.hvsc.HvscCancelRegistry
-import com.c64.commander.hvsc.HvscIngestionService
+import uk.gleissner.c64commander.hvsc.AndroidHvscDatabase
+import uk.gleissner.c64commander.hvsc.HvscCancelRegistry
+import uk.gleissner.c64commander.hvsc.HvscIngestionService
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -179,7 +179,7 @@ class HvscIngestionPlugin : Plugin() {
     call.resolve(payload)
   }
 
-  private fun metaToJs(meta: com.c64.commander.hvsc.HvscMeta): JSObject {
+  private fun metaToJs(meta: uk.gleissner.c64commander.hvsc.HvscMeta): JSObject {
     val payload = JSObject()
     payload.put("installedBaselineVersion", meta.installedBaselineVersion)
     payload.put("installedVersion", meta.installedVersion)
@@ -189,7 +189,7 @@ class HvscIngestionPlugin : Plugin() {
     return payload
   }
 
-  private fun updateToJs(status: com.c64.commander.hvsc.HvscUpdateStatus): JSObject {
+  private fun updateToJs(status: uk.gleissner.c64commander.hvsc.HvscUpdateStatus): JSObject {
     val payload = JSObject()
     payload.put("latestVersion", status.latestVersion)
     payload.put("installedVersion", status.installedVersion)
@@ -198,7 +198,7 @@ class HvscIngestionPlugin : Plugin() {
     return payload
   }
 
-  private fun progressToJs(progress: com.c64.commander.hvsc.HvscIngestionService.Progress): JSObject {
+  private fun progressToJs(progress: uk.gleissner.c64commander.hvsc.HvscIngestionService.Progress): JSObject {
     val payload = JSObject()
     payload.put("ingestionId", progress.ingestionId)
     payload.put("stage", progress.stage)

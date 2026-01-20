@@ -26,11 +26,12 @@ export const isSupportedLocalArchive = (name: string) => isZipFile(name) || isSe
 const buildExtractedFile = (archiveName: string, entryPath: string, data: Uint8Array): LocalSidFile => {
   const normalized = normalizePath(entryPath);
   const name = normalized.split('/').pop() || normalized;
+  const snapshot = new Uint8Array(data);
   return {
     name,
     webkitRelativePath: `/${archiveName}/${normalized}`,
     lastModified: Date.now(),
-    arrayBuffer: async () => toArrayBuffer(data),
+    arrayBuffer: async () => toArrayBuffer(snapshot),
   };
 };
 

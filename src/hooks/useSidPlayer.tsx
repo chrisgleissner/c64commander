@@ -39,11 +39,7 @@ const buildId = () =>
 const resolveBlob = (track: SidTrack) => {
   if (track.file) return track.file;
   if (track.data) {
-    const buffer = track.data.buffer.slice(
-      track.data.byteOffset,
-      track.data.byteOffset + track.data.byteLength,
-    ) as ArrayBuffer;
-    return new Blob([buffer], { type: 'audio/sid' });
+    return new Blob([track.data], { type: 'audio/sid' });
   }
   return null;
 };
