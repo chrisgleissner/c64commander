@@ -118,9 +118,8 @@ jobs:
             --reporter=text-summary
           echo "==> Merging unit + E2E LCOV for Codecov..."
           npx lcov-result-merger \
-            coverage/lcov.info \
-            coverage/e2e/lcov.info \
-            > coverage/lcov-merged.info
+            "coverage/{lcov.info,e2e/lcov.info}" \
+            coverage/lcov-merged.info
 
       - name: Upload coverage to Codecov
         if: always()

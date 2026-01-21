@@ -4,7 +4,45 @@ import { HvscSongSource } from '@/lib/hvsc/hvscSource';
 import { buildPlayPlan, executePlayPlan } from '@/lib/playback/playbackRouter';
 import { getC64API } from '@/lib/c64api';
 import { isAudioMixerValueEqual, normalizeAudioMixerValue, resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
+import {
+  buildSoloRoutingUpdates,
+  isSidVolumeName,
+  resolveAudioMixerMuteValue,
+  soloReducer,
+} from '@/lib/config/audioMixerSolo';
 import { useSidPlayer } from '@/hooks/useSidPlayer';
+import { useMockMode } from '@/hooks/useMockMode';
+import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
+import { useC64Connection } from '@/hooks/useC64Connection';
+import { buildDiskEntryFromDrive, buildDiskEntryFromPath, useDiskLibrary } from '@/hooks/useDiskLibrary';
+import {
+  FeatureFlagManager,
+  InMemoryFeatureFlagRepository,
+  FEATURE_FLAG_DEFINITIONS,
+  isHvscEnabled,
+} from '@/lib/config/featureFlags';
+import {
+  clearStoredMockBaseUrl,
+  clearStoredRealDeviceHost,
+  clearStoredRealFtpPort,
+  getDeviceMode,
+  getDeveloperModeEnabled,
+  getStoredMockBaseUrl,
+  getStoredRealBaseUrl,
+  getStoredRealDeviceHost,
+  getStoredRealFtpPort,
+  setDeviceMode,
+  setDeveloperModeEnabled,
+  setStoredMockBaseUrl,
+  setStoredRealBaseUrl,
+  setStoredRealDeviceHost,
+  setStoredRealFtpPort,
+  subscribeDeviceMode,
+  subscribeDeveloperMode,
+} from '@/lib/config/developerModeStore';
+import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from '@/lib/uiPreferences';
+import { startMockServer, stopMockServer } from '@/lib/mock/mockServer';
+import { FeatureFlags } from '@/lib/native/featureFlags';
 
 type ProbeStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -18,6 +56,10 @@ const runProbe = async (label: string, runner: () => Promise<void>, errors: stri
 
 export default function CoverageProbePage() {
   const player = useSidPlayer();
+  const mockMode = useMockMode();
+  const listPreview = useListPreviewLimit();
+  const connection = useC64Connection();
+  const diskLibrary = useDiskLibrary('coverage-probe');
   const [status, setStatus] = useState<ProbeStatus>('idle');
   const [errors, setErrors] = useState<string[]>([]);
   const [startedAt] = useState(() => Date.now());
@@ -36,11 +78,15 @@ export default function CoverageProbePage() {
 
       await runProbe('audio mixer', async () => {
         const volReset = await resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1', ['+1 dB', '0 dB']);
+        const volResetApi = await resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1');
         const panReset = await resolveAudioMixerResetValue('Audio Mixer', 'Pan 1', ['Left', 'Center', 'Right']);
         const otherReset = await resolveAudioMixerResetValue('Audio Mixer', 'Other', ['A', 'B']);
         normalizeAudioMixerValue(' 0 dB');
         if (!isAudioMixerValueEqual(volReset, '0 dB')) {
           throw new Error('Volume reset not resolved');
+        }
+        if (volResetApi === undefined) {
+          throw new Error('Volume reset not resolved via API');
         }
         if (!isAudioMixerValueEqual(panReset, 'Center')) {
           throw new Error('Pan reset not resolved');
@@ -48,6 +94,24 @@ export default function CoverageProbePage() {
         if (otherReset !== undefined) {
           throw new Error('Unexpected reset for non-audio mixer item');
         }
+      }, failures);
+
+      await runProbe('audio mixer solo routing', async () => {
+        if (!isSidVolumeName('Vol UltiSid 1')) {
+          throw new Error('SID volume name not recognized');
+        }
+        resolveAudioMixerMuteValue(['-12 dB', '-6 dB', '0 dB']);
+        resolveAudioMixerMuteValue(['Muted', 'On']);
+        resolveAudioMixerMuteValue([]);
+        soloReducer({ soloItem: null }, { type: 'toggle', item: 'Vol UltiSid 1' });
+        soloReducer({ soloItem: 'Vol UltiSid 1' }, { type: 'reset' });
+        buildSoloRoutingUpdates(
+          [
+            { name: 'Vol UltiSid 1', value: '0 dB', options: ['0 dB', '-6 dB'] },
+            { name: 'Vol UltiSid 2', value: '-6 dB', options: ['0 dB', '-6 dB'] },
+          ],
+          'Vol UltiSid 1',
+        );
       }, failures);
 
       await runProbe('hvsc source', async () => {
@@ -105,10 +169,103 @@ export default function CoverageProbePage() {
         await player.previous();
       }, failures);
 
+      await runProbe('ui preferences', async () => {
+        clampListPreviewLimit(0);
+        clampListPreviewLimit(999);
+        getListPreviewLimit();
+        setListPreviewLimit(42);
+        listPreview.setLimit(12.7);
+        listPreview.setLimit(250);
+        listPreview.setLimit(1);
+      }, failures);
+
+      await runProbe('feature flags', async () => {
+        const defaults = Object.entries(FEATURE_FLAG_DEFINITIONS).reduce<Record<string, boolean>>(
+          (acc, [key, value]) => {
+            acc[key] = value.defaultValue;
+            return acc;
+          },
+          {},
+        );
+        const manager = new FeatureFlagManager(
+          new InMemoryFeatureFlagRepository({ hvsc_enabled: true }),
+          defaults as Record<'hvsc_enabled', boolean>,
+        );
+        await manager.load();
+        const snapshot = manager.getSnapshot();
+        if (!isHvscEnabled(snapshot.flags)) {
+          throw new Error('HVSC flag should be enabled after load');
+        }
+        await manager.setFlag('hvsc_enabled', false);
+        await FeatureFlags.getFlag({ key: 'hvsc_enabled' });
+        await FeatureFlags.getAllFlags({ keys: ['hvsc_enabled'] });
+        await FeatureFlags.setFlag({ key: 'hvsc_enabled', value: true });
+      }, failures);
+
+      await runProbe('mock mode', async () => {
+        try {
+          await mockMode.enableMockMode();
+        } catch {
+          // Expected on web: Mock mode is only available on native platforms.
+        }
+        await mockMode.disableMockMode();
+      }, failures);
+
+      await runProbe('developer mode store', async () => {
+        const devUnsub = subscribeDeveloperMode(() => {});
+        const modeUnsub = subscribeDeviceMode(() => {});
+        setDeveloperModeEnabled(true);
+        setDeviceMode('MOCK_DEVICE');
+        setStoredRealBaseUrl('http://127.0.0.1');
+        setStoredRealDeviceHost('127.0.0.1');
+        setStoredRealFtpPort(1541);
+        setStoredMockBaseUrl('http://127.0.0.1:8000');
+        getDeveloperModeEnabled();
+        getDeviceMode();
+        getStoredRealBaseUrl();
+        getStoredRealDeviceHost();
+        getStoredRealFtpPort();
+        getStoredMockBaseUrl();
+        clearStoredRealDeviceHost();
+        clearStoredRealFtpPort();
+        clearStoredMockBaseUrl();
+        devUnsub();
+        modeUnsub();
+      }, failures);
+
+      await runProbe('mock server errors', async () => {
+        try {
+          await startMockServer();
+        } catch {
+          // Expected on web.
+        }
+        await stopMockServer();
+      }, failures);
+
+      await runProbe('connection + disk library', async () => {
+        connection.updateConfig(connection.baseUrl, connection.password, connection.deviceHost);
+        await connection.refetch();
+        window.dispatchEvent(
+          new CustomEvent('c64u-connection-change', {
+            detail: { baseUrl: connection.baseUrl, password: connection.password, deviceHost: connection.deviceHost },
+          }),
+        );
+        const entry = buildDiskEntryFromPath('local', '/Games/Test.d64');
+        diskLibrary.addDisks([entry]);
+        const id = buildDiskEntryFromDrive('local', '/Games/Test.d64');
+        if (id) {
+          diskLibrary.updateDiskName(id, 'Test Disk');
+          diskLibrary.updateDiskGroup(id, 'Favorites');
+          diskLibrary.removeDisk(id);
+        }
+        diskLibrary.setFilter('Test');
+        buildDiskEntryFromDrive('local', null);
+      }, failures);
+
       setErrors(failures);
       setStatus(failures.length ? 'error' : 'done');
     };
-  }, [player]);
+  }, [connection, diskLibrary, listPreview, mockMode, player]);
 
   useEffect(() => {
     if (status !== 'idle') return;

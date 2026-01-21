@@ -28,9 +28,8 @@ npx nyc report \
 # 5. Merge unit + E2E LCOV for Codecov
 echo "==> Merging LCOV reports for Codecov..."
 npx lcov-result-merger \
-  coverage/lcov.info \
-  coverage/e2e/lcov.info \
-  > coverage/lcov-merged.info
+  "coverage/{lcov.info,e2e/lcov.info}" \
+  coverage/lcov-merged.info
 
 echo ""
 echo "==> Coverage collection complete!"

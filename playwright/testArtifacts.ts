@@ -120,14 +120,19 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
   if (!page.isClosed()) {
     await page.close();
   }
+  const expectedVideo = path.join(evidenceDir, 'video.webm');
   if (video) {
     try {
-      const videoPath = await video.path();
-      await video.saveAs(path.join(evidenceDir, 'video.webm'));
+      await video.path();
+      await video.saveAs(expectedVideo);
+      return;
     } catch {
-      // Ignore video copy errors; validation will flag missing files.
+      // Fall through to outputPath fallback below.
     }
   }
+
+  const videoPath = testInfo.outputPath('video.webm');
+  await copyIfExists(videoPath, expectedVideo);
 };
 
 export const allowWarnings = (testInfo: TestInfo, reason?: string) => {
