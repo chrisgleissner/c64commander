@@ -11,11 +11,14 @@ node_modules
 dist
 dist-ssr
 .gradle
+
+# Build artifacts and test results
 test-results
 test-results/evidence
 playwright-report
 android/**/build
 *.local
+ci-artifacts/**
 
 # Editor directories and files
 .vscode/*
