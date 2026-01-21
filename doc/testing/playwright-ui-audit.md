@@ -9,11 +9,13 @@
 ## Executive Summary
 
 ### Current State
+
 - **9 test spec files** covering major workflows
 - **Existing Tests**: ~65 test cases across UI, disk management, playback, HVSC, audio mixer, feature flags, screenshots, solo routing
 - **Evidence Quality**: High - step screenshots + video enabled
 
 ### Target State
+
 - **Expand coverage** for all interactive widgets and click paths
 - **Evidence Score 3** for all high-value paths
 - **Add >=20 new tests** OR **augment >=40 existing tests**
@@ -25,6 +27,7 @@
 ### 1. Home Page (`/`)
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | machine-reset | Button | Reset | POST /v1/machine:reset | Network failure | ui.spec.ts (button sweep) |
@@ -39,6 +42,7 @@
 | drives-summary | Button | Open Disks | navigate('/disks') | N/A | ui.spec.ts |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | HP-1 | Open save dialog → enter name → save → verify toast | HIGH | Config saved to localStorage | 0 (MISSING) |
@@ -54,6 +58,7 @@
 ### 2. Disks Page (`/disks`)
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | add-items-btn | Button | Add items | Opens ItemSelectionDialog | No items selected | diskManagement.spec.ts (strong) |
@@ -73,6 +78,7 @@
 | disk-menu-remove | MenuItem | Remove from collection | Confirmation dialog | Mounted disk | diskManagement.spec.ts |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | DP-1 | Import local folder → verify sorted list | HIGH | Disks shown, sorted by path | 3 (diskManagement.spec.ts) |
@@ -90,6 +96,7 @@
 ### 3. Play Page (`/play`)
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | add-items-btn | Button | Add items / Add more | Opens ItemSelectionDialog | No sources | playback.spec.ts |
@@ -115,6 +122,7 @@
 | song-number-input | Input | Song # | Sets SID subsong number | Out of range | **MISSING** |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | PP-1 | Add local folder → verify playlist | HIGH | Supported files listed | 3 (playback.spec.ts) |
@@ -143,6 +151,7 @@
 ### 4. Config Page (`/config`)
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | refresh-btn | Button | Refresh | Refetches all categories | Network failure | ui.spec.ts |
@@ -154,6 +163,7 @@
 | config-reset-btn | Button | Reset | Resets category to defaults | Network failure | **MISSING** |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | CP-1 | Expand category → change select → verify PUT | HIGH | Correct value sent | 3 (ui.spec.ts) |
@@ -173,6 +183,7 @@
 ### 5. Settings Page (`/settings`)
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | base-url-input | Input | Base URL | Sets connection URL | Invalid URL format | **MISSING** |
@@ -193,6 +204,7 @@
 | list-preview-input | Input | List preview limit | Sets preview limit | Invalid number, < 1 | **MISSING** |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | SP-1 | Change base URL → save → verify reconnect | HIGH | Connection attempted | 0 (MISSING) |
@@ -214,11 +226,13 @@
 ### 6. Docs Page (`/docs`)
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | doc-section-toggle | Button | Section title | Expands/collapses section | N/A | ui.spec.ts (render only) |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | DocP-1 | Expand section → verify content shown | LOW | Content visible | 2 (ui.spec.ts weak) |
@@ -231,6 +245,7 @@
 ### ItemSelectionDialog
 
 #### Interactive Widgets
+
 | Widget ID | Type | Label/Text | Effect | Edge Cases | Existing Coverage |
 |-----------|------|------------|--------|------------|-------------------|
 | source-group-btn | Button | Source group name | Expands source picker | N/A | diskManagement.spec.ts, playback.spec.ts |
@@ -246,6 +261,7 @@
 | selection-count-badge | Badge | X selected | Shows selection count | N/A | diskManagement.spec.ts, playback.spec.ts |
 
 #### High-Value Click Paths
+
 | Path ID | Steps | Priority | Assertions | Coverage Score |
 |---------|-------|----------|------------|----------------|
 | ISD-1 | Browse C64U → verify hierarchy | HIGH | Folders shown | 3 (diskManagement.spec.ts) |
@@ -290,11 +306,13 @@
 ### Evidence Quality Issues
 
 **Score 2 (Weak Assertions or Missing Edge Cases)**:
+
 - ui.spec.ts: Machine control buttons (no network failure tests)
 - playback.spec.ts: Disk autostart sequence (no verification of memory contents)
 - ui.spec.ts: Docs section expansion (no content verification)
 
 **Score 1 (Tested but No Evidence)**:
+
 - None identified
 
 ---
@@ -306,6 +324,7 @@
 **Recommended**: YES - substantial missing coverage justifies new tests
 
 New test files to create:
+
 1. `homeConfigManagement.spec.ts` - App config CRUD operations (6 tests)
 2. `playlistControls.spec.ts` - Shuffle, repeat, filtering, duration override (8 tests)
 3. `settingsConnection.spec.ts` - Connection management, theme switching (6 tests)
@@ -393,10 +412,12 @@ test('config reset category applies defaults', ...)
 ## CI Configuration Updates
 
 ### Current State
+
 - `playwright.config.ts` has `video: 'on'`, `screenshot: 'on'`
 - Evidence captured via `testArtifacts.ts`
 
 ### Required Changes
+
 1. **Always-on artifacts**: Already configured ✅
 2. **Per-test video**: Already configured ✅
 3. **Step screenshots**: Already implemented via `attachStepScreenshot()` ✅
@@ -405,6 +426,7 @@ test('config reset category applies defaults', ...)
 ### CI Workflow Verification
 
 Check `.github/workflows/*.yml` for:
+
 - `uses: actions/upload-artifact` with `if: always()`
 - Upload path includes `test-results/**`
 - Artifact retention configured

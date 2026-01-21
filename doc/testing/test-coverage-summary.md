@@ -4,7 +4,7 @@
 
 ### Objectives Achieved
 
-1. **✅ Comprehensive UX Documentation** 
+1. **✅ Comprehensive UX Documentation**
    - Created [doc/ux-interactions.md](doc/ux-interactions.md) with detailed CTA inventory (~150 CTAs across 5 pages)
    - Each CTA documented with: Label, Purpose, Importance (CRITICAL/HIGH/MEDIUM/LOW), Test Coverage status, Test file reference
    - Multi-step user flows categorized by importance
@@ -48,6 +48,7 @@
 ## Test Coverage Breakdown
 
 ### E2E Tests (123 total)
+
 - **New CTA Coverage Tests**: 7 tests (playwright/ctaCoverage.spec.ts)
   - Critical CTA Coverage: 1 test
   - Shuffle Mode Tests: 2 tests
@@ -64,6 +65,7 @@
   - UX interactions: ~16 tests
 
 ### Unit Tests (49 total)
+
 - Config tests: 10 tests
 - Audio mixer solo: 5 tests
 - Playback router: 4 tests
@@ -78,6 +80,7 @@
 ## Files Modified/Created
 
 ### New Files
+
 1. **playwright/ctaCoverage.spec.ts** (280 lines)
    - 7 new E2E tests for priority CTA gaps
    - Uses existing test infrastructure (mocks, screenshots, assertions)
@@ -95,6 +98,7 @@
    - Coverage thresholds and notification settings
 
 ### Modified Files
+
 1. **vitest.config.ts**
    - Added coverage configuration with v8 provider
    - Set baseline thresholds
@@ -131,14 +135,18 @@
 ## Coverage Viewing
 
 ### Local Coverage Reports
+
 After running `npm run test:coverage`:
+
 - **HTML report**: Open `coverage/index.html` in browser
 - **Terminal summary**: Displayed after test run
 - **LCOV report**: `coverage/lcov.info` (for tools like VS Code extensions)
 
 ### Codecov Dashboard (After CI Setup)
+
 Once CODECOV_TOKEN is configured:
-1. Visit https://app.codecov.io/gh/[owner]/[repo]
+
+1. Visit <https://app.codecov.io/gh/[owner]/[repo>]
 2. View overall coverage trends
 3. Browse file-by-file coverage
 4. See coverage on PRs via comments
@@ -146,7 +154,8 @@ Once CODECOV_TOKEN is configured:
 ## Next Steps (Remaining Work)
 
 ### 1. Configure Codecov Token
-1. Go to https://codecov.io and sign up/login with GitHub
+
+1. Go to <https://codecov.io> and sign up/login with GitHub
 2. Add the repository to Codecov
 3. Get the repository token from Codecov settings
 4. Add to GitHub repository secrets:
@@ -154,9 +163,10 @@ Once CODECOV_TOKEN is configured:
    - Value: [token from Codecov]
 
 ### 2. Trigger First CI Build
+
 1. Commit all changes: `git add -A && git commit -m "feat: add comprehensive UX test coverage and Codecov integration"`
 2. Push to GitHub: `git push`
-3. Monitor CI workflow at: https://github.com/[owner]/[repo]/actions
+3. Monitor CI workflow at: <https://github.com/[owner]/[repo]/actions>
 4. Verify:
    - Lint passes ✅
    - Unit tests pass with coverage ✅
@@ -165,18 +175,22 @@ Once CODECOV_TOKEN is configured:
    - Coverage uploads to Codecov ✅
 
 ### 3. Verify Codecov Dashboard
+
 1. Check Codecov dashboard for coverage data
 2. Verify coverage percentages match local reports
 3. Ensure coverage badge is available
 
 ### 4. Trigger Second CI Build (Validation)
+
 1. Make a minor change (e.g., update README with coverage badge)
 2. Commit and push
 3. Verify second CI build is fully green
 4. Confirm coverage updates on Codecov
 
 ### 5. Add Coverage Badges (Optional)
+
 Add to README.md:
+
 ```markdown
 [![codecov](https://codecov.io/gh/[owner]/[repo]/branch/main/graph/badge.svg)](https://codecov.io/gh/[owner]/[repo])
 ```
@@ -184,6 +198,7 @@ Add to README.md:
 ## Coverage Improvement Roadmap
 
 ### Short Term (Next 2-4 weeks)
+
 - Target: Increase line coverage to 15-20%
 - Focus areas:
   - Add unit tests for utility functions
@@ -191,6 +206,7 @@ Add to README.md:
   - Cover error handling paths
 
 ### Medium Term (Next 1-3 months)
+
 - Target: Increase line coverage to 30%+
 - Focus areas:
   - Component unit tests with React Testing Library
@@ -198,6 +214,7 @@ Add to README.md:
   - API client error scenarios
 
 ### Long Term (Next 3-6 months)
+
 - Target: Increase line coverage to 50%+
 - Focus areas:
   - Full page component coverage
@@ -207,6 +224,7 @@ Add to README.md:
 ## Success Metrics
 
 ### Current State
+
 - **Unit Tests**: 49 tests, 100% passing
 - **E2E Tests**: 123 tests, 100% passing
 - **Code Coverage**: 10.25% lines, 57.8% branches
@@ -215,6 +233,7 @@ Add to README.md:
 - **CI Builds**: Pending (0/2)
 
 ### Target State (After CI Verification)
+
 - **CI Builds**: 2/2 passing
 - **Codecov Integration**: ✅ Active
 - **Coverage Reporting**: ✅ Automated
