@@ -125,9 +125,19 @@ Checks:
 
 ## CI workflow
 
-CI runs on every push and produces two artifacts:
-1. `playwright-evidence` - Test evidence folders
-2. `playwright-report` - HTML test report
+CI runs on every push with two parallel jobs:
+1. **Web tests** (unit + Playwright) producing Playwright evidence + report
+2. **Android build** (Gradle tests + APK/AAB)
+
+Artifacts:
+- `playwright-test-results` - Evidence folders + raw Playwright outputs
+- `playwright-report` - HTML test report
+- `c64-commander-debug-apk` - Debug APK
+- Release APK/AAB artifacts on tag builds when signing secrets are present
+
+Performance notes:
+- `PLAYWRIGHT_SKIP_BUILD=1` lets Playwright reuse a prebuilt `dist/` (build first).
+- The workflow supports a `package_manager` input for `workflow_dispatch` to compare `npm` vs `bun` install speed.
 
 Download artifacts:
 

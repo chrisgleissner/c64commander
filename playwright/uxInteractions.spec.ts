@@ -12,22 +12,28 @@
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page } from '@playwright/test';
-import { attachStepScreenshot } from './testArtifacts';
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 
 test.describe('UX Interaction Patterns', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     server = await createMockC64Server({});
+    await startStrictUiMonitoring(page, testInfo);
     await seedUiMocks(page, server.baseUrl);
     await page.waitForLoadState('networkidle');
   });
 
   test.afterEach(async ({ page }, testInfo) => {
-    await saveCoverageFromPage(page, testInfo?.title);
-    await server.close();
+    try {
+      await saveCoverageFromPage(page, testInfo?.title);
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await server.close();
+    }
   });
 
   test('source selection precedes navigation - local source @allow-warnings', async ({ page }, testInfo) => {
