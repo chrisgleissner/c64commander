@@ -1,4 +1,6 @@
 import type { Page, TestInfo } from '@playwright/test';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 const sanitizeLabel = (label: string) =>
   label
@@ -6,6 +8,34 @@ const sanitizeLabel = (label: string) =>
     .toLowerCase()
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-_]+/g, '');
+
+const sanitizeSegment = (value: string) => {
+  const cleaned = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return cleaned || 'untitled';
+};
+
+const getTitlePath = (testInfo: TestInfo) => {
+  if (typeof (testInfo as TestInfo & { titlePath?: () => string[] }).titlePath === 'function') {
+    return (testInfo as TestInfo & { titlePath: () => string[] }).titlePath();
+  }
+  return (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [testInfo.title];
+};
+
+const getEvidenceDirName = (testInfo: TestInfo) => {
+  const titlePath = getTitlePath(testInfo);
+  const describeParts = titlePath.slice(0, -1).map(sanitizeSegment).filter(Boolean);
+  const testPart = sanitizeSegment(titlePath[titlePath.length - 1] ?? testInfo.title);
+  const describeSlug = describeParts.length ? describeParts.join('--') : 'root';
+  return `${describeSlug}--${testPart}`;
+};
+
+const getEvidenceDir = (testInfo: TestInfo) =>
+  path.resolve(process.cwd(), 'test-results', 'evidence', getEvidenceDirName(testInfo));
 
 type StrictUiTracker = {
   consoleErrors: string[];
@@ -23,6 +53,8 @@ const getStepIndex = (testInfo: TestInfo) => {
   return info.__stepIndex;
 };
 
+const getStepCount = (testInfo: TestInfo) => (testInfo as TestInfo & { __stepIndex?: number }).__stepIndex ?? 0;
+
 const getTracker = (testInfo: TestInfo) =>
   (testInfo as TestInfo & { __strictUiTracker?: StrictUiTracker }).__strictUiTracker;
 
@@ -34,9 +66,68 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   const safe = sanitizeLabel(label);
   const step = String(getStepIndex(testInfo)).padStart(2, '0');
   const name = safe.length ? `${step}-${safe}.png` : `${step}-step.png`;
-  const filePath = testInfo.outputPath(name);
+  const evidenceDir = getEvidenceDir(testInfo);
+  await fs.mkdir(evidenceDir, { recursive: true });
+  const filePath = path.join(evidenceDir, name);
   await page.screenshot({ path: filePath, fullPage: true });
   await testInfo.attach(name, { path: filePath, contentType: 'image/png' });
+};
+
+const copyIfExists = async (source: string, destination: string) => {
+  try {
+    const stat = await fs.stat(source);
+    if (!stat.isFile() || stat.size === 0) return false;
+    await fs.copyFile(source, destination);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const writeErrorContext = async (testInfo: TestInfo, evidenceDir: string) => {
+  if (testInfo.status === testInfo.expectedStatus) return;
+  const errors = testInfo.errors ?? [];
+  const payload = [
+    `Status: ${testInfo.status}`,
+    `Expected: ${testInfo.expectedStatus}`,
+    `Retry: ${testInfo.retry}`,
+    `Project: ${testInfo.project.name}`,
+    '',
+    'Errors:',
+    ...errors.map((error, index) => {
+      const message = error.message || String(error);
+      const stack = error.stack ? `\n${error.stack}` : '';
+      return `#${index + 1}: ${message}${stack}`;
+    }),
+  ].join('\n');
+  await fs.writeFile(path.join(evidenceDir, 'error-context.md'), payload, 'utf8');
+};
+
+export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
+  const evidenceDir = getEvidenceDir(testInfo);
+  await fs.mkdir(evidenceDir, { recursive: true });
+
+  if (getStepCount(testInfo) === 0 && !page.isClosed()) {
+    await attachStepScreenshot(page, testInfo, 'final-state');
+  }
+
+  await writeErrorContext(testInfo, evidenceDir);
+
+  const tracePath = testInfo.outputPath('trace.zip');
+  await copyIfExists(tracePath, path.join(evidenceDir, 'trace.zip'));
+
+  const video = page.video();
+  if (!page.isClosed()) {
+    await page.close();
+  }
+  if (video) {
+    try {
+      const videoPath = await video.path();
+      await video.saveAs(path.join(evidenceDir, 'video.webm'));
+    } catch {
+      // Ignore video copy errors; validation will flag missing files.
+    }
+  }
 };
 
 export const allowWarnings = (testInfo: TestInfo, reason?: string) => {

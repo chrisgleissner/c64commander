@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -136,8 +136,12 @@ test.describe('Disk management', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
-    await server.close();
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await server.close();
+    }
   });
 
   test('disks render as flat list sorted by full path', async ({ page }: { page: Page }, testInfo) => {

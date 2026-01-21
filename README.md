@@ -32,56 +32,6 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 3. If prompted, allow installs from unknown sources for the browser/files app.
 4. Tap Install to finish.
 
-## Build the Android APK
+## Developer documentation
 
-Ensure JDK 17 is installed (Gradle requires it for Android builds).
-
-```sh
-./linux-build.sh
-```
-
-You can then find it at:
-
-```text
-android/app/build/outputs/apk/debug/app-debug.apk
-```
-
-## Run it in Android Emulator
-
-```sh
-./linux-build.sh --emulator
-```
-
-## Run it on your Device
-
-Device (one-time): Auto Blocker Off (Samsung), enable Developer options, enable USB debugging, approve the USB prompt.
-
-Then run:
-
-```sh
-./linux-build.sh --install
-```
-
-## Internal developer testing mode (mocked C64U)
-
-1. Open Settings and tap the About panel 7 times quickly.
-2. A Developer section appears with "Enable mocked C64U (internal testing)".
-3. Enabling it starts a local mock REST service on 127.0.0.1 and a local FTP server backed by fixture files.
-4. FTP logins use the Network Password from the mock configuration (blank allows anonymous).
-5. Disable it to stop the mock servers and restore the previous device base URL.
-
-## Tests
-
-```sh
-npm run test
-npm run test:e2e
-cd android && ./gradlew test
-```
-
-## Update screenshots
-
-This refreshes the app screenshots in `doc/img` and captures extra states (including expanded configuration sliders).
-
-```sh
-./local-build.sh --screenshots
-```
+For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).

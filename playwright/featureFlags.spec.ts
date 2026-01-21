@@ -1,7 +1,7 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 test.describe('Feature flags', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -17,8 +17,12 @@ test.describe('Feature flags', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
-    await server.close();
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await server.close();
+    }
   });
 
   const enableDeveloperMode = async (page: Page) => {

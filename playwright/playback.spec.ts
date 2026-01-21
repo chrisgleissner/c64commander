@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
@@ -62,8 +62,12 @@ test.describe('Playback file browser', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
-    await server.close();
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await server.close();
+    }
   });
 
   test('play page is available from tab bar', async ({ page }: { page: Page }, testInfo) => {

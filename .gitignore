@@ -12,6 +12,7 @@ dist
 dist-ssr
 .gradle
 test-results
+test-results/evidence
 playwright-report
 android/**/build
 *.local

@@ -9,7 +9,7 @@ export default defineConfig({
   expect: { timeout: 10000 },
   reporter: [
     ['list'],
-    ['html', { outputFolder: 'test-results/playwright-report', open: 'never' }],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {
     baseURL: 'http://127.0.0.1:4173',

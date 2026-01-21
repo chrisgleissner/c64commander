@@ -11,6 +11,10 @@ RUN_APK=true
 RUN_INSTALL_APK=false
 RUN_EMULATOR=false
 RUN_SCREENSHOTS=false
+RUN_TEST_UNIT=false
+RUN_TEST_E2E=false
+RUN_TEST_E2E_CI=false
+RUN_VALIDATE_EVIDENCE=false
 APK_PATH=""
 DEVICE_ID=""
 
@@ -33,6 +37,11 @@ Options:
   --device [id]         Device ID for adb (optional). If omitted, picks the first real phone.
   --apk-path <path>     APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
 
+  --test                Run unit tests only (vitest)
+  --test-e2e            Run E2E tests only (Playwright, no screenshots)
+  --test-e2e-ci         Run full CI mirror (screenshots + e2e + validation)
+  --validate-evidence   Validate Playwright evidence structure
+  
   --skip-install        Skip npm install
   --skip-build          Skip npm run cap:build
   --skip-tests          Skip npm test
@@ -70,6 +79,38 @@ while [[ $# -gt 0 ]]; do
       ;;
     --install)
       RUN_INSTALL_APK=true
+      shift
+      ;;
+    --test)
+      RUN_TEST_UNIT=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
+      RUN_APK=false
+      RUN_TEST=false
+      shift
+      ;;
+    --test-e2e)
+      RUN_TEST_E2E=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
+      RUN_APK=false
+      RUN_TEST=false
+      shift
+      ;;
+    --test-e2e-ci)
+      RUN_TEST_E2E_CI=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
+      RUN_APK=false
+      RUN_TEST=false
+      shift
+      ;;
+    --validate-evidence)
+      RUN_VALIDATE_EVIDENCE=true
+      RUN_BUILD=false
+      RUN_INSTALL=false
+      RUN_APK=false
+      RUN_TEST=false
       shift
       ;;
     --device)
@@ -164,6 +205,28 @@ if [[ "$RUN_TEST" == "true" ]]; then
     (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
   fi
   (cd "$ROOT_DIR/android" && ./gradlew test --warning-mode none)
+fi
+
+if [[ "$RUN_TEST_UNIT" == "true" ]]; then
+  log "Running unit tests"
+  (cd "$ROOT_DIR" && npm test)
+fi
+
+if [[ "$RUN_TEST_E2E" == "true" ]]; then
+  log "Running E2E tests"
+  (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
+  (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
+fi
+
+if [[ "$RUN_TEST_E2E_CI" == "true" ]]; then
+  log "Running CI mirror (screenshots + E2E + validation)"
+  (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
+  (cd "$ROOT_DIR" && npm run test:e2e:ci)
+fi
+
+if [[ "$RUN_VALIDATE_EVIDENCE" == "true" ]]; then
+  log "Validating Playwright evidence"
+  (cd "$ROOT_DIR" && npm run validate:evidence)
 fi
 
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then

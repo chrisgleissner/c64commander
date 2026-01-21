@@ -1,7 +1,7 @@
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 const getSlider = (page: Page, id: string) => page.getByTestId(`audio-mixer-slider-${id}`);
 const getValue = (page: Page, id: string) => page.getByTestId(`audio-mixer-value-${id}`);
@@ -28,8 +28,12 @@ test.describe('Audio Mixer volumes', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
-    await server.close();
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await server.close();
+    }
   });
 
   test('changing one volume does not change other sliders', async ({ page }: { page: Page }, testInfo) => {

@@ -2,7 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 test.describe('App screenshots', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -26,7 +26,11 @@ test.describe('App screenshots', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+    }
   });
 
   const waitForStableRender = async (page: Page) => {

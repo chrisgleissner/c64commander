@@ -2,7 +2,7 @@ import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 test.describe('FTP performance', () => {
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -42,8 +42,12 @@ test.describe('FTP performance', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
-    await server.close();
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+      await server.close();
+    }
   });
 
   test('FTP navigation uses cache across reloads', async ({ page }: { page: Page }, testInfo) => {

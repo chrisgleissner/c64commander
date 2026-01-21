@@ -15,6 +15,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test --grep-invert @screenshots",
     "screenshots": "playwright test --grep @screenshots",
+    "validate:evidence": "node scripts/validate-playwright-evidence.mjs",
+    "test:e2e:ci": "npm run screenshots && npm run test:e2e && npm run validate:evidence",
     "proxy": "node proxy/server.mjs",
     "dev:proxy": "npm run proxy",
     "cap:init": "cap init \"C64 Commander\" \"uk.gleissner.c64commander\" --web-dir dist",

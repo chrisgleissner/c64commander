@@ -1,7 +1,7 @@
 import { test, expect, type Page, type Route, type TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
-import { allowWarnings, assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
+import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 declare global {
   interface Window {
@@ -28,7 +28,11 @@ test.describe('HVSC Play page', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
-    await assertNoUiIssues(page, testInfo);
+    try {
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+    }
   });
 
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {
