@@ -21,9 +21,9 @@ export default defineConfig({
     navigationTimeout: 30000,
   },
   webServer: {
-    command: 'npm run build && npm run preview -- --host 127.0.0.1 --port 4173',
+    command: 'VITE_ENABLE_TEST_PROBES=1 npm run build && VITE_ENABLE_TEST_PROBES=1 npm run preview -- --host 127.0.0.1 --port 4173',
     url: 'http://127.0.0.1:4173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120000,
   },
 });
