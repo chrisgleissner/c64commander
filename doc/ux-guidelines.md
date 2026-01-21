@@ -27,9 +27,10 @@ The UX is built around three distinct concepts that must never be conflated:
    - No playback or mounting occurs here.
 
 3. **Playlists & Collections**
-  - Playlists are the single source of truth for **playback**.
-  - Disk collections are used exclusively for **mounting**.
-  - Never expose filesystem navigation.
+
+- Playlists are the single source of truth for **playback**.
+- Disk collections are used exclusively for **mounting**.
+- Never expose filesystem navigation.
 
 All UX flows must respect this separation.
 
@@ -197,6 +198,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 ### Actual Page Structure
 
 **Play Page (PlayFilesPage.tsx)**
+
 - Primary CTA: "Add items" or "Add more items"
 - Opens ItemSelectionDialog for source and file selection
 - Playlist displayed with SelectableActionList component
@@ -207,6 +209,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - HVSC integration for SID metadata and song lengths
 
 **Disks Page (DisksPage.tsx → HomeDiskManager.tsx)**
+
 - Drive control area showing Drive A and Drive B status
 - Active drive selection (radio buttons)
 - Mount/Eject buttons for each drive
@@ -218,18 +221,21 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - View all button when library exceeds preview limit
 
 **Home Page (HomePage.tsx)**
+
 - Quick action cards for machine control (Reset, Menu, Pause, Resume, Power Off)
 - Configuration quick actions (Apply, Save, Load, Revert, Manage)
 - Drive status cards with navigation to Disks page
 - Current configuration display
 
 **Settings Page (SettingsPage.tsx)**
+
 - Connection settings (IP, Port, Mock mode)
 - Appearance settings (Theme selection)
 - Diagnostics (Share logs, Email logs, Clear logs)
 - About section (with secret developer mode activation)
 
 **Config Browser Page (ConfigBrowserPage.tsx)**
+
 - Hierarchical category navigation
 - Config item widgets (sliders, toggles, inputs)
 - Per-item refresh buttons
@@ -238,6 +244,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 ### Component Inventory
 
 **SelectableActionList** - Universal list component used for:
+
 - Playlist items on Play page
 - Disk library on Disks page
 - Consistent UI across both pages
@@ -245,6 +252,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - Per-item dropdown menus for contextual actions
 
 **ItemSelectionDialog** - Source and file browser used for:
+
 - Adding items to playlist
 - Adding disks to library
 - Source selection: Local vs C64 Ultimate
@@ -253,6 +261,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - Bulk selection and confirmation
 
 **QuickActionCard** - Action buttons used on Home page
+
 - Machine control actions
 - Configuration management actions
 - Visual feedback states (default, danger, success)
@@ -263,6 +272,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 The following terms are consistently used across the UI:
 
 **Preferred (Used)**:
+
 - "Add items" / "Add more items" - Primary acquisition CTA
 - "Choose source" - Source selection dialog heading
 - "Local" / "C64 Ultimate" - Source names
@@ -272,6 +282,7 @@ The following terms are consistently used across the UI:
 - Collection management (not filesystem operations)
 
 **Avoided (Not Used)**:
+
 - "Browse filesystem"
 - "Root directory"
 - "Drill up"
@@ -280,6 +291,7 @@ The following terms are consistently used across the UI:
 ### Navigation Boundaries
 
 Actual implementation enforces source boundaries:
+
 - "Up" button navigates within source
 - "Up" disabled at source root (not hidden)
 - Source change requires returning to source selection
@@ -288,6 +300,7 @@ Actual implementation enforces source boundaries:
 ### Modal Patterns
 
 All destructive and configuration actions use centered modal dialogs:
+
 - Mount disk dialog
 - Remove from collection confirmation
 - Rename disk dialog

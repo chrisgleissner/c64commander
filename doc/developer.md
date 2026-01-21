@@ -63,6 +63,7 @@ All common development tasks use `./local-build.sh`:
 Location: `tests/unit/`, component tests in `src/**/*.test.ts`
 
 Run:
+
 ```bash
 ./local-build.sh --test
 ```
@@ -72,6 +73,7 @@ Run:
 Location: `playwright/*.spec.ts`
 
 Key concepts:
+
 - Strict UI monitoring: tests fail on console warnings/errors
 - Evidence folders: `test-results/evidence/<describe>--<test>/`
 - Numbered screenshots: `01-step.png`, `02-step.png`, etc.
@@ -79,6 +81,7 @@ Key concepts:
 - Trace files: `trace.zip` for debugging
 
 Run:
+
 ```bash
 ./local-build.sh --test-e2e           # E2E only
 ./local-build.sh --test-e2e-ci        # Full CI mirror
@@ -86,6 +89,7 @@ Run:
 ```
 
 Evidence structure:
+
 ```
 test-results/
   evidence/
@@ -105,6 +109,7 @@ playwright-report/
 Location: `android/app/src/test/java/`
 
 Run:
+
 ```bash
 cd android && ./gradlew test
 ```
@@ -118,6 +123,7 @@ Validate that all test evidence folders have correct structure:
 ```
 
 Checks:
+
 - Every folder has at least one PNG
 - Every folder has exactly one video.webm
 - All files have valid signatures (PNG/WEBM/ZIP)
@@ -126,16 +132,19 @@ Checks:
 ## CI workflow
 
 CI runs on every push with two parallel jobs:
+
 1. **Web tests** (unit + Playwright) producing Playwright evidence + report
 2. **Android build** (Gradle tests + APK/AAB)
 
 Artifacts:
+
 - `playwright-test-results` - Evidence folders + raw Playwright outputs
 - `playwright-report` - HTML test report
 - `c64-commander-debug-apk` - Debug APK
 - Release APK/AAB artifacts on tag builds when signing secrets are present
 
 Performance notes:
+
 - `PLAYWRIGHT_SKIP_BUILD=1` lets Playwright reuse a prebuilt `dist/` (build first).
 - The workflow supports a `package_manager` input for `workflow_dispatch` to compare `npm` vs `bun` install speed.
 
@@ -164,12 +173,14 @@ EXPECT_ANDROID_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs
 ```
 
 Coverage outputs:
+
 - Unit coverage: `coverage/lcov.info`
 - E2E coverage: `coverage/e2e/lcov.info`
 - Merged coverage (Codecov): `coverage/lcov-merged.info`
 - Android Jacoco XML: `android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml`
 
 CI guardrails:
+
 - `scripts/verify-coverage-artifacts.mjs` fails if expected coverage files are missing or empty.
 - `scripts/check-coverage-threshold.mjs` enforces minimum line coverage (default 80%).
 - `scripts/report-coverage.mjs` lists lowest-covered files to target for additional tests.
@@ -199,6 +210,7 @@ The app includes a developer mode with mocked C64U REST + FTP servers:
 4. App connects to 127.0.0.1 with fixture-backed mock servers
 
 Fixtures:
+
 - REST config: `tests/mocks/mockC64Server.ts`
 - FTP files: `playwright/fixtures/ftp-root/`
 

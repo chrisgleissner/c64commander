@@ -19,16 +19,19 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 **Command**: `npm run test:coverage`
 
 **What's covered**:
+
 - All TypeScript files in `src/**/*.{ts,tsx}`
 - Excludes: test files, type definitions, config files, `main.tsx`
 
 **Reporters**:
+
 - `text` - Console output during test runs
 - `lcov` - LCOV format for Codecov upload (`coverage/lcov.info`)
 - `html` - Human-readable HTML report (`coverage/index.html`)
 - `json` - Machine-readable JSON report (`coverage/coverage-final.json`)
 
 **Coverage thresholds** (baseline, aim to increase):
+
 ```typescript
 {
   statements: 10,
@@ -45,14 +48,17 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 **Command**: `cd android && ./gradlew testDebugUnitTest jacocoTestReport`
 
 **What's covered**:
+
 - All Kotlin source files in `android/app/src/main/java/`
 - Excludes: R.class, BuildConfig, Manifest, test files, android framework classes
 
 **Reports**:
+
 - `xml` - XML format for Codecov upload (`android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml`)
 - `html` - Human-readable HTML report (`android/app/build/reports/jacoco/jacocoTestReport/html/`)
 
 **Test files**:
+
 - Unit tests: `android/app/src/test/java/`
 - Integration tests: `android/app/src/androidTest/java/`
 
@@ -60,11 +66,13 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 
 **Tool**: Playwright  
 **Configuration**: `playwright.config.ts`  
-**Commands**: 
+**Commands**:
+
 - `npm run test:e2e` - Run all E2E tests
 - `npm run screenshots` - Generate screenshot tests
 
 **What's covered**:
+
 - Full user workflows across all pages
 - Configuration management
 - Disk management and file operations
@@ -79,16 +87,20 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 ### Local Coverage
 
 **TypeScript/TSX**:
+
 ```bash
 npm run test:coverage
 ```
+
 View report: `open coverage/index.html`
 
 **Kotlin**:
+
 ```bash
 cd android
 ./gradlew testDebugUnitTest jacocoTestReport
 ```
+
 View report: `open app/build/reports/jacoco/jacocoTestReport/html/index.html`
 
 ### CI Pipeline Coverage
@@ -96,12 +108,14 @@ View report: `open app/build/reports/jacoco/jacocoTestReport/html/index.html`
 The GitHub Actions workflow (`.github/workflows/android-apk.yaml`) automatically:
 
 1. **Run TypeScript tests with coverage**:
+
    ```yaml
    - name: Run unit tests with coverage
      run: npm run test:coverage
    ```
 
 2. **Run Kotlin tests with coverage**:
+
    ```yaml
    - name: Run Android tests with coverage
      run: |
@@ -110,12 +124,14 @@ The GitHub Actions workflow (`.github/workflows/android-apk.yaml`) automatically
    ```
 
 3. **Run E2E tests** (for integration coverage):
+
    ```yaml
    - name: Run Playwright e2e tests
      run: npm run test:e2e
    ```
 
 4. **Upload all coverage to Codecov**:
+
    ```yaml
    - name: Upload coverage to Codecov
      uses: codecov/codecov-action@v5
@@ -127,18 +143,21 @@ The GitHub Actions workflow (`.github/workflows/android-apk.yaml`) automatically
 
 ### Codecov Integration
 
-**Dashboard**: https://codecov.io/gh/chrisgleissner/c64commander
+**Dashboard**: <https://codecov.io/gh/chrisgleissner/c64commander>
 
 **Badge** (in README.md):
+
 ```markdown
 [![codecov](https://codecov.io/gh/chrisgleissner/c64commander/graph/badge.svg?token=hGEe09SZch)](https://codecov.io/gh/chrisgleissner/c64commander)
 ```
 
 **Flags**:
+
 - `unittests` - TypeScript/TSX unit tests
 - `android` - Kotlin/Android tests
 
 Codecov automatically:
+
 - Merges coverage from multiple languages
 - Tracks coverage trends over time
 - Comments on PRs with coverage changes
@@ -147,16 +166,19 @@ Codecov automatically:
 ## Coverage Goals
 
 ### Short-term (Current Baseline)
+
 - TypeScript: 10% lines, 55% branches
 - Kotlin: Establish baseline (first measurements)
 - E2E: Maintain 100% of critical user paths
 
 ### Medium-term (Next Quarter)
+
 - TypeScript: 50% lines, 70% branches
 - Kotlin: 60% lines, 70% branches
 - Add component-level testing for React components
 
 ### Long-term (6+ Months)
+
 - TypeScript: 80% lines, 85% branches
 - Kotlin: 80% lines, 85% branches
 - Full E2E coverage of all user-facing features
@@ -175,16 +197,19 @@ Codecov automatically:
 ## Testing Stack
 
 ### Unit Testing
+
 - **Vitest** - Fast, modern test runner for TypeScript/TSX
 - **React Testing Library** - Component testing utilities
 - **JUnit** - Kotlin unit tests
 
 ### Integration Testing
+
 - **Playwright** - E2E testing with real browser automation
 - **Mock servers** - `mockC64Server.ts`, `mockFtpServer.ts`
 - **Test fixtures** - Realistic test data in `playwright/fixtures/`
 
 ### Coverage Reporting
+
 - **V8** - Built-in coverage for V8 engine (TypeScript)
 - **Jacoco** - Industry-standard for JVM (Kotlin)
 - **Codecov** - Unified coverage dashboard and CI integration
@@ -194,6 +219,7 @@ Codecov automatically:
 ### Coverage Not Generated
 
 **TypeScript**:
+
 ```bash
 # Clean coverage directory
 rm -rf coverage
@@ -201,6 +227,7 @@ npm run test:coverage
 ```
 
 **Kotlin**:
+
 ```bash
 # Clean build directory
 cd android
@@ -211,11 +238,13 @@ cd android
 ### Coverage Upload Fails
 
 Check Codecov token:
+
 ```bash
 echo $CODECOV_TOKEN
 ```
 
 Verify files exist:
+
 ```bash
 ls -la coverage/lcov.info
 ls -la android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
@@ -224,6 +253,7 @@ ls -la android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
 ### Low Coverage for New Code
 
 1. Check what's not covered:
+
    ```bash
    npm run test:coverage
    open coverage/index.html
@@ -235,6 +265,7 @@ ls -la android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
    - Edge cases (null, empty, invalid input)
 
 3. Add targeted tests:
+
    ```typescript
    describe('new feature', () => {
      it('handles error case', () => {
