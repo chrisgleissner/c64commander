@@ -1,32 +1,46 @@
 # Logs
-logs
 *.log
+lerna-debug.log*
+logs/
 npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-.gradle
-test-results
-playwright-report
-android/**/build
+# Dependencies
+node_modules/
+
+# Build output
+.gradle/
+android/**/build/
+ci-artifacts/
+dist/
+dist-ssr/
+.tmp*
+
+# Test output
+.nyc_output/
+coverage/
+playwright-report/
+test-results/
+test-results/evidence/
+
+# Local config
 *.local
+.env
 
-# Editor directories and files
+# Editors
+*.njsproj
+*.ntvs*
+*.sln
+*.suo
+*.sw?
+.DS_Store
+.idea/
 .vscode/*
 !.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.env
+
+# Android signing
+*.keystore
 android/key.properties
 android/keystore/
-*.keystore

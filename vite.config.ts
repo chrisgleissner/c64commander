@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
+import istanbul from "vite-plugin-istanbul";
 import path from "path";
 import fs from "fs";
 
@@ -24,12 +25,24 @@ export default defineConfig(() => ({
       overlay: false,
     },
   },
+  assetsInclude: ['**/*.yaml', '**/*.yml'],
   build: {
     outDir: "dist",
     // Adjust warning threshold to avoid noisy chunk warnings while keeping defaults.
     chunkSizeWarningLimit: 1200,
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    // Instrument code for E2E coverage collection
+    istanbul({
+      include: 'src/**/*',
+      exclude: ['node_modules', 'test/', 'tests/', 'playwright/'],
+      extension: ['.js', '.ts', '.tsx'],
+      requireEnv: true,
+      envName: 'VITE_COVERAGE',
+      forceBuildInstrument: true,
+    }),
+  ],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
     __GIT_SHA__: JSON.stringify(gitSha),

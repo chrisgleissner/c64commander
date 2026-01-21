@@ -93,6 +93,9 @@ function CategorySection({
   const audioConfiguredRef = useRef<ConfigListItem[]>([]);
   const soloSnapshotRef = useRef<ConfigListItem[]>([]);
   const wasSoloActiveRef = useRef(false);
+  const [isEditingVolumes, setIsEditingVolumes] = useState(false);
+  const editTimeoutRef = useRef<number | null>(null);
+  const skipSoloRoutingRef = useRef(false);
   const soloSnapshotKey = 'c64u_audio_mixer_solo_snapshot';
 
   useEffect(() => {
@@ -143,6 +146,12 @@ function CategorySection({
     audioConfiguredRef.current = audioConfiguredItems;
   }, [isAudioMixer, audioConfiguredItems]);
 
+  useEffect(() => () => {
+    if (editTimeoutRef.current) {
+      window.clearTimeout(editTimeoutRef.current);
+    }
+  }, []);
+
   const applySoloRouting = useCallback(
     async (soloItem: string | null, configuredOverride?: ConfigListItem[]) => {
       if (!isAudioMixer) return;
@@ -189,15 +198,51 @@ function CategorySection({
   useEffect(() => {
     if (!isAudioMixer) return;
     const isActive = Boolean(soloState.soloItem);
+    if (skipSoloRoutingRef.current && !isActive) {
+      skipSoloRoutingRef.current = false;
+      wasSoloActiveRef.current = false;
+      return;
+    }
     if (isActive || wasSoloActiveRef.current) {
       void applySoloRouting(soloState.soloItem);
     }
-    wasSoloActiveRef.current = isActive;
+    wasSoloActiveRef.current = wasSoloActiveRef.current || isActive;
   }, [isAudioMixer, soloState.soloItem, applySoloRouting]);
+
+  const restoredSnapshotRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAudioMixer) return;
+    if (soloState.soloItem) return;
+    if (restoredSnapshotRef.current) return;
+    let stored: string | null = null;
+    try {
+      stored = sessionStorage.getItem(soloSnapshotKey);
+    } catch (error) {
+      addErrorLog('Solo snapshot read failed', { error: (error as Error).message });
+      restoredSnapshotRef.current = true;
+      return;
+    }
+    if (!stored) {
+      restoredSnapshotRef.current = true;
+      return;
+    }
+    try {
+      const parsed = JSON.parse(stored) as ConfigListItem[];
+      if (Array.isArray(parsed) && parsed.length) {
+        void applySoloRouting(null, parsed);
+      }
+    } catch (error) {
+      addErrorLog('Solo snapshot parse failed', { error: (error as Error).message });
+    } finally {
+      restoredSnapshotRef.current = true;
+    }
+  }, [applySoloRouting, isAudioMixer, soloState.soloItem]);
 
   useEffect(() => {
     if (!isAudioMixer) return undefined;
     return () => {
+      if (!wasSoloActiveRef.current && !soloState.soloItem) return;
       const configured = audioConfiguredRef.current.length
         ? audioConfiguredRef.current
         : items;
@@ -215,7 +260,7 @@ function CategorySection({
         void applySoloRouting(null, snapshot);
       }
     };
-  }, [isAudioMixer, applySoloRouting, items]);
+  }, [isAudioMixer, applySoloRouting, items, soloState.soloItem]);
 
   const handleValueChange = async (itemName: string, value: string | number) => {
     try {
@@ -247,6 +292,15 @@ function CategorySection({
   );
 
   const handleAudioValueChange = async (itemName: string, value: string | number) => {
+    if (soloState.soloItem) {
+      skipSoloRoutingRef.current = true;
+      dispatchSolo({ type: 'reset' });
+    }
+    setIsEditingVolumes(true);
+    if (editTimeoutRef.current) {
+      window.clearTimeout(editTimeoutRef.current);
+    }
+    editTimeoutRef.current = window.setTimeout(() => setIsEditingVolumes(false), 800);
     updateAudioConfiguredValue(itemName, value);
     await handleValueChange(itemName, value);
     if (!soloState.soloItem) {
@@ -374,6 +428,42 @@ function CategorySection({
             transition={{ duration: 0.2 }}
           >
             <div className="border-t border-border px-4 pb-2">
+              <div className="flex items-center justify-between gap-2 py-3" data-testid="config-group-actions">
+                <div className="flex items-center gap-2">
+                  {categoryName === 'Audio Mixer' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={resetAudioMixer}
+                      disabled={isResetting || isLoading || items.length === 0}
+                      className="text-xs"
+                    >
+                      Reset Audio Mixer
+                    </Button>
+                  )}
+                  {categoryName === 'Clock Settings' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSyncClock}
+                      disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
+                      className="text-xs"
+                    >
+                      Sync clock
+                    </Button>
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetch()}
+                  className="text-xs"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" />
+                  Refresh
+                </Button>
+              </div>
+
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -383,11 +473,12 @@ function CategorySection({
                   No settings available
                 </div>
               ) : (
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-border" data-testid="config-group-list">
                   {displayItems.map((item) => {
                     const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
                     const isSoloed = isSidVolume && soloState.soloItem === item.name;
                     const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
+                    const testIdBase = item.name.toLowerCase().replace(/\s+/g, '-');
                     const rowClassName = cn(
                       isSidVolume && 'rounded-md px-2',
                       isSoloed && 'bg-primary/10',
@@ -408,6 +499,8 @@ function CategorySection({
                             checked={isSoloed}
                             aria-label={`Solo ${item.name}`}
                             onCheckedChange={() => dispatchSolo({ type: 'toggle', item: item.name })}
+                            disabled={isEditingVolumes}
+                            data-testid={`audio-mixer-solo-${testIdBase}`}
                           />
                         </div>
                       </div>
@@ -427,45 +520,13 @@ function CategorySection({
                         isLoading={setConfig.isPending}
                         className={rowClassName}
                         rightAccessory={rightAccessory}
+                        valueTestId={isSidVolume ? `audio-mixer-value-${testIdBase}` : undefined}
+                        sliderTestId={isSidVolume ? `audio-mixer-slider-${testIdBase}` : undefined}
                       />
                     );
                   })}
                 </div>
               )}
-              
-              <div className="flex justify-between pt-2">
-                {categoryName === 'Audio Mixer' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={resetAudioMixer}
-                    disabled={isResetting || isLoading || items.length === 0}
-                    className="text-xs"
-                  >
-                    Reset Audio Mixer
-                  </Button>
-                )}
-                {categoryName === 'Clock Settings' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSyncClock}
-                    disabled={isLoading || items.length === 0 || updateConfigBatch.isPending}
-                    className="text-xs"
-                  >
-                    Sync clock
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => refetch()}
-                  className="text-xs"
-                >
-                  <RefreshCw className="h-3 w-3 mr-1" />
-                  Refresh
-                </Button>
-              </div>
             </div>
           </motion.div>
         )}

@@ -12,6 +12,7 @@ export type ItemSelectionViewProps = {
   onToggleSelect: (entry: SourceEntry) => void;
   onOpen: (path: string) => void;
   onNavigateUp: () => void;
+  onNavigateRoot: () => void;
   onRefresh: () => void;
   showFolderSelect: boolean;
   emptyLabel: string;
@@ -26,6 +27,7 @@ export const ItemSelectionView = ({
   onToggleSelect,
   onOpen,
   onNavigateUp,
+  onNavigateRoot,
   onRefresh,
   showFolderSelect,
   emptyLabel,
@@ -34,9 +36,24 @@ export const ItemSelectionView = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Path: {path}</span>
+      <div className="flex items-center justify-between gap-2 min-w-0">
+        <span className="text-xs text-muted-foreground break-all min-w-0">Path: {path}</span>
         <div className="flex items-center gap-2">
+          <span
+            data-testid="ftp-loading"
+            className={`text-xs text-muted-foreground ${isLoading ? 'inline-flex' : 'hidden'}`}
+          >
+            Loading…
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onNavigateRoot}
+            disabled={atRoot || isLoading}
+            data-testid="navigate-root"
+          >
+            Root
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -66,7 +83,7 @@ export const ItemSelectionView = ({
           const isSelected = selection.has(entry.path);
           const canSelect = entry.type === 'file' || showFolderSelect;
           return (
-            <div key={entry.path} className="flex items-center justify-between gap-2">
+            <div key={entry.path} className="flex items-center justify-between gap-2 min-w-0" data-testid="source-entry-row">
               <div className="flex items-center gap-2 min-w-0">
                 <Checkbox
                   checked={isSelected}

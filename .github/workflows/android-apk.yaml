@@ -6,13 +6,25 @@ on:
     tags: ["*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      package_manager:
+        description: "Package manager for dependency install (performance comparison)"
+        type: choice
+        options:
+          - npm
+          - bun
+        default: npm
 
 permissions:
   contents: write
 
 jobs:
-  build-apk:
+  web-tests:
+    name: Web tests (unit + Playwright)
     runs-on: ubuntu-latest
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
 
     steps:
       - name: Checkout
@@ -24,17 +36,216 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Setup Bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          start=$(date +%s)
+          bun install --frozen-lockfile
+          end=$(date +%s)
+          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install dependencies (npm)
+        if: env.PACKAGE_MANAGER != 'bun'
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Build web (screenshots)
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run build
+          end=$(date +%s)
+          echo "- build (screenshots): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run unit tests with coverage
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run test:coverage
+          end=$(date +%s)
+          echo "- unit tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Playwright browsers
+        run: |
+          start=$(date +%s)
+          npx playwright install --with-deps
+          end=$(date +%s)
+          echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run screenshot tests
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          VITE_GIT_SHA: "ci"
+          VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+          SOURCE_DATE_EPOCH: "0"
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run screenshots
+          end=$(date +%s)
+          echo "- screenshots: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Build web (coverage probes)
+        run: |
+          start=$(date +%s)
+          VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+          end=$(date +%s)
+          echo "- build (coverage): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Playwright e2e tests
+        env:
+          PLAYWRIGHT_SKIP_BUILD: "1"
+          VITE_GIT_SHA: "ci"
+          VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
+          SOURCE_DATE_EPOCH: "0"
+          VITE_COVERAGE: "true"
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run test:e2e
+          end=$(date +%s)
+          echo "- e2e tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Validate Playwright evidence
+        if: always()
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run validate:evidence
+          end=$(date +%s)
+          echo "- evidence validation: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Merge coverage reports
+        if: always()
+        run: |
+          start=$(date +%s)
+          echo "==> Generating E2E coverage report..."
+          npx nyc report \
+            --temp-dir .nyc_output \
+            --report-dir coverage/e2e \
+            --reporter=lcov \
+            --reporter=text-summary
+          echo "==> Merging unit + E2E LCOV for Codecov..."
+          npx lcov-result-merger \
+            "coverage/{lcov.info,e2e/lcov.info}" \
+            coverage/lcov-merged.info
+          end=$(date +%s)
+          echo "- coverage merge: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: List web coverage artifacts
+        if: always()
+        run: |
+          echo "Coverage files:";
+          find coverage -maxdepth 3 -type f \( -name "*.info" -o -name "*.json" -o -name "*.html" \) | sort
+
+      - name: Verify coverage artifacts
+        if: always()
+        env:
+          EXPECT_WEB_COVERAGE: "1"
+        run: node scripts/verify-coverage-artifacts.mjs
+
+      - name: Enforce coverage threshold
+        if: always()
+        env:
+          COVERAGE_MIN: "80"
+        run: node scripts/check-coverage-threshold.mjs
+
+      - name: Upload web coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov-merged.info
+          flags: unittests,e2etests
+          name: c64-commander-web-coverage
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results
+          path: test-results/**
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+
+  android-build:
+    name: Android tests + APK
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          start=$(date +%s)
+          bun install --frozen-lockfile
+          end=$(date +%s)
+          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install dependencies (npm)
+        if: env.PACKAGE_MANAGER != 'bun'
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
+          cache: gradle
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install dependencies
-        run: npm install
 
       - name: Decode keystore
         env:
@@ -75,20 +286,48 @@ jobs:
             "build-tools;34.0.0"
 
       - name: Build web + sync
-        run: npm run cap:build
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run cap:build
+          end=$(date +%s)
+          echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+      - name: Run Android tests with coverage
+        run: |
+          start=$(date +%s)
+          cd android
+          ./gradlew testDebugUnitTest jacocoTestReport
+          end=$(date +%s)
+          echo "- android tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
-      - name: Run screenshot tests
+      - name: List Android coverage artifacts
+        if: always()
+        run: |
+          echo "Android coverage files:";
+          find android/app/build/reports -type f -name "jacocoTestReport.xml" | sort
+
+      - name: Verify coverage artifacts
+        if: always()
         env:
-          VITE_GIT_SHA: "ci"
-          VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
-          SOURCE_DATE_EPOCH: "0"
-        run: npm run screenshots
+          EXPECT_ANDROID_COVERAGE: "1"
+        run: node scripts/verify-coverage-artifacts.mjs
+
+      - name: Upload Android coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          flags: android
+          name: c64-commander-android-coverage
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build APK (debug)
-        run: npm run android:apk
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run android:apk
+          end=$(date +%s)
+          echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Build APK (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'

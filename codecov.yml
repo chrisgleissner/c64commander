@@ -1,0 +1,37 @@
+codecov:
+  require_ci_to_pass: yes
+  notify:
+    wait_for_ci: yes
+
+coverage:
+  status:
+    project:
+      default:
+        target: 0.8
+        threshold: 0%
+        informational: false
+        if_not_found: error
+    patch:
+      default:
+        target: 0.8
+        threshold: 0%
+        informational: false
+        if_not_found: error
+
+comment:
+  layout: "reach,diff,flags,tree"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "tests/**"
+  - "playwright/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/*.d.ts"
+  - "**/*.config.ts"
+  - "**/*.config.js"
+  - "src/vite-env.d.ts"
+  - "src/main.tsx"

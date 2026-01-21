@@ -9,7 +9,21 @@ export type SourceNavigatorState = {
   error: string | null;
   navigateTo: (path: string) => void;
   navigateUp: () => void;
+  navigateRoot: () => void;
   refresh: () => void;
+};
+
+const buildNavKey = (source: SourceLocation) => `c64u_source_nav:${source.type}:${source.id}`;
+
+const getStoredPath = (source: SourceLocation) => {
+  if (typeof localStorage === 'undefined') return null;
+  const raw = localStorage.getItem(buildNavKey(source));
+  return raw || null;
+};
+
+const setStoredPath = (source: SourceLocation, path: string) => {
+  if (typeof localStorage === 'undefined') return;
+  localStorage.setItem(buildNavKey(source), path);
 };
 
 export const useSourceNavigator = (source: SourceLocation | null): SourceNavigatorState => {
@@ -36,8 +50,15 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
 
   useEffect(() => {
     if (!source) return;
-    void loadEntries(source.rootPath);
+    const stored = getStoredPath(source);
+    const initialPath = stored ? ensureWithinRoot(stored, source.rootPath) : source.rootPath;
+    void loadEntries(initialPath);
   }, [loadEntries, source]);
+
+  useEffect(() => {
+    if (!source) return;
+    setStoredPath(source, path);
+  }, [path, source]);
 
   const navigateTo = useCallback((nextPath: string) => {
     if (!source) return;
@@ -50,8 +71,14 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     void loadEntries(parent);
   }, [loadEntries, path, source]);
 
+  const navigateRoot = useCallback(() => {
+    if (!source) return;
+    void loadEntries(source.rootPath);
+  }, [loadEntries, source]);
+
   const refresh = useCallback(() => {
     if (!source) return;
+    source.clearCacheForPath?.(path);
     void loadEntries(path);
   }, [loadEntries, path, source]);
 
@@ -62,6 +89,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     error,
     navigateTo,
     navigateUp,
+    navigateRoot,
     refresh,
   };
 };

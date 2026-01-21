@@ -26,36 +26,36 @@ The UX is built around three distinct concepts that must never be conflated:
    - Navigation is always **bounded to the selected source**.
    - No playback or mounting occurs here.
 
-3. **Libraries**
-   - Logical collections of selected items.
-   - Used exclusively for **playback** or **disk mounting**.
-   - Never expose filesystem navigation.
+3. **Playlists & Collections**
+
+- Playlists are the single source of truth for **playback**.
+- Disk collections are used exclusively for **mounting**.
+- Never expose filesystem navigation.
 
 All UX flows must respect this separation.
 
 ---
 
-## Libraries
+## Playlists & Disk Collections
 
-There are exactly two libraries:
+There are exactly two collections:
 
-### File Library
+### Playlist (Play page)
 
 - Contains all playable artefacts:
   - PRG, CRT, SID, MOD, and disk images.
-- Disk images in this library are treated as playable media.
-- Playback auto-starts the first item on the disk.
+- Items are queued explicitly; adding items never auto-plays.
 
-### Disk Library
+### Disk Collection (Disks page)
 
 - Contains disk images intended for later mounting on drives.
 - Focused on system configuration rather than immediate playback.
 
-Libraries:
+Collections:
 
 - Never expose filesystem concepts.
 - Never depend on navigation state.
-- Always operate on stored library entries.
+- Always operate on stored entries.
 
 ---
 
@@ -69,7 +69,7 @@ This action always leads to:
 
 1. Choose source
 2. Select items
-3. Add to library
+3. Add to playlist
 
 The user never “browses the filesystem” as a primary goal.
 
@@ -97,11 +97,13 @@ Rules:
 - Traversal beyond the source root is impossible.
 - The root boundary must be visually clear.
 - “Up” is disabled or hidden at the root.
+- Remember the last visited path per source and resume there.
+- Provide a quick “Root” action to return to the source root.
 
 Selection views:
 
 - Are used only to select files or folders.
-- Must not expose playback, mounting, or library actions.
+- Must not expose playback, mounting, or collection actions.
 - Must use the same layout and behaviour for all sources.
 
 ---
@@ -111,11 +113,13 @@ Selection views:
 - Use centered dialogs for modal actions:
   - Mount
   - Rename
-  - Remove from library
+  - Remove from collection
   - Playlist actions
 - Avoid layout shifts when selections or controls appear.
 - Reserve space for selection and bulk-action controls.
 - Group related controls and keep labels concise and intention-driven.
+- Long paths must wrap and never force horizontal scrolling.
+- Lists show a configurable preview limit and open a scrollable “View all” panel for the full set.
 
 ---
 
@@ -127,14 +131,14 @@ Selection views:
 - Place bulk actions near selection controls.
 - Clearly distinguish destructive actions.
 - Always confirm destructive actions:
-  - Remove from library
+  - Remove from collection
   - Delete (where applicable)
 
 ---
 
 ## Playback and Mounting Controls
 
-- Playback and mounting controls appear **only in libraries**, never in selection views.
+- Playback and mounting controls appear **only in playlists/collections**, never in selection views.
 - Keep playback-related toggles grouped and stable.
 - Playlist actions (play, remove, clear) must be easily discoverable.
 - Use detected metadata (e.g. HVSC song lengths) to inform timers when available.
@@ -150,8 +154,8 @@ Language must express **intent**, not implementation.
 - Add items
 - Choose source
 - Select items
-- Add to library
-- Remove from library
+- Add to playlist
+- Remove from collection
 
 ### Avoid
 
@@ -167,7 +171,7 @@ Menu titles, dialog titles, and action labels must match exactly.
 ## Consistency Rules
 
 - The same selection UI must be used for all sources.
-- The same library UI must be used regardless of item origin.
+- The same playlist UI must be used regardless of item origin.
 - Source boundaries must never be crossed implicitly.
 - Users must never wonder whether they are:
   - Selecting items
@@ -182,7 +186,125 @@ If intent is unclear, the UX is incorrect.
 
 - Sources define scope.
 - Selection happens within scope.
-- Libraries are the only place where playback and mounting occur.
+- Collections (playlists and disk libraries) are the only place where playback and mounting occur.
 - Clear intent, stable layouts, and consistent wording are mandatory.
 
 This model prioritizes clarity, predictability, and long-term maintainability.
+
+---
+
+## Implementation Notes
+
+### Actual Page Structure
+
+**Play Page (PlayFilesPage.tsx)**
+
+- Primary CTA: "Add items" or "Add more items"
+- Opens ItemSelectionDialog for source and file selection
+- Playlist displayed with SelectableActionList component
+- Transport controls: Play/Stop, Pause/Resume, Prev/Next
+- Playlist options: Shuffle, Repeat
+- Selection controls: Select all, Deselect all, Remove selected
+- View all button when playlist exceeds preview limit
+- HVSC integration for SID metadata and song lengths
+
+**Disks Page (DisksPage.tsx → HomeDiskManager.tsx)**
+
+- Drive control area showing Drive A and Drive B status
+- Active drive selection (radio buttons)
+- Mount/Eject buttons for each drive
+- Multi-disk navigation (Prev/Next) for disk groups
+- Disk library displayed with SelectableActionList
+- Primary CTA: "Add disks"
+- Opens ItemSelectionDialog for disk source and selection
+- Selection controls: Select all, Deselect all, Remove selected
+- View all button when library exceeds preview limit
+
+**Home Page (HomePage.tsx)**
+
+- Quick action cards for machine control (Reset, Menu, Pause, Resume, Power Off)
+- Configuration quick actions (Apply, Save, Load, Revert, Manage)
+- Drive status cards with navigation to Disks page
+- Current configuration display
+
+**Settings Page (SettingsPage.tsx)**
+
+- Connection settings (IP, Port, Mock mode)
+- Appearance settings (Theme selection)
+- Diagnostics (Share logs, Email logs, Clear logs)
+- About section (with secret developer mode activation)
+
+**Config Browser Page (ConfigBrowserPage.tsx)**
+
+- Hierarchical category navigation
+- Config item widgets (sliders, toggles, inputs)
+- Per-item refresh buttons
+- Category-level reset buttons
+
+### Component Inventory
+
+**SelectableActionList** - Universal list component used for:
+
+- Playlist items on Play page
+- Disk library on Disks page
+- Consistent UI across both pages
+- Built-in selection controls, bulk actions, view all dialog
+- Per-item dropdown menus for contextual actions
+
+**ItemSelectionDialog** - Source and file browser used for:
+
+- Adding items to playlist
+- Adding disks to library
+- Source selection: Local vs C64 Ultimate
+- Navigation within selected source (bounded by source root)
+- File type filtering
+- Bulk selection and confirmation
+
+**QuickActionCard** - Action buttons used on Home page
+
+- Machine control actions
+- Configuration management actions
+- Visual feedback states (default, danger, success)
+- Loading and disabled states
+
+### Terminology Consistency
+
+The following terms are consistently used across the UI:
+
+**Preferred (Used)**:
+
+- "Add items" / "Add more items" - Primary acquisition CTA
+- "Choose source" - Source selection dialog heading
+- "Local" / "C64 Ultimate" - Source names
+- "Select all" / "Deselect all" - Bulk selection
+- "Remove selected" - Destructive bulk action
+- "View all" - List expansion
+- Collection management (not filesystem operations)
+
+**Avoided (Not Used)**:
+
+- "Browse filesystem"
+- "Root directory"
+- "Drill up"
+- Direct filesystem terminology
+
+### Navigation Boundaries
+
+Actual implementation enforces source boundaries:
+
+- "Up" button navigates within source
+- "Up" disabled at source root (not hidden)
+- Source change requires returning to source selection
+- No implicit source boundary crossing
+
+### Modal Patterns
+
+All destructive and configuration actions use centered modal dialogs:
+
+- Mount disk dialog
+- Remove from collection confirmation
+- Rename disk dialog
+- Save configuration dialog
+- Load configuration dialog
+- Set duration override dialog
+- Choose subsong dialog

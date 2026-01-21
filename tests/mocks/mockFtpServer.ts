@@ -19,6 +19,15 @@ export async function createMockFtpServer(options: MockFtpServerOptions): Promis
   const rootDir = path.resolve(options.rootDir);
   const port = options.port ?? 0;
   const password = options.password ?? '';
+  const silentLog = {
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    debug: () => {},
+    trace: () => {},
+    fatal: () => {},
+    child: () => silentLog,
+  };
 
   const server = new FtpSrv({
     url: `ftp://${host}:${port}`,
@@ -26,6 +35,7 @@ export async function createMockFtpServer(options: MockFtpServerOptions): Promis
     pasv_min: 40100,
     pasv_max: 40200,
     anonymous: true,
+    log: silentLog,
   });
 
   server.on('login', ({ password: suppliedPassword }, resolve, reject) => {

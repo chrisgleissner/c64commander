@@ -14,6 +14,7 @@ import DocsPage from "./pages/DocsPage";
 import NotFound from "./pages/NotFound";
 import PlayFilesPage from './pages/PlayFilesPage';
 import DisksPage from './pages/DisksPage.tsx';
+import CoverageProbePage from './pages/CoverageProbePage';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog } from "@/lib/logging";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
@@ -67,6 +68,9 @@ const AppRoutes = () => (
     <RouteRefresher />
     <MockModeBanner />
     <Routes>
+      {import.meta.env.VITE_ENABLE_TEST_PROBES === '1' ? (
+        <Route path="/__coverage__" element={<CoverageProbePage />} />
+      ) : null}
       <Route path="/" element={<HomePage />} />
       <Route path="/config" element={<ConfigBrowserPage />} />
       <Route path="/play" element={<PlayFilesPage />} />

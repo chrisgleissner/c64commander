@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildPlayPlan, executePlayPlan } from '@/lib/playback/playbackRouter';
+import { addErrorLog } from '@/lib/logging';
+
+vi.mock('@/lib/logging', () => ({
+  addErrorLog: vi.fn(),
+}));
 
 const createApiMock = () => ({
   playSid: vi.fn().mockResolvedValue({ errors: [] }),
@@ -46,6 +51,21 @@ describe('playbackRouter', () => {
     expect(api.machineReset).toHaveBeenCalled();
     expect(api.mountDriveUpload).toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it('routes PRG uploads in load mode', async () => {
+    const api = createApiMock();
+    const file = new File(['prg'], 'demo.prg');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.prg', file });
+    await executePlayPlan(api as any, plan, { loadMode: 'load' });
+    expect(api.loadPrgUpload).toHaveBeenCalled();
+  });
+
+  it('logs and throws when local SID data is missing', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.sid' });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local SID data');
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
   });
 
   it('throws on unsupported formats', () => {

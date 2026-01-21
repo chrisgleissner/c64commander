@@ -1,6 +1,9 @@
-import { test, expect, type Page, type Route, type ConsoleMessage } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Page, Route, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
+import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 declare global {
   interface Window {
@@ -11,7 +14,6 @@ declare global {
 test.describe('HVSC Play page', () => {
   let c64Server: Awaited<ReturnType<typeof createMockC64Server>>;
   let hvscServer: Awaited<ReturnType<typeof createMockHvscServer>>;
-  const consoleErrors = new WeakMap<Page, string[]>();
 
   test.beforeAll(async () => {
     c64Server = await createMockC64Server({});
@@ -23,19 +25,22 @@ test.describe('HVSC Play page', () => {
     if (hvscServer) await hvscServer.close();
   });
 
-  test.beforeEach(async ({ page }: { page: Page }) => {
-    const errors: string[] = [];
-    page.on('console', (msg: ConsoleMessage) => {
-      if (msg.type() === 'error') errors.push(msg.text());
-    });
-    page.on('pageerror', (err: Error) => errors.push(err.message));
-    consoleErrors.set(page, errors);
+  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
   });
 
-  test.afterEach(async ({ page }: { page: Page }) => {
-    const errors = consoleErrors.get(page) ?? [];
-    expect(errors, `Console errors: ${errors.join('\n')}`).toEqual([]);
+  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+    try {
+      await saveCoverageFromPage(page, testInfo.title);
+      await assertNoUiIssues(page, testInfo);
+    } finally {
+      await finalizeEvidence(page, testInfo);
+    }
   });
+
+  const snap = async (page: Page, testInfo: TestInfo, label: string) => {
+    await attachStepScreenshot(page, testInfo, label);
+  };
 
   type InstallOptions = {
     installedVersion: number;
@@ -361,26 +366,31 @@ test.describe('HVSC Play page', () => {
     );
   };
 
-  test('HVSC not installed -> install -> ready', async ({ page }: { page: Page }) => {
+  test('HVSC not installed -> install -> ready', async ({ page }: { page: Page }, testInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    await snap(page, testInfo, 'hvsc-installed');
   });
 
-  test('HVSC install shows progress updates', async ({ page }: { page: Page }) => {
+  test('HVSC install shows progress updates', async ({ page }: { page: Page }, testInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    await snap(page, testInfo, 'install-complete');
   });
 
-  test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }) => {
+  test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }, testInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
 
@@ -389,6 +399,7 @@ test.describe('HVSC Play page', () => {
     await expect(firstTrack).toBeVisible();
     await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'playlist-visible');
 
     const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
     await expect
@@ -397,22 +408,28 @@ test.describe('HVSC Play page', () => {
     const lastRequest = c64Server.sidplayRequests[c64Server.sidplayRequests.length - 1];
     expect(lastRequest.method).toBe('POST');
     expect(lastRequest.body.includes(expectedPayload)).toBe(true);
+    await snap(page, testInfo, 'sidplay-requested');
   });
 
-  test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }) => {
+  test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }, testInfo) => {
+    allowWarnings(testInfo, 'Expected extraction failure toast before cached ingest.');
     await installMocks(page, { installedVersion: 0, failInstall: true, failStage: 'extract' });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
+    await snap(page, testInfo, 'extract-failed');
 
     await page.getByRole('button', { name: 'Ingest cached', exact: true }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    await snap(page, testInfo, 'ingest-complete');
 
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     const firstTrack = page.getByText('10_Orbyte.sid', { exact: true });
     await expect(firstTrack).toBeVisible();
     await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'playlist-visible');
 
     const expectedPayload = Buffer.from(hvscServer.baseline.songs[0].dataBase64, 'base64');
     await expect
@@ -420,59 +437,77 @@ test.describe('HVSC Play page', () => {
       .toBeGreaterThan(0);
     const lastRequest = c64Server.sidplayRequests[c64Server.sidplayRequests.length - 1];
     expect(lastRequest.body.includes(expectedPayload)).toBe(true);
+    await snap(page, testInfo, 'sidplay-requested');
   });
 
-  test('HVSC up-to-date -> browse -> play track', async ({ page }: { page: Page }) => {
+  test('HVSC up-to-date -> browse -> play track', async ({ page }: { page: Page }, testInfo) => {
     await installMocks(page, { installedVersion: 84 });
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
 
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     const firstTrack = page.getByText(/\.sid$/i).first();
     await expect(firstTrack).toBeVisible();
+    await snap(page, testInfo, 'hvsc-list');
     await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'playlist-visible');
   });
 
-  test('HVSC update available -> update -> browsing works', async ({ page }: { page: Page }) => {
+  test('HVSC update available -> update -> browsing works', async ({ page }: { page: Page }, testInfo) => {
     await installMocks(page, { installedVersion: 83 });
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
     );
 
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Check updates' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    await snap(page, testInfo, 'update-complete');
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     await expect(page.getByText(/\.sid$/i).first()).toBeVisible();
+    await snap(page, testInfo, 'hvsc-list');
   });
 
-  test('Local ZIP ingestion is not shown on Play page', async ({ page }: { page: Page }) => {
+  test('Local ZIP ingestion is not shown on Play page', async ({ page }: { page: Page }, testInfo) => {
     await installMocks(page, { installedVersion: 84 });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await expect(page.getByText(/local\.zip/i)).toHaveCount(0);
+    await snap(page, testInfo, 'zip-hidden');
   });
 
-  test('HVSC update check failure surfaces error', async ({ page }: { page: Page }) => {
+  test('HVSC update check failure surfaces error', async ({ page }: { page: Page }, testInfo) => {
+    allowWarnings(testInfo, 'Expected error toast for HVSC update check failure.');
     await installMocks(page, { installedVersion: 0, failCheck: true });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated update check failure/i).first()).toBeVisible();
+    await snap(page, testInfo, 'update-failed');
   });
 
-  test('HVSC extraction failure shows retry', async ({ page }: { page: Page }) => {
+  test('HVSC extraction failure shows retry', async ({ page }: { page: Page }, testInfo) => {
+    allowWarnings(testInfo, 'Expected error toast for HVSC extraction failure.');
     await installMocks(page, { installedVersion: 0, failStage: 'extract', failInstallAttempts: 1 });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
+    await snap(page, testInfo, 'extract-failed');
   });
 
-  test('HVSC ingestion failure shows retry', async ({ page }: { page: Page }) => {
+  test('HVSC ingestion failure shows retry', async ({ page }: { page: Page }, testInfo) => {
+    allowWarnings(testInfo, 'Expected error toast for HVSC ingestion failure.');
     await installMocks(page, { installedVersion: 0, failStage: 'ingest', failInstallAttempts: 1 });
     await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Install HVSC' }).click();
     await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
+    await snap(page, testInfo, 'ingest-failed');
   });
 });
