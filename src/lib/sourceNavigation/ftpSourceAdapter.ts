@@ -2,31 +2,110 @@ import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import type { SourceEntry, SourceLocation } from './types';
 
+type FtpCacheRecord = {
+  entries: SourceEntry[];
+  updatedAt: number;
+};
+
+type FtpCacheState = {
+  entries: Record<string, FtpCacheRecord>;
+  order: string[];
+};
+
+const CACHE_KEY = 'c64u_ftp_cache:v1';
+const CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 200;
+
+const loadCache = (): FtpCacheState => {
+  if (typeof localStorage === 'undefined') return { entries: {}, order: [] };
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return { entries: {}, order: [] };
+    const parsed = JSON.parse(raw) as FtpCacheState;
+    if (!parsed || typeof parsed !== 'object') return { entries: {}, order: [] };
+    return {
+      entries: parsed.entries ?? {},
+      order: Array.isArray(parsed.order) ? parsed.order : [],
+    };
+  } catch {
+    return { entries: {}, order: [] };
+  }
+};
+
+const saveCache = (state: FtpCacheState) => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore cache persistence errors.
+  }
+};
+
+const buildCacheKey = (host: string, port: number | undefined, path: string) =>
+  `${host}:${port ?? ''}:${path || '/'}`;
+
+const getCachedEntries = (key: string): SourceEntry[] | null => {
+  const cache = loadCache();
+  const record = cache.entries[key];
+  if (!record) return null;
+  if (Date.now() - record.updatedAt > CACHE_TTL_MS) return null;
+  return record.entries;
+};
+
+const setCachedEntries = (key: string, entries: SourceEntry[]) => {
+  const cache = loadCache();
+  cache.entries[key] = { entries, updatedAt: Date.now() };
+  cache.order = [key, ...cache.order.filter((entry) => entry !== key)];
+  if (cache.order.length > MAX_CACHE_ENTRIES) {
+    const evicted = cache.order.splice(MAX_CACHE_ENTRIES);
+    evicted.forEach((entry) => {
+      delete cache.entries[entry];
+    });
+  }
+  saveCache(cache);
+};
+
+const clearCachedEntries = (key: string) => {
+  const cache = loadCache();
+  delete cache.entries[key];
+  cache.order = cache.order.filter((entry) => entry !== key);
+  saveCache(cache);
+};
+
 const listEntries = async (path: string): Promise<SourceEntry[]> => {
   const host = localStorage.getItem('c64u_device_host') || 'c64u';
   const password = localStorage.getItem('c64u_password') || '';
+  const normalizedPath = path && path !== '' ? path : '/';
+  const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
+  const cached = getCachedEntries(cacheKey);
+  if (cached) return cached;
+
   const result = await listFtpDirectory({
     host,
     port: getStoredFtpPort(),
     password,
-    path,
+    path: normalizedPath,
   });
-  return (result.entries || []).map((entry) => ({
+  const entries = (result.entries || []).map((entry) => ({
     type: entry.type,
     name: entry.name,
     path: entry.path,
     sizeBytes: entry.size ?? null,
     modifiedAt: entry.modifiedAt ?? null,
   }));
+  setCachedEntries(cacheKey, entries);
+  return entries;
 };
 
 const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
   const queue = [path || '/'];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
-  while (queue.length) {
-    const current = queue.shift();
-    if (!current || visited.has(current)) continue;
+  const maxConcurrent = 3;
+  const pending = new Set<Promise<void>>();
+
+  const processPath = async (current: string) => {
+    if (!current || visited.has(current)) return;
     visited.add(current);
     const entries = await listEntries(current);
     entries.forEach((entry) => {
@@ -36,7 +115,21 @@ const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
         results.push(entry);
       }
     });
+  };
+
+  while (queue.length || pending.size) {
+    while (queue.length && pending.size < maxConcurrent) {
+      const nextPath = queue.shift();
+      if (!nextPath) continue;
+      let job: Promise<void>;
+      job = processPath(nextPath).finally(() => pending.delete(job));
+      pending.add(job);
+    }
+    if (pending.size) {
+      await Promise.race(pending);
+    }
   }
+
   return results;
 };
 
@@ -48,4 +141,10 @@ export const createUltimateSourceLocation = (): SourceLocation => ({
   isAvailable: true,
   listEntries,
   listFilesRecursive,
+  clearCacheForPath: (path) => {
+    if (typeof localStorage === 'undefined') return;
+    const host = localStorage.getItem('c64u_device_host') || 'c64u';
+    const cacheKey = buildCacheKey(host, getStoredFtpPort(), path || '/');
+    clearCachedEntries(cacheKey);
+  },
 });

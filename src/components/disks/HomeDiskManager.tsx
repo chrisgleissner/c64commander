@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, Trash2, X } from 'lucide-react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Monitor, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
+import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { getC64API } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
-import { DiskTree } from '@/components/disks/DiskTree';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
@@ -34,6 +35,36 @@ const buildDrivePath = (path?: string | null, file?: string | null) => {
 const DiskIndicator = ({ mounted }: { mounted: boolean }) => (
   <Disc className={`h-4 w-4 ${mounted ? 'text-success' : 'text-muted-foreground'}`} />
 );
+
+const LocationIcon = ({ location }: { location: DiskEntry['location'] }) =>
+  location === 'local' ? (
+    <Smartphone className="h-4 w-4 text-primary/70" aria-label="Local disk" />
+  ) : (
+    <Monitor className="h-4 w-4 text-blue-500/70" aria-label="C64U disk" />
+  );
+
+const formatBytes = (value?: number | null) => {
+  if (!value || value <= 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = value;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  }).format(date);
+};
 
 export const HomeDiskManager = () => {
   const { status } = useC64Connection();
@@ -60,6 +91,7 @@ export const HomeDiskManager = () => {
   const [selectedDiskIds, setSelectedDiskIds] = useState<Set<string>>(new Set());
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
+  const { limit: listPreviewLimit } = useListPreviewLimit();
 
   const api = getC64API();
 
@@ -121,6 +153,21 @@ export const HomeDiskManager = () => {
   const allDiskIds = useMemo(() => diskLibrary.disks.map((disk) => disk.id), [diskLibrary.disks]);
   const selectedCount = selectedDiskIds.size;
   const allSelected = selectedCount > 0 && selectedCount === allDiskIds.length;
+  const filterText = diskLibrary.filter.trim().toLowerCase();
+  const sortedDisks = useMemo(
+    () => diskLibrary.disks.slice().sort((a, b) => a.path.localeCompare(b.path)),
+    [diskLibrary.disks],
+  );
+  const matchesFilter = useCallback(
+    (disk: DiskEntry) => {
+      if (!filterText) return true;
+      const name = disk.name.toLowerCase();
+      const path = disk.path.toLowerCase();
+      const group = disk.group?.toLowerCase() ?? '';
+      return name.includes(filterText) || path.includes(filterText) || group.includes(filterText);
+    },
+    [filterText],
+  );
 
   const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) => {
     try {
@@ -255,7 +302,7 @@ export const HomeDiskManager = () => {
       const diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
       if (!diskCandidates.length) {
         showNoDiskWarning();
-        return;
+        return false;
       }
 
       const runtimeFiles: Record<string, File> = {};
@@ -282,14 +329,78 @@ export const HomeDiskManager = () => {
 
       diskLibrary.addDisks(disks, runtimeFiles);
       toast({ title: 'Items added', description: `${disks.length} disk(s) added to library.` });
+      return true;
     } catch (error) {
       toast({
         title: 'Add items failed',
         description: (error as Error).message,
         variant: 'destructive',
       });
+      return false;
     }
   }, [diskLibrary, localSourcesById]);
+
+  const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
+    const detailsDate = disk.modifiedAt || disk.importedAt;
+    return [
+      { type: 'label', label: 'Details' },
+      { type: 'info', label: 'Size', value: formatBytes(disk.sizeBytes) },
+      { type: 'info', label: 'Date', value: formatDate(detailsDate) },
+      { type: 'separator' },
+      {
+        type: 'action',
+        label: 'Set group…',
+        onSelect: () => {
+          setGroupDialogDisk(disk);
+          setGroupName(disk.group || '');
+        },
+        disabled: disableActions,
+      },
+      {
+        type: 'action',
+        label: 'Rename disk…',
+        onSelect: () => {
+          setRenameDialogDisk(disk);
+          setRenameValue(disk.name || '');
+        },
+        disabled: disableActions,
+      },
+      {
+        type: 'action',
+        label: 'Remove from collection',
+        onSelect: () => setDeleteDialogDisk(disk),
+        disabled: disableActions,
+        destructive: true,
+      },
+    ];
+  }, []);
+
+  const buildDiskListItems = useCallback(
+    (disks: DiskEntry[], options?: { showSelection?: boolean; showMenu?: boolean; disableActions?: boolean; onMount?: (disk: DiskEntry) => void }) =>
+      disks.map((disk) => {
+        const matches = matchesFilter(disk);
+        const isDimmed = filterText.length > 0 && !matches;
+        return {
+          id: disk.id,
+          title: disk.name,
+          subtitle: disk.path,
+          subtitleTestId: 'disk-path',
+          icon: <LocationIcon location={disk.location} />,
+          selected: selectedDiskIds.has(disk.id),
+          onSelectToggle: (selected) => handleDiskSelect(disk, selected),
+          menuItems: buildDiskMenuItems(disk, options?.disableActions),
+          isDimmed,
+          disableActions: options?.disableActions,
+          actionLabel: 'Mount',
+          onAction: () => options?.onMount?.(disk),
+          onTitleClick: () => options?.onMount?.(disk),
+          actionAriaLabel: `Mount ${disk.name}`,
+          showSelection: options?.showSelection !== false,
+          showMenu: options?.showMenu !== false,
+        } as ActionListItem;
+      }),
+    [buildDiskMenuItems, filterText.length, handleDiskSelect, matchesFilter, selectedDiskIds],
+  );
 
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
@@ -312,8 +423,6 @@ export const HomeDiskManager = () => {
       mountedLabel,
     };
   });
-
-  const disksByIdMap = disksById;
 
   return (
     <div className="space-y-6">
@@ -406,58 +515,31 @@ export const HomeDiskManager = () => {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="text-muted-foreground">
-            {selectedCount ? `${selectedCount} selected` : 'No disks selected'}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleSelectAll}
-              disabled={!diskLibrary.disks.length}
-            >
-              {allSelected ? 'Deselect all' : 'Select all'}
-            </Button>
-            {selectedCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBulkDeleteOpen(true)}
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Remove from library
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4" data-testid="disk-library-tree">
-          <DiskTree
-            tree={diskLibrary.tree}
-            disksById={disksByIdMap}
-            filter={diskLibrary.filter}
-            selectedDiskIds={selectedDiskIds}
-            onDiskSelect={handleDiskSelect}
-            onDiskMount={(disk) => {
+        <SelectableActionList
+          title="Disk list"
+          selectionLabel="items"
+          items={buildDiskListItems(sortedDisks, {
+            onMount: (entry) => {
               if (!status.isConnected) {
                 toast({ title: 'Offline', description: 'Connect to mount disks.', variant: 'destructive' });
                 return;
               }
-              setActiveDisk(disk);
-            }}
-            onDiskDelete={(disk) => setDeleteDialogDisk(disk)}
-            onDiskGroup={(disk) => {
-              setGroupDialogDisk(disk);
-              setGroupName(disk.group || '');
-            }}
-            onDiskRename={(disk) => {
-              setRenameDialogDisk(disk);
-              setRenameValue(disk.name || '');
-            }}
-          />
-        </div>
+              setActiveDisk(entry);
+            },
+          })}
+          emptyLabel="No disks in the collection yet."
+          selectAllLabel="Select all"
+          deselectAllLabel="Deselect all"
+          removeSelectedLabel={selectedCount ? 'Remove selected items' : undefined}
+          selectedCount={selectedCount}
+          allSelected={allSelected}
+          onToggleSelectAll={toggleSelectAll}
+          onRemoveSelected={() => setBulkDeleteOpen(true)}
+          maxVisible={listPreviewLimit}
+          viewAllTitle="All disks"
+          listTestId="disk-list"
+          rowTestId="disk-row"
+        />
 
         <div className="flex flex-col gap-2">
           <Button variant="outline" onClick={() => setBrowserOpen(true)}>
@@ -477,32 +559,27 @@ export const HomeDiskManager = () => {
       <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <div className="flex items-center justify-between gap-3">
-              <DialogTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ''}</DialogTitle>
-              <Button variant="ghost" size="icon" onClick={() => setActiveDrive(null)} aria-label="Close">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <DialogTitle>Mount disk to {activeDrive ? buildDriveLabel(activeDrive) : ''}</DialogTitle>
+            <DialogDescription>Select a disk to mount in this drive.</DialogDescription>
           </DialogHeader>
-          <DiskTree
-            tree={diskLibrary.tree}
-            disksById={disksByIdMap}
-            filter={diskLibrary.filter}
-            showSelection={false}
-            onDiskMount={(disk) => {
-              if (!activeDrive) return;
-              void handleMountDisk(activeDrive, disk).finally(() => setActiveDrive(null));
-            }}
-            onDiskDelete={(disk) => setDeleteDialogDisk(disk)}
-            onDiskGroup={(disk) => {
-              setGroupDialogDisk(disk);
-              setGroupName(disk.group || '');
-            }}
-            onDiskRename={(disk) => {
-              setRenameDialogDisk(disk);
-              setRenameValue(disk.name || '');
-            }}
-            disableActions={!status.isConnected}
+          <SelectableActionList
+            title="Available disks"
+            items={buildDiskListItems(sortedDisks, {
+              showSelection: false,
+              showMenu: false,
+              disableActions: !status.isConnected,
+              onMount: (entry) => {
+                if (!activeDrive) return;
+                void handleMountDisk(activeDrive, entry).finally(() => setActiveDrive(null));
+              },
+            })}
+            emptyLabel="No disks in the collection yet."
+            selectedCount={0}
+            allSelected={false}
+            onToggleSelectAll={() => undefined}
+            maxVisible={listPreviewLimit}
+            viewAllTitle="All disks"
+            showSelectionControls={false}
           />
         </DialogContent>
       </Dialog>
@@ -510,12 +587,8 @@ export const HomeDiskManager = () => {
       <Dialog open={Boolean(activeDisk)} onOpenChange={(open) => !open && setActiveDisk(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <div className="flex items-center justify-between gap-3">
-              <DialogTitle>Mount {activeDisk?.name}</DialogTitle>
-              <Button variant="ghost" size="icon" onClick={() => setActiveDisk(null)} aria-label="Close">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <DialogTitle>Mount {activeDisk?.name}</DialogTitle>
+            <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
             {driveRows.map(({ key, info, mounted }) => (
@@ -546,6 +619,7 @@ export const HomeDiskManager = () => {
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) => entry.type === 'dir' || isDiskImagePath(entry.path)}
         allowFolderSelection
+        autoConfirmLocalSource
       />
 
       <Dialog open={Boolean(groupDialogDisk)} onOpenChange={(open) => !open && setGroupDialogDisk(null)}>
@@ -597,21 +671,21 @@ export const HomeDiskManager = () => {
       <Dialog open={Boolean(deleteDialogDisk)} onOpenChange={(open) => !open && setDeleteDialogDisk(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete disk?</DialogTitle>
+            <DialogTitle>Remove disk?</DialogTitle>
             <DialogDescription>
-              This removes the disk from your library. The original file is not deleted.
+              This removes the disk from your collection. The original file is not deleted.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button
-              variant="destructive"
+              variant="outline"
               onClick={() => {
                 if (!deleteDialogDisk) return;
                 void handleDeleteDisk(deleteDialogDisk);
                 setDeleteDialogDisk(null);
               }}
             >
-              Delete
+              Remove
             </Button>
             <Button variant="ghost" onClick={() => setDeleteDialogDisk(null)}>Cancel</Button>
           </DialogFooter>
@@ -624,12 +698,12 @@ export const HomeDiskManager = () => {
             <DialogTitle>Remove selected disks?</DialogTitle>
             <DialogDescription>
               {selectedCount
-                ? `This removes ${selectedCount} disk(s) from your library. Files are not deleted.`
+                ? `This removes ${selectedCount} disk(s) from your collection. Files are not deleted.`
                 : 'No disks selected.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="destructive" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
+            <Button variant="outline" onClick={() => void handleBulkDelete()} disabled={!selectedCount}>
               Remove
             </Button>
             <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>

@@ -2,13 +2,20 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './playwright',
+  outputDir: 'test-results/playwright',
+  preserveOutput: 'always',
   workers: '100%',
   timeout: 60000,
   expect: { timeout: 10000 },
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: 'test-results/playwright-report', open: 'never' }],
+  ],
   use: {
     baseURL: 'http://127.0.0.1:4173',
-    trace: 'retain-on-failure',
-    screenshot: 'only-on-failure',
+    trace: 'on',
+    screenshot: 'on',
+    video: 'on',
     actionTimeout: 15000,
     navigationTimeout: 30000,
   },

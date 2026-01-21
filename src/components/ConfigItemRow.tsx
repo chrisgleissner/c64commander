@@ -29,6 +29,8 @@ interface ConfigItemRowProps {
   isLoading?: boolean;
   className?: string;
   rightAccessory?: React.ReactNode;
+  valueTestId?: string;
+  sliderTestId?: string;
 }
 
 export function ConfigItemRow({
@@ -41,6 +43,8 @@ export function ConfigItemRow({
   isLoading = false,
   className,
   rightAccessory,
+  valueTestId,
+  sliderTestId,
 }: ConfigItemRowProps) {
   const [inputValue, setInputValue] = useState(() => String(value));
   const lastCommittedRef = useRef<string>(String(value));
@@ -318,7 +322,9 @@ export function ConfigItemRow({
       <div className={cn('settings-row w-full flex items-center justify-between gap-3', className)}>
         <div className="flex flex-col flex-1 pr-4">
           <span className="text-sm font-medium">{name}</span>
-          <span className="text-xs text-muted-foreground font-mono">{currentLabel}</span>
+          <span className="text-xs text-muted-foreground font-mono" data-testid={valueTestId}>
+            {currentLabel}
+          </span>
         </div>
         <div className="flex items-center gap-3 min-w-[220px] max-w-[320px] w-full">
           <div className="min-w-[180px] max-w-[260px] w-full">
@@ -344,6 +350,7 @@ export function ConfigItemRow({
                 onValueChange(nextValue);
               }}
               aria-label={`${name} slider`}
+              data-testid={sliderTestId}
             />
           </div>
           {rightAccessory ? <div className="flex items-center gap-2">{rightAccessory}</div> : null}

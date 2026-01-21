@@ -35,6 +35,8 @@ import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } fro
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useMockMode } from '@/hooks/useMockMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
+import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
+import { clampListPreviewLimit } from '@/lib/uiPreferences';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -43,6 +45,7 @@ export default function SettingsPage() {
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
+  const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const {
     isMockMode,
     isMockAvailable,
@@ -59,6 +62,7 @@ export default function SettingsPage() {
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
+  const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const devTapTimestamps = useRef<number[]>([]);
 
   useEffect(() => {
@@ -68,6 +72,10 @@ export default function SettingsPage() {
   useEffect(() => {
     setPasswordInput(password);
   }, [password]);
+
+  useEffect(() => {
+    setListPreviewInput(String(listPreviewLimit));
+  }, [listPreviewLimit]);
 
   useEffect(() => {
     const handler = () => {
@@ -169,6 +177,13 @@ export default function SettingsPage() {
     { value: 'dark', icon: Moon, label: 'Dark' },
     { value: 'system', icon: Monitor, label: 'System' },
   ];
+
+  const commitListPreviewLimit = () => {
+    const parsed = Number(listPreviewInput);
+    const clamped = clampListPreviewLimit(parsed);
+    setListPreviewLimit(clamped);
+    setListPreviewInput(String(clamped));
+  };
 
   return (
     <div className="min-h-screen pb-24">
@@ -329,6 +344,44 @@ export default function SettingsPage() {
                 </button>
               );
             })}
+          </div>
+        </motion.div>
+
+        {/* Library Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Library</h2>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="listPreviewLimit" className="text-sm">
+              List preview limit
+            </Label>
+            <Input
+              id="listPreviewLimit"
+              type="number"
+              min={1}
+              max={200}
+              value={listPreviewInput}
+              onChange={(event) => setListPreviewInput(event.target.value)}
+              onBlur={commitListPreviewLimit}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  commitListPreviewLimit();
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Controls how many playlist or disk items are shown before opening View all. Default is 50.
+            </p>
           </div>
         </motion.div>
 

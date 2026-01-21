@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
@@ -20,9 +20,18 @@ export type ItemSelectionDialogProps = {
   confirmLabel: string;
   sourceGroups: SourceGroup[];
   onAddLocalSource: () => Promise<string | null>;
-  onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<void>;
+  onConfirm: (source: SourceLocation, selections: SelectedItem[]) => Promise<boolean>;
   filterEntry?: (entry: SourceEntry) => boolean;
   allowFolderSelection?: boolean;
+  isConfirming?: boolean;
+  autoConfirmLocalSource?: boolean;
+  progress?: {
+    status: 'idle' | 'scanning' | 'error' | 'done';
+    count: number;
+    elapsedMs: number;
+    total?: number | null;
+    message?: string | null;
+  };
 };
 
 export const ItemSelectionDialog = ({
@@ -35,12 +44,16 @@ export const ItemSelectionDialog = ({
   onConfirm,
   filterEntry,
   allowFolderSelection = true,
+  isConfirming = false,
+  autoConfirmLocalSource = false,
+  progress,
 }: ItemSelectionDialogProps) => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [filterText, setFilterText] = useState('');
   const [pendingLocalSource, setPendingLocalSource] = useState(false);
   const [pendingLocalSourceCount, setPendingLocalSourceCount] = useState(0);
+  const [autoConfirming, setAutoConfirming] = useState(false);
 
   const localSources = useMemo(
     () => sourceGroups.flatMap((group) => group.sources).filter((item) => item.type === 'local'),
@@ -77,6 +90,23 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(0);
   }, [open]);
 
+  const confirmLocalSource = async (target: SourceLocation) => {
+    if (autoConfirming) return;
+    setAutoConfirming(true);
+    const selections: SelectedItem[] = [
+      {
+        type: 'dir',
+        name: target.name,
+        path: target.rootPath,
+      },
+    ];
+    const success = await onConfirm(target, selections);
+    if (success) {
+      onOpenChange(false);
+    }
+    setAutoConfirming(false);
+  };
+
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
     if (localSourceCount <= pendingLocalSourceCount) return;
@@ -84,7 +114,10 @@ export const ItemSelectionDialog = ({
     if (!newestLocal) return;
     setSelectedSourceId(newestLocal.id);
     setPendingLocalSource(false);
-  }, [localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
+    if (autoConfirmLocalSource) {
+      void confirmLocalSource(newestLocal);
+    }
+  }, [autoConfirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
 
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
@@ -118,8 +151,18 @@ export const ItemSelectionDialog = ({
       name: entry.name,
       path: entry.path,
     }));
-    await onConfirm(source, selections);
-    onOpenChange(false);
+    const success = await onConfirm(source, selections);
+    if (success) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      onOpenChange(false);
+    }
+  };
+
+  const formatElapsed = (ms: number) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   };
 
   const handleAddLocalSource = async () => {
@@ -127,8 +170,12 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(localSourceCount);
     const nextId = await onAddLocalSource();
     if (nextId) {
+      const nextSource = localSources.find((item) => item.id === nextId) || null;
       setSelectedSourceId(nextId);
       setPendingLocalSource(false);
+      if (autoConfirmLocalSource && nextSource) {
+        void confirmLocalSource(nextSource);
+      }
     }
   };
 
@@ -138,6 +185,9 @@ export const ItemSelectionDialog = ({
         <div className="flex h-full max-h-[85vh] flex-col">
           <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
             <DialogTitle className="text-xl">{title}</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Select items from the chosen source to add.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
@@ -183,13 +233,16 @@ export const ItemSelectionDialog = ({
               <div className="space-y-3">
                 <div>
                   <p className="text-base font-semibold">Select items</p>
-                  <p className="text-xs text-muted-foreground">{selection.size} selected</p>
+                  <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">
+                    {selection.size} selected
+                  </p>
                 </div>
 
                 <Input
                   placeholder="Filter items…"
                   value={filterText}
                   onChange={(event) => setFilterText(event.target.value)}
+                  data-testid="add-items-filter"
                 />
 
                 <ItemSelectionView
@@ -201,6 +254,7 @@ export const ItemSelectionDialog = ({
                   onToggleSelect={toggleSelection}
                   onOpen={browser.navigateTo}
                   onNavigateUp={browser.navigateUp}
+                  onNavigateRoot={browser.navigateRoot}
                   onRefresh={browser.refresh}
                   showFolderSelect={allowFolderSelection}
                   emptyLabel="No matching items in this folder."
@@ -209,11 +263,24 @@ export const ItemSelectionDialog = ({
             )}
           </div>
 
-          <DialogFooter className="flex items-center justify-between border-t border-border px-6 py-4">
+          <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            {progress && progress.status !== 'idle' && (
+              <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
+                <span>
+                  {progress.message || 'Scanning…'} {progress.count} items, {formatElapsed(progress.elapsedMs)}
+                </span>
+                {progress.total ? <span> / {progress.total}</span> : null}
+              </div>
+            )}
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button variant="default" onClick={handleConfirm} disabled={!source}>
+            <Button
+              variant="default"
+              onClick={handleConfirm}
+              disabled={!source || isConfirming || autoConfirming}
+              data-testid="add-items-confirm"
+            >
               {confirmLabel}
             </Button>
           </DialogFooter>

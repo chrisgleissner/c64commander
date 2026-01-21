@@ -121,6 +121,20 @@ export class C64API {
     return headers;
   }
 
+  private async parseResponseJson<T>(response: Response): Promise<T> {
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+    const text = await response.text();
+    if (!text || !contentType.includes('application/json')) {
+      return { errors: [] } as T;
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch (error) {
+      addErrorLog('C64 API parse failed', { error: (error as Error).message });
+      return { errors: [] } as T;
+    }
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit = {}
@@ -149,7 +163,12 @@ export class C64API {
         }
 
         if (typeof nativeResponse.data === 'string') {
-          return JSON.parse(nativeResponse.data) as T;
+          try {
+            return JSON.parse(nativeResponse.data) as T;
+          } catch (error) {
+            addErrorLog('C64 API parse failed', { error: (error as Error).message });
+            return { errors: [] } as T;
+          }
         }
 
         return nativeResponse.data as T;
@@ -164,7 +183,7 @@ export class C64API {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return response.json();
+      return this.parseResponseJson<T>(response);
     } catch (error) {
       addErrorLog('C64 API request failed', {
         path,
@@ -323,7 +342,7 @@ export class C64API {
       throw error;
     }
 
-    return response.json();
+    return this.parseResponseJson(response);
   }
 
   async unmountDrive(drive: 'a' | 'b'): Promise<{ errors: string[] }> {
@@ -382,7 +401,7 @@ export class C64API {
       throw error;
     }
 
-    return response.json();
+    return this.parseResponseJson(response);
   }
 
   async playMod(file: string): Promise<{ errors: string[] }> {
@@ -405,7 +424,7 @@ export class C64API {
       throw error;
     }
 
-    return response.json();
+    return this.parseResponseJson(response);
   }
 
   async runPrg(file: string): Promise<{ errors: string[] }> {
@@ -428,7 +447,7 @@ export class C64API {
       throw error;
     }
 
-    return response.json();
+    return this.parseResponseJson(response);
   }
 
   async loadPrg(file: string): Promise<{ errors: string[] }> {
@@ -451,7 +470,7 @@ export class C64API {
       throw error;
     }
 
-    return response.json();
+    return this.parseResponseJson(response);
   }
 
   async runCartridge(file: string): Promise<{ errors: string[] }> {
@@ -474,7 +493,7 @@ export class C64API {
       throw error;
     }
 
-    return response.json();
+    return this.parseResponseJson(response);
   }
 }
 

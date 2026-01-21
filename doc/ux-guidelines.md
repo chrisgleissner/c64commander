@@ -26,36 +26,35 @@ The UX is built around three distinct concepts that must never be conflated:
    - Navigation is always **bounded to the selected source**.
    - No playback or mounting occurs here.
 
-3. **Libraries**
-   - Logical collections of selected items.
-   - Used exclusively for **playback** or **disk mounting**.
-   - Never expose filesystem navigation.
+3. **Playlists & Collections**
+  - Playlists are the single source of truth for **playback**.
+  - Disk collections are used exclusively for **mounting**.
+  - Never expose filesystem navigation.
 
 All UX flows must respect this separation.
 
 ---
 
-## Libraries
+## Playlists & Disk Collections
 
-There are exactly two libraries:
+There are exactly two collections:
 
-### File Library
+### Playlist (Play page)
 
 - Contains all playable artefacts:
   - PRG, CRT, SID, MOD, and disk images.
-- Disk images in this library are treated as playable media.
-- Playback auto-starts the first item on the disk.
+- Items are queued explicitly; adding items never auto-plays.
 
-### Disk Library
+### Disk Collection (Disks page)
 
 - Contains disk images intended for later mounting on drives.
 - Focused on system configuration rather than immediate playback.
 
-Libraries:
+Collections:
 
 - Never expose filesystem concepts.
 - Never depend on navigation state.
-- Always operate on stored library entries.
+- Always operate on stored entries.
 
 ---
 
@@ -69,7 +68,7 @@ This action always leads to:
 
 1. Choose source
 2. Select items
-3. Add to library
+3. Add to playlist
 
 The user never “browses the filesystem” as a primary goal.
 
@@ -97,11 +96,13 @@ Rules:
 - Traversal beyond the source root is impossible.
 - The root boundary must be visually clear.
 - “Up” is disabled or hidden at the root.
+- Remember the last visited path per source and resume there.
+- Provide a quick “Root” action to return to the source root.
 
 Selection views:
 
 - Are used only to select files or folders.
-- Must not expose playback, mounting, or library actions.
+- Must not expose playback, mounting, or collection actions.
 - Must use the same layout and behaviour for all sources.
 
 ---
@@ -111,11 +112,13 @@ Selection views:
 - Use centered dialogs for modal actions:
   - Mount
   - Rename
-  - Remove from library
+  - Remove from collection
   - Playlist actions
 - Avoid layout shifts when selections or controls appear.
 - Reserve space for selection and bulk-action controls.
 - Group related controls and keep labels concise and intention-driven.
+- Long paths must wrap and never force horizontal scrolling.
+- Lists show a configurable preview limit and open a scrollable “View all” panel for the full set.
 
 ---
 
@@ -127,14 +130,14 @@ Selection views:
 - Place bulk actions near selection controls.
 - Clearly distinguish destructive actions.
 - Always confirm destructive actions:
-  - Remove from library
+  - Remove from collection
   - Delete (where applicable)
 
 ---
 
 ## Playback and Mounting Controls
 
-- Playback and mounting controls appear **only in libraries**, never in selection views.
+- Playback and mounting controls appear **only in playlists/collections**, never in selection views.
 - Keep playback-related toggles grouped and stable.
 - Playlist actions (play, remove, clear) must be easily discoverable.
 - Use detected metadata (e.g. HVSC song lengths) to inform timers when available.
@@ -150,8 +153,8 @@ Language must express **intent**, not implementation.
 - Add items
 - Choose source
 - Select items
-- Add to library
-- Remove from library
+- Add to playlist
+- Remove from collection
 
 ### Avoid
 
@@ -167,7 +170,7 @@ Menu titles, dialog titles, and action labels must match exactly.
 ## Consistency Rules
 
 - The same selection UI must be used for all sources.
-- The same library UI must be used regardless of item origin.
+- The same playlist UI must be used regardless of item origin.
 - Source boundaries must never be crossed implicitly.
 - Users must never wonder whether they are:
   - Selecting items

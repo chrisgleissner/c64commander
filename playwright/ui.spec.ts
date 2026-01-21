@@ -1,13 +1,16 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
+import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
+import { assertNoUiIssues, attachStepScreenshot, startStrictUiMonitoring } from './testArtifacts';
 
 test.describe('UI coverage', () => {
   test.describe.configure({ mode: 'parallel' });
 
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
     await page.addStyleTag({
@@ -15,7 +18,8 @@ test.describe('UI coverage', () => {
     });
   });
 
-  test.afterEach(async () => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+    await assertNoUiIssues(page, testInfo);
     await server.close();
   });
 
@@ -76,8 +80,22 @@ test.describe('UI coverage', () => {
     await expect(toggle).toBeChecked();
   };
 
-  test('config widgets read/write and refresh', async ({ page }: { page: Page }) => {
+  const ensureRemoteRoot = async (page: Page) => {
+    const rootButton = page.locator('[data-testid="navigate-root"]');
+    if (await rootButton.isVisible()) {
+      if (await rootButton.isEnabled()) {
+        await rootButton.click();
+      }
+    }
+  };
+
+  const snap = async (page: Page, testInfo: TestInfo, label: string) => {
+    await attachStepScreenshot(page, testInfo, label);
+  };
+
+  test('config widgets read/write and refresh', async ({ page }: { page: Page }, testInfo) => {
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'config-open');
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
 
@@ -89,6 +107,7 @@ test.describe('UI coverage', () => {
     await checkbox.click();
 
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    await snap(page, testInfo, 'audio-mixer-open');
     const slider = page.getByLabel('Vol UltiSid 1 slider');
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {
@@ -103,38 +122,145 @@ test.describe('UI coverage', () => {
     const refreshButton = page.getByRole('button', { name: 'Refresh' }).first();
     await refreshButton.click();
     await expect.poll(() => server.requests.length).toBeGreaterThan(refreshCount);
+    await snap(page, testInfo, 'config-refreshed');
 
     await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
     await expect(page.getByLabel('System Mode select')).toContainText('NTSC');
+    await snap(page, testInfo, 'config-updated');
   });
 
-  test('home and disks pages render', async ({ page }: { page: Page }) => {
+  test('config group actions stay at top of expanded section', async ({ page }: { page: Page }, testInfo) => {
+    await page.goto('/config', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'config-open');
+    await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    await snap(page, testInfo, 'audio-mixer-expanded');
+    const actions = page.getByTestId('config-group-actions');
+    const list = page.getByTestId('config-group-list');
+    const [actionsBox, listBox] = await Promise.all([actions.boundingBox(), list.boundingBox()]);
+    expect(actionsBox?.y ?? 0).toBeLessThan(listBox?.y ?? Number.MAX_SAFE_INTEGER);
+  });
+
+  test('home and disks pages render', async ({ page }: { page: Page }, testInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'C64 Commander' })).toBeVisible();
+    await snap(page, testInfo, 'home-open');
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
+    await snap(page, testInfo, 'disks-open');
   });
 
-  test('config page renders and toggles a section', async ({ page }: { page: Page }) => {
+  test('config page renders and toggles a section', async ({ page }: { page: Page }, testInfo) => {
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'config-open');
     const section = page.getByRole('button', { name: 'U64 Specific Settings' });
     await section.click();
     await expect(page.getByText('System Mode')).toBeVisible();
+    await snap(page, testInfo, 'section-expanded');
   });
 
-  test('play page renders with HVSC controls', async ({ page }: { page: Page }) => {
+  test('play page renders with HVSC controls', async ({ page }: { page: Page }, testInfo) => {
     await enableHvscDownloads(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
     await expect(page.getByRole('button', { name: /Install HVSC|Check updates/ })).toBeVisible();
+    await snap(page, testInfo, 'play-hvsc');
   });
 
-  test('settings and docs pages render', async ({ page }: { page: Page }) => {
+  test('add-items shows progress feedback after confirm', async ({ page }: { page: Page }, testInfo) => {
+    const ftpServers = await startFtpTestServers();
+    await seedFtpConfig(page, {
+      host: ftpServers.ftpServer.host,
+      port: ftpServers.ftpServer.port,
+      bridgeUrl: ftpServers.bridgeServer.baseUrl,
+      password: '',
+    });
+    await page.route('**/v1/ftp/list', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.continue();
+    });
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await ensureRemoteRoot(page);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'c64u-root');
+    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Disk 1.d64', { exact: true }).locator('..').locator('..').getByRole('checkbox').click();
+    await page.getByTestId('add-items-confirm').click();
+    await expect(page.getByTestId('add-items-progress')).toBeVisible();
+    await snap(page, testInfo, 'progress-visible');
+    await ftpServers.close();
+  });
+
+  test('selection state stays stable when filtering', async ({ page }: { page: Page }, testInfo) => {
+    const ftpServers = await startFtpTestServers();
+    await seedFtpConfig(page, {
+      host: ftpServers.ftpServer.host,
+      port: ftpServers.ftpServer.port,
+      bridgeUrl: ftpServers.bridgeServer.baseUrl,
+      password: '',
+    });
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await ensureRemoteRoot(page);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
+    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
+    await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await expect(dialog.getByText('Turrican II', { exact: true })).toBeVisible();
+    await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await expect(dialog.getByText('Disk 1.d64', { exact: true })).toBeVisible();
+    await dialog.getByText('Disk 1.d64', { exact: true }).locator('..').locator('..').getByRole('checkbox').click();
+    await snap(page, testInfo, 'selection-made');
+
+    await page.getByTestId('add-items-filter').fill('Disk');
+    await expect(page.getByTestId('add-items-selection-count')).toHaveText(/1 selected/i);
+    await snap(page, testInfo, 'filter-applied');
+    await ftpServers.close();
+  });
+
+  test('item browser does not overflow viewport width', async ({ page }: { page: Page }, testInfo) => {
+    const ftpServers = await startFtpTestServers();
+    await seedFtpConfig(page, {
+      host: ftpServers.ftpServer.host,
+      port: ftpServers.ftpServer.port,
+      bridgeUrl: ftpServers.bridgeServer.baseUrl,
+      password: '',
+    });
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await ensureRemoteRoot(page);
+    const dialog = page.getByRole('dialog');
+    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await snap(page, testInfo, 'deep-folder');
+
+    const hasOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(hasOverflow).toBe(false);
+    await snap(page, testInfo, 'no-overflow');
+    await ftpServers.close();
+  });
+
+  test('settings and docs pages render', async ({ page }: { page: Page }, testInfo) => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await snap(page, testInfo, 'settings-open');
 
     await page.goto('/docs', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Documentation' })).toBeVisible();
+    await snap(page, testInfo, 'docs-open');
   });
 });
