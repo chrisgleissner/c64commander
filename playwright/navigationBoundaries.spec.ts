@@ -1,4 +1,6 @@
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
@@ -49,6 +51,7 @@ test.describe('Navigation boundaries and edge cases', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);

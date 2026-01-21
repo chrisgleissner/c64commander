@@ -7,16 +7,19 @@
 **File**: `playwright/playlistControls.spec.ts`
 
 #### Test 1: Playlist filter not yet implemented
+
 - **Status**: ✅ Passing (1.5s)
 - **Change**: Converted from `test.skip()` to regular test that validates the absence of the filter feature gracefully
 - **Line**: 38
 
 #### Test 2: Duration override input accepts mm:ss format
+
 - **Status**: ✅ Passing (2.2s)
 - **Fix**: Added playback initiation before testing the duration override menu
 - **Lines**: 126-170
 
 #### Test 3: Duration override affects playback metadata
+
 - **Status**: ✅ Passing (19.1s)
 - **Fix**: Added full playback flow with start, menu navigation, duration setting, and timer verification
 - **Lines**: 172-232
@@ -28,40 +31,48 @@
 Created 20 comprehensive tests covering UX patterns from `doc/ux-guidelines.md`:
 
 #### Source Selection Tests (3)
+
 1. Source selection precedes navigation - local source
 2. Source selection precedes navigation - C64U source
 3. Consistent selection UI across local and C64U sources
 
 #### Selection & Navigation Tests (5)
+
 4. Selection view navigation stays within source scope
-5. Quick "Root" action available in selection view
-6. Long paths wrap and do not force horizontal scrolling
-7. Selection count is displayed when items are selected
-8. Layout stability: controls do not shift when selection changes
+2. Quick "Root" action available in selection view
+3. Long paths wrap and do not force horizontal scrolling
+4. Selection count is displayed when items are selected
+5. Layout stability: controls do not shift when selection changes
 
 #### Bulk Actions Tests (2)
+
 9. Bulk actions: select all and deselect all
-10. Bulk remove from playlist shows confirmation
+2. Bulk remove from playlist shows confirmation
 
 #### Collections Tests (4)
+
 11. Playback controls only in playlist, not in selection view
-12. Mounting controls only on disks page, not on play page
-13. Disk collection shows full list with "View all" when limit exceeded
-14. Playlist actions easily discoverable
+2. Mounting controls only on disks page, not on play page
+3. Disk collection shows full list with "View all" when limit exceeded
+4. Playlist actions easily discoverable
 
 #### Confirmation Dialogs Tests (2)
+
 15. Bulk remove from playlist shows confirmation
-16. Clear confirmation on destructive playlist action
+2. Clear confirmation on destructive playlist action
 
 #### Modal Dialogs Test (1)
+
 17. Modal dialogs for mount actions
 
 #### Language Tests (3)
+
 18. Intent-based language: "Add items" not "Browse filesystem"
-19. Intent-based language: "Choose source" in source selection
-20. No unrestricted filesystem access language
+2. Intent-based language: "Choose source" in source selection
+3. No unrestricted filesystem access language
 
 #### Metadata Test (1)
+
 21. HVSC metadata used for song display
 
 **All 20 tests**: ✅ Passing in ~34 seconds
@@ -77,6 +88,7 @@ Created 20 comprehensive tests covering UX patterns from `doc/ux-guidelines.md`:
 ### 4. Coverage Analysis ✅
 
 **Created**: `playwright/UX_TEST_COVERAGE.md` documenting:
+>
 - >90% coverage of UX guidelines from `doc/ux-guidelines.md`
 - Breakdown by pattern category
 - Analysis of covered vs uncovered patterns
@@ -85,6 +97,7 @@ Created 20 comprehensive tests covering UX patterns from `doc/ux-guidelines.md`:
 ### 5. Test Suite Health ✅
 
 **Final Results**:
+
 - **Total E2E tests**: 116 passing
   - Original: 93 tests
   - Unskipped: +3 tests
@@ -97,12 +110,14 @@ Created 20 comprehensive tests covering UX patterns from `doc/ux-guidelines.md`:
 ## Test Statistics
 
 ### Before This Work
+
 - 93 E2E tests passing
 - 3 tests skipped in playlistControls.spec.ts
 - No dedicated UX interaction test suite
 - ~70% UX guidelines coverage (implied)
 
 ### After This Work
+
 - 116 E2E tests passing (+23)
 - 0 skipped tests (-3)
 - 20 dedicated UX interaction tests (+20)
@@ -111,24 +126,28 @@ Created 20 comprehensive tests covering UX patterns from `doc/ux-guidelines.md`:
 ## UX Patterns Validated
 
 ### Core Concepts ✅
+
 - Sources define item origin
 - Selection bounded to source
 - Collections for playback/mounting
 - Clear separation of concerns
 
 ### User Flows ✅
+
 - Intent-based language enforced
 - Source selection before navigation
 - Confirmation on destructive actions
 - Consistent UI across sources
 
 ### Layout & Stability ✅
+
 - No layout shifts
 - Long path wrapping
 - Modal dialogs
 - Preview limits with "View all"
 
 ### Control Placement ✅
+
 - Playback controls only in playlists
 - Mounting controls only in disk collections
 - No controls in selection views

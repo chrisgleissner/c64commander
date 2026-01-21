@@ -106,12 +106,29 @@ jobs:
         if: always()
         run: npm run validate:evidence
 
+      - name: Merge coverage reports
+        if: always()
+        run: |
+          echo "==> Merging unit and E2E coverage..."
+          # Copy unit test coverage to .nyc_output for merging
+          cp coverage/coverage-final.json .nyc_output/
+          # Generate merged report
+          npx nyc report \
+            --temp-dir .nyc_output \
+            --report-dir coverage/merged \
+            --reporter=lcov \
+            --reporter=text-summary
+          # Copy merged LCOV for Codecov
+          cp coverage/merged/lcov.info coverage/lcov-merged.info
+          echo "==> Merged coverage summary:"
+          npx nyc report --temp-dir .nyc_output --reporter=text-summary
+
       - name: Upload coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          files: ./coverage/lcov.info,./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
-          flags: unittests,android
+          files: ./coverage/lcov-merged.info,./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          flags: unittests,e2etests,android
           name: c64-commander-coverage
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}

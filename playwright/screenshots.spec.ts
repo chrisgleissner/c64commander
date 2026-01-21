@@ -1,6 +1,10 @@
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
+// Load full YAML config for tests
+import '../tests/mocks/setupMockConfigForTests';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
@@ -8,7 +12,8 @@ test.describe('App screenshots', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeAll(async () => {
-    server = await createMockC64Server(uiFixtures.configState);
+    // Use default YAML config (no initial state) to show all categories
+    server = await createMockC64Server();
   });
 
   test.afterAll(async () => {
@@ -27,6 +32,7 @@ test.describe('App screenshots', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);

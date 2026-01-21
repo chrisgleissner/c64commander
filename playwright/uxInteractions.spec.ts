@@ -1,6 +1,6 @@
 /**
  * UX Interaction Pattern Tests
- * 
+ *
  * Validates interaction patterns from doc/ux-guidelines.md:
  * - Sources define where items come from
  * - Selection is navigation within a source (bounded)
@@ -9,7 +9,9 @@
  * - Layout stability
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Page } from '@playwright/test';
 import { attachStepScreenshot } from './testArtifacts';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
@@ -23,7 +25,8 @@ test.describe('UX Interaction Patterns', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  test.afterEach(async () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    await saveCoverageFromPage(page, testInfo?.title);
     await server.close();
   });
 

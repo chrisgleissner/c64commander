@@ -1,5 +1,9 @@
 import http from 'node:http';
-import { getMockConfigPayload } from '../../src/lib/mock/mockConfig.js';
+import { getMockConfigPayload, setMockConfigLoader } from '../../src/lib/mock/mockConfig.js';
+import { loadConfigYaml } from '../../src/lib/mock/mockConfigLoader.node.js';
+
+// Set the full YAML loader for tests
+setMockConfigLoader(loadConfigYaml);
 
 export interface MockC64Server {
   baseUrl: string;
@@ -49,11 +53,11 @@ const buildStateFromYaml = (): CategoryState => {
   const payload = getMockConfigPayload();
   const state: CategoryState = {};
   
-  Object.entries(payload.categories).forEach(([categoryName, category]) => {
+  Object.entries(payload.categories).forEach(([categoryName, items]) => {
     state[categoryName] = {};
-    Object.entries(category.items).forEach(([itemName, item]) => {
+    Object.entries(items).forEach(([itemName, item]) => {
       state[categoryName][itemName] = {
-        value: item.selected,
+        value: item.value,
         options: item.options,
         details: item.details,
       };

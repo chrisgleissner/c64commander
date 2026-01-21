@@ -7,6 +7,7 @@ export default defineConfig({
   workers: '100%',
   timeout: 60000,
   expect: { timeout: 10000 },
+  globalTeardown: './playwright/global-teardown-coverage.ts',
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],

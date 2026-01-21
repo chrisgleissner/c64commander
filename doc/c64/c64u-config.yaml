@@ -2,8 +2,8 @@ config:
   general:
     base_url: http://c64u
     rest_api_version: '0.1'
-    device_type: Ultimate 64 Elite
-    firmware_version: 3.12a
+    device_type: 'Ultimate 64 Elite'
+    firmware_version: '3.12a'
     fetched_at: '2026-01-18T11:47:52.430762+00:00'
   categories:
     Audio Mixer:

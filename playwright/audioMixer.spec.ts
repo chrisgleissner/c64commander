@@ -1,4 +1,6 @@
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
@@ -29,6 +31,7 @@ test.describe('Audio Mixer volumes', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
@@ -82,5 +85,17 @@ test.describe('Audio Mixer volumes', () => {
 
     await expect(getSoloToggle(page, 'vol-ultisid-1')).toHaveAttribute('aria-checked', 'false');
     await snap(page, testInfo, 'solo-disabled');
+  });
+
+  test('reset audio mixer applies defaults', async ({ page }: { page: Page }, testInfo) => {
+    await page.goto('/config');
+    await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    await snap(page, testInfo, 'audio-mixer-open');
+
+    await page.getByRole('button', { name: 'Reset Audio Mixer' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Audio Mixer reset' }).first(),
+    ).toBeVisible();
+    await snap(page, testInfo, 'audio-mixer-reset');
   });
 });

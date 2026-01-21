@@ -1,4 +1,6 @@
-import { test, expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Locator, Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
@@ -63,6 +65,7 @@ test.describe('Playback file browser', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
@@ -97,6 +100,27 @@ test.describe('Playback file browser', () => {
     await waitForRequests(() => server.sidplayRequests.length > 0);
     expect(server.sidplayRequests[0].method).toBe('POST');
     await snap(page, testInfo, 'sid-playback-requested');
+  });
+
+  test('songlengths metadata is applied for local SIDs', async ({ page }: { page: Page }, testInfo) => {
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await expect(input).toHaveCount(1);
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    await snap(page, testInfo, 'songlengths-playlist');
+
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: 'demo.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+    await snap(page, testInfo, 'songlengths-playback');
   });
 
   test('local source browser filters supported files', async ({ page }: { page: Page }, testInfo) => {

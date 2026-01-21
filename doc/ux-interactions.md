@@ -13,12 +13,14 @@ This document provides a comprehensive inventory of all user-facing interactions
 ## Legend
 
 ### Importance Levels
+
 - **CRITICAL**: Core functionality; app unusable without it
 - **HIGH**: Key user workflows; frequently used features
 - **MEDIUM**: Secondary features; quality-of-life improvements
 - **LOW**: Nice-to-have; rarely used or edge-case features
 
 ### Test Coverage Status
+
 - ✅ **FULL**: Complete test coverage with assertions
 - ⚠️ **PARTIAL**: Some test coverage but gaps remain
 - ❌ **NONE**: No test coverage identified
@@ -313,9 +315,11 @@ This document provides a comprehensive inventory of all user-facing interactions
 ### 9.4 Priority Gaps (CTAs to Test)
 
 #### CRITICAL (Missing Coverage)
+
 1. ❌ Add disks to library flow (end-to-end)
 
 #### HIGH (Missing Coverage)
+
 1. ❌ Shuffle mode enable/disable
 2. ❌ Quick action cards on Home page (Reset, Menu, Pause, Resume, Power Off)
 3. ❌ Drive status card navigation
@@ -323,6 +327,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 5. ❌ Disk browser source selection
 
 #### MEDIUM (Missing Coverage)
+
 1. ❌ Reshuffle button
 2. ❌ Recurse folders toggle
 3. ❌ File type filter dropdown
@@ -340,15 +345,18 @@ This document provides a comprehensive inventory of all user-facing interactions
 ## 10. Test Implementation Plan
 
 ### Phase 1: CRITICAL Gaps (Target: 100%)
+
 - [ ] Add disks to library E2E flow
 
 ### Phase 2: HIGH Gaps (Target: 95%+)
+
 - [ ] Shuffle mode tests
 - [ ] Home page quick actions
 - [ ] Drive navigation from Home
 - [ ] Disk browser source selection
 
 ### Phase 3: MEDIUM Gaps (Target: 80%+)
+
 - [ ] Playlist options (reshuffle, recurse)
 - [ ] Filter controls
 - [ ] HVSC edge cases
@@ -357,6 +365,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 - [ ] Settings appearance options
 
 ### Phase 4: LOW Priority (Target: 50%+)
+
 - [ ] Debug tools
 - [ ] Developer mode features
 - [ ] Less common edge cases
@@ -366,17 +375,21 @@ This document provides a comprehensive inventory of all user-facing interactions
 ## 11. Notes & Conventions
 
 ### Test Naming
+
 Tests should follow: `[page/component] › [feature] › [specific behavior]`
 
 Example: `Play page › Add items › local source selection works`
 
 ### Test Data
+
 Use fixtures in `playwright/fixtures/` for consistent test data.
 
 ### Graceful Degradation
+
 Tests marked with `@allow-warnings` document missing UI elements with screenshots rather than failing hard.
 
 ### Mock vs Real
+
 - Unit tests: Always use mocks
 - E2E tests: Use mock C64U server for reliability
 - FTP tests: Use local mock FTP server
@@ -386,6 +399,7 @@ Tests marked with `@allow-warnings` document missing UI elements with screenshot
 ## 12. Maintenance
 
 This document should be updated when:
+
 - New features are added
 - CTAs are modified or removed
 - Test coverage changes

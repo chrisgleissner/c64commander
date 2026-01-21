@@ -1,5 +1,21 @@
 import yaml from 'js-yaml';
-import configYaml from '../../../doc/c64/c64u-config.yaml?raw';
+
+// Minimal embedded config for browser - tests will override this with full YAML
+const defaultConfigYaml = `
+config:
+  general:
+    base_url: http://c64u
+    rest_api_version: '0.1'
+    device_type: 'Ultimate 64 Elite'
+    firmware_version: '3.12a'
+    fetched_at: '2026-01-18T11:47:52.430762+00:00'
+  categories:
+    Audio Mixer:
+      items:
+        Vol UltiSid 1:
+          selected: 'OFF'
+          options: ['OFF', '+6 dB', '+5 dB', '+4 dB', '+3 dB', '+2 dB', '+1 dB', '0 dB', '-1 dB', '-2 dB', '-3 dB', '-4 dB', '-5 dB', '-6 dB', '-9 dB', '-12 dB', '-18 dB', '-24 dB', '-30 dB', '-42 dB']
+`;
 
 type RawConfigItem = {
   selected?: string | number;
@@ -80,8 +96,18 @@ const normalizeDetails = (details?: RawConfigItem['details']): MockConfigDetails
 const normalizeOptions = (options?: Array<string | number>) =>
   options?.map((entry) => asString(entry)).filter((entry) => entry.length > 0);
 
+let customYamlLoader: (() => any) | null = null;
+
+/**
+ * Set a custom YAML loader (for tests with full config)
+ */
+export const setMockConfigLoader = (loader: () => any) => {
+  customYamlLoader = loader;
+  cachedPayload = null; // Clear cache
+};
+
 const buildPayload = (): MockConfigPayload => {
-  const parsed = yaml.load(configYaml) as RawConfig;
+  const parsed = (customYamlLoader ? customYamlLoader() : yaml.load(defaultConfigYaml)) as RawConfig;
   const config = parsed?.config ?? {};
   const general = config.general ?? {};
   const categories = config.categories ?? {};

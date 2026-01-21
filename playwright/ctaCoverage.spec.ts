@@ -1,13 +1,15 @@
 /**
  * Critical & High Priority CTA Coverage Tests
- * 
+ *
  * Tests for previously uncovered CTAs identified in doc/ux-interactions.md:
  * - CRITICAL: Add disks to library flow
  * - HIGH: Shuffle mode, Home quick actions, Drive navigation
  * - HIGH: Disk browser source selection
  */
 
-import { test, expect, type Page, type TestInfo } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, assertNoUiIssues, allowWarnings } from './testArtifacts';
@@ -23,6 +25,7 @@ test.describe('Critical CTA Coverage', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
@@ -66,6 +69,7 @@ test.describe('Shuffle Mode Tests', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
@@ -139,6 +143,7 @@ test.describe('Home Page Quick Actions', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
@@ -230,6 +235,7 @@ test.describe('Disk Browser Coverage', () => {
 
   test.afterEach(async ({ page }: { page: Page }, testInfo) => {
     try {
+      await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
