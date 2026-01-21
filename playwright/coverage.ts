@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/rules-of-hooks */
 import fs from 'fs';
 import path from 'path';
 import { test as base, type Page } from '@playwright/test';

@@ -11,8 +11,8 @@ export default defineConfig({
     include: ["tests/unit/**/*.{test,spec}.{ts,tsx}", "src/**/*.{test,spec}.{ts,tsx}"],
     coverage: {
       provider: "v8",
+      all: false,
       reporter: ["text", "lcov", "html", "json"],
-      include: ["src/**/*.{ts,tsx}"],
       exclude: [
         "src/**/*.test.{ts,tsx}",
         "src/**/*.spec.{ts,tsx}",

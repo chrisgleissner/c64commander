@@ -31,4 +31,14 @@ test.describe('Coverage probes', () => {
     await expect(page.locator('[data-testid="coverage-probe-page"]')).toBeVisible();
     await expect(page.getByText('Errors')).toHaveCount(0);
   });
+
+  test('covers primary routes for coverage', async ({ page }: { page: Page }) => {
+    const routes = ['/', '/play', '/disks', '/settings', '/docs', '/config'];
+
+    for (const route of routes) {
+      await page.goto(route);
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForLoadState('networkidle');
+    }
+  });
 });

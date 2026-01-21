@@ -242,6 +242,8 @@ fi
 if [[ "$RUN_COVERAGE" == "true" ]]; then
   log "Running coverage (unit + e2e)"
   (cd "$ROOT_DIR" && ./scripts/collect-coverage.sh)
+  (cd "$ROOT_DIR" && EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs)
+  (cd "$ROOT_DIR" && COVERAGE_MIN=80 node scripts/check-coverage-threshold.mjs)
 fi
 
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then

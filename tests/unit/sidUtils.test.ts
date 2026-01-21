@@ -1,0 +1,22 @@
+import { describe, expect, it } from 'vitest';
+import { base64ToUint8, computeSidMd5, createSslPayload } from '@/lib/sid/sidUtils';
+
+const toHex = (value: Uint8Array) => Array.from(value).map((b) => b.toString(16).padStart(2, '0')).join('');
+
+describe('sidUtils', () => {
+  it('computes md5 for SID data', async () => {
+    const data = new TextEncoder().encode('SID').buffer;
+    const hash = await computeSidMd5(data);
+    expect(hash).toHaveLength(32);
+  });
+
+  it('creates SSL payload for duration', () => {
+    const payload = createSslPayload(90500);
+    expect(toHex(payload)).toBe('0130');
+  });
+
+  it('converts base64 to bytes', () => {
+    const bytes = base64ToUint8(btoa('C64'));
+    expect(Array.from(bytes)).toEqual([67, 54, 52]);
+  });
+});

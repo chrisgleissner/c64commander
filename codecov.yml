@@ -7,14 +7,16 @@ coverage:
   status:
     project:
       default:
-        target: auto
-        threshold: 1%
+        target: 0.8
+        threshold: 0%
         informational: false
+        if_not_found: error
     patch:
       default:
-        target: auto
-        threshold: 1%
-        informational: true
+        target: 0.8
+        threshold: 0%
+        informational: false
+        if_not_found: error
 
 comment:
   layout: "reach,diff,flags,tree"

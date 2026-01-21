@@ -9,14 +9,14 @@ import { chromium } from '@playwright/test';
   await page.waitForLoadState('networkidle');
   
   const hasCoverage = await page.evaluate(() => {
-    return typeof (window as any).__coverage__ !== 'undefined';
+    return typeof window.__coverage__ !== 'undefined';
   });
   
   console.log('Has coverage object:', hasCoverage);
   
   if (hasCoverage) {
     const coverageKeys = await page.evaluate(() => {
-      return Object.keys((window as any).__coverage__).length;
+      return Object.keys(window.__coverage__).length;
     });
     console.log('Number of instrumented files:', coverageKeys);
   }
