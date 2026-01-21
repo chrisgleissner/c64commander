@@ -90,7 +90,7 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(0);
   }, [open]);
 
-  const confirmLocalSource = async (target: SourceLocation) => {
+  const confirmLocalSource = useCallback(async (target: SourceLocation) => {
     if (autoConfirming) return;
     setAutoConfirming(true);
     const selections: SelectedItem[] = [
@@ -105,7 +105,7 @@ export const ItemSelectionDialog = ({
       onOpenChange(false);
     }
     setAutoConfirming(false);
-  };
+  }, [autoConfirming, onConfirm, onOpenChange]);
 
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
@@ -117,7 +117,7 @@ export const ItemSelectionDialog = ({
     if (autoConfirmLocalSource) {
       void confirmLocalSource(newestLocal);
     }
-  }, [autoConfirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
+  }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
 
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
@@ -169,20 +169,15 @@ export const ItemSelectionDialog = ({
     setPendingLocalSource(true);
     setPendingLocalSourceCount(localSourceCount);
     const nextId = await onAddLocalSource();
-    if (nextId) {
-      const nextSource = localSources.find((item) => item.id === nextId) || null;
-      setSelectedSourceId(nextId);
+    if (!nextId) {
       setPendingLocalSource(false);
-      if (autoConfirmLocalSource && nextSource) {
-        void confirmLocalSource(nextSource);
-      }
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-[calc(100%-2rem)] max-h-[85vh] p-0 overflow-hidden shadow-2xl">
-        <div className="flex h-full max-h-[85vh] flex-col">
+      <DialogContent className="max-w-3xl w-[calc(100%-2rem)] max-h-[80vh] p-0 overflow-hidden shadow-2xl">
+        <div className="flex h-full max-h-[80vh] flex-col">
           <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
             <DialogTitle className="text-xl">{title}</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
@@ -272,17 +267,21 @@ export const ItemSelectionDialog = ({
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
             )}
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="default"
-              onClick={handleConfirm}
-              disabled={!source || isConfirming || autoConfirming}
-              data-testid="add-items-confirm"
-            >
-              {confirmLabel}
-            </Button>
+            <div className="flex gap-2 sm:ml-auto">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              {source && (
+                <Button
+                  variant="default"
+                  onClick={handleConfirm}
+                  disabled={isConfirming || autoConfirming || selection.size === 0}
+                  data-testid="add-items-confirm"
+                >
+                  {confirmLabel}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </div>
       </DialogContent>
