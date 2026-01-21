@@ -369,8 +369,7 @@ export default function PlayFilesPage() {
         while (queue.length && pending.size < maxConcurrent) {
           const nextPath = queue.shift();
           if (!nextPath) continue;
-          let job: Promise<void>;
-          job = processPath(nextPath).finally(() => pending.delete(job));
+          const job = processPath(nextPath).finally(() => pending.delete(job));
           pending.add(job);
         }
         if (pending.size) {
