@@ -185,7 +185,113 @@ If intent is unclear, the UX is incorrect.
 
 - Sources define scope.
 - Selection happens within scope.
-- Libraries are the only place where playback and mounting occur.
+- Collections (playlists and disk libraries) are the only place where playback and mounting occur.
 - Clear intent, stable layouts, and consistent wording are mandatory.
 
 This model prioritizes clarity, predictability, and long-term maintainability.
+
+---
+
+## Implementation Notes
+
+### Actual Page Structure
+
+**Play Page (PlayFilesPage.tsx)**
+- Primary CTA: "Add items" or "Add more items"
+- Opens ItemSelectionDialog for source and file selection
+- Playlist displayed with SelectableActionList component
+- Transport controls: Play/Stop, Pause/Resume, Prev/Next
+- Playlist options: Shuffle, Repeat
+- Selection controls: Select all, Deselect all, Remove selected
+- View all button when playlist exceeds preview limit
+- HVSC integration for SID metadata and song lengths
+
+**Disks Page (DisksPage.tsx → HomeDiskManager.tsx)**
+- Drive control area showing Drive A and Drive B status
+- Active drive selection (radio buttons)
+- Mount/Eject buttons for each drive
+- Multi-disk navigation (Prev/Next) for disk groups
+- Disk library displayed with SelectableActionList
+- Primary CTA: "Add disks"
+- Opens ItemSelectionDialog for disk source and selection
+- Selection controls: Select all, Deselect all, Remove selected
+- View all button when library exceeds preview limit
+
+**Home Page (HomePage.tsx)**
+- Quick action cards for machine control (Reset, Menu, Pause, Resume, Power Off)
+- Configuration quick actions (Apply, Save, Load, Revert, Manage)
+- Drive status cards with navigation to Disks page
+- Current configuration display
+
+**Settings Page (SettingsPage.tsx)**
+- Connection settings (IP, Port, Mock mode)
+- Appearance settings (Theme selection)
+- Diagnostics (Share logs, Email logs, Clear logs)
+- About section (with secret developer mode activation)
+
+**Config Browser Page (ConfigBrowserPage.tsx)**
+- Hierarchical category navigation
+- Config item widgets (sliders, toggles, inputs)
+- Per-item refresh buttons
+- Category-level reset buttons
+
+### Component Inventory
+
+**SelectableActionList** - Universal list component used for:
+- Playlist items on Play page
+- Disk library on Disks page
+- Consistent UI across both pages
+- Built-in selection controls, bulk actions, view all dialog
+- Per-item dropdown menus for contextual actions
+
+**ItemSelectionDialog** - Source and file browser used for:
+- Adding items to playlist
+- Adding disks to library
+- Source selection: Local vs C64 Ultimate
+- Navigation within selected source (bounded by source root)
+- File type filtering
+- Bulk selection and confirmation
+
+**QuickActionCard** - Action buttons used on Home page
+- Machine control actions
+- Configuration management actions
+- Visual feedback states (default, danger, success)
+- Loading and disabled states
+
+### Terminology Consistency
+
+The following terms are consistently used across the UI:
+
+**Preferred (Used)**:
+- "Add items" / "Add more items" - Primary acquisition CTA
+- "Choose source" - Source selection dialog heading
+- "Local" / "C64 Ultimate" - Source names
+- "Select all" / "Deselect all" - Bulk selection
+- "Remove selected" - Destructive bulk action
+- "View all" - List expansion
+- Collection management (not filesystem operations)
+
+**Avoided (Not Used)**:
+- "Browse filesystem"
+- "Root directory"
+- "Drill up"
+- Direct filesystem terminology
+
+### Navigation Boundaries
+
+Actual implementation enforces source boundaries:
+- "Up" button navigates within source
+- "Up" disabled at source root (not hidden)
+- Source change requires returning to source selection
+- No implicit source boundary crossing
+
+### Modal Patterns
+
+All destructive and configuration actions use centered modal dialogs:
+- Mount disk dialog
+- Remove from collection confirmation
+- Rename disk dialog
+- Save configuration dialog
+- Load configuration dialog
+- Set duration override dialog
+- Choose subsong dialog

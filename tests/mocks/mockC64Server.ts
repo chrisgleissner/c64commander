@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { getMockConfigPayload } from '../../src/lib/mock/mockConfig.js';
 
 export interface MockC64Server {
   baseUrl: string;
@@ -41,6 +42,27 @@ export type ItemDetailsState = Record<string, Record<string, ItemDetails>>;
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 
+/**
+ * Convert the mock config payload from YAML into the internal state format
+ */
+const buildStateFromYaml = (): CategoryState => {
+  const payload = getMockConfigPayload();
+  const state: CategoryState = {};
+  
+  Object.entries(payload.categories).forEach(([categoryName, category]) => {
+    state[categoryName] = {};
+    Object.entries(category.items).forEach(([itemName, item]) => {
+      state[categoryName][itemName] = {
+        value: item.selected,
+        options: item.options,
+        details: item.details,
+      };
+    });
+  });
+  
+  return state;
+};
+
 const normalizeInitialState = (initial: Record<string, Record<string, string | number | ConfigItemState>>) => {
   const normalized: CategoryState = {};
   Object.entries(initial).forEach(([category, items]) => {
@@ -58,7 +80,7 @@ const normalizeInitialState = (initial: Record<string, Record<string, string | n
 };
 
 export function createMockC64Server(
-  initial: Record<string, Record<string, string | number | ConfigItemState>>,
+  initial: Record<string, Record<string, string | number | ConfigItemState>> = {},
   itemDetails: ItemDetailsState = {},
 ): Promise<MockC64Server> {
   const requests: Array<{ method: string; url: string }> = [];
@@ -68,7 +90,10 @@ export function createMockC64Server(
     headers: Record<string, string | string[] | undefined>;
     body: Buffer;
   }> = [];
-  const defaults = normalizeInitialState(initial);
+  
+  // Use YAML as source of truth if no initial state provided
+  const yamlState = Object.keys(initial).length === 0 ? buildStateFromYaml() : {};
+  const defaults = Object.keys(initial).length === 0 ? yamlState : normalizeInitialState(initial);
   let state: CategoryState = clone(defaults);
   const driveState: Record<'a' | 'b', { enabled: boolean; bus_id: number; type: string; image_file?: string; image_path?: string }> = {
     a: { enabled: true, bus_id: 8, type: '1541' },
@@ -139,6 +164,10 @@ export function createMockC64Server(
         '/v1/machine:menu_button',
         '/v1/drives/a:off',
         '/v1/drives/b:off',
+        '/v1/drives/a:on',
+        '/v1/drives/b:on',
+        '/v1/drives/a:reset',
+        '/v1/drives/b:reset',
         '/v1/configs:save_to_flash',
         '/v1/configs:load_from_flash',
         '/v1/configs:reset_to_default',

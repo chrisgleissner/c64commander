@@ -77,6 +77,14 @@ jobs:
       - name: Build web + sync
         run: npm run cap:build
 
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Run Android tests with coverage
+        run: |
+          cd android
+          ./gradlew testDebugUnitTest jacocoTestReport
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
@@ -97,6 +105,16 @@ jobs:
       - name: Validate Playwright evidence
         if: always()
         run: npm run validate:evidence
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage/lcov.info,./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          flags: unittests,android
+          name: c64-commander-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build APK (debug)
         run: npm run android:apk

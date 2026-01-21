@@ -11,6 +11,8 @@ export default tseslint.config(
       "android/**/build/**",
       "android/**/src/main/assets/**",
       "test-results/**",
+      "coverage/**",
+      "playwright-report/**",
     ],
   },
   {
