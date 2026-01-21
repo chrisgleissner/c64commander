@@ -16,6 +16,7 @@ android/**/build/
 ci-artifacts/
 dist/
 dist-ssr/
+.tmp*
 
 # Test output
 .nyc_output/
