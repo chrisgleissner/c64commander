@@ -15,6 +15,7 @@ RUN_TEST_UNIT=false
 RUN_TEST_E2E=false
 RUN_TEST_E2E_CI=false
 RUN_VALIDATE_EVIDENCE=false
+RUN_COVERAGE=false
 APK_PATH=""
 DEVICE_ID=""
 
@@ -41,6 +42,7 @@ Options:
   --test-e2e            Run E2E tests only (Playwright, no screenshots)
   --test-e2e-ci         Run full CI mirror (screenshots + e2e + validation)
   --validate-evidence   Validate Playwright evidence structure
+  --coverage            Run unit + e2e coverage (slower)
   
   --skip-install        Skip npm install
   --skip-build          Skip npm run cap:build
@@ -109,6 +111,14 @@ while [[ $# -gt 0 ]]; do
       RUN_VALIDATE_EVIDENCE=true
       RUN_BUILD=false
       RUN_INSTALL=false
+      RUN_APK=false
+      RUN_TEST=false
+      shift
+      ;;
+    --coverage)
+      RUN_COVERAGE=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
       RUN_APK=false
       RUN_TEST=false
       shift
@@ -227,6 +237,11 @@ fi
 if [[ "$RUN_VALIDATE_EVIDENCE" == "true" ]]; then
   log "Validating Playwright evidence"
   (cd "$ROOT_DIR" && npm run validate:evidence)
+fi
+
+if [[ "$RUN_COVERAGE" == "true" ]]; then
+  log "Running coverage (unit + e2e)"
+  (cd "$ROOT_DIR" && ./scripts/collect-coverage.sh)
 fi
 
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then

@@ -100,6 +100,7 @@ jobs:
           VITE_GIT_SHA: "ci"
           VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
           SOURCE_DATE_EPOCH: "0"
+          VITE_COVERAGE: "true"
         run: npm run test:e2e
 
       - name: Validate Playwright evidence
@@ -109,19 +110,17 @@ jobs:
       - name: Merge coverage reports
         if: always()
         run: |
-          echo "==> Merging unit and E2E coverage..."
-          # Copy unit test coverage to .nyc_output for merging
-          cp coverage/coverage-final.json .nyc_output/
-          # Generate merged report
+          echo "==> Generating E2E coverage report..."
           npx nyc report \
             --temp-dir .nyc_output \
-            --report-dir coverage/merged \
+            --report-dir coverage/e2e \
             --reporter=lcov \
             --reporter=text-summary
-          # Copy merged LCOV for Codecov
-          cp coverage/merged/lcov.info coverage/lcov-merged.info
-          echo "==> Merged coverage summary:"
-          npx nyc report --temp-dir .nyc_output --reporter=text-summary
+          echo "==> Merging unit + E2E LCOV for Codecov..."
+          npx lcov-result-merger \
+            coverage/lcov.info \
+            coverage/e2e/lcov.info \
+            > coverage/lcov-merged.info
 
       - name: Upload coverage to Codecov
         if: always()

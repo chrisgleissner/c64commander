@@ -4,11 +4,7 @@ import fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
 
 const istanbulCLIOutput = path.join(process.cwd(), '.nyc_output');
-
-// Ensure .nyc_output directory exists
-if (!fs.existsSync(istanbulCLIOutput)) {
-  fs.mkdirSync(istanbulCLIOutput, { recursive: true });
-}
+const coverageEnabled = process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true';
 
 function generateUUID(): string {
   return randomBytes(16).toString('hex');
@@ -19,19 +15,22 @@ function generateUUID(): string {
  * Call this at the END of every test, before it finishes
  */
 export async function saveCoverageFromPage(page: Page, testName?: string): Promise<void> {
+  if (!coverageEnabled) {
+    return;
+  }
   const fileName = `coverage-${generateUUID()}.json`;
   try {
     const coverage = await page.evaluate(() => (window as any).__coverage__);
     if (coverage) {
+      if (!fs.existsSync(istanbulCLIOutput)) {
+        fs.mkdirSync(istanbulCLIOutput, { recursive: true });
+      }
       await fs.promises.writeFile(
         path.join(istanbulCLIOutput, fileName),
         JSON.stringify(coverage)
       );
-      console.log(`[COVERAGE] ✓ Saved ${fileName}`);
-    } else {
-      console.warn(`[COVERAGE] ✗ No __coverage__ found for: ${testName || 'unknown'}`);
     }
-  } catch (error) {
-    console.error(`[COVERAGE] ✗ Failed for ${testName || 'unknown'}: ${error}`);
+  } catch {
+    // Intentionally silent to avoid disrupting Playwright progress output.
   }
 }

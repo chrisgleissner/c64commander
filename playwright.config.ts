@@ -1,5 +1,8 @@
 import { defineConfig } from '@playwright/test';
 
+const coverageEnv = process.env.VITE_COVERAGE ? 'VITE_COVERAGE=true ' : '';
+const probeEnv = 'VITE_ENABLE_TEST_PROBES=1 ';
+
 export default defineConfig({
   testDir: './playwright',
   outputDir: 'test-results/playwright',
@@ -21,7 +24,7 @@ export default defineConfig({
     navigationTimeout: 30000,
   },
   webServer: {
-    command: 'VITE_ENABLE_TEST_PROBES=1 npm run build && VITE_ENABLE_TEST_PROBES=1 npm run preview -- --host 127.0.0.1 --port 4173',
+    command: `${coverageEnv}${probeEnv}npm run build && ${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port 4173`,
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: false,
     timeout: 120000,

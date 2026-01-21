@@ -3,6 +3,9 @@ set -e
 
 echo "==> Collecting coverage from all sources..."
 
+# 0. Clean prior coverage output
+rm -rf .nyc_output coverage/e2e coverage/merged coverage/lcov-merged.info
+
 # 1. Run unit tests with coverage
 echo "==> Running unit tests with coverage..."
 npm run test:coverage
@@ -12,29 +15,26 @@ mkdir -p .nyc_output
 
 # 3. Run E2E tests (which will collect coverage via Istanbul instrumentation)
 echo "==> Running E2E tests with coverage..."
-npm run test:e2e
+VITE_COVERAGE=true npm run test:e2e
 
-# 4. Merge all coverage reports
-echo "==> Merging coverage reports..."
-npx nyc merge .nyc_output coverage/e2e-coverage.json
-npx nyc merge coverage coverage/merged-coverage.json
-
-# 5. Generate reports from merged coverage
-echo "==> Generating merged coverage reports..."
+# 4. Generate E2E coverage report
+echo "==> Generating E2E coverage report..."
 npx nyc report \
   --temp-dir .nyc_output \
-  --report-dir coverage/merged \
+  --report-dir coverage/e2e \
   --reporter=lcov \
-  --reporter=text \
-  --reporter=html \
-  --reporter=json
+  --reporter=text-summary
 
-# 6. Copy merged LCOV to root coverage dir for Codecov
-cp coverage/merged/lcov.info coverage/lcov-merged.info
+# 5. Merge unit + E2E LCOV for Codecov
+echo "==> Merging LCOV reports for Codecov..."
+npx lcov-result-merger \
+  coverage/lcov.info \
+  coverage/e2e/lcov.info \
+  > coverage/lcov-merged.info
 
 echo ""
 echo "==> Coverage collection complete!"
 echo "  Unit test coverage: coverage/lcov.info"
 echo "  E2E coverage: .nyc_output/"
 echo "  Merged coverage: coverage/lcov-merged.info"
-echo "  HTML report: coverage/merged/index.html"
+echo "  E2E HTML report: coverage/e2e/index.html"

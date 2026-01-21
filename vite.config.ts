@@ -35,10 +35,11 @@ export default defineConfig(() => ({
     react(),
     // Instrument code for E2E coverage collection
     istanbul({
-      include: 'src/*',
+      include: 'src/**/*',
       exclude: ['node_modules', 'test/', 'tests/', 'playwright/'],
       extension: ['.js', '.ts', '.tsx'],
-      requireEnv: false,
+      requireEnv: true,
+      envName: 'VITE_COVERAGE',
       forceBuildInstrument: true,
     }),
   ],
