@@ -58,32 +58,32 @@ class MockC64UState private constructor(
   companion object {
     fun fromPayload(payload: JSONObject): MockC64UState {
       val generalObj = payload.optJSONObject("general") ?: JSONObject()
-      val baseUrl = generalObj.optString("baseUrl", "http://c64u")
+      val baseUrl = generalObj.opt("baseUrl")?.toString()?.takeIf { it.isNotBlank() } ?: "http://c64u"
       val hostname = try {
         URI(baseUrl).host ?: "c64u"
       } catch (_: Exception) {
         "c64u"
       }
       val general = MockGeneralInfo(
-        restApiVersion = generalObj.optString("restApiVersion", "0.1"),
-        deviceType = generalObj.optString("deviceType", "Ultimate 64"),
-        firmwareVersion = generalObj.optString("firmwareVersion", "3.12a"),
+        restApiVersion = generalObj.opt("restApiVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "0.1",
+        deviceType = generalObj.opt("deviceType")?.toString()?.takeIf { it.isNotBlank() } ?: "Ultimate 64",
+        firmwareVersion = generalObj.opt("firmwareVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "3.12a",
         baseUrl = baseUrl,
         hostname = hostname,
         uniqueId = "MOCK-${hostname.uppercase(Locale.ROOT)}",
-        fpgaVersion = generalObj.optString("fpgaVersion", "mock"),
-        coreVersion = generalObj.optString("coreVersion", "mock"),
+        fpgaVersion = generalObj.opt("fpgaVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "mock",
+        coreVersion = generalObj.opt("coreVersion")?.toString()?.takeIf { it.isNotBlank() } ?: "mock",
       )
 
       val categoriesObj = payload.optJSONObject("categories") ?: JSONObject()
       val categories = mutableMapOf<String, Map<String, MockConfigItem>>()
       val categoryKeys = categoriesObj.keys()
-      while (categoryKeys.hasNext()) {
+      while (categoryKeys?.hasNext() == true) {
         val categoryName = categoryKeys.next()
         val itemsObj = categoriesObj.optJSONObject(categoryName) ?: JSONObject()
         val itemKeys = itemsObj.keys()
         val items = mutableMapOf<String, MockConfigItem>()
-        while (itemKeys.hasNext()) {
+        while (itemKeys?.hasNext() == true) {
           val itemName = itemKeys.next()
           val itemObj = itemsObj.optJSONObject(itemName) ?: continue
           val value = unwrapJson(itemObj.opt("value")) ?: ""

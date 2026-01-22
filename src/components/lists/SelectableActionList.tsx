@@ -243,13 +243,17 @@ export const SelectableActionList = ({
 
       {viewAllTitle && (
         <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{viewAllTitle || title}</DialogTitle>
-              <DialogDescription>Review all items in this list.</DialogDescription>
-            </DialogHeader>
-            <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
-              {renderList(items)}
+          <DialogContent className="max-w-2xl w-[calc(100%-2rem)] h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)] p-0 overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col" data-testid="action-list-view-all">
+              <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
+                <DialogTitle>{viewAllTitle || title}</DialogTitle>
+                <DialogDescription>Review all items in this list.</DialogDescription>
+              </DialogHeader>
+              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" data-testid="action-list-scroll">
+                <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
+                  {renderList(items)}
+                </div>
+              </div>
             </div>
           </DialogContent>
         </Dialog>

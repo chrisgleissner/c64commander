@@ -101,7 +101,30 @@ test.describe('FTP performance', () => {
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await expect(page.getByTestId('ftp-loading')).toBeHidden({ timeout: 800 });
+    await expect(page.getByTestId('ftp-loading')).toBeHidden({ timeout: 400 });
     await snap(page, testInfo, 'loading-hidden');
+  });
+
+  test('FTP navigation shows delayed loading indicator on slow requests', async ({ page }: { page: Page }, testInfo) => {
+    await page.route('**/v1/ftp/list', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      await route.continue();
+    });
+
+    await page.addInitScript(() => {
+      localStorage.removeItem('c64u_ftp_cache:v1');
+    });
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+
+    await expect(page.getByTestId('ftp-loading')).toBeVisible({ timeout: 1200 });
+    await snap(page, testInfo, 'loading-visible');
+
+    await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('ftp-loading')).toBeHidden({ timeout: 1500 });
+    await snap(page, testInfo, 'loading-hidden-after');
   });
 });

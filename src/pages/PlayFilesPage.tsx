@@ -18,6 +18,8 @@ import { getC64API } from '@/lib/c64api';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
+import { PlaybackClock } from '@/lib/playback/playbackClock';
+import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
@@ -68,6 +70,14 @@ type StoredPlaylistState = {
     sourceId?: string | null;
   }>;
   currentIndex?: number;
+};
+
+type AddItemsProgressState = {
+  status: 'idle' | 'scanning' | 'error' | 'done';
+  count: number;
+  elapsedMs: number;
+  total: number | null;
+  message: string | null;
 };
 
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
@@ -142,10 +152,11 @@ export default function PlayFilesPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [playlistElapsedMs, setPlaylistElapsedMs] = useState(0);
+  const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [durationInput, setDurationInput] = useState('');
   const [songNrInput, setSongNrInput] = useState('');
+  const [songlengthsFiles, setSonglengthsFiles] = useState<Array<{ path: string; file: LocalPlayFile }>>([]);
   const [recurseFolders, setRecurseFolders] = useState(true);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
@@ -154,12 +165,12 @@ export default function PlayFilesPage() {
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
   const [songPickerOpen, setSongPickerOpen] = useState(false);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
-  const [addItemsProgress, setAddItemsProgress] = useState({
-    status: 'idle' as const,
+  const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
+    status: 'idle',
     count: 0,
     elapsedMs: 0,
-    total: null as number | null,
-    message: null as string | null,
+    total: null,
+    message: null,
   });
   const [isAddingItems, setIsAddingItems] = useState(false);
   const { limit: listPreviewLimit } = useListPreviewLimit();
@@ -190,7 +201,7 @@ export default function PlayFilesPage() {
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
-  const playlistStartedAtRef = useRef<number | null>(null);
+  const playedClockRef = useRef(new PlaybackClock());
   const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
   const addItemsStartedAtRef = useRef<number | null>(null);
 
@@ -208,6 +219,12 @@ export default function PlayFilesPage() {
   }, [playlist]);
 
   useEffect(() => {
+    if (playlist.length > 0) return;
+    playedClockRef.current.reset();
+    setPlayedMs(0);
+  }, [playlist.length]);
+
+  useEffect(() => {
     if (addItemsProgress.status !== 'scanning') return undefined;
     const interval = window.setInterval(() => {
       const startedAt = addItemsStartedAtRef.current ?? Date.now();
@@ -221,19 +238,23 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     songlengthsCacheRef.current.clear();
-  }, [playlist]);
+  }, [playlist, songlengthsFiles]);
 
   const songlengthsFilesByDir = useMemo(() => {
     const map = new Map<string, LocalPlayFile>();
+    const addSonglengthsFile = (file: LocalPlayFile, pathOverride?: string) => {
+      const path = pathOverride ?? getLocalFilePath(file);
+      const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
+      map.set(folder, file);
+    };
     playlist.forEach((item) => {
       if (item.request.source !== 'local' || !item.request.file) return;
       if (item.label.toLowerCase() !== 'songlengths.md5') return;
-      const path = getLocalFilePath(item.request.file);
-      const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
-      map.set(folder, item.request.file);
+      addSonglengthsFile(item.request.file);
     });
+    songlengthsFiles.forEach((entry) => addSonglengthsFile(entry.file, entry.path));
     return map;
-  }, [playlist]);
+  }, [playlist, songlengthsFiles]);
 
   const readLocalText = useCallback(async (file: LocalPlayFile) => {
     if (file instanceof File && typeof file.text === 'function') {
@@ -400,6 +421,27 @@ export default function PlayFilesPage() {
       }
 
       const playlistItems: PlaylistItem[] = [];
+      if (source.type === 'local') {
+        const songlengthsEntries = selectedFiles
+          .filter((entry) => entry.type === 'file' && entry.name.toLowerCase() === 'songlengths.md5')
+          .map((entry) => ({
+            path: normalizeSourcePath(entry.path),
+            file: resolveLocalRuntimeFile(source.id, entry.path),
+          }))
+          .filter((entry): entry is { path: string; file: LocalPlayFile } => Boolean(entry.file));
+        if (songlengthsEntries.length) {
+          setSonglengthsFiles((prev) => {
+            const seen = new Set(prev.map((entry) => entry.path));
+            const next = [...prev];
+            songlengthsEntries.forEach((entry) => {
+              if (seen.has(entry.path)) return;
+              seen.add(entry.path);
+              next.push(entry);
+            });
+            return next;
+          });
+        }
+      }
       selectedFiles.forEach((file) => {
         if (!getPlayCategory(file.path)) return;
         const playable: PlayableEntry = {
@@ -497,19 +539,25 @@ export default function PlayFilesPage() {
   useEffect(() => {
     if (!isPlaying || isPaused || currentIndex < 0) return;
     const tick = () => {
+      const now = Date.now();
       if (trackStartedAtRef.current) {
-        setElapsedMs(Date.now() - trackStartedAtRef.current);
+        setElapsedMs(now - trackStartedAtRef.current);
       }
-      if (playlistStartedAtRef.current) {
-        setPlaylistElapsedMs(Date.now() - playlistStartedAtRef.current);
-      }
+      setPlayedMs(playedClockRef.current.current(now));
     };
     tick();
     const timer = window.setInterval(tick, 1000);
     return () => window.clearInterval(timer);
   }, [currentIndex, isPaused, isPlaying]);
 
+  const playlistItemDuration = useCallback(
+    (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
+    [currentIndex, durationMs],
+  );
+
   const currentItem = playlist[currentIndex];
+  const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
+  const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
   const subsongCount = currentItem?.subsongCount ?? 1;
   const songNrValue = Number(songNrInput);
   const resolvedSongNr = Number.isNaN(songNrValue) || songNrInput.trim() === '' ? 1 : songNrValue;
@@ -524,6 +572,8 @@ export default function PlayFilesPage() {
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
   const canPause = isPlaying;
+  const hasPrev = currentIndex > 0;
+  const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
 
   const toggleShuffleCategory = (category: PlayFileCategory) => {
     setShuffleCategories((prev) =>
@@ -695,8 +745,11 @@ export default function PlayFilesPage() {
       : item.request;
     const plan = buildPlayPlan(request);
     await executePlayPlan(api, plan);
-    trackStartedAtRef.current = Date.now();
+    const now = Date.now();
+    trackStartedAtRef.current = now;
     setElapsedMs(0);
+    playedClockRef.current.start(now, false);
+    setPlayedMs(playedClockRef.current.current(now));
     const resolvedDuration = durationOverride ?? item.durationMs;
     setDurationMs(resolvedDuration);
     if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
@@ -714,6 +767,8 @@ export default function PlayFilesPage() {
 
   const startPlaylist = useCallback(async (items: PlaylistItem[], startIndex = 0) => {
     if (!items.length) return;
+    playedClockRef.current.reset();
+    setPlayedMs(0);
     const resolvedItems = await applySonglengthsToItems(items);
     setPlaylist((prev) => {
       if (!prev.length) return resolvedItems;
@@ -722,8 +777,6 @@ export default function PlayFilesPage() {
       return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
     });
     setCurrentIndex(startIndex);
-    playlistStartedAtRef.current = Date.now();
-    setPlaylistElapsedMs(0);
     setIsPlaylistLoading(true);
     setIsPaused(false);
     try {
@@ -749,13 +802,14 @@ export default function PlayFilesPage() {
     } catch (error) {
       addErrorLog('Stop failed', { error: (error as Error).message });
     }
+    const now = Date.now();
+    playedClockRef.current.stop(now, true);
+    setPlayedMs(0);
     setIsPlaying(false);
     setIsPaused(false);
     setElapsedMs(0);
     setDurationMs(undefined);
     trackStartedAtRef.current = null;
-    playlistStartedAtRef.current = null;
-    setPlaylistElapsedMs(0);
   }, [isPaused, isPlaying]);
 
   const handlePauseResume = useCallback(async () => {
@@ -767,11 +821,13 @@ export default function PlayFilesPage() {
         setIsPaused(false);
         const now = Date.now();
         trackStartedAtRef.current = now - elapsedMs;
-        if (playlistStartedAtRef.current) {
-          playlistStartedAtRef.current = now - playlistElapsedMs;
-        }
+        playedClockRef.current.resume(now);
+        setPlayedMs(playedClockRef.current.current(now));
       } else {
         await api.machinePause();
+        const now = Date.now();
+        playedClockRef.current.pause(now);
+        setPlayedMs(playedClockRef.current.current(now));
         setIsPaused(true);
       }
     } catch (error) {
@@ -781,19 +837,21 @@ export default function PlayFilesPage() {
         variant: 'destructive',
       });
     }
-  }, [elapsedMs, isPaused, isPlaying, playlistElapsedMs]);
+  }, [elapsedMs, isPaused, isPlaying]);
 
   const handleNext = useCallback(async () => {
     if (!playlist.length) return;
+    const now = Date.now();
+    playedClockRef.current.pause(now);
+    setPlayedMs(playedClockRef.current.current(now));
     let nextIndex = currentIndex + 1;
     if (nextIndex >= playlist.length) {
       if (!repeatEnabled) {
+        playedClockRef.current.pause(Date.now());
         setIsPlaying(false);
         return;
       }
       nextIndex = 0;
-      playlistStartedAtRef.current = Date.now();
-      setPlaylistElapsedMs(0);
     }
     setCurrentIndex(nextIndex);
     await playItem(playlist[nextIndex]);
@@ -802,6 +860,9 @@ export default function PlayFilesPage() {
 
   const handlePrevious = useCallback(async () => {
     if (!playlist.length) return;
+    const now = Date.now();
+    playedClockRef.current.pause(now);
+    setPlayedMs(playedClockRef.current.current(now));
     const prevIndex = Math.max(0, currentIndex - 1);
     setCurrentIndex(prevIndex);
     await playItem(playlist[prevIndex]);
@@ -815,16 +876,39 @@ export default function PlayFilesPage() {
     }
   }, [elapsedMs, durationMs, handleNext, isPlaying]);
 
+  const reshufflePlaylist = useCallback((items: PlaylistItem[], lockedIndex: number) => {
+    if (items.length < 2) return items;
+    if (lockedIndex >= 0 && lockedIndex < items.length) {
+      const currentItem = items[lockedIndex];
+      const rest = items.filter((_, index) => index !== lockedIndex);
+      let shuffled = shuffleArray(rest);
+      const insertIndex = Math.min(lockedIndex, shuffled.length);
+      let next = [...shuffled.slice(0, insertIndex), currentItem, ...shuffled.slice(insertIndex)];
+      if (next.map((item) => item.id).join('|') === items.map((item) => item.id).join('|')) {
+        if (rest.length > 1) {
+          const swapped = [...shuffled];
+          [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+          next = [...swapped.slice(0, insertIndex), currentItem, ...swapped.slice(insertIndex)];
+        }
+      }
+      return next;
+    }
+
+    let shuffled = shuffleArray(items);
+    if (shuffled.map((item) => item.id).join('|') === items.map((item) => item.id).join('|')) {
+      if (shuffled.length > 1) {
+        const swapped = [...shuffled];
+        [swapped[0], swapped[1]] = [swapped[1], swapped[0]];
+        shuffled = swapped;
+      }
+    }
+    return shuffled;
+  }, []);
+
   const handleReshuffle = useCallback(() => {
-    if (!shuffleEnabled || !playlist.length || currentIndex < 0) return;
-    setPlaylist((prev) => {
-      if (prev.length < 2) return prev;
-      const head = prev.slice(0, currentIndex + 1);
-      const tail = prev.slice(currentIndex + 1);
-      const shuffled = shuffleArray(tail);
-      return [...head, ...shuffled];
-    });
-  }, [currentIndex, playlist.length, shuffleEnabled]);
+    if (!shuffleEnabled || !playlist.length) return;
+    setPlaylist((prev) => reshufflePlaylist(prev, currentIndex));
+  }, [currentIndex, playlist.length, reshufflePlaylist, shuffleEnabled]);
 
 
   const handlePlayEntry = useCallback(async (entry: PlayableEntry) => {
@@ -984,23 +1068,10 @@ export default function PlayFilesPage() {
     }
   }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscStatus?.installedVersion, shuffleEnabled, startPlaylist]);
 
-  const playlistItemDuration = useCallback(
-    (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
-    [currentIndex, durationMs],
-  );
-
   const playlistTotals = useMemo(() => {
-    if (!playlist.length) return { total: undefined, remaining: undefined } as const;
     const durations = playlist.map((item, index) => playlistItemDuration(item, index));
-    const allKnown = durations.every((value) => value !== undefined);
-    if (!allKnown) return { total: undefined, remaining: undefined } as const;
-    const total = durations.reduce((sum, value) => sum + (value ?? 0), 0);
-    if (currentIndex < 0) return { total, remaining: total } as const;
-    const currentDuration = durations[currentIndex] ?? 0;
-    const future = durations.slice(currentIndex + 1).reduce((sum, value) => sum + (value ?? 0), 0);
-    const remaining = Math.max(0, currentDuration - elapsedMs) + future;
-    return { total, remaining } as const;
-  }, [currentIndex, elapsedMs, playlist, playlistItemDuration]);
+    return calculatePlaylistTotals(durations, playedMs);
+  }, [playlist, playedMs, playlistItemDuration]);
 
   const playlistListItems = useMemo(() => {
     return playlist.map((item, index) => {
@@ -1064,9 +1135,18 @@ export default function PlayFilesPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Playback controls</p>
-              <p className="text-xs text-muted-foreground">
-                {currentItem ? currentItem.label : 'Select a playlist item to start'}
-              </p>
+              <div className="text-xs text-muted-foreground" data-testid="playback-current-track">
+                {currentItem ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-sm font-medium text-foreground">{currentItem.label}</span>
+                    {currentDurationLabel ? (
+                      <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
+                    ) : null}
+                  </div>
+                ) : (
+                  'Select a playlist item to start'
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-2">
               <Button
@@ -1074,7 +1154,7 @@ export default function PlayFilesPage() {
                 size="sm"
                 className="min-w-[96px] justify-center"
                 onClick={() => void handlePrevious()}
-                disabled={!canTransport}
+                disabled={!canTransport || !hasPrev}
                 data-testid="playlist-prev"
               >
                 <SkipBack className="h-4 w-4 mr-1" />
@@ -1107,7 +1187,7 @@ export default function PlayFilesPage() {
                 size="sm"
                 className="min-w-[96px] justify-center"
                 onClick={() => void handleNext()}
-                disabled={!canTransport}
+                disabled={!canTransport || !hasNext}
                 data-testid="playlist-next"
               >
                 <SkipForward className="h-4 w-4 mr-1" />
@@ -1117,8 +1197,8 @@ export default function PlayFilesPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Played: {formatTime(playlistElapsedMs)}</span>
+            <div className="flex items-center justify-between text-xs text-muted-foreground" data-testid="playback-counters">
+              <span>Played: {formatTime(playedMs)}</span>
               <span>Total: {formatTime(playlistTotals.total)}</span>
               <span>Remaining: {formatTime(playlistTotals.remaining)}</span>
             </div>
@@ -1276,7 +1356,10 @@ export default function PlayFilesPage() {
           type="file"
           multiple
           className="hidden"
-          onChange={(event) => handleLocalSourceInput(event.target.files)}
+          onChange={(event) => {
+            handleLocalSourceInput(event.target.files);
+            event.currentTarget.value = '';
+          }}
         />
 
         <ItemSelectionDialog

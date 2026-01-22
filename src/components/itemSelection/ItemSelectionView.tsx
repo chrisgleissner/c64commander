@@ -8,6 +8,7 @@ export type ItemSelectionViewProps = {
   rootPath: string;
   entries: SourceEntry[];
   isLoading: boolean;
+  showLoadingIndicator?: boolean;
   selection: Map<string, SourceEntry>;
   onToggleSelect: (entry: SourceEntry) => void;
   onOpen: (path: string) => void;
@@ -23,6 +24,7 @@ export const ItemSelectionView = ({
   rootPath,
   entries,
   isLoading,
+  showLoadingIndicator = false,
   selection,
   onToggleSelect,
   onOpen,
@@ -35,16 +37,18 @@ export const ItemSelectionView = ({
   const atRoot = path === rootPath || path === rootPath.replace(/\/$/, '');
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 relative">
+      {showLoadingIndicator && (
+        <div
+          className="absolute right-3 top-2 z-10 rounded-full bg-muted/80 px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm"
+          data-testid="ftp-loading"
+        >
+          Loading…
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 min-w-0">
         <span className="text-xs text-muted-foreground break-all min-w-0">Path: {path}</span>
         <div className="flex items-center gap-2">
-          <span
-            data-testid="ftp-loading"
-            className={`text-xs text-muted-foreground ${isLoading ? 'inline-flex' : 'hidden'}`}
-          >
-            Loading…
-          </span>
           <Button
             variant="ghost"
             size="sm"

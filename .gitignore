@@ -10,6 +10,9 @@ yarn-error.log*
 # Dependencies
 node_modules/
 
+# Test fixtures
+android/app/src/test/fixtures/HVSC_Update_84.7z
+
 # Build output
 .gradle/
 android/**/build/

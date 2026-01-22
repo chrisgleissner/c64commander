@@ -124,6 +124,11 @@ function CategorySection({
       }));
   }, [categoryData, categoryName]);
 
+  const syncAudioConfiguredItems = useCallback((next: ConfigListItem[]) => {
+    setAudioConfiguredItems(next);
+    audioConfiguredRef.current = next;
+  }, []);
+
   useEffect(() => {
     if (!isAudioMixer) return;
     if (items.length === 0) {
@@ -132,14 +137,16 @@ function CategorySection({
       soloSnapshotRef.current = [];
       return;
     }
-    if (!soloState.soloItem || audioConfiguredItems.length === 0) {
-      setAudioConfiguredItems(items);
-      audioConfiguredRef.current = items;
+    if (soloState.soloItem) {
+      if (!audioConfiguredItems.length) {
+        syncAudioConfiguredItems(items);
+      }
+      return;
     }
-    if (!soloState.soloItem) {
-      soloSnapshotRef.current = items;
-    }
-  }, [isAudioMixer, items, soloState.soloItem, audioConfiguredItems.length]);
+    const snapshot = soloSnapshotRef.current.length ? soloSnapshotRef.current : items;
+    syncAudioConfiguredItems(snapshot);
+    soloSnapshotRef.current = snapshot;
+  }, [audioConfiguredItems.length, isAudioMixer, items, soloState.soloItem, syncAudioConfiguredItems]);
 
   useEffect(() => {
     if (!isAudioMixer) return;
@@ -292,7 +299,8 @@ function CategorySection({
   );
 
   const handleAudioValueChange = async (itemName: string, value: string | number) => {
-    if (soloState.soloItem) {
+    const wasSoloActive = Boolean(soloState.soloItem);
+    if (wasSoloActive) {
       skipSoloRoutingRef.current = true;
       dispatchSolo({ type: 'reset' });
     }
@@ -302,9 +310,33 @@ function CategorySection({
     }
     editTimeoutRef.current = window.setTimeout(() => setIsEditingVolumes(false), 800);
     updateAudioConfiguredValue(itemName, value);
+    if (wasSoloActive) {
+      const snapshot = soloSnapshotRef.current.length
+        ? soloSnapshotRef.current
+        : audioConfiguredRef.current.length
+          ? audioConfiguredRef.current
+          : items;
+      const updates = buildSoloRoutingUpdates(snapshot, null);
+      updates[itemName] = value;
+      try {
+        await updateConfigBatch.mutateAsync({ category: categoryName, updates });
+        soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
+      } catch (error) {
+        addErrorLog('Audio mixer update failed', {
+          error: (error as Error).message,
+          category: categoryName,
+        });
+        toast({
+          title: 'Error',
+          description: (error as Error).message,
+          variant: 'destructive',
+        });
+      }
+      return;
+    }
     await handleValueChange(itemName, value);
     if (!soloState.soloItem) {
-      soloSnapshotRef.current = items;
+      soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
     }
   };
 

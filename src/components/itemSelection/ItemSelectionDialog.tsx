@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { FolderPlus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FolderPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
@@ -90,7 +90,7 @@ export const ItemSelectionDialog = ({
     setPendingLocalSourceCount(0);
   }, [open]);
 
-  const confirmLocalSource = async (target: SourceLocation) => {
+  const confirmLocalSource = useCallback(async (target: SourceLocation) => {
     if (autoConfirming) return;
     setAutoConfirming(true);
     const selections: SelectedItem[] = [
@@ -105,7 +105,7 @@ export const ItemSelectionDialog = ({
       onOpenChange(false);
     }
     setAutoConfirming(false);
-  };
+  }, [autoConfirming, onConfirm, onOpenChange]);
 
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
@@ -117,7 +117,7 @@ export const ItemSelectionDialog = ({
     if (autoConfirmLocalSource) {
       void confirmLocalSource(newestLocal);
     }
-  }, [autoConfirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
+  }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
 
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
@@ -168,29 +168,30 @@ export const ItemSelectionDialog = ({
   const handleAddLocalSource = async () => {
     setPendingLocalSource(true);
     setPendingLocalSourceCount(localSourceCount);
-    const nextId = await onAddLocalSource();
-    if (nextId) {
-      const nextSource = localSources.find((item) => item.id === nextId) || null;
-      setSelectedSourceId(nextId);
-      setPendingLocalSource(false);
-      if (autoConfirmLocalSource && nextSource) {
-        void confirmLocalSource(nextSource);
-      }
-    }
+    await onAddLocalSource();
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl w-[calc(100%-2rem)] max-h-[85vh] p-0 overflow-hidden shadow-2xl">
-        <div className="flex h-full max-h-[85vh] flex-col">
+      <DialogContent showClose={false} className="max-w-3xl w-[calc(100%-2rem)] h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl">
+        <div className="flex h-full min-h-0 flex-col">
           <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
-            <DialogTitle className="text-xl">{title}</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              Select items from the chosen source to add.
-            </DialogDescription>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="text-xl">{title}</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground">
+                  Select items from the chosen source to add.
+                </DialogDescription>
+              </div>
+              <DialogClose asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Close">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" data-testid="add-items-scroll">
             {!source && (
               <div className="space-y-5">
                 <p className="text-lg font-semibold text-foreground">Choose source</p>
@@ -250,6 +251,7 @@ export const ItemSelectionDialog = ({
                   rootPath={source.rootPath}
                   entries={visibleEntries}
                   isLoading={browser.isLoading}
+                  showLoadingIndicator={browser.showLoadingIndicator}
                   selection={selection}
                   onToggleSelect={toggleSelection}
                   onOpen={browser.navigateTo}
@@ -263,7 +265,7 @@ export const ItemSelectionDialog = ({
             )}
           </div>
 
-          <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
             {progress && progress.status !== 'idle' && (
               <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
                 <span>
@@ -272,17 +274,21 @@ export const ItemSelectionDialog = ({
                 {progress.total ? <span> / {progress.total}</span> : null}
               </div>
             )}
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="default"
-              onClick={handleConfirm}
-              disabled={!source || isConfirming || autoConfirming}
-              data-testid="add-items-confirm"
-            >
-              {confirmLabel}
-            </Button>
+            <div className="flex gap-2 sm:ml-auto">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              {source && (
+                <Button
+                  variant="default"
+                  onClick={handleConfirm}
+                  disabled={isConfirming || autoConfirming || selection.size === 0}
+                  data-testid="add-items-confirm"
+                >
+                  {confirmLabel}
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </div>
       </DialogContent>

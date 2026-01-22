@@ -180,6 +180,18 @@ export function createMockC64Server(
       if (parsed.pathname === '/v1/configs:reset_to_default') {
         state = clone(defaults);
       }
+      if (parsed.pathname === '/v1/drives/a:on') {
+        driveState.a.enabled = true;
+      }
+      if (parsed.pathname === '/v1/drives/b:on') {
+        driveState.b.enabled = true;
+      }
+      if (parsed.pathname === '/v1/drives/a:off') {
+        driveState.a.enabled = false;
+      }
+      if (parsed.pathname === '/v1/drives/b:off') {
+        driveState.b.enabled = false;
+      }
       return sendJson(200, { errors: [] });
     }
 

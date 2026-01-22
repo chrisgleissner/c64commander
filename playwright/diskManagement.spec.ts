@@ -70,6 +70,9 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const getDriveCard = (page: Page, label: string) =>
+  page.getByText(label, { exact: true }).locator('..').locator('..').locator('..');
+
 const seedDiskLibrary = async (page: Page, disks: Array<{ id: string; name: string; path: string; location: 'local' | 'ultimate'; group?: string | null; importOrder?: number | null }>) => {
   await page.addInitScript(({ disks: seedDisks }) => {
     const payload = {
@@ -173,6 +176,42 @@ test.describe('Disk management', () => {
     await expect(page.getByText('Games', { exact: true })).toBeVisible();
     await expect(page.getByText('Demos', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-folders');
+  });
+
+  test('drive power toggle button updates state and issues request', async ({ page }: { page: Page }, testInfo) => {
+    const requests: Array<{ method: string; url: string }> = [];
+    page.on('request', (request) => {
+      try {
+        const url = new URL(request.url());
+        if (url.pathname.startsWith('/v1/drives/') && (url.pathname.endsWith(':on') || url.pathname.endsWith(':off'))) {
+          requests.push({ method: request.method(), url: url.pathname });
+        }
+      } catch {
+        // Ignore malformed URLs.
+      }
+    });
+
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    const driveCard = getDriveCard(page, 'Drive A');
+    const mountButton = driveCard.getByRole('button', { name: 'Mount…' });
+    const powerButton = page.getByTestId('drive-power-toggle-a');
+
+    await expect(powerButton).toBeVisible();
+    await expect(powerButton).toHaveText('Turn Off');
+
+    const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
+    if (mountBox && powerBox) {
+      expect(powerBox.y).toBeGreaterThan(mountBox.y);
+      expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x);
+    }
+
+    await powerButton.click();
+    await expect(powerButton).toHaveText('Turn On');
+    await expect(driveCard.getByText('OFF', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'drive-power-off');
+
+    const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith('/v1/drives/a:off'));
+    expect(lastRequest).toBeTruthy();
   });
 
   test('importing C64U folders preserves hierarchy and paths', async ({ page }: { page: Page }, testInfo) => {
