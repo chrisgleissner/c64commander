@@ -251,6 +251,7 @@ export const ItemSelectionDialog = ({
                   rootPath={source.rootPath}
                   entries={visibleEntries}
                   isLoading={browser.isLoading}
+                  showLoadingIndicator={browser.showLoadingIndicator}
                   selection={selection}
                   onToggleSelect={toggleSelection}
                   onOpen={browser.navigateTo}

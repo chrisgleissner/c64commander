@@ -11,6 +11,35 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const waitForFtpIdle = async (container: Page) => {
+  const loading = container.getByTestId('ftp-loading');
+  if (await loading.count()) {
+    await expect(loading).toBeHidden({ timeout: 15000 });
+  }
+};
+
+const ensureRemoteRoot = async (container: Page) => {
+  const rootButton = container.getByTestId('navigate-root');
+  if (!(await rootButton.isVisible())) return;
+  await waitForFtpIdle(container);
+  if (await rootButton.isEnabled()) {
+    await rootButton.click();
+    await waitForFtpIdle(container);
+  }
+};
+
+const openRemoteFolder = async (container: Page, name: string) => {
+  await waitForFtpIdle(container);
+  await expect(container.getByText(name, { exact: true })).toBeVisible({ timeout: 10000 });
+  const row = container.getByText(name, { exact: true }).locator('..').locator('..').locator('..');
+  await row.getByRole('button', { name: 'Open' }).click();
+};
+
+const selectEntryCheckbox = async (container: Page, name: string) => {
+  const row = container.getByText(name, { exact: true }).locator('..').locator('..');
+  await row.getByRole('checkbox').click();
+};
+
 test.describe('Item Selection Dialog UX', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -161,8 +190,9 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'c64u-selected');
 
     // Navigate to Usb0 folder
-    const usb2Row = page.getByText('Usb0', { exact: false }).locator('..').locator('..').locator('..');
-    await usb2Row.getByRole('button', { name: 'Open' }).click();
+    const dialog = page.getByRole('dialog');
+    await ensureRemoteRoot(dialog);
+    await openRemoteFolder(dialog, 'Usb0');
     await page.waitForTimeout(500);
     await snap(page, testInfo, 'usb2-opened');
 
@@ -204,9 +234,10 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'c64u-selected');
 
     // Navigate to Usb0 folder
-    const usb2Row = page.getByText('Usb0', { exact: false }).locator('..').locator('..').locator('..');
-    if (await usb2Row.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await usb2Row.getByRole('button', { name: 'Open' }).click();
+    const dialog = page.getByRole('dialog');
+    await ensureRemoteRoot(dialog);
+    if (await dialog.getByText('Usb0', { exact: true }).isVisible({ timeout: 2000 }).catch(() => false)) {
+      await openRemoteFolder(dialog, 'Usb0');
       await page.waitForTimeout(500);
       await snap(page, testInfo, 'usb2-opened');
     }
@@ -266,5 +297,135 @@ test.describe('Item Selection Dialog UX', () => {
     await expect(page.getByTestId('disk-row').first()).toBeVisible();
     await expect(page.getByTestId('disk-list')).toContainText('Disk 1');
     await snap(page, testInfo, 'disks-populated');
+  });
+
+  test('Play page: repeated add items via folder picker remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-initial');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const firstCount = await page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_playlist:v1:TEST-123');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { items?: unknown[] };
+      return parsed.items?.length ?? 0;
+    });
+    expect(firstCount).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const secondCount = await page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_playlist:v1:TEST-123');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { items?: unknown[] };
+      return parsed.items?.length ?? 0;
+    });
+    expect(secondCount).toBeGreaterThanOrEqual(firstCount);
+    await snap(page, testInfo, 'play-repeated-add');
+  });
+
+  test('Disks page: repeated add items via folder picker remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/disks');
+    await snap(page, testInfo, 'disks-initial');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const firstCount = await page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_disk_library:TEST-123');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { disks?: unknown[] };
+      return parsed.disks?.length ?? 0;
+    });
+    expect(firstCount).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const secondCount = await page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_disk_library:TEST-123');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { disks?: unknown[] };
+      return parsed.disks?.length ?? 0;
+    });
+    expect(secondCount).toBeGreaterThanOrEqual(firstCount);
+    await snap(page, testInfo, 'disks-repeated-add');
+  });
+
+  test('Play page: repeated add items via C64 Ultimate remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-initial');
+
+    for (let i = 0; i < 2; i += 1) {
+      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel' }).click();
+      await expect(page.getByRole('dialog')).toBeHidden();
+    }
+
+    const addDisk = async (diskName: string) => {
+      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+      const dialog = page.getByRole('dialog');
+      await ensureRemoteRoot(dialog);
+      await openRemoteFolder(dialog, 'Usb0');
+      await openRemoteFolder(dialog, 'Games');
+      await openRemoteFolder(dialog, 'Turrican II');
+      await selectEntryCheckbox(dialog, diskName);
+      await page.getByTestId('add-items-confirm').click();
+      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 });
+    };
+
+    await addDisk('Disk 1.d64');
+    await addDisk('Disk 2.d64');
+
+    await expect(page.getByTestId('playlist-list')).toContainText('Disk 1.d64');
+    await expect(page.getByTestId('playlist-list')).toContainText('Disk 2.d64');
+    await snap(page, testInfo, 'play-c64u-repeated-add');
+  });
+
+  test('Disks page: repeated add items via C64 Ultimate remains stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/disks');
+    await snap(page, testInfo, 'disks-initial');
+
+    for (let i = 0; i < 2; i += 1) {
+      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel' }).click();
+      await expect(page.getByRole('dialog')).toBeHidden();
+    }
+
+    const addDisk = async (diskName: string) => {
+      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+      const dialog = page.getByRole('dialog');
+      await ensureRemoteRoot(dialog);
+      await openRemoteFolder(dialog, 'Usb0');
+      await openRemoteFolder(dialog, 'Games');
+      await openRemoteFolder(dialog, 'Turrican II');
+      await selectEntryCheckbox(dialog, diskName);
+      await page.getByTestId('add-items-confirm').click();
+      await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 });
+    };
+
+    await addDisk('Disk 1.d64');
+    await addDisk('Disk 2.d64');
+
+    await expect(page.getByTestId('disk-list')).toContainText('Disk 1.d64');
+    await expect(page.getByTestId('disk-list')).toContainText('Disk 2.d64');
+    await snap(page, testInfo, 'disks-c64u-repeated-add');
   });
 });

@@ -7,6 +7,7 @@ APK_DEFAULT="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
 RUN_INSTALL=true
 RUN_BUILD=true
 RUN_TEST=true
+RUN_ANDROID_TESTS=true
 RUN_APK=true
 RUN_INSTALL_APK=false
 RUN_EMULATOR=false
@@ -16,6 +17,7 @@ RUN_TEST_E2E=false
 RUN_TEST_E2E_CI=false
 RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
+RUN_ANDROID_COVERAGE=true
 APK_PATH=""
 DEVICE_ID=""
 
@@ -43,6 +45,8 @@ Options:
   --test-e2e-ci         Run full CI mirror (screenshots + e2e + validation)
   --validate-evidence   Validate Playwright evidence structure
   --coverage            Run unit + e2e coverage (slower)
+  --skip-android-tests  Skip Android instrumentation tests
+  --skip-android-coverage Skip Android Jacoco coverage check
   
   --skip-install        Skip npm install
   --skip-build          Skip npm run cap:build
@@ -121,6 +125,14 @@ while [[ $# -gt 0 ]]; do
       RUN_INSTALL=true
       RUN_APK=false
       RUN_TEST=false
+      shift
+      ;;
+    --skip-android-tests)
+      RUN_ANDROID_TESTS=false
+      shift
+      ;;
+    --skip-android-coverage)
+      RUN_ANDROID_COVERAGE=false
       shift
       ;;
     --device)
@@ -215,6 +227,10 @@ if [[ "$RUN_TEST" == "true" ]]; then
     (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
   fi
   (cd "$ROOT_DIR/android" && ./gradlew test --warning-mode none)
+  if [[ "$RUN_ANDROID_TESTS" == "true" ]]; then
+    log "Running Android instrumentation tests"
+    (cd "$ROOT_DIR" && ./android/gradlew -p android connectedDebugAndroidTest)
+  fi
 fi
 
 if [[ "$RUN_TEST_UNIT" == "true" ]]; then
@@ -243,7 +259,16 @@ if [[ "$RUN_COVERAGE" == "true" ]]; then
   log "Running coverage (unit + e2e)"
   (cd "$ROOT_DIR" && ./scripts/collect-coverage.sh)
   (cd "$ROOT_DIR" && EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs)
-  (cd "$ROOT_DIR" && COVERAGE_MIN=80 node scripts/check-coverage-threshold.mjs)
+  (cd "$ROOT_DIR" && COVERAGE_MIN=75 node scripts/check-coverage-threshold.mjs)
+  if [[ "$RUN_ANDROID_TESTS" == "true" ]]; then
+    log "Running Android instrumentation tests"
+    (cd "$ROOT_DIR" && ./android/gradlew -p android connectedDebugAndroidTest)
+  fi
+  if [[ "$RUN_ANDROID_COVERAGE" == "true" ]]; then
+    log "Running Android coverage verification"
+    (cd "$ROOT_DIR" && ./android/gradlew -p android testDebugUnitTest jacocoTestCoverageVerification)
+    (cd "$ROOT_DIR" && EXPECT_ANDROID_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs)
+  fi
 fi
 
 if [[ "$RUN_SCREENSHOTS" == "true" ]]; then

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureWithinRoot, getParentPathWithinRoot } from './paths';
 import type { SourceEntry, SourceLocation } from './types';
 
@@ -6,6 +6,7 @@ export type SourceNavigatorState = {
   path: string;
   entries: SourceEntry[];
   isLoading: boolean;
+  showLoadingIndicator: boolean;
   error: string | null;
   navigateTo: (path: string) => void;
   navigateUp: () => void;
@@ -30,12 +31,28 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
   const [path, setPath] = useState('/');
   const [entries, setEntries] = useState<SourceEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLoadingIndicator, setShowLoadingIndicator] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadingTokenRef = useRef(0);
+  const loadingShownAtRef = useRef<number | null>(null);
 
   const loadEntries = useCallback(async (nextPath: string) => {
     if (!source) return;
+    const token = loadingTokenRef.current + 1;
+    loadingTokenRef.current = token;
     setIsLoading(true);
     setError(null);
+    let loadingTimer: number | null = null;
+    if (source.type === 'ultimate') {
+      loadingTimer = window.setTimeout(() => {
+        if (loadingTokenRef.current === token) {
+          loadingShownAtRef.current = Date.now();
+          setShowLoadingIndicator(true);
+        }
+      }, 200);
+    } else {
+      setShowLoadingIndicator(false);
+    }
     try {
       const safePath = ensureWithinRoot(nextPath, source.rootPath);
       const result = await source.listEntries(safePath);
@@ -44,6 +61,29 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      if (loadingTimer !== null) {
+        window.clearTimeout(loadingTimer);
+      }
+      if (loadingTokenRef.current === token) {
+        const shownAt = loadingShownAtRef.current;
+        if (shownAt) {
+          const elapsed = Date.now() - shownAt;
+          const remaining = 300 - elapsed;
+          if (remaining > 0) {
+            window.setTimeout(() => {
+              if (loadingTokenRef.current === token) {
+                setShowLoadingIndicator(false);
+                loadingShownAtRef.current = null;
+              }
+            }, remaining);
+          } else {
+            setShowLoadingIndicator(false);
+            loadingShownAtRef.current = null;
+          }
+        } else {
+          setShowLoadingIndicator(false);
+        }
+      }
       setIsLoading(false);
     }
   }, [source]);
@@ -59,6 +99,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     if (!source) return;
     setStoredPath(source, path);
   }, [path, source]);
+
 
   const navigateTo = useCallback((nextPath: string) => {
     if (!source) return;
@@ -86,6 +127,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     path,
     entries,
     isLoading,
+    showLoadingIndicator,
     error,
     navigateTo,
     navigateUp,

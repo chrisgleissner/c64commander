@@ -37,7 +37,7 @@ object HvscExtractionTestUtils {
   }
 
   fun resolveOptionalRealArchivePath(fixtureName: String): File {
-    val args = InstrumentationRegistry.getInstrumentation().arguments
+    val args = InstrumentationRegistry.getArguments()
     val argPath = args.getString(ARG_REAL_ARCHIVE_PATH)
     if (!argPath.isNullOrBlank()) {
       return File(argPath).absoluteFile
@@ -69,7 +69,7 @@ object HvscExtractionTestUtils {
   }
 
   private fun resolveFixtureOnDisk(fixtureName: String): File? {
-    val args = InstrumentationRegistry.getInstrumentation().arguments
+    val args = InstrumentationRegistry.getArguments()
     val fixturesDirArg = args.getString(ARG_FIXTURES_DIR)
     if (!fixturesDirArg.isNullOrBlank()) {
       return File(fixturesDirArg, fixtureName).absoluteFile

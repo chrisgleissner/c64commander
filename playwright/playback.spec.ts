@@ -39,6 +39,23 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }>) => {
+  await page.addInitScript(({ seedItems }) => {
+    const payload = {
+      items: seedItems,
+      currentIndex: -1,
+    };
+    localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+  }, { seedItems: items });
+};
+
+const parseTimeLabel = (value: string | null) => {
+  if (!value) return null;
+  const match = value.match(/(\d+):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
 test.describe('Playback file browser', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -77,6 +94,100 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
     await snap(page, testInfo, 'play-page-loaded');
+  });
+
+  test('playlist view-all dialog is constrained and scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '10');
+    });
+    const largePlaylist = Array.from({ length: 2700 }, (_, index) => ({
+      source: 'ultimate' as const,
+      path: `/Usb0/Demos/Track_${String(index + 1).padStart(4, '0')}.sid`,
+      name: `Track_${String(index + 1).padStart(4, '0')}.sid`,
+      durationMs: 5000,
+    }));
+    await seedPlaylistStorage(page, largePlaylist);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await snap(page, testInfo, 'playlist-view-all-open');
+
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    if (dialogBox && viewport) {
+      const heightRatio = dialogBox.height / viewport.height;
+      expect(heightRatio).toBeLessThan(0.9);
+      expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
+      expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
+    }
+
+    const scrollArea = page.getByTestId('action-list-scroll');
+    const scrollable = await scrollArea.evaluate((node) => node.scrollHeight > node.clientHeight);
+    expect(scrollable).toBeTruthy();
+
+    await scrollArea.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    await expect(scrollArea).toContainText('Track_2700.sid');
+    await snap(page, testInfo, 'playlist-view-all-scrolled');
+  });
+
+  test('playback counters reflect played, total, and remaining time', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const seededItems = [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0002.sid', name: 'Track_0002.sid', durationMs: 7000 },
+    ];
+    await seedPlaylistStorage(page, seededItems);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const counters = page.getByTestId('playback-counters');
+    await expect(counters).toContainText('Total: 0:12');
+
+    await page.getByTestId('playlist-play').click();
+    await page.waitForTimeout(1200);
+    await snap(page, testInfo, 'playback-running');
+
+    await expect.poll(async () => {
+      const text = await counters.textContent();
+      const played = parseTimeLabel(text);
+      return played ?? 0;
+    }).toBeGreaterThanOrEqual(1);
+
+    const remainingAfterStart = await counters.textContent();
+    expect(remainingAfterStart).toContain('Remaining:');
+
+    await page.getByTestId('playlist-next').click();
+    await page.waitForTimeout(1200);
+    await snap(page, testInfo, 'playback-next');
+
+    await expect.poll(async () => {
+      const text = await counters.textContent();
+      const played = parseTimeLabel(text);
+      return played ?? 0;
+    }).toBeGreaterThanOrEqual(2);
+  });
+
+  test('playback counters show dashes when durations are unknown', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const seededItems = [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Unknown_1.sid', name: 'Unknown_1.sid' },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Unknown_2.sid', name: 'Unknown_2.sid', durationMs: 4000 },
+    ];
+    await seedPlaylistStorage(page, seededItems);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const counters = page.getByTestId('playback-counters');
+    await expect(counters).toContainText('Total: —');
+    await expect(counters).toContainText('Remaining: —');
   });
 
   test('playback controls are stateful and show current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -238,6 +349,49 @@ test.describe('Playback file browser', () => {
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     await snap(page, testInfo, 'playlist-populated');
+  });
+
+  test('reshuffle changes playlist order and keeps current track index', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const playlist = {
+      items: Array.from({ length: 6 }, (_, index) => ({
+        source: 'ultimate',
+        path: `/Usb0/Demos/shuffle-${index}.sid`,
+        name: `shuffle-${index}.sid`,
+        durationMs: 5000,
+        songNr: 1,
+        sourceId: null,
+      })),
+      currentIndex: 0,
+    };
+
+    await page.addInitScript((payload) => {
+      localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+    }, playlist);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const shuffleCheckbox = page.getByText('Shuffle').locator('..').getByRole('checkbox');
+    await shuffleCheckbox.click();
+
+    await page.getByTestId('playlist-play').click();
+    await expect(page.getByTestId('playback-current-track')).toContainText('shuffle-0.sid');
+
+    const getTitles = async () =>
+      page.getByTestId('playlist-item').locator('button').filter({ hasText: /\.sid$/i }).allTextContents();
+
+    const beforeTitles = await getTitles();
+    const currentTrack = 'shuffle-0.sid';
+    const beforeIndex = beforeTitles.indexOf(currentTrack);
+
+    await page.getByRole('button', { name: 'Reshuffle' }).click();
+    await snap(page, testInfo, 'reshuffle-clicked');
+
+    const afterTitles = await getTitles();
+    const afterIndex = afterTitles.indexOf(currentTrack);
+
+    expect(afterTitles.join('|')).not.toBe(beforeTitles.join('|'));
+    expect(afterIndex).toBe(beforeIndex);
   });
 
   test('local folder without supported files shows warning', async ({ page }: { page: Page }, testInfo: TestInfo) => {

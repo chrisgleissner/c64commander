@@ -10,6 +10,12 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const getPlaylistOrder = async (page: Page) => {
+  const rows = page.getByTestId('playlist-item');
+  const titles = await rows.locator('button').filter({ hasText: /\.(sid|d64|prg|mod|crt)$/i }).allTextContents();
+  return titles.map((title) => title.trim()).filter(Boolean);
+};
+
 const addLocalFolder = async (page: Page, folderPath: string) => {
   await page.getByRole('button', { name: /Add items|Add more items/i }).click();
   await page.getByRole('button', { name: 'Add folder' }).click();
@@ -81,6 +87,29 @@ test.describe('Playlist controls and advanced features', () => {
     await shuffleCheckbox.click();
     await expect(shuffleCheckbox).not.toBeChecked();
     await snap(page, testInfo, 'shuffle-disabled');
+  });
+
+  test('reshuffle changes playlist order', async ({ page }: { page: Page }, testInfo) => {
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
+    await snap(page, testInfo, 'playlist-ready');
+
+    await page.getByText('Recurse folders').scrollIntoViewIfNeeded();
+    const shuffleCheckbox = page.getByRole('checkbox').nth(1);
+    await shuffleCheckbox.click();
+    await snap(page, testInfo, 'shuffle-enabled');
+
+    const initialOrder = await getPlaylistOrder(page);
+    expect(initialOrder.length).toBeGreaterThan(1);
+
+    await page.getByRole('button', { name: 'Reshuffle' }).click();
+    await expect.poll(async () => {
+      const nextOrder = await getPlaylistOrder(page);
+      return nextOrder.join('|');
+    }).not.toBe(initialOrder.join('|'));
+    await snap(page, testInfo, 'reshuffle-changed');
   });
 
   test('shuffle category checkboxes filter eligible files', async ({ page }: { page: Page }, testInfo) => {

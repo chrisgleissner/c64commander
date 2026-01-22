@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Monitor, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,6 +82,8 @@ export const HomeDiskManager = () => {
   const [activeDisk, setActiveDisk] = useState<DiskEntry | null>(null);
   const [driveErrors, setDriveErrors] = useState<Record<string, string>>({});
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
+  const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
+  const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [browserOpen, setBrowserOpen] = useState(false);
   const [groupDialogDisk, setGroupDialogDisk] = useState<DiskEntry | null>(null);
   const [groupName, setGroupName] = useState('');
@@ -94,6 +97,7 @@ export const HomeDiskManager = () => {
   const { limit: listPreviewLimit } = useListPreviewLimit();
 
   const api = getC64API();
+  const queryClient = useQueryClient();
 
   const localSourcesById = useMemo(
     () => new Map(localSources.map((source) => [source.id, source])),
@@ -116,6 +120,24 @@ export const HomeDiskManager = () => {
       return next.size === prev.size ? prev : next;
     });
   }, [disksById]);
+
+  useEffect(() => {
+    if (!drivesData?.drives?.length) return;
+    setDrivePowerOverride((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      DRIVE_KEYS.forEach((drive) => {
+        const info = drivesData.drives.find((entry) => entry[drive])?.[drive];
+        if (info?.enabled === undefined) return;
+        const override = next[drive];
+        if (override !== undefined && override === info.enabled) {
+          delete next[drive];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [drivesData?.drives]);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -202,6 +224,39 @@ export const HomeDiskManager = () => {
         description: (error as Error).message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleToggleDrivePower = async (drive: DriveKey, targetEnabled: boolean) => {
+    if (!status.isConnected) return;
+    setDrivePowerPending((prev) => ({ ...prev, [drive]: true }));
+    setDrivePowerOverride((prev) => ({ ...prev, [drive]: targetEnabled }));
+    try {
+      if (targetEnabled) {
+        await api.driveOn(drive);
+      } else {
+        await api.driveOff(drive);
+      }
+      setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+      toast({
+        title: targetEnabled ? 'Drive powered on' : 'Drive powered off',
+        description: `${buildDriveLabel(drive)} ${targetEnabled ? 'enabled' : 'disabled'}.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
+    } catch (error) {
+      setDrivePowerOverride((prev) => {
+        const next = { ...prev };
+        delete next[drive];
+        return next;
+      });
+      setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
+      toast({
+        title: 'Drive power toggle failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDrivePowerPending((prev) => ({ ...prev, [drive]: false }));
     }
   };
 
@@ -404,6 +459,12 @@ export const HomeDiskManager = () => {
 
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
+    const powerOverride = drivePowerOverride[key];
+    const powerEnabled = powerOverride ?? info?.enabled;
+    const hasPowerState = typeof powerEnabled === 'boolean';
+    const powerLabel = powerEnabled ? 'Turn Off' : 'Turn On';
+    const powerTarget = !powerEnabled;
+    const powerPending = Boolean(drivePowerPending[key]);
     const mountedDiskId = resolveMountedDiskId(key);
     const forcedEmpty = mountedByDrive[key] === '';
     const mounted = forcedEmpty ? false : Boolean(info?.image_file || mountedDiskId);
@@ -421,6 +482,11 @@ export const HomeDiskManager = () => {
       mountedDisk,
       canRotate,
       mountedLabel,
+      powerEnabled,
+      hasPowerState,
+      powerLabel,
+      powerTarget,
+      powerPending,
     };
   });
 
@@ -432,7 +498,7 @@ export const HomeDiskManager = () => {
           Drives
         </h3>
         <div className="grid gap-3">
-          {driveRows.map(({ key, info, mounted, mountedDisk, canRotate, mountedLabel }) => (
+          {driveRows.map(({ key, info, mounted, mountedDisk, canRotate, mountedLabel, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending }) => (
             <div key={key} className="config-card space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -442,10 +508,10 @@ export const HomeDiskManager = () => {
                 <div className="flex items-center gap-2">
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${
-                      info?.enabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                      powerEnabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
                     }`}
                   >
-                    {info?.enabled ? 'ON' : 'OFF'}
+                    {powerEnabled ? 'ON' : 'OFF'}
                   </span>
                   <DiskIndicator mounted={mounted} />
                 </div>
@@ -482,6 +548,18 @@ export const HomeDiskManager = () => {
                   </Button>
                 </div>
               )}
+
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleToggleDrivePower(key, powerTarget)}
+                  disabled={!status.isConnected || !hasPowerState || powerPending}
+                  data-testid={`drive-power-toggle-${key}`}
+                >
+                  {powerLabel}
+                </Button>
+              </div>
 
               {driveErrors[key] ? (
                 <p className="text-xs text-destructive">{driveErrors[key]}</p>
@@ -553,7 +631,10 @@ export const HomeDiskManager = () => {
         type="file"
         multiple
         className="hidden"
-        onChange={(event) => handleLocalSourceInput(event.target.files)}
+          onChange={(event) => {
+            handleLocalSourceInput(event.target.files);
+            event.currentTarget.value = '';
+          }}
       />
 
       <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>

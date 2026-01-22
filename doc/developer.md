@@ -28,7 +28,7 @@ All common development tasks use `./local-build.sh`:
 ### Build variants
 
 ```bash
-./local-build.sh                  # Full build: deps, build, test, APK
+./local-build.sh                  # Full build: deps, build, web + Android tests, APK
 ./local-build.sh --skip-tests     # Skip all tests
 ./local-build.sh --skip-apk       # Build without APK generation
 ```
@@ -40,6 +40,8 @@ All common development tasks use `./local-build.sh`:
 ./local-build.sh --test-e2e       # E2E tests only (Playwright, no screenshots)
 ./local-build.sh --test-e2e-ci    # Full CI mirror: screenshots + e2e + validation
 ./local-build.sh --validate-evidence  # Validate Playwright evidence structure
+./local-build.sh --skip-android-tests  # Skip Android instrumentation tests
+./local-build.sh --coverage       # Web + Android coverage checks
 ```
 
 ### Android
@@ -104,14 +106,14 @@ playwright-report/
   index.html
 ```
 
-### Android JVM tests
+### Android JVM + instrumentation tests
 
 Location: `android/app/src/test/java/`
 
 Run:
 
 ```bash
-cd android && ./gradlew test
+./local-build.sh
 ```
 
 ## Evidence validation
