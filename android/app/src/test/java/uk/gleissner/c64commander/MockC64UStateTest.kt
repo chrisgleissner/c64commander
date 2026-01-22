@@ -12,27 +12,17 @@ class MockC64UStateTest {
       put("restApiVersion", "0.1")
       put("baseUrl", "http://localhost")
     })
-    
-    try {
-      val state = MockC64UState.fromPayload(payload)
-      assertNotNull("State should not be null", state)
-    } catch (e: Exception) {
-      // Context-dependent, allow graceful failure
-      assertTrue("Should handle missing context", true)
-    }
+
+    val state = MockC64UState.fromPayload(payload)
+    assertNotNull("State should not be null", state)
   }
 
   @Test
   fun fromPayloadAcceptsEmptyJson() {
     val payload = JSONObject()
-    
-    try {
-      val state = MockC64UState.fromPayload(payload)
-      assertNotNull("State should not be null even with empty payload", state)
-    } catch (e: Exception) {
-      // Context-dependent, allow graceful failure
-      assertTrue("Should handle missing context", true)
-    }
+
+    val state = MockC64UState.fromPayload(payload)
+    assertNotNull("State should not be null even with empty payload", state)
   }
 
   @Test

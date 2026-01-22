@@ -31,12 +31,12 @@ const ensureRemoteRoot = async (container: Page) => {
 const openRemoteFolder = async (container: Page, name: string) => {
   await waitForFtpIdle(container);
   await expect(container.getByText(name, { exact: true })).toBeVisible({ timeout: 10000 });
-  const row = container.getByText(name, { exact: true }).locator('..').locator('..').locator('..');
+  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
   await row.getByRole('button', { name: 'Open' }).click();
 };
 
 const selectEntryCheckbox = async (container: Page, name: string) => {
-  const row = container.getByText(name, { exact: true }).locator('..').locator('..');
+  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
   await row.getByRole('checkbox').click();
 };
 
@@ -84,10 +84,6 @@ test.describe('Item Selection Dialog UX', () => {
 
     // Find all close buttons (X icons) in the dialog
     const dialog = page.locator('[role="dialog"]').first();
-    const closeButtons = dialog.locator('button').filter({
-      has: page.locator('svg').filter({ hasText: /^$/ }).first()
-    });
-
     // Count visible close buttons in top-right area
     const headerCloseButtons = await dialog.locator('button[aria-label*="Close"], button[class*="absolute"][class*="right"]').count();
     

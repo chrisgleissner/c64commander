@@ -35,12 +35,14 @@ class FolderPickerPluginTest {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("uri")).thenReturn(null)
 
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("uri is required")
+
     plugin.readFile(call)
-
-    // Give executor time to run
-    Thread.sleep(100)
-
-    verify(call).reject("uri is required")
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
 
   @Test
@@ -48,12 +50,14 @@ class FolderPickerPluginTest {
     val call = mock(PluginCall::class.java)
     `when`(call.getString("uri")).thenReturn("")
 
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("uri is required")
+
     plugin.readFile(call)
-
-    // Give executor time to run
-    Thread.sleep(100)
-
-    verify(call).reject("uri is required")
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
 
   @Test

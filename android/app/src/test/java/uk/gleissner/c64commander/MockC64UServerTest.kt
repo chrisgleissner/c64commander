@@ -115,14 +115,9 @@ class MockC64UServerTest {
     config.put("general", JSONObject().apply {
       put("baseUrl", "http://localhost")
     })
-    
-    try {
-      val state = MockC64UState.fromPayload(config)
-      val server = MockC64UServer(state)
-      assertNotNull("Server should not be null", server)
-    } catch (e: Exception) {
-      // Expected - may fail without full Android context
-      assertTrue("Should handle context issues gracefully", true)
-    }
+
+    val state = MockC64UState.fromPayload(config)
+    val server = MockC64UServer(state)
+    assertNotNull("Server should not be null", server)
   }
 }
