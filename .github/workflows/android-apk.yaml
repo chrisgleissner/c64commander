@@ -208,6 +208,19 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Resolve app version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME}"
+          else
+            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
+            if [[ -z "$APP_VERSION" ]]; then
+              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+            fi
+          fi
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
+
       - name: Setup Bun
         if: env.PACKAGE_MANAGER == 'bun'
         uses: oven-sh/setup-bun@v1
@@ -337,21 +350,21 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: ${{ github.ref_name }}
+          VERSION_NAME: ${{ env.APP_VERSION }}
         run: cd android && ./gradlew bundleRelease
 
       - name: Upload APK artifact (debug)
         uses: actions/upload-artifact@v4
         with:
-          name: c64-commander-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: c64commander-debug-apk
+          path: android/app/build/outputs/apk/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
 
       - name: Upload APK artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: c64-commander-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: c64commander-release-apk
+          path: android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk
 
       - name: Upload AAB artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
@@ -365,7 +378,7 @@ jobs:
         uses: softprops/action-gh-release@v2.5.0
         with:
           files: |
-            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
           generate_release_notes: true
 
       - name: Upload release APK to GitHub release
@@ -373,7 +386,7 @@ jobs:
         uses: softprops/action-gh-release@v2.5.0
         with:
           files: |
-            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk
 
       - name: Upload release AAB to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'

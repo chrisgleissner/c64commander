@@ -1,10 +1,31 @@
 import { test, expect } from '@playwright/test';
+import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
+
+const resolveExpectedVersion = () => {
+  const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || '';
+  if (envVersion) return envVersion;
+  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) {
+    return process.env.GITHUB_REF_NAME;
+  }
+  try {
+    const tag = execSync('git describe --tags --exact-match', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+    if (tag) return tag;
+  } catch {
+    // ignore
+  }
+  const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')) as { version?: string };
+  return pkg.version || '';
+};
 
 test.describe('UI coverage', () => {
   test.describe.configure({ mode: 'parallel' });
@@ -155,6 +176,14 @@ test.describe('UI coverage', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
     await snap(page, testInfo, 'disks-open');
+  });
+
+  test('home page shows resolved version', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const expectedVersion = resolveExpectedVersion() || '—';
+    const versionCard = page.getByText('Version', { exact: true }).locator('..');
+    await expect(versionCard.locator('p')).toHaveText(expectedVersion);
+    await snap(page, testInfo, 'home-version');
   });
 
   test('config page renders and toggles a section', async ({ page }: { page: Page }, testInfo: TestInfo) => {

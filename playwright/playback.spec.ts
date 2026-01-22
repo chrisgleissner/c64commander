@@ -26,13 +26,11 @@ const openRemoteFolder = async (container: Page | Locator, name: string) => {
   await row.getByRole('button', { name: 'Open' }).click();
 };
 
-const ensureRemoteRoot = async (page: Page) => {
-  const rootButton = page.locator('[data-testid="navigate-root"]');
-  if (await rootButton.isVisible()) {
-    if (await rootButton.isEnabled()) {
-      await rootButton.click();
-    }
-  }
+const ensureRemoteRoot = async (container: Page | Locator) => {
+  const rootButton = container.getByTestId('navigate-root');
+  if (!(await rootButton.isVisible())) return;
+  if (!(await rootButton.isEnabled())) return;
+  await rootButton.click();
 };
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -411,8 +409,8 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await ensureRemoteRoot(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
     await openRemoteFolder(dialog, 'Usb0');
@@ -440,7 +438,7 @@ test.describe('Playback file browser', () => {
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
     const dialog = page.getByRole('dialog');
-    await ensureRemoteRoot(page);
+    await ensureRemoteRoot(dialog);
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Games');
     await expect(dialog.getByText(/Path: \/Usb0\/Games/)).toBeVisible();
@@ -526,8 +524,8 @@ test.describe('Playback file browser', () => {
 
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await ensureRemoteRoot(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Games');

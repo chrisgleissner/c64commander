@@ -121,7 +121,7 @@ const DiskRow = ({
   return (
     <div
       className={cn(
-        'flex items-start gap-2 py-2 px-1 rounded-md',
+        'flex items-start gap-2 py-2 px-1 rounded-md min-w-0',
         isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
     >
@@ -181,12 +181,14 @@ const DiskRow = ({
             {highlightText(disk.path, filter)}
           </div>
           {disk.group ? (
-            <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1 min-w-0">
               <span
                 className={cn('h-2 w-2 rounded-full border', groupColor?.chip)}
                 aria-hidden="true"
               />
-              <span className={cn(groupColor?.text)}>Group: {highlightText(disk.group, filter)}</span>
+              <span className={cn(groupColor?.text, 'break-words min-w-0')}>
+                Group: {highlightText(disk.group, filter)}
+              </span>
             </div>
           ) : null}
         </div>
@@ -238,8 +240,9 @@ const FolderNode = ({
     const disk = node.diskId ? disksById[node.diskId] : null;
     if (!disk) return null;
     const matchInfo = node.diskId ? tree.matches[node.diskId]?.matches ?? false : false;
+    const indent = Math.min(depth * 12, 48);
     return (
-      <div style={{ paddingLeft: depth * 12 }}>
+      <div style={{ paddingLeft: indent }} className="min-w-0">
         <DiskRow
           disk={disk}
           matches={matchInfo}
@@ -259,13 +262,14 @@ const FolderNode = ({
 
   const hasMatch = tree.hasMatch(node);
   const isDimmed = filter.length > 0 && !hasMatch;
+  const indent = Math.min(depth * 12, 48);
   return (
     <div
-      className={cn('space-y-1', depth > 0 && 'border-l border-border/40 pl-3')}
-      style={{ paddingLeft: depth * 12 }}
+      className={cn('space-y-1 min-w-0', depth > 0 && 'border-l border-border/40 pl-3')}
+      style={{ paddingLeft: indent }}
     >
       {node.id !== 'root' && (
-        <div className={cn('text-xs font-semibold text-muted-foreground py-1', isDimmed && 'opacity-40')}>
+        <div className={cn('text-xs font-semibold text-muted-foreground py-1 break-words min-w-0', isDimmed && 'opacity-40')}>
           {highlightText(node.name, filter)}
         </div>
       )}
@@ -314,7 +318,7 @@ export const DiskTree = ({
   onDiskSelect,
 }: DiskTreeProps) => {
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 min-w-0">
       <FolderNode
         node={tree.root}
         depth={0}

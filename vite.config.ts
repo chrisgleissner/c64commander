@@ -3,17 +3,42 @@ import react from "@vitejs/plugin-react-swc";
 import istanbul from "vite-plugin-istanbul";
 import path from "path";
 import fs from "fs";
+import { execSync } from "child_process";
 
 const pkg = JSON.parse(
   fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
 );
 
-const appVersion = process.env.VITE_APP_VERSION || pkg.version || "";
+const resolveGitTag = () => {
+  try {
+    return execSync("git describe --tags --exact-match", {
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+      .toString()
+      .trim();
+  } catch {
+    return "";
+  }
+};
+
 const gitSha =
   process.env.VITE_GIT_SHA ||
   process.env.GIT_SHA ||
   process.env.GITHUB_SHA ||
   "";
+const gitTagFromEnv =
+  (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) || "";
+
+const resolveAppVersion = () => {
+  const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";
+  if (envVersion) return envVersion;
+  if (gitTagFromEnv) return gitTagFromEnv;
+  const gitTag = resolveGitTag();
+  if (gitTag) return gitTag;
+  return pkg.version || "";
+};
+
+const appVersion = resolveAppVersion();
 const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
 
 // https://vitejs.dev/config/

@@ -67,7 +67,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
     )}
     data-testid={rowTestId}
   >
-    <div className="flex items-center gap-2 pt-0.5">
+    <div className="flex items-center gap-2 pt-0.5 shrink-0">
       {item.showSelection !== false ? (
         <Checkbox
           checked={item.selected}
@@ -142,7 +142,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
     <Button
       variant="outline"
       size="sm"
-      className="h-7 px-2 text-xs"
+      className="h-7 px-2 text-xs shrink-0"
       onClick={item.onAction}
       disabled={item.isDimmed || item.disableActions}
       aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
@@ -188,8 +188,8 @@ export const SelectableActionList = ({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+        <div className="min-w-0">
           <p className="text-sm font-medium">{title}</p>
           {showSelectionControls ? (
             <p className="text-xs text-muted-foreground">
@@ -199,7 +199,7 @@ export const SelectableActionList = ({
             </p>
           ) : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           {headerActions}
           {hasMore && (
             <Button variant="outline" size="sm" onClick={() => setViewAllOpen(true)}>
@@ -210,16 +210,17 @@ export const SelectableActionList = ({
       </div>
 
       {showSelectionControls ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span className="text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
+          <span className="text-muted-foreground min-w-0 break-words">
             {items.length ? `${items.length} items` : emptyLabel}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={onToggleSelectAll}
               disabled={!items.length}
+              className="max-w-full truncate"
             >
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
@@ -228,7 +229,7 @@ export const SelectableActionList = ({
                 variant="outline"
                 size="sm"
                 onClick={onRemoveSelected}
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive max-w-full truncate"
               >
                 {removeSelectedLabel}
               </Button>

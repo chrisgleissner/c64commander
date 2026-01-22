@@ -1460,19 +1460,20 @@ export default function PlayFilesPage() {
 
                 <div className="grid gap-2 sm:grid-cols-2">
                   {hvscVisibleFolders.slice(0, 24).map((folder) => (
-                    <div key={folder} className="flex items-center gap-2">
+                    <div key={folder} className="flex items-center gap-2 min-w-0">
                       <Button
                         variant={folder === selectedHvscFolder ? 'secondary' : 'outline'}
                         size="sm"
-                        className="flex-1 justify-start"
+                        className="flex-1 justify-start min-w-0"
                         onClick={() => void loadHvscFolder(folder)}
                       >
-                        <FolderOpen className="h-4 w-4 mr-1" />
-                        {folder}
+                        <FolderOpen className="h-4 w-4 mr-1 shrink-0" />
+                        <span className="truncate">{folder}</span>
                       </Button>
                       <Button
                         variant="default"
                         size="sm"
+                        className="shrink-0"
                         onClick={() => void handlePlayHvscFolder(folder)}
                         disabled={hvscUpdating}
                       >

@@ -143,8 +143,8 @@ Artifacts:
 
 - `playwright-test-results` - Evidence folders + raw Playwright outputs
 - `playwright-report` - HTML test report
-- `c64-commander-debug-apk` - Debug APK
-- Release APK/AAB artifacts on tag builds when signing secrets are present
+- `c64commander-<version>-debug.apk` - Debug APK (version resolved from tag/env/package.json)
+- Release APK/AAB artifacts on tag builds when signing secrets are present (named `c64commander-<version>.apk`)
 
 Performance notes:
 

@@ -86,7 +86,8 @@ export const createLocalSourceFromFileList = (files: FileList | File[], label?: 
   const runtimeFiles: Record<string, File> = {};
   const entries: LocalSourceEntry[] = list.map((file) => {
     const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const relativePath = relative.replace(/^\/+/, '');
+    const withLabel = label && !relative.includes('/') ? `${label}/${relative}` : relative;
+    const relativePath = withLabel.replace(/^\/+/, '');
     const normalizedPath = normalizeSourcePath(relativePath);
     runtimeFiles[normalizedPath] = file;
     return {

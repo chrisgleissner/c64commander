@@ -859,11 +859,11 @@ export default function MusicPlayerPage() {
                   <Button
                     key={folder.path}
                     variant={folder.path === selectedHvscFolder ? 'secondary' : 'outline'}
-                    className="justify-start"
+                    className="justify-start min-w-0"
                     onClick={() => setSelectedHvscFolder(folder.path)}
                   >
-                    <Folder className="h-4 w-4 mr-2" />
-                    {folder.path}
+                    <Folder className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="truncate">{folder.path}</span>
                   </Button>
                 ))}
               </div>
@@ -968,11 +968,11 @@ export default function MusicPlayerPage() {
                   <Button
                     key={folder.path}
                     variant={folder.path === selectedLocalFolder ? 'secondary' : 'outline'}
-                    className="justify-start"
+                    className="justify-start min-w-0"
                     onClick={() => setSelectedLocalFolder(folder.path)}
                   >
-                    <Folder className="h-4 w-4 mr-2" />
-                    {folder.path}
+                    <Folder className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="truncate">{folder.path}</span>
                   </Button>
                 ))}
               </div>
