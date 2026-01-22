@@ -12,13 +12,13 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 test.describe('Settings connection management', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -28,7 +28,7 @@ test.describe('Settings connection management', () => {
     }
   });
 
-  test('change base URL and save reconnects', async ({ page }: { page: Page }, testInfo) => {
+  test('change base URL and save reconnects', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected connection failures to non-existent URL' });
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
@@ -53,7 +53,7 @@ test.describe('Settings connection management', () => {
     await snap(page, testInfo, 'url-saved');
   });
 
-  test('invalid URL format shows validation or accepts input', async ({ page }: { page: Page }, testInfo) => {
+  test('invalid URL format shows validation or accepts input', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -75,7 +75,7 @@ test.describe('Settings connection management', () => {
     }
   });
 
-  test('change password stores in localStorage', async ({ page }: { page: Page }, testInfo) => {
+  test('change password stores in localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -97,7 +97,7 @@ test.describe('Settings connection management', () => {
     await snap(page, testInfo, 'password-saved');
   });
 
-  test('select light theme applies theme class', async ({ page }: { page: Page }, testInfo) => {
+  test('select light theme applies theme class', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -114,7 +114,7 @@ test.describe('Settings connection management', () => {
     await snap(page, testInfo, 'light-theme-applied');
   });
 
-  test('select dark theme applies theme class', async ({ page }: { page: Page }, testInfo) => {
+  test('select dark theme applies theme class', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -130,7 +130,7 @@ test.describe('Settings connection management', () => {
     await snap(page, testInfo, 'dark-theme-applied');
   });
 
-  test('toggle mock mode switches connection', async ({ page }: { page: Page }, testInfo) => {
+  test('toggle mock mode switches connection', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const enableDeveloperMode = async () => {
       const aboutButton = page.getByRole('button', { name: 'About' });
       for (let i = 0; i < 7; i += 1) {

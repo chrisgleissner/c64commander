@@ -12,7 +12,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 test.describe('Settings diagnostics workflows', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
@@ -30,7 +30,7 @@ test.describe('Settings diagnostics workflows', () => {
     });
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -40,7 +40,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('open diagnostics dialog shows logs', async ({ page }: { page: Page }, testInfo) => {
+  test('open diagnostics dialog shows logs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -65,7 +65,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('share diagnostics copies to clipboard', async ({ page }: { page: Page }, testInfo) => {
+  test('share diagnostics copies to clipboard', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -104,7 +104,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('email diagnostics opens mailto link', async ({ page }: { page: Page }, testInfo) => {
+  test('email diagnostics opens mailto link', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -139,7 +139,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('clear logs empties log storage', async ({ page }: { page: Page }, testInfo) => {
+  test('clear logs empties log storage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 

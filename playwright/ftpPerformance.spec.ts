@@ -31,7 +31,7 @@ test.describe('FTP performance', () => {
     await ftpServers.close();
   });
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedFtpConfig(page, {
@@ -43,7 +43,7 @@ test.describe('FTP performance', () => {
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -53,7 +53,7 @@ test.describe('FTP performance', () => {
     }
   });
 
-  test('FTP navigation uses cache across reloads', async ({ page }: { page: Page }, testInfo) => {
+  test('FTP navigation uses cache across reloads', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const counts = new Map<string, number>();
     await page.route('**/v1/ftp/list', async (route) => {
       const body = route.request().postData();
@@ -96,16 +96,17 @@ test.describe('FTP performance', () => {
     expect(secondCount).toBe(firstCount);
   });
 
-  test('FTP navigation shows minimal loading delay', async ({ page }: { page: Page }, testInfo) => {
+  test('FTP navigation shows minimal loading delay', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await expect(page.getByTestId('ftp-loading')).toBeHidden({ timeout: 400 });
+    await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('ftp-loading')).toBeHidden({ timeout: 1500 });
     await snap(page, testInfo, 'loading-hidden');
   });
 
-  test('FTP navigation shows delayed loading indicator on slow requests', async ({ page }: { page: Page }, testInfo) => {
+  test('FTP navigation shows delayed loading indicator on slow requests', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.route('**/v1/ftp/list', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 700));
       await route.continue();

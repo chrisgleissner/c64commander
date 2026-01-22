@@ -11,7 +11,7 @@ test.describe('UI coverage', () => {
 
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
@@ -20,7 +20,7 @@ test.describe('UI coverage', () => {
     });
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -100,7 +100,7 @@ test.describe('UI coverage', () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  test('config widgets read/write and refresh', async ({ page }: { page: Page }, testInfo) => {
+  test('config widgets read/write and refresh', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'config-open');
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
@@ -136,7 +136,7 @@ test.describe('UI coverage', () => {
     await snap(page, testInfo, 'config-updated');
   });
 
-  test('config group actions stay at top of expanded section', async ({ page }: { page: Page }, testInfo) => {
+  test('config group actions stay at top of expanded section', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'config-open');
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
@@ -147,7 +147,7 @@ test.describe('UI coverage', () => {
     expect(actionsBox?.y ?? 0).toBeLessThan(listBox?.y ?? Number.MAX_SAFE_INTEGER);
   });
 
-  test('home and disks pages render', async ({ page }: { page: Page }, testInfo) => {
+  test('home and disks pages render', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'C64 Commander' })).toBeVisible();
     await snap(page, testInfo, 'home-open');
@@ -157,7 +157,7 @@ test.describe('UI coverage', () => {
     await snap(page, testInfo, 'disks-open');
   });
 
-  test('config page renders and toggles a section', async ({ page }: { page: Page }, testInfo) => {
+  test('config page renders and toggles a section', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'config-open');
     const section = page.getByRole('button', { name: 'U64 Specific Settings' });
@@ -166,7 +166,7 @@ test.describe('UI coverage', () => {
     await snap(page, testInfo, 'section-expanded');
   });
 
-  test('play page renders with HVSC controls', async ({ page }: { page: Page }, testInfo) => {
+  test('play page renders with HVSC controls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await enableHvscDownloads(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
@@ -174,7 +174,7 @@ test.describe('UI coverage', () => {
     await snap(page, testInfo, 'play-hvsc');
   });
 
-  test('add-items shows progress feedback after confirm', async ({ page }: { page: Page }, testInfo) => {
+  test('add-items shows progress feedback after confirm', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -204,7 +204,7 @@ test.describe('UI coverage', () => {
     await ftpServers.close();
   });
 
-  test('selection state stays stable when filtering', async ({ page }: { page: Page }, testInfo) => {
+  test('selection state stays stable when filtering', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -234,7 +234,7 @@ test.describe('UI coverage', () => {
     await ftpServers.close();
   });
 
-  test('item browser does not overflow viewport width', async ({ page }: { page: Page }, testInfo) => {
+  test('item browser does not overflow viewport width', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -261,7 +261,7 @@ test.describe('UI coverage', () => {
     await ftpServers.close();
   });
 
-  test('settings and docs pages render', async ({ page }: { page: Page }, testInfo) => {
+  test('settings and docs pages render', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
     await snap(page, testInfo, 'settings-open');

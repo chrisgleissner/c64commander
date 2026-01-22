@@ -8,7 +8,7 @@ import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence
 test.describe('Feature flags', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await page.addInitScript(() => {
@@ -18,7 +18,7 @@ test.describe('Feature flags', () => {
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -40,13 +40,13 @@ test.describe('Feature flags', () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  test('developer mode gating hides HVSC toggle', async ({ page }: { page: Page }, testInfo) => {
+  test('developer mode gating hides HVSC toggle', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await expect(page.getByLabel('Enable HVSC downloads')).toHaveCount(0);
     await snap(page, testInfo, 'toggle-hidden');
   });
 
-  test('developer mode shows toggle and default is off', async ({ page }: { page: Page }, testInfo) => {
+  test('developer mode shows toggle and default is off', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await enableDeveloperMode(page);
     const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeVisible();
@@ -57,7 +57,7 @@ test.describe('Feature flags', () => {
     await snap(page, testInfo, 'hvsc-hidden');
   });
 
-  test('dynamic enablement shows HVSC controls', async ({ page }: { page: Page }, testInfo) => {
+  test('dynamic enablement shows HVSC controls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await enableDeveloperMode(page);
     const toggle = page.getByLabel('Enable HVSC downloads');
     await toggle.click();
@@ -68,7 +68,7 @@ test.describe('Feature flags', () => {
     await snap(page, testInfo, 'hvsc-visible');
   });
 
-  test('dynamic disablement hides HVSC controls', async ({ page }: { page: Page }, testInfo) => {
+  test('dynamic disablement hides HVSC controls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await enableDeveloperMode(page);
     const toggle = page.getByLabel('Enable HVSC downloads');
     await toggle.click();
@@ -81,7 +81,7 @@ test.describe('Feature flags', () => {
     await snap(page, testInfo, 'hvsc-hidden');
   });
 
-  test('legacy /music route shows 404 page', async ({ page }: { page: Page }, testInfo) => {
+  test('legacy /music route shows 404 page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected 404 route log output.');
     await page.goto('/music');
     await expect(page.getByRole('heading', { name: '404' })).toBeVisible();

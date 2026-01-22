@@ -37,7 +37,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     await ftpServers.close();
   });
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await seedFtpConfig(page, {
@@ -49,7 +49,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -59,7 +59,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('navigate parent from subfolder shows parent', async ({ page }: { page: Page }, testInfo) => {
+  test('navigate parent from subfolder shows parent', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -101,7 +101,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('navigate parent from root disables or hides button', async ({ page }: { page: Path }, testInfo) => {
+  test('navigate parent from root disables or hides button', async ({ page }: { page: Path }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -122,7 +122,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('breadcrumb click jumps to ancestor folder', async ({ page }: { page: Page }, testInfo) => {
+  test('breadcrumb click jumps to ancestor folder', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -160,7 +160,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('add items with no selection shows validation', async ({ page }: { page: Page }, testInfo) => {
+  test('add items with no selection shows validation', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected validation message for empty selection.');
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
@@ -194,7 +194,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('disk rotate previous mounts previous disk in group', async ({ page }: { page: Page }, testInfo) => {
+  test('disk rotate previous mounts previous disk in group', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_disk_library:TEST-123', JSON.stringify({
         disks: [
@@ -250,7 +250,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     }
   });
 
-  test('config reset category applies defaults', async ({ page }: { page: Page }, testInfo) => {
+  test('config reset category applies defaults', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/config');
     await snap(page, testInfo, 'config-open');
 

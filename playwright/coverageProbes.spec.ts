@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
-import type { Page } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
@@ -8,13 +8,13 @@ import { assertNoUiIssues, finalizeEvidence, startStrictUiMonitoring } from './t
 test.describe('Coverage probes', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);

@@ -881,7 +881,7 @@ export default function PlayFilesPage() {
     if (lockedIndex >= 0 && lockedIndex < items.length) {
       const currentItem = items[lockedIndex];
       const rest = items.filter((_, index) => index !== lockedIndex);
-      let shuffled = shuffleArray(rest);
+      const shuffled = shuffleArray(rest);
       const insertIndex = Math.min(lockedIndex, shuffled.length);
       let next = [...shuffled.slice(0, insertIndex), currentItem, ...shuffled.slice(insertIndex)];
       if (next.map((item) => item.id).join('|') === items.map((item) => item.id).join('|')) {
