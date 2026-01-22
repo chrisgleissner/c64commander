@@ -8,7 +8,8 @@ Control your Commodore 64 Ultimate from your Android device
 
 <img src="./doc/img/c64commander.png" alt="C64 Commander Logo" width="200"/>
 
-> [!NOTE] This project is under active development. Some features are still being finalised.
+> [!NOTE]
+> This project is under active development. Some features are still being finalised.
 
 C64 Commander is an Android app that connects to a C64 Ultimate device on your local network:
 
