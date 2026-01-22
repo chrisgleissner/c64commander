@@ -274,10 +274,10 @@ test.describe('Playlist controls and advanced features', () => {
 
     const prevButton = page.getByTestId('playlist-prev');
     await expect(prevButton).toBeVisible();
+    await expect(prevButton).toBeDisabled();
     
     const initialHighlight = await page.getByTestId('playlist-item').first().getAttribute('data-playing');
-    await prevButton.click();
-    await snap(page, testInfo, 'prev-clicked');
+    await snap(page, testInfo, 'prev-disabled');
 
     const currentHighlight = await page.getByTestId('playlist-item').first().getAttribute('data-playing');
     expect(currentHighlight).toBe(initialHighlight);
@@ -299,11 +299,10 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'playback-active');
 
     const nextButton = page.getByTestId('playlist-next');
-    await nextButton.click();
-    await snap(page, testInfo, 'next-clicked');
+    await expect(nextButton).toBeDisabled();
+    await snap(page, testInfo, 'next-disabled');
 
-    await expect(playButton).toContainText(/Play/i);
-    await expect(playButton).not.toContainText(/Stop|Playing/i);
-    await snap(page, testInfo, 'playback-stopped');
+    await expect(playButton).toContainText(/Stop|Playing/i);
+    await snap(page, testInfo, 'playback-still-active');
   });
 });

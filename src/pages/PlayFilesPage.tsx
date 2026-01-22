@@ -70,6 +70,14 @@ type StoredPlaylistState = {
   currentIndex?: number;
 };
 
+type AddItemsProgressState = {
+  status: 'idle' | 'scanning' | 'error' | 'done';
+  count: number;
+  elapsedMs: number;
+  total: number | null;
+  message: string | null;
+};
+
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
 
@@ -146,6 +154,7 @@ export default function PlayFilesPage() {
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
   const [durationInput, setDurationInput] = useState('');
   const [songNrInput, setSongNrInput] = useState('');
+  const [songlengthsFiles, setSonglengthsFiles] = useState<Array<{ path: string; file: LocalPlayFile }>>([]);
   const [recurseFolders, setRecurseFolders] = useState(true);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
@@ -154,12 +163,12 @@ export default function PlayFilesPage() {
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
   const [songPickerOpen, setSongPickerOpen] = useState(false);
   const [durationPickerOpen, setDurationPickerOpen] = useState(false);
-  const [addItemsProgress, setAddItemsProgress] = useState({
-    status: 'idle' as const,
+  const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
+    status: 'idle',
     count: 0,
     elapsedMs: 0,
-    total: null as number | null,
-    message: null as string | null,
+    total: null,
+    message: null,
   });
   const [isAddingItems, setIsAddingItems] = useState(false);
   const { limit: listPreviewLimit } = useListPreviewLimit();
@@ -221,19 +230,23 @@ export default function PlayFilesPage() {
 
   useEffect(() => {
     songlengthsCacheRef.current.clear();
-  }, [playlist]);
+  }, [playlist, songlengthsFiles]);
 
   const songlengthsFilesByDir = useMemo(() => {
     const map = new Map<string, LocalPlayFile>();
+    const addSonglengthsFile = (file: LocalPlayFile, pathOverride?: string) => {
+      const path = pathOverride ?? getLocalFilePath(file);
+      const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
+      map.set(folder, file);
+    };
     playlist.forEach((item) => {
       if (item.request.source !== 'local' || !item.request.file) return;
       if (item.label.toLowerCase() !== 'songlengths.md5') return;
-      const path = getLocalFilePath(item.request.file);
-      const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
-      map.set(folder, item.request.file);
+      addSonglengthsFile(item.request.file);
     });
+    songlengthsFiles.forEach((entry) => addSonglengthsFile(entry.file, entry.path));
     return map;
-  }, [playlist]);
+  }, [playlist, songlengthsFiles]);
 
   const readLocalText = useCallback(async (file: LocalPlayFile) => {
     if (file instanceof File && typeof file.text === 'function') {
@@ -400,6 +413,27 @@ export default function PlayFilesPage() {
       }
 
       const playlistItems: PlaylistItem[] = [];
+      if (source.type === 'local') {
+        const songlengthsEntries = selectedFiles
+          .filter((entry) => entry.type === 'file' && entry.name.toLowerCase() === 'songlengths.md5')
+          .map((entry) => ({
+            path: normalizeSourcePath(entry.path),
+            file: resolveLocalRuntimeFile(source.id, entry.path),
+          }))
+          .filter((entry): entry is { path: string; file: LocalPlayFile } => Boolean(entry.file));
+        if (songlengthsEntries.length) {
+          setSonglengthsFiles((prev) => {
+            const seen = new Set(prev.map((entry) => entry.path));
+            const next = [...prev];
+            songlengthsEntries.forEach((entry) => {
+              if (seen.has(entry.path)) return;
+              seen.add(entry.path);
+              next.push(entry);
+            });
+            return next;
+          });
+        }
+      }
       selectedFiles.forEach((file) => {
         if (!getPlayCategory(file.path)) return;
         const playable: PlayableEntry = {
@@ -509,7 +543,14 @@ export default function PlayFilesPage() {
     return () => window.clearInterval(timer);
   }, [currentIndex, isPaused, isPlaying]);
 
+  const playlistItemDuration = useCallback(
+    (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
+    [currentIndex, durationMs],
+  );
+
   const currentItem = playlist[currentIndex];
+  const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
+  const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
   const subsongCount = currentItem?.subsongCount ?? 1;
   const songNrValue = Number(songNrInput);
   const resolvedSongNr = Number.isNaN(songNrValue) || songNrInput.trim() === '' ? 1 : songNrValue;
@@ -524,6 +565,8 @@ export default function PlayFilesPage() {
   const hasPlaylist = playlist.length > 0;
   const canTransport = hasPlaylist && !isPlaylistLoading;
   const canPause = isPlaying;
+  const hasPrev = currentIndex > 0;
+  const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
 
   const toggleShuffleCategory = (category: PlayFileCategory) => {
     setShuffleCategories((prev) =>
@@ -984,11 +1027,6 @@ export default function PlayFilesPage() {
     }
   }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscStatus?.installedVersion, shuffleEnabled, startPlaylist]);
 
-  const playlistItemDuration = useCallback(
-    (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
-    [currentIndex, durationMs],
-  );
-
   const playlistTotals = useMemo(() => {
     if (!playlist.length) return { total: undefined, remaining: undefined } as const;
     const durations = playlist.map((item, index) => playlistItemDuration(item, index));
@@ -1064,9 +1102,18 @@ export default function PlayFilesPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium">Playback controls</p>
-              <p className="text-xs text-muted-foreground">
-                {currentItem ? currentItem.label : 'Select a playlist item to start'}
-              </p>
+              <div className="text-xs text-muted-foreground" data-testid="playback-current-track">
+                {currentItem ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-sm font-medium text-foreground">{currentItem.label}</span>
+                    {currentDurationLabel ? (
+                      <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
+                    ) : null}
+                  </div>
+                ) : (
+                  'Select a playlist item to start'
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-4 gap-2">
               <Button
@@ -1074,7 +1121,7 @@ export default function PlayFilesPage() {
                 size="sm"
                 className="min-w-[96px] justify-center"
                 onClick={() => void handlePrevious()}
-                disabled={!canTransport}
+                disabled={!canTransport || !hasPrev}
                 data-testid="playlist-prev"
               >
                 <SkipBack className="h-4 w-4 mr-1" />
@@ -1107,7 +1154,7 @@ export default function PlayFilesPage() {
                 size="sm"
                 className="min-w-[96px] justify-center"
                 onClick={() => void handleNext()}
-                disabled={!canTransport}
+                disabled={!canTransport || !hasNext}
                 data-testid="playlist-next"
               >
                 <SkipForward className="h-4 w-4 mr-1" />

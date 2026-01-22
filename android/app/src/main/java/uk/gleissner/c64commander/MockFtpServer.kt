@@ -47,7 +47,8 @@ class MockFtpServer(
     } catch (error: Exception) {
       Log.w(LOG_TAG, "Failed to close server socket", error)
     }
-    sockets.forEach { socket ->
+    val snapshot = synchronized(sockets) { sockets.toList() }
+    snapshot.forEach { socket ->
       try {
         socket.close()
       } catch (error: Exception) {

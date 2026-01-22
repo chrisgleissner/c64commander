@@ -51,7 +51,7 @@ test.describe('Playback file browser', () => {
     await ftpServers.close();
   });
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedFtpConfig(page, {
@@ -63,7 +63,7 @@ test.describe('Playback file browser', () => {
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -73,13 +73,79 @@ test.describe('Playback file browser', () => {
     }
   });
 
-  test('play page is available from tab bar', async ({ page }: { page: Page }, testInfo) => {
+  test('play page is available from tab bar', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
     await snap(page, testInfo, 'play-page-loaded');
   });
 
-  test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo) => {
+  test('playback controls are stateful and show current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await snap(page, testInfo, 'playlist-ready');
+
+    const prevButton = page.getByTestId('playlist-prev');
+    const playButton = page.getByTestId('playlist-play');
+    const pauseButton = page.getByTestId('playlist-pause');
+    const nextButton = page.getByTestId('playlist-next');
+
+    await expect(prevButton).toBeVisible();
+    await expect(playButton).toBeVisible();
+    await expect(pauseButton).toBeVisible();
+    await expect(nextButton).toBeVisible();
+
+    const [prevBox, playBox, pauseBox, nextBox] = await Promise.all([
+      prevButton.boundingBox(),
+      playButton.boundingBox(),
+      pauseButton.boundingBox(),
+      nextButton.boundingBox(),
+    ]);
+    if (prevBox && playBox && pauseBox && nextBox) {
+      expect(prevBox.x).toBeLessThan(playBox.x);
+      expect(playBox.x).toBeLessThan(pauseBox.x);
+      expect(pauseBox.x).toBeLessThan(nextBox.x);
+    }
+
+    await expect(prevButton).toBeDisabled();
+    await expect(nextButton).toBeEnabled();
+    await expect(playButton).toContainText('Play');
+    await expect(pauseButton).toContainText('Pause');
+    await expect(pauseButton).toBeDisabled();
+
+    await playButton.click();
+    await expect(playButton).toContainText('Stop');
+    await expect(pauseButton).toContainText('Pause');
+    await expect(pauseButton).toBeEnabled();
+    await snap(page, testInfo, 'playback-started');
+
+    const currentTrack = page.getByTestId('playback-current-track');
+    await expect(currentTrack).toContainText(/demo\d?\.sid/i);
+    await expect(currentTrack).toContainText(/\(\d+:\d{2}\)/);
+
+    await pauseButton.click();
+    await expect(pauseButton).toContainText('Resume');
+    await snap(page, testInfo, 'playback-paused');
+
+    await pauseButton.click();
+    await expect(pauseButton).toContainText('Pause');
+    await snap(page, testInfo, 'playback-resumed');
+
+    await nextButton.click();
+    await expect(prevButton).toBeEnabled();
+    await expect(nextButton).toBeDisabled();
+    await snap(page, testInfo, 'playback-next');
+
+    await playButton.click();
+    await expect(playButton).toContainText('Play');
+    await snap(page, testInfo, 'playback-stopped');
+  });
+
+  test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -102,7 +168,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'sid-playback-requested');
   });
 
-  test('songlengths metadata is applied for local SIDs', async ({ page }: { page: Page }, testInfo) => {
+  test('songlengths metadata is applied for local SIDs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -123,7 +189,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'songlengths-playback');
   });
 
-  test('local source browser filters supported files', async ({ page }: { page: Page }, testInfo) => {
+  test('local source browser filters supported files', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -142,7 +208,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'local-source-browser');
   });
 
-  test('folder play populates playlist dialog', async ({ page }: { page: Page }, testInfo) => {
+  test('folder play populates playlist dialog', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '1');
     });
@@ -162,7 +228,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playlist-view-all');
   });
 
-  test('local folder input accepts directory', async ({ page }: { page: Page }, testInfo) => {
+  test('local folder input accepts directory', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -174,7 +240,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playlist-populated');
   });
 
-  test('local folder without supported files shows warning', async ({ page }: { page: Page }, testInfo) => {
+  test('local folder without supported files shows warning', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected warning when no supported files are found.');
     await page.goto('/play');
     await openAddItemsDialog(page);
@@ -187,7 +253,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'no-supported-files');
   });
 
-  test('ultimate browsing lists FTP entries and mounts remote disk image', async ({ page }: { page: Page }, testInfo) => {
+  test('ultimate browsing lists FTP entries and mounts remote disk image', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
@@ -214,7 +280,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'mount-requested');
   });
 
-  test('C64U browser remembers last path and supports root', async ({ page }, testInfo) => {
+  test('C64U browser remembers last path and supports root', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -236,7 +302,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'c64u-root');
   });
 
-  test('disk image triggers mount and autostart sequence', async ({ page }: { page: Page }, testInfo) => {
+  test('disk image triggers mount and autostart sequence', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -262,7 +328,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'autostart-complete');
   });
 
-  test('FTP failure shows error toast', async ({ page }: { page: Page }, testInfo) => {
+  test('FTP failure shows error toast', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for FTP failure.');
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -279,7 +345,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'browse-failed');
   });
 
-  test('end-to-end add, browse, and play (local + remote)', async ({ page }, testInfo) => {
+  test('end-to-end add, browse, and play (local + remote)', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page');
     await snap(page, testInfo, 'play-open');
@@ -334,7 +400,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'remote-playback-started');
   });
 
-  test('add to playlist queues items without auto-play', async ({ page }: { page: Page }, testInfo) => {
+  test('add to playlist queues items without auto-play', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -349,7 +415,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'no-autoplay');
   });
 
-  test('prev/next navigates within playlist', async ({ page }: { page: Page }, testInfo) => {
+  test('prev/next navigates within playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -380,7 +446,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'prev-track-playing');
   });
 
-  test('transport controls toggle play, pause, and stop', async ({ page }: { page: Page }, testInfo) => {
+  test('transport controls toggle play, pause, and stop', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     const playButton = page.getByTestId('playlist-play');
@@ -428,7 +494,7 @@ test.describe('Playback file browser', () => {
     expect(after.map((box) => box?.x)).toEqual(before.map((box) => box?.x));
   });
 
-  test('playlist selection supports select all and remove selected', async ({ page }, testInfo) => {
+  test('playlist selection supports select all and remove selected', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -445,7 +511,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playlist-removed');
   });
 
-  test('playlist persists after reload', async ({ page }: { page: Page }, testInfo) => {
+  test('playlist persists after reload', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -461,9 +527,9 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playlist-restored');
   });
 
-  test('upload handler tolerates empty/binary response', async ({ page }: { page: Page }, testInfo) => {
+  test('upload handler tolerates empty/binary response', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     let sidplayCalls = 0;
-    await page.route('**/v1/runners:sidplay**', async (route) => {
+    await page.route('**/v1/runners:sidplay**', async (route: any) => {
       sidplayCalls += 1;
       await route.fulfill({
         status: 200,

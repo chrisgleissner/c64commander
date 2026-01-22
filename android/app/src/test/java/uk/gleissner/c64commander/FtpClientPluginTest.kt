@@ -1,47 +1,93 @@
 package uk.gleissner.c64commander
 
+import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
-import org.junit.Assert.*
-import org.junit.Before
+import org.apache.commons.net.ftp.FTPClient
+import org.apache.commons.net.ftp.FTPFile
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
-import org.mockito.Mockito.*
+import org.junit.rules.TemporaryFolder
+import org.mockito.Mockito.any
+import org.mockito.Mockito.doAnswer
+import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
+import org.mockito.Mockito.`when`
+import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class FtpClientPluginTest {
-  private lateinit var plugin: FtpClientPlugin
-
-  @Before
-  fun setUp() {
-    plugin = FtpClientPlugin()
-  }
+  @get:Rule
+  val tempFolder = TemporaryFolder()
 
   @Test
-  fun listDirectoryRejectsWhenHostIsMissing() {
+  fun listDirectoryRejectsMissingHost() {
+    val plugin = FtpClientPlugin()
     val call = mock(PluginCall::class.java)
     `when`(call.getString("host")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("host is required")
 
     plugin.listDirectory(call)
 
-    verify(call).reject("host is required")
-    verify(call, never()).resolve(any())
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
 
   @Test
-  fun listDirectoryRejectsWhenHostIsBlank() {
+  fun listDirectoryReturnsEntries() {
+    val root = tempFolder.newFolder("ftp-root")
+    File(root, "demo.sid").writeText("sid")
+    File(root, "docs").mkdirs()
+
+    val server = MockFtpServer(root, "secret")
+    server.start()
+
+    val plugin = FtpClientPlugin()
     val call = mock(PluginCall::class.java)
-    `when`(call.getString("host")).thenReturn("")
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    val latch = CountDownLatch(1)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+      resolved = invocation.getArgument(0) as JSObject
+      latch.countDown()
+      null
+    }.`when`(call).resolve(any())
 
     plugin.listDirectory(call)
+    assertTrue(latch.await(3, TimeUnit.SECONDS))
 
-    verify(call).reject("host is required")
-    verify(call, never()).resolve(any())
+    val entries = resolved?.getJSONArray("entries")
+    assertNotNull(entries)
+    val names = buildList {
+      for (idx in 0 until (entries?.length() ?: 0)) {
+        add(entries?.getJSONObject(idx)?.getString("name"))
+      }
+    }
+    assertTrue(names.contains("demo.sid"))
+    assertTrue(names.contains("docs"))
+
+    server.stop()
   }
 
   @Test
   fun buildPathHandlesTrailingSlash() {
+    val plugin = FtpClientPlugin()
     val method = FtpClientPlugin::class.java.getDeclaredMethod(
       "buildPath",
       String::class.java,
-      String::class.java
+      String::class.java,
     )
     method.isAccessible = true
 
@@ -50,41 +96,43 @@ class FtpClientPluginTest {
   }
 
   @Test
-  fun buildPathHandlesNoTrailingSlash() {
+  fun resolveListingUsesMlistWhenAvailable() {
+    val plugin = FtpClientPlugin()
     val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "buildPath",
+      "resolveListing",
+      FTPClient::class.java,
       String::class.java,
-      String::class.java
     )
     method.isAccessible = true
 
-    val result = method.invoke(plugin, "/folder", "file.txt") as String
-    assertEquals("/folder/file.txt", result)
+    val ftpClient = mock(FTPClient::class.java)
+    val mlistFile = FTPFile().apply { name = "mlist.txt" }
+    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(mlistFile))
+
+    val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+    assertEquals(1, result.size)
+    assertEquals("mlist.txt", result[0].name)
+    verify(ftpClient, never()).listFiles("/")
   }
 
   @Test
-  fun buildPathHandlesEmptyBase() {
+  fun resolveListingFallsBackToListFilesOnException() {
+    val plugin = FtpClientPlugin()
     val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "buildPath",
+      "resolveListing",
+      FTPClient::class.java,
       String::class.java,
-      String::class.java
     )
     method.isAccessible = true
 
-    val result = method.invoke(plugin, "", "file.txt") as String
-    assertEquals("/file.txt", result)
-  }
+    val ftpClient = mock(FTPClient::class.java)
+    val listedFile = FTPFile().apply { name = "fallback.txt" }
+    `when`(ftpClient.mlistDir("/")).thenThrow(RuntimeException("boom"))
+    `when`(ftpClient.listFiles("/")).thenReturn(arrayOf(listedFile))
 
-  @Test
-  fun buildPathHandlesRootBase() {
-    val method = FtpClientPlugin::class.java.getDeclaredMethod(
-      "buildPath",
-      String::class.java,
-      String::class.java
-    )
-    method.isAccessible = true
-
-    val result = method.invoke(plugin, "/", "file.txt") as String
-    assertEquals("/file.txt", result)
+    val result = method.invoke(plugin, ftpClient, "/") as Array<FTPFile>
+    assertEquals(1, result.size)
+    assertEquals("fallback.txt", result[0].name)
+    verify(ftpClient).listFiles("/")
   }
 }
