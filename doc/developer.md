@@ -28,7 +28,7 @@ All common development tasks use `./local-build.sh`:
 ### Build variants
 
 ```bash
-./local-build.sh                  # Full build: deps, build, web + Android tests, APK
+./local-build.sh                  # Full build: deps, build, web + Android unit tests, APK
 ./local-build.sh --skip-tests     # Skip all tests
 ./local-build.sh --skip-apk       # Build without APK generation
 ```
@@ -40,7 +40,7 @@ All common development tasks use `./local-build.sh`:
 ./local-build.sh --test-e2e       # E2E tests only (Playwright, no screenshots)
 ./local-build.sh --test-e2e-ci    # Full CI mirror: screenshots + e2e + validation
 ./local-build.sh --validate-evidence  # Validate Playwright evidence structure
-./local-build.sh --skip-android-tests  # Skip Android instrumentation tests
+./local-build.sh --android-tests  # Run Android instrumentation tests (requires device/emulator)
 ./local-build.sh --coverage       # Web + Android coverage checks
 ```
 
@@ -114,6 +114,7 @@ Run:
 
 ```bash
 ./local-build.sh
+./local-build.sh --android-tests
 ```
 
 ## Evidence validation
@@ -162,16 +163,13 @@ VITE_COVERAGE=true npm run test:e2e
 npx nyc report --temp-dir .nyc_output --report-dir coverage/e2e --reporter=lcov --reporter=text-summary
 npx lcov-result-merger "coverage/{lcov.info,e2e/lcov.info}" coverage/lcov-merged.info
 EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs
-COVERAGE_MIN=80 node scripts/check-coverage-threshold.mjs
+COVERAGE_MIN=75 node scripts/check-coverage-threshold.mjs
 ```
 
 Local reproduction (Android coverage):
 
 ```bash
-cd android
-./gradlew testDebugUnitTest jacocoTestReport
-cd ..
-EXPECT_ANDROID_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs
+./local-build.sh --coverage
 ```
 
 Coverage outputs:

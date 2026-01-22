@@ -116,6 +116,8 @@ dependencies {
     testImplementation "androidx.test:core:1.5.0"
     testImplementation "androidx.test.ext:junit:1.1.5"
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
+    testImplementation "net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01"
+    testImplementation "net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
