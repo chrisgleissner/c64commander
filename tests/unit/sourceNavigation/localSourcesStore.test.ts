@@ -93,6 +93,17 @@ describe('localSourcesStore', () => {
     expect(result?.source.entries).toHaveLength(1);
   });
 
+  it('accepts iterable folder picker results on android', async () => {
+    platformState.value = 'android';
+    pickDirectoryMock.mockResolvedValue({
+      rootName: 'Phone',
+      files: new Set([{ name: 'song.sid', path: '/Phone/song.sid', uri: 'file://song.sid' }]),
+    });
+
+    const result = await createLocalSourceFromPicker(null);
+    expect(result?.source.entries).toHaveLength(1);
+  });
+
   it('falls back to input click when directory picker is unavailable', async () => {
     const input = document.createElement('input');
     const clickSpy = vi.spyOn(input, 'click');

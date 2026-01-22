@@ -144,4 +144,26 @@ test.describe('Layout overflow safeguards', () => {
 
     await ftpServers.close();
   });
+
+  test('diagnostics dialog stays within viewport', async ({ page }, testInfo) => {
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'settings-open');
+
+    await page.getByRole('button', { name: 'Logs' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await snap(page, testInfo, 'diagnostics-dialog');
+    await expectNoHorizontalOverflow(page);
+
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    if (dialogBox && viewport) {
+      expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+      expect(dialogBox.y).toBeGreaterThanOrEqual(0);
+      expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width);
+      expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
+    }
+  });
 });

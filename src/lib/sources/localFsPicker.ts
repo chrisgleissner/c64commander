@@ -1,5 +1,6 @@
-import { Capacitor } from '@capacitor/core';
 import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
+import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { getPlatform } from '@/lib/native/platform';
 import type { LocalSidFile } from './LocalFsSongSource';
 import { ingestLocalArchives, isSupportedLocalArchive } from './localArchiveIngestion';
 
@@ -53,13 +54,11 @@ const normalizeFolderPickerEntries = (result: FolderPickerResult | null): Picked
   if (!result) {
     throw new Error('Folder picker returned no data.');
   }
-  const files = result.files;
-  if (!files) return [];
-  if (Array.isArray(files)) return files as PickedFolderEntry[];
-  if (typeof files === 'object' && 'length' in files) {
-    return Array.from(files as ArrayLike<PickedFolderEntry>);
+  const entries = coerceFolderPickerEntries(result.files);
+  if (entries === null) {
+    throw new Error('Folder picker returned an invalid file list.');
   }
-  throw new Error('Folder picker returned an invalid file list.');
+  return entries;
 };
 
 const toLocalFile = (entry: FolderPicker.PickedFolderEntry): LocalSidFile => {
@@ -78,7 +77,7 @@ const toLocalFile = (entry: FolderPicker.PickedFolderEntry): LocalSidFile => {
 };
 
 export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promise<LocalSidFile[] | null> => {
-  if (Capacitor.getPlatform() === 'android') {
+  if (getPlatform() === 'android') {
     const result = await FolderPicker.pickDirectory();
     const entries = normalizeFolderPickerEntries(result);
     const candidates = entries.filter((entry) => isSupportedLocalFile(entry.name)).map(toLocalFile);

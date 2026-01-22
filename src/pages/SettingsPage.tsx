@@ -556,8 +556,8 @@ export default function SettingsPage() {
             </TabsContent>
           </Tabs>
           <DialogFooter>
-            <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-between">
-              <div className="flex gap-2">
+            <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2 min-w-0">
                 <Button variant="outline" onClick={handleShareActive}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
@@ -567,7 +567,7 @@ export default function SettingsPage() {
                   Share via email
                 </Button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 min-w-0">
                 <Button
                   variant="destructive"
                   onClick={() => {

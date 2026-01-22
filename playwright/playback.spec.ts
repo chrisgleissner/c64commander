@@ -18,7 +18,9 @@ const openAddItemsDialog = async (page: Page) => {
 
 const selectEntryCheckbox = async (container: Page | Locator, name: string) => {
   const row = container.getByText(name, { exact: true }).locator('..').locator('..');
-  await row.getByRole('checkbox').click();
+  const checkbox = row.getByRole('checkbox');
+  await checkbox.scrollIntoViewIfNeeded();
+  await checkbox.click({ force: true });
 };
 
 const openRemoteFolder = async (container: Page | Locator, name: string) => {
@@ -252,6 +254,151 @@ test.describe('Playback file browser', () => {
     await playButton.click();
     await expect(playButton).toContainText('Play');
     await snap(page, testInfo, 'playback-stopped');
+  });
+
+  test('native folder picker adds local files to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+      const entries = [
+        { name: 'demo.sid', path: '/Local Music/demo.sid', uri: 'file://demo.sid' },
+        { name: 'launch.prg', path: '/Local Music/launch.prg', uri: 'file://launch.prg' },
+        { name: 'disk.d64', path: '/Local Music/disk.d64', uri: 'file://disk.d64' },
+      ];
+
+      const createOverlay = () => {
+        const overlay = document.createElement('div');
+        overlay.setAttribute('data-testid', 'native-folder-picker');
+        overlay.style.cssText = [
+          'position: fixed',
+          'inset: 0',
+          'z-index: 9999',
+          'background: rgba(15, 23, 42, 0.65)',
+          'display: flex',
+          'align-items: center',
+          'justify-content: center',
+          'font-family: Inter, sans-serif',
+        ].join(';');
+
+        const panel = document.createElement('div');
+        panel.style.cssText = [
+          'background: white',
+          'color: #111827',
+          'padding: 16px',
+          'border-radius: 12px',
+          'width: min(320px, 90vw)',
+          'box-shadow: 0 18px 40px rgba(0,0,0,0.35)',
+        ].join(';');
+
+        const title = document.createElement('div');
+        title.textContent = 'Native folder picker (mock)';
+        title.style.cssText = 'font-weight: 600; margin-bottom: 8px;';
+        panel.appendChild(title);
+
+        const list = document.createElement('ul');
+        list.style.cssText = 'margin: 0 0 12px 0; padding: 0 0 0 16px; font-size: 12px;';
+        entries.forEach((entry) => {
+          const item = document.createElement('li');
+          item.textContent = entry.name;
+          list.appendChild(item);
+        });
+        panel.appendChild(list);
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = 'Select folder';
+        button.setAttribute('data-testid', 'native-picker-confirm');
+        button.style.cssText = [
+          'background: #3b82f6',
+          'color: white',
+          'border: none',
+          'border-radius: 999px',
+          'padding: 8px 12px',
+          'font-size: 12px',
+          'font-weight: 600',
+          'cursor: pointer',
+        ].join(';');
+        panel.appendChild(button);
+
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        return { overlay, button };
+      };
+
+      const pickDirectory = () =>
+        new Promise((resolve) => {
+          const { overlay, button } = createOverlay();
+          const finalize = () => {
+            overlay.remove();
+            resolve({ rootName: 'Local Music', files: new Set(entries) });
+          };
+          button.addEventListener('click', finalize);
+          (window as Window & { __c64uNativePickerResolve?: () => void }).__c64uNativePickerResolve = finalize;
+          setTimeout(() => {
+            if (document.body.contains(overlay)) finalize();
+          }, 500);
+        });
+
+      const readFile = async () => ({ data: '' });
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
+        pickDirectory,
+        readFile,
+      };
+    });
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'playlist-empty');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await snap(page, testInfo, 'choose-source');
+
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    const picker = page.getByTestId('native-folder-picker');
+    await expect(picker).toBeVisible();
+    await snap(page, testInfo, 'native-folder-picker');
+
+    await page.evaluate(() => {
+      (window as Window & { __c64uNativePickerResolve?: () => void }).__c64uNativePickerResolve?.();
+    });
+    await expect(picker).toBeHidden();
+
+    const playlistList = page.getByTestId('playlist-list');
+    const dialog = page.getByRole('dialog');
+
+    let autoConfirmed = false;
+    try {
+      await expect(playlistList).not.toContainText('No tracks in playlist yet.', { timeout: 2000 });
+      autoConfirmed = true;
+    } catch {
+      autoConfirmed = false;
+    }
+
+    if (!autoConfirmed && await dialog.isVisible()) {
+      const confirmButton = dialog.getByTestId('add-items-confirm');
+      if (!(await confirmButton.isVisible())) {
+        const localSourceButton = dialog.getByRole('button', { name: 'Local Music' });
+        await expect(localSourceButton).toBeVisible();
+        await localSourceButton.click();
+      }
+      await expect(confirmButton).toBeVisible();
+      await expect(dialog.getByText('demo.sid', { exact: true })).toBeVisible();
+      await snap(page, testInfo, 'local-source-entries');
+
+      await dialog.evaluate(() => {
+        document
+          .querySelectorAll('[data-testid="source-entry-row"] [role="checkbox"]')
+          .forEach((node) => (node as HTMLElement).click());
+      });
+      await snap(page, testInfo, 'local-items-selected');
+
+      await confirmButton.click();
+      await expect(dialog).toBeHidden();
+    }
+
+    await expect(playlistList).toContainText('demo.sid');
+    await expect(playlistList).toContainText('launch.prg');
+    await expect(playlistList).toContainText('disk.d64');
+    await snap(page, testInfo, 'playlist-with-local-files');
   });
 
   test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo: TestInfo) => {

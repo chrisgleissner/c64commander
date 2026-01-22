@@ -1,5 +1,6 @@
-import { Capacitor } from '@capacitor/core';
 import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
+import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { getPlatform } from '@/lib/native/platform';
 import { normalizeSourcePath } from './paths';
 
 export type LocalSourceEntry = {
@@ -37,12 +38,11 @@ const safeRandomId = () => {
 };
 
 const normalizeFolderPickerEntries = (result: { files?: unknown } | null): PickedFolderEntry[] => {
-  if (!result?.files) return [];
-  if (Array.isArray(result.files)) return result.files as PickedFolderEntry[];
-  if (typeof result.files === 'object' && 'length' in result.files) {
-    return Array.from(result.files as ArrayLike<PickedFolderEntry>);
+  const entries = coerceFolderPickerEntries(result?.files);
+  if (entries === null) {
+    throw new Error('Folder picker returned an invalid file list.');
   }
-  throw new Error('Folder picker returned an invalid file list.');
+  return entries;
 };
 
 const buildRootPath = (rootName: string | null) => {
@@ -115,7 +115,7 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
 };
 
 export const createLocalSourceFromPicker = async (input: HTMLInputElement | null): Promise<LocalSourceBuildResult | null> => {
-  if (Capacitor.getPlatform() === 'android') {
+  if (getPlatform() === 'android') {
     const result = await FolderPicker.pickDirectory();
     const entries = normalizeFolderPickerEntries(result);
     const rootName = result?.rootName || null;

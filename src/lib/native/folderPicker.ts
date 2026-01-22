@@ -11,4 +11,29 @@ type FolderPickerPlugin = {
   readFile: (options: { uri: string }) => Promise<{ data: string }>;
 };
 
-export const FolderPicker = registerPlugin<FolderPickerPlugin>('FolderPicker');
+type FolderPickerOverride = Partial<FolderPickerPlugin>;
+
+const resolveOverride = (): FolderPickerOverride | null => {
+  if (typeof window === 'undefined') return null;
+  const candidate = (window as Window & { __c64uFolderPickerOverride?: FolderPickerOverride }).__c64uFolderPickerOverride;
+  return candidate ?? null;
+};
+
+const plugin = registerPlugin<FolderPickerPlugin>('FolderPicker');
+
+export const FolderPicker: FolderPickerPlugin = {
+  pickDirectory: (options) => {
+    const override = resolveOverride();
+    if (override?.pickDirectory) {
+      return override.pickDirectory(options);
+    }
+    return plugin.pickDirectory(options);
+  },
+  readFile: (options) => {
+    const override = resolveOverride();
+    if (override?.readFile) {
+      return override.readFile(options);
+    }
+    return plugin.readFile(options);
+  },
+};

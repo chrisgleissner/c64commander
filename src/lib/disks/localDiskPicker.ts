@@ -1,5 +1,6 @@
-import { Capacitor } from '@capacitor/core';
 import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
+import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { getPlatform } from '@/lib/native/platform';
 import type { DiskEntry } from './diskTypes';
 import { createDiskEntry, isDiskImagePath, normalizeDiskPath } from './diskTypes';
 
@@ -40,17 +41,9 @@ export const prepareDiskDirectoryInput = (input: HTMLInputElement | null) => {
 
 const normalizeFolderPickerEntries = (result: FolderPickerResult | null): { entries: PickedFolderEntry[]; rootName: string } => {
   if (!result) throw new Error('Folder picker returned no data.');
-  const files = result.files;
   const rootName = result.rootName || '';
-  if (!files) return { entries: [], rootName };
-  if (Array.isArray(files)) return { entries: files as PickedFolderEntry[], rootName };
-  if (typeof files === 'object' && 'length' in files) {
-    return { entries: Array.from(files as ArrayLike<PickedFolderEntry>), rootName };
-  }
-  if (typeof files === 'object' && Symbol.iterator in files) {
-    return { entries: Array.from(files as Iterable<PickedFolderEntry>), rootName };
-  }
-  return { entries: [], rootName };
+  const entries = coerceFolderPickerEntries(result.files);
+  return { entries: entries ?? [], rootName };
 };
 
 const applyRootName = (path: string, rootName: string) => {
@@ -61,7 +54,7 @@ const applyRootName = (path: string, rootName: string) => {
 };
 
 export const importLocalDiskFolder = async (): Promise<LocalDiskSelection | null> => {
-  if (Capacitor.getPlatform() === 'android') {
+  if (getPlatform() === 'android') {
     const result = await FolderPicker.pickDirectory({ extensions: ['d64', 'g64', 'd71', 'g71', 'd81'] });
     const { entries, rootName } = normalizeFolderPickerEntries(result);
     const runtimeFiles: Record<string, File> = {};

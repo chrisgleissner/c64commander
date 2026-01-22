@@ -1,5 +1,6 @@
-import { Capacitor } from '@capacitor/core';
 import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
+import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { getPlatform } from '@/lib/native/platform';
 import { SUPPORTED_PLAY_EXTENSIONS, getFileExtension } from './fileTypes';
 import type { LocalPlayFile } from './playbackRouter';
 
@@ -45,16 +46,8 @@ const normalizeFolderPickerEntries = (result: FolderPickerResult | null): Picked
   if (!result) {
     throw new Error('Folder picker returned no data.');
   }
-  const files = result.files;
-  if (!files) return [];
-  if (Array.isArray(files)) return files as PickedFolderEntry[];
-  if (typeof files === 'object' && 'length' in files) {
-    return Array.from(files as ArrayLike<PickedFolderEntry>);
-  }
-  if (typeof files === 'object' && Symbol.iterator in files) {
-    return Array.from(files as Iterable<PickedFolderEntry>);
-  }
-  return [];
+  const entries = coerceFolderPickerEntries(result.files);
+  return entries ?? [];
 };
 
 const toLocalFile = (entry: PickedFolderEntry): LocalPlayFile => {
@@ -75,7 +68,7 @@ const toLocalFile = (entry: PickedFolderEntry): LocalPlayFile => {
 const isSupportedPlayFile = (name: string) => SUPPORTED_PLAY_EXTENSIONS.has(getFileExtension(name));
 
 export const browseLocalPlayFiles = async (input: HTMLInputElement | null): Promise<LocalPlayFile[] | null> => {
-  if (Capacitor.getPlatform() === 'android') {
+  if (getPlatform() === 'android') {
     const extensions = Array.from(SUPPORTED_PLAY_EXTENSIONS.values());
     const result = await FolderPicker.pickDirectory({ extensions });
     const entries = normalizeFolderPickerEntries(result);
