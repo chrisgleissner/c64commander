@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ensureWithinRoot, getParentPathWithinRoot } from './paths';
+import { addErrorLog } from '@/lib/logging';
 import type { SourceEntry, SourceLocation } from './types';
 
 export type SourceNavigatorState = {
@@ -59,7 +60,18 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
       setEntries(result);
       setPath(safePath);
     } catch (err) {
-      setError((err as Error).message);
+      const error = err as Error;
+      setError(error.message);
+      addErrorLog('Source browse failed', {
+        sourceId: source.id,
+        sourceType: source.type,
+        path: nextPath,
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+      });
     } finally {
       if (loadingTimer !== null) {
         window.clearTimeout(loadingTimer);

@@ -22,6 +22,8 @@ import { useDiskLibrary } from '@/hooks/useDiskLibrary';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
+import { getLocalSourceListingMode, requireLocalSourceEntries } from '@/lib/sourceNavigation/localSourcesStore';
+import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { getPlatform } from '@/lib/native/platform';
@@ -530,7 +532,22 @@ export const HomeDiskManager = () => {
         const fallbackGroup = getLeafFolderName(normalized);
         const groupName = autoGroup ?? fallbackGroup ?? null;
         const localSource = source.type === 'local' ? localSourcesById.get(source.id) : null;
-        const localEntry = localSource?.entries.find((item) => normalizeSourcePath(item.relativePath) === normalized);
+        let localEntry: { uri?: string | null } | null = null;
+        if (localSource && getLocalSourceListingMode(localSource) === 'entries') {
+          try {
+            const entries = requireLocalSourceEntries(localSource, 'HomeDiskManager.localEntry');
+            localEntry = entries.find((item) => normalizeSourcePath(item.relativePath) === normalized) ?? null;
+          } catch (error) {
+            addErrorLog('Local source entries unavailable', {
+              sourceId: localSource.id,
+              error: {
+                name: (error as Error).name,
+                message: (error as Error).message,
+                stack: (error as Error).stack,
+              },
+            });
+          }
+        }
         const diskEntry = createDiskEntry({
           path: normalized,
           location: source.type === 'ultimate' ? 'ultimate' : 'local',
@@ -568,10 +585,23 @@ export const HomeDiskManager = () => {
       toast({ title: 'Items added', description: `${disks.length} disk(s) added to library.` });
       return true;
     } catch (error) {
+      const err = error as Error;
+      const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
+      addErrorLog('Add items failed', {
+        sourceId: source.id,
+        sourceType: source.type,
+        platform: getPlatform(),
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+        details: listingDetails,
+      });
       setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
       toast({
         title: 'Add items failed',
-        description: (error as Error).message,
+        description: err.message,
         variant: 'destructive',
       });
       return false;

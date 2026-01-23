@@ -432,8 +432,51 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'saf-scan-overlay');
 
     await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
-    await expect(page.getByText('No supported files', { exact: true })).toBeVisible();
+    await expect(page.getByRole('status').getByText('No supported files', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'saf-no-supported-files');
+  });
+
+  test('SAF scan failures are logged and do not crash the page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected destructive toast for SAF scan failure.' });
+    await page.addInitScript(() => {
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
+
+      const treeUri = 'content://tree/primary%3ABroken';
+      const pickDirectory = async () => ({ treeUri, rootName: 'Broken', permissionPersisted: true });
+      const listChildren = async ({ treeUri: requestUri }: { treeUri: string }) => {
+        if (requestUri !== treeUri) throw new Error('Unexpected treeUri');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return { entries: { bad: true } } as any;
+      };
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
+        pickDirectory,
+        listChildren,
+        readFileFromTree: async () => ({ data: '' }),
+        readFile: async () => ({ data: '' }),
+        getPersistedUris: async () => ({ uris: [] }),
+      };
+    });
+
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'Add folder' }).click();
+
+    const overlay = page.getByTestId('add-items-overlay');
+    await expect(overlay).toBeVisible();
+    await snap(page, testInfo, 'saf-error-overlay');
+
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    await expect(page.getByRole('status').getByText('Add items failed', { exact: true })).toBeVisible();
+
+    await expect.poll(async () => {
+      const logs = await page.evaluate(() => JSON.parse(localStorage.getItem('c64u_app_logs') ?? '[]'));
+      return logs.some((entry: { level: string; message: string }) => entry.level === 'error' && entry.message === 'Add items failed');
+    }).toBe(true);
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await snap(page, testInfo, 'saf-error-recovered');
   });
 
   test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo: TestInfo) => {

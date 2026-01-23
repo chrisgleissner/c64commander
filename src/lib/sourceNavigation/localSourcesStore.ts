@@ -3,6 +3,7 @@ import { getPlatform } from '@/lib/native/platform';
 import { addLog } from '@/lib/logging';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeSourcePath } from './paths';
+import { LocalSourceListingError } from './localSourceErrors';
 
 export type LocalSourceEntry = {
   name: string;
@@ -18,7 +19,7 @@ export type LocalSourceRecord = {
   rootName: string | null;
   rootPath: string;
   createdAt: string;
-  entries: LocalSourceEntry[];
+  entries?: LocalSourceEntry[];
   android?: {
     treeUri: string;
     rootName: string | null;
@@ -26,6 +27,8 @@ export type LocalSourceRecord = {
   };
   requiresReselect?: boolean;
 };
+
+export type LocalSourceListingMode = 'entries' | 'saf';
 
 export type LocalSourceBuildResult = {
   source: LocalSourceRecord;
@@ -55,13 +58,30 @@ const buildRootPath = (rootName: string | null) => {
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
 };
 
+const normalizeLocalSource = (source: LocalSourceRecord): LocalSourceRecord => {
+  const hasSaf = Boolean(source.android?.treeUri);
+  if (hasSaf) {
+    return {
+      ...source,
+      entries: undefined,
+      rootPath: source.rootPath || '/',
+    };
+  }
+  const entries = Array.isArray(source.entries) ? source.entries : [];
+  return {
+    ...source,
+    entries,
+    rootPath: source.rootPath || '/',
+  };
+};
+
 export const loadLocalSources = (): LocalSourceRecord[] => {
   if (typeof localStorage === 'undefined') return [];
   const raw = localStorage.getItem(STORE_KEY);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as LocalSourceRecord[];
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.map((source) => normalizeLocalSource(source)) : [];
   } catch {
     return [];
   }
@@ -156,7 +176,7 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
       rootName,
       rootPath: '/',
       createdAt,
-      entries: [],
+      entries: undefined,
       android: {
         treeUri,
         rootName,
@@ -190,4 +210,23 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
 
   await walkDirectory(directoryHandle, '');
   return createLocalSourceFromFileList(files, directoryHandle.name);
+};
+
+export const getLocalSourceListingMode = (source: LocalSourceRecord): LocalSourceListingMode =>
+  source.android?.treeUri ? 'saf' : 'entries';
+
+export const requireLocalSourceEntries = (source: LocalSourceRecord, context: string): LocalSourceEntry[] => {
+  if (getLocalSourceListingMode(source) === 'saf') {
+    throw new LocalSourceListingError('SAF sources do not expose entry listings.', 'saf-listing-unavailable', {
+      sourceId: source.id,
+      context,
+    });
+  }
+  if (!Array.isArray(source.entries)) {
+    throw new LocalSourceListingError('Local source entries are missing or invalid.', 'local-entries-missing', {
+      sourceId: source.id,
+      context,
+    });
+  }
+  return source.entries;
 };

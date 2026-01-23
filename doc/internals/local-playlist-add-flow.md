@@ -13,7 +13,7 @@ flowchart TD
   E --> F[localSourcesStore.createLocalSourceFromPicker]
   F --> G[FolderPicker.pickDirectory (Capacitor SAF)]
   G --> H[LocalSourceRecord stores SAF treeUri + permission timestamp]
-  H --> I[LocalSourceRecord created + persisted (entries empty)]
+  H --> I[LocalSourceRecord created + persisted (entries omitted)]
   I --> J[ItemSelectionDialog auto-confirm local source]
   J --> K[PlayFilesPage.handleAutoConfirmStart]
   K --> L[PlayFilesPage.handleAddFileSelections]
@@ -25,11 +25,11 @@ flowchart TD
 
 ## `src/pages/PlayFilesPage.tsx` (auto-confirm + scan + playlist update)
 
-**Lines:** 444-700, 1704-1714  
+**Lines:** 449-747, 1740-1755  
 **Role:** Owns the add-items workflow, shows the page overlay during scans, recursively walks local sources, and appends playlist items.
 
 ```tsx
-// src/pages/PlayFilesPage.tsx:444-700
+// src/pages/PlayFilesPage.tsx:449-747
 const handleAutoConfirmStart = useCallback(() => {
   setAddItemsSurface('page');
   setIsAddingItems(true);
@@ -51,7 +51,7 @@ const handleAddFileSelections = useCallback(async (source, selections) => {
 ```
 
 ```tsx
-// src/pages/PlayFilesPage.tsx:1704-1714
+// src/pages/PlayFilesPage.tsx:1740-1755
 <ItemSelectionDialog
   ...
   onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
@@ -124,18 +124,18 @@ const addSourceFromPicker = useCallback(async (input) => {
 
 ## `src/lib/sourceNavigation/localSourcesStore.ts` (Android SAF picker ingestion)
 
-**Lines:** 122-167  
+**Lines:** 142-186  
 **Role:** Android-native path that calls the Capacitor SAF picker, stores the tree URI + permission timestamp, and creates a LocalSourceRecord rooted at `/` without file entries.
 
 ```ts
-// src/lib/sourceNavigation/localSourcesStore.ts:122-167
+// src/lib/sourceNavigation/localSourcesStore.ts:142-186
 if (getPlatform() === 'android') {
   const result = await FolderPicker.pickDirectory();
   const treeUri = result?.treeUri;
   const rootName = normalizeRootName(result?.rootName);
   const source = {
     ...,
-    entries: [],
+    entries: undefined,
     android: {
       treeUri,
       rootName,
@@ -174,11 +174,11 @@ export const FolderPicker: FolderPickerPlugin = {
 
 ## `src/lib/sourceNavigation/localSourceAdapter.ts` (local file listing + SAF enumeration)
 
-**Lines:** 23-127  
+**Lines:** 30-138  
 **Role:** Resolves the effective root path for local sources and provides `listEntries` used by the scan. On Android SAF sources it calls the native `listChildren` API per directory.
 
 ```ts
-// src/lib/sourceNavigation/localSourceAdapter.ts:23-102
+// src/lib/sourceNavigation/localSourceAdapter.ts:30-138
 const resolveRootPath = (source) => {
   if (source.android?.treeUri) return '/';
   const normalizedRoot = normalizeSourcePath(source.rootPath || '/');

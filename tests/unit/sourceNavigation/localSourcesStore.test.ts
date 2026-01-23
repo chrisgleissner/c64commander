@@ -73,7 +73,9 @@ describe('localSourcesStore', () => {
     ];
 
     saveLocalSources(sources);
-    expect(loadLocalSources()).toEqual(sources);
+    const loaded = loadLocalSources();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].entries).toHaveLength(0);
   });
 
   it('prepares directory input attributes', () => {
@@ -93,7 +95,7 @@ describe('localSourcesStore', () => {
 
     const result = await createLocalSourceFromPicker(null);
     expect(result?.source.rootName).toBe('Phone');
-    expect(result?.source.entries).toHaveLength(0);
+    expect(result?.source.entries).toBeUndefined();
     expect(result?.source.android?.treeUri).toBe('content://tree/primary%3AMusic');
   });
 

@@ -26,7 +26,12 @@ import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
+import {
+  getLocalSourceListingMode,
+  prepareDirectoryInput,
+  requireLocalSourceEntries,
+} from '@/lib/sourceNavigation/localSourcesStore';
+import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
@@ -484,11 +489,28 @@ export default function PlayFilesPage() {
   const localEntriesBySourceId = useMemo(() => {
     const map = new Map<string, Map<string, { uri?: string | null; name: string }>>();
     localSources.forEach((source) => {
-      const entriesMap = new Map<string, { uri?: string | null; name: string }>();
-      source.entries.forEach((entry) => {
-        entriesMap.set(normalizeSourcePath(entry.relativePath), { uri: entry.uri, name: entry.name });
-      });
-      map.set(source.id, entriesMap);
+      if (getLocalSourceListingMode(source) !== 'entries') {
+        map.set(source.id, new Map());
+        return;
+      }
+      try {
+        const entries = requireLocalSourceEntries(source, 'PlayFilesPage.localEntriesBySourceId');
+        const entriesMap = new Map<string, { uri?: string | null; name: string }>();
+        entries.forEach((entry) => {
+          entriesMap.set(normalizeSourcePath(entry.relativePath), { uri: entry.uri, name: entry.name });
+        });
+        map.set(source.id, entriesMap);
+      } catch (error) {
+        addErrorLog('Local source entries unavailable', {
+          sourceId: source.id,
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+        map.set(source.id, new Map());
+      }
     });
     return map;
   }, [localSources]);
@@ -699,8 +721,29 @@ export default function PlayFilesPage() {
       await new Promise((resolve) => setTimeout(resolve, 150));
       return true;
     } catch (error) {
+      const err = error as Error;
+      const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
+      if (localTreeUri) {
+        addLog('debug', 'SAF scan failed', {
+          sourceId: source.id,
+          treeUri: redactTreeUri(localTreeUri),
+          error: err.message,
+        });
+      }
+      addErrorLog('Add items failed', {
+        sourceId: source.id,
+        sourceType: source.type,
+        platform: getPlatform(),
+        treeUri: localTreeUri ? redactTreeUri(localTreeUri) : null,
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+        details: listingDetails,
+      });
       setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
-      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
+      toast({ title: 'Add items failed', description: err.message, variant: 'destructive' });
       return false;
     } finally {
       setIsAddingItems(false);

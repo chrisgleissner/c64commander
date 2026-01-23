@@ -1,9 +1,10 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { MockModeBanner } from '@/components/MockModeBanner';
@@ -68,7 +69,7 @@ const RouteRefresher = () => {
 
 const AppRoutes = () => (
   <BrowserRouter>
-    <ErrorBoundary />
+    <GlobalErrorListener />
     <RouteRefresher />
     <DebugStartupLogger />
     <MockModeBanner />
@@ -98,7 +99,9 @@ const App = () => (
           <RefreshControlProvider>
             <SidPlayerProvider>
               <MockModeProvider>
-                <AppRoutes />
+                <AppErrorBoundary>
+                  <AppRoutes />
+                </AppErrorBoundary>
               </MockModeProvider>
             </SidPlayerProvider>
           </RefreshControlProvider>
@@ -108,7 +111,7 @@ const App = () => (
   </QueryClientProvider>
 );
 
-const ErrorBoundary = () => {
+const GlobalErrorListener = () => {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       addErrorLog('Window error', {
@@ -134,6 +137,41 @@ const ErrorBoundary = () => {
 
   return null;
 };
+
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    addErrorLog('React render error', {
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+          <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
+            <p className="text-lg font-semibold text-foreground">Something went wrong</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              The app hit an unexpected error. Please reopen the page or try again.
+            </p>
+            <Button className="mt-4" onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const DebugStartupLogger = () => {
   useEffect(() => {
