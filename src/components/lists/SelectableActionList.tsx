@@ -63,7 +63,7 @@ export type SelectableActionListProps = {
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => (
   <div
     className={cn(
-      'flex items-start gap-2 py-2 px-1 rounded-md min-w-0',
+      'flex items-start gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
       item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
     )}
     data-testid={rowTestId}
@@ -119,12 +119,12 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         </DropdownMenu>
       )}
     </div>
-    <div className="flex flex-1 items-start gap-2 min-w-0">
+    <div className="flex flex-1 items-start gap-2 min-w-0 max-w-full">
       {item.icon ? <div className="pt-0.5">{item.icon}</div> : null}
-      <div className="min-w-0">
+      <div className="min-w-0 w-full">
         <button
           type="button"
-          className="text-sm font-medium break-words whitespace-normal text-left hover:underline"
+          className="text-sm font-medium break-words whitespace-normal text-left hover:underline max-w-full"
           onClick={item.onTitleClick}
           disabled={item.isDimmed || item.disableActions}
         >
@@ -132,14 +132,14 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         </button>
         {item.subtitle ? (
           <div
-            className="text-[11px] text-muted-foreground break-words whitespace-normal"
+            className="text-[11px] text-muted-foreground break-words whitespace-normal max-w-full"
             data-testid={item.subtitleTestId}
           >
             {item.subtitle}
           </div>
         ) : null}
         {item.meta ? (
-          <div className="text-[11px] text-muted-foreground break-words whitespace-normal">
+          <div className="text-[11px] text-muted-foreground break-words whitespace-normal max-w-full">
             {item.meta}
           </div>
         ) : null}

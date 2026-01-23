@@ -36,6 +36,14 @@ import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavi
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import {
+  buildEnabledSidMuteUpdates,
+  buildEnabledSidUnmuteUpdates,
+  buildEnabledSidVolumeSnapshot,
+  buildEnabledSidVolumeUpdates,
+  buildSidEnablement,
+  filterEnabledSidVolumeItems,
+} from '@/lib/config/sidVolumeControl';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
@@ -177,6 +185,8 @@ export default function PlayFilesPage() {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
+  const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
+  const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
   const uniqueId = status.deviceInfo?.unique_id || 'default';
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -229,6 +239,18 @@ export default function PlayFilesPage() {
   const sidVolumeItems = useMemo(
     () => audioMixerItems.filter((item) => isSidVolumeName(item.name)),
     [audioMixerItems],
+  );
+  const sidEnablement = useMemo(
+    () =>
+      buildSidEnablement(
+        sidSocketsCategory as Record<string, unknown> | undefined,
+        sidAddressingCategory as Record<string, unknown> | undefined,
+      ),
+    [sidAddressingCategory, sidSocketsCategory],
+  );
+  const enabledSidVolumeItems = useMemo(
+    () => filterEnabledSidVolumeItems(sidVolumeItems, sidEnablement),
+    [sidEnablement, sidVolumeItems],
   );
   const volumeOptions = useMemo(() => {
     const baseOptions = sidVolumeItems.find((item) => Array.isArray(item.options) && item.options.length)?.options ?? [];
@@ -326,11 +348,20 @@ export default function PlayFilesPage() {
     }
   }, [sidVolumeItems]);
 
+  const resolveEnabledSidVolumeItems = useCallback(async () => {
+    const items = await resolveSidVolumeItems();
+    return filterEnabledSidVolumeItems(items, sidEnablement);
+  }, [resolveSidVolumeItems, sidEnablement]);
+
   useEffect(() => {
-    if (!sidVolumeItems.length || !volumeOptions.length) return;
-    const muteValues = sidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
+    if (!enabledSidVolumeItems.length || !volumeOptions.length) {
+      setVolumeMuted(false);
+      setVolumeIndex(defaultVolumeIndex);
+      return;
+    }
+    const muteValues = enabledSidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
     const activeIndices: number[] = [];
-    sidVolumeItems.forEach((item, index) => {
+    enabledSidVolumeItems.forEach((item, index) => {
       if (item.value === muteValues[index]) return;
       activeIndices.push(resolveVolumeIndex(item.value));
     });
@@ -344,7 +375,7 @@ export default function PlayFilesPage() {
     activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
     const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
     setVolumeIndex(nextIndex);
-  }, [defaultVolumeIndex, resolveVolumeIndex, sidVolumeItems, volumeOptions]);
+  }, [defaultVolumeIndex, enabledSidVolumeItems, resolveVolumeIndex, volumeOptions]);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -849,7 +880,7 @@ export default function PlayFilesPage() {
   const currentItem = playlist[currentIndex];
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
-  const canControlVolume = sidVolumeItems.length > 0 && volumeOptions.length > 0;
+  const canControlVolume = enabledSidVolumeItems.length > 0 && volumeOptions.length > 0;
   const volumeLabel = volumeOptions[volumeIndex]?.label ?? '—';
   const subsongCount = currentItem?.subsongCount ?? 1;
   const songNrValue = Number(songNrInput);
@@ -1159,32 +1190,32 @@ export default function PlayFilesPage() {
     if (!volumeOptions.length || !sidVolumeItems.length) return;
     const target = volumeOptions[nextIndex]?.option;
     if (!target) return;
-    const updates: Record<string, string | number> = {};
-    sidVolumeItems.forEach((item) => {
-      const muteValue = resolveAudioMixerMuteValue(item.options);
-      if (item.value === muteValue) return;
-      updates[item.name] = target;
-    });
+    const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
     manualMuteSnapshotRef.current = null;
     setVolumeMuted(false);
     await applyAudioMixerUpdates(updates, 'Volume');
-  }, [applyAudioMixerUpdates, sidVolumeItems, volumeOptions]);
+  }, [applyAudioMixerUpdates, sidEnablement, sidVolumeItems, volumeOptions]);
 
   const handleToggleMute = useCallback(async () => {
-    const items = await resolveSidVolumeItems();
+    const items = await resolveEnabledSidVolumeItems();
     if (!items.length) return;
     if (!volumeMuted) {
-      manualMuteSnapshotRef.current = buildSidVolumeSnapshot(items);
+      manualMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(items, sidEnablement);
       setVolumeMuted(true);
-      await applyAudioMixerUpdates(buildSidMuteUpdates(items), 'Mute');
+      await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(items, sidEnablement), 'Mute');
       return;
     }
-    const snapshot = manualMuteSnapshotRef.current ?? buildSidVolumeSnapshot(items);
+    const snapshot = manualMuteSnapshotRef.current ?? buildEnabledSidVolumeSnapshot(items, sidEnablement);
     const wasMuted = items.every((item) => snapshot[item.name] === resolveAudioMixerMuteValue(item.options));
     setVolumeMuted(wasMuted);
-    await applyAudioMixerUpdates(snapshot, 'Unmute');
+    await applyAudioMixerUpdates(buildEnabledSidUnmuteUpdates(snapshot, sidEnablement), 'Unmute');
     manualMuteSnapshotRef.current = null;
-  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, resolveSidVolumeItems, volumeMuted]);
+  }, [
+    applyAudioMixerUpdates,
+    resolveEnabledSidVolumeItems,
+    sidEnablement,
+    volumeMuted,
+  ]);
 
   const handleNext = useCallback(async () => {
     if (!playlist.length) return;

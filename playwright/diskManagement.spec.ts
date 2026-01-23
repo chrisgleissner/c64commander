@@ -6,6 +6,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -54,7 +55,8 @@ const selectEntryCheckbox = async (page: Page, name: string) => {
 
 const addLocalFolder = async (page: Page, folderPath: string, diskNames: string[], expectVisible = true) => {
   await openAddItemsDialog(page);
-  await page.getByRole('button', { name: 'Add folder' }).click();
+  const dialog = page.getByRole('dialog');
+  await clickSourceSelectionButton(dialog, 'This device');
   const input = page.locator('input[type="file"][webkitdirectory]');
   await expect(input).toHaveCount(1);
   await input.setInputFiles(folderPath);
@@ -176,7 +178,8 @@ test.describe('Disk management', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
     await openRemoteFolder(page, 'Usb0');
@@ -225,7 +228,8 @@ test.describe('Disk management', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await openRemoteFolder(page, 'Usb0');
     await openRemoteFolder(page, 'Games');
     await openRemoteFolder(page, 'Turrican II');
@@ -430,7 +434,8 @@ test.describe('Disk management', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles(path.resolve('playwright/fixtures/disks-local/EmptyFolder'));
@@ -453,7 +458,8 @@ test.describe('Disk management', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await expect(page.getByText('Browse failed', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'browse-failed');
 
@@ -473,7 +479,8 @@ test.describe('Disk management', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await expect(page.getByText('Browse failed', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'browse-failed');
   });

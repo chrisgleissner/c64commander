@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -153,11 +154,11 @@ test.describe('Item Selection Dialog UX', () => {
     await page.waitForSelector('[role="dialog"]');
     
     // Select C64 Ultimate source to get file list
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await page.waitForTimeout(500);
     await snap(page, testInfo, 'file-browser-opened');
 
-    const dialog = page.locator('[role="dialog"]').first();
     const scrollableContent = dialog.locator('[class*="overflow"]').first();
 
     // Check if content area is scrollable
@@ -176,7 +177,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-page-loaded');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await page.waitForTimeout(500);
     await snap(page, testInfo, 'c64u-browser-opened');
 
@@ -206,12 +208,12 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'add-items-opened');
 
     // Select C64 Ultimate source
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await page.waitForTimeout(500);
     await snap(page, testInfo, 'c64u-selected');
 
     // Navigate to Usb0 folder
-    const dialog = page.getByRole('dialog');
     await ensureRemoteRoot(dialog);
     await openRemoteFolder(dialog, 'Usb0');
     await page.waitForTimeout(500);
@@ -251,7 +253,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-open');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
 
     await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 10000 });
     await expect(page.getByTestId('playlist-list')).toBeVisible();
@@ -271,7 +274,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-open');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
 
     await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 10000 });
     await expect(page.getByTestId('disk-list')).toBeVisible();
@@ -290,12 +294,12 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'add-items-opened');
 
     // Select C64 Ultimate source
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await page.waitForTimeout(500);
     await snap(page, testInfo, 'c64u-selected');
 
     // Navigate to Usb0 folder
-    const dialog = page.getByRole('dialog');
     await ensureRemoteRoot(dialog);
     if (await dialog.getByText('Usb0', { exact: true }).isVisible({ timeout: 2000 }).catch(() => false)) {
       await openRemoteFolder(dialog, 'Usb0');
@@ -332,7 +336,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-initial');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
@@ -348,7 +353,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-initial');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
@@ -365,7 +371,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-initial');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -379,7 +386,7 @@ test.describe('Item Selection Dialog UX', () => {
     expect(firstCount).toBeGreaterThan(0);
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
@@ -398,7 +405,8 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-initial');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -412,7 +420,7 @@ test.describe('Item Selection Dialog UX', () => {
     expect(firstCount).toBeGreaterThan(0);
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
@@ -439,8 +447,8 @@ test.describe('Item Selection Dialog UX', () => {
 
     const addDisk = async (diskName: string) => {
       await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-      await page.getByRole('button', { name: 'C64 Ultimate' }).click();
       const dialog = page.getByRole('dialog');
+      await clickSourceSelectionButton(dialog, 'C64 Ultimate');
       await ensureRemoteRoot(dialog);
       await openRemoteFolder(dialog, 'Usb0');
       await openRemoteFolder(dialog, 'Games');
@@ -471,8 +479,8 @@ test.describe('Item Selection Dialog UX', () => {
 
     const addDisk = async (diskName: string) => {
       await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-      await page.getByRole('button', { name: 'C64 Ultimate' }).click();
       const dialog = page.getByRole('dialog');
+      await clickSourceSelectionButton(dialog, 'C64 Ultimate');
       await ensureRemoteRoot(dialog);
       await openRemoteFolder(dialog, 'Usb0');
       await openRemoteFolder(dialog, 'Games');

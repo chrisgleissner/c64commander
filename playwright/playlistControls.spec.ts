@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -18,7 +19,7 @@ const getPlaylistOrder = async (page: Page) => {
 
 const addLocalFolder = async (page: Page, folderPath: string) => {
   await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-  await page.getByRole('button', { name: 'Add folder' }).click();
+  await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
   const input = page.locator('input[type="file"][webkitdirectory]');
   await expect(input).toHaveCount(1);
   await input.setInputFiles([folderPath]);

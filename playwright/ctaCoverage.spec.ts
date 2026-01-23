@@ -13,6 +13,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, assertNoUiIssues, allowWarnings } from './testArtifacts';
+import { getSourceSelectionButton } from './sourceSelection';
 
 test.describe('Critical CTA Coverage', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -47,8 +48,9 @@ test.describe('Critical CTA Coverage', () => {
     await attachStepScreenshot(page, testInfo, 'source-selection-opened');
 
     // Should show source selection: Local and C64 Ultimate
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    const c64uButton = page.getByRole('button', { name: /C64 Ultimate|Ultimate|C64U/i });
+    const dialog = page.getByRole('dialog');
+    const localButton = getSourceSelectionButton(dialog, 'This device');
+    const c64uButton = getSourceSelectionButton(dialog, 'C64 Ultimate');
 
     const hasLocalOption = await localButton.isVisible({ timeout: 2000 }).catch(() => false);
     const hasC64UOption = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
@@ -257,8 +259,9 @@ test.describe('Disk Browser Coverage', () => {
       await attachStepScreenshot(page, testInfo, 'browser-opened');
 
       // Verify source selection available
-      const localOption = page.getByRole('button', { name: /Local|Local Files/i });
-      const c64uOption = page.getByRole('button', { name: /C64 Ultimate|Ultimate|C64U/i });
+      const dialog = page.getByRole('dialog');
+      const localOption = getSourceSelectionButton(dialog, 'This device');
+      const c64uOption = getSourceSelectionButton(dialog, 'C64 Ultimate');
 
       const hasLocal = await localOption.isVisible({ timeout: 2000 }).catch(() => false);
       const hasC64U = await c64uOption.isVisible({ timeout: 2000 }).catch(() => false);
@@ -267,11 +270,7 @@ test.describe('Disk Browser Coverage', () => {
       await attachStepScreenshot(page, testInfo, 'source-selection-available');
 
       // Try selecting a source
-      if (hasLocal) {
-        await localOption.click();
-        await page.waitForTimeout(500);
-        await attachStepScreenshot(page, testInfo, 'local-source-selected');
-      } else if (hasC64U) {
+      if (hasC64U) {
         await c64uOption.click();
         await page.waitForTimeout(500);
         await attachStepScreenshot(page, testInfo, 'c64u-source-selected');

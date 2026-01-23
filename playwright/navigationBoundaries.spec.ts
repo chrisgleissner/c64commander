@@ -6,6 +6,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -64,7 +65,8 @@ test.describe('Navigation boundaries and edge cases', () => {
     await snap(page, testInfo, 'play-open');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await snap(page, testInfo, 'root-folder');
 
@@ -106,7 +108,8 @@ test.describe('Navigation boundaries and edge cases', () => {
     await snap(page, testInfo, 'play-open');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await snap(page, testInfo, 'root-folder');
 
@@ -127,7 +130,8 @@ test.describe('Navigation boundaries and edge cases', () => {
     await snap(page, testInfo, 'play-open');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await snap(page, testInfo, 'root-folder');
 
@@ -166,7 +170,8 @@ test.describe('Navigation boundaries and edge cases', () => {
     await snap(page, testInfo, 'play-open');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await snap(page, testInfo, 'root-folder');
 

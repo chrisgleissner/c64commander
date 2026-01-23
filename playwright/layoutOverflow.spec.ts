@@ -5,6 +5,7 @@ import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -147,7 +148,7 @@ test.describe('Layout overflow safeguards', () => {
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();

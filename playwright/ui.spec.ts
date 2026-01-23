@@ -8,6 +8,7 @@ import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const resolveExpectedVersion = () => {
   const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || '';
@@ -218,9 +219,9 @@ test.describe('UI coverage', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await ensureRemoteRoot(page);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
     await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
@@ -244,9 +245,9 @@ test.describe('UI coverage', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await ensureRemoteRoot(page);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
     await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
@@ -274,9 +275,9 @@ test.describe('UI coverage', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await ensureRemoteRoot(page);
     await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
     await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
     await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
