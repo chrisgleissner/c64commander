@@ -149,6 +149,8 @@ Artifacts:
 Performance notes:
 
 - `PLAYWRIGHT_SKIP_BUILD=1` lets Playwright reuse a prebuilt `dist/` (build first).
+- `PLAYWRIGHT_WORKERS` overrides Playwright worker count (default caps at 4).
+- `GRADLE_MAX_WORKERS` caps Gradle workers (used by `local-build.sh` and CI).
 - The workflow supports a `package_manager` input for `workflow_dispatch` to compare `npm` vs `bun` install speed.
 
 ## CI + Coverage

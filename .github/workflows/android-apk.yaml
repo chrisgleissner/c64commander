@@ -197,6 +197,7 @@ jobs:
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+      GRADLE_MAX_WORKERS: "6"
 
     steps:
       - name: Checkout
