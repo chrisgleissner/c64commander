@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { Page, TestInfo } from '@playwright/test';
+import type { Locator, Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
@@ -21,6 +21,20 @@ const expectNoHorizontalOverflow = async (page: Page) => {
   });
   expect(overflow.docOverflow, 'Document width overflow detected').toBeLessThanOrEqual(1);
   expect(overflow.bodyOverflow, 'Body width overflow detected').toBeLessThanOrEqual(1);
+};
+
+const expectDialogWithinViewport = async (page: Page, dialog: Locator) => {
+  await expect(dialog).toBeVisible();
+  const dialogBox = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  expect(dialogBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  if (dialogBox && viewport) {
+    expect(dialogBox.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBox.y).toBeGreaterThanOrEqual(0);
+    expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width);
+    expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
+  }
 };
 
 const seedDiskLibrary = async (page: Page, disks: Array<{ id: string; name: string; path: string; location: 'local' | 'ultimate'; group?: string | null; importOrder?: number | null }>) => {
@@ -165,5 +179,41 @@ test.describe('Layout overflow safeguards', () => {
       expect(dialogBox.x + dialogBox.width).toBeLessThanOrEqual(viewport.width);
       expect(dialogBox.y + dialogBox.height).toBeLessThanOrEqual(viewport.height);
     }
+  });
+
+  test('play dialogs stay within viewport', async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      const payload = {
+        items: [
+          {
+            source: 'ultimate',
+            path: '/Usb0/Demos/demo.sid',
+            name: 'demo.sid',
+            durationMs: 60000,
+            songNr: 1,
+            sourceId: null,
+          },
+        ],
+        currentIndex: 0,
+      };
+      localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+    });
+
+    await page.goto('/play', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'play-open');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    const addDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, addDialog);
+    await snap(page, testInfo, 'add-items-dialog');
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: /Duration/i }).click();
+    const durationDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, durationDialog);
+    await snap(page, testInfo, 'duration-dialog');
+    await page.keyboard.press('Escape');
+
+    await expectNoHorizontalOverflow(page);
   });
 });

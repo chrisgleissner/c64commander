@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
-import { useC64Connection } from '@/hooks/useC64Connection';
+import { useC64Category, useC64Connection, useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
@@ -27,6 +28,8 @@ import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore'
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
+import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -72,6 +75,12 @@ type StoredPlaylistState = {
   currentIndex?: number;
 };
 
+type AudioMixerItem = {
+  name: string;
+  value: string | number;
+  options?: string[];
+};
+
 type AddItemsProgressState = {
   status: 'idle' | 'scanning' | 'error' | 'done';
   count: number;
@@ -82,6 +91,7 @@ type AddItemsProgressState = {
 
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
+const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 
 const formatTime = (ms?: number) => {
   if (ms === undefined) return '—';
@@ -90,6 +100,8 @@ const formatTime = (ms?: number) => {
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
+
+const isSongCategory = (category: PlayFileCategory) => category === 'sid' || category === 'mod';
 
 const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
@@ -112,6 +124,24 @@ const parseDurationInput = (value: string) => {
   const seconds = Number(trimmed);
   if (Number.isNaN(seconds)) return undefined;
   return Math.max(0, seconds * 1000);
+};
+
+const parseVolumeOption = (option: string) => {
+  const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : undefined;
+};
+
+const extractAudioMixerItems = (payload: Record<string, unknown> | undefined): AudioMixerItem[] => {
+  if (!payload) return [];
+  const categoryData = (payload as Record<string, any>)['Audio Mixer'] ?? payload;
+  const itemsData = (categoryData as Record<string, any>)?.items ?? categoryData;
+  if (!itemsData || typeof itemsData !== 'object') return [];
+  return Object.entries(itemsData)
+    .filter(([key]) => key !== 'errors')
+    .map(([name, config]) => ({
+      name,
+      ...normalizeConfigItem(config),
+    }));
 };
 
 const shuffleArray = <T,>(items: T[]) => {
@@ -144,6 +174,8 @@ const getSidSongCount = (buffer: ArrayBuffer) => {
 export default function PlayFilesPage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
+  const updateConfigBatch = useC64UpdateConfigBatch();
+  const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
   const uniqueId = status.deviceInfo?.unique_id || 'default';
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -187,6 +219,22 @@ export default function PlayFilesPage() {
   }, [flags.hvsc_enabled, isLoaded]);
   const hvscControlsEnabled = flags.hvsc_enabled || hvscFlagStorage;
 
+  const audioMixerItems = useMemo(() => extractAudioMixerItems(audioMixerCategory as Record<string, unknown> | undefined), [audioMixerCategory]);
+  const sidVolumeItems = useMemo(
+    () => audioMixerItems.filter((item) => isSidVolumeName(item.name)),
+    [audioMixerItems],
+  );
+  const volumeOptions = useMemo(() => {
+    const baseOptions = sidVolumeItems.find((item) => Array.isArray(item.options) && item.options.length)?.options ?? [];
+    return baseOptions
+      .map((option) => ({
+        option,
+        label: option.trim(),
+        numeric: parseVolumeOption(option),
+      }))
+      .filter((entry): entry is { option: string; label: string; numeric: number } => entry.numeric !== undefined);
+  }, [sidVolumeItems]);
+
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscLoading, setHvscLoading] = useState(false);
   const [hvscProgress, setHvscProgress] = useState<number | null>(null);
@@ -198,16 +246,99 @@ export default function PlayFilesPage() {
   const [hvscFolders, setHvscFolders] = useState<string[]>([]);
   const [hvscSongs, setHvscSongs] = useState<Array<{ id: number; virtualPath: string; fileName: string; durationSeconds?: number | null }>>([]);
   const [selectedHvscFolder, setSelectedHvscFolder] = useState('/');
+  const [volumeIndex, setVolumeIndex] = useState(0);
+  const [volumeMuted, setVolumeMuted] = useState(false);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
   const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
   const addItemsStartedAtRef = useRef<number | null>(null);
+  const manualMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
+  const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
   }, []);
+
+  const defaultVolumeIndex = useMemo(() => {
+    const zeroIndex = volumeOptions.findIndex((option) => option.numeric === 0);
+    return zeroIndex >= 0 ? zeroIndex : 0;
+  }, [volumeOptions]);
+
+  const resolveVolumeIndex = useCallback((value: string | number) => {
+    if (!volumeOptions.length) return defaultVolumeIndex;
+    const stringValue = typeof value === 'string' ? value.trim() : value.toString();
+    const directIndex = volumeOptions.findIndex((option) => option.option.trim() === stringValue);
+    if (directIndex >= 0) return directIndex;
+    const numeric = typeof value === 'number' ? value : parseVolumeOption(value);
+    if (numeric !== undefined) {
+      const numericIndex = volumeOptions.findIndex((option) => option.numeric === numeric);
+      if (numericIndex >= 0) return numericIndex;
+    }
+    return defaultVolumeIndex;
+  }, [defaultVolumeIndex, volumeOptions]);
+
+  const buildSidVolumeSnapshot = useCallback((items: AudioMixerItem[]) => {
+    const snapshot: Record<string, string | number> = {};
+    items.forEach((item) => {
+      snapshot[item.name] = item.value;
+    });
+    return snapshot;
+  }, []);
+
+  const buildSidMuteUpdates = useCallback((items: AudioMixerItem[]) => {
+    const updates: Record<string, string | number> = {};
+    items.forEach((item) => {
+      updates[item.name] = resolveAudioMixerMuteValue(item.options);
+    });
+    return updates;
+  }, []);
+
+  const applyAudioMixerUpdates = useCallback(async (updates: Record<string, string | number>, context: string) => {
+    if (!Object.keys(updates).length) return;
+    try {
+      await updateConfigBatch.mutateAsync({ category: 'Audio Mixer', updates });
+    } catch (error) {
+      addErrorLog(`${context} audio mixer update failed`, { error: (error as Error).message });
+      toast({
+        title: 'Audio mixer update failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  }, [updateConfigBatch]);
+
+  const resolveSidVolumeItems = useCallback(async () => {
+    if (sidVolumeItems.length) return sidVolumeItems;
+    try {
+      const data = await getC64API().getCategory('Audio Mixer');
+      return extractAudioMixerItems(data as Record<string, unknown>).filter((item) => isSidVolumeName(item.name));
+    } catch (error) {
+      addErrorLog('Audio mixer lookup failed', { error: (error as Error).message });
+      return [];
+    }
+  }, [sidVolumeItems]);
+
+  useEffect(() => {
+    if (!sidVolumeItems.length || !volumeOptions.length) return;
+    const muteValues = sidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
+    const activeIndices: number[] = [];
+    sidVolumeItems.forEach((item, index) => {
+      if (item.value === muteValues[index]) return;
+      activeIndices.push(resolveVolumeIndex(item.value));
+    });
+    if (!activeIndices.length) {
+      setVolumeMuted(true);
+      setVolumeIndex(defaultVolumeIndex);
+      return;
+    }
+    setVolumeMuted(false);
+    const counts = new Map<number, number>();
+    activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
+    const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
+    setVolumeIndex(nextIndex);
+  }, [defaultVolumeIndex, resolveVolumeIndex, sidVolumeItems, volumeOptions]);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -551,13 +682,21 @@ export default function PlayFilesPage() {
   }, [currentIndex, isPaused, isPlaying]);
 
   const playlistItemDuration = useCallback(
-    (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
+    (item: PlaylistItem, index: number) => {
+      const base = index === currentIndex ? durationMs ?? item.durationMs : item.durationMs;
+      if (isSongCategory(item.category)) {
+        return base ?? DEFAULT_SONG_DURATION_MS;
+      }
+      return base;
+    },
     [currentIndex, durationMs],
   );
 
   const currentItem = playlist[currentIndex];
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
+  const canControlVolume = sidVolumeItems.length > 0 && volumeOptions.length > 0;
+  const volumeLabel = volumeOptions[volumeIndex]?.label ?? '—';
   const subsongCount = currentItem?.subsongCount ?? 1;
   const songNrValue = Number(songNrInput);
   const resolvedSongNr = Number.isNaN(songNrValue) || songNrInput.trim() === '' ? 1 : songNrValue;
@@ -642,18 +781,20 @@ export default function PlayFilesPage() {
       const songlengths = await loadSonglengthsForPath(filePath);
       if (songlengths?.pathToSeconds.has(filePath)) {
         const seconds = songlengths.pathToSeconds.get(filePath);
-        return { durationMs: seconds ? seconds * 1000 : undefined, subsongCount } as const;
+        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : DEFAULT_SONG_DURATION_MS;
+        return { durationMs, subsongCount } as const;
       }
 
       const md5 = await computeSidMd5(buffer);
       const md5Duration = songlengths?.md5ToSeconds.get(md5);
-      if (md5Duration) {
+      if (md5Duration !== undefined && md5Duration !== null) {
         return { durationMs: md5Duration * 1000, subsongCount } as const;
       }
       const seconds = await getHvscDurationByMd5Seconds(md5);
-      return { durationMs: seconds ? seconds * 1000 : undefined, subsongCount } as const;
+      const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : DEFAULT_SONG_DURATION_MS;
+      return { durationMs, subsongCount } as const;
     } catch {
-      return { durationMs: override, subsongCount: undefined } as const;
+      return { durationMs: override ?? DEFAULT_SONG_DURATION_MS, subsongCount: undefined } as const;
     }
   }, [durationInput, loadSonglengthsForPath]);
 
@@ -664,7 +805,7 @@ export default function PlayFilesPage() {
         const filePath = getLocalFilePath(item.request.file);
         const songlengths = await loadSonglengthsForPath(filePath);
         const seconds = songlengths?.pathToSeconds.get(filePath);
-        if (!seconds) return item;
+        if (seconds === undefined || seconds === null) return item;
         return { ...item, durationMs: seconds * 1000 };
       }),
     );
@@ -750,7 +891,10 @@ export default function PlayFilesPage() {
     setElapsedMs(0);
     playedClockRef.current.start(now, false);
     setPlayedMs(playedClockRef.current.current(now));
-    const resolvedDuration = durationOverride ?? item.durationMs;
+    const resolvedDurationBase = durationOverride ?? item.durationMs;
+    const resolvedDuration = isSongCategory(item.category)
+      ? resolvedDurationBase ?? DEFAULT_SONG_DURATION_MS
+      : resolvedDurationBase;
     setDurationMs(resolvedDuration);
     if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
       setPlaylist((prev) =>
@@ -817,14 +961,32 @@ export default function PlayFilesPage() {
     const api = getC64API();
     try {
       if (isPaused) {
+        const resumeItems = await resolveSidVolumeItems();
+        const resumeSnapshot = pauseMuteSnapshotRef.current;
+        const wasMuted = resumeSnapshot && resumeItems.length
+          ? resumeItems.every((item) => resumeSnapshot[item.name] === resolveAudioMixerMuteValue(item.options))
+          : false;
+        if (pauseMuteSnapshotRef.current && resumeItems.length) {
+          await applyAudioMixerUpdates(pauseMuteSnapshotRef.current, 'Resume');
+        }
         await api.machineResume();
+        pauseMuteSnapshotRef.current = null;
         setIsPaused(false);
+        setVolumeMuted(wasMuted);
         const now = Date.now();
         trackStartedAtRef.current = now - elapsedMs;
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
       } else {
+        const pauseItems = await resolveSidVolumeItems();
+        if (pauseItems.length) {
+          pauseMuteSnapshotRef.current = buildSidVolumeSnapshot(pauseItems);
+        }
         await api.machinePause();
+        if (pauseItems.length) {
+          await applyAudioMixerUpdates(buildSidMuteUpdates(pauseItems), 'Pause');
+          setVolumeMuted(true);
+        }
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -837,7 +999,38 @@ export default function PlayFilesPage() {
         variant: 'destructive',
       });
     }
-  }, [elapsedMs, isPaused, isPlaying]);
+  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, resolveSidVolumeItems]);
+
+  const handleVolumeCommit = useCallback(async (nextIndex: number) => {
+    if (!volumeOptions.length || !sidVolumeItems.length) return;
+    const target = volumeOptions[nextIndex]?.option;
+    if (!target) return;
+    const updates: Record<string, string | number> = {};
+    sidVolumeItems.forEach((item) => {
+      const muteValue = resolveAudioMixerMuteValue(item.options);
+      if (item.value === muteValue) return;
+      updates[item.name] = target;
+    });
+    manualMuteSnapshotRef.current = null;
+    setVolumeMuted(false);
+    await applyAudioMixerUpdates(updates, 'Volume');
+  }, [applyAudioMixerUpdates, sidVolumeItems, volumeOptions]);
+
+  const handleToggleMute = useCallback(async () => {
+    const items = await resolveSidVolumeItems();
+    if (!items.length) return;
+    if (!volumeMuted) {
+      manualMuteSnapshotRef.current = buildSidVolumeSnapshot(items);
+      setVolumeMuted(true);
+      await applyAudioMixerUpdates(buildSidMuteUpdates(items), 'Mute');
+      return;
+    }
+    const snapshot = manualMuteSnapshotRef.current ?? buildSidVolumeSnapshot(items);
+    const wasMuted = items.every((item) => snapshot[item.name] === resolveAudioMixerMuteValue(item.options));
+    setVolumeMuted(wasMuted);
+    await applyAudioMixerUpdates(snapshot, 'Unmute');
+    manualMuteSnapshotRef.current = null;
+  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, resolveSidVolumeItems, volumeMuted]);
 
   const handleNext = useCallback(async () => {
     if (!playlist.length) return;
@@ -1148,51 +1341,79 @@ export default function PlayFilesPage() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => void handlePrevious()}
-                disabled={!canTransport || !hasPrev}
-                data-testid="playlist-prev"
-              >
-                <SkipBack className="h-4 w-4 mr-1" />
-                Prev
-              </Button>
-              <Button
-                variant={isPlaying ? 'destructive' : 'default'}
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => (isPlaying ? void handleStop() : void handlePlay())}
-                disabled={!hasPlaylist || isPlaylistLoading}
-                data-testid="playlist-play"
-              >
-                {isPlaying ? <Square className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                {isPlaying ? 'Stop' : 'Play'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => void handlePauseResume()}
-                disabled={!canPause || isPlaylistLoading}
-                data-testid="playlist-pause"
-              >
-                {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
-                {isPaused ? 'Resume' : 'Pause'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => void handleNext()}
-                disabled={!canTransport || !hasNext}
-                data-testid="playlist-next"
-              >
-                <SkipForward className="h-4 w-4 mr-1" />
-                Next
-              </Button>
+            <div className="flex flex-col gap-3 w-full sm:w-auto">
+              <div className="grid grid-cols-4 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handlePrevious()}
+                  disabled={!canTransport || !hasPrev}
+                  data-testid="playlist-prev"
+                >
+                  <SkipBack className="h-4 w-4 mr-1" />
+                  Prev
+                </Button>
+                <Button
+                  variant={isPlaying ? 'destructive' : 'default'}
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => (isPlaying ? void handleStop() : void handlePlay())}
+                  disabled={!hasPlaylist || isPlaylistLoading}
+                  data-testid="playlist-play"
+                >
+                  {isPlaying ? <Square className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+                  {isPlaying ? 'Stop' : 'Play'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handlePauseResume()}
+                  disabled={!canPause || isPlaylistLoading}
+                  data-testid="playlist-pause"
+                >
+                  {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
+                  {isPaused ? 'Resume' : 'Pause'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handleNext()}
+                  disabled={!canTransport || !hasNext}
+                  data-testid="playlist-next"
+                >
+                  <SkipForward className="h-4 w-4 mr-1" />
+                  Next
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handleToggleMute()}
+                  disabled={!canControlVolume || updateConfigBatch.isPending}
+                  data-testid="volume-mute"
+                >
+                  {volumeMuted ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
+                  {volumeMuted ? 'Unmute' : 'Mute'}
+                </Button>
+                <div className="flex flex-1 items-center gap-3 min-w-[160px] sm:min-w-[200px]">
+                  <Slider
+                    min={0}
+                    max={Math.max(0, volumeOptions.length - 1)}
+                    step={1}
+                    value={[volumeIndex]}
+                    onValueChange={(value) => setVolumeIndex(value[0] ?? 0)}
+                    onValueCommit={(value) => void handleVolumeCommit(value[0] ?? 0)}
+                    disabled={!canControlVolume || updateConfigBatch.isPending || volumeMuted}
+                    data-testid="volume-slider"
+                  />
+                  <span className="text-xs text-muted-foreground w-[52px] text-right">{volumeLabel}</span>
+                </div>
+              </div>
             </div>
           </div>
 

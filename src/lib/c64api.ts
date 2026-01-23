@@ -1,7 +1,8 @@
 // C64 Ultimate REST API Client
 
 import { CapacitorHttp } from '@capacitor/core';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
+import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
@@ -135,6 +136,17 @@ export class C64API {
     }
   }
 
+  private logRestCall(method: string, path: string, status: number | 'error', startedAt: number) {
+    const endedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const latencyMs = Math.max(0, Math.round(endedAt - startedAt));
+    addLog('debug', 'C64 API request', {
+      method,
+      path,
+      status,
+      latencyMs,
+    });
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit = {}
@@ -146,10 +158,12 @@ export class C64API {
     };
 
     const url = `${this.baseUrl}${path}`;
+    const method = (options.method || 'GET').toString().toUpperCase();
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
 
     try {
       if (isNativePlatform()) {
-        const method = (options.method || 'GET') as string;
         const body = options.body ? options.body : undefined;
         const nativeResponse = await CapacitorHttp.request({
           url,
@@ -158,6 +172,7 @@ export class C64API {
           data: typeof body === 'string' ? JSON.parse(body) : body,
         });
 
+        status = nativeResponse.status;
         if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
           throw new Error(`HTTP ${nativeResponse.status}`);
         }
@@ -179,6 +194,7 @@ export class C64API {
         headers,
       });
 
+      status = response.status;
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -191,6 +207,8 @@ export class C64API {
         error: (error as Error).message,
       });
       throw error;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
     }
   }
 
@@ -223,28 +241,32 @@ export class C64API {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
     const valEncoded = encodeURIComponent(String(value));
-    return this.request(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
-      method: 'PUT',
-    });
+    return scheduleConfigWrite(() =>
+      this.request(`/v1/configs/${catEncoded}/${itemEncoded}?value=${valEncoded}`, {
+        method: 'PUT',
+      }),
+    );
   }
 
   async saveConfig(): Promise<{ errors: string[] }> {
-    return this.request('/v1/configs:save_to_flash', { method: 'PUT' });
+    return scheduleConfigWrite(() => this.request('/v1/configs:save_to_flash', { method: 'PUT' }));
   }
 
   async loadConfig(): Promise<{ errors: string[] }> {
-    return this.request('/v1/configs:load_from_flash', { method: 'PUT' });
+    return scheduleConfigWrite(() => this.request('/v1/configs:load_from_flash', { method: 'PUT' }));
   }
 
   async resetConfig(): Promise<{ errors: string[] }> {
-    return this.request('/v1/configs:reset_to_default', { method: 'PUT' });
+    return scheduleConfigWrite(() => this.request('/v1/configs:reset_to_default', { method: 'PUT' }));
   }
 
   async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
-    return this.request('/v1/configs', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
+    return scheduleConfigWrite(() =>
+      this.request('/v1/configs', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    );
   }
 
   // Machine control endpoints
@@ -327,14 +349,23 @@ export class C64API {
       path = `${path}?${params.toString()}`;
     }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        ...this.buildAuthHeaders(),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: image,
-    });
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          ...this.buildAuthHeaders(),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: image,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -389,11 +420,21 @@ export class C64API {
       form.append('file', sslFile, (sslFile as any).name ?? 'songlengths.ssl');
     }
 
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers,
-      body: form,
-    });
+    const path = `${url.pathname}${url.search}`;
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(url.toString(), {
+        method,
+        headers,
+        body: form,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -409,14 +450,24 @@ export class C64API {
   }
 
   async playModUpload(modFile: Blob): Promise<{ errors: string[] }> {
-    const response = await fetch(`${this.baseUrl}/v1/runners:modplay`, {
-      method: 'POST',
-      headers: {
-        ...this.buildAuthHeaders(),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: modFile,
-    });
+    const path = '/v1/runners:modplay';
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          ...this.buildAuthHeaders(),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: modFile,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -432,14 +483,24 @@ export class C64API {
   }
 
   async runPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
-    const response = await fetch(`${this.baseUrl}/v1/runners:run_prg`, {
-      method: 'POST',
-      headers: {
-        ...this.buildAuthHeaders(),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: prgFile,
-    });
+    const path = '/v1/runners:run_prg';
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          ...this.buildAuthHeaders(),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: prgFile,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -455,14 +516,24 @@ export class C64API {
   }
 
   async loadPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
-    const response = await fetch(`${this.baseUrl}/v1/runners:load_prg`, {
-      method: 'POST',
-      headers: {
-        ...this.buildAuthHeaders(),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: prgFile,
-    });
+    const path = '/v1/runners:load_prg';
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          ...this.buildAuthHeaders(),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: prgFile,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -478,14 +549,24 @@ export class C64API {
   }
 
   async runCartridgeUpload(crtFile: Blob): Promise<{ errors: string[] }> {
-    const response = await fetch(`${this.baseUrl}/v1/runners:run_crt`, {
-      method: 'POST',
-      headers: {
-        ...this.buildAuthHeaders(),
-        'Content-Type': 'application/octet-stream',
-      },
-      body: crtFile,
-    });
+    const path = '/v1/runners:run_crt';
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          ...this.buildAuthHeaders(),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: crtFile,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);

@@ -1,4 +1,6 @@
-export type LogLevel = 'info' | 'warn' | 'error';
+import { loadDebugLoggingEnabled } from '@/lib/config/appSettings';
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type LogEntry = {
   id: string;
@@ -30,6 +32,7 @@ const writeLogs = (logs: LogEntry[]) => {
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
+  if (level === 'debug' && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {
     id: buildId(),
     level,

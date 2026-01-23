@@ -3,7 +3,7 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks } from './uiMocks';
+import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
@@ -70,7 +70,7 @@ test.describe('Playback file browser', () => {
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    server = await createMockC64Server({});
+    server = await createMockC64Server(uiFixtures.configState);
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,
@@ -175,7 +175,7 @@ test.describe('Playback file browser', () => {
     }).toBeGreaterThanOrEqual(2);
   });
 
-  test('playback counters show dashes when durations are unknown', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('playback counters fall back to default song durations when unknown', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const seededItems = [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Unknown_1.sid', name: 'Unknown_1.sid' },
       { source: 'ultimate' as const, path: '/Usb0/Demos/Unknown_2.sid', name: 'Unknown_2.sid', durationMs: 4000 },
@@ -186,8 +186,8 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'play-open');
 
     const counters = page.getByTestId('playback-counters');
-    await expect(counters).toContainText('Total: —');
-    await expect(counters).toContainText('Remaining: —');
+    await expect(counters).toContainText('Total: 3:04');
+    await expect(counters).toContainText('Remaining: 3:04');
   });
 
   test('playback controls are stateful and show current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -254,6 +254,79 @@ test.describe('Playback file browser', () => {
     await playButton.click();
     await expect(playButton).toContainText('Play');
     await snap(page, testInfo, 'playback-stopped');
+  });
+
+  test('volume slider updates non-muted SID outputs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const initialState = server.getState()['Audio Mixer'];
+
+    await page.goto('/play');
+    await expect(page.getByText('Connected')).toBeVisible();
+    const slider = page.getByTestId('volume-slider').getByRole('slider');
+    await expect(slider).toBeVisible();
+    await expect(page.getByTestId('volume-mute')).toBeEnabled();
+    await expect(slider).toBeEnabled();
+    await snap(page, testInfo, 'volume-slider-ready');
+
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await slider.press('ArrowRight');
+    await snap(page, testInfo, 'volume-slider-adjusted');
+
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).not.toBe(initialState['Vol UltiSid 2'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).not.toBe(initialState['Vol Socket 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).not.toBe(initialState['Vol Socket 2'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
+    await snap(page, testInfo, 'volume-updated');
+  });
+
+  test('pause mutes SID outputs and resume restores them', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const initialState = server.getState()['Audio Mixer'];
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const playButton = page.getByTestId('playlist-play');
+    const pauseButton = page.getByTestId('playlist-pause');
+
+    await playButton.click();
+    await expect(pauseButton).toBeEnabled();
+    await snap(page, testInfo, 'play-started');
+
+    await pauseButton.click();
+    await snap(page, testInfo, 'paused');
+
+    await expect.poll(() => {
+      const audio = server.getState()['Audio Mixer'];
+      return [
+        audio['Vol UltiSid 1'].value,
+        audio['Vol UltiSid 2'].value,
+        audio['Vol Socket 1'].value,
+        audio['Vol Socket 2'].value,
+      ].every((value) => value === 'OFF');
+    }).toBe(true);
+    await snap(page, testInfo, 'sid-muted');
+
+    await pauseButton.click();
+    await snap(page, testInfo, 'resumed');
+
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).toBe(initialState['Vol UltiSid 2'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe(initialState['Vol Socket 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe(initialState['Vol Socket 2'].value);
+
+    const pauseIndex = server.requests.findIndex((req) => req.url.includes('/v1/machine:pause'));
+    const resumeIndex = server.requests.findIndex((req) => req.url.includes('/v1/machine:resume'));
+    const configIndices = server.requests
+      .map((req, index) => (req.url.includes('/v1/configs') ? index : -1))
+      .filter((index) => index >= 0);
+    const configBetweenPauseAndResume = configIndices.filter((index) => index > pauseIndex && index < resumeIndex);
+    expect(pauseIndex).toBeGreaterThan(-1);
+    expect(resumeIndex).toBeGreaterThan(-1);
+    expect(configBetweenPauseAndResume.length).toBeGreaterThan(0);
+    await snap(page, testInfo, 'sid-restored');
   });
 
   test('native folder picker adds local files to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {

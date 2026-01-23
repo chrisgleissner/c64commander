@@ -11,6 +11,7 @@ describe('logging', () => {
     window.addEventListener('c64u-logs-updated', handler as EventListener);
 
     addLog('info', 'hello');
+    addLog('debug', 'hidden');
     addErrorLog('boom', { code: 500 });
 
     const logs = getLogs();
@@ -29,5 +30,12 @@ describe('logging', () => {
 
     clearLogs();
     expect(getLogs()).toHaveLength(0);
+  });
+
+  it('records debug logs when enabled', () => {
+    localStorage.setItem('c64u_debug_logging_enabled', '1');
+    addLog('debug', 'verbose');
+    expect(getLogs()).toHaveLength(1);
+    expect(getLogs()[0].message).toBe('verbose');
   });
 });

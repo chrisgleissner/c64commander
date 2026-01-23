@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/slider';
 import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -37,6 +38,13 @@ import { useMockMode } from '@/hooks/useMockMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
+import {
+  clampConfigWriteIntervalMs,
+  loadConfigWriteIntervalMs,
+  loadDebugLoggingEnabled,
+  saveConfigWriteIntervalMs,
+  saveDebugLoggingEnabled,
+} from '@/lib/config/appSettings';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -63,6 +71,8 @@ export default function SettingsPage() {
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
+  const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
+  const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const devTapTimestamps = useRef<number[]>([]);
 
   useEffect(() => {
@@ -84,6 +94,21 @@ export default function SettingsPage() {
     };
     window.addEventListener('c64u-logs-updated', handler);
     return () => window.removeEventListener('c64u-logs-updated', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { key?: string; value?: unknown } | undefined;
+      if (!detail?.key) return;
+      if (detail.key === 'c64u_debug_logging_enabled') {
+        setDebugLoggingEnabled(Boolean(detail.value));
+      }
+      if (detail.key === 'c64u_config_write_min_interval_ms') {
+        setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
+      }
+    };
+    window.addEventListener('c64u-app-settings-updated', handler);
+    return () => window.removeEventListener('c64u-app-settings-updated', handler);
   }, []);
 
   const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
@@ -263,6 +288,7 @@ export default function SettingsPage() {
               variant="outline"
               onClick={() => refetch()}
               disabled={status.isConnecting}
+              aria-label="Refresh connection"
             >
               <RefreshCw className={`h-4 w-4 ${status.isConnecting ? 'animate-spin' : ''}`} />
             </Button>
@@ -300,11 +326,50 @@ export default function SettingsPage() {
             <h2 className="font-medium">Diagnostics</h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-2">
+          <div className="space-y-4">
             <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-2" />
               Logs
             </Button>
+
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="debug-logging" className="font-medium">Debug REST logging</Label>
+                <p className="text-xs text-muted-foreground">
+                  Records every REST call with method, path, status, and latency.
+                </p>
+              </div>
+              <Checkbox
+                id="debug-logging"
+                checked={debugLoggingEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setDebugLoggingEnabled(enabled);
+                  saveDebugLoggingEnabled(enabled);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="config-write-interval" className="font-medium">
+                  Config write spacing
+                </Label>
+                <span className="text-xs text-muted-foreground">{configWriteIntervalMs} ms</span>
+              </div>
+              <Slider
+                id="config-write-interval"
+                min={0}
+                max={2000}
+                step={100}
+                value={[configWriteIntervalMs]}
+                onValueChange={(value) => setConfigWriteIntervalMs(clampConfigWriteIntervalMs(value[0] ?? 0))}
+                onValueCommit={(value) => saveConfigWriteIntervalMs(value[0] ?? 0)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum delay between consecutive config write calls. Default 500 ms.
+              </p>
+            </div>
           </div>
         </motion.div>
 
@@ -527,7 +592,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium">{entry.message}</p>
                     <p className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</p>
                     {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                      <pre className="mt-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     )}
@@ -546,7 +611,7 @@ export default function SettingsPage() {
                       {entry.level.toUpperCase()} · {new Date(entry.timestamp).toLocaleString()}
                     </p>
                     {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                      <pre className="mt-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     )}
