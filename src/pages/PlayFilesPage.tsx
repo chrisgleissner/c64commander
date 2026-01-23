@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
+import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { useC64Category, useC64Connection, useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
@@ -17,6 +18,7 @@ import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
 import { getC64API } from '@/lib/c64api';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
+import { buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
 import { PlaybackClock } from '@/lib/playback/playbackClock';
@@ -30,6 +32,7 @@ import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { getPlatform } from '@/lib/native/platform';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -79,14 +82,6 @@ type AudioMixerItem = {
   name: string;
   value: string | number;
   options?: string[];
-};
-
-type AddItemsProgressState = {
-  status: 'idle' | 'scanning' | 'error' | 'done';
-  count: number;
-  elapsedMs: number;
-  total: number | null;
-  message: string | null;
 };
 
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
@@ -204,8 +199,13 @@ export default function PlayFilesPage() {
     total: null,
     message: null,
   });
+  const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
+  const addItemsOverlayStartedAtRef = useRef<number | null>(null);
+  const addItemsOverlayActiveRef = useRef(false);
+  const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const { limit: listPreviewLimit } = useListPreviewLimit();
+  const isAndroid = getPlatform() === 'android';
 
   const { flags, isLoaded } = useFeatureFlags();
   const [hvscFlagStorage, setHvscFlagStorage] = useState(false);
@@ -368,6 +368,12 @@ export default function PlayFilesPage() {
   }, [addItemsProgress.status]);
 
   useEffect(() => {
+    if (browserOpen) {
+      setAddItemsSurface('dialog');
+    }
+  }, [browserOpen]);
+
+  useEffect(() => {
     songlengthsCacheRef.current.clear();
   }, [playlist, songlengthsFiles]);
 
@@ -434,10 +440,35 @@ export default function PlayFilesPage() {
 
   const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(uniqueId), [uniqueId]);
 
+  const handleAutoConfirmStart = useCallback(() => {
+    setAddItemsSurface('page');
+    setIsAddingItems(true);
+    setShowAddItemsOverlay(true);
+    addItemsOverlayStartedAtRef.current = Date.now();
+    addItemsOverlayActiveRef.current = true;
+  }, []);
+
   useEffect(() => {
     if (browserOpen) return;
+    if (addItemsProgress.status === 'scanning') return;
     setAddItemsProgress({ status: 'idle', count: 0, elapsedMs: 0, total: null, message: null });
-  }, [browserOpen]);
+  }, [addItemsProgress.status, browserOpen]);
+
+  useEffect(() => {
+    if (browserOpen) return;
+    if (addItemsProgress.status !== 'scanning') return;
+    if (addItemsSurface !== 'page') {
+      setAddItemsSurface('page');
+    }
+  }, [addItemsProgress.status, addItemsSurface, browserOpen]);
+
+  useEffect(() => {
+    if (addItemsProgress.status === 'scanning') return;
+    if (addItemsSurface === 'page' && isAddingItems) return;
+    if (addItemsSurface !== 'dialog') {
+      setAddItemsSurface('dialog');
+    }
+  }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
@@ -447,6 +478,18 @@ export default function PlayFilesPage() {
       { label: 'C64 Ultimate', sources: [ultimateSource] },
       { label: 'This device', sources: localGroupSources },
     ];
+  }, [localSources]);
+
+  const localEntriesBySourceId = useMemo(() => {
+    const map = new Map<string, Map<string, { uri?: string | null; name: string }>>();
+    localSources.forEach((source) => {
+      const entriesMap = new Map<string, { uri?: string | null; name: string }>();
+      source.entries.forEach((entry) => {
+        entriesMap.set(normalizeSourcePath(entry.relativePath), { uri: entry.uri, name: entry.name });
+      });
+      map.set(source.id, entriesMap);
+    });
+    return map;
   }, [localSources]);
 
   const handleLocalSourceInput = useCallback((files: FileList | null) => {
@@ -479,8 +522,17 @@ export default function PlayFilesPage() {
   const handleAddFileSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
     addItemsStartedAtRef.current = startedAt;
+    if (!browserOpen) {
+      setAddItemsSurface('page');
+      if (!addItemsOverlayActiveRef.current) {
+        setShowAddItemsOverlay(true);
+        addItemsOverlayStartedAtRef.current = Date.now();
+        addItemsOverlayActiveRef.current = true;
+      }
+    }
     setIsAddingItems(true);
     setAddItemsProgress({ status: 'scanning', count: 0, elapsedMs: 0, total: null, message: 'Scanning…' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     let processed = 0;
     let lastUpdate = 0;
 
@@ -575,13 +627,20 @@ export default function PlayFilesPage() {
       }
       selectedFiles.forEach((file) => {
         if (!getPlayCategory(file.path)) return;
+        const normalizedPath = normalizeSourcePath(file.path);
+        const localEntry = source.type === 'local' ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
+        const localFile =
+          source.type === 'local'
+            ? resolveLocalRuntimeFile(source.id, normalizedPath)
+              || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri) : undefined)
+            : undefined;
         const playable: PlayableEntry = {
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
           name: file.name,
-          path: normalizeSourcePath(file.path),
+          path: normalizedPath,
           durationMs: undefined,
           sourceId: source.type === 'local' ? source.id : null,
-          file: source.type === 'local' ? resolveLocalRuntimeFile(source.id, file.path) : undefined,
+          file: localFile,
         };
         const item = buildPlaylistItem(playable);
         if (item) playlistItems.push(item);
@@ -593,6 +652,11 @@ export default function PlayFilesPage() {
         return false;
       }
 
+      const minDuration = addItemsSurface === 'page' ? 800 : 300;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < minDuration) {
+        await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
+      }
       setPlaylist((prev) => [...prev, ...playlistItems]);
       toast({ title: 'Items added', description: `${playlistItems.length} file(s) added to playlist.` });
       setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to playlist' }));
@@ -610,8 +674,19 @@ export default function PlayFilesPage() {
           elapsedMs: Date.now() - addItemsStartedAtRef.current!,
         }));
       }
+      if (addItemsOverlayActiveRef.current) {
+        const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? startedAt;
+        const minOverlayDuration = 800;
+        const overlayElapsed = Date.now() - overlayStartedAt;
+        if (overlayElapsed < minOverlayDuration) {
+          await new Promise((resolve) => setTimeout(resolve, minOverlayDuration - overlayElapsed));
+        }
+        setShowAddItemsOverlay(false);
+        addItemsOverlayStartedAtRef.current = null;
+        addItemsOverlayActiveRef.current = false;
+      }
     }
-  }, [buildPlaylistItem, recurseFolders]);
+  }, [addItemsSurface, browserOpen, buildPlaylistItem, localEntriesBySourceId, recurseFolders]);
 
 
   const refreshHvscStatus = useCallback(() => {
@@ -1595,8 +1670,20 @@ export default function PlayFilesPage() {
           allowFolderSelection
           isConfirming={isAddingItems}
           progress={addItemsProgress}
+          showProgressFooter={addItemsSurface === 'dialog'}
+          autoConfirmCloseBefore={isAndroid}
+          onAutoConfirmStart={handleAutoConfirmStart}
           autoConfirmLocalSource
         />
+
+        {!browserOpen ? (
+          <AddItemsProgressOverlay
+            progress={addItemsProgress}
+            title="Adding items"
+            testId="add-items-overlay"
+            visible={showAddItemsOverlay || addItemsProgress.status === 'scanning'}
+          />
+        ) : null}
 
         {hvscControlsEnabled && (
           <div className="space-y-4">

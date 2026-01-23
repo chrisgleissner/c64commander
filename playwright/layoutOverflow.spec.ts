@@ -162,6 +162,7 @@ test.describe('Layout overflow safeguards', () => {
   test('diagnostics dialog stays within viewport', async ({ page }, testInfo) => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'settings-open');
+    await expectNoHorizontalOverflow(page);
 
     await page.getByRole('button', { name: 'Logs' }).click();
     const dialog = page.getByRole('dialog');
@@ -212,6 +213,70 @@ test.describe('Layout overflow safeguards', () => {
     const durationDialog = page.getByRole('dialog');
     await expectDialogWithinViewport(page, durationDialog);
     await snap(page, testInfo, 'duration-dialog');
+    await page.keyboard.press('Escape');
+
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('primary pages avoid horizontal overflow', async ({ page }, testInfo) => {
+    const pages = [
+      { path: '/', label: 'home' },
+      { path: '/play', label: 'play' },
+      { path: '/disks', label: 'disks' },
+      { path: '/config', label: 'config' },
+      { path: '/settings', label: 'settings' },
+      { path: '/docs', label: 'docs' },
+    ];
+
+    for (const entry of pages) {
+      await page.goto(entry.path, { waitUntil: 'domcontentloaded' });
+      await snap(page, testInfo, `page-${entry.label}`);
+      await expectNoHorizontalOverflow(page);
+    }
+  });
+
+  test('disk dialogs stay within viewport', async ({ page }, testInfo) => {
+    await seedDiskLibrary(page, [
+      {
+        id: 'local:/Extremely/Long/Path/With/Deep/Structure/And-A-Super-Long-Disk-Name-That-Should-Not-Overflow-Device-Width.d64',
+        name: 'Super-Long-Disk-Name-That-Should-Not-Overflow-Device-Width.d64',
+        path: '/Extremely/Long/Path/With/Deep/Structure/And-A-Super-Long-Disk-Name-That-Should-Not-Overflow-Device-Width.d64',
+        location: 'local',
+        group: 'Group-With-An-Extra-Long-Name-For-Overflow-Testing',
+        importOrder: 1,
+      },
+    ]);
+
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'disks-open');
+    await expectNoHorizontalOverflow(page);
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    const addDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, addDialog);
+    await snap(page, testInfo, 'disks-add-items-dialog');
+    await page.keyboard.press('Escape');
+
+    const row = page.getByTestId('disk-row').first();
+    await row.getByRole('button', { name: 'Item actions' }).click();
+    await page.getByRole('menuitem', { name: 'Set group…' }).click();
+    const groupDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, groupDialog);
+    await snap(page, testInfo, 'disk-group-dialog');
+    await page.keyboard.press('Escape');
+
+    await row.getByRole('button', { name: 'Item actions' }).click();
+    await page.getByRole('menuitem', { name: 'Rename disk…' }).click();
+    const renameDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, renameDialog);
+    await snap(page, testInfo, 'disk-rename-dialog');
+    await page.keyboard.press('Escape');
+
+    await row.getByRole('button', { name: 'Item actions' }).click();
+    await page.getByRole('menuitem', { name: 'Remove from collection' }).click();
+    const deleteDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, deleteDialog);
+    await snap(page, testInfo, 'disk-delete-dialog');
     await page.keyboard.press('Escape');
 
     await expectNoHorizontalOverflow(page);

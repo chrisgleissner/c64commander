@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
+import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
@@ -12,14 +13,18 @@ import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { getC64API } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
+import { cn } from '@/lib/utils';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
+import { assignDiskGroupsByPrefix } from '@/lib/disks/diskGrouping';
+import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
-import type { SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
+import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
+import { getPlatform } from '@/lib/native/platform';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
@@ -85,6 +90,19 @@ export const HomeDiskManager = () => {
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
+    status: 'idle',
+    count: 0,
+    elapsedMs: 0,
+    total: null,
+    message: null,
+  });
+  const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
+  const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
+  const [isAddingItems, setIsAddingItems] = useState(false);
+  const addItemsStartedAtRef = useRef<number | null>(null);
+  const addItemsOverlayStartedAtRef = useRef<number | null>(null);
+  const addItemsOverlayActiveRef = useRef(false);
   const [groupDialogDisk, setGroupDialogDisk] = useState<DiskEntry | null>(null);
   const [groupName, setGroupName] = useState('');
   const [renameDialogDisk, setRenameDialogDisk] = useState<DiskEntry | null>(null);
@@ -95,6 +113,7 @@ export const HomeDiskManager = () => {
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const { limit: listPreviewLimit } = useListPreviewLimit();
+  const isAndroid = getPlatform() === 'android';
 
   const api = getC64API();
   const queryClient = useQueryClient();
@@ -141,15 +160,63 @@ export const HomeDiskManager = () => {
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
+  }, [toast]);
+
+  useEffect(() => {
+    if (addItemsProgress.status !== 'scanning') return undefined;
+    const interval = window.setInterval(() => {
+      const startedAt = addItemsStartedAtRef.current ?? Date.now();
+      setAddItemsProgress((prev) => ({
+        ...prev,
+        elapsedMs: Date.now() - startedAt,
+      }));
+    }, 500);
+    return () => window.clearInterval(interval);
+  }, [addItemsProgress.status]);
+
+  useEffect(() => {
+    if (browserOpen) {
+      setAddItemsSurface('dialog');
+    }
+  }, [browserOpen]);
+
+  useEffect(() => {
+    if (browserOpen) return;
+    if (addItemsProgress.status === 'scanning') return;
+    setAddItemsProgress({ status: 'idle', count: 0, elapsedMs: 0, total: null, message: null });
+  }, [addItemsProgress.status, browserOpen]);
+
+  useEffect(() => {
+    if (browserOpen) return;
+    if (addItemsProgress.status !== 'scanning') return;
+    if (addItemsSurface !== 'page') {
+      setAddItemsSurface('page');
+    }
+  }, [addItemsProgress.status, addItemsSurface, browserOpen]);
+
+  useEffect(() => {
+    if (addItemsProgress.status === 'scanning') return;
+    if (addItemsSurface === 'page' && isAddingItems) return;
+    if (addItemsSurface !== 'dialog') {
+      setAddItemsSurface('dialog');
+    }
+  }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
+
+  const handleAutoConfirmStart = useCallback(() => {
+    setAddItemsSurface('page');
+    setIsAddingItems(true);
+    setShowAddItemsOverlay(true);
+    addItemsOverlayStartedAtRef.current = Date.now();
+    addItemsOverlayActiveRef.current = true;
   }, []);
 
-  const showNoDiskWarning = () => {
+  const showNoDiskWarning = useCallback(() => {
     toast({
       title: 'No disks found',
       description: 'Found no disk file.',
       variant: 'destructive',
     });
-  };
+  }, []);
 
   const toggleSelectAll = () => {
     setSelectedDiskIds(allSelected ? new Set() : new Set(allDiskIds));
@@ -175,6 +242,17 @@ export const HomeDiskManager = () => {
   const allDiskIds = useMemo(() => diskLibrary.disks.map((disk) => disk.id), [diskLibrary.disks]);
   const selectedCount = selectedDiskIds.size;
   const allSelected = selectedCount > 0 && selectedCount === allDiskIds.length;
+
+  const groupOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    diskLibrary.disks.forEach((disk) => {
+      if (!disk.group) return;
+      counts.set(disk.group, (counts.get(disk.group) ?? 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, count]) => ({ name, count, color: pickDiskGroupColor(name) }));
+  }, [diskLibrary.disks]);
   const filterText = diskLibrary.filter.trim().toLowerCase();
   const sortedDisks = useMemo(
     () => diskLibrary.disks.slice().sort((a, b) => a.path.localeCompare(b.path)),
@@ -340,10 +418,74 @@ export const HomeDiskManager = () => {
 
   const handleAddDiskSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     try {
+      const startedAt = Date.now();
+      addItemsStartedAtRef.current = startedAt;
+      if (!browserOpen) {
+        setAddItemsSurface('page');
+        if (!addItemsOverlayActiveRef.current) {
+          setShowAddItemsOverlay(true);
+          addItemsOverlayStartedAtRef.current = Date.now();
+          addItemsOverlayActiveRef.current = true;
+        }
+      }
+      setIsAddingItems(true);
+      setAddItemsProgress({ status: 'scanning', count: 0, elapsedMs: 0, total: null, message: 'Scanning…' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      let processed = 0;
+      let lastUpdate = 0;
+
+      const updateProgress = (delta: number) => {
+        processed += delta;
+        const now = Date.now();
+        if (now - lastUpdate < 120) return;
+        lastUpdate = now;
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          count: processed,
+          elapsedMs: now - startedAt,
+        }));
+      };
+
+      const collectRecursive = async (rootPath: string) => {
+        const queue = [rootPath];
+        const visited = new Set<string>();
+        const files: SourceEntry[] = [];
+        const maxConcurrent = 3;
+        const pending = new Set<Promise<void>>();
+
+        const processPath = async (path: string) => {
+          if (!path || visited.has(path)) return;
+          visited.add(path);
+          const entries = await source.listEntries(path);
+          entries.forEach((entry) => {
+            if (entry.type === 'dir') {
+              queue.push(entry.path);
+            } else {
+              files.push(entry);
+            }
+          });
+          updateProgress(entries.filter((entry) => entry.type === 'file').length);
+        };
+
+        while (queue.length || pending.size) {
+          while (queue.length && pending.size < maxConcurrent) {
+            const nextPath = queue.shift();
+            if (!nextPath) continue;
+            const job = processPath(nextPath).finally(() => pending.delete(job));
+            pending.add(job);
+          }
+          if (pending.size) {
+            await Promise.race(pending);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        }
+        return files;
+      };
+
       const files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
       for (const selection of selections) {
         if (selection.type === 'dir') {
-          const nested = await source.listFilesRecursive(selection.path);
+          const nested = await collectRecursive(selection.path);
           nested.forEach((entry) => {
             if (entry.type !== 'file') return;
             files.push({ path: entry.path, name: entry.name, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt, sourceId: source.id });
@@ -351,25 +493,33 @@ export const HomeDiskManager = () => {
         } else {
           const entryPath = normalizeSourcePath(selection.path);
           files.push({ path: entryPath, name: selection.name, sourceId: source.id });
+          updateProgress(1);
         }
       }
 
       const diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
       if (!diskCandidates.length) {
+        setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No disk files found.' }));
         showNoDiskWarning();
         return false;
       }
 
+      const groupMap = assignDiskGroupsByPrefix(
+        diskCandidates.map((entry) => ({ path: normalizeDiskPath(entry.path), name: entry.name })),
+      );
+
       const runtimeFiles: Record<string, File> = {};
       const disks = diskCandidates.map((entry, index) => {
         const normalized = normalizeDiskPath(entry.path);
-        const groupName = getLeafFolderName(normalized);
+        const autoGroup = groupMap.get(normalized);
+        const fallbackGroup = getLeafFolderName(normalized);
+        const groupName = autoGroup ?? fallbackGroup ?? null;
         const localSource = source.type === 'local' ? localSourcesById.get(source.id) : null;
         const localEntry = localSource?.entries.find((item) => normalizeSourcePath(item.relativePath) === normalized);
         const diskEntry = createDiskEntry({
           path: normalized,
           location: source.type === 'ultimate' ? 'ultimate' : 'local',
-          group: groupName ?? null,
+          group: groupName,
           localUri: localEntry?.uri ?? null,
           sizeBytes: entry.sizeBytes ?? null,
           modifiedAt: entry.modifiedAt ?? null,
@@ -382,18 +532,45 @@ export const HomeDiskManager = () => {
         return diskEntry;
       });
 
+      const minDuration = addItemsSurface === 'page' ? 800 : 300;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < minDuration) {
+        await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
+      }
+
       diskLibrary.addDisks(disks, runtimeFiles);
+      setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to library' }));
       toast({ title: 'Items added', description: `${disks.length} disk(s) added to library.` });
       return true;
     } catch (error) {
+      setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
       toast({
         title: 'Add items failed',
         description: (error as Error).message,
         variant: 'destructive',
       });
       return false;
+    } finally {
+      setIsAddingItems(false);
+      if (addItemsStartedAtRef.current) {
+        setAddItemsProgress((prev) => ({
+          ...prev,
+          elapsedMs: Date.now() - addItemsStartedAtRef.current!,
+        }));
+      }
+      if (addItemsOverlayActiveRef.current) {
+        const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? startedAt;
+        const minOverlayDuration = 800;
+        const overlayElapsed = Date.now() - overlayStartedAt;
+        if (overlayElapsed < minOverlayDuration) {
+          await new Promise((resolve) => setTimeout(resolve, minOverlayDuration - overlayElapsed));
+        }
+        setShowAddItemsOverlay(false);
+        addItemsOverlayStartedAtRef.current = null;
+        addItemsOverlayActiveRef.current = false;
+      }
     }
-  }, [diskLibrary, localSourcesById]);
+  }, [addItemsSurface, browserOpen, diskLibrary, localSourcesById, showNoDiskWarning]);
 
   const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
     const detailsDate = disk.modifiedAt || disk.importedAt;
@@ -435,10 +612,18 @@ export const HomeDiskManager = () => {
       disks.map((disk) => {
         const matches = matchesFilter(disk);
         const isDimmed = filterText.length > 0 && !matches;
+        const groupColor = disk.group ? pickDiskGroupColor(disk.group) : null;
+        const groupMeta = disk.group ? (
+          <span className="flex items-center gap-1 min-w-0">
+            <span className={cn('h-2 w-2 rounded-full border', groupColor?.chip)} aria-hidden="true" />
+            <span className={cn(groupColor?.text, 'break-words min-w-0')}>Group: {disk.group}</span>
+          </span>
+        ) : null;
         return {
           id: disk.id,
           title: disk.name,
           subtitle: disk.path,
+          meta: groupMeta,
           subtitleTestId: 'disk-path',
           icon: <LocationIcon location={disk.location} />,
           selected: selectedDiskIds.has(disk.id),
@@ -523,6 +708,17 @@ export const HomeDiskManager = () => {
                   <p className="text-sm font-medium truncate max-w-full">
                     {mountedLabel}
                   </p>
+                  {mountedDisk?.group ? (
+                    <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground min-w-0">
+                      <span
+                        className={cn('h-2 w-2 rounded-full border', pickDiskGroupColor(mountedDisk.group).chip)}
+                        aria-hidden="true"
+                      />
+                      <span className={cn(pickDiskGroupColor(mountedDisk.group).text, 'break-words min-w-0')}>
+                        Group: {mountedDisk.group}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {mounted && (
@@ -696,12 +892,26 @@ export const HomeDiskManager = () => {
         title="Add items"
         confirmLabel="Add to library"
         sourceGroups={sourceGroups}
-          onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
+        onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) => entry.type === 'dir' || isDiskImagePath(entry.path)}
         allowFolderSelection
+        isConfirming={isAddingItems}
+        progress={addItemsProgress}
+        showProgressFooter={addItemsSurface === 'dialog'}
+        autoConfirmCloseBefore={isAndroid}
+        onAutoConfirmStart={handleAutoConfirmStart}
         autoConfirmLocalSource
       />
+
+      {!browserOpen ? (
+        <AddItemsProgressOverlay
+          progress={addItemsProgress}
+          title="Adding disks"
+          testId="add-disks-overlay"
+          visible={showAddItemsOverlay || addItemsProgress.status === 'scanning'}
+        />
+      ) : null}
 
       <Dialog open={Boolean(groupDialogDisk)} onOpenChange={(open) => !open && setGroupDialogDisk(null)}>
         <DialogContent>
@@ -709,17 +919,61 @@ export const HomeDiskManager = () => {
             <DialogTitle>Set group</DialogTitle>
             <DialogDescription>Assign a group label for disk rotation.</DialogDescription>
           </DialogHeader>
-          <Input value={groupName} onChange={(event) => setGroupName(event.target.value)} />
+          <div className="space-y-4">
+            {groupOptions.length ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Existing groups</p>
+                <div className="flex flex-wrap gap-2">
+                  {groupOptions.map((option) => (
+                    <Button
+                      key={option.name}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (!groupDialogDisk) return;
+                        diskLibrary.updateDiskGroup(groupDialogDisk.id, option.name);
+                        setGroupDialogDisk(null);
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <span className={cn('h-2 w-2 rounded-full border', option.color.chip)} aria-hidden="true" />
+                      <span className={cn(option.color.text, 'truncate max-w-[180px]')}>
+                        {option.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">({option.count})</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">New group</p>
+              <Input
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+                placeholder="Enter a group name"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && groupDialogDisk) {
+                    const nextName = groupName.trim();
+                    if (!nextName) return;
+                    diskLibrary.updateDiskGroup(groupDialogDisk.id, nextName);
+                    setGroupDialogDisk(null);
+                  }
+                }}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button
               variant="default"
               onClick={() => {
                 if (!groupDialogDisk) return;
-                diskLibrary.updateDiskGroup(groupDialogDisk.id, groupName || null);
+                const nextName = groupName.trim();
+                diskLibrary.updateDiskGroup(groupDialogDisk.id, nextName || null);
                 setGroupDialogDisk(null);
               }}
             >
-              Save
+              {groupName.trim() ? 'Create & assign' : 'Clear group'}
             </Button>
             <Button variant="ghost" onClick={() => setGroupDialogDisk(null)}>Cancel</Button>
           </DialogFooter>

@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { DiskEntry } from '@/lib/disks/diskTypes';
 import type { DiskTreeNode, DiskTreeState } from '@/lib/disks/diskTree';
+import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
 
 const highlightText = (text: string, query: string) => {
   if (!query) return text;
@@ -52,20 +53,6 @@ export type DiskTreeProps = {
   disableActions?: boolean;
 };
 
-const groupColors = [
-  { chip: 'bg-blue-500/20 border-blue-500/40', text: 'text-blue-700' },
-  { chip: 'bg-emerald-500/20 border-emerald-500/40', text: 'text-emerald-700' },
-  { chip: 'bg-indigo-500/20 border-indigo-500/40', text: 'text-indigo-700' },
-  { chip: 'bg-teal-500/20 border-teal-500/40', text: 'text-teal-700' },
-];
-
-const pickGroupColor = (value: string) => {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash + value.charCodeAt(i) * (i + 1)) % groupColors.length;
-  }
-  return groupColors[hash] || groupColors[0];
-};
 
 const formatBytes = (value?: number | null) => {
   if (!value || value <= 0) return '—';
@@ -117,7 +104,7 @@ const DiskRow = ({
 }) => {
   const isDimmed = filter.length > 0 && !matches;
   const detailsDate = disk.modifiedAt || disk.importedAt;
-  const groupColor = disk.group ? pickGroupColor(disk.group) : null;
+  const groupColor = disk.group ? pickDiskGroupColor(disk.group) : null;
   return (
     <div
       className={cn(
@@ -340,4 +327,3 @@ export const DiskTree = ({
     </div>
   );
 };
-

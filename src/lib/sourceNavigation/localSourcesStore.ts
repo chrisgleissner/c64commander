@@ -45,6 +45,30 @@ const normalizeFolderPickerEntries = (result: { files?: unknown } | null): Picke
   return entries;
 };
 
+const normalizeRootName = (value: string | null | undefined) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const normalizePickerRelativePath = (entry: PickedFolderEntry, rootName: string | null) => {
+  const rawPath = entry.path || entry.name;
+  let relative = rawPath.replace(/^\/+/, '');
+  const normalizedRoot = rootName ? rootName.replace(/^\/+|\/+$/g, '').trim() : '';
+  if (normalizedRoot) {
+    const prefixPattern = new RegExp(`^${escapeRegex(normalizedRoot)}\\/`, 'i');
+    if (prefixPattern.test(relative)) {
+      relative = relative.replace(prefixPattern, '');
+    } else if (relative.toLowerCase() === normalizedRoot.toLowerCase()) {
+      relative = entry.name;
+    }
+  }
+  relative = relative.replace(/^\/+/, '');
+  return relative || entry.name;
+};
+
 const buildRootPath = (rootName: string | null) => {
   if (!rootName) return '/';
   const normalized = normalizeSourcePath(rootName);
@@ -118,12 +142,12 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
   if (getPlatform() === 'android') {
     const result = await FolderPicker.pickDirectory();
     const entries = normalizeFolderPickerEntries(result);
-    const rootName = result?.rootName || null;
-    const rootPath = buildRootPath(rootName);
+    const rootName = normalizeRootName(result?.rootName);
+    const rootPath = '/';
     const sourceId = safeRandomId();
     const sourceEntries: LocalSourceEntry[] = entries.map((entry) => ({
       name: entry.name,
-      relativePath: entry.path.replace(/^\/+/, ''),
+      relativePath: normalizePickerRelativePath(entry, rootName),
       uri: entry.uri,
     }));
     const source: LocalSourceRecord = {

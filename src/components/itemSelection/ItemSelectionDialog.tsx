@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog } from '@/lib/logging';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
+import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import { ItemSelectionView } from './ItemSelectionView';
 
@@ -26,13 +27,10 @@ export type ItemSelectionDialogProps = {
   allowFolderSelection?: boolean;
   isConfirming?: boolean;
   autoConfirmLocalSource?: boolean;
-  progress?: {
-    status: 'idle' | 'scanning' | 'error' | 'done';
-    count: number;
-    elapsedMs: number;
-    total?: number | null;
-    message?: string | null;
-  };
+  progress?: AddItemsProgressState;
+  showProgressFooter?: boolean;
+  autoConfirmCloseBefore?: boolean;
+  onAutoConfirmStart?: (source: SourceLocation) => void;
 };
 
 export const ItemSelectionDialog = ({
@@ -48,6 +46,9 @@ export const ItemSelectionDialog = ({
   isConfirming = false,
   autoConfirmLocalSource = false,
   progress,
+  showProgressFooter = true,
+  autoConfirmCloseBefore = false,
+  onAutoConfirmStart,
 }: ItemSelectionDialogProps) => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
@@ -104,16 +105,22 @@ export const ItemSelectionDialog = ({
       },
     ];
     try {
+      onAutoConfirmStart?.(target);
+      if (autoConfirmCloseBefore) {
+        onOpenChange(false);
+      }
       const success = await onConfirm(target, selections);
       if (success) {
-        onOpenChange(false);
+        if (!autoConfirmCloseBefore) {
+          onOpenChange(false);
+        }
       }
     } catch (error) {
       addErrorLog('Add items failed', { error: (error as Error).message });
       toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
     }
     setAutoConfirming(false);
-  }, [autoConfirming, isConfirming, onConfirm, onOpenChange]);
+  }, [autoConfirmCloseBefore, autoConfirming, isConfirming, onAutoConfirmStart, onConfirm, onOpenChange]);
 
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
@@ -298,7 +305,7 @@ export const ItemSelectionDialog = ({
           </div>
 
           <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
-            {progress && progress.status !== 'idle' && (
+            {showProgressFooter && progress && progress.status !== 'idle' && (
               <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
                 <span>
                   {progress.message || 'Scanning…'} {progress.count} items, {formatElapsed(progress.elapsedMs)}

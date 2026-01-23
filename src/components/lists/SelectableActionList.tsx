@@ -23,6 +23,7 @@ export type ActionListItem = {
   id: string;
   title: string;
   subtitle?: string | null;
+  meta?: React.ReactNode;
   icon?: React.ReactNode;
   selected: boolean;
   onSelectToggle?: (selected: boolean) => void;
@@ -135,6 +136,11 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             data-testid={item.subtitleTestId}
           >
             {item.subtitle}
+          </div>
+        ) : null}
+        {item.meta ? (
+          <div className="text-[11px] text-muted-foreground break-words whitespace-normal">
+            {item.meta}
           </div>
         ) : null}
       </div>

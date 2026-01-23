@@ -67,6 +67,8 @@ export const coerceFolderPickerEntries = (files: unknown): PickedFolderEntry[] |
   if (isArrayLike(files)) return normalizeEntries(Array.from(files));
   if (isIterable(files)) return normalizeEntries(Array.from(files));
   if (typeof files === 'object') {
+    const single = toPickedFolderEntry(files);
+    if (single) return [single];
     return entriesFromObject(files);
   }
   return null;

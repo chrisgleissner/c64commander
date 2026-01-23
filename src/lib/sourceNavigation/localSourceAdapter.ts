@@ -16,7 +16,17 @@ const buildFileList = (source: LocalSourceRecord) =>
 
 const toSourceEntryPath = (relativePath: string) => normalizeSourcePath(relativePath);
 
+const resolveRootPath = (source: LocalSourceRecord) => {
+  const normalizedRoot = normalizeSourcePath(source.rootPath || '/');
+  if (!source.entries.length || normalizedRoot === '/') return '/';
+  const hasRootedEntry = source.entries.some((entry) =>
+    normalizeSourcePath(entry.relativePath).startsWith(normalizedRoot),
+  );
+  return hasRootedEntry ? normalizedRoot : '/';
+};
+
 export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLocation => {
+  const rootPath = resolveRootPath(source);
   const listEntries = async (path: string): Promise<SourceEntry[]> => {
     const files = buildFileList(source);
     const folders = listLocalFolders(files, path).map((folder) => ({
@@ -48,7 +58,7 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
     id: source.id,
     type: 'local',
     name: source.name,
-    rootPath: source.rootPath,
+    rootPath,
     isAvailable: !source.requiresReselect,
     listEntries,
     listFilesRecursive,

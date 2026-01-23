@@ -334,8 +334,9 @@ test.describe('Playback file browser', () => {
       (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
       const entries = [
         { name: 'demo.sid', path: '/Local Music/demo.sid', uri: 'file://demo.sid' },
-        { name: 'launch.prg', path: '/Local Music/launch.prg', uri: 'file://launch.prg' },
-        { name: 'disk.d64', path: '/Local Music/disk.d64', uri: 'file://disk.d64' },
+        { name: 'launch.prg', path: '/Local Music/Apps/launch.prg', uri: 'file://launch.prg' },
+        { name: 'disk.d64', path: '/Local Music/Disks/disk.d64', uri: 'file://disk.d64' },
+        { name: 'deep.sid', path: '/Local Music/Deep/Nested/deep.sid', uri: 'file://deep.sid' },
       ];
 
       const createOverlay = () => {
@@ -436,41 +437,14 @@ test.describe('Playback file browser', () => {
     await expect(picker).toBeHidden();
 
     const playlistList = page.getByTestId('playlist-list');
-    const dialog = page.getByRole('dialog');
-
-    let autoConfirmed = false;
-    try {
-      await expect(playlistList).not.toContainText('No tracks in playlist yet.', { timeout: 2000 });
-      autoConfirmed = true;
-    } catch {
-      autoConfirmed = false;
-    }
-
-    if (!autoConfirmed && await dialog.isVisible()) {
-      const confirmButton = dialog.getByTestId('add-items-confirm');
-      if (!(await confirmButton.isVisible())) {
-        const localSourceButton = dialog.getByRole('button', { name: 'Local Music' });
-        await expect(localSourceButton).toBeVisible();
-        await localSourceButton.click();
-      }
-      await expect(confirmButton).toBeVisible();
-      await expect(dialog.getByText('demo.sid', { exact: true })).toBeVisible();
-      await snap(page, testInfo, 'local-source-entries');
-
-      await dialog.evaluate(() => {
-        document
-          .querySelectorAll('[data-testid="source-entry-row"] [role="checkbox"]')
-          .forEach((node) => (node as HTMLElement).click());
-      });
-      await snap(page, testInfo, 'local-items-selected');
-
-      await confirmButton.click();
-      await expect(dialog).toBeHidden();
-    }
-
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByTestId('add-items-overlay')).toBeVisible();
+    await snap(page, testInfo, 'playlist-scan-overlay');
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
     await expect(playlistList).toContainText('demo.sid');
     await expect(playlistList).toContainText('launch.prg');
     await expect(playlistList).toContainText('disk.d64');
+    await expect(playlistList).toContainText('deep.sid');
     await snap(page, testInfo, 'playlist-with-local-files');
   });
 

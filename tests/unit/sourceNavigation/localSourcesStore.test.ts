@@ -104,6 +104,17 @@ describe('localSourcesStore', () => {
     expect(result?.source.entries).toHaveLength(1);
   });
 
+  it('accepts single entry objects from the folder picker', async () => {
+    platformState.value = 'android';
+    pickDirectoryMock.mockResolvedValue({
+      rootName: 'Phone',
+      files: { name: 'song.sid', path: '/Phone/song.sid', uri: 'file://song.sid' },
+    });
+
+    const result = await createLocalSourceFromPicker(null);
+    expect(result?.source.entries).toHaveLength(1);
+  });
+
   it('normalizes missing picker paths on android', async () => {
     platformState.value = 'android';
     pickDirectoryMock.mockResolvedValue({

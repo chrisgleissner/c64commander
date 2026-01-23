@@ -332,8 +332,8 @@ export default function SettingsPage() {
               Logs
             </Button>
 
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
                 <Label htmlFor="debug-logging" className="font-medium">Debug REST logging</Label>
                 <p className="text-xs text-muted-foreground">
                   Records every REST call with method, path, status, and latency.
@@ -464,8 +464,8 @@ export default function SettingsPage() {
               <h2 className="font-medium">Developer</h2>
             </div>
             <div className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="hvsc-flag" className="font-medium">
                     Enable HVSC downloads
                   </Label>
@@ -490,8 +490,8 @@ export default function SettingsPage() {
                   }}
                 />
               </div>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <p className="font-medium">Enable mocked C64U (internal testing)</p>
                   <p className="text-xs text-muted-foreground">
                     Starts a local REST service and routes all requests to it.

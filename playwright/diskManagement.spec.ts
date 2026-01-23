@@ -59,6 +59,13 @@ const addLocalFolder = async (page: Page, folderPath: string, diskNames: string[
   await expect(input).toHaveCount(1);
   await input.setInputFiles(folderPath);
   await expect(page.getByRole('dialog')).toBeHidden();
+  const overlay = page.locator('[data-testid="add-disks-overlay"]');
+  try {
+    await overlay.waitFor({ state: 'visible', timeout: 1500 });
+  } catch {
+    // Overlay may resolve quickly on small folders.
+  }
+  await overlay.waitFor({ state: 'detached' }).catch(() => null);
   if (expectVisible) {
     for (const diskName of diskNames) {
       await expect(getDiskList(page)).toContainText(diskName);
@@ -252,6 +259,36 @@ test.describe('Disk management', () => {
     await page.getByRole('button', { name: 'Clear filter' }).click();
     await expect(nonMatchRow).not.toHaveClass(/opacity-40/);
     await snap(page, testInfo, 'filter-cleared');
+  });
+
+  test('disk groups display and can be reassigned inline', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'disks-open');
+
+    await addLocalFolder(
+      page,
+      path.resolve('playwright/fixtures/disks-local/Groupings'),
+      ['foo1.d64', 'foo2.d64', 'DiskA.d64', 'DiskB.d64', 'Last Ninja 3-1.d64'],
+    );
+    await snap(page, testInfo, 'disks-grouped');
+
+    const fooRow = getDiskRow(page, 'foo1.d64');
+    await expect(fooRow).toContainText('Group: foo');
+
+    await openDiskMenu(page, 'foo1.d64');
+    await page.getByRole('menuitem', { name: 'Set group…' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: /^Disk/ }).click();
+    await expect(fooRow).toContainText('Group: Disk');
+
+    await openDiskMenu(page, 'DiskA.d64');
+    await page.getByRole('menuitem', { name: 'Set group…' }).click();
+    await expect(dialog).toBeVisible();
+    await dialog.getByPlaceholder('Enter a group name').fill('My Group');
+    await dialog.getByRole('button', { name: 'Create & assign' }).click();
+    await expect(getDiskRow(page, 'DiskA.d64')).toContainText('Group: My Group');
+    await snap(page, testInfo, 'disk-group-reassigned');
   });
 
   test('mounting ultimate disks uses mount endpoint', async ({ page }: { page: Page }, testInfo: TestInfo) => {
