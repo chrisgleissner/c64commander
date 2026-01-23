@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, beforeAll, afterAll } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { createMockC64Server, type MockC64Server } from '../../mocks/mockC64Server';
 import { createOpenApiGeneratedClient } from '../../helpers/openapiGeneratedClient';
@@ -239,5 +239,67 @@ describe('ConfigItemRow control selection + REST updates', () => {
       });
       expect(resp.data['Test Category'].items['Video Mode'].selected).toBe('NTSC');
     });
+  });
+});
+
+describe('ConfigItemRow slider and input behaviors', () => {
+  it('renders a slider for audio mixer volumes', () => {
+    const onValueChange = vi.fn();
+    renderWithQuery(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="Vol UltiSid 1"
+        value="0 dB"
+        options={['-6 dB', '0 dB', '+6 dB']}
+        onValueChange={onValueChange}
+        valueTestId="volume-value"
+        sliderTestId="volume-slider"
+      />,
+    );
+
+    expect(screen.getByLabelText('Vol UltiSid 1 slider')).toBeTruthy();
+    expect(screen.getByTestId('volume-value')).toHaveTextContent('0 dB');
+  });
+
+  it('commits text input on enter without waiting for debounce', () => {
+    vi.useFakeTimers();
+    const onValueChange = vi.fn();
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Hostname"
+        value="c64u"
+        options={[]}
+        details={{ presets: [] }}
+        onValueChange={onValueChange}
+      />,
+    );
+
+    const input = screen.getByLabelText('Hostname text input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'u64' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onValueChange).toHaveBeenCalledWith('u64');
+    vi.useRealTimers();
+  });
+
+  it('ignores edits for read-only rows', () => {
+    const onValueChange = vi.fn();
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="SID Detected Socket 1"
+        value="Socket A"
+        options={[]}
+        onValueChange={onValueChange}
+      />,
+    );
+
+    const input = screen.getByLabelText('SID Detected Socket 1 text input') as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Socket B' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.blur(input);
+
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });

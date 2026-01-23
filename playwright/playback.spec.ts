@@ -312,6 +312,11 @@ test.describe('Playback file browser', () => {
     await pauseButton.click();
     await snap(page, testInfo, 'resumed');
 
+    await expect.poll(
+      () => server.requests.some((req) => req.url.includes('/v1/machine:resume')),
+      { timeout: 2000 },
+    ).toBe(true);
+
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).toBe(initialState['Vol UltiSid 2'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe(initialState['Vol Socket 1'].value);

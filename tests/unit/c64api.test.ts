@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { C64API, getC64API, updateC64APIConfig, C64_DEFAULTS } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
+import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
+import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
@@ -26,6 +28,8 @@ describe('c64api', () => {
     capacitorRequestMock.mockReset();
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     vi.stubGlobal('fetch', vi.fn());
+    resetConfigWriteThrottle();
+    saveConfigWriteIntervalMs(0);
   });
 
   it('adds auth headers for password and local proxy host', async () => {
@@ -89,6 +93,40 @@ describe('c64api', () => {
     expect(capacitorRequestMock).toHaveBeenCalled();
   });
 
+  it('handles CapacitorHttp non-string payloads', async () => {
+    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+      isNativePlatform: () => true,
+    };
+    capacitorRequestMock.mockResolvedValue({ status: 200, data: { errors: [] } });
+
+    const api = new C64API('http://c64u');
+    const result = await api.getVersion();
+    expect(result.errors).toEqual([]);
+  });
+
+  it('logs parse failures for invalid json responses', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      new Response('bad-json', { status: 200, headers: { 'content-type': 'application/json' } }),
+    );
+
+    const api = new C64API('http://c64u');
+    const result = await api.getInfo();
+    expect(result.errors).toEqual([]);
+    expect(addErrorLogMock).toHaveBeenCalledWith('C64 API parse failed', expect.any(Object));
+  });
+
+  it('throws for native http errors', async () => {
+    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+      isNativePlatform: () => true,
+    };
+    capacitorRequestMock.mockResolvedValue({ status: 400, data: { errors: ['bad'] } });
+
+    const api = new C64API('http://c64u');
+    await expect(api.getInfo()).rejects.toThrow('HTTP 400');
+    expect(addErrorLogMock).toHaveBeenCalled();
+  });
+
   it('updates config and dispatches connection change', () => {
     const handler = vi.fn();
     window.addEventListener('c64u-connection-change', handler as EventListener);
@@ -126,6 +164,127 @@ describe('c64api', () => {
     fetchMock.mockResolvedValueOnce(new Response('fail', { status: 500, statusText: 'Server Error' }));
     await expect(api.runCartridgeUpload(payload)).rejects.toThrow('HTTP 500');
     expect(addErrorLogMock).toHaveBeenCalledWith('CRT upload failed', expect.any(Object));
+  });
+
+  it('builds request urls for config writes and machine actions', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const okResponse = () =>
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    fetchMock.mockImplementation(() => Promise.resolve(okResponse()));
+
+    const api = new C64API('http://c64u');
+    await api.setConfigValue('Audio Mixer', 'Vol UltiSid 1', '+6 dB');
+    await api.saveConfig();
+    await api.loadConfig();
+    await api.resetConfig();
+    await api.updateConfigBatch({ Audio: { Volume: '0 dB' } });
+    await api.machineReset();
+    await api.machineReboot();
+    await api.machinePause();
+    await api.machineResume();
+    await api.machinePowerOff();
+    await api.machineMenuButton();
+
+    const calls = fetchMock.mock.calls.map((call) => call[0]);
+    expect(calls).toContain('http://c64u/v1/configs/Audio%20Mixer/Vol%20UltiSid%201?value=%2B6%20dB');
+    expect(calls).toContain('http://c64u/v1/configs:save_to_flash');
+    expect(calls).toContain('http://c64u/v1/machine:resume');
+  });
+
+  it('covers reads, writes, and drive endpoints', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: btoa('ABC') }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: [1, 2, 3] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    const okResponse = () =>
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    fetchMock.mockImplementation(() => Promise.resolve(okResponse()));
+
+    const api = new C64API('http://c64u');
+    expect(Array.from(await api.readMemory('0400', 3))).toEqual([65, 66, 67]);
+    expect(Array.from(await api.readMemory('0400', 3))).toEqual([1, 2, 3]);
+
+    await api.writeMemory('0400', new Uint8Array([0, 15, 255]));
+    await api.mountDrive('a', '/path/my disk.d64', '1541', 'readonly');
+    await api.unmountDrive('a');
+    await api.resetDrive('a');
+    await api.driveOn('a');
+    await api.driveOff('a');
+    await api.setDriveMode('a', '1581');
+
+    const urls = fetchMock.mock.calls.map((call) => call[0]);
+    expect(urls).toContain('http://c64u/v1/machine:writemem?address=0400&data=000fff');
+    expect(urls).toContain('http://c64u/v1/drives/a:mount?image=%2Fpath%2Fmy%20disk.d64&type=1541&mode=readonly');
+  });
+
+  it('uploads drives and runner files with auth headers', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const okResponse = () =>
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    fetchMock
+      .mockImplementationOnce(() => Promise.resolve(okResponse()))
+      .mockImplementationOnce(() => Promise.resolve(new Response('fail', { status: 500, statusText: 'Server Error' })))
+      .mockImplementation(() => Promise.resolve(okResponse()));
+
+    const api = new C64API('http://127.0.0.1:8787', 'pw', 'device-host');
+    await api.mountDriveUpload('a', new Blob(['disk']), '1541', 'readwrite');
+    await expect(api.mountDriveUpload('a', new Blob(['disk']))).rejects.toThrow('HTTP 500');
+
+    const sidFile = new Blob(['PSID'], { type: 'application/octet-stream' });
+    const sslFile = new Blob(['SSL'], { type: 'application/octet-stream' });
+    await api.playSidUpload(sidFile, 2, sslFile);
+    await api.playModUpload(new Blob(['MOD']));
+    await api.runPrgUpload(new Blob(['PRG']));
+    await api.loadPrgUpload(new Blob(['PRG']));
+
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers['X-Password']).toBe('pw');
+    expect(headers['X-C64U-Host']).toBe('device-host');
+    expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
+  });
+
+  it('covers runner and drive request helpers', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const okResponse = () =>
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    fetchMock.mockImplementation(() => Promise.resolve(okResponse()));
+
+    const api = new C64API('http://c64u');
+    await api.getCategories();
+    await api.getCategory('Audio Mixer');
+    await api.getConfigItem('Audio Mixer', 'Vol UltiSid 1');
+    await api.getDrives();
+    await api.playSid('/music/test.sid', 7);
+    await api.playMod('/music/test.mod');
+    await api.runPrg('/programs/test.prg');
+    await api.loadPrg('/programs/test.prg');
+    await api.runCartridge('/cartridges/test.crt');
+
+    const urls = fetchMock.mock.calls.map((call) => call[0]);
+    expect(urls).toContain('http://c64u/v1/runners:sidplay?file=%2Fmusic%2Ftest.sid&songnr=7');
+    expect(urls).toContain('http://c64u/v1/runners:run_crt?file=%2Fcartridges%2Ftest.crt');
   });
 
   it('reuses singleton C64 API instance', () => {
