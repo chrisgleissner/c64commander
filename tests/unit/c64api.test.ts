@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { C64API, getC64API, updateC64APIConfig, C64_DEFAULTS } from '@/lib/c64api';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 vi.mock('@capacitor/core', () => ({
@@ -14,12 +15,14 @@ vi.mock('@capacitor/core', () => ({
 }));
 
 const addErrorLogMock = vi.mocked(addErrorLog);
+const addLogMock = vi.mocked(addLog);
 const capacitorRequestMock = vi.mocked(CapacitorHttp.request);
 
 describe('c64api', () => {
   beforeEach(() => {
     localStorage.clear();
     addErrorLogMock.mockReset();
+    addLogMock.mockReset();
     capacitorRequestMock.mockReset();
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     vi.stubGlobal('fetch', vi.fn());
@@ -51,6 +54,11 @@ describe('c64api', () => {
     const api = new C64API('http://c64u');
     const result = await api.getVersion();
     expect(result.errors).toEqual([]);
+    expect(addLogMock).toHaveBeenCalledWith('debug', 'C64 API request', expect.objectContaining({
+      method: 'GET',
+      path: '/v1/version',
+      status: 200,
+    }));
   });
 
   it('logs and throws on http errors', async () => {
@@ -62,6 +70,11 @@ describe('c64api', () => {
     const api = new C64API('http://c64u');
     await expect(api.getInfo()).rejects.toThrow('HTTP 500');
     expect(addErrorLogMock).toHaveBeenCalled();
+    expect(addLogMock).toHaveBeenCalledWith('debug', 'C64 API request', expect.objectContaining({
+      method: 'GET',
+      path: '/v1/info',
+      status: 500,
+    }));
   });
 
   it('uses CapacitorHttp on native platforms', async () => {

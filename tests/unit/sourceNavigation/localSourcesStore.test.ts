@@ -13,6 +13,10 @@ const pickDirectoryMock = vi.fn();
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
     pickDirectory: (...args: unknown[]) => pickDirectoryMock(...args),
+    listChildren: vi.fn(),
+    getPersistedUris: vi.fn(),
+    readFile: vi.fn(),
+    readFileFromTree: vi.fn(),
   },
 }));
 
@@ -69,7 +73,9 @@ describe('localSourcesStore', () => {
     ];
 
     saveLocalSources(sources);
-    expect(loadLocalSources()).toEqual(sources);
+    const loaded = loadLocalSources();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].entries).toHaveLength(0);
   });
 
   it('prepares directory input attributes', () => {
@@ -82,15 +88,27 @@ describe('localSourcesStore', () => {
   it('uses native folder picker on android', async () => {
     platformState.value = 'android';
     pickDirectoryMock.mockResolvedValue({
+      treeUri: 'content://tree/primary%3AMusic',
       rootName: 'Phone',
-      files: [
-        { name: 'song.sid', path: '/Phone/song.sid', uri: 'file://song.sid' },
-      ],
+      permissionPersisted: true,
     });
 
     const result = await createLocalSourceFromPicker(null);
     expect(result?.source.rootName).toBe('Phone');
-    expect(result?.source.entries).toHaveLength(1);
+    expect(result?.source.entries).toBeUndefined();
+    expect(result?.source.android?.treeUri).toBe('content://tree/primary%3AMusic');
+  });
+
+  it('rejects picker payloads with file listings on android', async () => {
+    platformState.value = 'android';
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: 'content://tree/primary%3AMusic',
+      rootName: 'Phone',
+      permissionPersisted: true,
+      files: [{ name: 'song.sid', path: '/Phone/song.sid', uri: 'file://song.sid' }],
+    });
+
+    await expect(createLocalSourceFromPicker(null)).rejects.toThrow('Android SAF picker returned an unsupported response.');
   });
 
   it('falls back to input click when directory picker is unavailable', async () => {

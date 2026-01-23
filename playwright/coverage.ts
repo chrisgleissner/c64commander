@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { test as base, type Page } from '@playwright/test';
+import type { TestInfo } from '@playwright/test';
 
 const istanbulCLIOutput = path.join(process.cwd(), '.nyc_output');
 
@@ -34,7 +35,7 @@ export async function saveCoverage(page: Page, testName?: string): Promise<void>
 }
 
 export const test = base.extend({
-  page: async ({ page }, use, testInfo) => {
+  page: async ({ page }, use, testInfo: TestInfo) => {
     await use(page);
     // Try to save coverage after test (best effort)
     await saveCoverage(page, testInfo.title);

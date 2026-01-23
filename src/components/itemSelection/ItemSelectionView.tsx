@@ -46,9 +46,9 @@ export const ItemSelectionView = ({
           Loading…
         </div>
       )}
-      <div className="flex items-center justify-between gap-2 min-w-0">
-        <span className="text-xs text-muted-foreground break-all min-w-0">Path: {path}</span>
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+        <span className="text-xs text-muted-foreground break-all min-w-0 flex-1">Path: {path}</span>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <Button
             variant="ghost"
             size="sm"
@@ -100,7 +100,7 @@ export const ItemSelectionView = ({
                 </div>
               </div>
               {entry.type === 'dir' && (
-                <Button variant="outline" size="sm" onClick={() => onOpen(entry.path)}>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => onOpen(entry.path)}>
                   <FolderOpen className="h-4 w-4 mr-1" />
                   Open
                 </Button>

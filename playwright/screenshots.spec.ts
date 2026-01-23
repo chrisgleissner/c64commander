@@ -20,7 +20,7 @@ test.describe('App screenshots', () => {
     await server.close();
   });
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {
@@ -30,7 +30,7 @@ test.describe('App screenshots', () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -54,7 +54,7 @@ test.describe('App screenshots', () => {
     await expect(openToasts).toHaveCount(0, { timeout: 10000 });
   };
 
-  test('capture app page screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo) => {
+  test('capture app page screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const screenshotPath = (fileName: string) => path.resolve('doc/img', fileName);
 
     await page.goto('/');

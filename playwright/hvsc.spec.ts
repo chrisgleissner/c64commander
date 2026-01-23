@@ -25,11 +25,11 @@ test.describe('HVSC Play page', () => {
     if (hvscServer) await hvscServer.close();
   });
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -366,7 +366,7 @@ test.describe('HVSC Play page', () => {
     );
   };
 
-  test('HVSC not installed -> install -> ready', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC not installed -> install -> ready', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
@@ -378,7 +378,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'hvsc-installed');
   });
 
-  test('HVSC install shows progress updates', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC install shows progress updates', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
@@ -387,7 +387,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'install-complete');
   });
 
-  test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC install -> play sends SID to C64U', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
@@ -411,7 +411,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'sidplay-requested');
   });
 
-  test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected extraction failure toast before cached ingest.');
     await installMocks(page, { installedVersion: 0, failInstall: true, failStage: 'extract' });
     await page.goto('/play');
@@ -440,7 +440,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'sidplay-requested');
   });
 
-  test('HVSC up-to-date -> browse -> play track', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC up-to-date -> browse -> play track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 84 });
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
@@ -457,7 +457,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'playlist-visible');
   });
 
-  test('HVSC update available -> update -> browsing works', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC update available -> update -> browsing works', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 83 });
     await page.route('**/v1/runners:sidplay**', (route: Route) =>
       route.fulfill({ status: 200, body: JSON.stringify({ errors: [] }) }),
@@ -473,7 +473,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'hvsc-list');
   });
 
-  test('Local ZIP ingestion is not shown on Play page', async ({ page }: { page: Page }, testInfo) => {
+  test('Local ZIP ingestion is not shown on Play page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 84 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
@@ -481,7 +481,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'zip-hidden');
   });
 
-  test('HVSC update check failure surfaces error', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC update check failure surfaces error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for HVSC update check failure.');
     await installMocks(page, { installedVersion: 0, failCheck: true });
     await page.goto('/play');
@@ -491,7 +491,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'update-failed');
   });
 
-  test('HVSC extraction failure shows retry', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC extraction failure shows retry', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for HVSC extraction failure.');
     await installMocks(page, { installedVersion: 0, failStage: 'extract', failInstallAttempts: 1 });
     await page.goto('/play');
@@ -501,7 +501,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'extract-failed');
   });
 
-  test('HVSC ingestion failure shows retry', async ({ page }: { page: Page }, testInfo) => {
+  test('HVSC ingestion failure shows retry', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for HVSC ingestion failure.');
     await installMocks(page, { installedVersion: 0, failStage: 'ingest', failInstallAttempts: 1 });
     await page.goto('/play');

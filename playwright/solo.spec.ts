@@ -8,13 +8,13 @@ import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUi
 test.describe('Config page SID solo routing', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -33,7 +33,7 @@ test.describe('Config page SID solo routing', () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  test('default state has no solo enabled', async ({ page }: { page: Page }, testInfo) => {
+  test('default state has no solo enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await expect(page.getByLabel('Solo Vol UltiSid 1')).not.toBeChecked();
@@ -43,7 +43,7 @@ test.describe('Config page SID solo routing', () => {
     await snap(page, testInfo, 'solo-disabled');
   });
 
-  test('solo enable mutes other SIDs without moving sliders', async ({ page }: { page: Page }, testInfo) => {
+  test('solo enable mutes other SIDs without moving sliders', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol UltiSid 2').click();
@@ -57,7 +57,7 @@ test.describe('Config page SID solo routing', () => {
     await snap(page, testInfo, 'mix-muted');
   });
 
-  test('solo switch toggles active SID instantly', async ({ page }: { page: Page }, testInfo) => {
+  test('solo switch toggles active SID instantly', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol UltiSid 2').click();
@@ -70,7 +70,7 @@ test.describe('Config page SID solo routing', () => {
     await snap(page, testInfo, 'solo-switched');
   });
 
-  test('solo disable restores configured mix', async ({ page }: { page: Page }, testInfo) => {
+  test('solo disable restores configured mix', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol Socket 2').click();
@@ -84,7 +84,7 @@ test.describe('Config page SID solo routing', () => {
     await snap(page, testInfo, 'solo-disabled');
   });
 
-  test('navigation reset clears solo and restores mix', async ({ page }: { page: Page }, testInfo) => {
+  test('navigation reset clears solo and restores mix', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol Socket 1').click();

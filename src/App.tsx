@@ -1,9 +1,10 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { MockModeBanner } from '@/components/MockModeBanner';
@@ -16,7 +17,11 @@ import PlayFilesPage from './pages/PlayFilesPage';
 import DisksPage from './pages/DisksPage.tsx';
 import CoverageProbePage from './pages/CoverageProbePage';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { getPlatform } from "@/lib/native/platform";
+import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { MockModeProvider } from "@/hooks/useMockMode";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
@@ -64,8 +69,9 @@ const RouteRefresher = () => {
 
 const AppRoutes = () => (
   <BrowserRouter>
-    <ErrorBoundary />
+    <GlobalErrorListener />
     <RouteRefresher />
+    <DebugStartupLogger />
     <MockModeBanner />
     <Routes>
       {import.meta.env.VITE_ENABLE_TEST_PROBES === '1' ? (
@@ -93,7 +99,9 @@ const App = () => (
           <RefreshControlProvider>
             <SidPlayerProvider>
               <MockModeProvider>
-                <AppRoutes />
+                <AppErrorBoundary>
+                  <AppRoutes />
+                </AppErrorBoundary>
               </MockModeProvider>
             </SidPlayerProvider>
           </RefreshControlProvider>
@@ -103,7 +111,7 @@ const App = () => (
   </QueryClientProvider>
 );
 
-const ErrorBoundary = () => {
+const GlobalErrorListener = () => {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
       addErrorLog('Window error', {
@@ -127,6 +135,60 @@ const ErrorBoundary = () => {
     };
   }, []);
 
+  return null;
+};
+
+class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    addErrorLog('React render error', {
+      message: error.message,
+      stack: error.stack,
+      componentStack: info.componentStack,
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+          <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
+            <p className="text-lg font-semibold text-foreground">Something went wrong</p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              The app hit an unexpected error. Please reopen the page or try again.
+            </p>
+            <Button className="mt-4" onClick={() => window.location.reload()}>
+              Reload
+            </Button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const DebugStartupLogger = () => {
+  useEffect(() => {
+    if (getPlatform() !== 'android') return;
+    if (!loadDebugLoggingEnabled()) return;
+    FolderPicker.getPersistedUris()
+      .then((result) => {
+        const uris = result?.uris ?? [];
+        addLog('debug', 'SAF persisted URIs on startup', {
+          count: uris.length,
+          uris: uris.map((entry) => redactTreeUri(entry.uri)),
+        });
+      })
+      .catch((error) => {
+        addLog('debug', 'SAF persisted URI lookup failed', { error: (error as Error).message });
+      });
+  }, []);
   return null;
 };
 

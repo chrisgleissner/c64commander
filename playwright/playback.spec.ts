@@ -3,7 +3,7 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
-import { seedUiMocks } from './uiMocks';
+import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
@@ -18,7 +18,9 @@ const openAddItemsDialog = async (page: Page) => {
 
 const selectEntryCheckbox = async (container: Page | Locator, name: string) => {
   const row = container.getByText(name, { exact: true }).locator('..').locator('..');
-  await row.getByRole('checkbox').click();
+  const checkbox = row.getByRole('checkbox');
+  await checkbox.scrollIntoViewIfNeeded();
+  await checkbox.click({ force: true });
 };
 
 const openRemoteFolder = async (container: Page | Locator, name: string) => {
@@ -26,13 +28,11 @@ const openRemoteFolder = async (container: Page | Locator, name: string) => {
   await row.getByRole('button', { name: 'Open' }).click();
 };
 
-const ensureRemoteRoot = async (page: Page) => {
-  const rootButton = page.locator('[data-testid="navigate-root"]');
-  if (await rootButton.isVisible()) {
-    if (await rootButton.isEnabled()) {
-      await rootButton.click();
-    }
-  }
+const ensureRemoteRoot = async (container: Page | Locator) => {
+  const rootButton = container.getByTestId('navigate-root');
+  if (!(await rootButton.isVisible())) return;
+  if (!(await rootButton.isEnabled())) return;
+  await rootButton.click();
 };
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -70,7 +70,7 @@ test.describe('Playback file browser', () => {
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    server = await createMockC64Server({});
+    server = await createMockC64Server(uiFixtures.configState);
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
       port: ftpServers.ftpServer.port,
@@ -175,7 +175,7 @@ test.describe('Playback file browser', () => {
     }).toBeGreaterThanOrEqual(2);
   });
 
-  test('playback counters show dashes when durations are unknown', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('playback counters fall back to default song durations when unknown', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const seededItems = [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Unknown_1.sid', name: 'Unknown_1.sid' },
       { source: 'ultimate' as const, path: '/Usb0/Demos/Unknown_2.sid', name: 'Unknown_2.sid', durationMs: 4000 },
@@ -186,8 +186,8 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'play-open');
 
     const counters = page.getByTestId('playback-counters');
-    await expect(counters).toContainText('Total: —');
-    await expect(counters).toContainText('Remaining: —');
+    await expect(counters).toContainText('Total: 3:04');
+    await expect(counters).toContainText('Remaining: 3:04');
   });
 
   test('playback controls are stateful and show current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -254,6 +254,229 @@ test.describe('Playback file browser', () => {
     await playButton.click();
     await expect(playButton).toContainText('Play');
     await snap(page, testInfo, 'playback-stopped');
+  });
+
+  test('volume slider updates non-muted SID outputs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const initialState = server.getState()['Audio Mixer'];
+
+    await page.goto('/play');
+    await expect(page.getByText('Connected')).toBeVisible();
+    const slider = page.getByTestId('volume-slider').getByRole('slider');
+    await expect(slider).toBeVisible();
+    await expect(page.getByTestId('volume-mute')).toBeEnabled();
+    await expect(slider).toBeEnabled();
+    await snap(page, testInfo, 'volume-slider-ready');
+
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await slider.press('ArrowRight');
+    await snap(page, testInfo, 'volume-slider-adjusted');
+
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).not.toBe(initialState['Vol UltiSid 2'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).not.toBe(initialState['Vol Socket 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).not.toBe(initialState['Vol Socket 2'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
+    await snap(page, testInfo, 'volume-updated');
+  });
+
+  test('pause mutes SID outputs and resume restores them', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const initialState = server.getState()['Audio Mixer'];
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const playButton = page.getByTestId('playlist-play');
+    const pauseButton = page.getByTestId('playlist-pause');
+
+    await playButton.click();
+    await expect(pauseButton).toBeEnabled();
+    await snap(page, testInfo, 'play-started');
+
+    await pauseButton.click();
+    await snap(page, testInfo, 'paused');
+
+    await expect.poll(() => {
+      const audio = server.getState()['Audio Mixer'];
+      return [
+        audio['Vol UltiSid 1'].value,
+        audio['Vol UltiSid 2'].value,
+        audio['Vol Socket 1'].value,
+        audio['Vol Socket 2'].value,
+      ].every((value) => value === 'OFF');
+    }).toBe(true);
+    await snap(page, testInfo, 'sid-muted');
+
+    await pauseButton.click();
+    await snap(page, testInfo, 'resumed');
+
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).toBe(initialState['Vol UltiSid 2'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe(initialState['Vol Socket 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe(initialState['Vol Socket 2'].value);
+
+    const pauseIndex = server.requests.findIndex((req) => req.url.includes('/v1/machine:pause'));
+    const resumeIndex = server.requests.findIndex((req) => req.url.includes('/v1/machine:resume'));
+    const configIndices = server.requests
+      .map((req, index) => (req.url.includes('/v1/configs') ? index : -1))
+      .filter((index) => index >= 0);
+    const configBetweenPauseAndResume = configIndices.filter((index) => index > pauseIndex && index < resumeIndex);
+    expect(pauseIndex).toBeGreaterThan(-1);
+    expect(resumeIndex).toBeGreaterThan(-1);
+    expect(configBetweenPauseAndResume.length).toBeGreaterThan(0);
+    await snap(page, testInfo, 'sid-restored');
+  });
+
+  test('native folder picker adds local files to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
+
+      const treeUri = 'content://tree/primary%3AMusic';
+      const entriesByPath: Record<string, Array<{ type: 'file' | 'dir'; name: string; path: string }>> = {
+        '/': [
+          { type: 'file', name: 'demo.sid', path: '/demo.sid' },
+          { type: 'dir', name: 'Apps', path: '/Apps' },
+          { type: 'dir', name: 'Disks', path: '/Disks' },
+        ],
+        '/Apps': [{ type: 'file', name: 'launch.prg', path: '/Apps/launch.prg' }],
+        '/Disks': [
+          { type: 'file', name: 'disk.d64', path: '/Disks/disk.d64' },
+          { type: 'dir', name: 'Deep', path: '/Disks/Deep' },
+        ],
+        '/Disks/Deep': [{ type: 'file', name: 'deep.sid', path: '/Disks/Deep/deep.sid' }],
+      };
+
+      const pickDirectory = async () => ({ treeUri, rootName: 'Local Music', permissionPersisted: true });
+      const calls: Array<{ path: string }> = [];
+      (window as Window & { __c64uSafCalls?: Array<{ path: string }> }).__c64uSafCalls = calls;
+      const listChildren = async ({ treeUri: requestUri, path = '/' }: { treeUri: string; path?: string }) => {
+        if (requestUri !== treeUri) {
+          throw new Error('Unexpected treeUri');
+        }
+        const normalized = path && path !== '/' ? path.replace(/\/+$/, '') : '/';
+        const key = normalized === '' ? '/' : normalized;
+        calls.push({ path: key });
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        return { entries: entriesByPath[key] ?? [] };
+      };
+      const readFileFromTree = async () => ({ data: '' });
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
+        pickDirectory,
+        listChildren,
+        readFileFromTree,
+        readFile: async () => ({ data: '' }),
+        getPersistedUris: async () => ({ uris: [] }),
+      };
+    });
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'playlist-empty');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await snap(page, testInfo, 'choose-source');
+
+    await page.getByRole('button', { name: 'Add folder' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+    const overlay = page.getByTestId('add-items-overlay');
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toContainText('Scanning');
+    await expect.poll(async () => page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0)).toBeGreaterThan(0);
+    await expect.poll(async () => page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0)).toBeGreaterThan(2);
+    await snap(page, testInfo, 'playlist-scan-overlay');
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    const playlistList = page.getByTestId('playlist-list');
+    await expect(playlistList).toContainText('demo.sid');
+    await expect(playlistList).toContainText('launch.prg');
+    await expect(playlistList).toContainText('disk.d64');
+    await expect(playlistList).toContainText('deep.sid');
+    await snap(page, testInfo, 'playlist-with-local-files');
+  });
+
+  test('SAF scan shows no supported files only after enumeration', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected destructive toast for empty SAF scan.' });
+    await page.addInitScript(() => {
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
+
+      const treeUri = 'content://tree/primary%3AEmpty';
+      const entriesByPath: Record<string, Array<{ type: 'file' | 'dir'; name: string; path: string }>> = {
+        '/': [{ type: 'file', name: 'notes.txt', path: '/notes.txt' }],
+      };
+
+      const pickDirectory = async () => ({ treeUri, rootName: 'Empty', permissionPersisted: true });
+      const listChildren = async ({ treeUri: requestUri, path = '/' }: { treeUri: string; path?: string }) => {
+        if (requestUri !== treeUri) throw new Error('Unexpected treeUri');
+        await new Promise((resolve) => setTimeout(resolve, 75));
+        return { entries: entriesByPath[path || '/'] ?? [] };
+      };
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
+        pickDirectory,
+        listChildren,
+        readFileFromTree: async () => ({ data: '' }),
+        readFile: async () => ({ data: '' }),
+        getPersistedUris: async () => ({ uris: [] }),
+      };
+    });
+
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'Add folder' }).click();
+
+    const overlay = page.getByTestId('add-items-overlay');
+    await expect(overlay).toBeVisible();
+    await expect(page.getByText('No supported files')).toHaveCount(0);
+    await snap(page, testInfo, 'saf-scan-overlay');
+
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    await expect(page.getByRole('status').getByText('No supported files', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'saf-no-supported-files');
+  });
+
+  test('SAF scan failures are logged and do not crash the page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected destructive toast for SAF scan failure.' });
+    await page.addInitScript(() => {
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
+
+      const treeUri = 'content://tree/primary%3ABroken';
+      const pickDirectory = async () => ({ treeUri, rootName: 'Broken', permissionPersisted: true });
+      const listChildren = async ({ treeUri: requestUri }: { treeUri: string }) => {
+        if (requestUri !== treeUri) throw new Error('Unexpected treeUri');
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return { entries: { bad: true } } as any;
+      };
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
+        pickDirectory,
+        listChildren,
+        readFileFromTree: async () => ({ data: '' }),
+        readFile: async () => ({ data: '' }),
+        getPersistedUris: async () => ({ uris: [] }),
+      };
+    });
+
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'Add folder' }).click();
+
+    const overlay = page.getByTestId('add-items-overlay');
+    await expect(overlay).toBeVisible();
+    await snap(page, testInfo, 'saf-error-overlay');
+
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    await expect(page.getByRole('status').getByText('Add items failed', { exact: true })).toBeVisible();
+
+    await expect.poll(async () => {
+      const logs = await page.evaluate(() => JSON.parse(localStorage.getItem('c64u_app_logs') ?? '[]'));
+      return logs.some((entry: { level: string; message: string }) => entry.level === 'error' && entry.message === 'Add items failed');
+    }).toBe(true);
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await snap(page, testInfo, 'saf-error-recovered');
   });
 
   test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -411,8 +634,8 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await ensureRemoteRoot(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
     await openRemoteFolder(dialog, 'Usb0');
@@ -440,7 +663,7 @@ test.describe('Playback file browser', () => {
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
     const dialog = page.getByRole('dialog');
-    await ensureRemoteRoot(page);
+    await ensureRemoteRoot(dialog);
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Games');
     await expect(dialog.getByText(/Path: \/Usb0\/Games/)).toBeVisible();
@@ -526,8 +749,8 @@ test.describe('Playback file browser', () => {
 
     await openAddItemsDialog(page);
     await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await ensureRemoteRoot(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Games');

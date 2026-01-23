@@ -17,13 +17,13 @@ import { attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, assert
 test.describe('Critical CTA Coverage', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -33,7 +33,7 @@ test.describe('Critical CTA Coverage', () => {
     }
   });
 
-  test('add disks to library flow shows source selection', async ({ page }: { page: Page }, testInfo) => {
+  test('add disks to library flow shows source selection', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks');
     await attachStepScreenshot(page, testInfo, 'disks-page');
 
@@ -61,13 +61,13 @@ test.describe('Critical CTA Coverage', () => {
 test.describe('Shuffle Mode Tests', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -77,7 +77,7 @@ test.describe('Shuffle Mode Tests', () => {
     }
   });
 
-  test('shuffle checkbox toggles shuffle mode', async ({ page }: { page: Page }, testInfo) => {
+  test('shuffle checkbox toggles shuffle mode', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await attachStepScreenshot(page, testInfo, 'play-page');
 
@@ -104,7 +104,7 @@ test.describe('Shuffle Mode Tests', () => {
     await attachStepScreenshot(page, testInfo, `shuffle-now-${newState ? 'on' : 'off'}`);
   });
 
-  test('reshuffle button appears when shuffle is enabled', async ({ page }: { page: Page }, testInfo) => {
+  test('reshuffle button appears when shuffle is enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await attachStepScreenshot(page, testInfo, 'play-page');
 
@@ -135,13 +135,13 @@ test.describe('Shuffle Mode Tests', () => {
 test.describe('Home Page Quick Actions', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -151,7 +151,7 @@ test.describe('Home Page Quick Actions', () => {
     }
   });
 
-  test('home page displays quick action cards for machine control', async ({ page }: { page: Page }, testInfo) => {
+  test('home page displays quick action cards for machine control', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'home-page');
 
@@ -173,7 +173,7 @@ test.describe('Home Page Quick Actions', () => {
     await attachStepScreenshot(page, testInfo, `machine-controls-found-${machineControlCount}`);
   });
 
-  test('home page displays config management quick actions', async ({ page }: { page: Page }, testInfo) => {
+  test('home page displays config management quick actions', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'home-page');
 
@@ -195,7 +195,7 @@ test.describe('Home Page Quick Actions', () => {
     await attachStepScreenshot(page, testInfo, `config-controls-found-${configControlCount}`);
   });
 
-  test('drive status cards navigate to disks page', async ({ page }: { page: Page }, testInfo) => {
+  test('drive status cards navigate to disks page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'home-page');
 
@@ -225,7 +225,7 @@ test.describe('Home Page Quick Actions', () => {
 test.describe('Disk Browser Coverage', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     // Allow expected FTP warnings when browsing without FTP bridge
     allowWarnings(testInfo, 'Expected FTP unavailable warnings in disk browser');
@@ -233,7 +233,7 @@ test.describe('Disk Browser Coverage', () => {
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -243,7 +243,7 @@ test.describe('Disk Browser Coverage', () => {
     }
   });
 
-  test('disk browser allows source selection', async ({ page }: { page: Page }, testInfo) => {
+  test('disk browser allows source selection', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks');
     await attachStepScreenshot(page, testInfo, 'disks-page');
 

@@ -2,8 +2,10 @@ package uk.gleissner.c64commander
 
 import android.app.Activity
 import android.content.Intent
-import androidx.documentfile.provider.DocumentFile
+import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.activity.result.ActivityResult
+import androidx.documentfile.provider.DocumentFile
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -40,31 +42,92 @@ class FolderPickerPlugin : Plugin() {
     }
 
     val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-    context.contentResolver.takePersistableUriPermission(treeUri, flags)
+    try {
+      context.contentResolver.takePersistableUriPermission(treeUri, flags)
+    } catch (error: SecurityException) {
+      call.reject("Persistable permission rejected", error)
+      return
+    }
 
     executor.execute {
       try {
         val root = DocumentFile.fromTreeUri(context, treeUri)
           ?: throw IllegalStateException("Unable to access selected directory")
-        val files = mutableListOf<JSObject>()
-        val extensions = call.getArray("extensions")?.let { array ->
-          val values = mutableSetOf<String>()
-          for (idx in 0 until array.length()) {
-            val value = array.optString(idx, "").lowercase()
-            if (value.isNotBlank()) values.add(value)
-          }
-          values
+        val permissionPersisted = context.contentResolver.persistedUriPermissions.any {
+          it.uri == treeUri && it.isReadPermission
         }
-        collectFiles(root, "", files, extensions)
+        if (!permissionPersisted) {
+          throw IllegalStateException("Persistable permission not persisted")
+        }
         val response = JSObject()
-        response.put("uri", treeUri.toString())
+        response.put("treeUri", treeUri.toString())
         response.put("rootName", root.name ?: "")
-        response.put("files", files)
+        response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
         call.reject(error.message, error)
       }
     }
+  }
+
+  @PluginMethod
+  fun listChildren(call: PluginCall) {
+    val treeUriString = call.getString("treeUri")
+    if (treeUriString.isNullOrBlank()) {
+      call.reject("treeUri is required")
+      return
+    }
+    val treeUri = Uri.parse(treeUriString)
+    val relativePath = call.getString("path")
+
+    executor.execute {
+      try {
+        val documentId = resolveDocumentId(treeUri, relativePath, true)
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
+        val projection = arrayOf(
+          DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+          DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+          DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        val entries = mutableListOf<JSObject>()
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+          val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+          val mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+          val base = normalizePath(relativePath)
+          while (cursor.moveToNext()) {
+            val name = cursor.getString(nameIndex) ?: continue
+            val mimeType = cursor.getString(mimeIndex) ?: ""
+            val type = if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) "dir" else "file"
+            val entry = JSObject()
+            entry.put("name", name)
+            entry.put("type", type)
+            entry.put("path", buildChildPath(base, name))
+            entries.add(entry)
+          }
+        } ?: throw IllegalStateException("Unable to list directory")
+        val response = JSObject()
+        response.put("entries", entries)
+        call.resolve(response)
+      } catch (error: Exception) {
+        call.reject(error.message, error)
+      }
+    }
+  }
+
+  @PluginMethod
+  fun getPersistedUris(call: PluginCall) {
+    val entries = mutableListOf<JSObject>()
+    context.contentResolver.persistedUriPermissions.forEach { permission ->
+      val entry = JSObject()
+      entry.put("uri", permission.uri.toString())
+      entry.put("read", permission.isReadPermission)
+      entry.put("write", permission.isWritePermission)
+      entry.put("persistedAt", permission.persistedTime)
+      entries.add(entry)
+    }
+    val response = JSObject()
+    response.put("uris", entries)
+    call.resolve(response)
   }
 
   @PluginMethod
@@ -77,7 +140,7 @@ class FolderPickerPlugin : Plugin() {
 
     executor.execute {
       try {
-        val input = context.contentResolver.openInputStream(android.net.Uri.parse(uri))
+        val input = context.contentResolver.openInputStream(Uri.parse(uri))
           ?: throw IllegalStateException("Unable to open file")
         val bytes = input.use { it.readBytes() }
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
@@ -90,32 +153,83 @@ class FolderPickerPlugin : Plugin() {
     }
   }
 
-  private fun collectFiles(
-    dir: DocumentFile,
-    prefix: String,
-    out: MutableList<JSObject>,
-    allowedExtensions: Set<String>?
-  ) {
-    dir.listFiles().forEach { entry ->
-      val name = entry.name ?: return@forEach
-      if (entry.isDirectory) {
-        collectFiles(entry, "$prefix$name/", out, allowedExtensions)
-      } else if (entry.isFile && isSupportedLocalFile(name, allowedExtensions)) {
-        val payload = JSObject()
-        payload.put("uri", entry.uri.toString())
-        payload.put("name", name)
-        payload.put("path", "/$prefix$name")
-        out.add(payload)
+  @PluginMethod
+  fun readFileFromTree(call: PluginCall) {
+    val treeUriString = call.getString("treeUri")
+    if (treeUriString.isNullOrBlank()) {
+      call.reject("treeUri is required")
+      return
+    }
+    val relativePath = call.getString("path")
+    if (relativePath.isNullOrBlank()) {
+      call.reject("path is required")
+      return
+    }
+    val treeUri = Uri.parse(treeUriString)
+
+    executor.execute {
+      try {
+        val documentId = resolveDocumentId(treeUri, relativePath, false)
+        val documentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+        val input = context.contentResolver.openInputStream(documentUri)
+          ?: throw IllegalStateException("Unable to open file")
+        val bytes = input.use { it.readBytes() }
+        val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val result = JSObject()
+        result.put("data", encoded)
+        call.resolve(result)
+      } catch (error: Exception) {
+        call.reject(error.message, error)
       }
     }
   }
 
-  private fun isSupportedLocalFile(name: String, allowedExtensions: Set<String>?): Boolean {
-    val lowered = name.lowercase()
-    val ext = lowered.substringAfterLast('.', "")
-    if (allowedExtensions != null && allowedExtensions.isNotEmpty()) {
-      return allowedExtensions.contains(ext)
+  private fun normalizePath(path: String?): String {
+    if (path.isNullOrBlank() || path == "/") return ""
+    return path.trim().trim('/').replace(Regex("/+"), "/")
+  }
+
+  private fun buildChildPath(base: String, name: String): String {
+    return if (base.isBlank()) {
+      "/$name"
+    } else {
+      "/$base/$name"
     }
-    return lowered.endsWith(".sid") || lowered.endsWith(".zip") || lowered.endsWith(".7z")
+  }
+
+  private fun resolveDocumentId(treeUri: Uri, relativePath: String?, requireDirectory: Boolean): String {
+    var documentId = DocumentsContract.getTreeDocumentId(treeUri)
+    val normalized = normalizePath(relativePath)
+    if (normalized.isBlank()) return documentId
+    val segments = normalized.split('/').filter { it.isNotBlank() }
+    for ((index, segment) in segments.withIndex()) {
+      val isLeaf = index == segments.size - 1
+      val childId = findChildDocumentId(treeUri, documentId, segment, requireDirectory || !isLeaf)
+        ?: throw IllegalStateException("Path segment not found: $segment")
+      documentId = childId
+    }
+    return documentId
+  }
+
+  private fun findChildDocumentId(treeUri: Uri, parentId: String, name: String, requireDirectory: Boolean): String? {
+    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+    val projection = arrayOf(
+      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+      DocumentsContract.Document.COLUMN_MIME_TYPE
+    )
+    context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+      val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+      val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+      val mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+      while (cursor.moveToNext()) {
+        val displayName = cursor.getString(nameIndex) ?: continue
+        if (displayName != name) continue
+        val mimeType = cursor.getString(mimeIndex) ?: ""
+        if (requireDirectory && mimeType != DocumentsContract.Document.MIME_TYPE_DIR) return null
+        return cursor.getString(idIndex)
+      }
+    }
+    return null
   }
 }

@@ -40,6 +40,31 @@ const selectEntryCheckbox = async (container: Page, name: string) => {
   await row.getByRole('checkbox').click();
 };
 
+const registerMockDirectoryPicker = async (page: Page, options: { folderName: string; fileName: string }) => {
+  await page.addInitScript(({ folderName, fileName }) => {
+    (window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker = async () => {
+      const file = new File(['data'], fileName, { type: 'application/octet-stream' });
+      const fileHandle = {
+        kind: 'file',
+        getFile: async () => file,
+      } as FileSystemFileHandle;
+      const nestedFolder = {
+        kind: 'directory',
+        entries: async function* () {
+          yield [fileName, fileHandle] as const;
+        },
+      } as FileSystemDirectoryHandle;
+      const directoryHandle = {
+        name: folderName,
+        entries: async function* () {
+          yield [folderName, nestedFolder] as const;
+        },
+      } as FileSystemDirectoryHandle;
+      return directoryHandle;
+    };
+  }, options);
+};
+
 test.describe('Item Selection Dialog UX', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -214,6 +239,46 @@ test.describe('Item Selection Dialog UX', () => {
     // Verify we're back on Play page with items
     await expect(page.getByTestId('playlist-list')).toBeVisible();
     await snap(page, testInfo, 'back-to-play-page');
+  });
+
+  test('Play page: local folder picker returns to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await registerMockDirectoryPicker(page, {
+      folderName: 'Local-Long-Folder-Name-For-Return-Flow',
+      fileName: 'Super-Long-Local-Track-Name-For-Return-Flow.sid',
+    });
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'Add folder' }).click();
+
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 10000 });
+    await expect(page.getByTestId('playlist-list')).toBeVisible();
+    await expect(
+      page.getByTestId('playlist-item').filter({ hasText: 'Super-Long-Local-Track-Name-For-Return-Flow.sid' }).first(),
+    ).toBeVisible();
+    await snap(page, testInfo, 'playlist-returned');
+  });
+
+  test('Disks page: local folder picker returns to disk list', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await registerMockDirectoryPicker(page, {
+      folderName: 'Local-Long-Disk-Folder-Name-For-Return-Flow',
+      fileName: 'Super-Long-Local-Disk-Name-For-Return-Flow.d64',
+    });
+
+    await page.goto('/disks');
+    await snap(page, testInfo, 'disks-open');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: 'Add folder' }).click();
+
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0, { timeout: 10000 });
+    await expect(page.getByTestId('disk-list')).toBeVisible();
+    await expect(
+      page.getByTestId('disk-row').filter({ hasText: 'Super-Long-Local-Disk-Name-For-Return-Flow.d64' }).first(),
+    ).toBeVisible();
+    await snap(page, testInfo, 'disks-returned');
   });
 
   test('Disks page: C64 Ultimate full flow adds disks', async ({ page }: { page: Page }, testInfo: TestInfo) => {

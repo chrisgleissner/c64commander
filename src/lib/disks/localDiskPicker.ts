@@ -1,7 +1,8 @@
-import { Capacitor } from '@capacitor/core';
-import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
+import { FolderPicker } from '@/lib/native/folderPicker';
+import { getPlatform } from '@/lib/native/platform';
 import type { DiskEntry } from './diskTypes';
-import { createDiskEntry, isDiskImagePath, normalizeDiskPath } from './diskTypes';
+import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath } from './diskTypes';
+import { assignDiskGroupsByPrefix } from './diskGrouping';
 
 export type LocalDiskSelection = {
   disks: DiskEntry[];
@@ -23,12 +24,6 @@ type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
 };
 
-type FolderPickerResult = {
-  uri?: string;
-  files?: unknown;
-  rootName?: string;
-};
-
 const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
   handle.kind === 'directory' && 'entries' in handle;
 
@@ -38,48 +33,54 @@ export const prepareDiskDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute('directory', '');
 };
 
-const normalizeFolderPickerEntries = (result: FolderPickerResult | null): { entries: PickedFolderEntry[]; rootName: string } => {
-  if (!result) throw new Error('Folder picker returned no data.');
-  const files = result.files;
-  const rootName = result.rootName || '';
-  if (!files) return { entries: [], rootName };
-  if (Array.isArray(files)) return { entries: files as PickedFolderEntry[], rootName };
-  if (typeof files === 'object' && 'length' in files) {
-    return { entries: Array.from(files as ArrayLike<PickedFolderEntry>), rootName };
+const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string }[]> => {
+  const queue = ['/'];
+  const files: { name: string; path: string }[] = [];
+  while (queue.length) {
+    const path = queue.shift();
+    if (!path) continue;
+    const response = await FolderPicker.listChildren({ treeUri, path });
+    response.entries.forEach((entry) => {
+      if (entry.type === 'dir') {
+        queue.push(normalizeDiskPath(entry.path));
+      } else {
+        files.push({ name: entry.name, path: normalizeDiskPath(entry.path) });
+      }
+    });
   }
-  if (typeof files === 'object' && Symbol.iterator in files) {
-    return { entries: Array.from(files as Iterable<PickedFolderEntry>), rootName };
-  }
-  return { entries: [], rootName };
-};
-
-const applyRootName = (path: string, rootName: string) => {
-  if (!rootName) return path;
-  const normalized = normalizeDiskPath(path);
-  if (normalized.startsWith(`/${rootName}/`) || normalized === `/${rootName}`) return normalized;
-  return normalizeDiskPath(`/${rootName}${normalized}`);
+  return files;
 };
 
 export const importLocalDiskFolder = async (): Promise<LocalDiskSelection | null> => {
-  if (Capacitor.getPlatform() === 'android') {
-    const result = await FolderPicker.pickDirectory({ extensions: ['d64', 'g64', 'd71', 'g71', 'd81'] });
-    const { entries, rootName } = normalizeFolderPickerEntries(result);
+  if (getPlatform() === 'android') {
+    const result = await FolderPicker.pickDirectory();
+    const treeUri = result?.treeUri;
+    if (!treeUri || result?.files != null || !result?.permissionPersisted) {
+      throw new Error('Android SAF picker returned an unsupported response.');
+    }
     const runtimeFiles: Record<string, File> = {};
-    const groupName = rootName || null;
-    const disks = entries
-      .filter((entry) => isDiskImagePath(entry.name))
-      .map((entry, index) => {
-        const path = applyRootName(entry.path, rootName);
-        return createDiskEntry({
-          path,
-          location: 'local',
-          group: groupName,
-          localUri: entry.uri,
-          modifiedAt: null,
-          sizeBytes: null,
-          importOrder: index,
-        });
+    const safFiles = await listSafFiles(treeUri);
+    const diskCandidates = safFiles.filter((entry) => isDiskImagePath(entry.name));
+    const groupMap = assignDiskGroupsByPrefix(
+      diskCandidates.map((entry) => ({
+        path: normalizeDiskPath(entry.path),
+        name: entry.name,
+      })),
+    );
+    const disks = diskCandidates.map((entry, index) => {
+      const path = normalizeDiskPath(entry.path);
+      const autoGroup = groupMap.get(path);
+      const fallbackGroup = getLeafFolderName(path);
+      return createDiskEntry({
+        path,
+        location: 'local',
+        group: autoGroup ?? fallbackGroup ?? null,
+        localTreeUri: treeUri,
+        modifiedAt: null,
+        sizeBytes: null,
+        importOrder: index,
       });
+    });
     return { disks, runtimeFiles };
   }
 
@@ -112,19 +113,28 @@ export const importLocalDiskFolder = async (): Promise<LocalDiskSelection | null
 
   await walkDirectory(directoryHandle, '');
   const runtimeFiles: Record<string, File> = {};
-  const disks = files.map((file, index) => {
+  const diskCandidates = files.map((file) => {
     const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const path = normalizeDiskPath(`${rootName}/${relativePath}`);
-    const entry = createDiskEntry({
-      path,
+    return {
+      file,
+      path: normalizeDiskPath(`${rootName}/${relativePath}`),
+      name: file.name,
+    };
+  });
+  const groupMap = assignDiskGroupsByPrefix(diskCandidates.map((entry) => ({ path: entry.path, name: entry.name })));
+  const disks = diskCandidates.map((entry, index) => {
+    const autoGroup = groupMap.get(entry.path);
+    const fallbackGroup = getLeafFolderName(entry.path);
+    const diskEntry = createDiskEntry({
+      path: entry.path,
       location: 'local',
-      group: rootName || null,
-      sizeBytes: file.size,
-      modifiedAt: new Date(file.lastModified).toISOString(),
+      group: autoGroup ?? fallbackGroup ?? null,
+      sizeBytes: entry.file.size,
+      modifiedAt: new Date(entry.file.lastModified).toISOString(),
       importOrder: index,
     });
-    runtimeFiles[entry.id] = file;
-    return entry;
+    runtimeFiles[diskEntry.id] = entry.file;
+    return diskEntry;
   });
   return { disks, runtimeFiles };
 };
@@ -132,20 +142,29 @@ export const importLocalDiskFolder = async (): Promise<LocalDiskSelection | null
 export const importLocalDiskFiles = (files: FileList | null): LocalDiskSelection => {
   if (!files || files.length === 0) return { disks: [], runtimeFiles: {} };
   const runtimeFiles: Record<string, File> = {};
-  const disks: DiskEntry[] = [];
-
-  Array.from(files).forEach((file) => {
-    if (!isDiskImagePath(file.name)) return;
-    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const path = normalizeDiskPath(relativePath);
-    const entry = createDiskEntry({
-      path,
-      location: 'local',
-      sizeBytes: file.size,
-      modifiedAt: new Date(file.lastModified).toISOString(),
+  const diskCandidates = Array.from(files)
+    .filter((file) => isDiskImagePath(file.name))
+    .map((file) => {
+      const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      return {
+        file,
+        path: normalizeDiskPath(relativePath),
+        name: file.name,
+      };
     });
-    runtimeFiles[entry.id] = file;
-    disks.push(entry);
+  const groupMap = assignDiskGroupsByPrefix(diskCandidates.map((entry) => ({ path: entry.path, name: entry.name })));
+  const disks = diskCandidates.map((entry) => {
+    const autoGroup = groupMap.get(entry.path);
+    const fallbackGroup = getLeafFolderName(entry.path);
+    const diskEntry = createDiskEntry({
+      path: entry.path,
+      location: 'local',
+      group: autoGroup ?? fallbackGroup ?? null,
+      sizeBytes: entry.file.size,
+      modifiedAt: new Date(entry.file.lastModified).toISOString(),
+    });
+    runtimeFiles[diskEntry.id] = entry.file;
+    return diskEntry;
   });
 
   return { disks, runtimeFiles };
@@ -154,24 +173,32 @@ export const importLocalDiskFiles = (files: FileList | null): LocalDiskSelection
 export const importLocalDiskFolderFromInput = (files: FileList | null): LocalDiskSelection => {
   if (!files || files.length === 0) return { disks: [], runtimeFiles: {} };
   const runtimeFiles: Record<string, File> = {};
-  const disks: DiskEntry[] = [];
   const first = files[0] as File & { webkitRelativePath?: string };
   const rootName = first?.webkitRelativePath?.split('/')?.[0] || null;
-
-  Array.from(files).forEach((file, index) => {
-    if (!isDiskImagePath(file.name)) return;
-    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
-    const path = normalizeDiskPath(relativePath);
-    const entry = createDiskEntry({
-      path,
+  const diskCandidates = Array.from(files)
+    .filter((file) => isDiskImagePath(file.name))
+    .map((file) => {
+      const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+      return {
+        file,
+        path: normalizeDiskPath(relativePath),
+        name: file.name,
+      };
+    });
+  const groupMap = assignDiskGroupsByPrefix(diskCandidates.map((entry) => ({ path: entry.path, name: entry.name })));
+  const disks = diskCandidates.map((entry, index) => {
+    const autoGroup = groupMap.get(entry.path);
+    const fallbackGroup = getLeafFolderName(entry.path) ?? rootName;
+    const diskEntry = createDiskEntry({
+      path: entry.path,
       location: 'local',
-      group: rootName,
-      sizeBytes: file.size,
-      modifiedAt: new Date(file.lastModified).toISOString(),
+      group: autoGroup ?? fallbackGroup ?? null,
+      sizeBytes: entry.file.size,
+      modifiedAt: new Date(entry.file.lastModified).toISOString(),
       importOrder: index,
     });
-    runtimeFiles[entry.id] = file;
-    disks.push(entry);
+    runtimeFiles[diskEntry.id] = entry.file;
+    return diskEntry;
   });
 
   return { disks, runtimeFiles };

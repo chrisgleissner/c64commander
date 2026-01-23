@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
+import { addErrorLog } from '@/lib/logging';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
+import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import { ItemSelectionView } from './ItemSelectionView';
 
@@ -25,13 +27,10 @@ export type ItemSelectionDialogProps = {
   allowFolderSelection?: boolean;
   isConfirming?: boolean;
   autoConfirmLocalSource?: boolean;
-  progress?: {
-    status: 'idle' | 'scanning' | 'error' | 'done';
-    count: number;
-    elapsedMs: number;
-    total?: number | null;
-    message?: string | null;
-  };
+  progress?: AddItemsProgressState;
+  showProgressFooter?: boolean;
+  autoConfirmCloseBefore?: boolean;
+  onAutoConfirmStart?: (source: SourceLocation) => void;
 };
 
 export const ItemSelectionDialog = ({
@@ -47,12 +46,16 @@ export const ItemSelectionDialog = ({
   isConfirming = false,
   autoConfirmLocalSource = false,
   progress,
+  showProgressFooter = true,
+  autoConfirmCloseBefore = false,
+  onAutoConfirmStart,
 }: ItemSelectionDialogProps) => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
   const [filterText, setFilterText] = useState('');
   const [pendingLocalSource, setPendingLocalSource] = useState(false);
   const [pendingLocalSourceCount, setPendingLocalSourceCount] = useState(0);
+  const [pendingLocalSourceId, setPendingLocalSourceId] = useState<string | null>(null);
   const [autoConfirming, setAutoConfirming] = useState(false);
 
   const localSources = useMemo(
@@ -88,10 +91,11 @@ export const ItemSelectionDialog = ({
     setFilterText('');
     setPendingLocalSource(false);
     setPendingLocalSourceCount(0);
+    setPendingLocalSourceId(null);
   }, [open]);
 
   const confirmLocalSource = useCallback(async (target: SourceLocation) => {
-    if (autoConfirming) return;
+    if (autoConfirming || isConfirming) return;
     setAutoConfirming(true);
     const selections: SelectedItem[] = [
       {
@@ -100,24 +104,39 @@ export const ItemSelectionDialog = ({
         path: target.rootPath,
       },
     ];
-    const success = await onConfirm(target, selections);
-    if (success) {
-      onOpenChange(false);
+    try {
+      onAutoConfirmStart?.(target);
+      if (autoConfirmCloseBefore) {
+        onOpenChange(false);
+      }
+      const success = await onConfirm(target, selections);
+      if (success) {
+        if (!autoConfirmCloseBefore) {
+          onOpenChange(false);
+        }
+      }
+    } catch (error) {
+      addErrorLog('Add items failed', { error: (error as Error).message });
+      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
     }
     setAutoConfirming(false);
-  }, [autoConfirming, onConfirm, onOpenChange]);
+  }, [autoConfirmCloseBefore, autoConfirming, isConfirming, onAutoConfirmStart, onConfirm, onOpenChange]);
 
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
-    if (localSourceCount <= pendingLocalSourceCount) return;
-    const newestLocal = localSources[0];
-    if (!newestLocal) return;
-    setSelectedSourceId(newestLocal.id);
+    const targetSource = pendingLocalSourceId
+      ? localSources.find((item) => item.id === pendingLocalSourceId)
+      : localSourceCount > pendingLocalSourceCount
+        ? localSources[0]
+        : null;
+    if (!targetSource) return;
+    setSelectedSourceId(targetSource.id);
     setPendingLocalSource(false);
+    setPendingLocalSourceId(null);
     if (autoConfirmLocalSource) {
-      void confirmLocalSource(newestLocal);
+      void confirmLocalSource(targetSource);
     }
-  }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, selectedSourceId]);
+  }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, pendingLocalSourceId, selectedSourceId]);
 
   const visibleEntries = useMemo(() => {
     const filesFiltered = filterEntry
@@ -142,6 +161,7 @@ export const ItemSelectionDialog = ({
 
   const handleConfirm = async () => {
     if (!source) return;
+    if (isConfirming || autoConfirming) return;
     if (!selection.size) {
       toast({ title: 'Select items', description: 'Choose at least one item to add.', variant: 'destructive' });
       return;
@@ -151,10 +171,15 @@ export const ItemSelectionDialog = ({
       name: entry.name,
       path: entry.path,
     }));
-    const success = await onConfirm(source, selections);
-    if (success) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      onOpenChange(false);
+    try {
+      const success = await onConfirm(source, selections);
+      if (success) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        onOpenChange(false);
+      }
+    } catch (error) {
+      addErrorLog('Add items failed', { error: (error as Error).message });
+      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
     }
   };
 
@@ -166,9 +191,23 @@ export const ItemSelectionDialog = ({
   };
 
   const handleAddLocalSource = async () => {
+    if (pendingLocalSource) return;
     setPendingLocalSource(true);
     setPendingLocalSourceCount(localSourceCount);
-    await onAddLocalSource();
+    setPendingLocalSourceId(null);
+    try {
+      const newSourceId = await onAddLocalSource();
+      if (newSourceId) {
+        setPendingLocalSourceId(newSourceId);
+        return;
+      }
+      setPendingLocalSourceId(null);
+    } catch (error) {
+      setPendingLocalSource(false);
+      setPendingLocalSourceId(null);
+      addErrorLog('Folder picker failed', { error: (error as Error).message });
+      toast({ title: 'Unable to add folder', description: (error as Error).message, variant: 'destructive' });
+    }
   };
 
   return (
@@ -208,15 +247,15 @@ export const ItemSelectionDialog = ({
                             setSelectedSourceId(item.id);
                           }}
                           disabled={!item.isAvailable}
-                          className="justify-start"
+                          className="justify-start min-w-0"
                         >
-                          {item.name}
+                          <span className="truncate">{item.name}</span>
                         </Button>
                       ))}
                       {group.label === 'This device' && (
-                        <Button variant="secondary" onClick={() => void handleAddLocalSource()} className="justify-start">
+                        <Button variant="secondary" onClick={() => void handleAddLocalSource()} className="justify-start min-w-0">
                           <FolderPlus className="h-4 w-4 mr-1" />
-                          Add folder
+                          <span className="truncate">Add folder</span>
                         </Button>
                       )}
                     </div>
@@ -266,7 +305,7 @@ export const ItemSelectionDialog = ({
           </div>
 
           <DialogFooter className="flex flex-col gap-2 border-t border-border px-6 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:items-center sm:justify-between">
-            {progress && progress.status !== 'idle' && (
+            {showProgressFooter && progress && progress.status !== 'idle' && (
               <div className="text-xs text-muted-foreground" data-testid="add-items-progress">
                 <span>
                   {progress.message || 'Scanning…'} {progress.count} items, {formatElapsed(progress.elapsedMs)}

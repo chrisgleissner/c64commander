@@ -11,7 +11,7 @@
 
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
-import type { Page } from '@playwright/test';
+import type { Page, TestInfo } from '@playwright/test';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
@@ -19,14 +19,14 @@ import { seedUiMocks } from './uiMocks';
 test.describe('UX Interaction Patterns', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }, testInfo) => {
+  test.beforeEach(async ({ page }, testInfo: TestInfo) => {
     server = await createMockC64Server({});
     await startStrictUiMonitoring(page, testInfo);
     await seedUiMocks(page, server.baseUrl);
     await page.waitForLoadState('networkidle');
   });
 
-  test.afterEach(async ({ page }, testInfo) => {
+  test.afterEach(async ({ page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo?.title);
       await assertNoUiIssues(page, testInfo);
@@ -36,7 +36,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('source selection precedes navigation - local source @allow-warnings', async ({ page }, testInfo) => {
+  test('source selection precedes navigation - local source @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     // Navigate directly to Play page
@@ -85,7 +85,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('source selection precedes navigation - C64U source @allow-warnings', async ({ page }, testInfo) => {
+  test('source selection precedes navigation - C64U source @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -120,7 +120,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('selection view navigation stays within source scope @allow-warnings', async ({ page }, testInfo) => {
+  test('selection view navigation stays within source scope @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -179,7 +179,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('bulk actions: select all and deselect all @allow-warnings', async ({ page }, testInfo) => {
+  test('bulk actions: select all and deselect all @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -223,7 +223,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('bulk remove from playlist shows confirmation @allow-warnings', async ({ page }, testInfo) => {
+  test('bulk remove from playlist shows confirmation @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -275,7 +275,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('playback controls only in playlist, not in selection view @allow-warnings', async ({ page }, testInfo) => {
+  test('playback controls only in playlist, not in selection view @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -320,7 +320,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('mounting controls only on disks page, not on play page @allow-warnings', async ({ page }, testInfo) => {
+  test('mounting controls only on disks page, not on play page @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -356,7 +356,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('intent-based language: "Add items" not "Browse filesystem" @allow-warnings', async ({ page }, testInfo) => {
+  test('intent-based language: "Add items" not "Browse filesystem" @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -380,7 +380,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('intent-based language: "Choose source" in source selection @allow-warnings', async ({ page }, testInfo) => {
+  test('intent-based language: "Choose source" in source selection @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -414,7 +414,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('layout stability: controls do not shift when selection changes @allow-warnings', async ({ page }, testInfo) => {
+  test('layout stability: controls do not shift when selection changes @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -469,7 +469,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('disk collection shows full list with "View all" when limit exceeded @allow-warnings', async ({ page }, testInfo) => {
+  test('disk collection shows full list with "View all" when limit exceeded @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/disks");
@@ -502,7 +502,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('long paths wrap and do not force horizontal scrolling @allow-warnings', async ({ page }, testInfo) => {
+  test('long paths wrap and do not force horizontal scrolling @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto("/play");
@@ -547,7 +547,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('selection count is displayed when items are selected @allow-warnings', async ({ page }, testInfo) => {
+  test('selection count is displayed when items are selected @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');
@@ -590,7 +590,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('quick "Root" action available in selection view @allow-warnings', async ({ page }, testInfo) => {
+  test('quick "Root" action available in selection view @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');
@@ -624,7 +624,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('modal dialogs for mount actions @allow-warnings', async ({ page }, testInfo) => {
+  test('modal dialogs for mount actions @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/disks');
@@ -653,7 +653,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('clear confirmation on destructive playlist action @allow-warnings', async ({ page }, testInfo) => {
+  test('clear confirmation on destructive playlist action @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');
@@ -696,7 +696,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('HVSC metadata used for song display @allow-warnings', async ({ page }, testInfo) => {
+  test('HVSC metadata used for song display @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');
@@ -717,7 +717,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('consistent selection UI across local and C64U sources @allow-warnings', async ({ page }, testInfo) => {
+  test('consistent selection UI across local and C64U sources @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');
@@ -771,7 +771,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('no unrestricted filesystem access language @allow-warnings', async ({ page }, testInfo) => {
+  test('no unrestricted filesystem access language @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');
@@ -798,7 +798,7 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
-  test('playlist actions easily discoverable @allow-warnings', async ({ page }, testInfo) => {
+  test('playlist actions easily discoverable @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');

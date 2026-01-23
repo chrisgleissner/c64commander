@@ -28,13 +28,13 @@ const addLocalFolder = async (page: Page, folderPath: string) => {
 test.describe('Playlist controls and advanced features', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -44,7 +44,7 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  test('playlist filter not yet implemented', async ({ page }: { page: Page }, testInfo) => {
+  test('playlist filter not yet implemented', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     // Verify that playlist filter is not yet available (only HVSC folder filter exists)
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
@@ -62,7 +62,7 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'items-shown-unfiltered');
   });
 
-  test('shuffle mode checkbox toggles state', async ({ page }: { page: Page }, testInfo) => {
+  test('shuffle mode checkbox toggles state', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -89,7 +89,7 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'shuffle-disabled');
   });
 
-  test('reshuffle changes playlist order', async ({ page }: { page: Page }, testInfo) => {
+  test('reshuffle changes playlist order', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -112,7 +112,7 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'reshuffle-changed');
   });
 
-  test('shuffle category checkboxes filter eligible files', async ({ page }: { page: Page }, testInfo) => {
+  test('shuffle category checkboxes filter eligible files', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -136,7 +136,7 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  test('repeat mode checkbox toggles state', async ({ page }: { page: Page }, testInfo) => {
+  test('repeat mode checkbox toggles state', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -155,7 +155,7 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'repeat-enabled');
   });
 
-  test('duration override input accepts mm:ss format', async ({ page }: { page: Page }, testInfo) => {
+  test('duration override input accepts mm:ss format', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -201,7 +201,7 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  test('duration override affects playback metadata', async ({ page }: { page: Page }, testInfo) => {
+  test('duration override affects playback metadata', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -258,7 +258,7 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  test('SID subsong selection input accepts song number', async ({ page }: { page: Page }, testInfo) => {
+  test('SID subsong selection input accepts song number', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -291,7 +291,7 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  test('prev at first track stays at first', async ({ page }: { page: Page }, testInfo) => {
+  test('prev at first track stays at first', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -313,7 +313,7 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'still-at-first');
   });
 
-  test('next at last track stops playback', async ({ page }: { page: Page }, testInfo) => {
+  test('next at last track stops playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 

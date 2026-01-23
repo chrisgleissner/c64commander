@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Slider } from '@/components/ui/slider';
 import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -31,12 +32,22 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
+import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useMockMode } from '@/hooks/useMockMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
+import {
+  clampConfigWriteIntervalMs,
+  loadConfigWriteIntervalMs,
+  loadDebugLoggingEnabled,
+  saveConfigWriteIntervalMs,
+  saveDebugLoggingEnabled,
+} from '@/lib/config/appSettings';
+import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
+import { getPlatform } from '@/lib/native/platform';
+import { redactTreeUri } from '@/lib/native/safUtils';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -63,7 +74,14 @@ export default function SettingsPage() {
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
+  const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
+  const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
+  const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
+  const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
+  const [safBusy, setSafBusy] = useState(false);
+  const [safError, setSafError] = useState<string | null>(null);
   const devTapTimestamps = useRef<number[]>([]);
+  const isAndroid = getPlatform() === 'android';
 
   useEffect(() => {
     setUrlInput(baseUrl);
@@ -86,9 +104,69 @@ export default function SettingsPage() {
     return () => window.removeEventListener('c64u-logs-updated', handler);
   }, []);
 
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { key?: string; value?: unknown } | undefined;
+      if (!detail?.key) return;
+      if (detail.key === 'c64u_debug_logging_enabled') {
+        setDebugLoggingEnabled(Boolean(detail.value));
+      }
+      if (detail.key === 'c64u_config_write_min_interval_ms') {
+        setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
+      }
+    };
+    window.addEventListener('c64u-app-settings-updated', handler);
+    return () => window.removeEventListener('c64u-app-settings-updated', handler);
+  }, []);
+
   const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
   const errorsPayload = useMemo(() => formatLogsForShare(errorLogs), [errorLogs]);
   const activePayload = diagnosticsTab === 'errors' ? errorsPayload : logsPayload;
+
+  const refreshSafPermissions = async () => {
+    if (!isAndroid) return;
+    setSafBusy(true);
+    setSafError(null);
+    try {
+      const result = await FolderPicker.getPersistedUris();
+      setSafUris(result?.uris ?? []);
+      addLog('debug', 'SAF persisted URIs (manual)', {
+        count: result?.uris?.length ?? 0,
+        uris: (result?.uris ?? []).map((entry) => redactTreeUri(entry.uri)),
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      setSafError(message);
+      addErrorLog('SAF persisted URI lookup failed', { error: message });
+    } finally {
+      setSafBusy(false);
+    }
+  };
+
+  const enumerateSafRoot = async () => {
+    if (!isAndroid) return;
+    const treeUri = safUris[0]?.uri;
+    if (!treeUri) {
+      toast({ title: 'SAF diagnostics', description: 'No persisted SAF permissions found.', variant: 'destructive' });
+      return;
+    }
+    setSafBusy(true);
+    setSafError(null);
+    try {
+      const result = await FolderPicker.listChildren({ treeUri, path: '/' });
+      setSafEntries(result.entries ?? []);
+      addLog('debug', 'SAF diagnostic enumeration', {
+        treeUri: redactTreeUri(treeUri),
+        entries: result.entries?.length ?? 0,
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      setSafError(message);
+      addErrorLog('SAF enumeration failed', { error: message });
+    } finally {
+      setSafBusy(false);
+    }
+  };
 
   const handleShareActive = async () => {
     const content = activePayload || 'No entries recorded.';
@@ -263,6 +341,7 @@ export default function SettingsPage() {
               variant="outline"
               onClick={() => refetch()}
               disabled={status.isConnecting}
+              aria-label="Refresh connection"
             >
               <RefreshCw className={`h-4 w-4 ${status.isConnecting ? 'animate-spin' : ''}`} />
             </Button>
@@ -300,11 +379,87 @@ export default function SettingsPage() {
             <h2 className="font-medium">Diagnostics</h2>
           </div>
 
-          <div className="grid grid-cols-1 gap-2">
+          <div className="space-y-4">
             <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-2" />
               Logs
             </Button>
+
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="debug-logging" className="font-medium">Enable Debug Logging</Label>
+                <p className="text-xs text-muted-foreground">
+                  Emits all debug-level logs for diagnostics, including SAF and REST events.
+                </p>
+              </div>
+              <Checkbox
+                id="debug-logging"
+                checked={debugLoggingEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setDebugLoggingEnabled(enabled);
+                  saveDebugLoggingEnabled(enabled);
+                }}
+              />
+            </div>
+
+            {debugLoggingEnabled && isAndroid ? (
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">SAF diagnostics</p>
+                  <p className="text-xs text-muted-foreground">
+                    Manual checks for persisted SAF permissions and enumeration.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void refreshSafPermissions()} disabled={safBusy}>
+                    List persisted URIs
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void enumerateSafRoot()}
+                    disabled={safBusy || safUris.length === 0}
+                  >
+                    Enumerate first root
+                  </Button>
+                </div>
+                {safError ? (
+                  <p className="text-xs text-destructive">{safError}</p>
+                ) : null}
+                {safUris.length ? (
+                  <div className="text-xs text-muted-foreground">
+                    Persisted: {safUris.map((entry) => redactTreeUri(entry.uri)).filter(Boolean).join(', ')}
+                  </div>
+                ) : null}
+                {safEntries.length ? (
+                  <div className="max-h-28 overflow-auto whitespace-pre-line text-xs text-muted-foreground">
+                    {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join('\n')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="config-write-interval" className="font-medium">
+                  Config write spacing
+                </Label>
+                <span className="text-xs text-muted-foreground">{configWriteIntervalMs} ms</span>
+              </div>
+              <Slider
+                id="config-write-interval"
+                min={0}
+                max={2000}
+                step={100}
+                value={[configWriteIntervalMs]}
+                onValueChange={(value) => setConfigWriteIntervalMs(clampConfigWriteIntervalMs(value[0] ?? 0))}
+                onValueCommit={(value) => saveConfigWriteIntervalMs(value[0] ?? 0)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum delay between consecutive config write calls. Default 500 ms.
+              </p>
+            </div>
           </div>
         </motion.div>
 
@@ -399,8 +554,8 @@ export default function SettingsPage() {
               <h2 className="font-medium">Developer</h2>
             </div>
             <div className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <Label htmlFor="hvsc-flag" className="font-medium">
                     Enable HVSC downloads
                   </Label>
@@ -425,8 +580,8 @@ export default function SettingsPage() {
                   }}
                 />
               </div>
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+              <div className="flex items-start justify-between gap-3 min-w-0">
+                <div className="space-y-1 min-w-0">
                   <p className="font-medium">Enable mocked C64U (internal testing)</p>
                   <p className="text-xs text-muted-foreground">
                     Starts a local REST service and routes all requests to it.
@@ -527,7 +682,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium">{entry.message}</p>
                     <p className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</p>
                     {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                      <pre className="mt-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     )}
@@ -546,7 +701,7 @@ export default function SettingsPage() {
                       {entry.level.toUpperCase()} · {new Date(entry.timestamp).toLocaleString()}
                     </p>
                     {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre-wrap text-muted-foreground">
+                      <pre className="mt-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     )}
@@ -556,8 +711,8 @@ export default function SettingsPage() {
             </TabsContent>
           </Tabs>
           <DialogFooter>
-            <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-between">
-              <div className="flex gap-2">
+            <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="flex flex-wrap gap-2 min-w-0">
                 <Button variant="outline" onClick={handleShareActive}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
@@ -567,7 +722,7 @@ export default function SettingsPage() {
                   Share via email
                 </Button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 min-w-0">
                 <Button
                   variant="destructive"
                   onClick={() => {

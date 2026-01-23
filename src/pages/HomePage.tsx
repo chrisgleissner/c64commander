@@ -283,22 +283,22 @@ export default function HomePage() {
             onClick={() => navigate('/disks')}
             aria-label="Open Disks"
           >
-            <p>
-              <span className="font-medium">Drive A:</span>{' '}
-              <span className={driveA?.enabled ? 'text-success' : 'text-muted-foreground'}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium shrink-0">Drive A:</span>
+              <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
                 {driveA?.enabled ? 'ON' : 'OFF'}
               </span>
-              {' '}–{' '}
-              <span className="font-medium truncate">
+              <span className="shrink-0">–</span>
+              <span className="font-medium truncate min-w-0">
                 {driveA?.enabled ? driveA?.image_file || '—' : '—'}
               </span>
-            </p>
-            <p>
-              <span className="font-medium">Drive B:</span>{' '}
-              <span className={driveB?.enabled ? 'text-success' : 'text-muted-foreground'}>
+            </div>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium shrink-0">Drive B:</span>
+              <span className={driveB?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
                 {driveB?.enabled ? 'ON' : 'OFF'}
               </span>
-            </p>
+            </div>
           </button>
         </motion.div>
 

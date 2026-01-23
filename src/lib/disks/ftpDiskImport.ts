@@ -3,6 +3,7 @@ import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { addErrorLog } from '@/lib/logging';
 import type { DiskEntry } from './diskTypes';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath } from './diskTypes';
+import { assignDiskGroupsByPrefix } from './diskGrouping';
 
 export type FtpBrowserEntry = {
   name: string;
@@ -27,26 +28,32 @@ export const listFtpEntries = async (options: {
 };
 
 const walkFtpFolder = async (
-  options: { host: string; password?: string; groupName?: string | null },
+  options: { host: string; password?: string },
   path: string,
   entries: DiskEntry[],
 ) => {
   const listing = await listFtpEntries({ host: options.host, password: options.password, path });
+  const diskFiles = listing.filter((entry) => entry.type === 'file' && isDiskImagePath(entry.name));
+  const groupMap = assignDiskGroupsByPrefix(diskFiles.map((entry) => ({ path: entry.path, name: entry.name })));
+  diskFiles.forEach((entry) => {
+    const normalized = normalizeDiskPath(entry.path);
+    const autoGroup = groupMap.get(normalized);
+    const groupName = autoGroup ?? getLeafFolderName(normalized) ?? null;
+    entries.push(
+      createDiskEntry({
+        path: normalized,
+        location: 'ultimate',
+        group: groupName,
+        sizeBytes: entry.size ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
+        importOrder: entries.length,
+      }),
+    );
+  });
+
   for (const entry of listing) {
     if (entry.type === 'dir') {
       await walkFtpFolder(options, entry.path, entries);
-    } else if (isDiskImagePath(entry.name)) {
-      const normalized = normalizeDiskPath(entry.path);
-      entries.push(
-        createDiskEntry({
-          path: normalized,
-          location: 'ultimate',
-          group: options.groupName ?? getLeafFolderName(normalized),
-          sizeBytes: entry.size ?? null,
-          modifiedAt: entry.modifiedAt ?? null,
-          importOrder: entries.length,
-        }),
-      );
     }
   }
 };
@@ -58,8 +65,7 @@ export const importFtpFolder = async (options: {
 }): Promise<DiskEntry[]> => {
   const disks: DiskEntry[] = [];
   try {
-    const groupName = getLeafFolderName(options.path) || null;
-    await walkFtpFolder({ ...options, groupName }, options.path, disks);
+    await walkFtpFolder(options, options.path, disks);
   } catch (error) {
     addErrorLog('FTP disk import failed', { path: options.path, error: (error as Error).message });
     throw error;

@@ -13,11 +13,15 @@ npm run test:coverage
 # 2. Ensure E2E coverage directory exists
 mkdir -p .nyc_output
 
-# 3. Run E2E tests (which will collect coverage via Istanbul instrumentation)
-echo "==> Running E2E tests with coverage..."
-VITE_COVERAGE=true npm run test:e2e
+# 3. Build coverage-instrumented assets for Playwright
+echo "==> Building web app for E2E coverage..."
+VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
 
-# 4. Generate E2E coverage report
+# 4. Run E2E tests (which will collect coverage via Istanbul instrumentation)
+echo "==> Running E2E tests with coverage..."
+VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 PLAYWRIGHT_SKIP_BUILD=1 npm run test:e2e
+
+# 5. Generate E2E coverage report
 echo "==> Generating E2E coverage report..."
 npx nyc report \
   --temp-dir .nyc_output \
@@ -25,7 +29,7 @@ npx nyc report \
   --reporter=lcov \
   --reporter=text-summary
 
-# 5. Merge unit + E2E LCOV for Codecov
+# 6. Merge unit + E2E LCOV for Codecov
 echo "==> Merging LCOV reports for Codecov..."
 npx lcov-result-merger \
   "coverage/{lcov.info,e2e/lcov.info}" \

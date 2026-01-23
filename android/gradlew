@@ -113,6 +113,27 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
+# Prefer a full JDK with jlink available (AGP needs it for JdkImageTransform).
+if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/jlink" ]; then
+    for candidate in \
+        /usr/lib/jvm/java-17-openjdk-amd64 \
+        /usr/lib/jvm/java-17-openjdk \
+        /usr/lib/jvm/java-1.17.0-openjdk-amd64 \
+        /usr/lib/jvm/openjdk-17
+    do
+        if [ -x "$candidate/bin/jlink" ] ; then
+            JAVA_HOME=$candidate
+            export JAVA_HOME
+            break
+        fi
+    done
+fi
+
+if [ -n "${GRADLE_MAX_WORKERS:-}" ]; then
+    GRADLE_OPTS="${GRADLE_OPTS:-} -Dorg.gradle.workers.max=${GRADLE_MAX_WORKERS}"
+    export GRADLE_OPTS
+fi
+
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then

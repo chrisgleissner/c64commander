@@ -12,25 +12,24 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 test.describe('Settings diagnostics workflows', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
-  test.beforeEach(async ({ page }: { page: Page }, testInfo) => {
+  test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
 
     await page.addInitScript(() => {
       window.addEventListener('c64u-logs-updated', () => {});
-      
+
       const logs = [
-        { timestamp: Date.now(), level: 'error', message: 'Test error 1', context: {} },
-        { timestamp: Date.now(), level: 'info', message: 'Test info 1', context: {} },
+        { id: 'log-1', timestamp: new Date().toISOString(), level: 'error', message: 'Test error 1', details: {} },
+        { id: 'log-2', timestamp: new Date().toISOString(), level: 'info', message: 'Test info 1', details: {} },
       ];
-      
-      localStorage.setItem('c64u_logs', JSON.stringify(logs));
-      localStorage.setItem('c64u_error_logs', JSON.stringify([logs[0]]));
+
+      localStorage.setItem('c64u_app_logs', JSON.stringify(logs));
     });
   });
 
-  test.afterEach(async ({ page }: { page: Page }, testInfo) => {
+  test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
@@ -40,7 +39,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('open diagnostics dialog shows logs', async ({ page }: { page: Page }, testInfo) => {
+  test('open diagnostics dialog shows logs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -65,7 +64,32 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('share diagnostics copies to clipboard', async ({ page }: { page: Page }, testInfo) => {
+  test('debug logging toggle records REST calls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/settings');
+    await snap(page, testInfo, 'settings-open');
+
+    const debugToggle = page.getByLabel('Enable Debug Logging');
+    await expect(debugToggle).toBeVisible();
+    await debugToggle.click();
+    await snap(page, testInfo, 'debug-logging-enabled');
+
+    const refreshButton = page.getByRole('button', { name: 'Refresh connection' });
+    await expect(refreshButton).toBeVisible();
+    await refreshButton.click();
+    await snap(page, testInfo, 'refresh-clicked');
+
+    await page.getByRole('button', { name: 'Logs' }).click();
+    const dialog = page.getByRole('dialog', { name: /Diagnostics|Logs/i });
+    await expect(dialog).toBeVisible();
+    await snap(page, testInfo, 'diagnostics-open');
+
+    await dialog.getByRole('tab', { name: 'All logs' }).click();
+    await expect(dialog.getByText('C64 API request')).toBeVisible();
+    await expect(dialog.getByText('DEBUG')).toBeVisible();
+    await snap(page, testInfo, 'debug-log-entry');
+  });
+
+  test('share diagnostics copies to clipboard', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -104,7 +128,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('email diagnostics opens mailto link', async ({ page }: { page: Page }, testInfo) => {
+  test('email diagnostics opens mailto link', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -139,7 +163,7 @@ test.describe('Settings diagnostics workflows', () => {
     }
   });
 
-  test('clear logs empties log storage', async ({ page }: { page: Page }, testInfo) => {
+  test('clear logs empties log storage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -156,9 +180,8 @@ test.describe('Settings diagnostics workflows', () => {
       await page.waitForTimeout(500);
 
       const stored = await page.evaluate(() => {
-        const logs = localStorage.getItem('c64u_logs');
-        const errorLogs = localStorage.getItem('c64u_error_logs');
-        return { logs, errorLogs };
+        const logs = localStorage.getItem('c64u_app_logs');
+        return { logs };
       });
 
       // Logs should be empty or at least the clear button was clicked

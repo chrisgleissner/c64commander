@@ -6,6 +6,8 @@ This document is a concise version of the official [Ultimate REST API guide](htt
 
 - REST access starts from Ultimate firmware 3.11.
 - URLs follow the form `/v1/{route}/{path}:{command}?{arguments}`.
+  - C64 Commander logs debug-level events (including REST calls) when Enable Debug Logging is enabled in Settings → Diagnostics.
+  - Config write calls are throttled with a configurable minimum spacing (default 500 ms) to prevent overloading the device.
 
 | Verb | Meaning                                                                                           |
 | ---- | ------------------------------------------------------------------------------------------------- |

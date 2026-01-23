@@ -2,6 +2,8 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'jacoco'
 
+import groovy.json.JsonSlurper
+
 def keystoreProps = new Properties()
 def envFile = rootProject.file("../.env")
 def keyPropsFile = rootProject.file("key.properties")
@@ -20,6 +22,24 @@ if (keyPropsFile.exists()) {
 
 logger.lifecycle("Signing config keys loaded: ${keystoreProps.keySet()}")
 
+def resolveAppVersionName = { ->
+    def envVersion = System.getenv("VERSION_NAME") ?: System.getenv("VITE_APP_VERSION")
+    if (envVersion) return envVersion
+    def refType = System.getenv("GITHUB_REF_TYPE")
+    def refName = System.getenv("GITHUB_REF_NAME")
+    if (refType == "tag" && refName) return refName
+    try {
+        def tag = "git describe --tags --exact-match".execute(null, rootDir).text.trim()
+        if (tag) return tag
+    } catch (Exception ignored) {}
+    def pkgFile = rootProject.file("../package.json")
+    if (pkgFile.exists()) {
+        def pkg = new JsonSlurper().parse(pkgFile)
+        if (pkg?.version) return pkg.version.toString()
+    }
+    return "0.0.0"
+}
+
 android {
     namespace "uk.gleissner.c64commander"
     compileSdk rootProject.ext.compileSdkVersion
@@ -28,9 +48,9 @@ android {
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         def envVersionCode = System.getenv("VERSION_CODE")
-        def envVersionName = System.getenv("VERSION_NAME")
+        def envVersionName = resolveAppVersionName()
         versionCode (envVersionCode ? envVersionCode.toInteger() : 2)
-        versionName (envVersionName ?: "0.1.1")
+        versionName (envVersionName)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
@@ -83,6 +103,17 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+        }
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            if (!output.hasProperty('outputFileName')) return
+            def versionNameValue = variant.versionName ?: resolveAppVersionName()
+            def suffix = variant.buildType.name == 'debug' ? '-debug' : ''
+            if (output.outputFileName?.toString()?.endsWith('.apk')) {
+                output.outputFileName = "c64commander-${versionNameValue}${suffix}.apk"
+            }
         }
     }
     testOptions {

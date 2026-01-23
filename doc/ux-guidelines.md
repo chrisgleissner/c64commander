@@ -258,6 +258,13 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - Source selection: Local vs C64 Ultimate
 - Navigation within selected source (bounded by source root)
 - File type filtering
+- If the source picker is external (Android folder picker / OS dialog), the dialog closes and progress is shown on the destination page.
+
+**Disk Groups**
+
+- Group labels (name + color chip) are always shown beneath disk entries.
+- Group assignment is available from the disk menu with existing group pickers and inline create.
+- Folder scans auto-group disks that share a common prefix (case-insensitive; trailing digits or single letters).
 - Bulk selection and confirmation
 
 **QuickActionCard** - Action buttons used on Home page

@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
+import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
-import { useC64Connection } from '@/hooks/useC64Connection';
+import { useC64Category, useC64Connection, useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { getC64API } from '@/lib/c64api';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
+import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
 import { PlaybackClock } from '@/lib/playback/playbackClock';
@@ -23,10 +26,19 @@ import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
+import {
+  getLocalSourceListingMode,
+  prepareDirectoryInput,
+  requireLocalSourceEntries,
+} from '@/lib/sourceNavigation/localSourcesStore';
+import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
+import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { getPlatform } from '@/lib/native/platform';
+import { redactTreeUri } from '@/lib/native/safUtils';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -72,16 +84,15 @@ type StoredPlaylistState = {
   currentIndex?: number;
 };
 
-type AddItemsProgressState = {
-  status: 'idle' | 'scanning' | 'error' | 'done';
-  count: number;
-  elapsedMs: number;
-  total: number | null;
-  message: string | null;
+type AudioMixerItem = {
+  name: string;
+  value: string | number;
+  options?: string[];
 };
 
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
+const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 
 const formatTime = (ms?: number) => {
   if (ms === undefined) return '—';
@@ -90,6 +101,8 @@ const formatTime = (ms?: number) => {
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 };
+
+const isSongCategory = (category: PlayFileCategory) => category === 'sid' || category === 'mod';
 
 const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
@@ -112,6 +125,24 @@ const parseDurationInput = (value: string) => {
   const seconds = Number(trimmed);
   if (Number.isNaN(seconds)) return undefined;
   return Math.max(0, seconds * 1000);
+};
+
+const parseVolumeOption = (option: string) => {
+  const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : undefined;
+};
+
+const extractAudioMixerItems = (payload: Record<string, unknown> | undefined): AudioMixerItem[] => {
+  if (!payload) return [];
+  const categoryData = (payload as Record<string, any>)['Audio Mixer'] ?? payload;
+  const itemsData = (categoryData as Record<string, any>)?.items ?? categoryData;
+  if (!itemsData || typeof itemsData !== 'object') return [];
+  return Object.entries(itemsData)
+    .filter(([key]) => key !== 'errors')
+    .map(([name, config]) => ({
+      name,
+      ...normalizeConfigItem(config),
+    }));
 };
 
 const shuffleArray = <T,>(items: T[]) => {
@@ -144,6 +175,8 @@ const getSidSongCount = (buffer: ArrayBuffer) => {
 export default function PlayFilesPage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
+  const updateConfigBatch = useC64UpdateConfigBatch();
+  const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
   const uniqueId = status.deviceInfo?.unique_id || 'default';
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -172,8 +205,13 @@ export default function PlayFilesPage() {
     total: null,
     message: null,
   });
+  const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
+  const addItemsOverlayStartedAtRef = useRef<number | null>(null);
+  const addItemsOverlayActiveRef = useRef(false);
+  const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const { limit: listPreviewLimit } = useListPreviewLimit();
+  const isAndroid = getPlatform() === 'android';
 
   const { flags, isLoaded } = useFeatureFlags();
   const [hvscFlagStorage, setHvscFlagStorage] = useState(false);
@@ -187,6 +225,22 @@ export default function PlayFilesPage() {
   }, [flags.hvsc_enabled, isLoaded]);
   const hvscControlsEnabled = flags.hvsc_enabled || hvscFlagStorage;
 
+  const audioMixerItems = useMemo(() => extractAudioMixerItems(audioMixerCategory as Record<string, unknown> | undefined), [audioMixerCategory]);
+  const sidVolumeItems = useMemo(
+    () => audioMixerItems.filter((item) => isSidVolumeName(item.name)),
+    [audioMixerItems],
+  );
+  const volumeOptions = useMemo(() => {
+    const baseOptions = sidVolumeItems.find((item) => Array.isArray(item.options) && item.options.length)?.options ?? [];
+    return baseOptions
+      .map((option) => ({
+        option,
+        label: option.trim(),
+        numeric: parseVolumeOption(option),
+      }))
+      .filter((entry): entry is { option: string; label: string; numeric: number } => entry.numeric !== undefined);
+  }, [sidVolumeItems]);
+
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscLoading, setHvscLoading] = useState(false);
   const [hvscProgress, setHvscProgress] = useState<number | null>(null);
@@ -198,16 +252,99 @@ export default function PlayFilesPage() {
   const [hvscFolders, setHvscFolders] = useState<string[]>([]);
   const [hvscSongs, setHvscSongs] = useState<Array<{ id: number; virtualPath: string; fileName: string; durationSeconds?: number | null }>>([]);
   const [selectedHvscFolder, setSelectedHvscFolder] = useState('/');
+  const [volumeIndex, setVolumeIndex] = useState(0);
+  const [volumeMuted, setVolumeMuted] = useState(false);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
   const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
   const addItemsStartedAtRef = useRef<number | null>(null);
+  const manualMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
+  const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
   }, []);
+
+  const defaultVolumeIndex = useMemo(() => {
+    const zeroIndex = volumeOptions.findIndex((option) => option.numeric === 0);
+    return zeroIndex >= 0 ? zeroIndex : 0;
+  }, [volumeOptions]);
+
+  const resolveVolumeIndex = useCallback((value: string | number) => {
+    if (!volumeOptions.length) return defaultVolumeIndex;
+    const stringValue = typeof value === 'string' ? value.trim() : value.toString();
+    const directIndex = volumeOptions.findIndex((option) => option.option.trim() === stringValue);
+    if (directIndex >= 0) return directIndex;
+    const numeric = typeof value === 'number' ? value : parseVolumeOption(value);
+    if (numeric !== undefined) {
+      const numericIndex = volumeOptions.findIndex((option) => option.numeric === numeric);
+      if (numericIndex >= 0) return numericIndex;
+    }
+    return defaultVolumeIndex;
+  }, [defaultVolumeIndex, volumeOptions]);
+
+  const buildSidVolumeSnapshot = useCallback((items: AudioMixerItem[]) => {
+    const snapshot: Record<string, string | number> = {};
+    items.forEach((item) => {
+      snapshot[item.name] = item.value;
+    });
+    return snapshot;
+  }, []);
+
+  const buildSidMuteUpdates = useCallback((items: AudioMixerItem[]) => {
+    const updates: Record<string, string | number> = {};
+    items.forEach((item) => {
+      updates[item.name] = resolveAudioMixerMuteValue(item.options);
+    });
+    return updates;
+  }, []);
+
+  const applyAudioMixerUpdates = useCallback(async (updates: Record<string, string | number>, context: string) => {
+    if (!Object.keys(updates).length) return;
+    try {
+      await updateConfigBatch.mutateAsync({ category: 'Audio Mixer', updates });
+    } catch (error) {
+      addErrorLog(`${context} audio mixer update failed`, { error: (error as Error).message });
+      toast({
+        title: 'Audio mixer update failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  }, [updateConfigBatch]);
+
+  const resolveSidVolumeItems = useCallback(async () => {
+    if (sidVolumeItems.length) return sidVolumeItems;
+    try {
+      const data = await getC64API().getCategory('Audio Mixer');
+      return extractAudioMixerItems(data as Record<string, unknown>).filter((item) => isSidVolumeName(item.name));
+    } catch (error) {
+      addErrorLog('Audio mixer lookup failed', { error: (error as Error).message });
+      return [];
+    }
+  }, [sidVolumeItems]);
+
+  useEffect(() => {
+    if (!sidVolumeItems.length || !volumeOptions.length) return;
+    const muteValues = sidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
+    const activeIndices: number[] = [];
+    sidVolumeItems.forEach((item, index) => {
+      if (item.value === muteValues[index]) return;
+      activeIndices.push(resolveVolumeIndex(item.value));
+    });
+    if (!activeIndices.length) {
+      setVolumeMuted(true);
+      setVolumeIndex(defaultVolumeIndex);
+      return;
+    }
+    setVolumeMuted(false);
+    const counts = new Map<number, number>();
+    activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
+    const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
+    setVolumeIndex(nextIndex);
+  }, [defaultVolumeIndex, resolveVolumeIndex, sidVolumeItems, volumeOptions]);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -235,6 +372,12 @@ export default function PlayFilesPage() {
     }, 500);
     return () => window.clearInterval(interval);
   }, [addItemsProgress.status]);
+
+  useEffect(() => {
+    if (browserOpen) {
+      setAddItemsSurface('dialog');
+    }
+  }, [browserOpen]);
 
   useEffect(() => {
     songlengthsCacheRef.current.clear();
@@ -303,10 +446,35 @@ export default function PlayFilesPage() {
 
   const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(uniqueId), [uniqueId]);
 
+  const handleAutoConfirmStart = useCallback(() => {
+    setAddItemsSurface('page');
+    setIsAddingItems(true);
+    setShowAddItemsOverlay(true);
+    addItemsOverlayStartedAtRef.current = Date.now();
+    addItemsOverlayActiveRef.current = true;
+  }, []);
+
   useEffect(() => {
     if (browserOpen) return;
+    if (addItemsProgress.status === 'scanning') return;
     setAddItemsProgress({ status: 'idle', count: 0, elapsedMs: 0, total: null, message: null });
-  }, [browserOpen]);
+  }, [addItemsProgress.status, browserOpen]);
+
+  useEffect(() => {
+    if (browserOpen) return;
+    if (addItemsProgress.status !== 'scanning') return;
+    if (addItemsSurface !== 'page') {
+      setAddItemsSurface('page');
+    }
+  }, [addItemsProgress.status, addItemsSurface, browserOpen]);
+
+  useEffect(() => {
+    if (addItemsProgress.status === 'scanning') return;
+    if (addItemsSurface === 'page' && isAddingItems) return;
+    if (addItemsSurface !== 'dialog') {
+      setAddItemsSurface('dialog');
+    }
+  }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
@@ -316,6 +484,43 @@ export default function PlayFilesPage() {
       { label: 'C64 Ultimate', sources: [ultimateSource] },
       { label: 'This device', sources: localGroupSources },
     ];
+  }, [localSources]);
+
+  const localEntriesBySourceId = useMemo(() => {
+    const map = new Map<string, Map<string, { uri?: string | null; name: string }>>();
+    localSources.forEach((source) => {
+      if (getLocalSourceListingMode(source) !== 'entries') {
+        map.set(source.id, new Map());
+        return;
+      }
+      try {
+        const entries = requireLocalSourceEntries(source, 'PlayFilesPage.localEntriesBySourceId');
+        const entriesMap = new Map<string, { uri?: string | null; name: string }>();
+        entries.forEach((entry) => {
+          entriesMap.set(normalizeSourcePath(entry.relativePath), { uri: entry.uri, name: entry.name });
+        });
+        map.set(source.id, entriesMap);
+      } catch (error) {
+        addErrorLog('Local source entries unavailable', {
+          sourceId: source.id,
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+        map.set(source.id, new Map());
+      }
+    });
+    return map;
+  }, [localSources]);
+
+  const localSourceTreeUris = useMemo(() => {
+    const map = new Map<string, string | null>();
+    localSources.forEach((source) => {
+      map.set(source.id, source.android?.treeUri ?? null);
+    });
+    return map;
   }, [localSources]);
 
   const handleLocalSourceInput = useCallback((files: FileList | null) => {
@@ -348,8 +553,25 @@ export default function PlayFilesPage() {
   const handleAddFileSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
     addItemsStartedAtRef.current = startedAt;
+    const localTreeUri = source.type === 'local' ? localSourceTreeUris.get(source.id) : null;
+    if (localTreeUri) {
+      addLog('debug', 'SAF scan started', {
+        sourceId: source.id,
+        treeUri: redactTreeUri(localTreeUri),
+        rootPath: source.rootPath,
+      });
+    }
+    if (!browserOpen) {
+      setAddItemsSurface('page');
+      if (!addItemsOverlayActiveRef.current) {
+        setShowAddItemsOverlay(true);
+        addItemsOverlayStartedAtRef.current = Date.now();
+        addItemsOverlayActiveRef.current = true;
+      }
+    }
     setIsAddingItems(true);
     setAddItemsProgress({ status: 'scanning', count: 0, elapsedMs: 0, total: null, message: 'Scanning…' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     let processed = 0;
     let lastUpdate = 0;
 
@@ -422,11 +644,13 @@ export default function PlayFilesPage() {
 
       const playlistItems: PlaylistItem[] = [];
       if (source.type === 'local') {
+        const treeUri = localSourceTreeUris.get(source.id);
         const songlengthsEntries = selectedFiles
           .filter((entry) => entry.type === 'file' && entry.name.toLowerCase() === 'songlengths.md5')
           .map((entry) => ({
             path: normalizeSourcePath(entry.path),
-            file: resolveLocalRuntimeFile(source.id, entry.path),
+            file: resolveLocalRuntimeFile(source.id, entry.path)
+              || (treeUri ? buildLocalPlayFileFromTree(entry.name, normalizeSourcePath(entry.path), treeUri) : undefined),
           }))
           .filter((entry): entry is { path: string; file: LocalPlayFile } => Boolean(entry.file));
         if (songlengthsEntries.length) {
@@ -444,32 +668,82 @@ export default function PlayFilesPage() {
       }
       selectedFiles.forEach((file) => {
         if (!getPlayCategory(file.path)) return;
+        const normalizedPath = normalizeSourcePath(file.path);
+        const localEntry = source.type === 'local' ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
+        const localFile =
+          source.type === 'local'
+            ? resolveLocalRuntimeFile(source.id, normalizedPath)
+              || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri) : undefined)
+              || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri) : undefined)
+            : undefined;
         const playable: PlayableEntry = {
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
           name: file.name,
-          path: normalizeSourcePath(file.path),
+          path: normalizedPath,
           durationMs: undefined,
           sourceId: source.type === 'local' ? source.id : null,
-          file: source.type === 'local' ? resolveLocalRuntimeFile(source.id, file.path) : undefined,
+          file: localFile,
         };
         const item = buildPlaylistItem(playable);
         if (item) playlistItems.push(item);
       });
 
       if (!playlistItems.length) {
+        const reason = selectedFiles.length === 0 ? 'no-files-found' : 'unsupported-files';
+        addLog('debug', 'No supported files after scan', {
+          sourceId: source.id,
+          sourceType: source.type,
+          reason,
+          totalFiles: selectedFiles.length,
+        });
         toast({ title: 'No supported files', description: 'Found no supported files.', variant: 'destructive' });
         setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No supported files found.' }));
         return false;
       }
 
+      const minDuration = addItemsSurface === 'page' ? 800 : 300;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < minDuration) {
+        await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
+      }
       setPlaylist((prev) => [...prev, ...playlistItems]);
+      if (localTreeUri) {
+        addLog('debug', 'SAF scan complete', {
+          sourceId: source.id,
+          treeUri: redactTreeUri(localTreeUri),
+          totalFiles: selectedFiles.length,
+          supportedFiles: playlistItems.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
       toast({ title: 'Items added', description: `${playlistItems.length} file(s) added to playlist.` });
       setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to playlist' }));
       await new Promise((resolve) => setTimeout(resolve, 150));
       return true;
     } catch (error) {
+      const err = error as Error;
+      const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
+      if (localTreeUri) {
+        addLog('debug', 'SAF scan failed', {
+          sourceId: source.id,
+          treeUri: redactTreeUri(localTreeUri),
+          error: err.message,
+        });
+      }
+      addErrorLog('Add items failed', {
+        sourceId: source.id,
+        sourceType: source.type,
+        platform: getPlatform(),
+        treeUri: localTreeUri ? redactTreeUri(localTreeUri) : null,
+        error: {
+          name: err.name,
+          message: err.message,
+          stack: err.stack,
+        },
+        details: listingDetails,
+      });
       setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
-      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
+      toast({ title: 'Add items failed', description: err.message, variant: 'destructive' });
       return false;
     } finally {
       setIsAddingItems(false);
@@ -479,8 +753,19 @@ export default function PlayFilesPage() {
           elapsedMs: Date.now() - addItemsStartedAtRef.current!,
         }));
       }
+      if (addItemsOverlayActiveRef.current) {
+        const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? startedAt;
+        const minOverlayDuration = 800;
+        const overlayElapsed = Date.now() - overlayStartedAt;
+        if (overlayElapsed < minOverlayDuration) {
+          await new Promise((resolve) => setTimeout(resolve, minOverlayDuration - overlayElapsed));
+        }
+        setShowAddItemsOverlay(false);
+        addItemsOverlayStartedAtRef.current = null;
+        addItemsOverlayActiveRef.current = false;
+      }
     }
-  }, [buildPlaylistItem, recurseFolders]);
+  }, [addItemsSurface, browserOpen, buildPlaylistItem, localEntriesBySourceId, localSourceTreeUris, recurseFolders]);
 
 
   const refreshHvscStatus = useCallback(() => {
@@ -551,13 +836,21 @@ export default function PlayFilesPage() {
   }, [currentIndex, isPaused, isPlaying]);
 
   const playlistItemDuration = useCallback(
-    (item: PlaylistItem, index: number) => (index === currentIndex ? durationMs ?? item.durationMs : item.durationMs),
+    (item: PlaylistItem, index: number) => {
+      const base = index === currentIndex ? durationMs ?? item.durationMs : item.durationMs;
+      if (isSongCategory(item.category)) {
+        return base ?? DEFAULT_SONG_DURATION_MS;
+      }
+      return base;
+    },
     [currentIndex, durationMs],
   );
 
   const currentItem = playlist[currentIndex];
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
+  const canControlVolume = sidVolumeItems.length > 0 && volumeOptions.length > 0;
+  const volumeLabel = volumeOptions[volumeIndex]?.label ?? '—';
   const subsongCount = currentItem?.subsongCount ?? 1;
   const songNrValue = Number(songNrInput);
   const resolvedSongNr = Number.isNaN(songNrValue) || songNrInput.trim() === '' ? 1 : songNrValue;
@@ -642,18 +935,20 @@ export default function PlayFilesPage() {
       const songlengths = await loadSonglengthsForPath(filePath);
       if (songlengths?.pathToSeconds.has(filePath)) {
         const seconds = songlengths.pathToSeconds.get(filePath);
-        return { durationMs: seconds ? seconds * 1000 : undefined, subsongCount } as const;
+        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : DEFAULT_SONG_DURATION_MS;
+        return { durationMs, subsongCount } as const;
       }
 
       const md5 = await computeSidMd5(buffer);
       const md5Duration = songlengths?.md5ToSeconds.get(md5);
-      if (md5Duration) {
+      if (md5Duration !== undefined && md5Duration !== null) {
         return { durationMs: md5Duration * 1000, subsongCount } as const;
       }
       const seconds = await getHvscDurationByMd5Seconds(md5);
-      return { durationMs: seconds ? seconds * 1000 : undefined, subsongCount } as const;
+      const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : DEFAULT_SONG_DURATION_MS;
+      return { durationMs, subsongCount } as const;
     } catch {
-      return { durationMs: override, subsongCount: undefined } as const;
+      return { durationMs: override ?? DEFAULT_SONG_DURATION_MS, subsongCount: undefined } as const;
     }
   }, [durationInput, loadSonglengthsForPath]);
 
@@ -664,7 +959,7 @@ export default function PlayFilesPage() {
         const filePath = getLocalFilePath(item.request.file);
         const songlengths = await loadSonglengthsForPath(filePath);
         const seconds = songlengths?.pathToSeconds.get(filePath);
-        if (!seconds) return item;
+        if (seconds === undefined || seconds === null) return item;
         return { ...item, durationMs: seconds * 1000 };
       }),
     );
@@ -750,7 +1045,10 @@ export default function PlayFilesPage() {
     setElapsedMs(0);
     playedClockRef.current.start(now, false);
     setPlayedMs(playedClockRef.current.current(now));
-    const resolvedDuration = durationOverride ?? item.durationMs;
+    const resolvedDurationBase = durationOverride ?? item.durationMs;
+    const resolvedDuration = isSongCategory(item.category)
+      ? resolvedDurationBase ?? DEFAULT_SONG_DURATION_MS
+      : resolvedDurationBase;
     setDurationMs(resolvedDuration);
     if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
       setPlaylist((prev) =>
@@ -817,14 +1115,32 @@ export default function PlayFilesPage() {
     const api = getC64API();
     try {
       if (isPaused) {
+        const resumeItems = await resolveSidVolumeItems();
+        const resumeSnapshot = pauseMuteSnapshotRef.current;
+        const wasMuted = resumeSnapshot && resumeItems.length
+          ? resumeItems.every((item) => resumeSnapshot[item.name] === resolveAudioMixerMuteValue(item.options))
+          : false;
+        if (pauseMuteSnapshotRef.current && resumeItems.length) {
+          await applyAudioMixerUpdates(pauseMuteSnapshotRef.current, 'Resume');
+        }
         await api.machineResume();
+        pauseMuteSnapshotRef.current = null;
         setIsPaused(false);
+        setVolumeMuted(wasMuted);
         const now = Date.now();
         trackStartedAtRef.current = now - elapsedMs;
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
       } else {
+        const pauseItems = await resolveSidVolumeItems();
+        if (pauseItems.length) {
+          pauseMuteSnapshotRef.current = buildSidVolumeSnapshot(pauseItems);
+        }
         await api.machinePause();
+        if (pauseItems.length) {
+          await applyAudioMixerUpdates(buildSidMuteUpdates(pauseItems), 'Pause');
+          setVolumeMuted(true);
+        }
         const now = Date.now();
         playedClockRef.current.pause(now);
         setPlayedMs(playedClockRef.current.current(now));
@@ -837,7 +1153,38 @@ export default function PlayFilesPage() {
         variant: 'destructive',
       });
     }
-  }, [elapsedMs, isPaused, isPlaying]);
+  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, resolveSidVolumeItems]);
+
+  const handleVolumeCommit = useCallback(async (nextIndex: number) => {
+    if (!volumeOptions.length || !sidVolumeItems.length) return;
+    const target = volumeOptions[nextIndex]?.option;
+    if (!target) return;
+    const updates: Record<string, string | number> = {};
+    sidVolumeItems.forEach((item) => {
+      const muteValue = resolveAudioMixerMuteValue(item.options);
+      if (item.value === muteValue) return;
+      updates[item.name] = target;
+    });
+    manualMuteSnapshotRef.current = null;
+    setVolumeMuted(false);
+    await applyAudioMixerUpdates(updates, 'Volume');
+  }, [applyAudioMixerUpdates, sidVolumeItems, volumeOptions]);
+
+  const handleToggleMute = useCallback(async () => {
+    const items = await resolveSidVolumeItems();
+    if (!items.length) return;
+    if (!volumeMuted) {
+      manualMuteSnapshotRef.current = buildSidVolumeSnapshot(items);
+      setVolumeMuted(true);
+      await applyAudioMixerUpdates(buildSidMuteUpdates(items), 'Mute');
+      return;
+    }
+    const snapshot = manualMuteSnapshotRef.current ?? buildSidVolumeSnapshot(items);
+    const wasMuted = items.every((item) => snapshot[item.name] === resolveAudioMixerMuteValue(item.options));
+    setVolumeMuted(wasMuted);
+    await applyAudioMixerUpdates(snapshot, 'Unmute');
+    manualMuteSnapshotRef.current = null;
+  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, resolveSidVolumeItems, volumeMuted]);
 
   const handleNext = useCallback(async () => {
     if (!playlist.length) return;
@@ -881,7 +1228,7 @@ export default function PlayFilesPage() {
     if (lockedIndex >= 0 && lockedIndex < items.length) {
       const currentItem = items[lockedIndex];
       const rest = items.filter((_, index) => index !== lockedIndex);
-      let shuffled = shuffleArray(rest);
+      const shuffled = shuffleArray(rest);
       const insertIndex = Math.min(lockedIndex, shuffled.length);
       let next = [...shuffled.slice(0, insertIndex), currentItem, ...shuffled.slice(insertIndex)];
       if (next.map((item) => item.id).join('|') === items.map((item) => item.id).join('|')) {
@@ -1148,51 +1495,79 @@ export default function PlayFilesPage() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => void handlePrevious()}
-                disabled={!canTransport || !hasPrev}
-                data-testid="playlist-prev"
-              >
-                <SkipBack className="h-4 w-4 mr-1" />
-                Prev
-              </Button>
-              <Button
-                variant={isPlaying ? 'destructive' : 'default'}
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => (isPlaying ? void handleStop() : void handlePlay())}
-                disabled={!hasPlaylist || isPlaylistLoading}
-                data-testid="playlist-play"
-              >
-                {isPlaying ? <Square className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                {isPlaying ? 'Stop' : 'Play'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => void handlePauseResume()}
-                disabled={!canPause || isPlaylistLoading}
-                data-testid="playlist-pause"
-              >
-                {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
-                {isPaused ? 'Resume' : 'Pause'}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="min-w-[96px] justify-center"
-                onClick={() => void handleNext()}
-                disabled={!canTransport || !hasNext}
-                data-testid="playlist-next"
-              >
-                <SkipForward className="h-4 w-4 mr-1" />
-                Next
-              </Button>
+            <div className="flex flex-col gap-3 w-full sm:w-auto">
+              <div className="grid grid-cols-4 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handlePrevious()}
+                  disabled={!canTransport || !hasPrev}
+                  data-testid="playlist-prev"
+                >
+                  <SkipBack className="h-4 w-4 mr-1" />
+                  Prev
+                </Button>
+                <Button
+                  variant={isPlaying ? 'destructive' : 'default'}
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => (isPlaying ? void handleStop() : void handlePlay())}
+                  disabled={!hasPlaylist || isPlaylistLoading}
+                  data-testid="playlist-play"
+                >
+                  {isPlaying ? <Square className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+                  {isPlaying ? 'Stop' : 'Play'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handlePauseResume()}
+                  disabled={!canPause || isPlaylistLoading}
+                  data-testid="playlist-pause"
+                >
+                  {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
+                  {isPaused ? 'Resume' : 'Pause'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handleNext()}
+                  disabled={!canTransport || !hasNext}
+                  data-testid="playlist-next"
+                >
+                  <SkipForward className="h-4 w-4 mr-1" />
+                  Next
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-w-[96px] justify-center"
+                  onClick={() => void handleToggleMute()}
+                  disabled={!canControlVolume || updateConfigBatch.isPending}
+                  data-testid="volume-mute"
+                >
+                  {volumeMuted ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
+                  {volumeMuted ? 'Unmute' : 'Mute'}
+                </Button>
+                <div className="flex flex-1 items-center gap-3 min-w-[160px] sm:min-w-[200px]">
+                  <Slider
+                    min={0}
+                    max={Math.max(0, volumeOptions.length - 1)}
+                    step={1}
+                    value={[volumeIndex]}
+                    onValueChange={(value) => setVolumeIndex(value[0] ?? 0)}
+                    onValueCommit={(value) => void handleVolumeCommit(value[0] ?? 0)}
+                    disabled={!canControlVolume || updateConfigBatch.isPending || volumeMuted}
+                    data-testid="volume-slider"
+                  />
+                  <span className="text-xs text-muted-foreground w-[52px] text-right">{volumeLabel}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1374,8 +1749,20 @@ export default function PlayFilesPage() {
           allowFolderSelection
           isConfirming={isAddingItems}
           progress={addItemsProgress}
+          showProgressFooter={addItemsSurface === 'dialog'}
+          autoConfirmCloseBefore={isAndroid}
+          onAutoConfirmStart={handleAutoConfirmStart}
           autoConfirmLocalSource
         />
+
+        {!browserOpen ? (
+          <AddItemsProgressOverlay
+            progress={addItemsProgress}
+            title="Adding items"
+            testId="add-items-overlay"
+            visible={showAddItemsOverlay || addItemsProgress.status === 'scanning'}
+          />
+        ) : null}
 
         {hvscControlsEnabled && (
           <div className="space-y-4">
@@ -1460,19 +1847,20 @@ export default function PlayFilesPage() {
 
                 <div className="grid gap-2 sm:grid-cols-2">
                   {hvscVisibleFolders.slice(0, 24).map((folder) => (
-                    <div key={folder} className="flex items-center gap-2">
+                    <div key={folder} className="flex items-center gap-2 min-w-0">
                       <Button
                         variant={folder === selectedHvscFolder ? 'secondary' : 'outline'}
                         size="sm"
-                        className="flex-1 justify-start"
+                        className="flex-1 justify-start min-w-0"
                         onClick={() => void loadHvscFolder(folder)}
                       >
-                        <FolderOpen className="h-4 w-4 mr-1" />
-                        {folder}
+                        <FolderOpen className="h-4 w-4 mr-1 shrink-0" />
+                        <span className="truncate">{folder}</span>
                       </Button>
                       <Button
                         variant="default"
                         size="sm"
+                        className="shrink-0"
                         onClick={() => void handlePlayHvscFolder(folder)}
                         disabled={hvscUpdating}
                       >

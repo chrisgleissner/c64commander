@@ -23,11 +23,15 @@ export const resolveLocalDiskBlob = async (
   runtimeFile?: File,
 ): Promise<Blob> => {
   if (runtimeFile) return runtimeFile;
-  if (!disk.localUri) {
-    throw new Error('Local disk is missing a readable URI.');
+  if (disk.localUri) {
+    const data = await FolderPicker.readFile({ uri: disk.localUri });
+    return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
   }
-  const data = await FolderPicker.readFile({ uri: disk.localUri });
-  return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+  if (disk.localTreeUri) {
+    const data = await FolderPicker.readFileFromTree({ treeUri: disk.localTreeUri, path: disk.path });
+    return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+  }
+  throw new Error('Local disk is missing a readable URI.');
 };
 
 export const mountDiskToDrive = async (

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-APK_DEFAULT="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+APK_DEFAULT=""
 
 RUN_INSTALL=true
 RUN_BUILD=true
@@ -20,6 +20,8 @@ RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
 APK_PATH=""
 DEVICE_ID=""
+GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
+export GRADLE_MAX_WORKERS
 
 usage() {
   cat <<'EOF'
@@ -212,9 +214,24 @@ if command -v git >/dev/null 2>&1; then
   if [[ -z "${VITE_GIT_SHA:-}" ]]; then
     export VITE_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || true)"
   fi
+  if [[ -z "${VITE_APP_VERSION:-}" ]]; then
+    GIT_TAG="$(git -C "$ROOT_DIR" describe --tags --exact-match 2>/dev/null || true)"
+    if [[ -n "$GIT_TAG" ]]; then
+      export VITE_APP_VERSION="$GIT_TAG"
+    fi
+  fi
 fi
 if [[ -z "${VITE_BUILD_TIME:-}" ]]; then
   export VITE_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+fi
+if [[ -z "${VITE_APP_VERSION:-}" && -f "$ROOT_DIR/package.json" ]]; then
+  export VITE_APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+fi
+if [[ -n "${VITE_APP_VERSION:-}" && -z "${VERSION_NAME:-}" ]]; then
+  export VERSION_NAME="$VITE_APP_VERSION"
+fi
+if [[ -z "$APK_DEFAULT" ]]; then
+  APK_DEFAULT="$ROOT_DIR/android/app/build/outputs/apk/debug/c64commander-${VITE_APP_VERSION:-unknown}-debug.apk"
 fi
 
 if [[ "$RUN_INSTALL" == "true" ]]; then

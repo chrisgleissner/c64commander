@@ -143,12 +143,14 @@ Artifacts:
 
 - `playwright-test-results` - Evidence folders + raw Playwright outputs
 - `playwright-report` - HTML test report
-- `c64-commander-debug-apk` - Debug APK
-- Release APK/AAB artifacts on tag builds when signing secrets are present
+- `c64commander-<version>-debug.apk` - Debug APK (version resolved from tag/env/package.json)
+- Release APK/AAB artifacts on tag builds when signing secrets are present (named `c64commander-<version>.apk`)
 
 Performance notes:
 
 - `PLAYWRIGHT_SKIP_BUILD=1` lets Playwright reuse a prebuilt `dist/` (build first).
+- `PLAYWRIGHT_WORKERS` overrides Playwright worker count (default caps at 4).
+- `GRADLE_MAX_WORKERS` caps Gradle workers (used by `local-build.sh` and CI).
 - The workflow supports a `package_manager` input for `workflow_dispatch` to compare `npm` vs `bun` install speed.
 
 ## CI + Coverage
