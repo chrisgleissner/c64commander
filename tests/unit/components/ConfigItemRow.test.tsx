@@ -294,6 +294,7 @@ describe('ConfigItemRow slider and input behaviors', () => {
         name="SID Detected Socket 1"
         value="Socket A"
         options={[]}
+        details={{ presets: [] }}
         onValueChange={onValueChange}
       />,
     );
