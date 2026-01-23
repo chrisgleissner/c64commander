@@ -40,9 +40,6 @@ const openRemoteFolder = async (page: Page, name: string) => {
 const getDiskRow = (page: Page, name: string) =>
   getDiskList(page).getByTestId('disk-row').filter({ hasText: name }).first();
 
-const getDiskRowByPath = (page: Page, pathText: string) =>
-  getDiskList(page).getByTestId('disk-row').filter({ hasText: pathText }).first();
-
 const openDiskMenu = async (page: Page, name: string) => {
   const row = getDiskRow(page, name);
   await row.getByRole('button', { name: 'Item actions' }).click();
@@ -159,19 +156,20 @@ test.describe('Disk management', () => {
     }
   });
 
-  test('disks render as flat list sorted by full path', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disks render with folder headers and no full paths', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.setViewportSize({ width: 360, height: 740 });
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
     await snap(page, testInfo, 'disks-added');
 
     const diskList = getDiskList(page);
-    const paths = await diskList.locator('[data-testid="disk-path"]').allTextContents();
-    const sorted = [...paths].sort((a, b) => a.localeCompare(b));
-    expect(paths).toEqual(sorted);
-    await expect(diskList.getByText('/Turrican II/Disk 1.d64', { exact: false })).toBeVisible();
-    await expect(diskList.getByText('/Turrican II/Disk 2.d64', { exact: false })).toBeVisible();
-    await snap(page, testInfo, 'disk-list-sorted');
+    await expect(diskList.getByTestId('disk-row-header').filter({ hasText: '/Turrican II/' })).toBeVisible();
+    const diskRow = getDiskRow(page, 'Disk 1.d64');
+    await expect(diskRow).toBeVisible();
+    await expect(diskRow).not.toContainText('/Turrican II/');
+    await expect(getDiskRow(page, 'Disk 2.d64')).toBeVisible();
+    await snap(page, testInfo, 'disk-list-grouped');
   });
 
   test('FTP directory listing shows hierarchy', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -243,7 +241,8 @@ test.describe('Disk management', () => {
     const diskList = getDiskList(page);
 
     await expect(diskList.getByText('Disk 1.d64', { exact: true })).toBeVisible();
-    await expect(diskList.getByText('/Usb0/Games/Turrican II/Disk 1.d64')).toBeVisible();
+    await expect(diskList.getByTestId('disk-row-header').filter({ hasText: '/Usb0/Games/Turrican II/' })).toBeVisible();
+    await expect(getDiskRow(page, 'Disk 1.d64')).not.toContainText('/Usb0/Games/Turrican II/');
     await expect(diskList.getByLabel('C64U disk').first()).toBeVisible();
     await snap(page, testInfo, 'disk-list');
   });
@@ -300,7 +299,7 @@ test.describe('Disk management', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
 
-    const diskRow = getDiskRowByPath(page, '/Usb0/Games/Turrican II/Disk 1.d64');
+    const diskRow = getDiskRow(page, 'Disk 1.d64');
     await diskRow.getByRole('button', { name: 'Mount Disk 1.d64' }).click();
     await page.getByRole('button', { name: /Drive A/i }).click();
     await snap(page, testInfo, 'mount-dialog');

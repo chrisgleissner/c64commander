@@ -156,140 +156,79 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'repeat-enabled');
   });
 
-  test('duration override input accepts mm:ss format', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('duration control syncs slider and input', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
-    await snap(page, testInfo, 'playlist-ready');
+    const slider = page.getByTestId('duration-slider').getByRole('slider');
+    const input = page.getByTestId('duration-input');
 
-    // Start playback
-    const playButton = page.getByRole('button', { name: /play/i }).first();
-    if (await playButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await playButton.click();
-      await page.waitForTimeout(500);
-      await snap(page, testInfo, 'playback-started');
-    }
+    await expect(slider).toBeVisible();
+    await expect(input).toHaveValue('3:00');
+    await snap(page, testInfo, 'duration-default');
 
-    // Find a SID file and open its menu
-    const sidRow = page.getByTestId('playlist-item').filter({ hasText: /\.sid$/i }).first();
-    const menuButton = sidRow.getByRole('button', { name: /menu|more|actions/i });
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await slider.press('ArrowRight');
+    const updatedValue = await input.inputValue();
+    expect(updatedValue).not.toBe('3:00');
+    await snap(page, testInfo, 'duration-slider-updated');
 
-    if (await menuButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await menuButton.click();
-      await snap(page, testInfo, 'menu-opened');
-
-      // Look for duration override menu item
-      const durationItem = page.getByRole('menuitem', { name: /duration|override|time/i });
-      if (await durationItem.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await durationItem.click();
-        await snap(page, testInfo, 'duration-dialog-open');
-
-        const durationInput = page.getByRole('dialog').getByRole('textbox').or(
-          page.getByRole('dialog').getByPlaceholder(/mm:ss|duration/i)
-        ).first();
-        
-        await durationInput.fill('3:45');
-        await snap(page, testInfo, 'duration-entered');
-
-        await page.getByRole('dialog').getByRole('button', { name: /save|set|apply/i }).click();
-        await snap(page, testInfo, 'duration-applied');
-      } else {
-        await snap(page, testInfo, 'duration-override-not-available');
-      }
-    } else {
-      await snap(page, testInfo, 'menu-not-available');
-    }
+    await input.fill('3:45');
+    await input.blur();
+    await expect(input).toHaveValue('3:45');
+    await snap(page, testInfo, 'duration-input-updated');
   });
 
-  test('duration override affects playback metadata', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('duration control updates playlist totals', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
+    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-sids'));
     await snap(page, testInfo, 'playlist-ready');
 
-    // Start playback
-    const playButton = page.getByRole('button', { name: /play/i }).first();
-    if (await playButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await playButton.click();
-      await page.waitForTimeout(500);
-      await snap(page, testInfo, 'playback-started');
-    }
+    const counters = page.getByTestId('playback-counters');
+    await expect(counters).toContainText('Total: 6:00');
+    await snap(page, testInfo, 'duration-total-default');
 
-    // Get initial timer display
-    const timerDisplay = page.locator('[data-testid="playback-timer"], [data-timer], .timer').first();
-    const initialTimer = await timerDisplay.textContent().catch(() => null);
-    await snap(page, testInfo, 'initial-timer');
-
-    // Find current playing item and set duration override
-    const playingItem = page.locator('[data-playing="true"], [data-state="playing"]').first();
-    if (await playingItem.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const menuButton = playingItem.getByRole('button', { name: /menu|more|actions/i });
-      
-      if (await menuButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await menuButton.click();
-        await snap(page, testInfo, 'menu-opened');
-
-        const durationItem = page.getByRole('menuitem', { name: /duration|override/i });
-        if (await durationItem.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await durationItem.click();
-          await page.waitForTimeout(300);
-          
-          const durationInput = page.getByRole('dialog').locator('input[type="text"], input[placeholder*="duration"]').first();
-          await durationInput.fill('2:00');
-          await page.getByRole('dialog').getByRole('button', { name: /save|apply/i }).click();
-          await snap(page, testInfo, 'duration-override-applied');
-
-          // Verify duration changed in metadata or display
-          await page.waitForTimeout(500);
-          const newTimer = await timerDisplay.textContent().catch(() => null);
-          await snap(page, testInfo, 'timer-after-override');
-          
-          // Timer display should reflect the override (may show as total duration)
-          expect(newTimer).not.toBe(initialTimer);
-        } else {
-          await snap(page, testInfo, 'duration-item-not-found');
-        }
-      } else {
-        await snap(page, testInfo, 'menu-button-not-visible');
-      }
-    } else {
-      await snap(page, testInfo, 'no-playing-item');
-    }
+    const input = page.getByTestId('duration-input');
+    await input.fill('2:00');
+    await input.blur();
+    await expect(counters).toContainText('Total: 4:00');
+    await snap(page, testInfo, 'duration-total-updated');
   });
 
-  test('SID subsong selection input accepts song number', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('song selector appears for multi-song SID and triggers playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
+    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-multi-song'));
     await snap(page, testInfo, 'playlist-ready');
 
-    const sidRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
-    const menuButton = sidRow.getByRole('button', { name: /menu|more|actions/i });
+    const playCountBefore = server.sidplayRequests.length;
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: 'multi.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore);
+    await snap(page, testInfo, 'multi-song-playing');
 
-    if (await menuButton.isVisible()) {
-      await menuButton.click();
-      await snap(page, testInfo, 'menu-opened');
+    const songButton = page.getByRole('button', { name: /Song 1\/3/ });
+    await expect(songButton).toBeVisible();
+    await snap(page, testInfo, 'song-selector-visible');
 
-      const subsongItem = page.getByRole('menuitem', { name: /song|subsong|song number/i });
-      if (await subsongItem.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await subsongItem.click();
-        await snap(page, testInfo, 'subsong-dialog-open');
+    await songButton.click({ force: true });
+    const dialog = page.getByTestId('song-selector-dialog');
+    await expect(dialog).toBeVisible();
+    await snap(page, testInfo, 'song-selector-open');
 
-        const subsongInput = page.getByRole('dialog').getByRole('spinbutton').or(
-          page.getByRole('dialog').getByPlaceholder(/song|number/i)
-        ).first();
-        await subsongInput.fill('2');
-        await snap(page, testInfo, 'subsong-entered');
+    await dialog.getByRole('button', { name: /Song 2/ }).click();
 
-        await page.getByRole('dialog').getByRole('button', { name: /save|set|apply/i }).click();
-        await snap(page, testInfo, 'subsong-saved');
-      } else {
-        await snap(page, testInfo, 'subsong-option-not-available');
-      }
-    }
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore + 1);
+    expect(server.sidplayRequests.at(-1)?.url).toContain('songnr=2');
+    await snap(page, testInfo, 'song-selector-updated');
   });
 
   test('prev at first track stays at first', async ({ page }: { page: Page }, testInfo: TestInfo) => {

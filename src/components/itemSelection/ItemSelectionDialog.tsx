@@ -75,14 +75,13 @@ export const ItemSelectionDialog = ({
   const browser = useSourceNavigator(source);
 
   useEffect(() => {
-    if (browser.error) {
-      toast({
-        title: 'Browse failed',
-        description: browser.error,
-        variant: 'destructive',
-      });
-    }
-  }, [browser.error]);
+    if (!browser.error || !open) return;
+    toast({
+      title: 'Browse failed',
+      description: browser.error,
+      variant: 'destructive',
+    });
+  }, [browser.error, open]);
 
   useEffect(() => {
     if (!open) return;

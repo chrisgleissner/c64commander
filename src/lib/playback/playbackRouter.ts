@@ -60,6 +60,7 @@ export type PlayExecutionOptions = {
   drive?: 'a' | 'b';
   loadMode?: 'run' | 'load';
   resetBeforeMount?: boolean;
+  rebootBeforeMount?: boolean;
 };
 
 export const executePlayPlan = async (
@@ -70,6 +71,8 @@ export const executePlayPlan = async (
   const drive = options.drive ?? 'a';
   const resetBeforeMount = options.resetBeforeMount ?? true;
   const loadMode = options.loadMode ?? 'run';
+  const rebootBeforeMount = options.rebootBeforeMount ?? false;
+  const resetDelayMs = 500;
 
   try {
     switch (plan.category) {
@@ -125,17 +128,31 @@ export const executePlayPlan = async (
         return;
       }
       case 'disk': {
-        if (resetBeforeMount) {
+        if (rebootBeforeMount) {
+          await api.machineReboot();
+          await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
+        } else if (resetBeforeMount) {
           await api.machineReset();
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
         }
 
-        const diskEntry = createDiskEntry({
-          path: plan.path,
-          location: plan.source === 'ultimate' ? 'ultimate' : 'local',
-        });
-        const runtimeFile = plan.file instanceof File ? plan.file : undefined;
-        await mountDiskToDrive(api, drive, diskEntry, runtimeFile);
+        if (plan.source === 'ultimate') {
+          const diskEntry = createDiskEntry({
+            path: plan.path,
+            location: 'ultimate',
+          });
+          await mountDiskToDrive(api, drive, diskEntry);
+        } else if (plan.file) {
+          const blob = await toBlob(plan.file);
+          if (!blob) throw new Error('Missing local disk data.');
+          await api.mountDriveUpload(drive, blob, plan.mountType, 'readwrite');
+        } else {
+          const diskEntry = createDiskEntry({
+            path: plan.path,
+            location: 'local',
+          });
+          await mountDiskToDrive(api, drive, diskEntry);
+        }
 
         await injectAutostart(api, AUTOSTART_SEQUENCE);
         return;

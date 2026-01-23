@@ -40,6 +40,18 @@ def resolveAppVersionName = { ->
     return "0.0.0"
 }
 
+def resolveAppVersionCode = { ->
+    def envVersionCode = System.getenv("VERSION_CODE")
+    if (envVersionCode) return envVersionCode.toInteger()
+    def runNumber = System.getenv("GITHUB_RUN_NUMBER")
+    if (runNumber) return 1000 + runNumber.toInteger()
+    try {
+        def commitCount = "git rev-list --count HEAD".execute(null, rootDir).text.trim()
+        if (commitCount) return 1000 + commitCount.toInteger()
+    } catch (Exception ignored) {}
+    return 2
+}
+
 android {
     namespace "uk.gleissner.c64commander"
     compileSdk rootProject.ext.compileSdkVersion
@@ -47,9 +59,8 @@ android {
         applicationId "uk.gleissner.c64commander"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        def envVersionCode = System.getenv("VERSION_CODE")
         def envVersionName = resolveAppVersionName()
-        versionCode (envVersionCode ? envVersionCode.toInteger() : 2)
+        versionCode resolveAppVersionCode()
         versionName (envVersionName)
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
@@ -60,6 +71,7 @@ android {
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
+        logger.lifecycle("Resolved versionCode=${versionCode}, versionName=${versionName}")
     }
     signingConfigs {
         release {

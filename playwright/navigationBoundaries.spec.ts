@@ -76,7 +76,7 @@ test.describe('Navigation boundaries and edge cases', () => {
     await openRemoteFolder(page, 'Games');
     await snap(page, testInfo, 'games-folder');
 
-    await expect(page.getByText(/Path:.*\/Usb0\/Games/i)).toBeVisible();
+    await expect(page.getByText(/Path:\s*\/Usb0\/Games\/?/i)).toBeVisible();
     await snap(page, testInfo, 'deep-path-shown');
 
     const parentButton = page.getByTestId('navigate-parent').or(
@@ -93,7 +93,7 @@ test.describe('Navigation boundaries and edge cases', () => {
       // Check if we navigated to parent (may not be implemented yet)
       const parentVisible = await page.getByText('Usb0', { exact: true }).isVisible({ timeout: 5000 }).catch(() => false);
       if (parentVisible) {
-        await expect(page.getByText(/Path:.*\/Usb0$/i)).toBeVisible();
+        await expect(page.getByText(/Path:\s*\/Usb0\/?$/i)).toBeVisible();
         await snap(page, testInfo, 'parent-folder-shown');
       } else {
         await snap(page, testInfo, 'parent-navigation-not-working');

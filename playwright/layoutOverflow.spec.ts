@@ -195,9 +195,18 @@ test.describe('Layout overflow safeguards', () => {
             songNr: 1,
             sourceId: null,
           },
+          {
+            source: 'ultimate',
+            path: '/Usb0/Demos/demo2.sid',
+            name: 'demo2.sid',
+            durationMs: 60000,
+            songNr: 1,
+            sourceId: null,
+          },
         ],
         currentIndex: 0,
       };
+      localStorage.setItem('c64u_list_preview_limit', '1');
       localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
     });
 
@@ -210,10 +219,10 @@ test.describe('Layout overflow safeguards', () => {
     await snap(page, testInfo, 'add-items-dialog');
     await page.keyboard.press('Escape');
 
-    await page.getByRole('button', { name: /Duration/i }).click();
-    const durationDialog = page.getByRole('dialog');
-    await expectDialogWithinViewport(page, durationDialog);
-    await snap(page, testInfo, 'duration-dialog');
+    await page.getByRole('button', { name: 'View all' }).click();
+    const playlistDialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, playlistDialog);
+    await snap(page, testInfo, 'playlist-dialog');
     await page.keyboard.press('Escape');
 
     await expectNoHorizontalOverflow(page);
