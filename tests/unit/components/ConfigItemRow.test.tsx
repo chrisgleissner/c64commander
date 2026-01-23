@@ -263,24 +263,27 @@ describe('ConfigItemRow slider and input behaviors', () => {
 
   it('commits text input on enter without waiting for debounce', () => {
     vi.useFakeTimers();
-    const onValueChange = vi.fn();
-    renderWithQuery(
-      <ConfigItemRow
-        category="Test Category"
-        name="Hostname"
-        value="c64u"
-        options={[]}
-        details={{ presets: [] }}
-        onValueChange={onValueChange}
-      />,
-    );
+    try {
+      const onValueChange = vi.fn();
+      renderWithQuery(
+        <ConfigItemRow
+          category="Test Category"
+          name="Hostname"
+          value="c64u"
+          options={[]}
+          details={{ presets: [] }}
+          onValueChange={onValueChange}
+        />,
+      );
 
-    const input = screen.getByLabelText('Hostname text input') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'u64' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
+      const input = screen.getByLabelText('Hostname text input') as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'u64' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(onValueChange).toHaveBeenCalledWith('u64');
-    vi.useRealTimers();
+      expect(onValueChange).toHaveBeenCalledWith('u64');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('ignores edits for read-only rows', () => {
