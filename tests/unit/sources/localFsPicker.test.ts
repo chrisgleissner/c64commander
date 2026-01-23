@@ -10,11 +10,16 @@ vi.mock('@capacitor/core', () => ({
 
 const pickDirectoryMock = vi.fn();
 const readFileMock = vi.fn();
+const listChildrenMock = vi.fn();
+const readFileFromTreeMock = vi.fn();
 
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
     pickDirectory: (...args: unknown[]) => pickDirectoryMock(...args),
     readFile: (...args: unknown[]) => readFileMock(...args),
+    listChildren: (...args: unknown[]) => listChildrenMock(...args),
+    readFileFromTree: (...args: unknown[]) => readFileFromTreeMock(...args),
+    getPersistedUris: vi.fn(),
   },
 }));
 
@@ -37,12 +42,20 @@ describe('localFsPicker', () => {
     platformState.value = 'android';
     pickDirectoryMock.mockReset();
     readFileMock.mockReset();
+    listChildrenMock.mockReset();
+    readFileFromTreeMock.mockReset();
     ingestLocalArchivesMock.mockReset();
   });
 
-  it('accepts iterable folder picker results on android', async () => {
+  it('enumerates SAF results on android', async () => {
+    const treeUri = 'content://tree/primary%3AMusic';
     pickDirectoryMock.mockResolvedValue({
-      files: new Set([{ name: 'song.sid', path: '/song.sid', uri: 'file://song.sid' }]),
+      treeUri,
+      rootName: 'Music',
+      permissionPersisted: true,
+    });
+    listChildrenMock.mockResolvedValue({
+      entries: [{ type: 'file', name: 'song.sid', path: '/song.sid' }],
     });
     ingestLocalArchivesMock.mockImplementation(async (files: unknown[]) => ({
       files,

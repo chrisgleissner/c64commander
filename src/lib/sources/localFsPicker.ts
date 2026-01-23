@@ -1,6 +1,7 @@
-import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
-import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { FolderPicker } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
+import { buildLocalPlayFileFromTree } from '@/lib/playback/fileLibraryUtils';
+import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import type { LocalSidFile } from './LocalFsSongSource';
 import { ingestLocalArchives, isSupportedLocalArchive } from './localArchiveIngestion';
 
@@ -19,22 +20,8 @@ type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
 };
 
-type FolderPickerResult = {
-  uri?: string;
-  files?: unknown;
-};
-
 const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
   handle.kind === 'directory' && 'entries' in handle;
-
-const base64ToArrayBuffer = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-};
 
 export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
   if (!input) return;
@@ -50,37 +37,35 @@ export const filterLocalInputFiles = (files: FileList | null): LocalSidFile[] =>
   return Array.from(files).filter((file) => isSupportedLocalFile(file.name));
 };
 
-const normalizeFolderPickerEntries = (result: FolderPickerResult | null): PickedFolderEntry[] => {
-  if (!result) {
-    throw new Error('Folder picker returned no data.');
+const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string }[]> => {
+  const queue = ['/'];
+  const files: { name: string; path: string }[] = [];
+  while (queue.length) {
+    const path = queue.shift();
+    if (!path) continue;
+    const response = await FolderPicker.listChildren({ treeUri, path });
+    response.entries.forEach((entry) => {
+      if (entry.type === 'dir') {
+        queue.push(normalizeSourcePath(entry.path));
+      } else {
+        files.push({ name: entry.name, path: normalizeSourcePath(entry.path) });
+      }
+    });
   }
-  const entries = coerceFolderPickerEntries(result.files);
-  if (entries === null) {
-    throw new Error('Folder picker returned an invalid file list.');
-  }
-  return entries;
-};
-
-const toLocalFile = (entry: FolderPicker.PickedFolderEntry): LocalSidFile => {
-  if (!entry?.uri || !entry.name || !entry.path) {
-    throw new Error('Folder picker entry is missing required fields.');
-  }
-  return {
-    name: entry.name,
-    webkitRelativePath: entry.path,
-    lastModified: Date.now(),
-    arrayBuffer: async () => {
-      const data = await FolderPicker.readFile({ uri: entry.uri });
-      return base64ToArrayBuffer(data.data);
-    },
-  };
+  return files;
 };
 
 export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promise<LocalSidFile[] | null> => {
   if (getPlatform() === 'android') {
     const result = await FolderPicker.pickDirectory();
-    const entries = normalizeFolderPickerEntries(result);
-    const candidates = entries.filter((entry) => isSupportedLocalFile(entry.name)).map(toLocalFile);
+    const treeUri = result?.treeUri;
+    if (!treeUri || result?.files != null || !result?.permissionPersisted) {
+      throw new Error('Android SAF picker returned an unsupported response.');
+    }
+    const entries = await listSafFiles(treeUri);
+    const candidates = entries
+      .filter((entry) => isSupportedLocalFile(entry.name))
+      .map((entry) => buildLocalPlayFileFromTree(entry.name, entry.path, treeUri));
     const ingestion = await ingestLocalArchives(candidates);
     return ingestion.files;
   }

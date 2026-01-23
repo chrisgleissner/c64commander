@@ -332,90 +332,43 @@ test.describe('Playback file browser', () => {
   test('native folder picker adds local files to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
-      const entries = [
-        { name: 'demo.sid', path: '/Local Music/demo.sid', uri: 'file://demo.sid' },
-        { name: 'launch.prg', path: '/Local Music/Apps/launch.prg', uri: 'file://launch.prg' },
-        { name: 'disk.d64', path: '/Local Music/Disks/disk.d64', uri: 'file://disk.d64' },
-        { name: 'deep.sid', path: '/Local Music/Deep/Nested/deep.sid', uri: 'file://deep.sid' },
-      ];
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
 
-      const createOverlay = () => {
-        const overlay = document.createElement('div');
-        overlay.setAttribute('data-testid', 'native-folder-picker');
-        overlay.style.cssText = [
-          'position: fixed',
-          'inset: 0',
-          'z-index: 9999',
-          'background: rgba(15, 23, 42, 0.65)',
-          'display: flex',
-          'align-items: center',
-          'justify-content: center',
-          'font-family: Inter, sans-serif',
-        ].join(';');
-
-        const panel = document.createElement('div');
-        panel.style.cssText = [
-          'background: white',
-          'color: #111827',
-          'padding: 16px',
-          'border-radius: 12px',
-          'width: min(320px, 90vw)',
-          'box-shadow: 0 18px 40px rgba(0,0,0,0.35)',
-        ].join(';');
-
-        const title = document.createElement('div');
-        title.textContent = 'Native folder picker (mock)';
-        title.style.cssText = 'font-weight: 600; margin-bottom: 8px;';
-        panel.appendChild(title);
-
-        const list = document.createElement('ul');
-        list.style.cssText = 'margin: 0 0 12px 0; padding: 0 0 0 16px; font-size: 12px;';
-        entries.forEach((entry) => {
-          const item = document.createElement('li');
-          item.textContent = entry.name;
-          list.appendChild(item);
-        });
-        panel.appendChild(list);
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.textContent = 'Select folder';
-        button.setAttribute('data-testid', 'native-picker-confirm');
-        button.style.cssText = [
-          'background: #3b82f6',
-          'color: white',
-          'border: none',
-          'border-radius: 999px',
-          'padding: 8px 12px',
-          'font-size: 12px',
-          'font-weight: 600',
-          'cursor: pointer',
-        ].join(';');
-        panel.appendChild(button);
-
-        overlay.appendChild(panel);
-        document.body.appendChild(overlay);
-        return { overlay, button };
+      const treeUri = 'content://tree/primary%3AMusic';
+      const entriesByPath: Record<string, Array<{ type: 'file' | 'dir'; name: string; path: string }>> = {
+        '/': [
+          { type: 'file', name: 'demo.sid', path: '/demo.sid' },
+          { type: 'dir', name: 'Apps', path: '/Apps' },
+          { type: 'dir', name: 'Disks', path: '/Disks' },
+        ],
+        '/Apps': [{ type: 'file', name: 'launch.prg', path: '/Apps/launch.prg' }],
+        '/Disks': [
+          { type: 'file', name: 'disk.d64', path: '/Disks/disk.d64' },
+          { type: 'dir', name: 'Deep', path: '/Disks/Deep' },
+        ],
+        '/Disks/Deep': [{ type: 'file', name: 'deep.sid', path: '/Disks/Deep/deep.sid' }],
       };
 
-      const pickDirectory = () =>
-        new Promise((resolve) => {
-          const { overlay, button } = createOverlay();
-          const finalize = () => {
-            overlay.remove();
-            resolve({ rootName: 'Local Music', files: new Set(entries) });
-          };
-          button.addEventListener('click', finalize);
-          (window as Window & { __c64uNativePickerResolve?: () => void }).__c64uNativePickerResolve = finalize;
-          setTimeout(() => {
-            if (document.body.contains(overlay)) finalize();
-          }, 500);
-        });
-
-      const readFile = async () => ({ data: '' });
+      const pickDirectory = async () => ({ treeUri, rootName: 'Local Music', permissionPersisted: true });
+      const calls: Array<{ path: string }> = [];
+      (window as Window & { __c64uSafCalls?: Array<{ path: string }> }).__c64uSafCalls = calls;
+      const listChildren = async ({ treeUri: requestUri, path = '/' }: { treeUri: string; path?: string }) => {
+        if (requestUri !== treeUri) {
+          throw new Error('Unexpected treeUri');
+        }
+        const normalized = path && path !== '/' ? path.replace(/\/+$/, '') : '/';
+        const key = normalized === '' ? '/' : normalized;
+        calls.push({ path: key });
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        return { entries: entriesByPath[key] ?? [] };
+      };
+      const readFileFromTree = async () => ({ data: '' });
       (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
         pickDirectory,
-        readFile,
+        listChildren,
+        readFileFromTree,
+        readFile: async () => ({ data: '' }),
+        getPersistedUris: async () => ({ uris: [] }),
       };
     });
 
@@ -427,25 +380,60 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'choose-source');
 
     await page.getByRole('button', { name: 'Add folder' }).click();
-    const picker = page.getByTestId('native-folder-picker');
-    await expect(picker).toBeVisible();
-    await snap(page, testInfo, 'native-folder-picker');
-
-    await page.evaluate(() => {
-      (window as Window & { __c64uNativePickerResolve?: () => void }).__c64uNativePickerResolve?.();
-    });
-    await expect(picker).toBeHidden();
-
-    const playlistList = page.getByTestId('playlist-list');
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page.getByTestId('add-items-overlay')).toBeVisible();
+    const overlay = page.getByTestId('add-items-overlay');
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toContainText('Scanning');
+    await expect.poll(async () => page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0)).toBeGreaterThan(0);
+    await expect.poll(async () => page.evaluate(() => (window as any).__c64uSafCalls?.length ?? 0)).toBeGreaterThan(2);
     await snap(page, testInfo, 'playlist-scan-overlay');
     await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    const playlistList = page.getByTestId('playlist-list');
     await expect(playlistList).toContainText('demo.sid');
     await expect(playlistList).toContainText('launch.prg');
     await expect(playlistList).toContainText('disk.d64');
     await expect(playlistList).toContainText('deep.sid');
     await snap(page, testInfo, 'playlist-with-local-files');
+  });
+
+  test('SAF scan shows no supported files only after enumeration', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected destructive toast for empty SAF scan.' });
+    await page.addInitScript(() => {
+      (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
+      (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
+
+      const treeUri = 'content://tree/primary%3AEmpty';
+      const entriesByPath: Record<string, Array<{ type: 'file' | 'dir'; name: string; path: string }>> = {
+        '/': [{ type: 'file', name: 'notes.txt', path: '/notes.txt' }],
+      };
+
+      const pickDirectory = async () => ({ treeUri, rootName: 'Empty', permissionPersisted: true });
+      const listChildren = async ({ treeUri: requestUri, path = '/' }: { treeUri: string; path?: string }) => {
+        if (requestUri !== treeUri) throw new Error('Unexpected treeUri');
+        await new Promise((resolve) => setTimeout(resolve, 75));
+        return { entries: entriesByPath[path || '/'] ?? [] };
+      };
+      (window as Window & { __c64uFolderPickerOverride?: any }).__c64uFolderPickerOverride = {
+        pickDirectory,
+        listChildren,
+        readFileFromTree: async () => ({ data: '' }),
+        readFile: async () => ({ data: '' }),
+        getPersistedUris: async () => ({ uris: [] }),
+      };
+    });
+
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await page.getByRole('button', { name: 'Add folder' }).click();
+
+    const overlay = page.getByTestId('add-items-overlay');
+    await expect(overlay).toBeVisible();
+    await expect(page.getByText('No supported files')).toHaveCount(0);
+    await snap(page, testInfo, 'saf-scan-overlay');
+
+    await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+    await expect(page.getByText('No supported files', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'saf-no-supported-files');
   });
 
   test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo: TestInfo) => {

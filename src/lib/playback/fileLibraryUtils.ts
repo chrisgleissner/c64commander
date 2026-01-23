@@ -30,6 +30,16 @@ export const buildLocalPlayFileFromUri = (name: string, path: string, uri: strin
   },
 });
 
+export const buildLocalPlayFileFromTree = (name: string, path: string, treeUri: string): LocalPlayFile => ({
+  name,
+  webkitRelativePath: path,
+  lastModified: Date.now(),
+  arrayBuffer: async () => {
+    const data = await FolderPicker.readFileFromTree({ treeUri, path });
+    return base64ToArrayBuffer(data.data);
+  },
+});
+
 export const resolvePlayRequestFromLibrary = (
   entry: FileLibraryEntry,
   runtimeFiles: Record<string, LocalPlayFile>,

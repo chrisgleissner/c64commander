@@ -16,7 +16,11 @@ import PlayFilesPage from './pages/PlayFilesPage';
 import DisksPage from './pages/DisksPage.tsx';
 import CoverageProbePage from './pages/CoverageProbePage';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
-import { addErrorLog } from "@/lib/logging";
+import { addErrorLog, addLog } from "@/lib/logging";
+import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
+import { FolderPicker } from "@/lib/native/folderPicker";
+import { getPlatform } from "@/lib/native/platform";
+import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { MockModeProvider } from "@/hooks/useMockMode";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
@@ -66,6 +70,7 @@ const AppRoutes = () => (
   <BrowserRouter>
     <ErrorBoundary />
     <RouteRefresher />
+    <DebugStartupLogger />
     <MockModeBanner />
     <Routes>
       {import.meta.env.VITE_ENABLE_TEST_PROBES === '1' ? (
@@ -127,6 +132,25 @@ const ErrorBoundary = () => {
     };
   }, []);
 
+  return null;
+};
+
+const DebugStartupLogger = () => {
+  useEffect(() => {
+    if (getPlatform() !== 'android') return;
+    if (!loadDebugLoggingEnabled()) return;
+    FolderPicker.getPersistedUris()
+      .then((result) => {
+        const uris = result?.uris ?? [];
+        addLog('debug', 'SAF persisted URIs on startup', {
+          count: uris.length,
+          uris: uris.map((entry) => redactTreeUri(entry.uri)),
+        });
+      })
+      .catch((error) => {
+        addLog('debug', 'SAF persisted URI lookup failed', { error: (error as Error).message });
+      });
+  }, []);
   return null;
 };
 

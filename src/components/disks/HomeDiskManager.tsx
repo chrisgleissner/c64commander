@@ -12,7 +12,7 @@ import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { getC64API } from '@/lib/c64api';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
@@ -25,6 +25,7 @@ import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { getPlatform } from '@/lib/native/platform';
+import { redactTreeUri } from '@/lib/native/safUtils';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
@@ -420,6 +421,14 @@ export const HomeDiskManager = () => {
     try {
       const startedAt = Date.now();
       addItemsStartedAtRef.current = startedAt;
+      const localTreeUri = source.type === 'local' ? localSourcesById.get(source.id)?.android?.treeUri ?? null : null;
+      if (localTreeUri) {
+        addLog('debug', 'SAF disk scan started', {
+          sourceId: source.id,
+          treeUri: redactTreeUri(localTreeUri),
+          rootPath: source.rootPath,
+        });
+      }
       if (!browserOpen) {
         setAddItemsSurface('page');
         if (!addItemsOverlayActiveRef.current) {
@@ -499,6 +508,12 @@ export const HomeDiskManager = () => {
 
       const diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
       if (!diskCandidates.length) {
+        addLog('debug', 'No disk files after scan', {
+          sourceId: source.id,
+          sourceType: source.type,
+          reason: 'no-disk-files',
+          totalFiles: files.length,
+        });
         setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No disk files found.' }));
         showNoDiskWarning();
         return false;
@@ -521,6 +536,7 @@ export const HomeDiskManager = () => {
           location: source.type === 'ultimate' ? 'ultimate' : 'local',
           group: groupName,
           localUri: localEntry?.uri ?? null,
+          localTreeUri: localSource?.android?.treeUri ?? null,
           sizeBytes: entry.sizeBytes ?? null,
           modifiedAt: entry.modifiedAt ?? null,
           importOrder: index,
@@ -539,6 +555,15 @@ export const HomeDiskManager = () => {
       }
 
       diskLibrary.addDisks(disks, runtimeFiles);
+      if (localTreeUri) {
+        addLog('debug', 'SAF disk scan complete', {
+          sourceId: source.id,
+          treeUri: redactTreeUri(localTreeUri),
+          totalFiles: files.length,
+          supportedFiles: diskCandidates.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
       setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to library' }));
       toast({ title: 'Items added', description: `${disks.length} disk(s) added to library.` });
       return true;

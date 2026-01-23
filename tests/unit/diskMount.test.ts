@@ -6,12 +6,18 @@ import { createDiskEntry } from '@/lib/disks/diskTypes';
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
     readFile: vi.fn(),
+    readFileFromTree: vi.fn(),
   },
 }));
 
 const mockFolderPicker = async (data: string) => {
   const { FolderPicker } = await import('@/lib/native/folderPicker');
   (FolderPicker.readFile as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
+};
+
+const mockFolderPickerFromTree = async (data: string) => {
+  const { FolderPicker } = await import('@/lib/native/folderPicker');
+  (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
 };
 
 describe('mountDiskToDrive', () => {
@@ -75,6 +81,25 @@ describe('mountDiskToDrive', () => {
     });
 
     expect(text).toBe('demo');
+  });
+
+  it('resolves local disk blobs from SAF tree URIs', async () => {
+    await mockFolderPickerFromTree(btoa('tree-data'));
+    const disk = createDiskEntry({
+      location: 'local',
+      path: '/Local/Disk 2.d64',
+      localTreeUri: 'content://tree/primary%3ADisks',
+    });
+
+    const blob = await resolveLocalDiskBlob(disk);
+    const text = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.readAsText(blob);
+    });
+
+    expect(text).toBe('tree-data');
   });
 
   it('throws when local disks are missing a URI', async () => {

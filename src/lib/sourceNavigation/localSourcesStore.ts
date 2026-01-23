@@ -1,6 +1,7 @@
-import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
-import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { FolderPicker } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
+import { addLog } from '@/lib/logging';
+import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeSourcePath } from './paths';
 
 export type LocalSourceEntry = {
@@ -18,6 +19,11 @@ export type LocalSourceRecord = {
   rootPath: string;
   createdAt: string;
   entries: LocalSourceEntry[];
+  android?: {
+    treeUri: string;
+    rootName: string | null;
+    permissionGrantedAt: string;
+  };
   requiresReselect?: boolean;
 };
 
@@ -37,36 +43,10 @@ const safeRandomId = () => {
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const normalizeFolderPickerEntries = (result: { files?: unknown } | null): PickedFolderEntry[] => {
-  const entries = coerceFolderPickerEntries(result?.files);
-  if (entries === null) {
-    throw new Error('Folder picker returned an invalid file list.');
-  }
-  return entries;
-};
-
 const normalizeRootName = (value: string | null | undefined) => {
   if (!value) return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
-};
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-const normalizePickerRelativePath = (entry: PickedFolderEntry, rootName: string | null) => {
-  const rawPath = entry.path || entry.name;
-  let relative = rawPath.replace(/^\/+/, '');
-  const normalizedRoot = rootName ? rootName.replace(/^\/+|\/+$/g, '').trim() : '';
-  if (normalizedRoot) {
-    const prefixPattern = new RegExp(`^${escapeRegex(normalizedRoot)}\\/`, 'i');
-    if (prefixPattern.test(relative)) {
-      relative = relative.replace(prefixPattern, '');
-    } else if (relative.toLowerCase() === normalizedRoot.toLowerCase()) {
-      relative = entry.name;
-    }
-  }
-  relative = relative.replace(/^\/+/, '');
-  return relative || entry.name;
 };
 
 const buildRootPath = (rootName: string | null) => {
@@ -107,6 +87,7 @@ export const createLocalSourceFromFileList = (files: FileList | File[], label?: 
   const rootName = first?.webkitRelativePath?.split('/')?.[0] || label || 'Folder';
   const rootPath = buildRootPath(rootName);
   const sourceId = safeRandomId();
+  const createdAt = new Date().toISOString();
   const runtimeFiles: Record<string, File> = {};
   const entries: LocalSourceEntry[] = list.map((file) => {
     const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
@@ -126,7 +107,7 @@ export const createLocalSourceFromFileList = (files: FileList | File[], label?: 
     name: rootName,
     rootName,
     rootPath,
-    createdAt: new Date().toISOString(),
+    createdAt,
     entries,
   };
   return { source, runtimeFiles };
@@ -140,23 +121,47 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
 
 export const createLocalSourceFromPicker = async (input: HTMLInputElement | null): Promise<LocalSourceBuildResult | null> => {
   if (getPlatform() === 'android') {
-    const result = await FolderPicker.pickDirectory();
-    const entries = normalizeFolderPickerEntries(result);
+    addLog('debug', 'SAF picker invoked', { platform: 'android' });
+    let result: Awaited<ReturnType<typeof FolderPicker.pickDirectory>>;
+    try {
+      result = await FolderPicker.pickDirectory();
+    } catch (error) {
+      addLog('debug', 'SAF picker failed', { error: (error as Error).message });
+      throw error;
+    }
+    const treeUri = result?.treeUri;
+    if (!treeUri || result?.files != null) {
+      addLog('debug', 'Android SAF picker rejected non-SAF response', {
+        treeUri: redactTreeUri(treeUri),
+        hasEntries: Array.isArray(result?.files),
+      });
+      throw new Error('Android SAF picker returned an unsupported response.');
+    }
     const rootName = normalizeRootName(result?.rootName);
-    const rootPath = '/';
     const sourceId = safeRandomId();
-    const sourceEntries: LocalSourceEntry[] = entries.map((entry) => ({
-      name: entry.name,
-      relativePath: normalizePickerRelativePath(entry, rootName),
-      uri: entry.uri,
-    }));
+    const createdAt = new Date().toISOString();
+    addLog('debug', 'SAF tree URI received', {
+      treeUri: redactTreeUri(treeUri),
+      rootName,
+      permissionPersisted: result?.permissionPersisted === true,
+    });
+    if (!result?.permissionPersisted) {
+      addLog('debug', 'SAF persistable permission missing', { treeUri: redactTreeUri(treeUri) });
+      throw new Error('Folder access permission could not be persisted.');
+    }
+    addLog('debug', 'SAF persistable permission granted', { treeUri: redactTreeUri(treeUri) });
     const source: LocalSourceRecord = {
       id: sourceId,
       name: rootName || 'This device',
       rootName,
-      rootPath,
-      createdAt: new Date().toISOString(),
-      entries: sourceEntries,
+      rootPath: '/',
+      createdAt,
+      entries: [],
+      android: {
+        treeUri,
+        rootName,
+        permissionGrantedAt: createdAt,
+      },
     };
     return { source, runtimeFiles: {} };
   }

@@ -1,5 +1,4 @@
-import { FolderPicker, type PickedFolderEntry } from '@/lib/native/folderPicker';
-import { coerceFolderPickerEntries } from '@/lib/native/folderPickerUtils';
+import { FolderPicker } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import type { DiskEntry } from './diskTypes';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath } from './diskTypes';
@@ -25,12 +24,6 @@ type FileSystemDirectoryHandleLike = FileSystemHandleLike & {
   entries: () => AsyncIterableIterator<[string, FileSystemHandleLike]>;
 };
 
-type FolderPickerResult = {
-  uri?: string;
-  files?: unknown;
-  rootName?: string;
-};
-
 const isDirectoryHandle = (handle: FileSystemHandleLike): handle is FileSystemDirectoryHandleLike =>
   handle.kind === 'directory' && 'entries' in handle;
 
@@ -40,41 +33,49 @@ export const prepareDiskDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute('directory', '');
 };
 
-const normalizeFolderPickerEntries = (result: FolderPickerResult | null): { entries: PickedFolderEntry[]; rootName: string } => {
-  if (!result) throw new Error('Folder picker returned no data.');
-  const rootName = result.rootName || '';
-  const entries = coerceFolderPickerEntries(result.files);
-  return { entries: entries ?? [], rootName };
-};
-
-const applyRootName = (path: string, rootName: string) => {
-  if (!rootName) return path;
-  const normalized = normalizeDiskPath(path);
-  if (normalized.startsWith(`/${rootName}/`) || normalized === `/${rootName}`) return normalized;
-  return normalizeDiskPath(`/${rootName}${normalized}`);
+const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string }[]> => {
+  const queue = ['/'];
+  const files: { name: string; path: string }[] = [];
+  while (queue.length) {
+    const path = queue.shift();
+    if (!path) continue;
+    const response = await FolderPicker.listChildren({ treeUri, path });
+    response.entries.forEach((entry) => {
+      if (entry.type === 'dir') {
+        queue.push(normalizeDiskPath(entry.path));
+      } else {
+        files.push({ name: entry.name, path: normalizeDiskPath(entry.path) });
+      }
+    });
+  }
+  return files;
 };
 
 export const importLocalDiskFolder = async (): Promise<LocalDiskSelection | null> => {
   if (getPlatform() === 'android') {
-    const result = await FolderPicker.pickDirectory({ extensions: ['d64', 'g64', 'd71', 'g71', 'd81'] });
-    const { entries, rootName } = normalizeFolderPickerEntries(result);
+    const result = await FolderPicker.pickDirectory();
+    const treeUri = result?.treeUri;
+    if (!treeUri || result?.files != null || !result?.permissionPersisted) {
+      throw new Error('Android SAF picker returned an unsupported response.');
+    }
     const runtimeFiles: Record<string, File> = {};
-    const diskCandidates = entries.filter((entry) => isDiskImagePath(entry.name));
+    const safFiles = await listSafFiles(treeUri);
+    const diskCandidates = safFiles.filter((entry) => isDiskImagePath(entry.name));
     const groupMap = assignDiskGroupsByPrefix(
       diskCandidates.map((entry) => ({
-        path: applyRootName(entry.path, rootName),
+        path: normalizeDiskPath(entry.path),
         name: entry.name,
       })),
     );
     const disks = diskCandidates.map((entry, index) => {
-      const path = applyRootName(entry.path, rootName);
-      const autoGroup = groupMap.get(normalizeDiskPath(path));
+      const path = normalizeDiskPath(entry.path);
+      const autoGroup = groupMap.get(path);
       const fallbackGroup = getLeafFolderName(path);
       return createDiskEntry({
         path,
         location: 'local',
         group: autoGroup ?? fallbackGroup ?? null,
-        localUri: entry.uri,
+        localTreeUri: treeUri,
         modifiedAt: null,
         sizeBytes: null,
         importOrder: index,

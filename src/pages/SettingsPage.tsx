@@ -32,7 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addErrorLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
+import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useMockMode } from '@/hooks/useMockMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
@@ -45,6 +45,9 @@ import {
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
 } from '@/lib/config/appSettings';
+import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
+import { getPlatform } from '@/lib/native/platform';
+import { redactTreeUri } from '@/lib/native/safUtils';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -73,7 +76,12 @@ export default function SettingsPage() {
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
+  const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
+  const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
+  const [safBusy, setSafBusy] = useState(false);
+  const [safError, setSafError] = useState<string | null>(null);
   const devTapTimestamps = useRef<number[]>([]);
+  const isAndroid = getPlatform() === 'android';
 
   useEffect(() => {
     setUrlInput(baseUrl);
@@ -114,6 +122,51 @@ export default function SettingsPage() {
   const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
   const errorsPayload = useMemo(() => formatLogsForShare(errorLogs), [errorLogs]);
   const activePayload = diagnosticsTab === 'errors' ? errorsPayload : logsPayload;
+
+  const refreshSafPermissions = async () => {
+    if (!isAndroid) return;
+    setSafBusy(true);
+    setSafError(null);
+    try {
+      const result = await FolderPicker.getPersistedUris();
+      setSafUris(result?.uris ?? []);
+      addLog('debug', 'SAF persisted URIs (manual)', {
+        count: result?.uris?.length ?? 0,
+        uris: (result?.uris ?? []).map((entry) => redactTreeUri(entry.uri)),
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      setSafError(message);
+      addErrorLog('SAF persisted URI lookup failed', { error: message });
+    } finally {
+      setSafBusy(false);
+    }
+  };
+
+  const enumerateSafRoot = async () => {
+    if (!isAndroid) return;
+    const treeUri = safUris[0]?.uri;
+    if (!treeUri) {
+      toast({ title: 'SAF diagnostics', description: 'No persisted SAF permissions found.', variant: 'destructive' });
+      return;
+    }
+    setSafBusy(true);
+    setSafError(null);
+    try {
+      const result = await FolderPicker.listChildren({ treeUri, path: '/' });
+      setSafEntries(result.entries ?? []);
+      addLog('debug', 'SAF diagnostic enumeration', {
+        treeUri: redactTreeUri(treeUri),
+        entries: result.entries?.length ?? 0,
+      });
+    } catch (error) {
+      const message = (error as Error).message;
+      setSafError(message);
+      addErrorLog('SAF enumeration failed', { error: message });
+    } finally {
+      setSafBusy(false);
+    }
+  };
 
   const handleShareActive = async () => {
     const content = activePayload || 'No entries recorded.';
@@ -334,9 +387,9 @@ export default function SettingsPage() {
 
             <div className="flex items-start justify-between gap-3 min-w-0">
               <div className="space-y-1 min-w-0">
-                <Label htmlFor="debug-logging" className="font-medium">Debug REST logging</Label>
+                <Label htmlFor="debug-logging" className="font-medium">Enable Debug Logging</Label>
                 <p className="text-xs text-muted-foreground">
-                  Records every REST call with method, path, status, and latency.
+                  Emits all debug-level logs for diagnostics, including SAF and REST events.
                 </p>
               </div>
               <Checkbox
@@ -349,6 +402,43 @@ export default function SettingsPage() {
                 }}
               />
             </div>
+
+            {debugLoggingEnabled && isAndroid ? (
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">SAF diagnostics</p>
+                  <p className="text-xs text-muted-foreground">
+                    Manual checks for persisted SAF permissions and enumeration.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void refreshSafPermissions()} disabled={safBusy}>
+                    List persisted URIs
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void enumerateSafRoot()}
+                    disabled={safBusy || safUris.length === 0}
+                  >
+                    Enumerate first root
+                  </Button>
+                </div>
+                {safError ? (
+                  <p className="text-xs text-destructive">{safError}</p>
+                ) : null}
+                {safUris.length ? (
+                  <div className="text-xs text-muted-foreground">
+                    Persisted: {safUris.map((entry) => redactTreeUri(entry.uri)).filter(Boolean).join(', ')}
+                  </div>
+                ) : null}
+                {safEntries.length ? (
+                  <div className="max-h-28 overflow-auto whitespace-pre-line text-xs text-muted-foreground">
+                    {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join('\n')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">

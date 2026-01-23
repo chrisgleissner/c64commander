@@ -2,7 +2,6 @@ package uk.gleissner.c64commander
 
 import com.getcapacitor.PluginCall
 import com.getcapacitor.JSObject
-import androidx.documentfile.provider.DocumentFile
 import com.getcapacitor.Bridge
 import com.getcapacitor.Plugin
 import android.content.Context
@@ -61,70 +60,50 @@ class FolderPickerPluginTest {
   }
 
   @Test
-  fun supportedLocalFileDetectionHonorsExtensions() {
-    val method = FolderPickerPlugin::class.java.getDeclaredMethod(
-      "isSupportedLocalFile",
-      String::class.java,
-      Set::class.java
-    )
-    method.isAccessible = true
+  fun listChildrenRejectsWhenTreeUriMissing() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("treeUri")).thenReturn(null)
 
-    val allowed = setOf("sid")
-    val sidResult = method.invoke(plugin, "demo.sid", allowed) as Boolean
-    val zipResult = method.invoke(plugin, "demo.zip", allowed) as Boolean
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("treeUri is required")
 
-    assertTrue(sidResult)
-    assertFalse(zipResult)
+    plugin.listChildren(call)
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
 
   @Test
-  fun supportedLocalFileDetectionUsesDefaultExtensions() {
-    val method = FolderPickerPlugin::class.java.getDeclaredMethod(
-      "isSupportedLocalFile",
-      String::class.java,
-      Set::class.java
-    )
-    method.isAccessible = true
+  fun readFileFromTreeRejectsWhenTreeUriMissing() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("treeUri")).thenReturn(null)
+    `when`(call.getString("path")).thenReturn("/demo.sid")
 
-    val sidResult = method.invoke(plugin, "demo.sid", null) as Boolean
-    val zipResult = method.invoke(plugin, "demo.zip", null) as Boolean
-    val sevenZResult = method.invoke(plugin, "demo.7z", null) as Boolean
-    val txtResult = method.invoke(plugin, "demo.txt", null) as Boolean
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("treeUri is required")
 
-    assertTrue(sidResult)
-    assertTrue(zipResult)
-    assertTrue(sevenZResult)
-    assertFalse(txtResult)
+    plugin.readFileFromTree(call)
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
 
   @Test
-  fun collectFilesRespectsExtensionFilter() {
-    val root = tempFolder.newFolder("picker-root")
-    val sidFile = java.io.File(root, "demo.sid")
-    val txtFile = java.io.File(root, "demo.txt")
-    val subDir = java.io.File(root, "sub")
-    subDir.mkdirs()
-    val zipFile = java.io.File(subDir, "archive.zip")
-    sidFile.writeText("sid")
-    txtFile.writeText("txt")
-    zipFile.writeText("zip")
+  fun readFileFromTreeRejectsWhenPathMissing() {
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("treeUri")).thenReturn("content://tree")
+    `when`(call.getString("path")).thenReturn(null)
 
-    val method = FolderPickerPlugin::class.java.getDeclaredMethod(
-      "collectFiles",
-      DocumentFile::class.java,
-      String::class.java,
-      MutableList::class.java,
-      Set::class.java
-    )
-    method.isAccessible = true
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("path is required")
 
-    val results = mutableListOf<JSObject>()
-    val allowed = setOf("sid")
-    method.invoke(plugin, DocumentFile.fromFile(root), "", results, allowed)
-
-    assertEquals(1, results.size)
-    assertEquals("demo.sid", results[0].getString("name"))
-    assertEquals("/demo.sid", results[0].getString("path"))
+    plugin.readFileFromTree(call)
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
 
   private fun setPluginBridge(target: FolderPickerPlugin, context: Context) {

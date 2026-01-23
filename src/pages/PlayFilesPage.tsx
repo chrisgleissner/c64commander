@@ -15,10 +15,10 @@ import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { getC64API } from '@/lib/c64api';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
-import { buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
+import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFileCategory } from '@/lib/playback/fileTypes';
 import { PlaybackClock } from '@/lib/playback/playbackClock';
@@ -33,6 +33,7 @@ import { parseSonglengths } from '@/lib/sid/songlengths';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getPlatform } from '@/lib/native/platform';
+import { redactTreeUri } from '@/lib/native/safUtils';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -492,6 +493,14 @@ export default function PlayFilesPage() {
     return map;
   }, [localSources]);
 
+  const localSourceTreeUris = useMemo(() => {
+    const map = new Map<string, string | null>();
+    localSources.forEach((source) => {
+      map.set(source.id, source.android?.treeUri ?? null);
+    });
+    return map;
+  }, [localSources]);
+
   const handleLocalSourceInput = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
     addSourceFromFiles(files);
@@ -522,6 +531,14 @@ export default function PlayFilesPage() {
   const handleAddFileSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
     addItemsStartedAtRef.current = startedAt;
+    const localTreeUri = source.type === 'local' ? localSourceTreeUris.get(source.id) : null;
+    if (localTreeUri) {
+      addLog('debug', 'SAF scan started', {
+        sourceId: source.id,
+        treeUri: redactTreeUri(localTreeUri),
+        rootPath: source.rootPath,
+      });
+    }
     if (!browserOpen) {
       setAddItemsSurface('page');
       if (!addItemsOverlayActiveRef.current) {
@@ -605,11 +622,13 @@ export default function PlayFilesPage() {
 
       const playlistItems: PlaylistItem[] = [];
       if (source.type === 'local') {
+        const treeUri = localSourceTreeUris.get(source.id);
         const songlengthsEntries = selectedFiles
           .filter((entry) => entry.type === 'file' && entry.name.toLowerCase() === 'songlengths.md5')
           .map((entry) => ({
             path: normalizeSourcePath(entry.path),
-            file: resolveLocalRuntimeFile(source.id, entry.path),
+            file: resolveLocalRuntimeFile(source.id, entry.path)
+              || (treeUri ? buildLocalPlayFileFromTree(entry.name, normalizeSourcePath(entry.path), treeUri) : undefined),
           }))
           .filter((entry): entry is { path: string; file: LocalPlayFile } => Boolean(entry.file));
         if (songlengthsEntries.length) {
@@ -633,6 +652,7 @@ export default function PlayFilesPage() {
           source.type === 'local'
             ? resolveLocalRuntimeFile(source.id, normalizedPath)
               || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri) : undefined)
+              || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri) : undefined)
             : undefined;
         const playable: PlayableEntry = {
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
@@ -647,6 +667,13 @@ export default function PlayFilesPage() {
       });
 
       if (!playlistItems.length) {
+        const reason = selectedFiles.length === 0 ? 'no-files-found' : 'unsupported-files';
+        addLog('debug', 'No supported files after scan', {
+          sourceId: source.id,
+          sourceType: source.type,
+          reason,
+          totalFiles: selectedFiles.length,
+        });
         toast({ title: 'No supported files', description: 'Found no supported files.', variant: 'destructive' });
         setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No supported files found.' }));
         return false;
@@ -658,6 +685,15 @@ export default function PlayFilesPage() {
         await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
       }
       setPlaylist((prev) => [...prev, ...playlistItems]);
+      if (localTreeUri) {
+        addLog('debug', 'SAF scan complete', {
+          sourceId: source.id,
+          treeUri: redactTreeUri(localTreeUri),
+          totalFiles: selectedFiles.length,
+          supportedFiles: playlistItems.length,
+          elapsedMs: Date.now() - startedAt,
+        });
+      }
       toast({ title: 'Items added', description: `${playlistItems.length} file(s) added to playlist.` });
       setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to playlist' }));
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -686,7 +722,7 @@ export default function PlayFilesPage() {
         addItemsOverlayActiveRef.current = false;
       }
     }
-  }, [addItemsSurface, browserOpen, buildPlaylistItem, localEntriesBySourceId, recurseFolders]);
+  }, [addItemsSurface, browserOpen, buildPlaylistItem, localEntriesBySourceId, localSourceTreeUris, recurseFolders]);
 
 
   const refreshHvscStatus = useCallback(() => {
