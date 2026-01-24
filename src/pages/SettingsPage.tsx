@@ -301,7 +301,7 @@ export default function SettingsPage() {
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <main className="container py-6 space-y-6">
-        {/* Connection Settings */}
+        {/* 1. Connection Settings */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -346,62 +346,6 @@ export default function SettingsPage() {
 
           </div>
 
-          <div className="space-y-4 rounded-lg border border-border/70 p-3">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <Label htmlFor="auto-demo-mode" className="font-medium">Automatic Demo Mode</Label>
-                <p className="text-xs text-muted-foreground">
-                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
-                </p>
-              </div>
-              <Checkbox
-                id="auto-demo-mode"
-                checked={automaticDemoModeEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  setAutomaticDemoModeEnabled(enabled);
-                  saveAutomaticDemoModeEnabled(enabled);
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
-              <Input
-                id="startup-discovery-window"
-                type="number"
-                min={0.5}
-                max={15}
-                step={0.1}
-                value={startupDiscoveryWindowInput}
-                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
-                onBlur={commitStartupDiscoveryWindow}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
-              <Input
-                id="background-rediscovery-interval"
-                type="number"
-                min={1}
-                max={60}
-                step={0.1}
-                value={backgroundRediscoveryIntervalInput}
-                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
-                onBlur={commitBackgroundRediscoveryInterval}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
-            </div>
-          </div>
-
           <div className="flex gap-2 pt-2">
             <Button
               onClick={handleSaveConnection}
@@ -441,11 +385,11 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* Logs & Diagnostics */}
+        {/* 2. Diagnostics */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
+          transition={{ delay: 0.05 }}
           className="bg-card border border-border rounded-xl p-4 space-y-4"
         >
           <div className="flex items-center gap-2">
@@ -539,7 +483,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* Theme Settings */}
+        {/* 3. Appearance */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -578,45 +522,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* Library Settings */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.12 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Library</h2>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="listPreviewLimit" className="text-sm">
-              List preview limit
-            </Label>
-            <Input
-              id="listPreviewLimit"
-              type="number"
-              min={1}
-              max={200}
-              value={listPreviewInput}
-              onChange={(event) => setListPreviewInput(event.target.value)}
-              onBlur={commitListPreviewLimit}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  commitListPreviewLimit();
-                }
-              }}
-            />
-            <p className="text-xs text-muted-foreground">
-              Controls how many playlist or disk items are shown before opening View all. Default is 50.
-            </p>
-          </div>
-        </motion.div>
-
-        {/* Playback Settings */}
+        {/* 4. Play and Disk */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -627,34 +533,130 @@ export default function SettingsPage() {
             <div className="p-2 rounded-lg bg-primary/10">
               <Play className="h-5 w-5 text-primary" />
             </div>
-            <h2 className="font-medium">Playback</h2>
+            <h2 className="font-medium">Play and Disk</h2>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="disk-autostart-mode" className="text-sm">
-              Disk first-PRG load
-            </Label>
-            <Select
-              value={diskAutostartMode}
-              onValueChange={(value) => {
-                const mode = value as DiskAutostartMode;
-                setDiskAutostartMode(mode);
-                saveDiskAutostartMode(mode);
-              }}
-            >
-              <SelectTrigger id="disk-autostart-mode">
-                <SelectValue placeholder="Select load mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
-                <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
-              the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
-              loaders may not like DMA.
-            </p>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="listPreviewLimit" className="text-sm">
+                List preview limit
+              </Label>
+              <Input
+                id="listPreviewLimit"
+                type="number"
+                min={1}
+                max={200}
+                value={listPreviewInput}
+                onChange={(event) => setListPreviewInput(event.target.value)}
+                onBlur={commitListPreviewLimit}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitListPreviewLimit();
+                  }
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls how many playlist or disk items are shown before opening View all. Default is 50.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="disk-autostart-mode" className="text-sm">
+                Disk first-PRG load
+              </Label>
+              <Select
+                value={diskAutostartMode}
+                onValueChange={(value) => {
+                  const mode = value as DiskAutostartMode;
+                  setDiskAutostartMode(mode);
+                  saveDiskAutostartMode(mode);
+                }}
+              >
+                <SelectTrigger id="disk-autostart-mode">
+                  <SelectValue placeholder="Select load mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
+                  <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
+                the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
+                loaders may not like DMA.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 5. Config */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Cpu className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Config</h2>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="auto-demo-mode" className="font-medium">Automatic Demo Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
+                </p>
+              </div>
+              <Checkbox
+                id="auto-demo-mode"
+                checked={automaticDemoModeEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setAutomaticDemoModeEnabled(enabled);
+                  saveAutomaticDemoModeEnabled(enabled);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
+              <Input
+                id="startup-discovery-window"
+                type="number"
+                min={0.5}
+                max={15}
+                step={0.1}
+                value={startupDiscoveryWindowInput}
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                onBlur={commitStartupDiscoveryWindow}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
+              <Input
+                id="background-rediscovery-interval"
+                type="number"
+                min={1}
+                max={60}
+                step={0.1}
+                value={backgroundRediscoveryIntervalInput}
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                onBlur={commitBackgroundRediscoveryInterval}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+            </div>
           </div>
         </motion.div>
 
@@ -662,14 +664,14 @@ export default function SettingsPage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.18 }}
+            transition={{ delay: 0.25 }}
             className="bg-card border border-border rounded-xl p-4 space-y-4"
           >
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-primary/10">
                 <Cpu className="h-5 w-5 text-primary" />
               </div>
-              <h2 className="font-medium">Developer</h2>
+              <h2 className="font-medium">Experimental</h2>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex items-start justify-between gap-3 min-w-0">
@@ -702,11 +704,11 @@ export default function SettingsPage() {
           </motion.div>
         )}
 
-        {/* About */}
+        {/* 7. About */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.3 }}
           className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
           onClick={handleDeveloperTap}
           role="button"
