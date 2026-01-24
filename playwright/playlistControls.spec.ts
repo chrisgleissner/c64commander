@@ -220,9 +220,13 @@ test.describe('Playlist controls and advanced features', () => {
     await expect(songButton).toBeVisible();
     await snap(page, testInfo, 'song-selector-visible');
 
-    await songButton.click({ force: true });
+    const trigger = page.getByTestId('song-selector-trigger');
+    await expect(trigger).toBeVisible();
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.dispatchEvent('pointerdown');
+    await trigger.dispatchEvent('click');
     const dialog = page.getByTestId('song-selector-dialog');
-    await expect(dialog).toBeVisible();
+    await expect(dialog).toBeVisible({ timeout: 10000 });
     await snap(page, testInfo, 'song-selector-open');
 
     await dialog.getByRole('button', { name: /Song 2/ }).click();

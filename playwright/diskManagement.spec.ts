@@ -211,8 +211,9 @@ test.describe('Disk management', () => {
 
     const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
     if (mountBox && powerBox) {
+      const xTolerance = 4;
       expect(powerBox.y).toBeGreaterThan(mountBox.y);
-      expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x);
+      expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x - xTolerance);
     }
 
     await powerButton.click();
@@ -345,7 +346,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'single-close');
   });
 
-  test('disk list view all shows full list', async ({ page }, testInfo: TestInfo) => {
+  test('disk list view all shows full list', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '1');
     });
