@@ -872,6 +872,9 @@ test.describe('Playback file browser', () => {
     const initialUlti2 = initialState['Vol UltiSid 2']?.value;
     const initialSocket2 = initialState['Vol Socket 2']?.value;
     const initialUlti1 = initialState['Vol UltiSid 1']?.value;
+    const initialUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
     const box = await slider.boundingBox();
     expect(box).not.toBeNull();
     if (box) {
@@ -881,9 +884,6 @@ test.describe('Playback file browser', () => {
       await page.mouse.up();
     }
 
-    const initialUpdateCount = server.requests.filter(
-      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
-    ).length;
     await waitForRequests(() =>
       server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > initialUpdateCount,
     );

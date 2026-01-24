@@ -102,6 +102,8 @@ test.describe('Layout overflow safeguards', () => {
     const viewAll = page.getByRole('button', { name: 'View all' }).first();
     if (await viewAll.isVisible()) {
       await viewAll.click();
+      const dialog = page.getByRole('dialog');
+      await expectDialogWithinViewport(page, dialog);
       await snap(page, testInfo, 'disks-view-all');
       await expectNoHorizontalOverflow(page);
       await page.keyboard.press('Escape');
@@ -133,6 +135,8 @@ test.describe('Layout overflow safeguards', () => {
     const viewAll = page.getByRole('button', { name: 'View all' }).first();
     if (await viewAll.isVisible()) {
       await viewAll.click();
+      const dialog = page.getByRole('dialog');
+      await expectDialogWithinViewport(page, dialog);
       await snap(page, testInfo, 'playlist-view-all');
       await expectNoHorizontalOverflow(page);
       await page.keyboard.press('Escape');
@@ -153,11 +157,19 @@ test.describe('Layout overflow safeguards', () => {
     await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
 
     const dialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
     await dialog.getByText('Long-Names-For-Overflow-Testing', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Super-Long-Folder-Name-That-Is-Definitely-Too-Wide-For-Mobile-Viewports-And-Should-Wrap', { exact: true })
+      .locator('..')
+      .locator('..')
+      .locator('..')
+      .getByRole('button', { name: 'Open' })
+      .click();
     await snap(page, testInfo, 'ftp-long-names');
     await expectNoHorizontalOverflow(page);
+    await expectDialogWithinViewport(page, dialog);
 
     await ftpServers.close();
   });
