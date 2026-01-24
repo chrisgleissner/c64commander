@@ -63,7 +63,12 @@ def sector_offset(layout: DiskLayout, track: int, sector: int) -> int:
 
 def read_sector(image: bytes, layout: DiskLayout, track: int, sector: int) -> bytes:
     offset = sector_offset(layout, track, sector)
-    return image[offset:offset + SECTOR_SIZE]
+    data = image[offset:offset + SECTOR_SIZE]
+    if len(data) != SECTOR_SIZE:
+        raise RuntimeError(
+            f"Short sector read at track {track} sector {sector}: expected {SECTOR_SIZE} bytes, got {len(data)}"
+        )
+    return data
 
 
 def iter_directory_entries(image: bytes, layout: DiskLayout) -> Iterable[bytes]:
@@ -75,11 +80,13 @@ def iter_directory_entries(image: bytes, layout: DiskLayout) -> Iterable[bytes]:
             break
         visited.add((track, sector))
         data = read_sector(image, layout, track, sector)
+        if len(data) < 2:
+            raise RuntimeError(f"Directory sector too short at track {track} sector {sector}")
         next_track = data[0]
         next_sector = data[1]
         for index in range(8):
             entry = data[2 + index * 32:2 + (index + 1) * 32]
-            if entry and entry[0] != 0x00:
+            if len(entry) == 32 and entry[0] != 0x00:
                 yield entry
         track = next_track
         sector = next_sector
@@ -93,6 +100,8 @@ def decode_filename(raw: bytes) -> str:
 def find_first_prg(image: bytes, layout: DiskLayout) -> Tuple[int, int, str]:
     for entry in iter_directory_entries(image, layout):
         file_type = entry[0]
+        if (file_type & 0x80) == 0:
+            continue
         if (file_type & 0x0F) != 0x02:
             continue
         start_track = entry[1]

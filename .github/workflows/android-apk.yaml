@@ -82,6 +82,7 @@ jobs:
   web-screenshots:
     name: Web screenshots
     runs-on: ubuntu-latest
+    needs: web-build-coverage
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
