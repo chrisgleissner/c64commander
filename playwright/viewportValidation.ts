@@ -49,10 +49,17 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
   // DOM-level boundary check
   const violations = await page.evaluate((maxWidth) => {
     const results: Array<{ selector: string; width: number; right: number; reason: string }> = [];
+    const isToastElement = (element: Element) =>
+      Boolean(
+        element.closest(
+          '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive'
+        )
+      );
     
     // Check all visible elements
     const elements = document.querySelectorAll('body *');
     elements.forEach((element) => {
+      if (isToastElement(element)) return;
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
       

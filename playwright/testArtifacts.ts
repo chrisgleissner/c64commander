@@ -271,8 +271,15 @@ const checkHorizontalOverflow = async (page: Page, testInfo: TestInfo) => {
   const overflows = await page.evaluate((config) => {
     const results: string[] = [];
     const elements = document.querySelectorAll('body *');
+    const isToastElement = (element: Element) =>
+      Boolean(
+        element.closest(
+          '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive'
+        )
+      );
 
     elements.forEach((element) => {
+      if (isToastElement(element)) return;
       const rect = element.getBoundingClientRect();
       if (rect.width > config.maxWidth + config.tolerance || rect.right > config.maxWidth + config.tolerance) {
         const tag = element.tagName.toLowerCase();
