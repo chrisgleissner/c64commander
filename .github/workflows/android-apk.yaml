@@ -190,6 +190,10 @@ jobs:
           end=$(date +%s)
           echo "- build (coverage): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Prepare coverage output
+        run: |
+          mkdir -p .nyc_output
+
       - name: Run Playwright e2e tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
@@ -209,6 +213,7 @@ jobs:
         with:
           name: e2e-nyc-output-${{ matrix.shard }}
           path: .nyc_output/**
+          if-no-files-found: ignore
 
       - name: Upload e2e evidence shard
         if: always()
