@@ -5,6 +5,7 @@ import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 test.describe('FTP performance', () => {
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -68,9 +69,9 @@ test.describe('FTP performance', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await ensureRemoteRoot(page);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
     await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
@@ -84,9 +85,9 @@ test.describe('FTP performance', () => {
     await snap(page, testInfo, 'reloaded');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await ensureRemoteRoot(page);
     const reloadDialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(reloadDialog, 'C64 Ultimate');
+    await ensureRemoteRoot(page);
     await expect(reloadDialog.getByText('Usb0', { exact: true })).toBeVisible();
     await reloadDialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
     await expect(reloadDialog.getByText('Games', { exact: true })).toBeVisible();
@@ -100,7 +101,8 @@ test.describe('FTP performance', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
     await expect(page.getByTestId('ftp-loading')).toBeHidden({ timeout: 1500 });
     await snap(page, testInfo, 'loading-hidden');
@@ -119,7 +121,8 @@ test.describe('FTP performance', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
 
     await expect(page.getByTestId('ftp-loading')).toBeVisible({ timeout: 1200 });
     await snap(page, testInfo, 'loading-visible');

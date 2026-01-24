@@ -20,20 +20,30 @@ const base64ToArrayBuffer = (base64: string) => {
   return bytes.buffer;
 };
 
-export const buildLocalPlayFileFromUri = (name: string, path: string, uri: string): LocalPlayFile => ({
+export const buildLocalPlayFileFromUri = (
+  name: string,
+  path: string,
+  uri: string,
+  lastModified?: number,
+): LocalPlayFile => ({
   name,
   webkitRelativePath: path,
-  lastModified: Date.now(),
+  lastModified: lastModified ?? Date.now(),
   arrayBuffer: async () => {
     const data = await FolderPicker.readFile({ uri });
     return base64ToArrayBuffer(data.data);
   },
 });
 
-export const buildLocalPlayFileFromTree = (name: string, path: string, treeUri: string): LocalPlayFile => ({
+export const buildLocalPlayFileFromTree = (
+  name: string,
+  path: string,
+  treeUri: string,
+  lastModified?: number,
+): LocalPlayFile => ({
   name,
   webkitRelativePath: path,
-  lastModified: Date.now(),
+  lastModified: lastModified ?? Date.now(),
   arrayBuffer: async () => {
     const data = await FolderPicker.readFileFromTree({ treeUri, path });
     return base64ToArrayBuffer(data.data);

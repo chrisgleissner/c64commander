@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { PathWrap } from '@/components/PathWrap';
 import { cn } from '@/lib/utils';
 
 export type ActionListMenuItem =
@@ -25,6 +26,7 @@ export type ActionListItem = {
   subtitle?: string | null;
   meta?: React.ReactNode;
   icon?: React.ReactNode;
+  variant?: 'item' | 'header';
   selected: boolean;
   onSelectToggle?: (selected: boolean) => void;
   menuItems?: ActionListMenuItem[];
@@ -60,103 +62,120 @@ export type SelectableActionListProps = {
   selectionLabel?: string;
 };
 
-const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => (
-  <div
-    className={cn(
-      'flex items-start gap-2 py-2 px-1 rounded-md min-w-0',
-      item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
-    )}
-    data-testid={rowTestId}
-  >
-    <div className="flex items-center gap-2 pt-0.5 shrink-0">
-      {item.showSelection !== false ? (
-        <Checkbox
-          checked={item.selected}
-          onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
-          aria-label={`Select ${item.title}`}
-        />
-      ) : null}
-      {item.showMenu === false ? null : (
-        <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              aria-label="Item actions"
-              disabled={item.disableActions}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {item.menuItems?.length
-              ? item.menuItems.map((entry, index) => {
-                  if (entry.type === 'separator') return <DropdownMenuSeparator key={`sep-${index}`} />;
-                  if (entry.type === 'label') {
-                    return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
-                  }
-                  if (entry.type === 'info') {
+const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
+  if (item.variant === 'header') {
+    const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
+    return (
+      <div
+        className="flex items-start gap-2 px-2 py-1 rounded-md bg-muted/30 min-w-0 max-w-full"
+        data-testid={headerTestId}
+      >
+        {item.icon ? <div className="pt-0.5 text-muted-foreground">{item.icon}</div> : null}
+        <div className="min-w-0 text-xs font-semibold text-foreground">
+          <PathWrap path={item.title} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
+        item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
+      )}
+      data-testid={rowTestId}
+    >
+      <div className="flex items-center gap-2 pt-0.5 shrink-0">
+        {item.showSelection !== false ? (
+          <Checkbox
+            checked={item.selected}
+            onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
+            aria-label={`Select ${item.title}`}
+          />
+        ) : null}
+        {item.showMenu === false ? null : (
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label="Item actions"
+                disabled={item.disableActions}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {item.menuItems?.length
+                ? item.menuItems.map((entry, index) => {
+                    if (entry.type === 'separator') return <DropdownMenuSeparator key={`sep-${index}`} />;
+                    if (entry.type === 'label') {
+                      return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
+                    }
+                    if (entry.type === 'info') {
+                      return (
+                        <DropdownMenuItem key={`info-${index}`} disabled>
+                          {entry.label}: {entry.value}
+                        </DropdownMenuItem>
+                      );
+                    }
                     return (
-                      <DropdownMenuItem key={`info-${index}`} disabled>
-                        {entry.label}: {entry.value}
+                      <DropdownMenuItem
+                        key={`action-${index}`}
+                        onSelect={entry.onSelect}
+                        disabled={entry.disabled}
+                        className={entry.destructive ? 'text-destructive focus:text-destructive' : undefined}
+                      >
+                        {entry.label}
                       </DropdownMenuItem>
                     );
-                  }
-                  return (
-                    <DropdownMenuItem
-                      key={`action-${index}`}
-                      onSelect={entry.onSelect}
-                      disabled={entry.disabled}
-                      className={entry.destructive ? 'text-destructive focus:text-destructive' : undefined}
-                    >
-                      {entry.label}
-                    </DropdownMenuItem>
-                  );
-                })
-              : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-    </div>
-    <div className="flex flex-1 items-start gap-2 min-w-0">
-      {item.icon ? <div className="pt-0.5">{item.icon}</div> : null}
-      <div className="min-w-0">
-        <button
-          type="button"
-          className="text-sm font-medium break-words whitespace-normal text-left hover:underline"
-          onClick={item.onTitleClick}
-          disabled={item.isDimmed || item.disableActions}
-        >
-          {item.title}
-        </button>
-        {item.subtitle ? (
-          <div
-            className="text-[11px] text-muted-foreground break-words whitespace-normal"
-            data-testid={item.subtitleTestId}
-          >
-            {item.subtitle}
-          </div>
-        ) : null}
-        {item.meta ? (
-          <div className="text-[11px] text-muted-foreground break-words whitespace-normal">
-            {item.meta}
-          </div>
-        ) : null}
+                  })
+                : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
+      <div className="flex flex-1 items-start gap-2 min-w-0 max-w-full">
+        {item.icon ? <div className="pt-0.5">{item.icon}</div> : null}
+        <div className="min-w-0 w-full">
+          <button
+            type="button"
+            className="text-sm font-medium break-words whitespace-normal text-left hover:underline max-w-full"
+            onClick={item.onTitleClick}
+            disabled={item.isDimmed || item.disableActions}
+          >
+            {item.title}
+          </button>
+          {item.subtitle ? (
+            <div
+              className="text-[11px] text-muted-foreground break-words whitespace-normal max-w-full"
+              data-testid={item.subtitleTestId}
+            >
+              {item.subtitle}
+            </div>
+          ) : null}
+          {item.meta ? (
+            <div className="text-[11px] text-muted-foreground break-words whitespace-normal max-w-full">
+              {item.meta}
+            </div>
+          ) : null}
+        </div>
+      </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 px-2 text-xs shrink-0"
+        onClick={item.onAction}
+        disabled={item.isDimmed || item.disableActions}
+        aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
+      >
+        {item.actionLabel}
+      </Button>
     </div>
-    <Button
-      variant="outline"
-      size="sm"
-      className="h-7 px-2 text-xs shrink-0"
-      onClick={item.onAction}
-      disabled={item.isDimmed || item.disableActions}
-      aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
-    >
-      {item.actionLabel}
-    </Button>
-  </div>
-);
+  );
+};
 
 export const SelectableActionList = ({
   title,
@@ -179,8 +198,26 @@ export const SelectableActionList = ({
   selectionLabel,
 }: SelectableActionListProps) => {
   const [viewAllOpen, setViewAllOpen] = useState(false);
-  const visibleItems = useMemo(() => items.slice(0, maxVisible), [items, maxVisible]);
-  const hasMore = items.length > maxVisible;
+  const { visibleItems, hasMore } = useMemo(() => {
+    const totalItems = items.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
+    const list: ActionListItem[] = [];
+    let pendingHeader: ActionListItem | null = null;
+    let remaining = maxVisible;
+    for (const item of items) {
+      if (item.variant === 'header') {
+        pendingHeader = item;
+        continue;
+      }
+      if (remaining <= 0) break;
+      if (pendingHeader) {
+        list.push(pendingHeader);
+        pendingHeader = null;
+      }
+      list.push(item);
+      remaining -= 1;
+    }
+    return { visibleItems: list, hasMore: totalItems > maxVisible };
+  }, [items, maxVisible]);
 
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>

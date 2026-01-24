@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft, Folder, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
@@ -36,6 +35,14 @@ import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavi
 import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
 import { parseSonglengths } from '@/lib/sid/songlengths';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import {
+  buildEnabledSidMuteUpdates,
+  buildEnabledSidUnmuteUpdates,
+  buildEnabledSidVolumeSnapshot,
+  buildEnabledSidVolumeUpdates,
+  buildSidEnablement,
+  filterEnabledSidVolumeItems,
+} from '@/lib/config/sidVolumeControl';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
@@ -93,6 +100,11 @@ type AudioMixerItem = {
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
 const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
+const DURATION_MIN_SECONDS = 1;
+const DURATION_MAX_SECONDS = 3600;
+const DURATION_SLIDER_STEPS = 1000;
+const SONGLENGTHS_FILE_NAME = 'songlengths.md5';
+const DOCUMENTS_FOLDER = 'DOCUMENTS';
 
 const formatTime = (ms?: number) => {
   if (ms === undefined) return '—';
@@ -112,6 +124,31 @@ const getLocalFilePath = (file: LocalPlayFile) => {
   return normalizeLocalPath(candidate);
 };
 
+const buildSonglengthsSearchPaths = (path: string) => {
+  const normalized = normalizeLocalPath(path || '/');
+  const folder = normalized.endsWith('/') ? normalized : normalized.slice(0, normalized.lastIndexOf('/') + 1);
+  const paths: string[] = [];
+  let current = folder || '/';
+  while (current) {
+    const base = current.endsWith('/') ? current : `${current}/`;
+    paths.push(`${base}${SONGLENGTHS_FILE_NAME}`);
+    paths.push(`${base}${DOCUMENTS_FOLDER}/${SONGLENGTHS_FILE_NAME}`);
+    if (base === '/') break;
+    current = getParentPath(base);
+  }
+  return paths;
+};
+
+const collectSonglengthsSearchPaths = (paths: string[]) => {
+  const set = new Set<string>();
+  paths.forEach((path) => {
+    buildSonglengthsSearchPaths(path).forEach((candidate) => {
+      set.add(normalizeSourcePath(candidate));
+    });
+  });
+  return Array.from(set);
+};
+
 const parseDurationInput = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -127,9 +164,32 @@ const parseDurationInput = (value: string) => {
   return Math.max(0, seconds * 1000);
 };
 
+const clampDurationSeconds = (value: number) =>
+  Math.min(DURATION_MAX_SECONDS, Math.max(DURATION_MIN_SECONDS, value));
+
+const formatDurationSeconds = (seconds: number) => formatTime(seconds * 1000);
+
+const durationSecondsToSlider = (seconds: number) => {
+  const clamped = clampDurationSeconds(seconds);
+  const ratio = Math.log(clamped / DURATION_MIN_SECONDS) / Math.log(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS);
+  return Math.round(ratio * DURATION_SLIDER_STEPS);
+};
+
+const sliderToDurationSeconds = (value: number) => {
+  const ratio = Math.min(1, Math.max(0, value / DURATION_SLIDER_STEPS));
+  const seconds = DURATION_MIN_SECONDS * Math.pow(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS, ratio);
+  return clampDurationSeconds(Math.round(seconds));
+};
+
 const parseVolumeOption = (option: string) => {
   const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : undefined;
+};
+
+const parseModifiedAt = (value?: string | null) => {
+  if (!value) return undefined;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? undefined : parsed;
 };
 
 const extractAudioMixerItems = (payload: Record<string, unknown> | undefined): AudioMixerItem[] => {
@@ -177,6 +237,8 @@ export default function PlayFilesPage() {
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
   const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
+  const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
+  const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
   const uniqueId = status.deviceInfo?.unique_id || 'default';
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -187,8 +249,10 @@ export default function PlayFilesPage() {
   const [elapsedMs, setElapsedMs] = useState(0);
   const [playedMs, setPlayedMs] = useState(0);
   const [durationMs, setDurationMs] = useState<number | undefined>(undefined);
-  const [durationInput, setDurationInput] = useState('');
+  const [durationSeconds, setDurationSeconds] = useState(() => Math.round(DEFAULT_SONG_DURATION_MS / 1000));
+  const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(Math.round(DEFAULT_SONG_DURATION_MS / 1000)));
   const [songNrInput, setSongNrInput] = useState('');
+  const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
   const [songlengthsFiles, setSonglengthsFiles] = useState<Array<{ path: string; file: LocalPlayFile }>>([]);
   const [recurseFolders, setRecurseFolders] = useState(true);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
@@ -197,7 +261,6 @@ export default function PlayFilesPage() {
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
   const [songPickerOpen, setSongPickerOpen] = useState(false);
-  const [durationPickerOpen, setDurationPickerOpen] = useState(false);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
     status: 'idle',
     count: 0,
@@ -230,6 +293,18 @@ export default function PlayFilesPage() {
     () => audioMixerItems.filter((item) => isSidVolumeName(item.name)),
     [audioMixerItems],
   );
+  const sidEnablement = useMemo(
+    () =>
+      buildSidEnablement(
+        sidSocketsCategory as Record<string, unknown> | undefined,
+        sidAddressingCategory as Record<string, unknown> | undefined,
+      ),
+    [sidAddressingCategory, sidSocketsCategory],
+  );
+  const enabledSidVolumeItems = useMemo(
+    () => filterEnabledSidVolumeItems(sidVolumeItems, sidEnablement),
+    [sidEnablement, sidVolumeItems],
+  );
   const volumeOptions = useMemo(() => {
     const baseOptions = sidVolumeItems.find((item) => Array.isArray(item.options) && item.options.length)?.options ?? [];
     return baseOptions
@@ -258,7 +333,13 @@ export default function PlayFilesPage() {
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
-  const songlengthsCacheRef = useRef(new Map<string, Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>>());
+  const songlengthsCacheRef = useRef(
+    new Map<string, {
+      signature: string;
+      promise: Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>;
+    }>(),
+  );
+  const songlengthsFileCacheRef = useRef(new Map<string, { mtime: number; data: { md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null }>());
   const addItemsStartedAtRef = useRef<number | null>(null);
   const manualMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
@@ -326,11 +407,20 @@ export default function PlayFilesPage() {
     }
   }, [sidVolumeItems]);
 
+  const resolveEnabledSidVolumeItems = useCallback(async () => {
+    const items = await resolveSidVolumeItems();
+    return filterEnabledSidVolumeItems(items, sidEnablement);
+  }, [resolveSidVolumeItems, sidEnablement]);
+
   useEffect(() => {
-    if (!sidVolumeItems.length || !volumeOptions.length) return;
-    const muteValues = sidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
+    if (!enabledSidVolumeItems.length || !volumeOptions.length) {
+      setVolumeMuted(false);
+      setVolumeIndex(defaultVolumeIndex);
+      return;
+    }
+    const muteValues = enabledSidVolumeItems.map((item) => resolveAudioMixerMuteValue(item.options));
     const activeIndices: number[] = [];
-    sidVolumeItems.forEach((item, index) => {
+    enabledSidVolumeItems.forEach((item, index) => {
       if (item.value === muteValues[index]) return;
       activeIndices.push(resolveVolumeIndex(item.value));
     });
@@ -344,7 +434,7 @@ export default function PlayFilesPage() {
     activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
     const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
     setVolumeIndex(nextIndex);
-  }, [defaultVolumeIndex, resolveVolumeIndex, sidVolumeItems, volumeOptions]);
+  }, [defaultVolumeIndex, enabledSidVolumeItems, resolveVolumeIndex, volumeOptions]);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -392,7 +482,7 @@ export default function PlayFilesPage() {
     };
     playlist.forEach((item) => {
       if (item.request.source !== 'local' || !item.request.file) return;
-      if (item.label.toLowerCase() !== 'songlengths.md5') return;
+      if (item.label.toLowerCase() !== SONGLENGTHS_FILE_NAME) return;
       addSonglengthsFile(item.request.file);
     });
     songlengthsFiles.forEach((entry) => addSonglengthsFile(entry.file, entry.path));
@@ -407,40 +497,71 @@ export default function PlayFilesPage() {
     return new TextDecoder().decode(new Uint8Array(buffer));
   }, []);
 
-  const loadSonglengthsForPath = useCallback(async (path: string) => {
+  const loadSonglengthsForPath = useCallback(async (
+    path: string,
+    extraFiles?: Array<{ path: string; file: LocalPlayFile }>,
+  ) => {
     const normalized = normalizeLocalPath(path || '/');
     const folderPath = normalized.endsWith('/') ? normalized : `${normalized.slice(0, normalized.lastIndexOf('/') + 1)}`;
     const cacheKey = folderPath || '/';
-    if (songlengthsCacheRef.current.has(cacheKey)) {
-      return songlengthsCacheRef.current.get(cacheKey) ?? null;
+    const filesByDir = extraFiles?.length
+      ? extraFiles.reduce((map, entry) => {
+          const normalizedPath = normalizeSourcePath(entry.path);
+          const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf('/') + 1) || '/';
+          map.set(folder, entry.file);
+          return map;
+        }, new Map(songlengthsFilesByDir))
+      : songlengthsFilesByDir;
+    const files = new Map<string, LocalPlayFile>();
+    let current = cacheKey;
+    while (current) {
+      const candidate = filesByDir.get(current);
+      if (candidate) files.set(getLocalFilePath(candidate), candidate);
+      const docsCandidate = filesByDir.get(`${current}${DOCUMENTS_FOLDER}/`);
+      if (docsCandidate) files.set(getLocalFilePath(docsCandidate), docsCandidate);
+      if (current === '/') break;
+      current = getParentPath(current);
+    }
+    if (!files.size) return null;
+
+    const signature = Array.from(files.values())
+      .map((file) => `${getLocalFilePath(file)}:${typeof file.lastModified === 'number' ? file.lastModified : 0}`)
+      .sort()
+      .join('|');
+    const cached = songlengthsCacheRef.current.get(cacheKey);
+    if (cached && cached.signature === signature) {
+      return cached.promise;
     }
 
     const loader = (async () => {
-      const files: LocalPlayFile[] = [];
-      let current = cacheKey;
-      while (current) {
-        const candidate = songlengthsFilesByDir.get(current);
-        if (candidate) files.push(candidate);
-        if (current === '/') break;
-        current = getParentPath(current);
-      }
-      if (!files.length) return null;
       const merged = { md5ToSeconds: new Map<string, number>(), pathToSeconds: new Map<string, number>() };
-      const ordered = files.slice().reverse();
+      const ordered = Array.from(files.values()).reverse();
       for (const file of ordered) {
         try {
+          const filePath = getLocalFilePath(file);
+          const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
+          const cachedEntry = songlengthsFileCacheRef.current.get(filePath);
+          if (cachedEntry && cachedEntry.mtime === mtime && cachedEntry.data) {
+            cachedEntry.data.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
+            cachedEntry.data.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
+            continue;
+          }
           const content = await readLocalText(file);
           const parsed = parseSonglengths(content);
+          songlengthsFileCacheRef.current.set(filePath, { mtime, data: parsed });
           parsed.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
           parsed.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
         } catch {
           // Ignore malformed songlengths files.
+          const filePath = getLocalFilePath(file);
+          const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
+          songlengthsFileCacheRef.current.set(filePath, { mtime, data: null });
         }
       }
       return merged;
     })();
 
-    songlengthsCacheRef.current.set(cacheKey, loader);
+    songlengthsCacheRef.current.set(cacheKey, { signature, promise: loader });
     return loader;
   }, [readLocalText, songlengthsFilesByDir]);
 
@@ -487,7 +608,7 @@ export default function PlayFilesPage() {
   }, [localSources]);
 
   const localEntriesBySourceId = useMemo(() => {
-    const map = new Map<string, Map<string, { uri?: string | null; name: string }>>();
+    const map = new Map<string, Map<string, { uri?: string | null; name: string; modifiedAt?: string | null }>>();
     localSources.forEach((source) => {
       if (getLocalSourceListingMode(source) !== 'entries') {
         map.set(source.id, new Map());
@@ -495,9 +616,13 @@ export default function PlayFilesPage() {
       }
       try {
         const entries = requireLocalSourceEntries(source, 'PlayFilesPage.localEntriesBySourceId');
-        const entriesMap = new Map<string, { uri?: string | null; name: string }>();
+        const entriesMap = new Map<string, { uri?: string | null; name: string; modifiedAt?: string | null }>();
         entries.forEach((entry) => {
-          entriesMap.set(normalizeSourcePath(entry.relativePath), { uri: entry.uri, name: entry.name });
+          entriesMap.set(normalizeSourcePath(entry.relativePath), {
+            uri: entry.uri,
+            name: entry.name,
+            modifiedAt: entry.modifiedAt ?? null,
+          });
         });
         map.set(source.id, entriesMap);
       } catch (error) {
@@ -549,6 +674,23 @@ export default function PlayFilesPage() {
       sourceId: entry.sourceId ?? null,
     };
   }, [songNrInput]);
+
+  const applySonglengthsToItems = useCallback(async (
+    items: PlaylistItem[],
+    songlengthsOverrides?: Array<{ path: string; file: LocalPlayFile }>,
+  ) => {
+    const updated = await Promise.all(
+      items.map(async (item) => {
+        if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
+        const filePath = getLocalFilePath(item.request.file);
+        const songlengths = await loadSonglengthsForPath(filePath, songlengthsOverrides);
+        const seconds = songlengths?.pathToSeconds.get(filePath);
+        if (seconds === undefined || seconds === null) return item;
+        return { ...item, durationMs: seconds * 1000 };
+      }),
+    );
+    return updated;
+  }, [loadSonglengthsForPath]);
 
   const handleAddFileSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
     const startedAt = Date.now();
@@ -643,21 +785,74 @@ export default function PlayFilesPage() {
       }
 
       const playlistItems: PlaylistItem[] = [];
+      let discoveredSonglengths: Array<{ path: string; file: LocalPlayFile }> | undefined;
       if (source.type === 'local') {
         const treeUri = localSourceTreeUris.get(source.id);
-        const songlengthsEntries = selectedFiles
-          .filter((entry) => entry.type === 'file' && entry.name.toLowerCase() === 'songlengths.md5')
-          .map((entry) => ({
-            path: normalizeSourcePath(entry.path),
-            file: resolveLocalRuntimeFile(source.id, entry.path)
-              || (treeUri ? buildLocalPlayFileFromTree(entry.name, normalizeSourcePath(entry.path), treeUri) : undefined),
-          }))
-          .filter((entry): entry is { path: string; file: LocalPlayFile } => Boolean(entry.file));
-        if (songlengthsEntries.length) {
+        const entriesMap = localEntriesBySourceId.get(source.id);
+        const knownSonglengths = new Set(songlengthsFiles.map((entry) => entry.path));
+        const discovered: Array<{ path: string; file: LocalPlayFile }> = [];
+        const addSonglengthsEntry = (path: string, file?: LocalPlayFile) => {
+          if (!file) return;
+          const normalizedPath = normalizeSourcePath(path);
+          if (knownSonglengths.has(normalizedPath)) return;
+          knownSonglengths.add(normalizedPath);
+          discovered.push({ path: normalizedPath, file });
+        };
+
+        selectedFiles
+          .filter((entry) => entry.type === 'file' && entry.name.toLowerCase() === SONGLENGTHS_FILE_NAME)
+          .forEach((entry) => {
+            const normalized = normalizeSourcePath(entry.path);
+            const lastModified = parseModifiedAt(entry.modifiedAt);
+            const file = resolveLocalRuntimeFile(source.id, entry.path)
+              || (treeUri ? buildLocalPlayFileFromTree(entry.name, normalized, treeUri, lastModified) : undefined);
+            addSonglengthsEntry(normalized, file);
+          });
+
+        const sidPaths = selectedFiles
+          .filter((entry) => getPlayCategory(entry.path) === 'sid')
+          .map((entry) => entry.path);
+        const candidatePaths = collectSonglengthsSearchPaths(sidPaths).filter((path) => !knownSonglengths.has(path));
+        if (candidatePaths.length) {
+          if (treeUri) {
+            const foldersToScan = new Set(candidatePaths.map((path) => {
+              const trimmed = path.replace(/\/[^/]+$/, '/');
+              return normalizeSourcePath(trimmed || '/');
+            }));
+            for (const folder of foldersToScan) {
+              try {
+                const entries = await source.listEntries(folder);
+                const songEntry = entries.find(
+                  (entry) => entry.type === 'file' && entry.name.toLowerCase() === SONGLENGTHS_FILE_NAME,
+                );
+                if (!songEntry) continue;
+                const songPath = normalizeSourcePath(songEntry.path);
+                addSonglengthsEntry(
+                  songPath,
+                  buildLocalPlayFileFromTree(songEntry.name, songPath, treeUri, parseModifiedAt(songEntry.modifiedAt)),
+                );
+              } catch {
+                // Ignore missing folders or SAF errors.
+              }
+            }
+          } else if (entriesMap) {
+            candidatePaths.forEach((candidate) => {
+              const entry = entriesMap.get(candidate);
+              if (!entry) return;
+              const lastModified = parseModifiedAt(entry.modifiedAt);
+              const file = resolveLocalRuntimeFile(source.id, candidate)
+                || (entry.uri ? buildLocalPlayFileFromUri(entry.name, candidate, entry.uri, lastModified) : undefined);
+              addSonglengthsEntry(candidate, file);
+            });
+          }
+        }
+
+        if (discovered.length) {
+          discoveredSonglengths = discovered;
           setSonglengthsFiles((prev) => {
             const seen = new Set(prev.map((entry) => entry.path));
             const next = [...prev];
-            songlengthsEntries.forEach((entry) => {
+            discovered.forEach((entry) => {
               if (seen.has(entry.path)) return;
               seen.add(entry.path);
               next.push(entry);
@@ -670,11 +865,12 @@ export default function PlayFilesPage() {
         if (!getPlayCategory(file.path)) return;
         const normalizedPath = normalizeSourcePath(file.path);
         const localEntry = source.type === 'local' ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
+        const entryModified = localEntry?.modifiedAt ? parseModifiedAt(localEntry.modifiedAt) : parseModifiedAt(file.modifiedAt);
         const localFile =
           source.type === 'local'
             ? resolveLocalRuntimeFile(source.id, normalizedPath)
-              || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri) : undefined)
-              || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri) : undefined)
+              || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified) : undefined)
+              || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified) : undefined)
             : undefined;
         const playable: PlayableEntry = {
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
@@ -706,7 +902,8 @@ export default function PlayFilesPage() {
       if (elapsed < minDuration) {
         await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
       }
-      setPlaylist((prev) => [...prev, ...playlistItems]);
+      const resolvedItems = await applySonglengthsToItems(playlistItems, discoveredSonglengths);
+      setPlaylist((prev) => [...prev, ...resolvedItems]);
       if (localTreeUri) {
         addLog('debug', 'SAF scan complete', {
           sourceId: source.id,
@@ -765,7 +962,16 @@ export default function PlayFilesPage() {
         addItemsOverlayActiveRef.current = false;
       }
     }
-  }, [addItemsSurface, browserOpen, buildPlaylistItem, localEntriesBySourceId, localSourceTreeUris, recurseFolders]);
+  }, [
+    addItemsSurface,
+    applySonglengthsToItems,
+    browserOpen,
+    buildPlaylistItem,
+    localEntriesBySourceId,
+    localSourceTreeUris,
+    recurseFolders,
+    songlengthsFiles,
+  ]);
 
 
   const refreshHvscStatus = useCallback(() => {
@@ -835,30 +1041,138 @@ export default function PlayFilesPage() {
     return () => window.clearInterval(timer);
   }, [currentIndex, isPaused, isPlaying]);
 
+  const durationFallbackMs = durationSeconds * 1000;
+
+  const resolveSidMetadata = useCallback(
+    async (file?: LocalPlayFile) => {
+      if (!file) return { durationMs: undefined, subsongCount: undefined } as const;
+      let buffer: ArrayBuffer;
+      try {
+        buffer = await file.arrayBuffer();
+      } catch {
+        return { durationMs: durationFallbackMs, subsongCount: undefined } as const;
+      }
+      const subsongCount = getSidSongCount(buffer);
+      try {
+        const filePath = getLocalFilePath(file);
+        const songlengths = await loadSonglengthsForPath(filePath);
+        if (songlengths?.pathToSeconds.has(filePath)) {
+          const seconds = songlengths.pathToSeconds.get(filePath);
+          const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
+          return { durationMs, subsongCount } as const;
+        }
+
+        const md5 = await computeSidMd5(buffer);
+        const md5Duration = songlengths?.md5ToSeconds.get(md5);
+        if (md5Duration !== undefined && md5Duration !== null) {
+          return { durationMs: md5Duration * 1000, subsongCount } as const;
+        }
+        const seconds = await getHvscDurationByMd5Seconds(md5);
+        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
+        return { durationMs, subsongCount } as const;
+      } catch {
+        return { durationMs: durationFallbackMs, subsongCount } as const;
+      }
+    },
+    [durationFallbackMs, loadSonglengthsForPath],
+  );
+
+  const playItem = useCallback(
+    async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean }) => {
+      const api = getC64API();
+      if (item.request.source === 'local' && !item.request.file) {
+        throw new Error('Local file unavailable. Re-add it to the playlist.');
+      }
+      let durationOverride: number | undefined;
+      let subsongCount: number | undefined;
+      if (item.category === 'sid' && item.request.source === 'local') {
+        const metadata = await resolveSidMetadata(item.request.file);
+        durationOverride = metadata.durationMs;
+        subsongCount = metadata.subsongCount;
+      }
+      if (isSongCategory(item.category)) {
+        setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
+      } else {
+        setCurrentSubsongCount(null);
+      }
+      const request: PlayRequest = durationOverride
+        ? { ...item.request, durationMs: durationOverride }
+        : item.request;
+      const plan = buildPlayPlan(request);
+      const shouldReboot = options?.rebootBeforePlay ?? item.category === 'disk';
+      const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
+      await executePlayPlan(api, plan, executionOptions);
+      const now = Date.now();
+      trackStartedAtRef.current = now;
+      setElapsedMs(0);
+      playedClockRef.current.start(now, false);
+      setPlayedMs(playedClockRef.current.current(now));
+      const resolvedDurationBase = durationOverride ?? item.durationMs;
+      const resolvedDuration = isSongCategory(item.category)
+        ? resolvedDurationBase ?? durationFallbackMs
+        : resolvedDurationBase;
+      setDurationMs(resolvedDuration);
+      if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
+        setPlaylist((prev) =>
+          prev.map((entry) =>
+            entry.id === item.id
+              ? { ...entry, durationMs: resolvedDuration, subsongCount: subsongCount ?? entry.subsongCount }
+              : entry,
+          ),
+        );
+      }
+      setIsPlaying(true);
+      setIsPaused(false);
+    },
+    [durationFallbackMs, resolveSidMetadata],
+  );
+
   const playlistItemDuration = useCallback(
     (item: PlaylistItem, index: number) => {
       const base = index === currentIndex ? durationMs ?? item.durationMs : item.durationMs;
       if (isSongCategory(item.category)) {
-        return base ?? DEFAULT_SONG_DURATION_MS;
+        return base ?? durationFallbackMs;
       }
       return base;
     },
-    [currentIndex, durationMs],
+    [currentIndex, durationFallbackMs, durationMs],
   );
 
   const currentItem = playlist[currentIndex];
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
-  const canControlVolume = sidVolumeItems.length > 0 && volumeOptions.length > 0;
+  const canControlVolume = enabledSidVolumeItems.length > 0 && volumeOptions.length > 0;
   const volumeLabel = volumeOptions[volumeIndex]?.label ?? '—';
-  const subsongCount = currentItem?.subsongCount ?? 1;
-  const songNrValue = Number(songNrInput);
-  const resolvedSongNr = Number.isNaN(songNrValue) || songNrInput.trim() === '' ? 1 : songNrValue;
-  const clampedSongNr = Math.min(Math.max(1, resolvedSongNr), subsongCount);
-  const canEditSongNr = currentItem?.category === 'sid' && subsongCount > 1;
-  const sidControlsEnabled = currentItem?.category === 'sid';
-  const durationOverrideValue = parseDurationInput(durationInput);
-  const durationLabel = durationOverrideValue !== undefined ? formatTime(durationOverrideValue) : 'Auto';
+  const knownSubsongCount = currentSubsongCount ?? (typeof currentItem?.subsongCount === 'number' ? currentItem.subsongCount : null);
+  const subsongCount = knownSubsongCount ?? 1;
+  const currentSongNr = currentItem?.request.songNr ?? 1;
+  const clampedSongNr = Math.min(Math.max(1, currentSongNr), subsongCount);
+  const isSongPlaying = Boolean(currentItem && isSongCategory(currentItem.category) && (isPlaying || isPaused));
+  const songSelectorVisible = Boolean(isSongPlaying && knownSubsongCount && knownSubsongCount > 1);
+
+  const handleSongSelection = useCallback(async (nextSongNr: number) => {
+    if (!currentItem || !isSongCategory(currentItem.category)) return;
+    const capped = knownSubsongCount ? Math.min(Math.max(1, nextSongNr), knownSubsongCount) : Math.max(1, nextSongNr);
+    const nextItem = {
+      ...currentItem,
+      request: { ...currentItem.request, songNr: capped },
+    };
+    setSongNrInput(String(capped));
+    setSongPickerOpen(false);
+    setIsPlaylistLoading(true);
+    try {
+      await playItem(nextItem);
+      setPlaylist((prev) => prev.map((item, index) => (index === currentIndex ? nextItem : item)));
+    } finally {
+      setIsPlaylistLoading(false);
+    }
+  }, [currentIndex, currentItem, knownSubsongCount, playItem]);
+
+  useEffect(() => {
+    if (!isSongPlaying && songPickerOpen) {
+      setSongPickerOpen(false);
+    }
+  }, [isSongPlaying, songPickerOpen]);
   const playlistIds = useMemo(() => playlist.map((item) => item.id), [playlist]);
   const selectedPlaylistCount = selectedPlaylistIds.size;
   const allPlaylistSelected = selectedPlaylistCount > 0 && selectedPlaylistCount === playlistIds.length;
@@ -921,55 +1235,17 @@ export default function PlayFilesPage() {
     removePlaylistItemsById(new Set(selectedPlaylistIds));
   }, [removePlaylistItemsById, selectedPlaylistIds]);
 
-  const resolveSidMetadata = useCallback(async (file?: LocalPlayFile) => {
-    if (!file) return { durationMs: undefined, subsongCount: undefined } as const;
-    const override = parseDurationInput(durationInput);
-    try {
-      const buffer = await file.arrayBuffer();
-      const subsongCount = getSidSongCount(buffer);
-      if (override !== undefined) {
-        return { durationMs: override, subsongCount } as const;
-      }
-
-      const filePath = getLocalFilePath(file);
-      const songlengths = await loadSonglengthsForPath(filePath);
-      if (songlengths?.pathToSeconds.has(filePath)) {
-        const seconds = songlengths.pathToSeconds.get(filePath);
-        const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : DEFAULT_SONG_DURATION_MS;
-        return { durationMs, subsongCount } as const;
-      }
-
-      const md5 = await computeSidMd5(buffer);
-      const md5Duration = songlengths?.md5ToSeconds.get(md5);
-      if (md5Duration !== undefined && md5Duration !== null) {
-        return { durationMs: md5Duration * 1000, subsongCount } as const;
-      }
-      const seconds = await getHvscDurationByMd5Seconds(md5);
-      const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : DEFAULT_SONG_DURATION_MS;
-      return { durationMs, subsongCount } as const;
-    } catch {
-      return { durationMs: override ?? DEFAULT_SONG_DURATION_MS, subsongCount: undefined } as const;
-    }
-  }, [durationInput, loadSonglengthsForPath]);
-
-  const applySonglengthsToItems = useCallback(async (items: PlaylistItem[]) => {
-    const updated = await Promise.all(
-      items.map(async (item) => {
-        if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
-        const filePath = getLocalFilePath(item.request.file);
-        const songlengths = await loadSonglengthsForPath(filePath);
-        const seconds = songlengths?.pathToSeconds.get(filePath);
-        if (seconds === undefined || seconds === null) return item;
-        return { ...item, durationMs: seconds * 1000 };
-      }),
-    );
-    return updated;
-  }, [loadSonglengthsForPath]);
-
   const hydrateStoredPlaylist = useCallback((stored: StoredPlaylistState | null) => {
     if (!stored?.items?.length) return { items: [] as PlaylistItem[], index: -1 };
     const hydrated = stored.items
       .map((entry) => {
+        const normalizedPath = normalizeSourcePath(entry.path);
+        const localEntry = entry.source === 'local' && entry.sourceId
+          ? localEntriesBySourceId.get(entry.sourceId)?.get(normalizedPath)
+          : null;
+        const localTreeUri = entry.source === 'local' && entry.sourceId
+          ? localSourceTreeUris.get(entry.sourceId)
+          : null;
         const playable: PlayableEntry = {
           source: entry.source,
           name: entry.name,
@@ -977,14 +1253,20 @@ export default function PlayFilesPage() {
           durationMs: entry.durationMs,
           sourceId: entry.sourceId ?? null,
           file: entry.source === 'local'
-            ? resolveLocalRuntimeFile(entry.sourceId ?? '', entry.path)
+            ? resolveLocalRuntimeFile(entry.sourceId ?? '', normalizedPath)
+              || (localEntry?.uri
+                ? buildLocalPlayFileFromUri(entry.name, normalizedPath, localEntry.uri, parseModifiedAt(localEntry.modifiedAt))
+                : undefined)
+              || (localTreeUri
+                ? buildLocalPlayFileFromTree(entry.name, normalizedPath, localTreeUri, parseModifiedAt(localEntry?.modifiedAt))
+                : undefined)
             : undefined,
         };
         return buildPlaylistItem(playable, entry.songNr);
       })
       .filter((item): item is PlaylistItem => Boolean(item));
     return { items: hydrated, index: stored.currentIndex ?? -1 };
-  }, [buildPlaylistItem]);
+  }, [buildPlaylistItem, localEntriesBySourceId, localSourceTreeUris]);
 
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
@@ -1023,46 +1305,6 @@ export default function PlayFilesPage() {
     }
   }, [currentIndex, playlist, playlistStorageKey]);
 
-  const playItem = useCallback(async (item: PlaylistItem) => {
-    const api = getC64API();
-    if (item.request.source === 'local' && !item.request.file) {
-      throw new Error('Local file unavailable. Re-add it to the playlist.');
-    }
-    let durationOverride: number | undefined;
-    let subsongCount: number | undefined;
-    if (item.category === 'sid' && item.request.source === 'local') {
-      const metadata = await resolveSidMetadata(item.request.file);
-      durationOverride = metadata.durationMs;
-      subsongCount = metadata.subsongCount;
-    }
-    const request: PlayRequest = durationOverride
-      ? { ...item.request, durationMs: durationOverride }
-      : item.request;
-    const plan = buildPlayPlan(request);
-    await executePlayPlan(api, plan);
-    const now = Date.now();
-    trackStartedAtRef.current = now;
-    setElapsedMs(0);
-    playedClockRef.current.start(now, false);
-    setPlayedMs(playedClockRef.current.current(now));
-    const resolvedDurationBase = durationOverride ?? item.durationMs;
-    const resolvedDuration = isSongCategory(item.category)
-      ? resolvedDurationBase ?? DEFAULT_SONG_DURATION_MS
-      : resolvedDurationBase;
-    setDurationMs(resolvedDuration);
-    if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
-      setPlaylist((prev) =>
-        prev.map((entry) =>
-          entry.id === item.id
-            ? { ...entry, durationMs: resolvedDuration, subsongCount: subsongCount ?? entry.subsongCount }
-            : entry,
-        ),
-      );
-    }
-    setIsPlaying(true);
-    setIsPaused(false);
-  }, [resolveSidMetadata]);
-
   const startPlaylist = useCallback(async (items: PlaylistItem[], startIndex = 0) => {
     if (!items.length) return;
     playedClockRef.current.reset();
@@ -1095,8 +1337,15 @@ export default function PlayFilesPage() {
 
   const handleStop = useCallback(async () => {
     if (!isPlaying && !isPaused) return;
+    const currentItem = playlist[currentIndex];
+    const shouldReboot = currentItem?.category === 'disk';
     try {
-      await getC64API().machinePause();
+      const api = getC64API();
+      if (shouldReboot) {
+        await api.machineReboot();
+      } else {
+        await api.machineReset();
+      }
     } catch (error) {
       addErrorLog('Stop failed', { error: (error as Error).message });
     }
@@ -1107,8 +1356,9 @@ export default function PlayFilesPage() {
     setIsPaused(false);
     setElapsedMs(0);
     setDurationMs(undefined);
+    setCurrentSubsongCount(null);
     trackStartedAtRef.current = null;
-  }, [isPaused, isPlaying]);
+  }, [currentIndex, isPaused, isPlaying, playlist]);
 
   const handlePauseResume = useCallback(async () => {
     if (!isPlaying) return;
@@ -1159,38 +1409,67 @@ export default function PlayFilesPage() {
     if (!volumeOptions.length || !sidVolumeItems.length) return;
     const target = volumeOptions[nextIndex]?.option;
     if (!target) return;
-    const updates: Record<string, string | number> = {};
-    sidVolumeItems.forEach((item) => {
-      const muteValue = resolveAudioMixerMuteValue(item.options);
-      if (item.value === muteValue) return;
-      updates[item.name] = target;
-    });
+    const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
     manualMuteSnapshotRef.current = null;
     setVolumeMuted(false);
     await applyAudioMixerUpdates(updates, 'Volume');
-  }, [applyAudioMixerUpdates, sidVolumeItems, volumeOptions]);
+  }, [applyAudioMixerUpdates, sidEnablement, sidVolumeItems, volumeOptions]);
 
   const handleToggleMute = useCallback(async () => {
-    const items = await resolveSidVolumeItems();
+    const items = await resolveEnabledSidVolumeItems();
     if (!items.length) return;
     if (!volumeMuted) {
-      manualMuteSnapshotRef.current = buildSidVolumeSnapshot(items);
+      manualMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(items, sidEnablement);
       setVolumeMuted(true);
-      await applyAudioMixerUpdates(buildSidMuteUpdates(items), 'Mute');
+      await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(items, sidEnablement), 'Mute');
       return;
     }
-    const snapshot = manualMuteSnapshotRef.current ?? buildSidVolumeSnapshot(items);
+    const snapshot = manualMuteSnapshotRef.current ?? buildEnabledSidVolumeSnapshot(items, sidEnablement);
     const wasMuted = items.every((item) => snapshot[item.name] === resolveAudioMixerMuteValue(item.options));
     setVolumeMuted(wasMuted);
-    await applyAudioMixerUpdates(snapshot, 'Unmute');
+    await applyAudioMixerUpdates(buildEnabledSidUnmuteUpdates(snapshot, sidEnablement), 'Unmute');
     manualMuteSnapshotRef.current = null;
-  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, resolveSidVolumeItems, volumeMuted]);
+  }, [
+    applyAudioMixerUpdates,
+    resolveEnabledSidVolumeItems,
+    sidEnablement,
+    volumeMuted,
+  ]);
+
+  const handleDurationSliderChange = useCallback((value: number[]) => {
+    const nextSeconds = sliderToDurationSeconds(value[0] ?? 0);
+    setDurationSeconds(nextSeconds);
+    setDurationInput(formatDurationSeconds(nextSeconds));
+  }, []);
+
+  const handleDurationInputChange = useCallback((value: string) => {
+    setDurationInput(value);
+    const parsed = parseDurationInput(value);
+    if (parsed === undefined) return;
+    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+    setDurationSeconds(nextSeconds);
+  }, []);
+
+  const handleDurationInputBlur = useCallback(() => {
+    const parsed = parseDurationInput(durationInput);
+    if (parsed === undefined) {
+      setDurationInput(formatDurationSeconds(durationSeconds));
+      return;
+    }
+    const nextSeconds = clampDurationSeconds(Math.round(parsed / 1000));
+    if (nextSeconds !== durationSeconds) {
+      setDurationSeconds(nextSeconds);
+    }
+    setDurationInput(formatDurationSeconds(nextSeconds));
+  }, [durationInput, durationSeconds]);
+
 
   const handleNext = useCallback(async () => {
     if (!playlist.length) return;
     const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
+    const currentItem = playlist[currentIndex];
     let nextIndex = currentIndex + 1;
     if (nextIndex >= playlist.length) {
       if (!repeatEnabled) {
@@ -1201,7 +1480,9 @@ export default function PlayFilesPage() {
       nextIndex = 0;
     }
     setCurrentIndex(nextIndex);
-    await playItem(playlist[nextIndex]);
+    const nextItem = playlist[nextIndex];
+    const shouldReboot = currentItem?.category === 'disk' || nextItem?.category === 'disk';
+    await playItem(nextItem, { rebootBeforePlay: shouldReboot });
     setIsPaused(false);
   }, [currentIndex, playItem, playlist, repeatEnabled]);
 
@@ -1210,9 +1491,12 @@ export default function PlayFilesPage() {
     const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
+    const currentItem = playlist[currentIndex];
     const prevIndex = Math.max(0, currentIndex - 1);
     setCurrentIndex(prevIndex);
-    await playItem(playlist[prevIndex]);
+    const prevItem = playlist[prevIndex];
+    const shouldReboot = currentItem?.category === 'disk' || prevItem?.category === 'disk';
+    await playItem(prevItem, { rebootBeforePlay: shouldReboot });
     setIsPaused(false);
   }, [currentIndex, playItem, playlist]);
 
@@ -1421,7 +1705,24 @@ export default function PlayFilesPage() {
   }, [playlist, playedMs, playlistItemDuration]);
 
   const playlistListItems = useMemo(() => {
-    return playlist.map((item, index) => {
+    const items: ActionListItem[] = [];
+    let lastFolder: string | null = null;
+    playlist.forEach((item, index) => {
+      const folderPath = getParentPath(item.path);
+      if (folderPath !== lastFolder) {
+        items.push({
+          id: `folder:${folderPath}`,
+          title: folderPath,
+          variant: 'header',
+          icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
+          selected: false,
+          actionLabel: '',
+          showMenu: false,
+          showSelection: false,
+          disableActions: true,
+        });
+        lastFolder = folderPath;
+      }
       const durationLabel = formatTime(playlistItemDuration(item, index));
       const sourceLabel = item.request.source === 'ultimate' ? 'C64 Ultimate' : 'This device';
       const menuItems: ActionListMenuItem[] = [
@@ -1437,10 +1738,9 @@ export default function PlayFilesPage() {
           destructive: true,
         },
       ];
-      return {
+      items.push({
         id: item.id,
         title: item.label,
-        subtitle: item.path,
         selected: selectedPlaylistIds.has(item.id),
         onSelectToggle: (selected) => handlePlaylistSelect(item, selected),
         menuItems,
@@ -1448,9 +1748,10 @@ export default function PlayFilesPage() {
         onAction: () => void startPlaylist(playlist, index),
         onTitleClick: () => void startPlaylist(playlist, index),
         disableActions: isPlaylistLoading,
-      } as ActionListItem;
+      } as ActionListItem);
     });
-  }, [handlePlaylistSelect, isPlaylistLoading, playlist, removePlaylistItemsById, selectedPlaylistIds, startPlaylist]);
+    return items;
+  }, [handlePlaylistSelect, isPlaylistLoading, playlist, playlistItemDuration, removePlaylistItemsById, selectedPlaylistIds, startPlaylist]);
 
   const hvscInstalled = Boolean(hvscStatus?.installedVersion);
   const hvscAvailable = isHvscBridgeAvailable();
@@ -1580,29 +1881,85 @@ export default function PlayFilesPage() {
             <Progress value={durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0} />
           </div>
 
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Default duration</p>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-1 min-w-[160px]">
+                <Slider
+                  min={0}
+                  max={DURATION_SLIDER_STEPS}
+                  step={1}
+                  value={[durationSecondsToSlider(durationSeconds)]}
+                  onValueChange={handleDurationSliderChange}
+                  data-testid="duration-slider"
+                />
+              </div>
+              <Input
+                value={durationInput}
+                onChange={(event) => handleDurationInputChange(event.target.value)}
+                onBlur={handleDurationInputBlur}
+                inputMode="numeric"
+                placeholder="mm:ss"
+                className="w-[84px] text-right"
+                data-testid="duration-input"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">1s–60m range with extra precision for short clips.</p>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">SID options</p>
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!canEditSongNr}
-                  onClick={() => {
-                    setSongNrInput(String(clampedSongNr));
-                    setSongPickerOpen(true);
-                  }}
-                >
-                  Song {clampedSongNr}/{subsongCount}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!sidControlsEnabled}
-                  onClick={() => setDurationPickerOpen(true)}
-                >
-                  Duration {durationLabel}
-                </Button>
+                {songSelectorVisible ? (
+                  <div className="flex flex-col gap-2 w-full max-w-full">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      data-testid="song-selector-trigger"
+                      data-open={songPickerOpen ? 'true' : 'false'}
+                      onPointerDown={() => setSongPickerOpen(true)}
+                      onClick={() => {
+                        setSongNrInput(String(clampedSongNr));
+                        setSongPickerOpen(true);
+                      }}
+                    >
+                      Song {clampedSongNr}/{subsongCount}
+                    </Button>
+                  </div>
+                ) : null}
+                {songPickerOpen ? (
+                  <div
+                    role="dialog"
+                    aria-label="SID song number"
+                    data-testid="song-selector-dialog"
+                    className="w-full max-w-full rounded-lg border border-border bg-background p-3 shadow-sm space-y-2"
+                  >
+                    <p className="text-sm font-semibold">SID song number</p>
+                    <p className="text-xs text-muted-foreground">Select a subsong index to start playback.</p>
+                    <div className="space-y-2" data-testid="song-selector-options">
+                      {Array.from({ length: subsongCount }, (_, index) => {
+                        const value = index + 1;
+                        return (
+                          <Button
+                            key={value}
+                            variant={value === clampedSongNr ? 'default' : 'outline'}
+                            className="w-full justify-start"
+                            onClick={() => void handleSongSelection(value)}
+                          >
+                            Song {value}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Available songs: 1–{subsongCount}
+                    </p>
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setSongPickerOpen(false)}>
+                      Close
+                    </Button>
+                  </div>
+                ) : null}
               </div>
               <p className="text-[11px] text-muted-foreground">Song picker enabled when subsongs are detected.</p>
             </div>
@@ -1665,66 +2022,6 @@ export default function PlayFilesPage() {
             </Button>
           }
         />
-
-        <Dialog open={songPickerOpen} onOpenChange={setSongPickerOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>SID song number</DialogTitle>
-              <DialogDescription>Select a subsong index for the current SID.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2">
-              <Input
-                type="number"
-                min={1}
-                max={subsongCount}
-                value={songNrInput}
-                onChange={(e) => setSongNrInput(e.target.value)}
-                disabled={!canEditSongNr}
-              />
-              <p className="text-xs text-muted-foreground">
-                Available songs: 1–{subsongCount}
-              </p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setSongPickerOpen(false)}>
-                Done
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={durationPickerOpen} onOpenChange={setDurationPickerOpen}>
-          <DialogContent className="max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Local SID duration</DialogTitle>
-              <DialogDescription>Set the playback duration for local SIDs.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2">
-              <Input
-                value={durationInput}
-                onChange={(e) => setDurationInput(e.target.value)}
-                placeholder="mm:ss or seconds"
-                disabled={!sidControlsEnabled}
-              />
-              <p className="text-xs text-muted-foreground">Current: {durationLabel}</p>
-            </div>
-            <DialogFooter className="flex items-center justify-between">
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setDurationInput('');
-                  setDurationPickerOpen(false);
-                }}
-                disabled={!sidControlsEnabled}
-              >
-                Clear
-              </Button>
-              <Button variant="outline" onClick={() => setDurationPickerOpen(false)}>
-                Done
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         <input
           ref={localSourceInputRef}

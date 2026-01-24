@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Monitor, Smartphone } from 'lucide-react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Monitor, Smartphone, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -15,7 +15,7 @@ import { getC64API } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { cn } from '@/lib/utils';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
-import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
+import { createDiskEntry, getDiskFolderPath, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { assignDiskGroupsByPrefix } from '@/lib/disks/diskGrouping';
 import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
@@ -663,8 +663,24 @@ export const HomeDiskManager = () => {
   }, []);
 
   const buildDiskListItems = useCallback(
-    (disks: DiskEntry[], options?: { showSelection?: boolean; showMenu?: boolean; disableActions?: boolean; onMount?: (disk: DiskEntry) => void }) =>
-      disks.map((disk) => {
+    (disks: DiskEntry[], options?: { showSelection?: boolean; showMenu?: boolean; disableActions?: boolean; onMount?: (disk: DiskEntry) => void }) => {
+      let lastFolder: string | null = null;
+      return disks.reduce<ActionListItem[]>((acc, disk) => {
+        const folderPath = getDiskFolderPath(disk.path);
+        if (folderPath !== lastFolder) {
+          acc.push({
+            id: `folder:${folderPath}`,
+            title: folderPath,
+            variant: 'header',
+            icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
+            selected: false,
+            actionLabel: '',
+            showMenu: false,
+            showSelection: false,
+            disableActions: true,
+          });
+          lastFolder = folderPath;
+        }
         const matches = matchesFilter(disk);
         const isDimmed = filterText.length > 0 && !matches;
         const groupColor = disk.group ? pickDiskGroupColor(disk.group) : null;
@@ -674,12 +690,10 @@ export const HomeDiskManager = () => {
             <span className={cn(groupColor?.text, 'break-words min-w-0')}>Group: {disk.group}</span>
           </span>
         ) : null;
-        return {
+        acc.push({
           id: disk.id,
           title: disk.name,
-          subtitle: disk.path,
           meta: groupMeta,
-          subtitleTestId: 'disk-path',
           icon: <LocationIcon location={disk.location} />,
           selected: selectedDiskIds.has(disk.id),
           onSelectToggle: (selected) => handleDiskSelect(disk, selected),
@@ -692,8 +706,10 @@ export const HomeDiskManager = () => {
           actionAriaLabel: `Mount ${disk.name}`,
           showSelection: options?.showSelection !== false,
           showMenu: options?.showMenu !== false,
-        } as ActionListItem;
-      }),
+        } as ActionListItem);
+        return acc;
+      }, []);
+    },
     [buildDiskMenuItems, filterText.length, handleDiskSelect, matchesFilter, selectedDiskIds],
   );
 

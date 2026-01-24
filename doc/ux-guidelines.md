@@ -79,7 +79,7 @@ The user never “browses the filesystem” as a primary goal.
 
 - Source selection always happens **before** navigation.
 - Sources must be clearly identifiable and named.
-- Local device sources represent previously selected folders.
+- Local device sources are added via the system folder picker; the source chooser shows only an “Add file / folder” action and does not list prior folders.
 - Adding a new local source requires the Android folder picker.
 
 Source selection must never occur inside a selection view.

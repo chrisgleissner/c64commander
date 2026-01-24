@@ -6,6 +6,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
@@ -91,6 +92,7 @@ test.describe('Playback file browser', () => {
   });
 
   test('play page is available from tab bar', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.setViewportSize({ width: 360, height: 740 });
     await page.goto('/play');
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
     await snap(page, testInfo, 'play-page-loaded');
@@ -194,7 +196,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -312,6 +314,11 @@ test.describe('Playback file browser', () => {
     await pauseButton.click();
     await snap(page, testInfo, 'resumed');
 
+    await expect.poll(
+      () => server.requests.some((req) => req.url.includes('/v1/machine:resume')),
+      { timeout: 2000 },
+    ).toBe(true);
+
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).toBe(initialState['Vol UltiSid 2'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe(initialState['Vol Socket 1'].value);
@@ -379,7 +386,7 @@ test.describe('Playback file browser', () => {
     await expect(page.getByRole('dialog')).toBeVisible();
     await snap(page, testInfo, 'choose-source');
 
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     await expect(page.getByRole('dialog')).toBeHidden();
     const overlay = page.getByTestId('add-items-overlay');
     await expect(overlay).toBeVisible();
@@ -424,7 +431,7 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
 
     const overlay = page.getByTestId('add-items-overlay');
     await expect(overlay).toBeVisible();
@@ -460,7 +467,7 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
 
     const overlay = page.getByTestId('add-items-overlay');
     await expect(overlay).toBeVisible();
@@ -484,14 +491,18 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
     await snap(page, testInfo, 'add-items-open');
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
     await snap(page, testInfo, 'playlist-populated');
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    const playlistList = page.getByTestId('playlist-list');
+    await expect(playlistList.getByTestId('playlist-item-header').filter({ hasText: '/local-play/' })).toBeVisible();
+    await expect(playlistList.getByText('/local-play/demo.sid')).toHaveCount(0);
 
+    const resetBefore = server.requests.filter((req) => req.url.startsWith('/v1/machine:reset')).length;
     await page
       .getByTestId('playlist-item')
       .filter({ hasText: 'demo.sid' })
@@ -500,46 +511,49 @@ test.describe('Playback file browser', () => {
     await waitForRequests(() => server.sidplayRequests.length > 0);
     expect(server.sidplayRequests[0].method).toBe('POST');
     await snap(page, testInfo, 'sid-playback-requested');
+
+    const stopButton = page.getByTestId('playlist-play');
+    await expect(stopButton).toContainText('Stop');
+    await snap(page, testInfo, 'sid-playing');
+    await stopButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/machine:reset')).length > resetBefore,
+    );
+    await snap(page, testInfo, 'sid-stop-reset');
   });
 
   test('songlengths metadata is applied for local SIDs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await expect(input).toHaveCount(1);
-    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths-documents')]);
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo2.sid');
     await snap(page, testInfo, 'songlengths-playlist');
 
-    await page
-      .getByTestId('playlist-item')
-      .filter({ hasText: 'demo.sid' })
-      .getByRole('button', { name: 'Play' })
-      .click();
-    await waitForRequests(() => server.sidplayRequests.length > 0);
-    await snap(page, testInfo, 'songlengths-playback');
+    const demoRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' });
+    await demoRow.getByRole('button', { name: 'Item actions' }).click();
+    await expect(page.getByRole('menuitem', { name: /Duration: 0:20/ })).toBeVisible();
+    await snap(page, testInfo, 'songlengths-duration');
   });
 
   test('local source browser filters supported files', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
     await snap(page, testInfo, 'local-source-added');
 
-    await openAddItemsDialog(page);
-    await expect(page.getByRole('button', { name: 'local-play' })).toBeVisible();
-    await page.getByRole('button', { name: 'local-play' }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText('demo.sid', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('demo.txt')).toHaveCount(0);
-    await snap(page, testInfo, 'local-source-browser');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    await expect(page.getByText('demo.txt')).toHaveCount(0);
+    await snap(page, testInfo, 'local-source-filtered');
   });
 
   test('folder play populates playlist dialog', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -549,7 +563,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -566,7 +580,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -622,7 +636,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await openAddItemsDialog(page);
     await snap(page, testInfo, 'add-items-open');
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play-unsupported')]);
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -633,7 +647,7 @@ test.describe('Playback file browser', () => {
   test('ultimate browsing lists FTP entries and mounts remote disk image', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
     const dialog = page.getByRole('dialog');
     await ensureRemoteRoot(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
@@ -658,22 +672,24 @@ test.describe('Playback file browser', () => {
   });
 
   test('C64U browser remembers last path and supports root', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.setViewportSize({ width: 360, height: 740 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
     const dialog = page.getByRole('dialog');
     await ensureRemoteRoot(dialog);
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Games');
-    await expect(dialog.getByText(/Path: \/Usb0\/Games/)).toBeVisible();
+    await expect(dialog.getByText(/Path:\s*\/Usb0\/Games\/?/)).toBeVisible();
+    await expect(dialog.getByText('/Usb0/Games/Turrican II')).toHaveCount(0);
     await snap(page, testInfo, 'c64u-path-remembered');
     await page.getByRole('button', { name: 'Cancel' }).click();
     await snap(page, testInfo, 'dialog-closed');
 
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
-    await expect(page.getByText(/Path: \/Usb0\/Games/)).toBeVisible();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
+    await expect(page.getByText(/Path:\s*\/Usb0\/Games\/?/)).toBeVisible();
     await page.getByTestId('navigate-root').click();
     await expect(page.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
@@ -683,16 +699,20 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
     await snap(page, testInfo, 'playlist-ready');
+    const rebootBefore = server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length;
     await page
       .getByTestId('playlist-item')
       .filter({ hasText: 'demo.d64' })
       .getByRole('button', { name: 'Play' })
       .click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length > rebootBefore,
+    );
     await waitForRequests(() =>
       server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),
     );
@@ -703,6 +723,16 @@ test.describe('Playback file browser', () => {
       server.requests.some((req) => req.url.startsWith('/v1/machine:writemem')),
     );
     await snap(page, testInfo, 'autostart-complete');
+
+    const rebootAfterPlay = server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length;
+    const stopButton = page.getByTestId('playlist-play');
+    await expect(stopButton).toContainText('Stop');
+    await snap(page, testInfo, 'disk-playing');
+    await stopButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length > rebootAfterPlay,
+    );
+    await snap(page, testInfo, 'disk-stop-reboot');
   });
 
   test('FTP failure shows error toast', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -717,7 +747,7 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
     await expect(page.getByText('Browse failed', { exact: true }).first()).toBeVisible();
     await snap(page, testInfo, 'browse-failed');
   });
@@ -731,7 +761,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'add-items-dialog');
     await snap(page, testInfo, 'add-items-open');
 
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -748,7 +778,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'local-playback-started');
 
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'C64 Ultimate' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
     const dialog = page.getByRole('dialog');
     await ensureRemoteRoot(dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
@@ -781,7 +811,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -796,12 +826,13 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
     await snap(page, testInfo, 'playlist-ready');
 
+    const rebootStart = server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length;
     await page
       .getByTestId('playlist-item')
       .filter({ hasText: 'demo.d64' })
@@ -813,12 +844,19 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'first-track-playing');
 
     await page.getByTestId('playlist-next').click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length > rebootStart,
+    );
     await waitForRequests(() => server.sidplayRequests.length > 0);
     await snap(page, testInfo, 'next-track-playing');
 
+    const rebootAfterNext = server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length;
     await page.getByTestId('playlist-prev').click();
     await waitForRequests(() =>
       server.requests.filter((req) => req.url.startsWith('/v1/drives/a:mount')).length > 1,
+    );
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length > rebootAfterNext,
     );
     await snap(page, testInfo, 'prev-track-playing');
   });
@@ -832,7 +870,7 @@ test.describe('Playback file browser', () => {
     await expect(pauseButton).toBeDisabled();
 
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -875,7 +913,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -892,7 +930,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -918,7 +956,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
-    await page.getByRole('button', { name: 'Add folder' }).click();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();

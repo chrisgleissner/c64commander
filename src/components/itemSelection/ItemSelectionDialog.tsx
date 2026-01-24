@@ -75,14 +75,13 @@ export const ItemSelectionDialog = ({
   const browser = useSourceNavigator(source);
 
   useEffect(() => {
-    if (browser.error) {
-      toast({
-        title: 'Browse failed',
-        description: browser.error,
-        variant: 'destructive',
-      });
-    }
-  }, [browser.error]);
+    if (!browser.error || !open) return;
+    toast({
+      title: 'Browse failed',
+      description: browser.error,
+      variant: 'destructive',
+    });
+  }, [browser.error, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -238,32 +237,35 @@ export const ItemSelectionDialog = ({
                   <div key={group.label} className="space-y-3">
                     <p className="text-base font-semibold text-foreground">{group.label}</p>
                     <div className="grid gap-2 sm:grid-cols-2">
-                      {group.sources.map((item) => (
+                      {group.label === 'C64 Ultimate' ? (
                         <Button
-                          key={item.id}
                           variant="outline"
                           onClick={() => {
+                            const target = group.sources[0];
+                            if (!target) return;
                             setPendingLocalSource(false);
-                            setSelectedSourceId(item.id);
+                            setSelectedSourceId(target.id);
                           }}
-                          disabled={!item.isAvailable}
+                          disabled={!group.sources[0]?.isAvailable}
                           className="justify-start min-w-0"
                         >
-                          <span className="truncate">{item.name}</span>
-                        </Button>
-                      ))}
-                      {group.label === 'This device' && (
-                        <Button variant="secondary" onClick={() => void handleAddLocalSource()} className="justify-start min-w-0">
                           <FolderPlus className="h-4 w-4 mr-1" />
-                          <span className="truncate">Add folder</span>
+                          <span className="truncate">Add file / folder</span>
                         </Button>
-                      )}
+                      ) : null}
+                      {group.label === 'This device' ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => void handleAddLocalSource()}
+                          className="justify-start min-w-0"
+                          disabled={pendingLocalSource}
+                          aria-busy={pendingLocalSource}
+                        >
+                          <FolderPlus className="h-4 w-4 mr-1" />
+                          <span className="truncate">Add file / folder</span>
+                        </Button>
+                      ) : null}
                     </div>
-                    {group.label === 'This device' && pendingLocalSource && (
-                      <p className="text-xs text-muted-foreground">
-                        Waiting for the system folder picker. Use the device back action to cancel if needed.
-                      </p>
-                    )}
                   </div>
                 ))}
               </div>

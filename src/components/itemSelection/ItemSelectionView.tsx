@@ -1,6 +1,7 @@
-import { ArrowUp, FolderOpen, RefreshCw } from 'lucide-react';
+import { ArrowUp, Folder, FolderOpen, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { PathWrap } from '@/components/PathWrap';
 import type { SourceEntry } from '@/lib/sourceNavigation/types';
 
 export type ItemSelectionViewProps = {
@@ -46,36 +47,41 @@ export const ItemSelectionView = ({
           Loading…
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-        <span className="text-xs text-muted-foreground break-all min-w-0 flex-1">Path: {path}</span>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onNavigateRoot}
-            disabled={atRoot || isLoading}
-            data-testid="navigate-root"
-          >
-            Root
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onNavigateUp}
-            disabled={atRoot || isLoading}
-          >
-            <ArrowUp className="h-4 w-4 mr-1" />
-            Up
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onRefresh}
-            disabled={isLoading}
-          >
-            <RefreshCw className="h-4 w-4 mr-1" />
-            {isLoading ? 'Loading…' : 'Refresh'}
-          </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onNavigateRoot}
+          disabled={atRoot || isLoading}
+          data-testid="navigate-root"
+        >
+          Root
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onNavigateUp}
+          disabled={atRoot || isLoading}
+        >
+          <ArrowUp className="h-4 w-4 mr-1" />
+          Up
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          disabled={isLoading}
+        >
+          <RefreshCw className="h-4 w-4 mr-1" />
+          {isLoading ? 'Loading…' : 'Refresh'}
+        </Button>
+      </div>
+
+      <div className="flex items-start gap-2 w-full min-w-0 font-semibold text-sm">
+        <Folder className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" aria-hidden="true" />
+        <div className="min-w-0">
+          <span className="mr-1">Path:</span>{' '}
+          <PathWrap path={path} className="text-foreground" />
         </div>
       </div>
 
@@ -96,7 +102,6 @@ export const ItemSelectionView = ({
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                  <p className="text-xs text-muted-foreground break-words whitespace-normal">{entry.path}</p>
                 </div>
               </div>
               {entry.type === 'dir' && (

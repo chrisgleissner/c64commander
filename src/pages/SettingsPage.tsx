@@ -348,7 +348,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Connection Status */}
-          <div className={`p-3 rounded-lg text-sm ${
+          <div className={`p-3 rounded-lg text-sm break-words ${
             status.isConnected 
               ? 'bg-success/10 text-success' 
               : status.isConnecting
@@ -428,12 +428,12 @@ export default function SettingsPage() {
                   <p className="text-xs text-destructive">{safError}</p>
                 ) : null}
                 {safUris.length ? (
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-xs text-muted-foreground break-words min-w-0">
                     Persisted: {safUris.map((entry) => redactTreeUri(entry.uri)).filter(Boolean).join(', ')}
                   </div>
                 ) : null}
                 {safEntries.length ? (
-                  <div className="max-h-28 overflow-auto whitespace-pre-line text-xs text-muted-foreground">
+                  <div className="max-h-28 overflow-auto whitespace-pre-line break-words min-w-0 text-xs text-muted-foreground">
                     {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join('\n')}
                   </div>
                 ) : null}
@@ -587,7 +587,7 @@ export default function SettingsPage() {
                     Starts a local REST service and routes all requests to it.
                   </p>
                   {mockBaseUrl ? (
-                    <p className="text-xs font-mono text-muted-foreground">{mockBaseUrl}</p>
+                    <p className="text-xs font-mono text-muted-foreground break-words">{mockBaseUrl}</p>
                   ) : null}
                   {!isMockAvailable ? (
                     <p className="text-xs text-muted-foreground">

@@ -15,6 +15,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
+import { getSourceSelectionButton } from './sourceSelection';
 
 test.describe('UX Interaction Patterns', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -36,6 +37,15 @@ test.describe('UX Interaction Patterns', () => {
     }
   });
 
+  const getSourceButtons = (page: Page) => {
+    const dialog = page.getByRole('dialog');
+    return {
+      dialog,
+      localButton: getSourceSelectionButton(dialog, 'This device'),
+      c64uButton: getSourceSelectionButton(dialog, 'C64 Ultimate'),
+    };
+  };
+
   test('source selection precedes navigation - local source @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
@@ -54,9 +64,8 @@ test.describe('UX Interaction Patterns', () => {
     await page.waitForTimeout(300);
     await attachStepScreenshot(page, testInfo, 'source-selector-opened');
 
-    // Should show source selection: Local and C64 Ultimate
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    const c64uButton = page.getByRole('button', { name: /C64 Ultimate|Ultimate|C64U/i });
+    // Should show source selection: C64 Ultimate and This device
+    const { localButton, c64uButton } = getSourceButtons(page);
 
     const localVisible = await localButton.isVisible({ timeout: 2000 }).catch(() => false);
     const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
@@ -66,23 +75,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
 
-    // Select local source
-    if (localVisible) {
-      await localButton.click();
-      await page.waitForTimeout(500);
-      await attachStepScreenshot(page, testInfo, 'local-source-selected');
-
-      // Should now show local file navigation
-      const backButton = page.getByRole('button', { name: /Back|Up|Parent/i });
-      const hasNavigation = await backButton.isVisible({ timeout: 2000 }).catch(() => false);
-      if (hasNavigation) {
-        await attachStepScreenshot(page, testInfo, 'navigation-available');
-      } else {
-        await attachStepScreenshot(page, testInfo, 'navigation-not-found');
-      }
-    } else {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
-    }
+    await attachStepScreenshot(page, testInfo, 'source-buttons-visible');
   });
 
   test('source selection precedes navigation - C64U source @allow-warnings', async ({ page }, testInfo: TestInfo) => {
@@ -100,7 +93,7 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const c64uButton = page.getByRole('button', { name: /C64 Ultimate|Ultimate|C64U/i });
+    const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
       await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
       return;
@@ -135,14 +128,14 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (!(await localButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+    const { c64uButton } = getSourceButtons(page);
+    if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
+      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
       return;
     }
-    await localButton.click();
+    await c64uButton.click();
     await page.waitForTimeout(500);
-    await attachStepScreenshot(page, testInfo, 'at-local-root');
+    await attachStepScreenshot(page, testInfo, 'at-source-root');
 
     // At source root, "Up" button should be disabled or hidden
     const upButton = page.getByRole('button', { name: /Back|Up|Parent/i }).first();
@@ -194,12 +187,12 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (!(await localButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+    const { c64uButton } = getSourceButtons(page);
+    if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
+      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
       return;
     }
-    await localButton.click();
+    await c64uButton.click();
     await page.waitForTimeout(500);
 
     // Look for "Select All" button
@@ -300,9 +293,9 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (await localButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await localButton.click();
+    const { c64uButton } = getSourceButtons(page);
+    if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await c64uButton.click();
       await page.waitForTimeout(500);
       await attachStepScreenshot(page, testInfo, 'in-selection-view');
 
@@ -316,7 +309,7 @@ test.describe('UX Interaction Patterns', () => {
         await attachStepScreenshot(page, testInfo, 'unexpected-playback-controls-in-selection');
       }
     } else {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
     }
   });
 
@@ -429,12 +422,12 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (!(await localButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+    const { c64uButton } = getSourceButtons(page);
+    if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
+      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
       return;
     }
-    await localButton.click();
+    await c64uButton.click();
     await page.waitForTimeout(500);
 
     // Get initial position of a control element (e.g., "Add" button)
@@ -517,7 +510,7 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const c64uButton = page.getByRole('button', { name: /C64 Ultimate|Ultimate|C64U/i });
+    const { c64uButton } = getSourceButtons(page);
     if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await c64uButton.click();
       await page.waitForTimeout(500);
@@ -561,12 +554,12 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (!(await localButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+    const { c64uButton } = getSourceButtons(page);
+    if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
+      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
       return;
     }
-    await localButton.click();
+    await c64uButton.click();
     await page.waitForTimeout(500);
 
     // Select an item
@@ -604,12 +597,12 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (!(await localButton.isVisible({ timeout: 2000 }).catch(() => false))) {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+    const { c64uButton } = getSourceButtons(page);
+    if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
+      await attachStepScreenshot(page, testInfo, 'c64u-source-not-available');
       return;
     }
-    await localButton.click();
+    await c64uButton.click();
     await page.waitForTimeout(500);
     await attachStepScreenshot(page, testInfo, 'in-selection-view');
 
@@ -723,7 +716,6 @@ test.describe('UX Interaction Patterns', () => {
     await page.goto('/play');
     await page.waitForLoadState('domcontentloaded');
 
-    // Test local source first
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
       await attachStepScreenshot(page, testInfo, 'add-button-not-found');
@@ -732,42 +724,16 @@ test.describe('UX Interaction Patterns', () => {
     await addButton.click();
     await page.waitForTimeout(300);
 
-    const localButton = page.getByRole('button', { name: /Local|Local Files|Device/i });
-    if (await localButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await localButton.click();
-      await page.waitForTimeout(500);
-      await attachStepScreenshot(page, testInfo, 'local-selection-ui');
+    const { localButton, c64uButton } = getSourceButtons(page);
+    const localVisible = await localButton.isVisible({ timeout: 2000 }).catch(() => false);
+    const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
 
-      // Capture layout elements
-      const selectAllLocal = page.getByRole('button', { name: /Select all/i });
-      const hasSelectAllLocal = await selectAllLocal.isVisible({ timeout: 2000 }).catch(() => false);
-
-      // Go back and try C64U
-      const backButton = page.getByRole('button', { name: /Back|Cancel|Close/i }).first();
-      if (await backButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await backButton.click();
-        await page.waitForTimeout(300);
-        await backButton.click(); // Back to source selection
-        await page.waitForTimeout(300);
-
-        const c64uButton = page.getByRole('button', { name: /C64 Ultimate|Ultimate|C64U/i });
-        if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await c64uButton.click();
-          await page.waitForTimeout(500);
-          await attachStepScreenshot(page, testInfo, 'c64u-selection-ui');
-
-          const selectAllC64u = page.getByRole('button', { name: /Select all/i });
-          const hasSelectAllC64u = await selectAllC64u.isVisible({ timeout: 2000 }).catch(() => false);
-
-          if (hasSelectAllLocal === hasSelectAllC64u) {
-            await attachStepScreenshot(page, testInfo, 'consistent-selection-ui');
-          } else {
-            await attachStepScreenshot(page, testInfo, 'inconsistent-selection-ui');
-          }
-        }
-      }
+    if (localVisible && c64uVisible) {
+      await expect(localButton).toHaveText('Add file / folder');
+      await expect(c64uButton).toHaveText('Add file / folder');
+      await attachStepScreenshot(page, testInfo, 'source-buttons-consistent');
     } else {
-      await attachStepScreenshot(page, testInfo, 'local-source-not-available');
+      await attachStepScreenshot(page, testInfo, 'source-buttons-missing');
     }
   });
 

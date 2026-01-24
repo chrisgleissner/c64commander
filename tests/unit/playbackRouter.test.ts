@@ -20,6 +20,7 @@ const createApiMock = () => ({
   mountDrive: vi.fn().mockResolvedValue({ errors: [] }),
   mountDriveUpload: vi.fn().mockResolvedValue({ errors: [] }),
   machineReset: vi.fn().mockResolvedValue({ errors: [] }),
+  machineReboot: vi.fn().mockResolvedValue({ errors: [] }),
   readMemory: vi.fn().mockResolvedValue(new Uint8Array([0])),
   writeMemory: vi.fn().mockResolvedValue({ errors: [] }),
 });
