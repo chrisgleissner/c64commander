@@ -111,10 +111,15 @@ test.describe('UI coverage', () => {
 
   const ensureRemoteRoot = async (page: Page) => {
     const rootButton = page.locator('[data-testid="navigate-root"]');
-    if (await rootButton.isVisible()) {
-      if (await rootButton.isEnabled()) {
-        await rootButton.click();
-      }
+    const visible = await rootButton.isVisible().catch(() => false);
+    if (!visible) return;
+    const disabledAttr = await rootButton.getAttribute('disabled').catch(() => null);
+    const ariaDisabled = await rootButton.getAttribute('aria-disabled').catch(() => null);
+    if (disabledAttr !== null || ariaDisabled === 'true') return;
+    try {
+      await rootButton.click({ timeout: 2000 });
+    } catch {
+      // Ignore: navigation may have already reached root.
     }
   };
 
