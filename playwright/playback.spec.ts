@@ -36,15 +36,8 @@ const ensureRemoteRoot = async (container: Page | Locator) => {
   const visible = await rootButton.isVisible().catch(() => false);
   if (!visible) return;
   // Avoid flakiness: during navigation the button can briefly flip enabled/disabled.
-  let disabledAttr: string | null = null;
-  let ariaDisabled: string | null = null;
-  try {
-    disabledAttr = await rootButton.getAttribute('disabled');
-    ariaDisabled = await rootButton.getAttribute('aria-disabled');
-  } catch {
-    disabledAttr = null;
-    ariaDisabled = null;
-  }
+  const disabledAttr = await rootButton.getAttribute('disabled').catch((): null => null);
+  const ariaDisabled = await rootButton.getAttribute('aria-disabled').catch((): null => null);
   if (disabledAttr !== null || ariaDisabled === 'true') return;
   try {
     await rootButton.click({ timeout: 2000 });
