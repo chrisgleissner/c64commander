@@ -316,19 +316,6 @@ export default function SettingsPage() {
 
           <div className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="deviceHost" className="text-sm">C64U Hostname / IP</Label>
-              <Input
-                id="deviceHost"
-                value={deviceHostInput}
-                onChange={(e) => setDeviceHostInput(e.target.value)}
-                placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Used for direct connections and local proxy header routing.
-              </p>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="baseUrl" className="text-sm">Base URL</Label>
               <Input
                 id="baseUrl"
@@ -337,12 +324,6 @@ export default function SettingsPage() {
                 placeholder={C64_DEFAULTS.DEFAULT_BASE_URL}
                 className="font-mono"
               />
-              <p className="text-xs text-muted-foreground">
-                Default: {C64_DEFAULTS.DEFAULT_BASE_URL}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Local proxy: {C64_DEFAULTS.DEFAULT_PROXY_URL}
-              </p>
             </div>
 
             <div className="space-y-2">
