@@ -68,7 +68,6 @@ import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
-import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -248,10 +247,7 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
-<<<<<<< HEAD
       await discoverConnection('settings');
-=======
->>>>>>> origin/main
       toast({ title: 'Connection settings saved' });
     } catch (error) {
       toast({
@@ -339,7 +335,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="baseUrl" className="text-sm">Base URL</Label>
+              <Label htmlFor="baseUrl" className="text-sm">C64U Hostname / IP</Label>
               <Input
                 id="baseUrl"
                 value={urlInput}
@@ -347,9 +343,12 @@ export default function SettingsPage() {
                 placeholder={C64_DEFAULTS.DEFAULT_BASE_URL}
                 className="font-mono"
               />
+              <p className="text-xs text-muted-foreground">
+                Use the Hostname or IP shown in the C64 menu. The protocol can be specified but is optional (e.g. http://c64u).
+              </p>
               {demoBaseUrl && demoBaseUrl !== urlInput ? (
                 <p className="text-xs text-muted-foreground">
-                  Demo Base URL: <span className="font-mono">{demoBaseUrl}</span>
+                  Demo Hostname / IP: <span className="font-mono">{demoBaseUrl}</span>
                 </p>
               ) : null}
             </div>
@@ -368,7 +367,7 @@ export default function SettingsPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                Required if network password is set on firmware 3.12+
+                The same password used for FTP and HTTP access on the C64.
               </p>
             </div>
 

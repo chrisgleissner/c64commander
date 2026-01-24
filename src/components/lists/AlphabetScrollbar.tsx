@@ -12,6 +12,7 @@ const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }: Props) {
   const [visible, setVisible] = useState(false);
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
+  const [isEligible, setIsEligible] = useState(false);
   const hideTimeoutRef = useRef<number | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -69,6 +70,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
 
   const handleTouch = useCallback(
     (clientY: number) => {
+      if (!isEligible) return;
       if (!overlayRef.current) return;
       const rect = overlayRef.current.getBoundingClientRect();
       const relativeY = clientY - rect.top;
@@ -78,37 +80,47 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
         scrollToLetter(letter);
       }
     },
-    [scrollToLetter]
+    [isEligible, scrollToLetter]
   );
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isEligible) return;
     clearHideTimeout();
     setVisible(true);
     handleTouch(e.touches[0].clientY);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isEligible) return;
     handleTouch(e.touches[0].clientY);
   };
 
   const handleTouchEnd = () => {
+    if (!isEligible) return;
     scheduleHide();
   };
 
   const handlePointerEnter = () => {
+    if (!isEligible) return;
     clearHideTimeout();
     setVisible(true);
   };
 
   const handlePointerLeave = () => {
+    if (!isEligible) return;
     scheduleHide();
   };
 
   const handleScroll = useCallback(() => {
+    if (!isEligible) {
+      setVisible(false);
+      setActiveLetter(null);
+      return;
+    }
     clearHideTimeout();
     setVisible(true);
     scheduleHide();
-  }, []);
+  }, [isEligible]);
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -118,45 +130,76 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
   }, [scrollContainerRef, handleScroll]);
 
   useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const updateEligibility = () => {
+      const eligible = container.scrollHeight > container.clientHeight * 2;
+      setIsEligible(eligible);
+      if (!eligible) {
+        setVisible(false);
+        setActiveLetter(null);
+      }
+    };
+
+    updateEligibility();
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateEligibility)
+      : null;
+    resizeObserver?.observe(container);
+    window.addEventListener('resize', updateEligibility);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateEligibility);
+    };
+  }, [items, scrollContainerRef]);
+
+  useEffect(() => {
     return () => clearHideTimeout();
   }, []);
 
   return (
     <>
-      {/* Touch area on the right edge */}
-      <div
-        ref={overlayRef}
-        className="fixed right-0 top-0 bottom-0 w-12 z-50 touch-none"
-        data-testid="alphabet-touch-area"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
-      />
-      
-      {/* Visible overlay */}
-      <div
-        className={cn(
-          'fixed right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 py-2 px-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-lg z-50 transition-opacity duration-200 pointer-events-none',
-          visible ? 'opacity-100' : 'opacity-0'
-        )}
-        data-testid="alphabet-overlay"
-      >
-        {LETTERS.map((letter) => (
+      {isEligible ? (
+        <>
+          {/* Touch area on the left edge */}
           <div
-            key={letter}
+            ref={overlayRef}
+            className="fixed left-0 top-0 bottom-0 w-12 z-50 touch-none"
+            data-testid="alphabet-touch-area"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onPointerEnter={handlePointerEnter}
+            onPointerLeave={handlePointerLeave}
+          />
+
+          {/* Visible overlay */}
+          <div
             className={cn(
-              'text-xs font-mono font-semibold leading-none py-0.5 px-1 rounded transition-colors',
-              activeLetter === letter
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground'
+              'fixed left-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 py-2 px-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-lg z-50 transition-opacity duration-200 pointer-events-none',
+              visible ? 'opacity-100' : 'opacity-0'
             )}
+            data-testid="alphabet-overlay"
           >
-            {letter}
+            {LETTERS.map((letter) => (
+              <div
+                key={letter}
+                className={cn(
+                  'text-xs font-mono font-semibold leading-none py-0.5 px-1 rounded transition-colors',
+                  activeLetter === letter
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground'
+                )}
+              >
+                {letter}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      ) : null}
 
       {/* Centered letter badge */}
       {visible && activeLetter && (
