@@ -102,6 +102,7 @@ const listeners = new Set<() => void>();
 let activeDiscovery: { abort: AbortController; cancel: () => void } | null = null;
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
+const DEMO_INTERSTITIAL_SESSION_KEY = 'c64u_demo_interstitial_shown';
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -193,6 +194,7 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
 
   if (shouldShowDemoInterstitial(trigger)) {
     demoInterstitialShownThisSession = true;
+    sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, '1');
     setSnapshot({ demoInterstitialVisible: true });
   }
 };
@@ -279,7 +281,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
-  demoInterstitialShownThisSession = false;
+  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   setSnapshot({
     state: 'UNKNOWN',
     lastDiscoveryTrigger: null,

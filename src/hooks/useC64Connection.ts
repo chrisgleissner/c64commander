@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
+import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl, getC64APIConfigSnapshot } from '@/lib/c64api';
 import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
 import { useConnectionState } from '@/hooks/useConnectionState';
 
@@ -81,9 +81,12 @@ export function useC64Connection() {
     deviceInfo: deviceInfo || null,
   };
 
+  const runtimeBaseUrl = getC64APIConfigSnapshot().baseUrl;
+
   return {
     status,
     baseUrl,
+    runtimeBaseUrl,
     password,
     deviceHost,
     updateConfig,

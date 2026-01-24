@@ -49,8 +49,12 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
       if (index === undefined || !scrollContainerRef.current) return;
 
       const container = scrollContainerRef.current;
-      const rows = container.querySelectorAll('[data-row-id]');
-      const targetRow = rows[index] as HTMLElement | undefined;
+      const targetItem = items[index];
+      if (!targetItem) return;
+      const safeId = typeof CSS !== 'undefined' && 'escape' in CSS
+        ? CSS.escape(targetItem.id)
+        : targetItem.id.replace(/"/g, '\\"');
+      const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
       
       if (targetRow) {
         targetRow.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -84,7 +88,6 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault();
     handleTouch(e.touches[0].clientY);
   };
 
@@ -124,6 +127,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
       <div
         ref={overlayRef}
         className="fixed right-0 top-0 bottom-0 w-12 z-50 touch-none"
+        data-testid="alphabet-touch-area"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -137,6 +141,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
           'fixed right-2 top-1/2 -translate-y-1/2 flex flex-col items-center gap-0.5 py-2 px-1.5 rounded-lg bg-background/90 backdrop-blur-sm border border-border shadow-lg z-50 transition-opacity duration-200 pointer-events-none',
           visible ? 'opacity-100' : 'opacity-0'
         )}
+        data-testid="alphabet-overlay"
       >
         {LETTERS.map((letter) => (
           <div
@@ -155,7 +160,10 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
 
       {/* Centered letter badge */}
       {visible && activeLetter && (
-        <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background/95 backdrop-blur-sm border-2 border-primary rounded-xl px-6 py-4 shadow-2xl z-50 pointer-events-none">
+        <div
+          className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background/95 backdrop-blur-sm border-2 border-primary rounded-xl px-6 py-4 shadow-2xl z-50 pointer-events-none"
+          data-testid="alphabet-badge"
+        >
           <div className="text-5xl font-bold text-primary">{activeLetter}</div>
         </div>
       )}

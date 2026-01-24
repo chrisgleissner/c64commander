@@ -25,6 +25,7 @@ export type ActionListMenuItem =
 export type ActionListItem = {
   id: string;
   title: string;
+  titleSuffix?: string | null;
   subtitle?: string | null;
   meta?: React.ReactNode;
   icon?: React.ReactNode;
@@ -60,6 +61,7 @@ export type SelectableActionListProps = {
   listTestId?: string;
   rowTestId?: string;
   headerActions?: React.ReactNode;
+  filterHeader?: React.ReactNode;
   showSelectionControls?: boolean;
   selectionLabel?: string;
 };
@@ -150,7 +152,10 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             onClick={item.onTitleClick}
             disabled={item.isDimmed || item.disableActions}
           >
-            {item.title}
+            <span>{item.title}</span>
+            {item.titleSuffix ? (
+              <span className="ml-1 text-xs text-muted-foreground tabular-nums">{item.titleSuffix}</span>
+            ) : null}
           </button>
           {item.subtitle ? (
             <div
@@ -198,6 +203,7 @@ export const SelectableActionList = ({
   listTestId,
   rowTestId,
   headerActions,
+  filterHeader,
   showSelectionControls = true,
   selectionLabel,
 }: SelectableActionListProps) => {
@@ -304,6 +310,12 @@ export const SelectableActionList = ({
         )}
       </div>
 
+      {filterHeader ? (
+        <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+          {filterHeader}
+        </div>
+      ) : null}
+
       {showSelectionControls ? (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
           <span className="text-muted-foreground min-w-0 break-words">
@@ -368,6 +380,11 @@ export const SelectableActionList = ({
                     </Button>
                   )}
                 </div>
+                {filterHeader ? (
+                  <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+                    {filterHeader}
+                  </div>
+                ) : null}
               </DialogHeader>
               <div 
                 ref={viewAllScrollRef}

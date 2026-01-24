@@ -67,12 +67,12 @@ import {
 import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
-import { discoverConnection } from '@/lib/connection/connectionManager';
+import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
-  const { status, baseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
+  const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
@@ -81,6 +81,7 @@ export default function SettingsPage() {
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
+  const demoBaseUrl = status.state === 'DEMO_ACTIVE' ? runtimeBaseUrl : null;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
@@ -115,6 +116,10 @@ export default function SettingsPage() {
   useEffect(() => {
     setDeviceHostInput(deviceHost);
   }, [deviceHost]);
+
+  useEffect(() => {
+    dismissDemoInterstitial();
+  }, []);
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
@@ -242,6 +247,7 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+      await discoverConnection('settings');
       toast({ title: 'Connection settings saved' });
     } catch (error) {
       toast({
@@ -324,6 +330,11 @@ export default function SettingsPage() {
                 placeholder={C64_DEFAULTS.DEFAULT_BASE_URL}
                 className="font-mono"
               />
+              {demoBaseUrl && demoBaseUrl !== urlInput ? (
+                <p className="text-xs text-muted-foreground">
+                  Demo Base URL: <span className="font-mono">{demoBaseUrl}</span>
+                </p>
+              ) : null}
             </div>
 
             <div className="space-y-2">

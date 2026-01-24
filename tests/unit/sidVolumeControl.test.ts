@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildEnabledSidMuteUpdates,
+  buildEnabledSidRestoreUpdates,
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidVolumeSnapshot,
   buildEnabledSidVolumeUpdates,
@@ -87,6 +88,27 @@ describe('sid volume control helpers', () => {
     const unmuteUpdates = buildEnabledSidUnmuteUpdates(snapshot, afterDisable);
     expect(unmuteUpdates).toEqual({
       'Vol Socket 1': ' 0 dB',
+    });
+  });
+
+  it('restores from snapshot or falls back to target volume', () => {
+    const enablement: SidEnablement = {
+      socket1: true,
+      socket2: true,
+      ultiSid1: false,
+      ultiSid2: false,
+    };
+    const snapshot = buildEnabledSidVolumeSnapshot(items, enablement);
+    const restoreFromSnapshot = buildEnabledSidRestoreUpdates(items, enablement, snapshot, null);
+    expect(restoreFromSnapshot).toEqual({
+      'Vol Socket 1': ' 0 dB',
+      'Vol Socket 2': '-6 dB',
+    });
+
+    const restoreFromFallback = buildEnabledSidRestoreUpdates(items, enablement, null, '+6 dB');
+    expect(restoreFromFallback).toEqual({
+      'Vol Socket 1': '+6 dB',
+      'Vol Socket 2': '+6 dB',
     });
   });
 });

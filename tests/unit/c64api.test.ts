@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { C64API, getC64API, updateC64APIConfig, C64_DEFAULTS } from '@/lib/c64api';
+import { C64API, getC64API, updateC64APIConfig, applyC64APIRuntimeConfig, C64_DEFAULTS } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
@@ -96,6 +96,18 @@ describe('c64api', () => {
     const result = await api.getInfo();
     expect(result.errors).toEqual([]);
     expect(capacitorRequestMock).toHaveBeenCalled();
+  });
+
+  it('does not persist runtime config updates', async () => {
+    localStorage.setItem('c64u_base_url', 'http://saved');
+    localStorage.setItem('c64u_password', 'saved-pass');
+    localStorage.setItem('c64u_device_host', 'saved-host');
+
+    applyC64APIRuntimeConfig('http://runtime', 'runtime-pass', 'runtime-host');
+
+    expect(localStorage.getItem('c64u_base_url')).toBe('http://saved');
+    expect(localStorage.getItem('c64u_password')).toBe('saved-pass');
+    expect(localStorage.getItem('c64u_device_host')).toBe('saved-host');
   });
 
   it('handles CapacitorHttp non-string payloads', async () => {

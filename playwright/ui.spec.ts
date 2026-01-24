@@ -236,6 +236,7 @@ test.describe('UI coverage', () => {
     await page.getByTestId('add-items-confirm').click();
     await expect(page.getByTestId('add-items-progress')).toBeVisible();
     await snap(page, testInfo, 'progress-visible');
+    await expect(page.getByTestId('playlist-list')).toContainText('Disk 1.d64');
     await ftpServers.close();
   });
 

@@ -14,8 +14,14 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 
 const getPlaylistOrder = async (page: Page) => {
   const rows = page.getByTestId('playlist-item');
-  const titles = await rows.locator('button').filter({ hasText: /\.(sid|d64|prg|mod|crt)$/i }).allTextContents();
-  return titles.map((title) => title.trim()).filter(Boolean);
+  const count = await rows.count();
+  const titles: string[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const row = rows.nth(i);
+    const title = await row.locator('button span').first().textContent();
+    if (title?.trim()) titles.push(title.trim());
+  }
+  return titles;
 };
 
 const addLocalFolder = async (page: Page, folderPath: string) => {
@@ -55,6 +61,8 @@ test.describe('Playlist controls and advanced features', () => {
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+
     // The playlist shows items without a general filter input
     // (HVSC has folder filter, but general playlist filtering not implemented)
     const playlistItems = page.locator('[data-playlist-item], [data-testid="playlist-item"]');
@@ -72,13 +80,14 @@ test.describe('Playlist controls and advanced features', () => {
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+
     // The Shuffle checkbox is in a div with checkboxes - scroll to the options area first
-    await page.getByText('Recurse folders').scrollIntoViewIfNeeded();
+    await page.getByTestId('playback-recurse').scrollIntoViewIfNeeded();
     await snap(page, testInfo, 'scrolled-to-options');
 
     // Now find the shuffle checkbox - it's the second checkbox in the options area
-    const allCheckboxes = page.getByRole('checkbox');
-    const shuffleCheckbox = allCheckboxes.nth(1); // 0=Recurse folders, 1=Shuffle, 2=Repeat
+    const shuffleCheckbox = page.getByTestId('playback-shuffle');
     await expect(shuffleCheckbox).toBeVisible();
     await expect(shuffleCheckbox).not.toBeChecked();
     await snap(page, testInfo, 'shuffle-off');
@@ -99,8 +108,10 @@ test.describe('Playlist controls and advanced features', () => {
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
-    await page.getByText('Recurse folders').scrollIntoViewIfNeeded();
-    const shuffleCheckbox = page.getByRole('checkbox').nth(1);
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+
+    await page.getByTestId('playback-recurse').scrollIntoViewIfNeeded();
+    const shuffleCheckbox = page.getByTestId('playback-shuffle');
     await shuffleCheckbox.click();
     await snap(page, testInfo, 'shuffle-enabled');
 
@@ -122,13 +133,13 @@ test.describe('Playlist controls and advanced features', () => {
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
-    await page.getByText('Recurse folders').scrollIntoViewIfNeeded();
-    const shuffleCheckbox = page.getByRole('checkbox').nth(1);
+    await page.getByTestId('playback-recurse').scrollIntoViewIfNeeded();
+    const shuffleCheckbox = page.getByTestId('playback-shuffle');
     await shuffleCheckbox.click();
     await snap(page, testInfo, 'shuffle-enabled');
 
     // Category checkboxes appear after shuffle is enabled (indices 3+ are categories)
-    const sidCategoryCheckbox = page.getByRole('checkbox').nth(3);
+    const sidCategoryCheckbox = page.getByTestId('shuffle-category-sid');
     if (await sidCategoryCheckbox.isVisible()) {
       await expect(sidCategoryCheckbox).toBeChecked();
       await sidCategoryCheckbox.click();
@@ -147,11 +158,11 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'playlist-ready');
 
     // Scroll to options area
-    await page.getByText('Recurse folders').scrollIntoViewIfNeeded();
+    await page.getByTestId('playback-recurse').scrollIntoViewIfNeeded();
     await snap(page, testInfo, 'scrolled-to-options');
 
     // Repeat checkbox is the third one (0=Recurse, 1=Shuffle, 2=Repeat)
-    const repeatCheckbox = page.getByRole('checkbox').nth(2);
+    const repeatCheckbox = page.getByTestId('playback-repeat');
 
     await repeatCheckbox.click();
     await expect(repeatCheckbox).toBeChecked();

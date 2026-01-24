@@ -54,6 +54,7 @@ test.describe('Settings connection management', () => {
   });
 
   test('invalid URL format shows validation or accepts input', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected connection failures to invalid URL.');
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -152,5 +153,25 @@ test.describe('Settings connection management', () => {
 
     const storedOn = await page.evaluate(() => localStorage.getItem('c64u_automatic_demo_mode_enabled'));
     expect(storedOn).toBe('1');
+  });
+
+  test('settings sections appear in expected order', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_dev_mode_enabled', '1');
+    });
+
+    await page.goto('/settings');
+    await snap(page, testInfo, 'settings-open');
+
+    const headings = await page.locator('h2').allTextContents();
+    expect(headings).toEqual([
+      'Connection',
+      'Diagnostics',
+      'Appearance',
+      'Play and Disk',
+      'Config',
+      'Experimental',
+      'About',
+    ]);
   });
 });

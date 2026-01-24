@@ -34,4 +34,14 @@ describe('PlaybackClock', () => {
     clock.stop(2000, true);
     expect(clock.current(4000)).toBe(0);
   });
+
+  it('start with reset clears prior base', () => {
+    const clock = new PlaybackClock();
+    clock.start(0);
+    clock.pause(2000);
+    expect(clock.current(3000)).toBe(2000);
+
+    clock.start(3000, true);
+    expect(clock.current(4000)).toBe(1000);
+  });
 });

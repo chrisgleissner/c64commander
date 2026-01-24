@@ -107,6 +107,20 @@ export const buildEnabledSidUnmuteUpdates = (
   return updates;
 };
 
+export const buildEnabledSidRestoreUpdates = (
+  items: SidVolumeItem[],
+  enablement: SidEnablement,
+  snapshot: Record<string, string | number> | null | undefined,
+  fallbackTarget?: string | null,
+) => {
+  const snapshotUpdates = buildEnabledSidUnmuteUpdates(snapshot, enablement);
+  if (Object.keys(snapshotUpdates).length) return snapshotUpdates;
+  if (fallbackTarget) {
+    return buildEnabledSidVolumeUpdates(items, enablement, fallbackTarget);
+  }
+  return {};
+};
+
 export const buildEnabledSidVolumeUpdates = (
   items: SidVolumeItem[],
   enablement: SidEnablement,
@@ -114,8 +128,6 @@ export const buildEnabledSidVolumeUpdates = (
 ) => {
   const updates: Record<string, string | number> = {};
   filterEnabledSidVolumeItems(items, enablement).forEach((item) => {
-    const muteValue = resolveAudioMixerMuteValue(item.options);
-    if (item.value === muteValue) return;
     updates[item.name] = target;
   });
   return updates;

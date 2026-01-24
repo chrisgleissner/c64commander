@@ -113,5 +113,57 @@ test.describe('Automatic Demo Mode', () => {
     expect(seenPasswords).toContain('new-password');
     await snap(page, testInfo, 'settings-rediscovery-password');
   });
+
+  test('demo mode does not overwrite stored base URL', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_base_url', 'http://192.168.1.13');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_device_host', 'c64u');
+      localStorage.setItem('c64u_password', '');
+    });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    const urlInput = page.getByLabel(/base url|connection url/i);
+    await expect(urlInput).toHaveValue('http://192.168.1.13');
+
+    const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
+    expect(stored).toBe('http://192.168.1.13');
+    await snap(page, testInfo, 'demo-base-url-preserved');
+  });
+
+  test('save & connect exits demo mode when base URL is valid', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+    server = await createMockC64Server({});
+
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_base_url', 'http://127.0.0.1:1');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_device_host', 'c64u');
+      localStorage.setItem('c64u_password', '');
+    });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    const urlInput = page.getByLabel(/base url|connection url/i);
+    await urlInput.fill(server.baseUrl);
+    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
+
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
+    expect(stored).toBe(server.baseUrl);
+    await snap(page, testInfo, 'demo-exit-connected');
+  });
 });
 

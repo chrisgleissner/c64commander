@@ -475,6 +475,33 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disks-removed');
   });
 
+  test('disk view-all filter narrows list', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '5');
+    });
+    const manyDisks = Array.from({ length: 12 }, (_, index) => ({
+      id: `ultimate:/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
+      name: `Disk_${String(index + 1).padStart(3, '0')}.d64`,
+      path: `/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
+      location: 'ultimate' as const,
+      group: null as string | null,
+      importOrder: index + 1,
+    }));
+    await seedDiskLibrary(page, manyDisks);
+
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    const filter = page.getByTestId('view-all-filter-input');
+    await filter.fill('Disk_005');
+    await snap(page, testInfo, 'disk-view-all-filtered');
+
+    await expect(page.getByTestId('action-list-scroll')).toContainText('Disk_005.d64');
+    await expect(page.getByTestId('action-list-scroll')).not.toContainText('Disk_001.d64');
+  });
+
   test('disk removal wording is non-destructive', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
@@ -484,6 +511,42 @@ test.describe('Disk management', () => {
     await expect(page.getByRole('menuitem', { name: /Remove from collection/i })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: /Delete disk/i })).toHaveCount(0);
     await snap(page, testInfo, 'menu-verified');
+  });
+
+  test('disk menu shows size and date for local imports', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
+
+    await openDiskMenu(page, 'Disk 1.d64');
+    const sizeItem = page.getByRole('menuitem', { name: /Size:/i });
+    const dateItem = page.getByRole('menuitem', { name: /Date:/i });
+    await expect(sizeItem).toBeVisible();
+    await expect(dateItem).toBeVisible();
+    await expect(sizeItem).not.toContainText('—');
+    await expect(dateItem).not.toContainText('—');
+    await snap(page, testInfo, 'local-disk-size-date');
+  });
+
+  test('disk menu shows size and date for C64 Ultimate imports', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await openAddItemsDialog(page);
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await openRemoteFolder(page, 'Usb0');
+    await openRemoteFolder(page, 'Games');
+    await openRemoteFolder(page, 'Turrican II');
+    await selectEntryCheckbox(page, 'Disk 1.d64');
+    await page.getByRole('button', { name: 'Add to library' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    await openDiskMenu(page, 'Disk 1.d64');
+    const sizeItem = page.getByRole('menuitem', { name: /Size:/i });
+    const dateItem = page.getByRole('menuitem', { name: /Date:/i });
+    await expect(sizeItem).toBeVisible();
+    await expect(dateItem).toBeVisible();
+    await expect(sizeItem).not.toContainText('—');
+    await expect(dateItem).not.toContainText('—');
+    await snap(page, testInfo, 'ftp-disk-size-date');
   });
 
   test('importing non-disk files shows warning', async ({ page }: { page: Page }, testInfo: TestInfo) => {
