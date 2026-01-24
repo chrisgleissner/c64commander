@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   web-unit:
-    name: Web unit tests (coverage)
+    name: Web | Unit tests (coverage)
     runs-on: ubuntu-latest
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
@@ -80,7 +80,7 @@ jobs:
           path: coverage/lcov.info
 
   web-screenshots:
-    name: Web screenshots
+    name: Web | Screenshots
     runs-on: ubuntu-latest
     needs: web-build-coverage
     env:
@@ -139,12 +139,18 @@ jobs:
           end=$(date +%s)
           echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
-      - name: Build web (screenshots)
+      - name: Download coverage build output
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-coverage
+          path: .
+
+      - name: Ensure build output exists
         run: |
-          start=$(date +%s)
-          ${{ env.PM_RUN }} run build
-          end=$(date +%s)
-          echo "- build (screenshots): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          if [[ ! -f dist/index.html ]]; then
+            echo "dist/index.html missing; rebuilding"
+            ${{ env.PM_RUN }} run build
+          fi
 
       - name: Run screenshot tests
         env:
@@ -166,7 +172,7 @@ jobs:
           path: test-results/evidence/**
 
   web-build-coverage:
-    name: Web build (coverage)
+    name: Web | Build (coverage)
     runs-on: ubuntu-latest
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
@@ -225,7 +231,7 @@ jobs:
           path: dist
 
   web-e2e:
-    name: Web Playwright e2e (sharded)
+    name: Web | E2E (sharded)
     runs-on: ubuntu-latest
     needs: web-build-coverage
     strategy:
@@ -359,7 +365,7 @@ jobs:
           path: test-results/evidence/**
 
   web-coverage-merge:
-    name: Web coverage + evidence merge
+    name: Web | Coverage + evidence merge
     runs-on: ubuntu-latest
     needs: [web-unit, web-screenshots, web-e2e]
     env:
@@ -466,7 +472,7 @@ jobs:
           path: test-results/evidence/**
 
   android-build:
-    name: Android tests + APK
+    name: Android | Tests + APK
     runs-on: ubuntu-latest
     needs: web-coverage-merge
     env:
