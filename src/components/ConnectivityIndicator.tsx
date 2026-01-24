@@ -53,7 +53,6 @@ export function ConnectivityIndicator({ className }: Props) {
         <Monitor
           className={cn('h-5 w-5', isReal ? 'text-success' : 'text-muted-foreground')}
           style={isDemo ? { color: demoColor } : undefined}
-          style={isDemo ? { color: demoColor } : undefined}
           aria-hidden="true"
         />
       )}
@@ -61,7 +60,6 @@ export function ConnectivityIndicator({ className }: Props) {
       {isDemo ? (
         <span
           className="flex flex-col leading-none font-mono font-bold text-[10px] uppercase tracking-wide"
-          style={{ color: demoColor }}
           style={{ color: demoColor }}
         >
           <span>C64U</span>

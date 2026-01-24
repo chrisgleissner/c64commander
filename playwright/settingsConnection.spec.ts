@@ -33,7 +33,7 @@ test.describe('Settings connection management', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    const urlInput = page.getByLabel(/base url|connection url/i);
+    const urlInput = page.getByLabel(/hostname\s*\/\s*ip/i);
     await expect(urlInput).toBeVisible();
     
     const originalUrl = await urlInput.inputValue();
@@ -58,7 +58,7 @@ test.describe('Settings connection management', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    const urlInput = page.getByLabel(/base url|connection url/i);
+    const urlInput = page.getByLabel(/hostname\s*\/\s*ip/i);
     await expect(urlInput).toBeVisible();
 
     await urlInput.fill('not-a-valid-url');

@@ -9,5 +9,4 @@ export const C64U_DEMO_GOLDEN_DARK = 'hsl(38, 70%, 58%)';  // #D4A943 - brighter
  * Intended for high-contrast status indication on light backgrounds.
  */
 export const C64U_DEMO_AMBER = '#B45309';
-export const C64U_DEMO_AMBER = '#B45309';
 

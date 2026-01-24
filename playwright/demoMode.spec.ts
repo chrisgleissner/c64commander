@@ -130,7 +130,7 @@ test.describe('Automatic Demo Mode', () => {
     await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const urlInput = page.getByLabel(/base url|connection url/i);
+    const urlInput = page.getByLabel(/hostname\s*\/\s*ip/i);
     await expect(urlInput).toHaveValue('http://192.168.1.13');
 
     const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
@@ -155,7 +155,7 @@ test.describe('Automatic Demo Mode', () => {
     await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const urlInput = page.getByLabel(/base url|connection url/i);
+    const urlInput = page.getByLabel(/hostname\s*\/\s*ip/i);
     await urlInput.fill(server.baseUrl);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
