@@ -436,7 +436,7 @@ def set_basic_pointers_and_clear_vars(
     - We set VARTAB/ARYTAB/STREND to end_addr_exclusive (end of *entire* PRG payload),
       not end of BASIC text, so that appended machine code used by SYS stubs is protected.
     - We write the empty variable-table marker (00 00) at end_addr_exclusive, which is safe.
-    - We write exactly 8 bytes to $2B-$32 (no clobber of $33/$34).
+    - We write exactly 8 bytes to $2B-$32.
     """
     if start_addr != 0x0801:
         return
