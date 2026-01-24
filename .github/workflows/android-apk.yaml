@@ -300,6 +300,10 @@ jobs:
             echo "dist/index.html missing; rebuilding with coverage instrumentation"
             VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
           fi
+          if ! grep -R "__coverage__" dist/assets 2>/dev/null | head -1 | grep -q "__coverage__"; then
+            echo "coverage instrumentation missing; rebuilding with coverage instrumentation"
+            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+          fi
 
       - name: Prepare coverage output
         run: |
