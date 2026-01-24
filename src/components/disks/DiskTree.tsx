@@ -154,7 +154,6 @@ const DiskRow = ({
         </DropdownMenu>
       </div>
       <div className="flex flex-1 items-start gap-2 min-w-0">
-        <LocationIcon location={disk.location} />
         <div className="min-w-0">
           <button
             type="button"
