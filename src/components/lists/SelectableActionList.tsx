@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { MoreVertical } from 'lucide-react';
+import { useMemo, useState, useRef } from 'react';
+import { MoreVertical, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,7 +11,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { PathWrap } from '@/components/PathWrap';
+import { AlphabetScrollbar } from './AlphabetScrollbar';
 import { cn } from '@/lib/utils';
 
 export type ActionListMenuItem =
@@ -69,6 +71,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
       <div
         className="flex items-start gap-2 px-2 py-1 rounded-md bg-muted/30 min-w-0 max-w-full"
         data-testid={headerTestId}
+        data-row-id={item.id}
       >
         {item.icon ? <div className="pt-0.5 text-muted-foreground">{item.icon}</div> : null}
         <div className="min-w-0 text-xs font-semibold text-foreground">
@@ -85,6 +88,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
       data-testid={rowTestId}
+      data-row-id={item.id}
     >
       <div className="flex items-center gap-2 pt-0.5 shrink-0">
         {item.showSelection !== false ? (
@@ -198,12 +202,36 @@ export const SelectableActionList = ({
   selectionLabel,
 }: SelectableActionListProps) => {
   const [viewAllOpen, setViewAllOpen] = useState(false);
+  const [filterText, setFilterText] = useState('');
+  const [viewAllFilterText, setViewAllFilterText] = useState('');
+  const viewAllScrollRef = useRef<HTMLDivElement>(null);
+  
+  const filteredItems = useMemo(() => {
+    if (!filterText.trim()) return items;
+    const lower = filterText.toLowerCase();
+    return items.filter(item => {
+      if (item.variant === 'header') return true; // Keep headers for now
+      return item.title.toLowerCase().includes(lower) || 
+             item.subtitle?.toLowerCase().includes(lower);
+    });
+  }, [items, filterText]);
+
+  const viewAllFilteredItems = useMemo(() => {
+    if (!viewAllFilterText.trim()) return items;
+    const lower = viewAllFilterText.toLowerCase();
+    return items.filter(item => {
+      if (item.variant === 'header') return true; // Keep headers for now
+      return item.title.toLowerCase().includes(lower) || 
+             item.subtitle?.toLowerCase().includes(lower);
+    });
+  }, [items, viewAllFilterText]);
+  
   const { visibleItems, hasMore } = useMemo(() => {
-    const totalItems = items.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
+    const totalItems = filteredItems.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
     const list: ActionListItem[] = [];
     let pendingHeader: ActionListItem | null = null;
     let remaining = maxVisible;
-    for (const item of items) {
+    for (const item of filteredItems) {
       if (item.variant === 'header') {
         pendingHeader = item;
         continue;
@@ -217,7 +245,7 @@ export const SelectableActionList = ({
       remaining -= 1;
     }
     return { visibleItems: list, hasMore: totalItems > maxVisible };
-  }, [items, maxVisible]);
+  }, [filteredItems, maxVisible]);
 
   const renderList = (list: ActionListItem[]) => (
     <div className="space-y-2" data-testid={listTestId}>
@@ -252,10 +280,34 @@ export const SelectableActionList = ({
         </div>
       </div>
 
+      {/* Text filter */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="text"
+          placeholder="Filter items..."
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          className="pl-9 pr-9 h-9"
+          data-testid="list-filter-input"
+        />
+        {filterText && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFilterText('')}
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+            aria-label="Clear filter"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
       {showSelectionControls ? (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
           <span className="text-muted-foreground min-w-0 break-words">
-            {items.length ? `${items.length} items` : emptyLabel}
+            {filteredItems.length ? `${filteredItems.length} items` : emptyLabel}
           </span>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -288,16 +340,48 @@ export const SelectableActionList = ({
       {viewAllTitle && (
         <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
           <DialogContent className="mx-auto w-[min(92vw,32rem)] max-w-[min(92vw,32rem)] sm:w-full sm:max-w-[36rem] h-[min(70vh,calc(100dvh-10rem))] max-h-[calc(100dvh-10rem)] p-0 overflow-hidden">
-            <div className="flex h-full min-h-0 flex-col min-w-0" data-testid="action-list-view-all">
-              <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
-                <DialogTitle>{viewAllTitle || title}</DialogTitle>
-                <DialogDescription>Review all items in this list.</DialogDescription>
+            <div className="flex h-full min-h-0 flex-col min-w-0 relative" data-testid="action-list-view-all">
+              <DialogHeader className="border-b border-border px-6 pb-3 pt-6 space-y-3">
+                <div>
+                  <DialogTitle>{viewAllTitle || title}</DialogTitle>
+                  <DialogDescription>Review all items in this list.</DialogDescription>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Filter items..."
+                    value={viewAllFilterText}
+                    onChange={(e) => setViewAllFilterText(e.target.value)}
+                    className="pl-9 pr-9 h-9"
+                    data-testid="view-all-filter-input"
+                  />
+                  {viewAllFilterText && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setViewAllFilterText('')}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                      aria-label="Clear filter"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </DialogHeader>
-              <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4" data-testid="action-list-scroll">
+              <div 
+                ref={viewAllScrollRef}
+                className="flex-1 min-h-0 overflow-y-auto px-6 py-4" 
+                data-testid="action-list-scroll"
+              >
                 <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
-                  {renderList(items)}
+                  {renderList(viewAllFilteredItems)}
                 </div>
               </div>
+              <AlphabetScrollbar 
+                items={viewAllFilteredItems.filter(item => item.variant !== 'header').map(item => ({ title: item.title, id: item.id }))}
+                scrollContainerRef={viewAllScrollRef}
+              />
             </div>
           </DialogContent>
         </Dialog>
