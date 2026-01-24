@@ -49,7 +49,7 @@ describe('playbackRouter', () => {
     const task = executePlayPlan(api as any, plan, { drive: 'a' });
     await vi.runAllTimersAsync();
     await task;
-    expect(api.machineReset).toHaveBeenCalled();
+    expect(api.machineReboot).toHaveBeenCalled();
     expect(api.mountDriveUpload).toHaveBeenCalled();
     vi.useRealTimers();
   });

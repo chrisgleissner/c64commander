@@ -69,9 +69,7 @@ export const executePlayPlan = async (
   options: PlayExecutionOptions = {},
 ) => {
   const drive = options.drive ?? 'a';
-  const resetBeforeMount = options.resetBeforeMount ?? true;
   const loadMode = options.loadMode ?? 'run';
-  const rebootBeforeMount = options.rebootBeforeMount ?? false;
   const resetDelayMs = 500;
 
   try {
@@ -128,13 +126,8 @@ export const executePlayPlan = async (
         return;
       }
       case 'disk': {
-        if (rebootBeforeMount) {
-          await api.machineReboot();
-          await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
-        } else if (resetBeforeMount) {
-          await api.machineReset();
-          await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
-        }
+        await api.machineReboot();
+        await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
 
         if (plan.source === 'ultimate') {
           const diskEntry = createDiskEntry({
