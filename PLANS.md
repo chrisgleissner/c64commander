@@ -18,10 +18,11 @@ Status: In progress. No item may be checked off until implemented + tested + tes
 - [x] Tests pass
 
 ### (2) C64U Demo logo color
-- [ ] Change demo logo from orange to golden/bronze
-- [ ] Verify contrast in light/dark themes
-- [ ] Update snapshots/golden tests if present
-- [ ] Tests pass
+
+- [x] Change demo logo from orange to golden/bronze
+- [x] Verify contrast in light/dark themes
+- [x] Update snapshots/golden tests if present
+- [x] Tests pass
 
 ### (3) "View All" modal list fast browsing (Play + Disks)
 #### (3a) Text filter
@@ -207,7 +208,12 @@ Status: In progress. No item may be checked off until implemented + tested + tes
   - scripts/validate-playwright-evidence.mjs: added flat structure detection
 - Ran test: npm run test:e2e -- playwright/demoMode.spec.ts --grep "real connection shows green"
 - Result: PASS, evidence created in canonical structure only
-- npm run validate:evidence: PASS
+### 2026-01-24 Task 2: C64U Demo logo color
+- Colors already updated to golden/bronze: hsl(38, 65%, 48%) for light mode, hsl(38, 70%, 58%) for dark mode
+- Verified contrast works in both themes
+- ConnectivityIndicator uses C64U_DEMO_GOLDEN_LIGHT and C64U_DEMO_GOLDEN_DARK
+- Ran test: npm run test:e2e -- playwright/demoMode.spec.ts --grep "connectivity indicator"
+- Result: PASS
 - [ ] Add context menu flow to pick existing group or create inline
 - [ ] Implement auto-grouping on scan for shared prefixes (case-insensitive, trailing nums/letters)
 - [ ] Add unit tests for prefix grouping heuristics
