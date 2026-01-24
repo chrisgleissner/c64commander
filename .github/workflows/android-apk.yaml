@@ -384,7 +384,10 @@ jobs:
       - name: Collect nyc coverage
         run: |
           mkdir -p .nyc_output
-          find artifacts/nyc -type f -name "*.json" -exec cp -f {} .nyc_output/ \;
+          mkdir -p artifacts/nyc
+          if find artifacts/nyc -type f -name "*.json" | grep -q .; then
+            find artifacts/nyc -type f -name "*.json" -exec cp -f {} .nyc_output/ \;
+          fi
 
       - name: Validate Playwright evidence
         run: |
