@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
@@ -34,8 +36,15 @@ const ensureRemoteRoot = async (container: Page | Locator) => {
   const visible = await rootButton.isVisible().catch(() => false);
   if (!visible) return;
   // Avoid flakiness: during navigation the button can briefly flip enabled/disabled.
-  const disabledAttr = await rootButton.getAttribute('disabled').catch(() => null);
-  const ariaDisabled = await rootButton.getAttribute('aria-disabled').catch(() => null);
+  let disabledAttr: string | null = null;
+  let ariaDisabled: string | null = null;
+  try {
+    disabledAttr = await rootButton.getAttribute('disabled');
+    ariaDisabled = await rootButton.getAttribute('aria-disabled');
+  } catch {
+    disabledAttr = null;
+    ariaDisabled = null;
+  }
   if (disabledAttr !== null || ariaDisabled === 'true') return;
   try {
     await rootButton.click({ timeout: 2000 });
@@ -48,8 +57,53 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const sectorsPerTrack1541 = (track: number) => {
+  if (track <= 17) return 21;
+  if (track <= 24) return 19;
+  if (track <= 30) return 18;
+  return 17;
+};
+
+const d64Offset = (track: number, sector: number) => {
+  let offset = 0;
+  for (let t = 1; t < track; t += 1) {
+    offset += sectorsPerTrack1541(t);
+  }
+  return (offset + sector) * 256;
+};
+
+const buildTestD64 = () => {
+  const totalSectors = Array.from({ length: 35 }, (_, idx) => sectorsPerTrack1541(idx + 1))
+    .reduce((sum, value) => sum + value, 0);
+  const buffer = Buffer.alloc(totalSectors * 256, 0);
+
+  const dirOffset = d64Offset(18, 1);
+  buffer[dirOffset] = 0;
+  buffer[dirOffset + 1] = 0;
+  buffer[dirOffset + 2] = 0x82;
+  buffer[dirOffset + 3] = 1;
+  buffer[dirOffset + 4] = 0;
+  const name = Buffer.from('DMA-DEMO', 'ascii');
+  name.copy(buffer, dirOffset + 5);
+  buffer.fill(0xa0, dirOffset + 5 + name.length, dirOffset + 21);
+
+  const prgOffset = d64Offset(1, 0);
+  buffer[prgOffset] = 0;
+  const prgPayload = Buffer.from([0x01, 0x08, 0x00, 0x00, 0x0a, 0x00, 0x00]);
+  buffer[prgOffset + 1] = prgPayload.length;
+  prgPayload.copy(buffer, prgOffset + 2);
+
+  return buffer;
+};
+
+const createTempDiskDirectory = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'c64u-dma-'));
+  fs.writeFileSync(path.join(dir, 'demo.d64'), buildTestD64());
+  return dir;
+};
+
 const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }>) => {
-  await page.addInitScript(({ seedItems }) => {
+  await page.addInitScript(({ seedItems }: { seedItems: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }> }) => {
     const payload = {
       items: seedItems,
       currentIndex: -1,
@@ -132,16 +186,18 @@ test.describe('Playback file browser', () => {
     expect(viewport).not.toBeNull();
     if (dialogBox && viewport) {
       const heightRatio = dialogBox.height / viewport.height;
+      const widthRatio = dialogBox.width / viewport.width;
       expect(heightRatio).toBeLessThan(0.9);
+      expect(widthRatio).toBeLessThan(0.92);
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
       expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
 
     const scrollArea = page.getByTestId('action-list-scroll');
-    const scrollable = await scrollArea.evaluate((node) => node.scrollHeight > node.clientHeight);
+    const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
     expect(scrollable).toBeTruthy();
 
-    await scrollArea.evaluate((node) => {
+    await scrollArea.evaluate((node: HTMLElement) => {
       node.scrollTop = node.scrollHeight;
     });
     await expect(scrollArea).toContainText('Track_2700.sid');
@@ -383,7 +439,7 @@ test.describe('Playback file browser', () => {
         listChildren,
         readFileFromTree,
         readFile: async () => ({ data: '' }),
-        getPersistedUris: async () => ({ uris: [] }),
+        getPersistedUris: async () => ({ uris: [] as Array<{ uri: string }> }),
       };
     });
 
@@ -433,7 +489,7 @@ test.describe('Playback file browser', () => {
         listChildren,
         readFileFromTree: async () => ({ data: '' }),
         readFile: async () => ({ data: '' }),
-        getPersistedUris: async () => ({ uris: [] }),
+        getPersistedUris: async () => ({ uris: [] as Array<{ uri: string }> }),
       };
     });
 
@@ -469,7 +525,7 @@ test.describe('Playback file browser', () => {
         listChildren,
         readFileFromTree: async () => ({ data: '' }),
         readFile: async () => ({ data: '' }),
-        getPersistedUris: async () => ({ uris: [] }),
+        getPersistedUris: async () => ({ uris: [] as Array<{ uri: string }> }),
       };
     });
 
@@ -597,19 +653,32 @@ test.describe('Playback file browser', () => {
   });
 
   test('reshuffle changes playlist order and keeps current track index', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    const playlist = {
-      items: Array.from({ length: 6 }, (_, index) => ({
+    const playlistItems: Array<{
+      source: 'ultimate';
+      path: string;
+      name: string;
+      durationMs: number;
+      songNr: number;
+      sourceId: string | null;
+    }> = [];
+
+    for (let index = 0; index < 6; index += 1) {
+      playlistItems.push({
         source: 'ultimate',
         path: `/Usb0/Demos/shuffle-${index}.sid`,
         name: `shuffle-${index}.sid`,
         durationMs: 5000,
         songNr: 1,
         sourceId: null,
-      })),
+      });
+    }
+
+    const playlist = {
+      items: playlistItems,
       currentIndex: 0,
     };
 
-    await page.addInitScript((payload) => {
+    await page.addInitScript((payload: { items: Array<Record<string, unknown>>; currentIndex: number }) => {
       localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
     }, playlist);
 
@@ -741,6 +810,121 @@ test.describe('Playback file browser', () => {
       server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length > rebootAfterPlay,
     );
     await snap(page, testInfo, 'disk-stop-reboot');
+  });
+
+  test('disk image uses DMA autostart when enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_disk_autostart_mode', 'dma');
+    });
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    const tempDir = createTempDiskDirectory();
+    try {
+      await input.setInputFiles(tempDir);
+      await expect(page.getByRole('dialog')).toBeHidden();
+      await snap(page, testInfo, 'playlist-ready');
+
+      await page
+        .getByTestId('playlist-item')
+        .filter({ hasText: 'demo.d64' })
+        .getByRole('button', { name: 'Play' })
+        .click();
+
+      await waitForRequests(() =>
+        server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),
+      );
+      await waitForRequests(() =>
+        server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/machine:writemem')),
+      );
+      await snap(page, testInfo, 'dma-autostart-complete');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('volume slider updates enabled SID volumes and restores after mute', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+          'SID Socket 2': 'Disabled',
+        },
+        'SID Addressing': {
+          'UltiSID 1 Address': 'Unmapped',
+          'UltiSID 2 Address': '$D420',
+        },
+      },
+    });
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const slider = page.getByTestId('volume-slider');
+    const muteButton = page.getByTestId('volume-mute');
+    await expect(slider).toBeVisible();
+    await expect(muteButton).toBeVisible();
+
+    const initialState = server.getState()['Audio Mixer'];
+    const initialSocket1 = initialState['Vol Socket 1']?.value;
+    const initialUlti2 = initialState['Vol UltiSid 2']?.value;
+    const initialSocket2 = initialState['Vol Socket 2']?.value;
+    const initialUlti1 = initialState['Vol UltiSid 1']?.value;
+    const box = await slider.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      await page.mouse.move(box.x + 4, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2);
+      await page.mouse.up();
+    }
+
+    const initialUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > initialUpdateCount,
+    );
+
+    const updatedState = server.getState()['Audio Mixer'];
+    const target = updatedState['Vol Socket 1']?.value;
+    expect(target).toBeDefined();
+    expect(updatedState['Vol UltiSid 2']?.value).toBe(target);
+    expect(updatedState['Vol Socket 1']?.value).not.toBe(initialSocket1);
+    expect(updatedState['Vol UltiSid 2']?.value).not.toBe(initialUlti2);
+    expect(updatedState['Vol Socket 2']?.value).toBe(initialSocket2);
+    expect(updatedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
+
+    const muteUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await muteButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > muteUpdateCount,
+    );
+    await expect(slider).not.toHaveAttribute('data-disabled');
+    const mutedState = server.getState()['Audio Mixer'];
+    expect(mutedState['Vol Socket 1']?.value).toBe('OFF');
+    expect(mutedState['Vol UltiSid 2']?.value).toBe('OFF');
+    expect(mutedState['Vol Socket 2']?.value).toBe(initialSocket2);
+    expect(mutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
+
+    const unmuteUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await muteButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > unmuteUpdateCount,
+    );
+    const unmutedState = server.getState()['Audio Mixer'];
+    expect(unmutedState['Vol Socket 1']?.value).toBe(target);
+    expect(unmutedState['Vol UltiSid 2']?.value).toBe(target);
+    expect(unmutedState['Vol Socket 2']?.value).toBe(initialSocket2);
+    expect(unmutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
+
+    await snap(page, testInfo, 'volume-updated');
   });
 
   test('FTP failure shows error toast', async ({ page }: { page: Page }, testInfo: TestInfo) => {

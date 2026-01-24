@@ -372,6 +372,52 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-view-all');
   });
 
+  test('disk view-all dialog is constrained and scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '5');
+    });
+    const manyDisks = Array.from({ length: 220 }, (_, index) => ({
+      id: `ultimate:/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
+      name: `Disk_${String(index + 1).padStart(3, '0')}.d64`,
+      path: `/Usb0/Disks/Disk_${String(index + 1).padStart(3, '0')}.d64`,
+      location: 'ultimate' as const,
+      group: null as string | null,
+      importOrder: index + 1,
+    }));
+    await seedDiskLibrary(page, manyDisks);
+
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'disks-open');
+
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await snap(page, testInfo, 'disks-view-all-open');
+
+    const dialogBox = await dialog.boundingBox();
+    const viewport = page.viewportSize();
+    expect(dialogBox).not.toBeNull();
+    expect(viewport).not.toBeNull();
+    if (dialogBox && viewport) {
+      const heightRatio = dialogBox.height / viewport.height;
+      const widthRatio = dialogBox.width / viewport.width;
+      expect(heightRatio).toBeLessThan(0.9);
+      expect(widthRatio).toBeLessThan(0.92);
+      expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
+      expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
+    }
+
+    const scrollArea = page.getByTestId('action-list-scroll');
+    const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
+    expect(scrollable).toBeTruthy();
+    await scrollArea.evaluate((node: HTMLElement) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    await expect(scrollArea).toContainText('Disk_220.d64');
+    await snap(page, testInfo, 'disks-view-all-scrolled');
+  });
+
   test('disk presence indicator and deletion ejects mounted disks', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
     const encodedPath = encodeURIComponent('/Usb0/Games/Turrican II/Disk 1.d64');

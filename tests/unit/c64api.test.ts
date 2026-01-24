@@ -85,7 +85,12 @@ describe('c64api', () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({ status: 200, data: JSON.stringify({ errors: [] }) });
+    capacitorRequestMock.mockResolvedValue({
+      status: 200,
+      data: JSON.stringify({ errors: [] }),
+      headers: {},
+      url: 'http://c64u/v1/info',
+    });
 
     const api = new C64API('http://c64u');
     const result = await api.getInfo();
@@ -97,7 +102,12 @@ describe('c64api', () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({ status: 200, data: { errors: [] } });
+    capacitorRequestMock.mockResolvedValue({
+      status: 200,
+      data: { errors: [] },
+      headers: {},
+      url: 'http://c64u/v1/version',
+    });
 
     const api = new C64API('http://c64u');
     const result = await api.getVersion();
@@ -120,7 +130,12 @@ describe('c64api', () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({ status: 400, data: { errors: ['bad'] } });
+    capacitorRequestMock.mockResolvedValue({
+      status: 400,
+      data: { errors: ['bad'] },
+      headers: {},
+      url: 'http://c64u/v1/info',
+    });
 
     const api = new C64API('http://c64u');
     await expect(api.getInfo()).rejects.toThrow('HTTP 400');
@@ -221,6 +236,7 @@ describe('c64api', () => {
     expect(Array.from(await api.readMemory('0400', 3))).toEqual([1, 2, 3]);
 
     await api.writeMemory('0400', new Uint8Array([0, 15, 255]));
+    await api.writeMemoryBlock('1000', new Uint8Array([1, 2, 3, 4]));
     await api.mountDrive('a', '/path/my disk.d64', '1541', 'readonly');
     await api.unmountDrive('a');
     await api.resetDrive('a');
@@ -231,6 +247,8 @@ describe('c64api', () => {
     const urls = fetchMock.mock.calls.map((call) => call[0]);
     expect(urls).toContain('http://c64u/v1/machine:writemem?address=0400&data=000fff');
     expect(urls).toContain('http://c64u/v1/drives/a:mount?image=%2Fpath%2Fmy%20disk.d64&type=1541&mode=readonly');
+    const writeBlockCall = fetchMock.mock.calls.find((call) => call[0] === 'http://c64u/v1/machine:writemem?address=1000');
+    expect(writeBlockCall?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
   });
 
   it('uploads drives and runner files with auth headers', async () => {

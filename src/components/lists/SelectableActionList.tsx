@@ -287,7 +287,7 @@ export const SelectableActionList = ({
 
       {viewAllTitle && (
         <Dialog open={viewAllOpen} onOpenChange={setViewAllOpen}>
-          <DialogContent className="max-w-[calc(100vw-2rem)] w-[calc(100vw-2rem)] sm:max-w-2xl sm:w-full h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)] p-0 overflow-hidden">
+          <DialogContent className="mx-auto w-[min(92vw,32rem)] max-w-[min(92vw,32rem)] sm:w-full sm:max-w-[36rem] h-[min(70vh,calc(100dvh-10rem))] max-h-[calc(100dvh-10rem)] p-0 overflow-hidden">
             <div className="flex h-full min-h-0 flex-col min-w-0" data-testid="action-list-view-all">
               <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
                 <DialogTitle>{viewAllTitle || title}</DialogTitle>

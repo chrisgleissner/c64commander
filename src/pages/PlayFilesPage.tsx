@@ -397,8 +397,8 @@ export default function PlayFilesPage() {
     }
   }, [updateConfigBatch]);
 
-  const resolveSidVolumeItems = useCallback(async () => {
-    if (sidVolumeItems.length) return sidVolumeItems;
+  const resolveSidVolumeItems = useCallback(async (forceRefresh = false) => {
+    if (sidVolumeItems.length && !forceRefresh) return sidVolumeItems;
     try {
       const data = await getC64API().getCategory('Audio Mixer');
       return extractAudioMixerItems(data as Record<string, unknown>).filter((item) => isSidVolumeName(item.name));
@@ -408,8 +408,8 @@ export default function PlayFilesPage() {
     }
   }, [sidVolumeItems]);
 
-  const resolveEnabledSidVolumeItems = useCallback(async () => {
-    const items = await resolveSidVolumeItems();
+  const resolveEnabledSidVolumeItems = useCallback(async (forceRefresh = false) => {
+    const items = await resolveSidVolumeItems(forceRefresh);
     return filterEnabledSidVolumeItems(items, sidEnablement);
   }, [resolveSidVolumeItems, sidEnablement]);
 
@@ -1417,7 +1417,7 @@ export default function PlayFilesPage() {
   }, [applyAudioMixerUpdates, sidEnablement, sidVolumeItems, volumeOptions]);
 
   const handleToggleMute = useCallback(async () => {
-    const items = await resolveEnabledSidVolumeItems();
+    const items = await resolveEnabledSidVolumeItems(true);
     if (!items.length) return;
     if (!volumeMuted) {
       manualMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(items, sidEnablement);
@@ -1855,7 +1855,7 @@ export default function PlayFilesPage() {
                     value={[volumeIndex]}
                     onValueChange={(value) => setVolumeIndex(value[0] ?? 0)}
                     onValueCommit={(value) => void handleVolumeCommit(value[0] ?? 0)}
-                    disabled={!canControlVolume || updateConfigBatch.isPending || volumeMuted}
+                    disabled={!canControlVolume || updateConfigBatch.isPending}
                     data-testid="volume-slider"
                   />
                   <span className="text-xs text-muted-foreground w-[52px] text-right">{volumeLabel}</span>
