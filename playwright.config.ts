@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices as playwrightDevices } from '@playwright/test';
 import os from 'os';
 
 const coverageEnv = process.env.VITE_COVERAGE ? 'VITE_COVERAGE=true ' : '';
@@ -14,6 +14,40 @@ const webServerCommand = skipBuild
   ? `${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port 4173`
   : `${coverageEnv}${probeEnv}npm run build && ${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port 4173`;
 
+// Device selection logic
+const devicesEnv = process.env.PLAYWRIGHT_DEVICES?.toLowerCase().trim();
+const phoneProject = {
+  name: 'android-phone',
+  use: playwrightDevices['Pixel 5'],
+};
+const tabletProject = {
+  name: 'android-tablet',
+  use: {
+    viewport: { width: 800, height: 1280 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+  },
+  // Tablet only runs layout-annotated tests by default
+  grep: devicesEnv ? undefined : /@layout/,
+};
+
+// Determine active projects based on environment variable
+const getActiveProjects = () => {
+  if (!devicesEnv) {
+    // Default: phone for all tests, tablet only for layout tests
+    return [phoneProject, tabletProject];
+  }
+
+  const normalized = devicesEnv === 'all' ? 'phone,tablet' : devicesEnv;
+  const requested = normalized.split(',').map((d) => d.trim());
+
+  const projects = [];
+  if (requested.includes('phone')) projects.push(phoneProject);
+  if (requested.includes('tablet')) projects.push(tabletProject);
+
+  return projects.length > 0 ? projects : [phoneProject];
+};
+
 export default defineConfig({
   testDir: './playwright',
   outputDir: 'test-results/playwright',
@@ -26,6 +60,7 @@ export default defineConfig({
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
+  projects: getActiveProjects(),
   use: {
     baseURL: 'http://127.0.0.1:4173',
     trace: 'on',

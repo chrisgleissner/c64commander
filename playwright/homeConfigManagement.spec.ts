@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowWarnings } from './testArtifacts';
+import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -34,6 +35,7 @@ test.describe('Home page app config management', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
@@ -52,7 +54,7 @@ test.describe('Home page app config management', () => {
     }
   });
 
-  test('save config with valid name stores in localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  layoutTest('save config with valid name stores in localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
     await snap(page, testInfo, 'home-open');
 

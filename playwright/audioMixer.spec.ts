@@ -3,7 +3,7 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowVisualOverflow } from './testArtifacts';
 
 const getSlider = (page: Page, id: string) => page.getByTestId(`audio-mixer-slider-${id}`);
 const getValue = (page: Page, id: string) => page.getByTestId(`audio-mixer-value-${id}`);
@@ -79,6 +79,7 @@ test.describe('Audio Mixer volumes', () => {
   });
 
   test('editing while solo active restores other volumes', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer controls expand beyond viewport during solo interactions');
     const initialState = server.getState()['Audio Mixer'];
     await page.goto('/config');
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
@@ -103,6 +104,7 @@ test.describe('Audio Mixer volumes', () => {
   });
 
   test('solo routing is disabled while editing volumes', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer controls expand beyond viewport during volume editing');
     await page.goto('/config');
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');

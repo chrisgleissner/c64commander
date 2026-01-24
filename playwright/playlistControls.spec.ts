@@ -6,6 +6,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
+import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -30,6 +31,7 @@ test.describe('Playlist controls and advanced features', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedUiMocks(page, server.baseUrl);
@@ -45,7 +47,7 @@ test.describe('Playlist controls and advanced features', () => {
     }
   });
 
-  test('playlist filter not yet implemented', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  layoutTest('playlist filter not yet implemented @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     // Verify that playlist filter is not yet available (only HVSC folder filter exists)
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');

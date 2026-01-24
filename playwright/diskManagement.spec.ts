@@ -7,6 +7,7 @@ import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
+import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -135,6 +136,7 @@ test.describe('Disk management', () => {
   });
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedFtpConfig(page, {
@@ -156,7 +158,7 @@ test.describe('Disk management', () => {
     }
   });
 
-  test('disks render with folder headers and no full paths', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  layoutTest('disks render with folder headers and no full paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
