@@ -31,9 +31,17 @@ const openRemoteFolder = async (container: Page | Locator, name: string) => {
 
 const ensureRemoteRoot = async (container: Page | Locator) => {
   const rootButton = container.getByTestId('navigate-root');
-  if (!(await rootButton.isVisible())) return;
-  if (!(await rootButton.isEnabled())) return;
-  await rootButton.click();
+  const visible = await rootButton.isVisible().catch(() => false);
+  if (!visible) return;
+  // Avoid flakiness: during navigation the button can briefly flip enabled/disabled.
+  const disabledAttr = await rootButton.getAttribute('disabled').catch(() => null);
+  const ariaDisabled = await rootButton.getAttribute('aria-disabled').catch(() => null);
+  if (disabledAttr !== null || ariaDisabled === 'true') return;
+  try {
+    await rootButton.click({ timeout: 2000 });
+  } catch {
+    // If it became disabled, we are already at root; ignore.
+  }
 };
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
