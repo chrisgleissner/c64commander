@@ -519,7 +519,7 @@ test.describe('Playback file browser', () => {
     await expect(page.getByRole('button', { name: 'View all' })).toBeVisible();
     await page.getByRole('button', { name: 'View all' }).click();
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText('SID', { exact: true })).toBeVisible();
+    await expect(dialog.getByTestId('file-type-filter-sid')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
 
