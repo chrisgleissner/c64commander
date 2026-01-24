@@ -13,6 +13,21 @@ import {
   useC64UpdateConfigBatch,
 } from '@/hooks/useC64Connection';
 
+const connectionSnapshot = {
+  state: 'REAL_CONNECTED' as const,
+  lastDiscoveryTrigger: null as const,
+  lastTransitionAtMs: 0,
+  lastProbeAtMs: null as number | null,
+  lastProbeSucceededAtMs: null as number | null,
+  lastProbeFailedAtMs: null as number | null,
+  lastProbeError: null as string | null,
+  demoInterstitialVisible: false,
+};
+
+vi.mock('@/hooks/useConnectionState', () => ({
+  useConnectionState: () => connectionSnapshot,
+}));
+
 const mockApi = {
   getInfo: vi.fn(),
   getCategories: vi.fn(),

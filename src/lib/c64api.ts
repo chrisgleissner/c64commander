@@ -111,6 +111,18 @@ export class C64API {
     this.deviceHost = deviceHost || DEFAULT_DEVICE_HOST;
   }
 
+  getBaseUrl() {
+    return this.baseUrl;
+  }
+
+  getPassword() {
+    return this.password;
+  }
+
+  getDeviceHost() {
+    return this.deviceHost || DEFAULT_DEVICE_HOST;
+  }
+
   private buildAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {};
     if (this.password) {
@@ -618,6 +630,39 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
       },
     }),
   );
+}
+
+export type C64ApiConfigSnapshot = {
+  baseUrl: string;
+  password?: string;
+  deviceHost: string;
+};
+
+export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
+  const api = getC64API();
+  return {
+    baseUrl: api.getBaseUrl(),
+    password: api.getPassword(),
+    deviceHost: api.getDeviceHost(),
+  };
+}
+
+/**
+ * Update the active in-memory API configuration without persisting it.
+ * This is used for session-limited modes (e.g. Demo Mode).
+ */
+export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
+  const api = getC64API();
+  api.setBaseUrl(baseUrl);
+  api.setPassword(password);
+  api.setDeviceHost(deviceHost);
+}
+
+export function applyC64APIConfigFromStorage() {
+  const savedUrl = localStorage.getItem('c64u_base_url') || getDefaultBaseUrl();
+  const savedPassword = localStorage.getItem('c64u_password') || undefined;
+  const savedDeviceHost = localStorage.getItem('c64u_device_host') || DEFAULT_DEVICE_HOST;
+  applyC64APIRuntimeConfig(savedUrl, savedPassword, savedDeviceHost);
 }
 
 export const C64_DEFAULTS = {

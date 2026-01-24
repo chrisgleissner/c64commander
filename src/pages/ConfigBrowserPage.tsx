@@ -22,6 +22,7 @@ import {
   soloReducer,
 } from '@/lib/config/audioMixerSolo';
 import { normalizeConfigItem, type NormalizedConfigItem } from '@/lib/config/normalizeConfigItem';
+import { AppBar } from '@/components/AppBar';
 
 type ConfigListItem = {
   name: string;
@@ -542,31 +543,25 @@ export default function ConfigBrowserPage() {
 
   return (
     <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="container py-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="c64-header text-xl">Configuration</h1>
-              <p className="text-xs text-muted-foreground mt-1">
-                {categoriesData?.categories.length || 0} categories
-              </p>
-              {isApplying && (
-                <p className="text-[11px] text-muted-foreground mt-1">Applying changes…</p>
-              )}
-            </div>
-          </div>
-          
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search categories..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
+      <AppBar
+        title="Configuration"
+        subtitle={
+          <span>
+            {categoriesData?.categories.length || 0} categories
+            {isApplying ? <span className="ml-2 text-[11px] text-muted-foreground">Applying changes…</span> : null}
+          </span>
+        }
+      >
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search categories..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
-      </header>
+      </AppBar>
 
       <main className="container py-4 space-y-3">
         {!status.isConnected ? (
