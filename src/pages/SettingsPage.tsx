@@ -68,6 +68,7 @@ import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
+import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -247,7 +248,10 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+<<<<<<< HEAD
       await discoverConnection('settings');
+=======
+>>>>>>> origin/main
       toast({ title: 'Connection settings saved' });
     } catch (error) {
       toast({
@@ -322,6 +326,19 @@ export default function SettingsPage() {
 
           <div className="space-y-3">
             <div className="space-y-2">
+              <Label htmlFor="deviceHost" className="text-sm">C64U Hostname / IP</Label>
+              <Input
+                id="deviceHost"
+                value={deviceHostInput}
+                onChange={(e) => setDeviceHostInput(e.target.value)}
+                placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Used for direct connections and local proxy header routing.
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="baseUrl" className="text-sm">Base URL</Label>
               <Input
                 id="baseUrl"
@@ -355,6 +372,62 @@ export default function SettingsPage() {
               </p>
             </div>
 
+          </div>
+
+          <div className="space-y-4 rounded-lg border border-border/70 p-3">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="auto-demo-mode" className="font-medium">Automatic Demo Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
+                </p>
+              </div>
+              <Checkbox
+                id="auto-demo-mode"
+                checked={automaticDemoModeEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setAutomaticDemoModeEnabled(enabled);
+                  saveAutomaticDemoModeEnabled(enabled);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
+              <Input
+                id="startup-discovery-window"
+                type="number"
+                min={0.5}
+                max={15}
+                step={0.1}
+                value={startupDiscoveryWindowInput}
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                onBlur={commitStartupDiscoveryWindow}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
+              <Input
+                id="background-rediscovery-interval"
+                type="number"
+                min={1}
+                max={60}
+                step={0.1}
+                value={backgroundRediscoveryIntervalInput}
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                onBlur={commitBackgroundRediscoveryInterval}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">

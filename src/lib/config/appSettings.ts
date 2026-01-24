@@ -119,7 +119,6 @@ export const saveDiskAutostartMode = (mode: DiskAutostartMode) => {
   localStorage.setItem(DISK_AUTOSTART_MODE_KEY, normalized);
   broadcast(DISK_AUTOSTART_MODE_KEY, normalized);
 };
-
 export const APP_SETTINGS_KEYS = {
   DEBUG_LOGGING_KEY,
   CONFIG_WRITE_INTERVAL_KEY,

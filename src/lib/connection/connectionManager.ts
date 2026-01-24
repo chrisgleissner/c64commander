@@ -282,6 +282,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
+  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   setSnapshot({
     state: 'UNKNOWN',
     lastDiscoveryTrigger: null,
