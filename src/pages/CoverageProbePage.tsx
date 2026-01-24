@@ -11,7 +11,6 @@ import {
   soloReducer,
 } from '@/lib/config/audioMixerSolo';
 import { useSidPlayer } from '@/hooks/useSidPlayer';
-import { useMockMode } from '@/hooks/useMockMode';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { buildDiskEntryFromDrive, buildDiskEntryFromPath, useDiskLibrary } from '@/hooks/useDiskLibrary';
@@ -22,22 +21,8 @@ import {
   isHvscEnabled,
 } from '@/lib/config/featureFlags';
 import {
-  clearStoredMockBaseUrl,
-  clearStoredRealDeviceHost,
-  clearStoredRealFtpPort,
-  getDeviceMode,
   getDeveloperModeEnabled,
-  getStoredMockBaseUrl,
-  getStoredRealBaseUrl,
-  getStoredRealDeviceHost,
-  getStoredRealFtpPort,
-  setDeviceMode,
   setDeveloperModeEnabled,
-  setStoredMockBaseUrl,
-  setStoredRealBaseUrl,
-  setStoredRealDeviceHost,
-  setStoredRealFtpPort,
-  subscribeDeviceMode,
   subscribeDeveloperMode,
 } from '@/lib/config/developerModeStore';
 import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from '@/lib/uiPreferences';
@@ -56,7 +41,6 @@ const runProbe = async (label: string, runner: () => Promise<void>, errors: stri
 
 export default function CoverageProbePage() {
   const player = useSidPlayer();
-  const mockMode = useMockMode();
   const listPreview = useListPreviewLimit();
   const connection = useC64Connection();
   const diskLibrary = useDiskLibrary('coverage-probe');
@@ -202,35 +186,11 @@ export default function CoverageProbePage() {
         await FeatureFlags.setFlag({ key: 'hvsc_enabled', value: true });
       }, failures);
 
-      await runProbe('mock mode', async () => {
-        try {
-          await mockMode.enableMockMode();
-        } catch {
-          // Expected on web: Mock mode is only available on native platforms.
-        }
-        await mockMode.disableMockMode();
-      }, failures);
-
       await runProbe('developer mode store', async () => {
         const devUnsub = subscribeDeveloperMode(() => {});
-        const modeUnsub = subscribeDeviceMode(() => {});
         setDeveloperModeEnabled(true);
-        setDeviceMode('MOCK_DEVICE');
-        setStoredRealBaseUrl('http://127.0.0.1');
-        setStoredRealDeviceHost('127.0.0.1');
-        setStoredRealFtpPort(1541);
-        setStoredMockBaseUrl('http://127.0.0.1:8000');
         getDeveloperModeEnabled();
-        getDeviceMode();
-        getStoredRealBaseUrl();
-        getStoredRealDeviceHost();
-        getStoredRealFtpPort();
-        getStoredMockBaseUrl();
-        clearStoredRealDeviceHost();
-        clearStoredRealFtpPort();
-        clearStoredMockBaseUrl();
         devUnsub();
-        modeUnsub();
       }, failures);
 
       await runProbe('mock server errors', async () => {
@@ -265,7 +225,7 @@ export default function CoverageProbePage() {
       setErrors(failures);
       setStatus(failures.length ? 'error' : 'done');
     };
-  }, [connection, diskLibrary, listPreview, mockMode, player]);
+  }, [connection, diskLibrary, listPreview, player]);
 
   useEffect(() => {
     if (status !== 'idle') return;

@@ -2,8 +2,10 @@ import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
 import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
+import { useConnectionState } from '@/hooks/useConnectionState';
 
 export interface ConnectionStatus {
+  state: 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
   isConnected: boolean;
   isConnecting: boolean;
   error: string | null;
@@ -11,6 +13,7 @@ export interface ConnectionStatus {
 }
 
 export function useC64Connection() {
+  const connection = useConnectionState();
   const [baseUrl, setBaseUrl] = useState(() =>
     localStorage.getItem('c64u_base_url') || getDefaultBaseUrl()
   );
@@ -28,6 +31,7 @@ export function useC64Connection() {
       const api = getC64API();
       return api.getInfo();
     },
+    enabled: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
@@ -70,8 +74,9 @@ export function useC64Connection() {
   }, [queryClient, refetch]);
 
   const status: ConnectionStatus = {
-    isConnected: !!deviceInfo && !error,
-    isConnecting: isLoading,
+    state: connection.state,
+    isConnected: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
+    isConnecting: connection.state === 'DISCOVERING',
     error: error ? (error as Error).message : null,
     deviceInfo: deviceInfo || null,
   };

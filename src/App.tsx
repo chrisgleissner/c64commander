@@ -7,7 +7,8 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-route
 import React, { useEffect, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
-import { MockModeBanner } from '@/components/MockModeBanner';
+import { ConnectionController } from '@/components/ConnectionController';
+import { DemoModeInterstitial } from '@/components/DemoModeInterstitial';
 import HomePage from './pages/HomePage';
 import ConfigBrowserPage from "./pages/ConfigBrowserPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -23,7 +24,6 @@ import { FolderPicker } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
-import { MockModeProvider } from "@/hooks/useMockMode";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 
 const queryClient = new QueryClient({
@@ -72,7 +72,8 @@ const AppRoutes = () => (
     <GlobalErrorListener />
     <RouteRefresher />
     <DebugStartupLogger />
-    <MockModeBanner />
+    <ConnectionController />
+    <DemoModeInterstitial />
     <Routes>
       {import.meta.env.VITE_ENABLE_TEST_PROBES === '1' ? (
         <Route path="/__coverage__" element={<CoverageProbePage />} />
@@ -98,11 +99,9 @@ const App = () => (
         <FeatureFlagsProvider>
           <RefreshControlProvider>
             <SidPlayerProvider>
-              <MockModeProvider>
-                <AppErrorBoundary>
-                  <AppRoutes />
-                </AppErrorBoundary>
-              </MockModeProvider>
+              <AppErrorBoundary>
+                <AppRoutes />
+              </AppErrorBoundary>
             </SidPlayerProvider>
           </RefreshControlProvider>
         </FeatureFlagsProvider>

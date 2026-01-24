@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { C64_DEFAULTS } from '@/lib/c64api';
+import { AppBar } from '@/components/AppBar';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,20 +35,28 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
-import { useMockMode } from '@/hooks/useMockMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
 import {
   clampConfigWriteIntervalMs,
   loadConfigWriteIntervalMs,
+  clampBackgroundRediscoveryIntervalMs,
+  clampStartupDiscoveryWindowMs,
+  loadAutomaticDemoModeEnabled,
+  loadBackgroundRediscoveryIntervalMs,
+  loadStartupDiscoveryWindowMs,
   loadDebugLoggingEnabled,
+  saveAutomaticDemoModeEnabled,
+  saveBackgroundRediscoveryIntervalMs,
+  saveStartupDiscoveryWindowMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
 } from '@/lib/config/appSettings';
 import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
+import { discoverConnection } from '@/lib/connection/connectionManager';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -57,17 +66,10 @@ export default function SettingsPage() {
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
-  const {
-    isMockMode,
-    isMockAvailable,
-    isBusy: isMockBusy,
-    mockBaseUrl,
-    enableMockMode,
-    disableMockMode,
-  } = useMockMode();
   
   const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
+  const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
@@ -76,6 +78,13 @@ export default function SettingsPage() {
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
+  const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
+  const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
+    String(loadStartupDiscoveryWindowMs() / 1000),
+  );
+  const [backgroundRediscoveryIntervalInput, setBackgroundRediscoveryIntervalInput] = useState(
+    String(loadBackgroundRediscoveryIntervalMs() / 1000),
+  );
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
   const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
@@ -90,6 +99,10 @@ export default function SettingsPage() {
   useEffect(() => {
     setPasswordInput(password);
   }, [password]);
+
+  useEffect(() => {
+    setDeviceHostInput(deviceHost);
+  }, [deviceHost]);
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
@@ -113,6 +126,15 @@ export default function SettingsPage() {
       }
       if (detail.key === 'c64u_config_write_min_interval_ms') {
         setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
+      }
+      if (detail.key === 'c64u_automatic_demo_mode_enabled') {
+        setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
+      }
+      if (detail.key === 'c64u_startup_discovery_window_ms') {
+        setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
+      }
+      if (detail.key === 'c64u_background_rediscovery_interval_ms') {
+        setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       }
     };
     window.addEventListener('c64u-app-settings-updated', handler);
@@ -204,7 +226,7 @@ export default function SettingsPage() {
   const handleSaveConnection = async () => {
     setIsSaving(true);
     try {
-      updateConfig(urlInput, passwordInput || undefined, deviceHost);
+      updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
       toast({ title: 'Connection settings saved' });
     } catch (error) {
       toast({
@@ -232,24 +254,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleMockToggle = async (checked: boolean) => {
-    try {
-      if (checked) {
-        await enableMockMode();
-        toast({ title: 'Mocked C64U enabled' });
-      } else {
-        await disableMockMode();
-        toast({ title: 'Mocked C64U disabled' });
-      }
-    } catch (error) {
-      toast({
-        title: 'Unable to update mock mode',
-        description: (error as Error).message,
-        variant: 'destructive',
-      });
-    }
-  };
-
   const themeOptions: { value: Theme; icon: React.ElementType; label: string }[] = [
     { value: 'light', icon: Sun, label: 'Light' },
     { value: 'dark', icon: Moon, label: 'Dark' },
@@ -263,16 +267,23 @@ export default function SettingsPage() {
     setListPreviewInput(String(clamped));
   };
 
+  const commitStartupDiscoveryWindow = () => {
+    const parsed = Number(startupDiscoveryWindowInput);
+    const clamped = clampStartupDiscoveryWindowMs(Math.round((Number.isFinite(parsed) ? parsed : 3) * 1000));
+    saveStartupDiscoveryWindowMs(clamped);
+    setStartupDiscoveryWindowInput(String(clamped / 1000));
+  };
+
+  const commitBackgroundRediscoveryInterval = () => {
+    const parsed = Number(backgroundRediscoveryIntervalInput);
+    const clamped = clampBackgroundRediscoveryIntervalMs(Math.round((Number.isFinite(parsed) ? parsed : 5) * 1000));
+    saveBackgroundRediscoveryIntervalMs(clamped);
+    setBackgroundRediscoveryIntervalInput(String(clamped / 1000));
+  };
+
   return (
     <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="container py-4">
-          <h1 className="c64-header text-xl">Settings</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Connection & appearance
-          </p>
-        </div>
-      </header>
+      <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <main className="container py-6 space-y-6">
         {/* Connection Settings */}
@@ -289,6 +300,19 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="deviceHost" className="text-sm">C64U Hostname / IP</Label>
+              <Input
+                id="deviceHost"
+                value={deviceHostInput}
+                onChange={(e) => setDeviceHostInput(e.target.value)}
+                placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Used for direct connections and local proxy header routing.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="baseUrl" className="text-sm">Base URL</Label>
               <Input
@@ -326,6 +350,62 @@ export default function SettingsPage() {
 
           </div>
 
+          <div className="space-y-4 rounded-lg border border-border/70 p-3">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="auto-demo-mode" className="font-medium">Automatic Demo Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
+                </p>
+              </div>
+              <Checkbox
+                id="auto-demo-mode"
+                checked={automaticDemoModeEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setAutomaticDemoModeEnabled(enabled);
+                  saveAutomaticDemoModeEnabled(enabled);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
+              <Input
+                id="startup-discovery-window"
+                type="number"
+                min={0.5}
+                max={15}
+                step={0.1}
+                value={startupDiscoveryWindowInput}
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                onBlur={commitStartupDiscoveryWindow}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
+              <Input
+                id="background-rediscovery-interval"
+                type="number"
+                min={1}
+                max={60}
+                step={0.1}
+                value={backgroundRediscoveryIntervalInput}
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                onBlur={commitBackgroundRediscoveryInterval}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+            </div>
+          </div>
+
           <div className="flex gap-2 pt-2">
             <Button
               onClick={handleSaveConnection}
@@ -339,7 +419,7 @@ export default function SettingsPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => refetch()}
+              onClick={() => void discoverConnection('manual')}
               disabled={status.isConnecting}
               aria-label="Refresh connection"
             >
@@ -580,32 +660,6 @@ export default function SettingsPage() {
                   }}
                 />
               </div>
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div className="space-y-1 min-w-0">
-                  <p className="font-medium">Enable mocked C64U (internal testing)</p>
-                  <p className="text-xs text-muted-foreground">
-                    Starts a local REST service and routes all requests to it.
-                  </p>
-                  {mockBaseUrl ? (
-                    <p className="text-xs font-mono text-muted-foreground break-words">{mockBaseUrl}</p>
-                  ) : null}
-                  {!isMockAvailable ? (
-                    <p className="text-xs text-muted-foreground">
-                      Available on Android native builds only.
-                    </p>
-                  ) : null}
-                </div>
-                <Checkbox
-                  checked={isMockMode}
-                  disabled={isMockBusy || !isMockAvailable}
-                  onCheckedChange={(checked) => handleMockToggle(checked === true)}
-                />
-              </div>
-              {isMockMode ? (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                  Internal testing mode is active. No real hardware is being controlled.
-                </div>
-              ) : null}
             </div>
           </motion.div>
         )}

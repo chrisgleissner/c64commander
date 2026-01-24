@@ -2,7 +2,10 @@ const FTP_PORT_KEY = 'c64u_ftp_port';
 const FTP_BRIDGE_URL_KEY = 'c64u_ftp_bridge_url';
 const DEFAULT_FTP_PORT = 21;
 
+let runtimeFtpPortOverride: number | null = null;
+
 export const getStoredFtpPort = () => {
+  if (runtimeFtpPortOverride !== null) return runtimeFtpPortOverride;
   const raw = localStorage.getItem(FTP_PORT_KEY);
   const parsed = raw ? Number(raw) : NaN;
   if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_FTP_PORT;
@@ -16,6 +19,19 @@ export const setStoredFtpPort = (port: number) => {
 
 export const clearStoredFtpPort = () => {
   localStorage.removeItem(FTP_PORT_KEY);
+};
+
+export const setRuntimeFtpPortOverride = (port: number | null) => {
+  if (port === null) {
+    runtimeFtpPortOverride = null;
+    return;
+  }
+  if (!Number.isFinite(port) || port <= 0) return;
+  runtimeFtpPortOverride = port;
+};
+
+export const clearRuntimeFtpPortOverride = () => {
+  runtimeFtpPortOverride = null;
 };
 
 export const getFtpBridgeUrl = () => {

@@ -16,7 +16,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
-import { ConnectionBadge } from '@/components/ConnectionBadge';
+import { AppBar } from '@/components/AppBar';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,25 +124,22 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img
-                src="/c64commander.png"
-                alt="C64 Commander"
-                className="h-9 w-9 rounded-md"
-              />
-              <div>
-                <h1 className="c64-header text-xl text-primary">C64 Commander</h1>
-                <p className="text-xs text-muted-foreground">Controller</p>
-              </div>
+      <AppBar
+        title="C64 Commander"
+        leading={
+          <div className="flex items-center gap-3 min-w-0">
+            <img
+              src="/c64commander.png"
+              alt="C64 Commander"
+              className="h-9 w-9 rounded-md"
+            />
+            <div className="min-w-0">
+              <h1 className="c64-header text-xl text-primary truncate">C64 Commander</h1>
+              <p className="text-xs text-muted-foreground truncate">Controller</p>
             </div>
-            <ConnectionBadge status={status} />
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <main className="container py-6 space-y-6">
         {/* Build Info */}

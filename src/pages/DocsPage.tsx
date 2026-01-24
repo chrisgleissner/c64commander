@@ -10,6 +10,7 @@ import {
   Disc,
   Sliders,
 } from 'lucide-react';
+import { AppBar } from '@/components/AppBar';
 
 interface DocSection {
   id: string;
@@ -193,14 +194,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
 export default function DocsPage() {
   return (
     <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="container py-4">
-          <h1 className="c64-header text-xl">Documentation</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            How to use this app
-          </p>
-        </div>
-      </header>
+      <AppBar title="Documentation" subtitle="How to use this app" />
 
       <main className="container py-6 space-y-4">
         {docSections.map((section, index) => (
