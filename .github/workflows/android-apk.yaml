@@ -468,6 +468,7 @@ jobs:
   android-build:
     name: Android tests + APK
     runs-on: ubuntu-latest
+    needs: web-coverage-merge
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
