@@ -189,7 +189,13 @@ This document provides a comprehensive inventory of all user-facing interactions
 | Button | "Clear logs" | Delete log history | **LOW** | ✅ FULL | settingsDiagnostics.spec.ts:139 | Maintenance |
 | Button | "View logs" | Expand log viewer | **LOW** | ❌ NONE | - | Debug tool |
 
-### 4.4 About
+### 4.4 Playback Settings
+
+| CTA | Label | Purpose | Importance | Test Coverage | Test File | Notes |
+|-----|-------|---------|------------|---------------|-----------|-------|
+| Select | "Disk first-PRG load" | Choose KERNAL LOAD or DMA (Direct Memory Access) for disk autostart | **MEDIUM** | ❌ NONE | - | DMA loads faster; some loaders may not like it |
+
+### 4.5 About
 
 | CTA | Label | Purpose | Importance | Test Coverage | Test File | Notes |
 |-----|-------|---------|------------|---------------|-----------|-------|

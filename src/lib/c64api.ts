@@ -330,6 +330,35 @@ export class C64API {
     return this.request(`/v1/machine:writemem?address=${address}&data=${hex}`, { method: 'PUT' });
   }
 
+  async writeMemoryBlock(address: string, data: Uint8Array): Promise<{ errors: string[] }> {
+    const path = `/v1/machine:writemem?address=${address}`;
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    let status: number | 'error' = 'error';
+    const method = 'POST';
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers: {
+          ...this.buildAuthHeaders(),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: data,
+      });
+      status = response.status;
+    } finally {
+      this.logRestCall(method, path, status, startedAt);
+    }
+
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+      addErrorLog('Memory DMA write failed', { status: response.status, statusText: response.statusText });
+      throw error;
+    }
+
+    return this.parseResponseJson(response);
+  }
+
   // Drive endpoints
   async getDrives(): Promise<DrivesResponse> {
     return this.request('/v1/drives');

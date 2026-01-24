@@ -13,6 +13,7 @@ import {
   Share2,
   Trash2,
   Cpu,
+  Play,
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { C64_DEFAULTS } from '@/lib/c64api';
@@ -23,6 +24,13 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Slider } from '@/components/ui/slider';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -47,11 +55,14 @@ import {
   loadBackgroundRediscoveryIntervalMs,
   loadStartupDiscoveryWindowMs,
   loadDebugLoggingEnabled,
+  loadDiskAutostartMode,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
   saveStartupDiscoveryWindowMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
+  saveDiskAutostartMode,
+  type DiskAutostartMode,
 } from '@/lib/config/appSettings';
 import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
@@ -79,6 +90,7 @@ export default function SettingsPage() {
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
+  const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
   const [startupDiscoveryWindowInput, setStartupDiscoveryWindowInput] = useState(
     String(loadStartupDiscoveryWindowMs() / 1000),
   );
@@ -135,6 +147,9 @@ export default function SettingsPage() {
       }
       if (detail.key === 'c64u_background_rediscovery_interval_ms') {
         setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
+      }
+      if (detail.key === 'c64u_disk_autostart_mode') {
+        setDiskAutostartMode(loadDiskAutostartMode());
       }
     };
     window.addEventListener('c64u-app-settings-updated', handler);
@@ -616,6 +631,48 @@ export default function SettingsPage() {
             />
             <p className="text-xs text-muted-foreground">
               Controls how many playlist or disk items are shown before opening View all. Default is 50.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Playback Settings */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Play className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Playback</h2>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="disk-autostart-mode" className="text-sm">
+              Disk first-PRG load
+            </Label>
+            <Select
+              value={diskAutostartMode}
+              onValueChange={(value) => {
+                const mode = value as DiskAutostartMode;
+                setDiskAutostartMode(mode);
+                saveDiskAutostartMode(mode);
+              }}
+            >
+              <SelectTrigger id="disk-autostart-mode">
+                <SelectValue placeholder="Select load mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
+                <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
+              the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
+              loaders may not like DMA.
             </p>
           </div>
         </motion.div>
