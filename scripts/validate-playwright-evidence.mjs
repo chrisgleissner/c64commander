@@ -141,6 +141,15 @@ const main = async () => {
     if (folders.length === 0) {
       errors.push('No evidence folders found.');
     }
+    
+    // Check for flat structure folders (device prefix format)
+    for (const folder of folders) {
+      const folderName = path.basename(folder);
+      if (folderName.startsWith('android-phone__') || folderName.startsWith('android-tablet__')) {
+        errors.push(`Found flat structure folder (should use canonical structure): ${folderName}`);
+      }
+    }
+    
     for (const folder of folders) {
       const leaves = await getEvidenceLeafFolders(folder);
       for (const leaf of leaves) {

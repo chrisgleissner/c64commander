@@ -47,7 +47,7 @@ export const getCanonicalEvidencePath = (testInfo: TestInfo): string => {
 };
 
 /**
- * Create meta.json for the test evidence.
+ * Create meta.json for the test evidence directly in canonical structure.
  */
 export const createEvidenceMetadata = async (testInfo: TestInfo, viewport: { width: number; height: number } | null): Promise<void> => {
   const evidencePath = getCanonicalEvidencePath(testInfo);
@@ -76,37 +76,6 @@ export const createEvidenceMetadata = async (testInfo: TestInfo, viewport: { wid
 const getDeviceScaleFactor = async (testInfo: TestInfo): Promise<number> => {
   const use = testInfo.project.use;
   return use?.deviceScaleFactor ?? 1;
-};
-
-/**
- * Consolidate evidence into canonical structure.
- * Copies screenshots from flat structure to test-first, device-second.
- */
-export const consolidateEvidence = async (testInfo: TestInfo, flatEvidenceDir: string): Promise<void> => {
-  const canonicalPath = getCanonicalEvidencePath(testInfo);
-  await fs.mkdir(path.join(canonicalPath, 'screenshots'), { recursive: true });
-
-  // Move all PNG files to screenshots subdirectory
-  try {
-    const files = await fs.readdir(flatEvidenceDir);
-    for (const file of files) {
-      if (file.endsWith('.png')) {
-        const source = path.join(flatEvidenceDir, file);
-        const dest = path.join(canonicalPath, 'screenshots', file);
-        await fs.copyFile(source, dest);
-      } else if (file === 'video.webm') {
-        const source = path.join(flatEvidenceDir, file);
-        const dest = path.join(canonicalPath, file);
-        await fs.copyFile(source, dest);
-      } else if (file === 'trace.zip') {
-        const source = path.join(flatEvidenceDir, file);
-        const dest = path.join(canonicalPath, file);
-        await fs.copyFile(source, dest);
-      }
-    }
-  } catch (error) {
-    // Flat evidence dir may not exist yet - that's OK
-  }
 };
 
 /**

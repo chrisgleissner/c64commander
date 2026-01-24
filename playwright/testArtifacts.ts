@@ -2,7 +2,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
-import { createEvidenceMetadata, consolidateEvidence } from './evidenceConsolidation';
+import { createEvidenceMetadata } from './evidenceConsolidation';
 
 const sanitizeLabel = (label: string) =>
   label
@@ -28,17 +28,27 @@ const getTitlePath = (testInfo: TestInfo) => {
   return (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [testInfo.title];
 };
 
-const getEvidenceDirName = (testInfo: TestInfo) => {
+const generateTestId = (testInfo: TestInfo): string => {
+  const fileName = path.basename(testInfo.file, '.ts').replace(/\.spec$/, '');
   const titlePath = getTitlePath(testInfo);
-  const describeParts = titlePath.slice(0, -1).map(sanitizeSegment).filter(Boolean);
-  const testPart = sanitizeSegment(titlePath[titlePath.length - 1] ?? testInfo.title);
-  const describeSlug = describeParts.length ? describeParts.join('--') : 'root';
-  const projectPrefix = testInfo.project.name ? `${testInfo.project.name}__` : '';
-  return `${projectPrefix}${describeSlug}--${testPart}`;
+  
+  const parts = [fileName, ...titlePath].map((part) =>
+    part
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]+/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+  ).filter(Boolean);
+  
+  return parts.join('--');
 };
 
-const getEvidenceDir = (testInfo: TestInfo) =>
-  path.resolve(process.cwd(), 'test-results', 'evidence', getEvidenceDirName(testInfo));
+const getEvidenceDir = (testInfo: TestInfo) => {
+  const testId = generateTestId(testInfo);
+  const deviceId = testInfo.project.name;
+  return path.resolve(process.cwd(), 'test-results', 'evidence', testId, deviceId);
+};
 
 type StrictUiTracker = {
   consoleErrors: string[];
@@ -71,10 +81,14 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   const step = String(getStepIndex(testInfo)).padStart(2, '0');
   const name = safe.length ? `${step}-${safe}.png` : `${step}-step.png`;
   const evidenceDir = getEvidenceDir(testInfo);
-  await fs.mkdir(evidenceDir, { recursive: true });
-  const filePath = path.join(evidenceDir, name);
+  const screenshotsDir = path.join(evidenceDir, 'screenshots');
+  await fs.mkdir(screenshotsDir, { recursive: true });
+  const filePath = path.join(screenshotsDir, name);
   await page.screenshot({ path: filePath, fullPage: true });
-  await testInfo.attach(name, { path: filePath, contentType: 'image/png' });
+  
+  // Note: We no longer call testInfo.attach() to avoid creating duplicate evidence
+  // in Playwright's outputDir. All evidence is now in the canonical structure:
+  // test-results/evidence/<testId>/<deviceId>/
 
   // Enforce visual boundaries after capturing screenshot (unless explicitly allowed)
   const allowOverflow = testInfo.annotations.some((a) => a.type === 'allow-visual-overflow');
@@ -143,10 +157,9 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
   const videoPath = testInfo.outputPath('video.webm');
   await copyIfExists(videoPath, expectedVideo);
 
-  // Create canonical evidence structure
+  // Create evidence metadata in canonical structure (now created directly, no consolidation needed)
   const viewport = page.viewportSize ? page.viewportSize() : null;
   await createEvidenceMetadata(testInfo, viewport);
-  await consolidateEvidence(testInfo, evidenceDir);
 };
 
 export const allowWarnings = (testInfo: TestInfo, reason?: string) => {

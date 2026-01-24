@@ -1,8 +1,9 @@
 import { Loader2, Monitor } from 'lucide-react';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
-import { C64U_DEMO_AMBER } from '@/lib/ui/colors';
+import { C64U_DEMO_GOLDEN_LIGHT, C64U_DEMO_GOLDEN_DARK } from '@/lib/ui/colors';
 import { cn } from '@/lib/utils';
+import { useThemeContext } from '@/components/ThemeProvider';
 
 type Props = {
   className?: string;
@@ -10,6 +11,7 @@ type Props = {
 
 export function ConnectivityIndicator({ className }: Props) {
   const { state } = useConnectionState();
+  const { resolvedTheme } = useThemeContext();
 
   const handleClick = () => {
     void discoverConnection('manual');
@@ -18,6 +20,8 @@ export function ConnectivityIndicator({ className }: Props) {
   const isDemo = state === 'DEMO_ACTIVE';
   const isReal = state === 'REAL_CONNECTED';
   const isDiscovering = state === 'DISCOVERING';
+  const isDark = resolvedTheme === 'dark';
+  const demoColor = isDark ? C64U_DEMO_GOLDEN_DARK : C64U_DEMO_GOLDEN_LIGHT;
 
   const label =
     state === 'DEMO_ACTIVE'
@@ -48,7 +52,7 @@ export function ConnectivityIndicator({ className }: Props) {
       ) : (
         <Monitor
           className={cn('h-5 w-5', isReal ? 'text-success' : 'text-muted-foreground')}
-          style={isDemo ? { color: C64U_DEMO_AMBER } : undefined}
+          style={isDemo ? { color: demoColor } : undefined}
           aria-hidden="true"
         />
       )}
@@ -56,7 +60,7 @@ export function ConnectivityIndicator({ className }: Props) {
       {isDemo ? (
         <span
           className="flex flex-col leading-none font-mono font-bold text-[10px] uppercase tracking-wide"
-          style={{ color: C64U_DEMO_AMBER }}
+          style={{ color: demoColor }}
         >
           <span>C64U</span>
           <span>DEMO</span>

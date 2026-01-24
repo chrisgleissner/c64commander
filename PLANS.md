@@ -1,103 +1,213 @@
-# Playwright Evidence Plan
+# Production-Ready PR: 11 Requirements + Tests
 
-Status: In progress. No item may be checked off until tests pass with evidence artifacts and CI uploads are verified.
+Status: In progress. No item may be checked off until implemented + tested + tests pass.
 
-## A) Remote browsing remembers last path + root shortcut
+## PHASE 0 – UNBLOCK: MERGE CONFLICTS
+- [x] Check git status
+- [x] No conflicts found - proceed
 
-- [ ] Audit UX and state persistence
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert path persistence + root navigation
+## PHASE 1 – IMPLEMENTATION + TESTS
 
-## B) Local add returns to correct page
+### (1) Playwright E2E evidence folder duplication
 
-- [ ] Audit add-items flow (Play + Disks)
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert post-add landing page
+- [x] Audit current evidence generation code
+- [x] Remove flat filenames with device prefix
+- [x] Keep only canonical: device as subfolder under test id
+- [x] Add regression guard: script/test that fails if both formats appear
+- [x] Verify evidence upload artifact contains only canonical structure
+- [x] Tests pass
 
-## C) UI never exceeds viewport width
+### (2) C64U Demo logo color
+- [ ] Change demo logo from orange to golden/bronze
+- [ ] Verify contrast in light/dark themes
+- [ ] Update snapshots/golden tests if present
+- [ ] Tests pass
 
-- [ ] Audit long-path rendering
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert no horizontal overflow
+### (3) "View All" modal list fast browsing (Play + Disks)
+#### (3a) Text filter
+- [ ] Add input above scrollable list
+- [ ] Implement instant case-insensitive substring match
+- [ ] Works in inline list AND "View All"
+- [ ] Add Playwright tests for filtering behavior
+- [ ] Add Playwright tests for no layout overflow
+- [ ] Tests pass
 
-## D) Single close button in Mount overlay
+#### (3b) A–Z overlay control
+- [ ] Create pure semi-transparent overlay (absolute/fixed, high z-index)
+- [ ] Hidden/low-opacity by default
+- [ ] Appears during scroll or right-edge touch
+- [ ] Auto-hides after inactivity
+- [ ] Touch maps vertical position to A–Z plus "#"
+- [ ] Precompute first indices per letter
+- [ ] Jump via virtual list scrollToIndex (no animation)
+- [ ] Feedback: highlight letter + transient centered badge
+- [ ] Add Playwright test: overlay does not change list width/scroll container metrics
+- [ ] Add Playwright test: dragging selects correct letter and jumps
+- [ ] Add Playwright test: overlay auto-hides
+- [ ] Tests pass
 
-- [ ] Audit dialog markup
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert single close control
+### (4) C64U host resolution issues
+#### (4a) Remove "C64U Hostname / IP" input
+- [ ] Remove hostname input, Base URL only
+- [ ] Tests pass
 
-## E) Reset/Refresh icons at top of config groups
+#### (4b) Fix regression: valid Base URL must connect
+- [ ] Ensure http://192.168.1.13 connects and exits demo mode
+- [ ] Tests pass
 
-- [ ] Audit DOM order and layout
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert action buttons above list
+#### (4c) Demo mode must NEVER overwrite user Base URL
+- [ ] UI: Base URL input always shows user value
+- [ ] Show Demo Base URL below it, smaller, only visible in demo mode
+- [ ] Remove "Default/Local Proxy" irrelevant values
+- [ ] Add unit tests for config persistence (Base URL unchanged)
+- [ ] Add E2E: switching to demo mode does not mutate Base URL
+- [ ] Add E2E: reconnect works
+- [ ] Tests pass
 
-## F) Playlist parity with Disks list
+### (5) Disks / Disk list
+#### (5a) Remove nonresponsive blue rectangle
+- [ ] Remove blue rectangle left of disk name
+- [ ] Tests pass
 
-- [ ] Audit selection controls and labels
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert select-all/remove-selected parity
+#### (5b) Context menu shows size and date
+- [ ] Size must be populated everywhere: Disk list, Play list, View All
+- [ ] Works for FTP and local
+- [ ] Extend file browser data model to always include byte size
+- [ ] Add unit tests for model mapping
+- [ ] Add E2E for context menu showing non-empty size
+- [ ] Tests pass
 
-## G) Consolidated reusable list component
+### (6) Demo mode configuration realism
+- [ ] Demo config populated from doc/c64u-config.yaml
+- [ ] Read at runtime from APK assets
+- [ ] No hard-coded demo menu
+- [ ] Add unit test for YAML parsing and menu generation
+- [ ] Add E2E: demo mode shows expected sections from YAML
+- [ ] Tests pass
 
-- [ ] Audit shared component usage
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert Play/Mount actions + view-all behavior
+### (7) Settings layout reorder
+- [ ] Order groups: 1-Connection 2-Diagnostics 3-Appearance 4-Play and Disk 5-Config 6-Experimental (rename from Developer) 7-About
+- [ ] Add E2E test asserting order and headings
+- [ ] Tests pass
 
-## H) Playback controls professional and stable
+### (8) Home build information layout
+- [ ] Display build timestamp as yyyy-mm-dd HH:mm
+- [ ] Fix truncation: widen or reflow for small screens
+- [ ] Add E2E visual/layout assertion
+- [ ] Tests pass
 
-- [ ] Audit control states and layout
-- [ ] Fix regressions
-- [ ] Add/confirm E2E test coverage
-- [ ] Add ordered screenshots per step
-- [ ] Assert no positional shifts, correct enable/disable
+### (9) Play page UX and behavior fixes
+#### (9a) Mute/Unmute must work
+- [ ] Clicking Unmute unmutes
+- [ ] Dragging volume slider also unmutes
+- [ ] Add unit tests for state machine
+- [ ] Add E2E tests
+- [ ] Tests pass
 
-## Evidence + CI
+#### (9b) Remove Default duration description text
+- [ ] Remove text
+- [ ] Tests pass
 
-- [ ] Validate evidence folders locally
-- [ ] Validate evidence folders in CI
-- [ ] Confirm playwright-evidence artifact download
-- [ ] Confirm playwright-report artifact download
+#### (9c) Remove "Song picker enabled when subsongs are detected."
+- [ ] Remove text
+- [ ] Tests pass
+
+#### (9d) File type filters as one-line checkbox row
+- [ ] SID/MOD/PRG/CRT/DISK checkboxes
+- [ ] Default all enabled
+- [ ] Instant filtering
+- [ ] Appears above inline playlist AND above View All list (non-scrollable header)
+- [ ] Add E2E tests for filtering
+- [ ] Tests pass
+
+#### (9e) Recurse/Shuffle/Repeat side-by-side
+- [ ] Layout Recurse/Shuffle/Repeat below Unmute+slider
+- [ ] Reshuffle next to them
+- [ ] Tests pass
+
+#### (9f) "Played: mm:ss" prominent
+- [ ] Right of progress bar
+- [ ] Aligned with Default duration field
+- [ ] Top-right near filename
+- [ ] Updates in real time
+- [ ] Tests pass
+
+#### (9g) Remove "Playback controls" header
+- [ ] Remove header
+- [ ] Tests pass
+
+#### (9h) Remove "Current duration" and its time
+- [ ] Remove field
+- [ ] Tests pass
+
+#### (9i) Remove "SID options" header
+- [ ] Remove header
+- [ ] Add E2E tests for presence/absence and layout stability
+- [ ] Tests pass
+
+### (10) Songlengths.md5 discovery + display
+#### (10a) On folder import, search for Songlengths.md5
+- [ ] Upwards from selected folder (if possible) and downwards recursively
+- [ ] Also check DOCUMENTS/Songlengths.md5
+- [ ] Fix existing broken/unused code
+- [ ] Ensure actually used
+- [ ] Tests pass
+
+#### (10b) Show discovered path on Play Files page
+- [ ] Display path
+- [ ] Clicking opens file picker to change it
+- [ ] Tests pass
+
+#### (10c) If Songlengths.md5 available
+- [ ] Show SID song length as (m:ss) after filename in subtle gray
+- [ ] Add unit tests for discovery and parsing
+- [ ] Add E2E for UI
+- [ ] Tests pass
+
+### (11) Demo mode playback bugs
+#### (11a) Stop must never autoresume after ~10s
+- [ ] Fix autoresume bug
+- [ ] Add unit test
+- [ ] Add E2E test
+- [ ] Tests pass
+
+#### (11b) Fix sporadic rapid "Played" advancement
+- [ ] Fix runaway song skipping
+- [ ] Respect Default duration
+- [ ] Add deterministic unit tests
+- [ ] Add E2E tests
+- [ ] Tests pass
+
+## PHASE 2 – VERIFICATION AND FINALIZATION
+- [ ] Run full local test suite: Web unit tests
+- [ ] Run full local test suite: Playwright E2E
+- [ ] Run full local test suite: Android unit tests
+- [ ] Verify evidence artifact structure is canonical only
+- [ ] Verify no UI overflow beyond device bounds (screenshots checks)
+- [ ] Final commit hygiene: logical commits, no debug code, no TODOs
+- [ ] Push branch and provide PR-ready summary
 
 ---
 
-# Production Release Blockers (Jan 2026)
+## PROGRESS LOG
 
-Status: In progress. All three issues must be fully resolved with tests, evidence screenshots, and green CI before completion.
+### 2026-01-24 Initial setup
+- Read PLANS.md
+- Checked git status: clean, no conflicts
+- Populated PLANS.md with full task breakdown
 
-## 1) Local device add-items flow (Android picker)
-
-- [ ] Trace add-items flow for local sources (Play + Disks) and identify where progress overlay is attached
-- [ ] Ensure Android picker results treat selected folder as root and recurse all subfolders
-- [ ] Ensure interstitial is skipped and destination page shows progress overlay
-- [ ] Ensure overlay shows real scanning progress and closes on completion
-- [ ] Add Playwright E2E for local add flow with deep folder structure
-- [ ] Capture required screenshots: before, overlay during scan, after items added
-
-## 2) Horizontal overflow / unusable UI
-
-- [ ] Audit all file-name rendering surfaces (browsers, playlists, disks, disk volumes, lists/grids)
-- [ ] Constrain widths and apply wrap/ellipsis consistently across components
-- [ ] Ensure CTAs remain within viewport on all orientations
-- [ ] Expand overflow Playwright coverage to cover long names in all relevant views
-
-## 3) Disk groups: visibility, selection, auto-grouping
-
-- [ ] Restore group label + color beneath each grouped disk in all views
+### 2026-01-24 Task 1: Evidence folder duplication
+- Removed testInfo.attach() call to prevent duplication in Playwright's outputDir
+- All evidence now in canonical structure: test-results/evidence/<testId>/<deviceId>/
+- Added validation check in scripts/validate-playwright-evidence.mjs to fail if flat structure folders exist
+- Cleaned up 174 old flat structure folders
+- Verified test runs create only canonical structure
+- Modified files:
+  - playwright/testArtifacts.ts: removed testInfo.attach() call
+  - scripts/validate-playwright-evidence.mjs: added flat structure detection
+- Ran test: npm run test:e2e -- playwright/demoMode.spec.ts --grep "real connection shows green"
+- Result: PASS, evidence created in canonical structure only
+- npm run validate:evidence: PASS
 - [ ] Add context menu flow to pick existing group or create inline
 - [ ] Implement auto-grouping on scan for shared prefixes (case-insensitive, trailing nums/letters)
 - [ ] Add unit tests for prefix grouping heuristics
