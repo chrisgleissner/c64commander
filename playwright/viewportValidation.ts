@@ -1,5 +1,4 @@
 import type { Page, TestInfo } from '@playwright/test';
-import { expect } from '@playwright/test';
 
 /**
  * Runtime viewport validation - MUST be called in every test.
@@ -47,7 +46,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
   }
 
   // DOM-level boundary check
-  const violations = await page.evaluate((maxWidth) => {
+  const violations = await page.evaluate((maxWidth: number) => {
     const results: Array<{ selector: string; width: number; right: number; reason: string }> = [];
     const isToastElement = (element: Element) =>
       Boolean(

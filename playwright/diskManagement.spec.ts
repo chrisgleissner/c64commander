@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
+import type { Request } from 'playwright';
 import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
@@ -38,6 +39,15 @@ const openRemoteFolder = async (page: Page, name: string) => {
   await row.getByRole('button', { name: 'Open' }).click();
 };
 
+type SeedDisk = {
+  id: string;
+  name: string;
+  path: string;
+  location: 'local' | 'ultimate';
+  group?: string | null;
+  importOrder?: number | null;
+};
+
 const getDiskRow = (page: Page, name: string) =>
   getDiskList(page).getByTestId('disk-row').filter({ hasText: name }).first();
 
@@ -65,7 +75,7 @@ const addLocalFolder = async (page: Page, folderPath: string, diskNames: string[
   } catch {
     // Overlay may resolve quickly on small folders.
   }
-  await overlay.waitFor({ state: 'detached' }).catch(() => null);
+  await overlay.waitFor({ state: 'detached' }).catch((): null => null);
   if (expectVisible) {
     for (const diskName of diskNames) {
       await expect(getDiskList(page)).toContainText(diskName);
@@ -80,10 +90,10 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 const getDriveCard = (page: Page, label: string) =>
   page.getByText(label, { exact: true }).locator('..').locator('..').locator('..');
 
-const seedDiskLibrary = async (page: Page, disks: Array<{ id: string; name: string; path: string; location: 'local' | 'ultimate'; group?: string | null; importOrder?: number | null }>) => {
-  await page.addInitScript(({ disks: seedDisks }) => {
+const seedDiskLibrary = async (page: Page, disks: SeedDisk[]) => {
+  await page.addInitScript(({ disks: seedDisks }: { disks: SeedDisk[] }) => {
     const payload = {
-      disks: seedDisks.map((disk) => ({
+      disks: seedDisks.map((disk: SeedDisk) => ({
         ...disk,
         group: disk.group ?? null,
         importOrder: disk.importOrder ?? null,
@@ -159,7 +169,6 @@ test.describe('Disk management', () => {
   });
 
   layoutTest('disks render with folder headers and no full paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.setViewportSize({ width: 360, height: 740 });
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
@@ -190,7 +199,7 @@ test.describe('Disk management', () => {
 
   test('drive power toggle button updates state and issues request', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const requests: Array<{ method: string; url: string }> = [];
-    page.on('request', (request) => {
+    page.on('request', (request: Request) => {
       try {
         const url = new URL(request.url());
         if (url.pathname.startsWith('/v1/drives/') && (url.pathname.endsWith(':on') || url.pathname.endsWith(':off'))) {

@@ -2,7 +2,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
-import { createEvidenceMetadata, consolidateEvidence, getCanonicalEvidencePath } from './evidenceConsolidation';
+import { createEvidenceMetadata, consolidateEvidence } from './evidenceConsolidation';
 
 const sanitizeLabel = (label: string) =>
   label
@@ -67,12 +67,6 @@ const setTracker = (testInfo: TestInfo, tracker: StrictUiTracker) => {
 };
 
 export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label: string) => {
-  // Enforce visual boundaries before taking screenshot (unless explicitly allowed)
-  const allowOverflow = testInfo.annotations.some((a) => a.type === 'allow-visual-overflow');
-  if (!allowOverflow) {
-    await enforceVisualBoundaries(page, testInfo);
-  }
-  
   const safe = sanitizeLabel(label);
   const step = String(getStepIndex(testInfo)).padStart(2, '0');
   const name = safe.length ? `${step}-${safe}.png` : `${step}-step.png`;
@@ -81,6 +75,12 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   const filePath = path.join(evidenceDir, name);
   await page.screenshot({ path: filePath, fullPage: true });
   await testInfo.attach(name, { path: filePath, contentType: 'image/png' });
+
+  // Enforce visual boundaries after capturing screenshot (unless explicitly allowed)
+  const allowOverflow = testInfo.annotations.some((a) => a.type === 'allow-visual-overflow');
+  if (!allowOverflow) {
+    await enforceVisualBoundaries(page, testInfo);
+  }
 };
 
 const copyIfExists = async (source: string, destination: string) => {

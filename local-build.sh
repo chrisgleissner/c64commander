@@ -155,9 +155,14 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --devices)
-      PLAYWRIGHT_DEVICES="$2"
-      export PLAYWRIGHT_DEVICES
-      shift 2
+      if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
+        PLAYWRIGHT_DEVICES="$2"
+        export PLAYWRIGHT_DEVICES
+        shift 2
+      else
+        echo "Error: --devices requires a value" >&2
+        exit 1
+      fi
       ;;
     --device)
       if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then

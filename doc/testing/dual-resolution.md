@@ -4,7 +4,7 @@
 
 The Playwright E2E test suite now supports automated testing across two Android device profiles:
 
-- **android-phone**: 1080×2400, scale 3 (default for all tests)
+- **android-phone** (Playwright Pixel 5 preset): 393×727 CSS px @ 2.75 device scale (≈1080×2000 physical, default for all tests)
 - **android-tablet**: 1600×2560, scale 2 (layout tests only by default)
 
 ## Default Behavior
@@ -70,14 +70,17 @@ This runs automatically in tests using `startStrictUiMonitoring` + `assertNoUiIs
 
 ## Screenshot Organization
 
-Screenshots are automatically prefixed with the device profile name:
+Screenshots are organized under the canonical evidence structure:
 
 ```text
 test-results/evidence/
-  android-phone__my-test/
-    01-step.png
-  android-tablet__my-test/
-    01-step.png
+  <testId>/
+    android-phone/
+      screenshots/
+        01-step.png
+    android-tablet/
+      screenshots/
+        01-step.png
 ```
 
 This allows visual comparison across devices without name collisions.

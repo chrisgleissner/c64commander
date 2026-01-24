@@ -80,7 +80,7 @@ const getDeviceScaleFactor = async (testInfo: TestInfo): Promise<number> => {
 
 /**
  * Consolidate evidence into canonical structure.
- * Moves screenshots from flat structure to test-first, device-second.
+ * Copies screenshots from flat structure to test-first, device-second.
  */
 export const consolidateEvidence = async (testInfo: TestInfo, flatEvidenceDir: string): Promise<void> => {
   const canonicalPath = getCanonicalEvidencePath(testInfo);
