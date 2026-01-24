@@ -154,7 +154,7 @@ export default function CoverageProbePage() {
         await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/music.mod' }));
         await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/demo.prg' }), { loadMode: 'load' });
         await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/demo.crt' }));
-        await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/disk.d64' }), { drive: 'b', resetBeforeMount: false });
+        await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/disk.d64' }), { drive: 'b', rebootBeforeMount: true });
       }, failures);
 
       await runProbe('sid player', async () => {

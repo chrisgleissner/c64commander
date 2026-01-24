@@ -46,7 +46,7 @@ describe('playbackRouter', () => {
     const api = createApiMock();
     const file = new File(['disk'], 'demo.d64');
     const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
-    const task = executePlayPlan(api as any, plan, { drive: 'a' });
+    const task = executePlayPlan(api as any, plan, { drive: 'a', rebootBeforeMount: true });
     await vi.runAllTimersAsync();
     await task;
     expect(api.machineReboot).toHaveBeenCalled();

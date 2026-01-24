@@ -221,7 +221,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-dist-coverage
-          path: dist/**
+          path: dist
 
   web-e2e:
     name: Web Playwright e2e (sharded)
@@ -292,7 +292,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-dist-coverage
-          path: dist
+          path: .
+
+      - name: Ensure coverage build exists
+        run: |
+          if [[ ! -f dist/index.html ]]; then
+            echo "dist/index.html missing; rebuilding with coverage instrumentation"
+            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+          fi
 
       - name: Prepare coverage output
         run: |
