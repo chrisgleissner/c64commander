@@ -235,6 +235,8 @@ jobs:
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+      VITE_COVERAGE: "true"
+      VITE_ENABLE_TEST_PROBES: "1"
 
     steps:
       - name: Checkout
@@ -324,13 +326,20 @@ jobs:
           VITE_GIT_SHA: "ci"
           VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
           SOURCE_DATE_EPOCH: "0"
-          VITE_COVERAGE: "true"
         run: |
           start=$(date +%s)
           mapfile -t SHARD_FILES < shard-files.txt
           ${{ env.PM_RUN }} run test:e2e -- "${SHARD_FILES[@]}"
           end=$(date +%s)
           echo "- e2e shard ${{ matrix.shard }}/${{ matrix.shardTotal }}: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify nyc output
+        if: always()
+        run: |
+          if ! find .nyc_output -type f -name "*.json" | grep -q .; then
+            echo "No nyc coverage output found in shard ${{ matrix.shard }}/${{ matrix.shardTotal }}"
+            exit 1
+          fi
 
       - name: Upload e2e coverage shard
         if: always()
