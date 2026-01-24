@@ -1,5 +1,6 @@
 import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
+import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import type { SourceEntry, SourceLocation } from './types';
 
 type FtpCacheRecord = {
@@ -73,8 +74,7 @@ const clearCachedEntries = (key: string) => {
 };
 
 const listEntries = async (path: string): Promise<SourceEntry[]> => {
-  const host = localStorage.getItem('c64u_device_host') || 'c64u';
-  const password = localStorage.getItem('c64u_password') || '';
+  const { deviceHost: host, password = '' } = getC64APIConfigSnapshot();
   const normalizedPath = path && path !== '' ? path : '/';
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
   const cached = getCachedEntries(cacheKey);
@@ -141,8 +141,7 @@ export const createUltimateSourceLocation = (): SourceLocation => ({
   listEntries,
   listFilesRecursive,
   clearCacheForPath: (path) => {
-    if (typeof localStorage === 'undefined') return;
-    const host = localStorage.getItem('c64u_device_host') || 'c64u';
+    const { deviceHost: host } = getC64APIConfigSnapshot();
     const cacheKey = buildCacheKey(host, getStoredFtpPort(), path || '/');
     clearCachedEntries(cacheKey);
   },

@@ -1,6 +1,5 @@
 import { addErrorLog } from '@/lib/logging';
 import { MockC64U } from '@/lib/native/mockC64u';
-import { clearStoredMockBaseUrl, setStoredMockBaseUrl } from '@/lib/config/developerModeStore';
 
 let activeMockBaseUrl: string | null = null;
 let activeFtpPort: number | null = null;
@@ -24,7 +23,6 @@ export const startMockServer = async (): Promise<{ baseUrl: string; ftpPort?: nu
       const response = await MockC64U.startServer({ config });
       activeMockBaseUrl = response.baseUrl;
       activeFtpPort = response.ftpPort ?? null;
-      setStoredMockBaseUrl(response.baseUrl);
       return { baseUrl: response.baseUrl, ftpPort: response.ftpPort };
     } catch (error) {
       addErrorLog('Mock C64U server failed to start', {
@@ -41,7 +39,6 @@ export const startMockServer = async (): Promise<{ baseUrl: string; ftpPort?: nu
 
 export const stopMockServer = async () => {
   if (!activeMockBaseUrl && !startPromise) {
-    clearStoredMockBaseUrl();
     return;
   }
 
@@ -58,6 +55,5 @@ export const stopMockServer = async () => {
   } finally {
     activeMockBaseUrl = null;
     activeFtpPort = null;
-    clearStoredMockBaseUrl();
   }
 };

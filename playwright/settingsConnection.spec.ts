@@ -130,36 +130,27 @@ test.describe('Settings connection management', () => {
     await snap(page, testInfo, 'dark-theme-applied');
   });
 
-  test('toggle mock mode switches connection', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    const enableDeveloperMode = async () => {
-      const aboutButton = page.getByRole('button', { name: 'About' });
-      for (let i = 0; i < 7; i += 1) {
-        await aboutButton.click();
-      }
-    };
-
+  test('automatic demo mode toggle is visible and persisted', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    await enableDeveloperMode();
-    await snap(page, testInfo, 'dev-mode-enabled');
+    const autoDemoToggle = page.getByLabel(/automatic demo mode/i);
+    await expect(autoDemoToggle).toBeVisible();
+    await expect(autoDemoToggle).toBeChecked();
+    await snap(page, testInfo, 'auto-demo-default-on');
 
-    const mockToggle = page.getByLabel(/mock|mocked c64u|use mock/i);
-    
-    if (await mockToggle.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await expect(mockToggle).not.toBeChecked();
-      await snap(page, testInfo, 'mock-off');
+    await autoDemoToggle.click();
+    await expect(autoDemoToggle).not.toBeChecked();
+    await snap(page, testInfo, 'auto-demo-off');
 
-      await mockToggle.click();
-      await snap(page, testInfo, 'mock-toggled');
+    const storedOff = await page.evaluate(() => localStorage.getItem('c64u_automatic_demo_mode_enabled'));
+    expect(storedOff).toBe('0');
 
-      await expect(page.getByText(/Mock.*enabled|Mocked C64U enabled/i).first()).toBeVisible({ timeout: 5000 });
-      await snap(page, testInfo, 'mock-mode-active');
+    await autoDemoToggle.click();
+    await expect(autoDemoToggle).toBeChecked();
+    await snap(page, testInfo, 'auto-demo-on');
 
-      await mockToggle.click();
-      await snap(page, testInfo, 'mock-disabled');
-    } else {
-      await snap(page, testInfo, 'mock-toggle-not-available');
-    }
+    const storedOn = await page.evaluate(() => localStorage.getItem('c64u_automatic_demo_mode_enabled'));
+    expect(storedOn).toBe('1');
   });
 });

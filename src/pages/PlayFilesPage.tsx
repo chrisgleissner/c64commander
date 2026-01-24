@@ -58,6 +58,7 @@ import {
   isHvscBridgeAvailable,
   type HvscStatus,
 } from '@/lib/hvsc';
+import { AppBar } from '@/components/AppBar';
 
 type PlayableEntry = {
   source: PlaySource;
@@ -1765,20 +1766,11 @@ export default function PlayFilesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/95">
+      <AppBar
+        title="Play Files"
+        subtitle={status.isConnected ? 'Connected' : status.isConnecting ? 'Connecting…' : 'Offline'}
+      />
       <main className="container max-w-3xl mx-auto px-4 py-6 pb-24 space-y-6">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/')}
-              aria-label="Back to home">
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h2 className="text-xl font-semibold">Play Files</h2>
-          </div>
-          <span className={`text-xs px-2 py-1 rounded-full ${status.isConnected ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'}`}>
-            {status.isConnected ? 'Connected' : 'Offline'}
-          </span>
-        </div>
-
         <div className="bg-card border border-border rounded-xl p-4 space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
