@@ -348,6 +348,7 @@ jobs:
           name: e2e-nyc-output-${{ matrix.shard }}
           path: .nyc_output/**
           if-no-files-found: ignore
+          include-hidden-files: true
 
       - name: Upload e2e evidence shard
         if: always()
