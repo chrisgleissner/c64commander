@@ -51,15 +51,19 @@ Status: In progress. No item may be checked off until implemented + tested + tes
 - [ ] Tests pass
 
 ### (4) C64U host resolution issues
+
 #### (4a) Remove "C64U Hostname / IP" input
-- [ ] Remove hostname input, Base URL only
-- [ ] Tests pass
+
+- [x] Remove hostname input, Base URL only
+- [x] Tests pass
 
 #### (4b) Fix regression: valid Base URL must connect
+
 - [ ] Ensure http://192.168.1.13 connects and exits demo mode
 - [ ] Tests pass
 
 #### (4c) Demo mode must NEVER overwrite user Base URL
+
 - [ ] UI: Base URL input always shows user value
 - [ ] Show Demo Base URL below it, smaller, only visible in demo mode
 - [ ] Remove "Default/Local Proxy" irrelevant values

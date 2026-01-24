@@ -58,6 +58,21 @@ export default function HomePage() {
   const appVersion = __APP_VERSION__ || '';
   const gitSha = __GIT_SHA__ || '';
   const buildTime = __BUILD_TIME__ || '';
+  
+  const formatBuildTime = (isoString: string) => {
+    if (!isoString) return '—';
+    try {
+      const date = new Date(isoString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}`;
+    } catch {
+      return isoString;
+    }
+  };
 
   const handleAction = async (action: () => Promise<unknown>, successMessage: string) => {
     try {
@@ -161,7 +176,7 @@ export default function HomePage() {
             </div>
             <div className="bg-muted/50 rounded-lg p-2">
               <span className="text-muted-foreground">Build</span>
-              <p className="font-mono font-medium truncate">{buildTime || '—'}</p>
+              <p className="font-mono font-medium text-sm">{formatBuildTime(buildTime)}</p>
             </div>
           </div>
         </motion.div>
