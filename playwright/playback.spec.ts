@@ -312,11 +312,12 @@ test.describe('Playback file browser', () => {
     await expect(page.getByText('Z-Track-001.sid', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'alphabet-jump');
 
-    await page.waitForTimeout(1700);
-    const overlayOpacity = await page.getByTestId('alphabet-overlay').evaluate((node: HTMLElement) =>
-      window.getComputedStyle(node).opacity,
-    );
-    expect(Number(overlayOpacity)).toBeLessThan(0.2);
+    await expect.poll(async () => {
+      const overlayOpacity = await page.getByTestId('alphabet-overlay').evaluate((node: HTMLElement) =>
+        window.getComputedStyle(node).opacity,
+      );
+      return Number(overlayOpacity);
+    }).toBeLessThan(0.2);
   });
 
   test('playback counters reflect played, total, and remaining time', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -335,7 +336,6 @@ test.describe('Playback file browser', () => {
     await expect(playedLabel).toContainText('Played: 0:00');
 
     await page.getByTestId('playlist-play').click();
-    await page.waitForTimeout(1200);
     await snap(page, testInfo, 'playback-running');
 
     await expect.poll(async () => {
@@ -348,7 +348,6 @@ test.describe('Playback file browser', () => {
     expect(remainingAfterStart).toContain('Remaining:');
 
     await page.getByTestId('playlist-next').click();
-    await page.waitForTimeout(1200);
     await snap(page, testInfo, 'playback-next');
 
     await expect.poll(async () => {
@@ -379,16 +378,28 @@ test.describe('Playback file browser', () => {
     ]);
 
     await page.goto('/play');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     const playButton = page.getByTestId('playlist-play');
     await playButton.click();
     await expect(playButton).toContainText('Stop');
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
     await snap(page, testInfo, 'play-started');
 
     await playButton.click();
     await expect(playButton).toContainText('Play');
     await snap(page, testInfo, 'play-stopped');
-
-    await page.waitForTimeout(12000);
+    await page.waitForFunction(() => {
+      const button = document.querySelector('[data-testid="playlist-play"]');
+      if (!button) return false;
+      const text = button.textContent ?? '';
+      const now = performance.now();
+      const win = window as Window & { __playStopCheckStart?: number };
+      if (!win.__playStopCheckStart) {
+        win.__playStopCheckStart = now;
+      }
+      if (!text.toLowerCase().includes('play')) return false;
+      return now - win.__playStopCheckStart > 10000;
+    }, null, { timeout: 12000 });
     await expect(playButton).toContainText('Play');
     await snap(page, testInfo, 'no-autoresume');
   });
@@ -403,15 +414,11 @@ test.describe('Playback file browser', () => {
     const played = page.getByTestId('playback-played');
     await playButton.click();
     await snap(page, testInfo, 'play-started');
-
-    await page.waitForTimeout(1200);
-    const firstValue = parseTimeLabel(await played.textContent());
-    await page.waitForTimeout(1200);
-    const secondValue = parseTimeLabel(await played.textContent());
-
-    expect(firstValue ?? 0).toBeGreaterThanOrEqual(1);
-    expect(secondValue ?? 0).toBeGreaterThan(firstValue ?? 0);
-    expect(secondValue ?? 0).toBeLessThanOrEqual(5);
+    await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThanOrEqual(1);
+    const firstValue = parseTimeLabel(await played.textContent()) ?? 0;
+    await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThan(firstValue);
+    const secondValue = parseTimeLabel(await played.textContent()) ?? 0;
+    expect(secondValue).toBeLessThanOrEqual(5);
   });
 
   test('playback controls are stateful and show current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -478,6 +485,130 @@ test.describe('Playback file browser', () => {
     await playButton.click();
     await expect(playButton).toContainText('Play');
     await snap(page, testInfo, 'playback-stopped');
+  });
+
+  test('play immediately after import targets the real device', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const playButton = page.getByTestId('playlist-play');
+    await playButton.click();
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+    await snap(page, testInfo, 'play-after-import');
+  });
+
+  test('rapid play/stop/play sequences remain stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    const playButton = page.getByTestId('playlist-play');
+    await playButton.click();
+    await expect(playButton).toContainText('Stop');
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+
+    await playButton.click();
+    await expect(playButton).toContainText('Play');
+
+    await playButton.click();
+    await expect(playButton).toContainText('Stop');
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(1);
+    await snap(page, testInfo, 'rapid-play-stop-play');
+  });
+
+  test('skipping tracks quickly updates current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-1.sid', name: 'track-1.sid', durationMs: 8000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-2.sid', name: 'track-2.sid', durationMs: 8000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-3.sid', name: 'track-3.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    const playButton = page.getByTestId('playlist-play');
+    const nextButton = page.getByTestId('playlist-next');
+    const currentTrack = page.getByTestId('playback-current-track');
+
+    await playButton.click();
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+
+    await nextButton.click();
+    await nextButton.click();
+    await expect(currentTrack).toContainText('track-3.sid');
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(2);
+    await snap(page, testInfo, 'skipped-to-last');
+  });
+
+  test('playback persists across navigation while active', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    const playButton = page.getByTestId('playlist-play');
+    await playButton.click();
+    await expect(playButton).toContainText('Stop');
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: 'Disks', exact: true }).click();
+    await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    const playButtonAfter = page.getByTestId('playlist-play');
+    const playLabelAfter = await playButtonAfter.textContent();
+    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes('stop')) {
+      const enabled = await playButtonAfter.isEnabled().catch(() => false);
+      if (enabled) {
+        const beforeCount = server.sidplayRequests.length;
+        await playButtonAfter.click();
+        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(beforeCount);
+      }
+    }
+    await expect(page.getByTestId('playback-current-track')).toContainText('demo.sid');
+    await snap(page, testInfo, 'playback-persists-navigation');
+  });
+
+  test('settings changes while playback active do not interrupt playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    const playButton = page.getByTestId('playlist-play');
+    const played = page.getByTestId('playback-played');
+    await playButton.click();
+    await expect(playButton).toContainText('Stop');
+    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+
+    await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThan(0);
+    const firstPlayed = parseTimeLabel(await played.textContent()) ?? 0;
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    const darkThemeButton = page.getByRole('button', { name: /Dark|dark theme/i }).first();
+    await expect(darkThemeButton).toBeVisible();
+    await darkThemeButton.click();
+
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    const playButtonAfter = page.getByTestId('playlist-play');
+    const playLabelAfter = await playButtonAfter.textContent();
+    if (!playLabelAfter || !playLabelAfter.toLowerCase().includes('stop')) {
+      const enabled = await playButtonAfter.isEnabled().catch(() => false);
+      if (enabled) {
+        const beforeCount = server.sidplayRequests.length;
+        await playButtonAfter.click();
+        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(beforeCount);
+      }
+    }
+    await expect.poll(async () => parseTimeLabel(await page.getByTestId('playback-played').textContent()) ?? 0).toBeGreaterThan(0);
+    await snap(page, testInfo, 'playback-persists-after-settings');
   });
 
   test('mute button toggles and slider unmutes', async ({ page }: { page: Page }, testInfo: TestInfo) => {

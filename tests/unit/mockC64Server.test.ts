@@ -175,4 +175,44 @@ describe('createMockC64Server', () => {
     const options = await requestJson(`${server.baseUrl}/v1/info`, { method: 'OPTIONS' });
     expect(options.status).toBe(204);
   });
+
+  it('supports reachability toggles', async () => {
+    server.setReachable(false);
+    const unreachable = await requestJson(`${server.baseUrl}/v1/info`);
+    expect(unreachable.status).toBe(503);
+    server.setReachable(true);
+    const reachable = await requestJson(`${server.baseUrl}/v1/info`);
+    expect(reachable.status).toBe(200);
+  });
+
+  it('supports authentication failure mode', async () => {
+    server.setFaultMode('auth');
+    const response = await requestJson(`${server.baseUrl}/v1/info`);
+    expect(response.status).toBe(401);
+    server.setFaultMode('none');
+  });
+
+  it('supports refused connections', async () => {
+    server.setFaultMode('refused');
+    await expect(requestJsonViaHttp(`${server.baseUrl}/v1/info`)).rejects.toBeTruthy();
+    server.setFaultMode('none');
+  });
+
+  it('supports slow and timeout response modes', async () => {
+    server.setFaultMode('slow');
+    server.setLatencyMs(50);
+    const slowStart = Date.now();
+    await requestJson(`${server.baseUrl}/v1/info`);
+    const slowElapsed = Date.now() - slowStart;
+    expect(slowElapsed).toBeGreaterThanOrEqual(40);
+
+    server.setFaultMode('timeout');
+    server.setLatencyMs(null);
+    const timeoutStart = Date.now();
+    await requestJson(`${server.baseUrl}/v1/info`);
+    const timeoutElapsed = Date.now() - timeoutStart;
+    expect(timeoutElapsed).toBeGreaterThanOrEqual(1400);
+    expect(timeoutElapsed).toBeLessThan(5000);
+    server.setFaultMode('none');
+  });
 });

@@ -45,7 +45,6 @@ test.describe('App screenshots', () => {
     await page.waitForFunction(() => (document as any).fonts?.ready ?? true);
     await page.evaluate(() => new Promise(requestAnimationFrame));
     await page.evaluate(() => new Promise(requestAnimationFrame));
-    await page.waitForTimeout(200);
   };
 
   const waitForOverlaysToClear = async (page: Page) => {

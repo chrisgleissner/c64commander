@@ -34,6 +34,35 @@ class HvscUtilsTest {
   }
 
   @Test
+  fun songlengthsParserNormalizesPathsAndRounds() {
+    val content = """
+      ; DEMOS/Test.sid
+      abcdef123456=0:00.499
+      999999999999=0:00.501
+    """.trimIndent()
+
+    val result = SonglengthsParser.parse(content)
+    assertEquals(0, result.pathToSeconds["/DEMOS/Test.sid"])
+    assertEquals(0, result.md5ToSeconds["abcdef123456"])
+    assertEquals(1, result.md5ToSeconds["999999999999"])
+  }
+
+  @Test
+  fun songlengthsTextIgnoresCommentsAndNormalizesPath() {
+    val content = """
+      # ignore comment
+      DEMOS/Test.sid 0:10
+      ; another comment
+      [header]
+      /DEMOS/Another.sid 0:20
+    """.trimIndent()
+
+    val result = SonglengthsParser.parseText(content)
+    assertEquals(10, result.pathToSeconds["/DEMOS/Test.sid"])
+    assertEquals(20, result.pathToSeconds["/DEMOS/Another.sid"])
+  }
+
+  @Test
   fun cancelRegistryCancelsAndRemovesToken() {
     val registry = HvscCancelRegistry()
     val token = registry.register("demo")

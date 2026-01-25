@@ -56,6 +56,7 @@ type StrictUiTracker = {
   pageErrors: string[];
   toastIssues: string[];
   horizontalOverflows: string[];
+  requestLog: Array<{ method: string; url: string; resourceType: string }>
   detach: () => void;
 };
 
@@ -131,6 +132,15 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
   const evidenceDir = getEvidenceDir(testInfo);
   await fs.mkdir(evidenceDir, { recursive: true });
 
+  const tracker = getTracker(testInfo);
+  if (tracker?.requestLog?.length) {
+    await fs.writeFile(
+      path.join(evidenceDir, 'request-routing.json'),
+      JSON.stringify(tracker.requestLog, null, 2),
+      'utf8',
+    );
+  }
+
   if (getStepCount(testInfo) === 0 && !page.isClosed()) {
     await attachStepScreenshot(page, testInfo, 'final-state');
   }
@@ -182,8 +192,21 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     pageErrors: [],
     toastIssues: [],
     horizontalOverflows: [],
+    requestLog: [],
     detach: () => {},
   };
+
+  const recordRequest = (request: { method: () => string; url: () => string; resourceType: () => string }) => {
+    const url = request.url();
+    if (!url.includes('/v1/')) return;
+    tracker.requestLog.push({
+      method: request.method(),
+      url,
+      resourceType: request.resourceType(),
+    });
+  };
+
+  page.on('request', recordRequest);
 
   await page.exposeFunction('__pwRecordToastIssue', (issue: ToastIssue) => {
     const message = `${issue.type}: ${issue.message}`.trim();
@@ -265,6 +288,7 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
   tracker.detach = () => {
     page.off('console', onConsole);
     page.off('pageerror', onPageError);
+    page.off('request', recordRequest);
   };
 
   setTracker(testInfo, tracker);

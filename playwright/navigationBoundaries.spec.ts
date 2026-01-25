@@ -86,9 +86,6 @@ test.describe('Navigation boundaries and edge cases', () => {
     if (await parentButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await parentButton.click();
       await snap(page, testInfo, 'parent-clicked');
-
-      // Wait for navigation to complete
-      await page.waitForTimeout(1000);
       
       // Check if we navigated to parent (may not be implemented yet)
       const parentVisible = await page.getByText('Usb0', { exact: true }).isVisible({ timeout: 5000 }).catch(() => false);

@@ -305,4 +305,36 @@ class HvscIngestionServiceTest {
     assertTrue(progress.any { it.stage == "archive_validation" })
     assertTrue(progress.any { it.stage == "database_insertion" })
   }
+
+  @Test
+  fun ingestExtractedBaselineFolderUsesSonglengthsTxt() {
+    val workDir = tempFolder.newFolder("hvsc-extracted")
+    val baselineDir = File(workDir, "hvsc-baseline-80")
+    val musicDir = File(baselineDir, "C64Music/Demos")
+    musicDir.mkdirs()
+
+    val sidData = byteArrayOf(1, 2, 3, 4)
+    File(musicDir, "Test.sid").writeBytes(sidData)
+    val songlengths = """
+      Demos/Test.sid 0:45
+    """.trimIndent()
+    File(baselineDir, "C64Music/Songlengths.txt").writeText(songlengths)
+
+    val database = InMemoryHvscDatabase()
+    val releaseProvider = object : HvscReleaseProvider {
+      override fun fetchLatestVersions(): Pair<Int, Int> = 80 to 80
+      override fun buildBaselineUrl(version: Int): String = "baseline-$version"
+      override fun buildUpdateUrl(version: Int): String = "update-$version"
+    }
+    val service = HvscIngestionService(database, releaseProvider)
+
+    val meta = service.installOrUpdate(workDir, null) { }
+
+    assertEquals(80, meta.installedBaselineVersion)
+    assertEquals(80, meta.installedVersion)
+    val songs = database.listSongs("/Demos")
+    assertEquals(1, songs.size)
+    assertEquals("Test.sid", songs[0].fileName)
+    assertEquals(45, songs[0].durationSeconds)
+  }
 }

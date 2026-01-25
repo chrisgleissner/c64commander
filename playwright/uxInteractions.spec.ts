@@ -46,6 +46,11 @@ test.describe('UX Interaction Patterns', () => {
     };
   };
 
+  const waitForUiStable = async (page: Page) => {
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
+  };
+
   test('source selection precedes navigation - local source @allow-warnings', async ({ page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings' });
 
@@ -61,7 +66,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'source-selector-opened');
 
     // Should show source selection: C64 Ultimate and This device
@@ -83,7 +88,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -91,7 +96,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -100,7 +105,7 @@ test.describe('UX Interaction Patterns', () => {
     }
 
     await c64uButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'c64u-source-selected');
 
     // Should now show C64U file navigation
@@ -118,7 +123,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -126,7 +131,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -134,7 +139,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await c64uButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'at-source-root');
 
     // At source root, "Up" button should be disabled or hidden
@@ -156,7 +161,7 @@ test.describe('UX Interaction Patterns', () => {
     const folder = page.getByRole('button', { name: /folder|dir/i }).first();
     if (await folder.isVisible({ timeout: 2000 }).catch(() => false)) {
       await folder.click();
-      await page.waitForTimeout(500);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'navigated-into-folder');
 
       // Now "Up" should be enabled
@@ -177,7 +182,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -185,7 +190,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -193,20 +198,20 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await c64uButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     // Look for "Select All" button
     const selectAllButton = page.getByRole('button', { name: /Select All|Select all/i });
     if (await selectAllButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await selectAllButton.click();
-      await page.waitForTimeout(300);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'all-items-selected');
 
       // Now look for "Deselect All" or "Clear Selection"
       const deselectButton = page.getByRole('button', { name: /Deselect All|Clear Selection|Deselect all/i });
       if (await deselectButton.isVisible({ timeout: 2000 }).catch(() => false)) {
         await deselectButton.click();
-        await page.waitForTimeout(300);
+        await waitForUiStable(page);
         await attachStepScreenshot(page, testInfo, 'all-items-deselected');
       } else {
         await attachStepScreenshot(page, testInfo, 'deselect-button-not-found');
@@ -221,7 +226,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'playlist-view');
 
     // Check if there are items in the playlist
@@ -241,7 +246,7 @@ test.describe('UX Interaction Patterns', () => {
     }
 
     await selectAllButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'all-playlist-items-selected');
 
     // Look for "Remove" button
@@ -252,7 +257,7 @@ test.describe('UX Interaction Patterns', () => {
     }
 
     await removeButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'after-remove-clicked');
 
     // Should show confirmation dialog
@@ -273,7 +278,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'playlist-view');
 
     // In playlist view, should have playback controls
@@ -291,12 +296,12 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await c64uButton.click();
-      await page.waitForTimeout(500);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'in-selection-view');
 
       // Should NOT have playback controls here
@@ -318,7 +323,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'play-page');
 
     // Should NOT have mounting controls (Mount, Unmount)
@@ -335,7 +340,7 @@ test.describe('UX Interaction Patterns', () => {
     await page.goto("/disks");
 
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'disks-page');
 
     // Should have mounting controls here
@@ -354,7 +359,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'play-page');
 
     // Look for intent-based button text
@@ -378,7 +383,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -386,7 +391,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'source-selector');
 
     // Look for intent-based headings or instructions
@@ -412,7 +417,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -420,7 +425,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -428,7 +433,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await c64uButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     // Get initial position of a control element (e.g., "Add" button)
     const controlButton = page.getByRole('button', { name: /Add|Select/i }).first();
@@ -444,7 +449,7 @@ test.describe('UX Interaction Patterns', () => {
     const firstItem = page.getByRole('button', { name: /.+/ }).first();
     if (await firstItem.isVisible({ timeout: 2000 }).catch(() => false)) {
       await firstItem.click();
-      await page.waitForTimeout(300);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'item-selected');
 
       // Check if control button moved
@@ -468,7 +473,7 @@ test.describe('UX Interaction Patterns', () => {
     await page.goto("/disks");
 
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'disks-page');
 
     // Look for "View all" button (indicates truncation)
@@ -478,7 +483,7 @@ test.describe('UX Interaction Patterns', () => {
     if (hasViewAll) {
       await attachStepScreenshot(page, testInfo, 'view-all-present');
       await viewAllButton.click();
-      await page.waitForTimeout(300);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'full-list-opened');
 
       // Should show a scrollable panel with all items
@@ -500,7 +505,7 @@ test.describe('UX Interaction Patterns', () => {
 
     await page.goto("/play");
     await page.waitForLoadState("domcontentloaded");
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     const addButton = page.getByRole('button', { name: /Add items|Add|Choose|Browse/i });
     if (!(await addButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -508,12 +513,12 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (await c64uButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await c64uButton.click();
-      await page.waitForTimeout(500);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'c64u-navigation');
 
       // Navigate deep to get a long path
@@ -521,7 +526,7 @@ test.describe('UX Interaction Patterns', () => {
       let depth = 0;
       while (await folder.isVisible({ timeout: 1000 }).catch(() => false) && depth < 3) {
         await folder.click();
-        await page.waitForTimeout(300);
+        await waitForUiStable(page);
         depth++;
       }
 
@@ -552,7 +557,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -560,13 +565,13 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await c64uButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
 
     // Select an item
     const firstItem = page.getByRole('button').first();
     if (await firstItem.isVisible({ timeout: 2000 }).catch(() => false)) {
       await firstItem.click();
-      await page.waitForTimeout(300);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'item-selected');
 
       // Look for selection count display
@@ -595,7 +600,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { c64uButton } = getSourceButtons(page);
     if (!(await c64uButton.isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -603,7 +608,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await c64uButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'in-selection-view');
 
     // Look for "Root" quick action button
@@ -632,7 +637,7 @@ test.describe('UX Interaction Patterns', () => {
     }
 
     await mountButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'mount-clicked');
 
     // Should show a modal dialog
@@ -670,7 +675,7 @@ test.describe('UX Interaction Patterns', () => {
     }
 
     await clearButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'clear-clicked');
 
     // Should show confirmation dialog
@@ -722,7 +727,7 @@ test.describe('UX Interaction Patterns', () => {
       return;
     }
     await addButton.click();
-    await page.waitForTimeout(300);
+    await waitForUiStable(page);
 
     const { localButton, c64uButton } = getSourceButtons(page);
     const localVisible = await localButton.isVisible({ timeout: 2000 }).catch(() => false);

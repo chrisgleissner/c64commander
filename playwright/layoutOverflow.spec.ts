@@ -39,6 +39,21 @@ const expectDialogWithinViewport = async (page: Page, dialog: Locator) => {
   }
 };
 
+const expectVerticalOverflowHandled = async (container: Locator) => {
+  const metrics = await container.evaluate((el: HTMLElement) => {
+    const style = window.getComputedStyle(el);
+    return {
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+      overflowY: style.overflowY,
+    };
+  });
+
+  if (metrics.scrollHeight > metrics.clientHeight) {
+    expect(metrics.overflowY).not.toBe('visible');
+  }
+};
+
 const seedDiskLibrary = async (page: Page, disks: Array<{ id: string; name: string; path: string; location: 'local' | 'ultimate'; group?: string | null; importOrder?: number | null }>) => {
   await page.addInitScript(({ disks: seedDisks }) => {
     const payload = {
@@ -274,6 +289,7 @@ test.describe('Layout overflow safeguards', () => {
     await expectNoHorizontalOverflow(page);
   });
 
+
   layoutTest('primary pages avoid horizontal overflow @layout', async ({ page }, testInfo) => {
     const pages = [
       { path: '/', label: 'home' },
@@ -336,5 +352,110 @@ test.describe('Layout overflow safeguards', () => {
     await page.keyboard.press('Escape');
 
     await expectNoHorizontalOverflow(page);
+  });
+
+  layoutTest('viewport matrix preserves layout and scrolling @layout', async ({ page }, testInfo) => {
+    const viewports = [
+      { width: 360, height: 640, label: 'phone-small' },
+      { width: 428, height: 926, label: 'phone-large' },
+      { width: 800, height: 1280, label: 'tablet-portrait' },
+      { width: 844, height: 390, label: 'phone-landscape' },
+    ];
+
+    const seededDisks = [
+      {
+        id: 'local:/Usb0/Overflow/Long-Disk-Name-For-Layout-Matrix-1.d64',
+        name: 'Long-Disk-Name-For-Layout-Matrix-1.d64',
+        path: '/Usb0/Overflow/Long-Disk-Name-For-Layout-Matrix-1.d64',
+        location: 'local' as const,
+        group: 'Layout-Matrix-Group',
+        importOrder: 1,
+      },
+      {
+        id: 'ultimate:/Usb0/Overflow/Long-Disk-Name-For-Layout-Matrix-2.d64',
+        name: 'Long-Disk-Name-For-Layout-Matrix-2.d64',
+        path: '/Usb0/Overflow/Long-Disk-Name-For-Layout-Matrix-2.d64',
+        location: 'ultimate' as const,
+        group: 'Layout-Matrix-Group',
+        importOrder: 2,
+      },
+    ];
+
+    const seededPlaylist = [
+      {
+        source: 'ultimate' as const,
+        path: '/Usb0/Demos/Layout-Matrix-Long-Track-Name-That-Should-Not-Overflow.sid',
+        name: 'Layout-Matrix-Long-Track-Name-That-Should-Not-Overflow.sid',
+        durationMs: 60000,
+      },
+    ];
+
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await seedDiskLibrary(page, seededDisks);
+      await seedPlaylistStorage(page, seededPlaylist);
+
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await snap(page, testInfo, `matrix-home-${viewport.label}`);
+      await expectNoHorizontalOverflow(page);
+
+      await page.goto('/play', { waitUntil: 'domcontentloaded' });
+      await snap(page, testInfo, `matrix-play-${viewport.label}`);
+      await expectNoHorizontalOverflow(page);
+
+      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      const addDialog = page.getByRole('dialog');
+      await expectDialogWithinViewport(page, addDialog);
+      await expectVerticalOverflowHandled(addDialog);
+      await snap(page, testInfo, `matrix-add-items-${viewport.label}`);
+      const scrollArea = addDialog.locator('[data-testid="action-list-scroll"]');
+      if (await scrollArea.count()) {
+        const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
+        expect(scrollable).toBeTruthy();
+      }
+      await page.keyboard.press('Escape');
+
+      const viewAll = page.getByRole('button', { name: 'View all' }).first();
+      if (await viewAll.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await viewAll.click();
+        const viewAllDialog = page.getByRole('dialog');
+        await expectDialogWithinViewport(page, viewAllDialog);
+        await expectVerticalOverflowHandled(viewAllDialog);
+        await snap(page, testInfo, `matrix-play-view-all-${viewport.label}`);
+        await page.keyboard.press('Escape');
+      }
+
+      await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+      await snap(page, testInfo, `matrix-disks-${viewport.label}`);
+      await expectNoHorizontalOverflow(page);
+
+      const diskAddItems = page.getByRole('button', { name: /Add items|Add more items/i });
+      if (await diskAddItems.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await diskAddItems.click();
+        const diskDialog = page.getByRole('dialog');
+        await expectDialogWithinViewport(page, diskDialog);
+        await expectVerticalOverflowHandled(diskDialog);
+        await snap(page, testInfo, `matrix-disks-add-items-${viewport.label}`);
+        await page.keyboard.press('Escape');
+      }
+
+      await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+      await snap(page, testInfo, `matrix-settings-${viewport.label}`);
+      await expectNoHorizontalOverflow(page);
+
+      const logsButton = page.getByRole('button', { name: 'Logs' });
+      if (await logsButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await logsButton.click();
+        const logsDialog = page.getByRole('dialog');
+        await expectDialogWithinViewport(page, logsDialog);
+        await expectVerticalOverflowHandled(logsDialog);
+        await snap(page, testInfo, `matrix-logs-${viewport.label}`);
+        await page.keyboard.press('Escape');
+      }
+
+      await page.goto('/config', { waitUntil: 'domcontentloaded' });
+      await snap(page, testInfo, `matrix-config-${viewport.label}`);
+      await expectNoHorizontalOverflow(page);
+    }
   });
 });

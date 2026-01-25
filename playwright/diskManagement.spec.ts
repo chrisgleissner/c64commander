@@ -323,6 +323,63 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'mount-requested');
   });
 
+  test('settings changes while disk mounted preserve mounted state @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedUltimateTurricanDisks(page);
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+
+    const diskRow = getDiskRow(page, 'Disk 1.d64');
+    await diskRow.getByRole('button', { name: 'Mount Disk 1.d64' }).click();
+    await page
+      .getByRole('dialog', { name: /Mount Disk 1\.d64/i })
+      .getByRole('button', { name: /Drive A/i })
+      .click();
+    await expect.poll(() => Boolean(mountDriveRequest(server.requests, 'a'))).toBe(true);
+
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    const lightThemeButton = page.getByRole('button', { name: /Light|light theme/i }).first();
+    await expect(lightThemeButton).toBeVisible();
+    await lightThemeButton.click();
+
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    const driveCard = getDriveCard(page, 'Drive A');
+    await expect(driveCard).toContainText('Disk 1.d64');
+    await snap(page, testInfo, 'mounted-after-settings');
+  });
+
+  test('mount failure surfaces error and does not mark drive mounted @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected mount failure warnings for auth errors.');
+    await seedUltimateTurricanDisks(page);
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+
+    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
+    const mountDialog = page.getByRole('dialog', { name: /Mount Disk 1\.d64/i });
+    server.setFaultMode('auth');
+    await mountDialog.getByRole('button', { name: /Drive A/i }).click();
+
+    await expect(page.getByText('Mount failed', { exact: true })).toBeVisible();
+    const driveCard = getDriveCard(page, 'Drive A');
+    await expect(driveCard).not.toContainText('Disk 1.d64');
+    await snap(page, testInfo, 'mount-failed');
+    server.setFaultMode('none');
+  });
+
+  test('mount failure when device unreachable shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected mount failure warnings for unreachable device.');
+    await seedUltimateTurricanDisks(page);
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+
+    await getDiskRow(page, 'Disk 1.d64').getByRole('button', { name: 'Mount Disk 1.d64' }).click();
+    const mountDialog = page.getByRole('dialog', { name: /Mount Disk 1\.d64/i });
+    server.setReachable(false);
+    await mountDialog.getByRole('button', { name: /Drive A/i }).click();
+
+    await expect(page.getByText('Mount failed', { exact: true })).toBeVisible();
+    const driveCard = getDriveCard(page, 'Drive A');
+    await expect(driveCard).not.toContainText('Disk 1.d64');
+    await snap(page, testInfo, 'mount-unreachable');
+    server.setReachable(true);
+  });
+
   test('multi-drive mounting and rotation within group @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
