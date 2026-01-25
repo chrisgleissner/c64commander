@@ -1,7 +1,7 @@
 import type { MediaEntry, MediaIndex } from '@/lib/media-index';
 import { JsonMediaIndex, LocalStorageMediaIndexStorage } from '@/lib/media-index';
 import type { HvscFolderListing } from './hvscTypes';
-import { HvscIngestion } from './native/hvscIngestion';
+import { listHvscFolder } from './hvscFilesystem';
 
 const normalizePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
@@ -62,8 +62,8 @@ export class HvscMediaIndexAdapter implements MediaIndex {
   }
 }
 
-export const createHvscMediaIndex = () =>
+export const createHvscMediaIndex = (listFolder: (path: string) => Promise<HvscFolderListing> = listHvscFolder) =>
   new HvscMediaIndexAdapter(
     new JsonMediaIndex(new LocalStorageMediaIndexStorage()),
-    (path: string) => HvscIngestion.getHvscFolderListing({ path }),
+    (path: string) => listFolder(path),
   );
