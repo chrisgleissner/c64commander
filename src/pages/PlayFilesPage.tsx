@@ -24,6 +24,7 @@ import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFile
 import { PlaybackClock } from '@/lib/playback/playbackClock';
 import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import { createHvscSourceLocation } from '@/lib/sourceNavigation/hvscSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import {
@@ -57,6 +58,7 @@ import {
   checkForHvscUpdates,
   getHvscDurationByMd5Seconds,
   getHvscFolderListing,
+  loadHvscRoot,
   getHvscSong,
   getHvscStatus,
   loadHvscStatusSummary,
@@ -419,6 +421,17 @@ export default function PlayFilesPage() {
     setSonglengthsFiles([{ path, file }]);
   }, []);
 
+  const buildHvscLocalPlayFile = useCallback((path: string, name: string): LocalPlayFile => ({
+    name,
+    webkitRelativePath: path,
+    lastModified: Date.now(),
+    arrayBuffer: async () => {
+      const detail = await getHvscSong({ virtualPath: path });
+      const data = base64ToUint8(detail.dataBase64);
+      return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    },
+  }), []);
+
   const defaultVolumeIndex = useMemo(() => {
     const zeroIndex = volumeOptions.findIndex((option) => option.numeric === 0);
     return zeroIndex >= 0 ? zeroIndex : 0;
@@ -690,15 +703,23 @@ export default function PlayFilesPage() {
     }
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
+  const hvscRoot = useMemo(() => loadHvscRoot(), []);
+  const hvscLibraryAvailable = hvscStatusSummary.download.status === 'success'
+    && hvscStatusSummary.extraction.status === 'success';
+
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
-    return [
+    const groups: SourceGroup[] = [
       { label: 'C64 Ultimate', sources: [ultimateSource] },
       { label: 'This device', sources: localGroupSources },
     ];
-  }, [localSources]);
+    if (hvscLibraryAvailable) {
+      groups.push({ label: 'HVSC Library', sources: [createHvscSourceLocation(hvscRoot.path)] });
+    }
+    return groups;
+  }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
 
   const localEntriesBySourceId = useMemo(() => {
     const map = new Map<
@@ -1017,13 +1038,16 @@ export default function PlayFilesPage() {
               || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified) : undefined)
               || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified) : undefined)
             : undefined;
+        const hvscFile = source.type === 'hvsc'
+          ? buildHvscLocalPlayFile(normalizedPath, file.name)
+          : undefined;
         const playable: PlayableEntry = {
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
           name: file.name,
           path: normalizedPath,
           durationMs: undefined,
           sourceId: source.type === 'local' ? source.id : null,
-          file: localFile,
+          file: hvscFile ?? localFile,
           sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
           modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
         };
@@ -2002,18 +2026,8 @@ export default function PlayFilesPage() {
   }, [updateHvscSummary]);
 
   const buildHvscFile = useCallback((song: { id: number; virtualPath: string; fileName: string }) => {
-    const name = song.fileName;
-    return {
-      name,
-      webkitRelativePath: song.virtualPath,
-      lastModified: Date.now(),
-      arrayBuffer: async () => {
-        const detail = await getHvscSong({ id: song.id });
-        const data = base64ToUint8(detail.dataBase64);
-        return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-      },
-    } as LocalPlayFile;
-  }, []);
+    return buildHvscLocalPlayFile(song.virtualPath, song.fileName) as LocalPlayFile;
+  }, [buildHvscLocalPlayFile]);
 
   const collectHvscSongs = useCallback(async (rootPath: string) => {
     const queuePaths = [rootPath || '/'];

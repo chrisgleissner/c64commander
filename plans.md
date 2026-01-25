@@ -63,9 +63,9 @@
 
 ### Step 6: Import interstitial: show HVSC only when available
 
-- [ ] Update import flow to include “HVSC Library” option only when extracted.
-- [ ] Open HVSC root directly in the browser when selected.
-- [ ] Run Playwright tests for import flow and commit: "Gate HVSC import option".
+- [x] Update import flow to include “HVSC Library” option only when extracted.
+- [x] Open HVSC root directly in the browser when selected.
+- [x] Run Playwright tests for import flow and commit: "Gate HVSC import option".
 
 ### Step 7: Move indexing to TS-only file-system scan
 
