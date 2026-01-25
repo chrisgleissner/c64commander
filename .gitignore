@@ -31,6 +31,8 @@ test-results/evidence/
 # Local config
 *.local
 .env
+plans.md
+PLANS.md
 
 # Editors
 *.njsproj

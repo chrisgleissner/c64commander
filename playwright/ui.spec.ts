@@ -213,7 +213,7 @@ test.describe('UI coverage', () => {
     await enableHvscDownloads(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Install HVSC|Check updates/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toBeVisible();
     await snap(page, testInfo, 'play-hvsc');
   });
 

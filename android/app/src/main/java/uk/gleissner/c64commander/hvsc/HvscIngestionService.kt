@@ -1,12 +1,11 @@
 package uk.gleissner.c64commander.hvsc
 
 import java.io.File
-import java.security.MessageDigest
 import java.util.Locale
 import java.util.UUID
 
-class HvscIngestionService(
-  private val database: HvscDatabase,
+internal class HvscIngestionService(
+  private val stateStore: HvscStateStore,
   private val releaseService: HvscReleaseProvider = HvscReleaseService(),
   private val downloader: HvscDownloadClient = HvscDownloader(),
 ) {
@@ -57,18 +56,13 @@ class HvscIngestionService(
     const val SidEnumeration = "sid_enumeration"
     const val Songlengths = "songlengths"
     const val SidMetadataParsing = "sid_metadata_parsing"
-    const val DatabaseInsertion = "database_insertion"
     const val Complete = "complete"
     const val Error = "error"
   }
 
-  private companion object {
-    const val BATCH_SIZE = 250
-  }
-
   private inner class ProgressEmitter(
     private val ingestionId: String,
-    private val onProgress: (Progress) -> Unit,
+    private val onProgress: (Progress) -> Unit
   ) {
     private val startedAt = System.currentTimeMillis()
 
@@ -85,9 +79,9 @@ class HvscIngestionService(
       songsUpserted: Int? = null,
       songsDeleted: Int? = null,
       errorType: String? = null,
-      errorCause: String? = null,
+      errorCause: String? = null
     ) {
-      val resolvedPercent = percent ?: calculatePercent(processedCount, totalCount)
+      val elapsed = System.currentTimeMillis() - startedAt
       onProgress(
         Progress(
           ingestionId = ingestionId,
@@ -97,71 +91,65 @@ class HvscIngestionService(
           currentFile = currentFile,
           processedCount = processedCount,
           totalCount = totalCount,
-          percent = resolvedPercent,
+          percent = percent ?: calculatePercent(processedCount, totalCount),
           downloadedBytes = downloadedBytes,
           totalBytes = totalBytes,
           songsUpserted = songsUpserted,
           songsDeleted = songsDeleted,
-          elapsedTimeMs = System.currentTimeMillis() - startedAt,
+          elapsedTimeMs = elapsed,
           errorType = errorType,
-          errorCause = errorCause,
-        ),
+          errorCause = errorCause
+        )
       )
     }
 
-    fun emitError(error: Exception, stage: String, archiveName: String? = null) {
+    fun emitError(error: Exception, stage: String, archiveName: String?) {
       emit(
         stage = stage,
-        message = error.message ?: "HVSC ingestion failed",
+        message = error.message ?: "Unknown error",
         archiveName = archiveName,
         errorType = error::class.java.simpleName,
-        errorCause = error.message,
+        errorCause = error.cause?.message
       )
     }
   }
 
-  fun getStatus(): HvscMeta = database.getMeta()
+  fun getStatus(): HvscMeta {
+    return stateStore.load().toMeta()
+  }
 
   fun getCacheStatus(workDir: File): CacheStatus {
     if (!workDir.exists()) return CacheStatus(null, emptyList())
-    val baselineVersions = mutableListOf<Int>()
-    val updateVersions = mutableListOf<Int>()
-    workDir.listFiles()?.forEach { file ->
-      val name = file.name
-      if (!file.isDirectory && !name.endsWith(".7z", ignoreCase = true) && !name.endsWith(".zip", ignoreCase = true)) {
-        return@forEach
-      }
-      val baselineMatch = Regex("hvsc-baseline-(\\d+)", RegexOption.IGNORE_CASE).find(name)
-      if (baselineMatch != null) {
-        baselineVersions.add(baselineMatch.groupValues[1].toInt())
-        return@forEach
-      }
-      val updateMatch = Regex("hvsc-update-(\\d+)", RegexOption.IGNORE_CASE).find(name)
-      if (updateMatch != null) {
-        updateVersions.add(updateMatch.groupValues[1].toInt())
-      }
-    }
-    val baseline = baselineVersions.maxOrNull()
-    return CacheStatus(baseline, updateVersions.sorted())
+    val entries = workDir.listFiles()?.toList() ?: emptyList()
+    val baselineVersions = entries.mapNotNull { parseCachedVersion("hvsc-baseline", it.name) }
+    val updateVersions = entries.mapNotNull { parseCachedVersion("hvsc-update", it.name) }
+    return CacheStatus(
+      baselineVersion = baselineVersions.maxOrNull(),
+      updateVersions = updateVersions.distinct().sorted(),
+    )
+  }
+
+  private fun parseCachedVersion(prefix: String, name: String): Int? {
+    val regex = Regex("^${Regex.escape(prefix)}-(\\d+)(\\..+)?$")
+    val match = regex.find(name) ?: return null
+    return match.groupValues[1].toIntOrNull()
   }
 
   fun checkForUpdates(): HvscUpdateStatus {
     val (baselineLatest, updateLatest) = releaseService.fetchLatestVersions()
-    val meta = database.getMeta()
-    val installed = meta.installedVersion
-    val required = if (installed == 0) {
-      (baselineLatest + 1..updateLatest).toList()
-    } else if (installed < updateLatest) {
-      ((installed + 1)..updateLatest).toList()
-    } else {
-      emptyList()
+    stateStore.updateMeta(lastUpdateCheckUtcMs = System.currentTimeMillis())
+    val meta = stateStore.load().toMeta()
+    val installedVersion = meta.installedVersion
+    val requiredUpdates = when {
+      installedVersion == 0 && updateLatest > baselineLatest -> (baselineLatest + 1..updateLatest).toList()
+      installedVersion in 1 until updateLatest -> (installedVersion + 1..updateLatest).toList()
+      else -> emptyList()
     }
-    database.updateMeta(lastUpdateCheckUtcMs = System.currentTimeMillis())
     return HvscUpdateStatus(
       latestVersion = updateLatest,
-      installedVersion = installed,
-      requiredUpdates = required,
-      baselineVersion = if (installed == 0) baselineLatest else null,
+      installedVersion = installedVersion,
+      requiredUpdates = requiredUpdates,
+      baselineVersion = baselineLatest,
     )
   }
 
@@ -172,13 +160,20 @@ class HvscIngestionService(
   ): HvscMeta {
     val ingestionId = UUID.randomUUID().toString()
     val emitter = ProgressEmitter(ingestionId, onProgress)
-    emitter.emit(Stages.Start, "HVSC ingestion started")
+    emitter.emit(Stages.Start, "HVSC install/update started")
     var currentArchive: String? = null
     try {
-      val meta = database.getMeta()
+      if (!workDir.exists()) {
+        workDir.mkdirs()
+      }
       val (baselineLatest, updateLatest) = releaseService.fetchLatestVersions()
+      stateStore.updateMeta(lastUpdateCheckUtcMs = System.currentTimeMillis())
+      val meta = stateStore.load().toMeta()
       val plans = buildInstallPlan(meta, baselineLatest, updateLatest, workDir)
-      if (plans.isEmpty()) return database.getMeta()
+      if (plans.isEmpty()) {
+        emitter.emit(Stages.Complete, "HVSC already up to date")
+        return stateStore.load().toMeta()
+      }
       emitter.emit(
         stage = Stages.ArchiveDiscovery,
         message = "Discovered ${plans.size} archive(s)",
@@ -201,24 +196,14 @@ class HvscIngestionService(
           applyUpdateArchive(plan, inspection, cancelToken, emitter)
         }
       }
-      emitter.emit(Stages.Complete, "HVSC ingestion complete")
-      return database.getMeta()
+      emitter.emit(Stages.Complete, "HVSC install/update complete")
+      return stateStore.load().toMeta()
     } catch (error: Exception) {
-      database.updateMeta(ingestionState = "error", ingestionError = error.message)
+      stateStore.updateMeta(ingestionState = "error", ingestionError = error.message)
       emitter.emitError(error, Stages.Error, currentArchive)
       throw error
     }
   }
-
-  fun listFolders(path: String): List<String> = database.listFolders(path)
-
-  fun listSongs(path: String): List<HvscSongSummary> = database.listSongs(path)
-
-  fun getSongById(id: Long): HvscSongDetail? = database.getSongById(id)
-
-  fun getSongByVirtualPath(path: String): HvscSongDetail? = database.getSongByVirtualPath(path)
-
-  fun getDurationByMd5(md5: String): Int? = database.getDurationByMd5(md5)
 
   fun ingestCached(
     workDir: File,
@@ -230,7 +215,7 @@ class HvscIngestionService(
     emitter.emit(Stages.Start, "HVSC cached ingestion started")
     var currentArchive: String? = null
     try {
-      val meta = database.getMeta()
+      val meta = stateStore.load().toMeta()
       val cache = getCacheStatus(workDir)
       val plans = buildCachedPlan(meta, cache, workDir)
       if (plans.isEmpty()) {
@@ -259,9 +244,9 @@ class HvscIngestionService(
         }
       }
       emitter.emit(Stages.Complete, "HVSC cached ingestion complete")
-      return database.getMeta()
+      return stateStore.load().toMeta()
     } catch (error: Exception) {
-      database.updateMeta(ingestionState = "error", ingestionError = error.message)
+      stateStore.updateMeta(ingestionState = "error", ingestionError = error.message)
       emitter.emitError(error, Stages.Error, currentArchive)
       throw error
     }
@@ -464,7 +449,7 @@ class HvscIngestionService(
     cancelToken: HvscCancelRegistry.CancellationToken?,
     emitter: ProgressEmitter,
   ) {
-    database.updateMeta(ingestionState = "installing", ingestionError = null, clearIngestionError = true)
+    stateStore.updateMeta(ingestionState = "installing", ingestionError = null, clearIngestionError = true)
     val archive = plan.archiveFile
     val totalSid = inspection.sidEntries.coerceAtLeast(0)
     emitter.emit(
@@ -473,120 +458,74 @@ class HvscIngestionService(
       archiveName = archive.name,
       totalCount = totalSid,
     )
-    val pathDurations = mutableMapOf<String, Int>()
-    val md5Durations = mutableMapOf<String, Int>()
-    val batch = mutableListOf<HvscSongRecord>()
-    val now = System.currentTimeMillis()
+    val libraryRoot = resolveLibraryRoot(archive)
+    if (libraryRoot.exists()) {
+      libraryRoot.deleteRecursively()
+    }
+    if (!libraryRoot.exists()) {
+      libraryRoot.mkdirs()
+    }
     var processed = 0
-    var upserted = 0
     var success = false
 
     try {
-      database.withTransaction {
-        HvscArchiveReaderFactory.open(archive, null).use { reader ->
-          var entry = reader.nextEntry()
-          while (entry != null) {
-            cancelIfNeeded(cancelToken)
-            if (!entry.isDirectory) {
-              val normalized = normalizeEntryName(entry.name)
-              if (normalized.endsWith("/Songlengths.md5", true)) {
-                val bytes = reader.readEntryBytes()
-                val parsed = SonglengthsParser.parse(String(bytes, Charsets.UTF_8))
-                parsed.pathToSeconds.forEach { (path, seconds) -> pathDurations[path] = seconds }
-                md5Durations.putAll(parsed.md5ToSeconds)
+      HvscArchiveReaderFactory.open(archive, null).use { reader ->
+        var entry = reader.nextEntry()
+        while (entry != null) {
+          cancelIfNeeded(cancelToken)
+          if (!entry.isDirectory) {
+            val normalized = normalizeEntryName(entry.name)
+            val lowered = normalized.lowercase(Locale.getDefault())
+            val targetPath = when {
+              lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt") -> normalizeLibraryPath(normalized)
+              lowered.endsWith(".sid") -> normalizeVirtualPath(normalized)
+              else -> null
+            }
+            if (targetPath != null) {
+              val data = reader.readEntryBytes()
+              writeLibraryFile(libraryRoot, targetPath, data)
+              if (lowered.endsWith("songlengths.md5")) {
+                val parsed = SonglengthsParser.parse(String(data, Charsets.UTF_8))
                 emitter.emit(
                   stage = Stages.Songlengths,
                   message = "Loaded songlengths.md5 (${parsed.pathToSeconds.size} paths, ${parsed.md5ToSeconds.size} md5 entries)",
                   archiveName = archive.name,
                 )
-              } else if (normalized.endsWith("/Songlengths.txt", true)) {
-                val bytes = reader.readEntryBytes()
-                val parsed = SonglengthsParser.parseText(String(bytes, Charsets.UTF_8))
-                parsed.pathToSeconds.forEach { (path, seconds) ->
-                  if (!pathDurations.containsKey(path)) {
-                    pathDurations[path] = seconds
-                  }
-                }
+              } else if (lowered.endsWith("songlengths.txt")) {
+                val parsed = SonglengthsParser.parseText(String(data, Charsets.UTF_8))
                 emitter.emit(
                   stage = Stages.Songlengths,
                   message = "Loaded songlengths.txt (${parsed.pathToSeconds.size} paths)",
                   archiveName = archive.name,
                 )
-              } else if (normalized.lowercase(Locale.getDefault()).endsWith(".sid")) {
-                val data = reader.readEntryBytes()
-                val virtualPath = normalizeVirtualPath(normalized)
-                if (virtualPath != null) {
-                  val md5 = computeMd5(data)
-                  val durationSeconds = pathDurations[virtualPath] ?: md5Durations[md5]
-                  val dirPath = virtualPath.substringBeforeLast('/', "")
-                  val fileName = virtualPath.substringAfterLast('/')
-                  batch.add(
-                    HvscSongRecord(
-                      virtualPath = virtualPath,
-                      dirPath = if (dirPath.isBlank()) "/" else dirPath,
-                      fileName = fileName,
-                      sizeBytes = data.size.toLong(),
-                      md5 = md5,
-                      durationSeconds = durationSeconds,
-                      data = data,
-                      sourceVersion = plan.version,
-                      createdAtUtcMs = now,
-                      updatedAtUtcMs = now,
-                    ),
-                  )
-                  processed += 1
-                  emitter.emit(
-                    stage = Stages.SidMetadataParsing,
-                    message = "Parsed $virtualPath",
-                    archiveName = archive.name,
-                    currentFile = virtualPath,
-                    processedCount = processed,
-                    totalCount = totalSid,
-                  )
-                  if (batch.size >= BATCH_SIZE) {
-                    database.upsertSongs(batch)
-                    upserted += batch.size
-                    emitter.emit(
-                      stage = Stages.DatabaseInsertion,
-                      message = "Inserted ${upserted.toString()} SID file(s)",
-                      archiveName = archive.name,
-                      processedCount = processed,
-                      totalCount = totalSid,
-                      songsUpserted = upserted,
-                    )
-                    batch.clear()
-                  }
-                }
+              } else {
+                processed += 1
+                emitter.emit(
+                  stage = Stages.SidMetadataParsing,
+                  message = "Parsed $targetPath",
+                  archiveName = archive.name,
+                  currentFile = targetPath,
+                  processedCount = processed,
+                  totalCount = totalSid,
+                )
               }
             }
-            entry = reader.nextEntry()
           }
+          entry = reader.nextEntry()
         }
-        if (batch.isNotEmpty()) {
-          database.upsertSongs(batch)
-          upserted += batch.size
-          emitter.emit(
-            stage = Stages.DatabaseInsertion,
-            message = "Inserted ${upserted.toString()} SID file(s)",
-            archiveName = archive.name,
-            processedCount = processed,
-            totalCount = totalSid,
-            songsUpserted = upserted,
-          )
-          batch.clear()
-        }
-        database.updateDurationsByMd5(md5Durations)
-        database.updateDurationsByVirtualPath(pathDurations)
-        database.updateMeta(
-          installedBaselineVersion = plan.version,
-          installedVersion = plan.version,
-          ingestionState = "ready",
-          ingestionError = null,
-          clearIngestionError = true,
-        )
       }
+      stateStore.updateMeta(
+        installedBaselineVersion = plan.version,
+        installedVersion = plan.version,
+        ingestionState = "ready",
+        ingestionError = null,
+        clearIngestionError = true,
+      )
       success = true
     } finally {
+      if (!success) {
+        stateStore.updateMeta(ingestionState = "error", ingestionError = "Baseline ingest failed")
+      }
       if (success) {
         archive.delete()
       }
@@ -598,7 +537,7 @@ class HvscIngestionService(
       processedCount = totalSid,
       totalCount = totalSid,
       percent = 100,
-      songsUpserted = upserted,
+      songsUpserted = processed,
       songsDeleted = 0,
     )
   }
@@ -609,8 +548,8 @@ class HvscIngestionService(
     cancelToken: HvscCancelRegistry.CancellationToken?,
     emitter: ProgressEmitter,
   ) {
-    if (database.isUpdateApplied(plan.version)) return
-    database.updateMeta(ingestionState = "updating", ingestionError = null, clearIngestionError = true)
+    if (stateStore.isUpdateApplied(plan.version)) return
+    stateStore.updateMeta(ingestionState = "updating", ingestionError = null, clearIngestionError = true)
     val archive = plan.archiveFile
     val totalSid = inspection.sidEntries.coerceAtLeast(0)
     emitter.emit(
@@ -619,69 +558,54 @@ class HvscIngestionService(
       archiveName = archive.name,
       totalCount = totalSid,
     )
-    val pathDurations = mutableMapOf<String, Int>()
-    val md5Durations = mutableMapOf<String, Int>()
     val deletions = mutableListOf<String>()
-    val batch = mutableListOf<HvscSongRecord>()
-    val now = System.currentTimeMillis()
     var processed = 0
-    var upserted = 0
     var success = false
+    val libraryRoot = resolveLibraryRoot(archive)
+    if (!libraryRoot.exists()) {
+      libraryRoot.mkdirs()
+    }
 
     try {
-      database.withTransaction {
-        HvscArchiveReaderFactory.open(archive, null).use { reader ->
-          var entry = reader.nextEntry()
-          while (entry != null) {
-            cancelIfNeeded(cancelToken)
-            if (!entry.isDirectory) {
-              val normalized = normalizeEntryName(entry.name)
-              if (normalized.endsWith("Songlengths.md5", true)) {
-                val parsed = SonglengthsParser.parse(String(reader.readEntryBytes(), Charsets.UTF_8))
-                parsed.pathToSeconds.forEach { (path, seconds) -> pathDurations[path] = seconds }
-                md5Durations.putAll(parsed.md5ToSeconds)
-                emitter.emit(
-                  stage = Stages.Songlengths,
-                  message = "Loaded songlengths.md5 (${parsed.pathToSeconds.size} paths, ${parsed.md5ToSeconds.size} md5 entries)",
-                  archiveName = archive.name,
-                )
-              } else if (normalized.endsWith("Songlengths.txt", true)) {
-                val parsed = SonglengthsParser.parseText(String(reader.readEntryBytes(), Charsets.UTF_8))
-                parsed.pathToSeconds.forEach { (path, seconds) ->
-                  if (!pathDurations.containsKey(path)) {
-                    pathDurations[path] = seconds
-                  }
-                }
-                emitter.emit(
-                  stage = Stages.Songlengths,
-                  message = "Loaded songlengths.txt (${parsed.pathToSeconds.size} paths)",
-                  archiveName = archive.name,
-                )
-              } else if (isDeletionList(normalized)) {
+      HvscArchiveReaderFactory.open(archive, null).use { reader ->
+        var entry = reader.nextEntry()
+        while (entry != null) {
+          cancelIfNeeded(cancelToken)
+          if (!entry.isDirectory) {
+            val normalized = normalizeEntryName(entry.name)
+            val lowered = normalized.lowercase(Locale.getDefault())
+            when {
+              isDeletionList(normalized) -> {
                 val text = String(reader.readEntryBytes(), Charsets.UTF_8)
                 deletions.addAll(parseDeletionList(text))
-              } else if (normalized.lowercase(Locale.getDefault()).endsWith(".sid")) {
+              }
+              lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt") -> {
+                val targetPath = normalizeUpdateLibraryPath(normalized)
+                if (targetPath != null) {
+                  val data = reader.readEntryBytes()
+                  writeLibraryFile(libraryRoot, targetPath, data)
+                  if (lowered.endsWith("songlengths.md5")) {
+                    val parsed = SonglengthsParser.parse(String(data, Charsets.UTF_8))
+                    emitter.emit(
+                      stage = Stages.Songlengths,
+                      message = "Loaded songlengths.md5 (${parsed.pathToSeconds.size} paths, ${parsed.md5ToSeconds.size} md5 entries)",
+                      archiveName = archive.name,
+                    )
+                  } else {
+                    val parsed = SonglengthsParser.parseText(String(data, Charsets.UTF_8))
+                    emitter.emit(
+                      stage = Stages.Songlengths,
+                      message = "Loaded songlengths.txt (${parsed.pathToSeconds.size} paths)",
+                      archiveName = archive.name,
+                    )
+                  }
+                }
+              }
+              lowered.endsWith(".sid") -> {
                 val data = reader.readEntryBytes()
                 val virtualPath = normalizeUpdateVirtualPath(normalized)
                 if (virtualPath != null) {
-                  val md5 = computeMd5(data)
-                  val durationSeconds = pathDurations[virtualPath] ?: md5Durations[md5]
-                  val dirPath = virtualPath.substringBeforeLast('/', "")
-                  val fileName = virtualPath.substringAfterLast('/')
-                  batch.add(
-                    HvscSongRecord(
-                      virtualPath = virtualPath,
-                      dirPath = if (dirPath.isBlank()) "/" else dirPath,
-                      fileName = fileName,
-                      sizeBytes = data.size.toLong(),
-                      md5 = md5,
-                      durationSeconds = durationSeconds,
-                      data = data,
-                      sourceVersion = plan.version,
-                      createdAtUtcMs = now,
-                      updatedAtUtcMs = now,
-                    ),
-                  )
+                  writeLibraryFile(libraryRoot, virtualPath, data)
                   processed += 1
                   emitter.emit(
                     stage = Stages.SidMetadataParsing,
@@ -691,52 +615,29 @@ class HvscIngestionService(
                     processedCount = processed,
                     totalCount = totalSid,
                   )
-                  if (batch.size >= BATCH_SIZE) {
-                    database.upsertSongs(batch)
-                    upserted += batch.size
-                    emitter.emit(
-                      stage = Stages.DatabaseInsertion,
-                      message = "Inserted ${upserted.toString()} SID file(s)",
-                      archiveName = archive.name,
-                      processedCount = processed,
-                      totalCount = totalSid,
-                      songsUpserted = upserted,
-                    )
-                    batch.clear()
-                  }
                 }
               }
             }
-            entry = reader.nextEntry()
+          }
+          entry = reader.nextEntry()
+        }
+      }
+
+      deletions.forEach { path ->
+        resolveLibraryFile(libraryRoot, path)?.let { file ->
+          if (file.exists()) {
+            file.delete()
           }
         }
-
-        if (deletions.isNotEmpty()) {
-          database.deleteByVirtualPaths(deletions)
-        }
-        if (batch.isNotEmpty()) {
-          database.upsertSongs(batch)
-          upserted += batch.size
-          emitter.emit(
-            stage = Stages.DatabaseInsertion,
-            message = "Inserted ${upserted.toString()} SID file(s)",
-            archiveName = archive.name,
-            processedCount = processed,
-            totalCount = totalSid,
-            songsUpserted = upserted,
-          )
-          batch.clear()
-        }
-        database.updateDurationsByMd5(md5Durations)
-        database.updateDurationsByVirtualPath(pathDurations)
-        database.updateMeta(
-          installedVersion = plan.version,
-          ingestionState = "ready",
-          ingestionError = null,
-          clearIngestionError = true,
-        )
-        database.markUpdateApplied(plan.version, "success")
       }
+
+      stateStore.updateMeta(
+        installedVersion = plan.version,
+        ingestionState = "ready",
+        ingestionError = null,
+        clearIngestionError = true,
+      )
+      stateStore.markUpdateApplied(plan.version, "success", null)
       emitter.emit(
         stage = Stages.Complete,
         message = "${plan.displayName} indexed",
@@ -744,12 +645,12 @@ class HvscIngestionService(
         processedCount = totalSid,
         totalCount = totalSid,
         percent = 100,
-        songsUpserted = upserted,
+        songsUpserted = processed,
         songsDeleted = deletions.size,
       )
       success = true
     } catch (error: Exception) {
-      database.markUpdateApplied(plan.version, "failed", error.message)
+      stateStore.markUpdateApplied(plan.version, "failed", error.message)
       throw error
     } finally {
       if (success) {
@@ -765,7 +666,7 @@ class HvscIngestionService(
 
   private fun cancelIfNeeded(cancelToken: HvscCancelRegistry.CancellationToken?) {
     if (cancelToken?.isCancelled() == true) {
-      database.updateMeta(ingestionState = "idle", ingestionError = "Cancelled")
+      stateStore.updateMeta(ingestionState = "idle", ingestionError = "Cancelled")
       throw IllegalStateException("HVSC update cancelled")
     }
   }
@@ -787,6 +688,16 @@ class HvscIngestionService(
     }
   }
 
+  private fun normalizeLibraryPath(entryName: String): String? {
+    val name = normalizeEntryName(entryName)
+    val withoutRoot = name
+      .removePrefix("HVSC/")
+      .removePrefix("C64Music/")
+      .removePrefix("C64MUSIC/")
+      .trimStart('/')
+    return if (withoutRoot.isBlank()) null else "/$withoutRoot"
+  }
+
   private fun normalizeUpdateVirtualPath(entryName: String): String? {
     val name = normalizeEntryName(entryName)
     val lowered = name.lowercase(Locale.getDefault())
@@ -802,6 +713,21 @@ class HvscIngestionService(
     return normalizeVirtualPath(base)
   }
 
+  private fun normalizeUpdateLibraryPath(entryName: String): String? {
+    val name = normalizeEntryName(entryName)
+    val lowered = name.lowercase(Locale.getDefault())
+    val base = when {
+      lowered.startsWith("new/") -> name.substringAfter("new/")
+      lowered.contains("/new/") -> name.substringAfter("/new/")
+      lowered.startsWith("update/") -> name.substringAfter("update/")
+      lowered.contains("/update/") -> name.substringAfter("/update/")
+      lowered.startsWith("updated/") -> name.substringAfter("updated/")
+      lowered.contains("/updated/") -> name.substringAfter("/updated/")
+      else -> name
+    }
+    return normalizeLibraryPath(base)
+  }
+
   private fun isDeletionList(path: String): Boolean {
     val lowered = path.lowercase(Locale.getDefault())
     return lowered.endsWith(".txt") && (lowered.contains("delete") || lowered.contains("remove"))
@@ -814,9 +740,30 @@ class HvscIngestionService(
       .map { if (it.startsWith("/")) it else "/$it" }
   }
 
-  private fun computeMd5(data: ByteArray): String {
-    val digest = MessageDigest.getInstance("MD5")
-    val hash = digest.digest(data)
-    return hash.joinToString("") { byte -> "%02x".format(byte) }
+  private fun resolveLibraryRoot(archiveFile: File): File = File(archiveFile.parentFile, "library")
+
+  private fun resolveLibraryFile(rootDir: File, virtualPath: String): File? {
+    val relative = virtualPath.trimStart('/')
+    if (relative.isBlank()) return null
+    val file = File(rootDir, relative)
+    ensureSafeTarget(rootDir, file)
+    return file
+  }
+
+  private fun writeLibraryFile(rootDir: File, virtualPath: String, data: ByteArray) {
+    val target = resolveLibraryFile(rootDir, virtualPath) ?: return
+    val parent = target.parentFile
+    if (parent != null && !parent.exists()) {
+      parent.mkdirs()
+    }
+    target.writeBytes(data)
+  }
+
+  private fun ensureSafeTarget(rootDir: File, target: File) {
+    val rootCanonical = rootDir.canonicalFile
+    val targetCanonical = target.canonicalFile
+    if (!targetCanonical.path.startsWith(rootCanonical.path)) {
+      throw IllegalArgumentException("Archive entry resolves outside HVSC root: ${target.path}")
+    }
   }
 }

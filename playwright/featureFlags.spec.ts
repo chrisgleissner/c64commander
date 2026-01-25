@@ -53,7 +53,7 @@ test.describe('Feature flags', () => {
     await expect(toggle).not.toBeChecked();
     await snap(page, testInfo, 'toggle-off');
     await page.goto('/play');
-    await expect(page.getByText('Install HVSC')).toHaveCount(0);
+    await expect(page.getByText('Download HVSC Library')).toHaveCount(0);
     await snap(page, testInfo, 'hvsc-hidden');
   });
 
@@ -64,7 +64,7 @@ test.describe('Feature flags', () => {
     await expect(toggle).toBeChecked();
     await snap(page, testInfo, 'toggle-on');
     await page.goto('/play');
-    await expect(page.getByRole('button', { name: /Install HVSC|Check updates/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toBeVisible();
     await snap(page, testInfo, 'hvsc-visible');
   });
 
@@ -77,7 +77,7 @@ test.describe('Feature flags', () => {
     await expect(toggle).not.toBeChecked();
     await snap(page, testInfo, 'toggle-disabled');
     await page.goto('/play');
-    await expect(page.getByRole('button', { name: 'Install HVSC' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toHaveCount(0);
     await snap(page, testInfo, 'hvsc-hidden');
   });
 

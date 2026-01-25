@@ -8,19 +8,6 @@ data class HvscMeta(
   val ingestionError: String?,
 )
 
-data class HvscSongRecord(
-  val virtualPath: String,
-  val dirPath: String,
-  val fileName: String,
-  val sizeBytes: Long,
-  val md5: String,
-  val durationSeconds: Int?,
-  val data: ByteArray,
-  val sourceVersion: Int,
-  val createdAtUtcMs: Long,
-  val updatedAtUtcMs: Long,
-)
-
 data class HvscSongSummary(
   val id: Long,
   val virtualPath: String,

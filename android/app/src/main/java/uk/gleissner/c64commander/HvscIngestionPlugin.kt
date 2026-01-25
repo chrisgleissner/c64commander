@@ -1,9 +1,10 @@
 package uk.gleissner.c64commander
 
 import android.util.Base64
-import uk.gleissner.c64commander.hvsc.AndroidHvscDatabase
 import uk.gleissner.c64commander.hvsc.HvscCancelRegistry
 import uk.gleissner.c64commander.hvsc.HvscIngestionService
+import uk.gleissner.c64commander.hvsc.HvscLibrary
+import uk.gleissner.c64commander.hvsc.HvscStateStore
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -20,19 +21,17 @@ class HvscIngestionPlugin : Plugin() {
 
   @PluginMethod
   fun getHvscStatus(call: PluginCall) {
-    val db = AndroidHvscDatabase(context)
-    val service = HvscIngestionService(db)
+    val workDir = resolveWorkDir()
+    val service = createService(workDir)
     val meta = service.getStatus()
-    db.close()
     call.resolve(metaToJs(meta))
   }
 
   @PluginMethod
   fun getHvscCacheStatus(call: PluginCall) {
-    val db = AndroidHvscDatabase(context)
-    val service = HvscIngestionService(db)
-    val cache = service.getCacheStatus(File(context.filesDir, "hvsc"))
-    db.close()
+    val workDir = resolveWorkDir()
+    val service = createService(workDir)
+    val cache = service.getCacheStatus(workDir)
     val payload = JSObject()
     payload.put("baselineVersion", cache.baselineVersion)
     payload.put("updateVersions", JSArray(cache.updateVersions))
@@ -41,14 +40,12 @@ class HvscIngestionPlugin : Plugin() {
 
   @PluginMethod
   fun checkForHvscUpdates(call: PluginCall) {
-    val db = AndroidHvscDatabase(context)
-    val service = HvscIngestionService(db)
+    val workDir = resolveWorkDir()
+    val service = createService(workDir)
     try {
       val status = service.checkForUpdates()
-      db.close()
       call.resolve(updateToJs(status))
     } catch (error: Exception) {
-      db.close()
       call.reject(error.message, error)
     }
   }
@@ -61,18 +58,15 @@ class HvscIngestionPlugin : Plugin() {
     call.setKeepAlive(true)
 
     executor.execute {
-      val db = AndroidHvscDatabase(context)
-      val service = HvscIngestionService(db)
       try {
-        val workDir = File(context.filesDir, "hvsc")
+        val workDir = resolveWorkDir()
+        val service = createService(workDir)
         val meta = service.installOrUpdate(workDir, cancelToken) { progress ->
           notifyListeners("progress", progressToJs(progress))
         }
-        db.close()
         cancelRegistry.remove(token)
         call.resolve(metaToJs(meta))
       } catch (error: Exception) {
-        db.close()
         cancelRegistry.remove(token)
         call.reject(error.message, error)
       }
@@ -87,18 +81,15 @@ class HvscIngestionPlugin : Plugin() {
     call.setKeepAlive(true)
 
     executor.execute {
-      val db = AndroidHvscDatabase(context)
-      val service = HvscIngestionService(db)
       try {
-        val workDir = File(context.filesDir, "hvsc")
+        val workDir = resolveWorkDir()
+        val service = createService(workDir)
         val meta = service.ingestCached(workDir, cancelToken) { progress ->
           notifyListeners("progress", progressToJs(progress))
         }
-        db.close()
         cancelRegistry.remove(token)
         call.resolve(metaToJs(meta))
       } catch (error: Exception) {
-        db.close()
         cancelRegistry.remove(token)
         call.reject(error.message, error)
       }
@@ -115,10 +106,10 @@ class HvscIngestionPlugin : Plugin() {
   @PluginMethod
   fun getHvscFolderListing(call: PluginCall) {
     val path = call.getString("path") ?: "/"
-    val db = AndroidHvscDatabase(context)
-    val service = HvscIngestionService(db)
-    val folders = service.listFolders(path)
-    val songs = service.listSongs(path)
+    val workDir = resolveWorkDir()
+    val library = createLibrary(workDir)
+    val folders = library.listFolders(path)
+    val songs = library.listSongs(path)
     val payload = JSObject()
     payload.put("path", path)
     payload.put("folders", JSArray(folders))
@@ -132,7 +123,6 @@ class HvscIngestionPlugin : Plugin() {
       songsArray.put(songJson)
     }
     payload.put("songs", songsArray)
-    db.close()
     call.resolve(payload)
   }
 
@@ -140,15 +130,14 @@ class HvscIngestionPlugin : Plugin() {
   fun getHvscSong(call: PluginCall) {
     val id = call.getLong("id")
     val virtualPath = call.getString("virtualPath")
-    val db = AndroidHvscDatabase(context)
-    val service = HvscIngestionService(db)
+    val workDir = resolveWorkDir()
+    val library = createLibrary(workDir)
     val song = when {
-      id != null -> service.getSongById(id)
-      !virtualPath.isNullOrBlank() -> service.getSongByVirtualPath(virtualPath)
+      !virtualPath.isNullOrBlank() -> library.getSongByVirtualPath(virtualPath)
+      id != null -> null
       else -> null
     }
     if (song == null) {
-      db.close()
       call.reject("Song not found")
       return
     }
@@ -159,7 +148,6 @@ class HvscIngestionPlugin : Plugin() {
     payload.put("durationSeconds", song.durationSeconds)
     payload.put("md5", song.md5)
     payload.put("dataBase64", Base64.encodeToString(song.data, Base64.NO_WRAP))
-    db.close()
     call.resolve(payload)
   }
 
@@ -170,10 +158,9 @@ class HvscIngestionPlugin : Plugin() {
       call.reject("md5 is required")
       return
     }
-    val db = AndroidHvscDatabase(context)
-    val service = HvscIngestionService(db)
-    val duration = service.getDurationByMd5(md5)
-    db.close()
+    val workDir = resolveWorkDir()
+    val library = createLibrary(workDir)
+    val duration = library.getDurationByMd5(md5)
     val payload = JSObject()
     payload.put("durationSeconds", duration)
     call.resolve(payload)
@@ -216,5 +203,22 @@ class HvscIngestionPlugin : Plugin() {
     progress.errorType?.let { payload.put("errorType", it) }
     progress.errorCause?.let { payload.put("errorCause", it) }
     return payload
+  }
+
+  private fun resolveWorkDir(): File {
+    val dir = File(context.filesDir, "hvsc")
+    if (!dir.exists()) {
+      dir.mkdirs()
+    }
+    return dir
+  }
+
+  private fun createService(workDir: File): HvscIngestionService {
+    val stateStore = HvscStateStore(File(workDir, "state.json"))
+    return HvscIngestionService(stateStore)
+  }
+
+  private fun createLibrary(workDir: File): HvscLibrary {
+    return HvscLibrary(File(workDir, "library"))
   }
 }

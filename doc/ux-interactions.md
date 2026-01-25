@@ -72,9 +72,9 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 | CTA | Label | Purpose | Importance | Test Coverage | Test File | Notes |
 |-----|-------|---------|------------|---------------|-----------|-------|
-| Button | "Install HVSC" | Download HVSC database | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | One-time setup |
+| Button | "Install HVSC" | Download HVSC library | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | One-time setup |
 | Button | "Check for updates" | Query HVSC version | **LOW** | ✅ FULL | hvsc.spec.ts:133 | Maintenance |
-| Progress bar | HVSC installation | Show download progress | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | Feedback |
+| Progress bar | HVSC installation | Show library download progress | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | Feedback |
 | Button | "Cancel" (HVSC install) | Abort installation | **MEDIUM** | ❌ NONE | - | Installation control |
 | Button | "Retry" (HVSC error) | Retry failed operation | **MEDIUM** | ✅ FULL | hvsc.spec.ts:481,491,501 | Error recovery |
 

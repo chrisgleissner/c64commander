@@ -84,6 +84,9 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
       name: entry.name,
       durationSeconds: entry.durationSeconds ?? null,
     }));
+    if (!entries.length && isHvscBridgeAvailable()) {
+      return HvscIngestion.getHvscFolderListing({ path });
+    }
     return buildFolderListingFromIndex(path, entries);
   } catch {
     return HvscIngestion.getHvscFolderListing({ path });
