@@ -50,10 +50,10 @@
 
 ### Step 4: TS-only download + extraction tracking (status model)
 
-- [ ] Add TS status model for download/extraction telemetry (time, size, errors).
-- [ ] Persist status in app storage.
-- [ ] Add unit tests for status persistence.
-- [ ] Run relevant unit tests and commit: "Add HVSC status model".
+- [x] Add TS status model for download/extraction telemetry (time, size, errors).
+- [x] Persist status in app storage.
+- [x] Add unit tests for status persistence.
+- [x] Run relevant unit tests and commit: "Add HVSC status model".
 
 ### Step 5: UI status summary + entry point (no new UX flows)
 

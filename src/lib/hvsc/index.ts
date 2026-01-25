@@ -21,4 +21,17 @@ export {
 } from './hvscService';
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
 export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from './hvscRootLocator';
+export {
+  clearHvscStatusSummary,
+  getDefaultHvscStatusSummary,
+  loadHvscStatusSummary,
+  saveHvscStatusSummary,
+} from './hvscStatusStore';
+export type {
+  HvscDownloadStatus,
+  HvscExtractionStatus,
+  HvscFailureCategory,
+  HvscStatusSummary,
+  HvscStepStatus,
+} from './hvscStatusStore';
 export { HvscSongSource } from './hvscSource';
