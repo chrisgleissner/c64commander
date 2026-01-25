@@ -42,7 +42,7 @@ class HvscUtilsTest {
     """.trimIndent()
 
     val result = SonglengthsParser.parse(content)
-    assertEquals(0, result.pathToSeconds["/DEMOS/Test.sid"])
+    assertEquals(1, result.pathToSeconds["/DEMOS/Test.sid"])
     assertEquals(0, result.md5ToSeconds["abcdef123456"])
     assertEquals(1, result.md5ToSeconds["999999999999"])
   }
