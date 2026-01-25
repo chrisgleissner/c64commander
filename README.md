@@ -20,14 +20,40 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 
 ## Screenshots
 
-![Home](doc/img/app-home.png)
-![Home (Dark)](doc/img/app-home-dark.png)
-![Play](doc/img/app-play.png)
-![Disks](doc/img/app-disks.png)
-![Configuration](doc/img/app-configuration.png)
-![Configuration Expanded](doc/img/app-configuration-expanded.png)
-![Settings](doc/img/app-settings.png)
-![Documentation](doc/img/app-documentation.png)
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app-home.png" alt="Home" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app-home-dark.png" alt="Home (Dark)" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app-play.png" alt="Play" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app-disks.png" alt="Disks" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app-configuration.png" alt="Configuration" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app-configuration-expanded.png" alt="Configuration Expanded" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app-settings.png" alt="Settings" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app-documentation.png" alt="Documentation" width="480"/>
+    </td>
+  </tr>
+</table>
 
 ## Install the APK on your Android phone
 
