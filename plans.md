@@ -29,10 +29,10 @@
 
 ### Step 1: Establish new TS-only HVSC index interface (no behavior change)
 
-- [ ] Add `MediaIndex` interface + types under [src/lib/media-index/](src/lib/media-index/).
-- [ ] Add JSON/flat-file index implementation that reads/writes from app storage.
-- [ ] Add unit tests for index read/write/query (no callers yet).
-- [ ] Run `npm run test` (targeted if possible) and commit: "Add TS media index interface".
+- [x] Add `MediaIndex` interface + types under [src/lib/media-index/](src/lib/media-index/).
+- [x] Add JSON/flat-file index implementation that reads/writes from app storage.
+- [x] Add unit tests for index read/write/query (no callers yet).
+- [x] Run `npm run test` (targeted if possible) and commit: "Add TS media index interface".
 
 ### Step 2: Wire index behind existing HVSC lookup API (no behavior change)
 
