@@ -281,7 +281,7 @@ export const ItemSelectionDialog = ({
                 </div>
 
                 <Input
-                  placeholder="Filter items…"
+                  placeholder="Filter files…"
                   value={filterText}
                   onChange={(event) => setFilterText(event.target.value)}
                   data-testid="add-items-filter"

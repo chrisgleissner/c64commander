@@ -21,6 +21,48 @@ class HvscUtilsTest {
   }
 
   @Test
+  fun songlengthsParserParsesTextFormat() {
+    val content = """
+      /DEMOS/0-9/10_Orbyte.sid 0:25
+      /DEMOS/0-9/20_Second.sid 1:05
+    """.trimIndent()
+
+    val result = SonglengthsParser.parseText(content)
+    assertEquals(25, result.pathToSeconds["/DEMOS/0-9/10_Orbyte.sid"])
+    assertEquals(65, result.pathToSeconds["/DEMOS/0-9/20_Second.sid"])
+    assertTrue(result.md5ToSeconds.isEmpty())
+  }
+
+  @Test
+  fun songlengthsParserNormalizesPathsAndRounds() {
+    val content = """
+      ; DEMOS/Test.sid
+      abcdef123456=0:00.499
+      999999999999=0:00.501
+    """.trimIndent()
+
+    val result = SonglengthsParser.parse(content)
+    assertEquals(1, result.pathToSeconds["/DEMOS/Test.sid"])
+    assertEquals(0, result.md5ToSeconds["abcdef123456"])
+    assertEquals(1, result.md5ToSeconds["999999999999"])
+  }
+
+  @Test
+  fun songlengthsTextIgnoresCommentsAndNormalizesPath() {
+    val content = """
+      # ignore comment
+      DEMOS/Test.sid 0:10
+      ; another comment
+      [header]
+      /DEMOS/Another.sid 0:20
+    """.trimIndent()
+
+    val result = SonglengthsParser.parseText(content)
+    assertEquals(10, result.pathToSeconds["/DEMOS/Test.sid"])
+    assertEquals(20, result.pathToSeconds["/DEMOS/Another.sid"])
+  }
+
+  @Test
   fun cancelRegistryCancelsAndRemovesToken() {
     val registry = HvscCancelRegistry()
     val token = registry.register("demo")
@@ -66,6 +108,21 @@ class HvscUtilsTest {
     assertNotNull(second)
     val bytes = reader.readEntryBytes()
     assertArrayEquals(byteArrayOf(5, 6, 7, 8), bytes)
+    reader.close()
+  }
+
+  @Test
+  fun archiveReaderFactorySelectsDirectoryReader() {
+    val tempDir = Files.createTempDirectory("hvsc-dir").toFile()
+    val file = File(tempDir, "demo.sid")
+    file.writeBytes(byteArrayOf(1, 2, 3))
+
+    val reader = HvscArchiveReaderFactory.open(tempDir, null)
+    assertTrue(reader is DirectoryArchiveReader)
+    val entry = reader.nextEntry()
+    assertNotNull(entry)
+    val bytes = reader.readEntryBytes()
+    assertArrayEquals(byteArrayOf(1, 2, 3), bytes)
     reader.close()
   }
 }

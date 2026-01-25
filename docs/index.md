@@ -8,11 +8,12 @@ C64 Commander is a companion app for the C64 Ultimate. It provides configuration
 - Control core actions (reset, pause/resume, drive actions).
 - Browse, mount and play supported files (prg, sid, crt, d64, etc.) from local storage or the C64U.
 - Easily swap disks.
+- Use songlengths.md5 or songlengths.txt to apply SID duration metadata in playlists.
 
 ## Support
 
-- Email: apps@gleissner.uk
-- Issues: https://github.com/chrisgleissner/c64commander/issues
+- Email: [apps@gleissner.uk](mailto:apps@gleissner.uk)
+- Issues: [github.com/chrisgleissner/c64commander/issues](https://github.com/chrisgleissner/c64commander/issues)
 
 ## Privacy
 

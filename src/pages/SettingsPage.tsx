@@ -68,11 +68,13 @@ import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
+import { useConnectionState } from '@/hooks/useConnectionState';
 
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
   const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
+  const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
@@ -80,7 +82,10 @@ export default function SettingsPage() {
   
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
-  const demoDeviceHost = status.state === 'DEMO_ACTIVE' ? getDeviceHostFromBaseUrl(runtimeBaseUrl) : null;
+  const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
+  const isDemoActive = status.state === 'DEMO_ACTIVE';
+  const lastProbeSucceededAtMs = connectionSnapshot.lastProbeSucceededAtMs;
+  const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
@@ -326,11 +331,19 @@ export default function SettingsPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                Hostname or IP from the C64 menu. The protocol is added automatically.
+                Hostname or IP from the C64 menu.
               </p>
-              {demoDeviceHost && demoDeviceHost !== deviceHostInput ? (
+              <p className="text-xs text-muted-foreground">
+                Currently using: <span className="font-mono">{runtimeDeviceHost}</span>
+                {isDemoActive ? ' (Demo mock)' : ''}
+              </p>
+              {isDemoActive ? (
                 <p className="text-xs text-muted-foreground">
-                  Demo Hostname / IP: <span className="font-mono">{demoDeviceHost}</span>
+                  {lastProbeSucceededAtMs
+                    ? 'Real device detected during probe.'
+                    : lastProbeFailedAtMs
+                      ? 'No real device detected in recent probe.'
+                      : 'Waiting for initial probe.'}
                 </p>
               ) : null}
             </div>
@@ -349,7 +362,7 @@ export default function SettingsPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                The same password used for FTP and HTTP access on the C64.
+                Network password from the C64 manual, if defined
               </p>
             </div>
 

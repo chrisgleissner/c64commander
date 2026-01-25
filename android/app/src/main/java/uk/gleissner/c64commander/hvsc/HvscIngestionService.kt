@@ -55,6 +55,7 @@ class HvscIngestionService(
     const val Download = "download"
     const val ArchiveExtraction = "archive_extraction"
     const val SidEnumeration = "sid_enumeration"
+    const val Songlengths = "songlengths"
     const val SidMetadataParsing = "sid_metadata_parsing"
     const val DatabaseInsertion = "database_insertion"
     const val Complete = "complete"
@@ -127,13 +128,15 @@ class HvscIngestionService(
     val updateVersions = mutableListOf<Int>()
     workDir.listFiles()?.forEach { file ->
       val name = file.name
-      if (!name.endsWith(".7z", ignoreCase = true) && !name.endsWith(".zip", ignoreCase = true)) return@forEach
-      val baselineMatch = Regex("hvsc-baseline-(\\d+)\\.(7z|zip)", RegexOption.IGNORE_CASE).find(name)
+      if (!file.isDirectory && !name.endsWith(".7z", ignoreCase = true) && !name.endsWith(".zip", ignoreCase = true)) {
+        return@forEach
+      }
+      val baselineMatch = Regex("hvsc-baseline-(\\d+)", RegexOption.IGNORE_CASE).find(name)
       if (baselineMatch != null) {
         baselineVersions.add(baselineMatch.groupValues[1].toInt())
         return@forEach
       }
-      val updateMatch = Regex("hvsc-update-(\\d+)\\.(7z|zip)", RegexOption.IGNORE_CASE).find(name)
+      val updateMatch = Regex("hvsc-update-(\\d+)", RegexOption.IGNORE_CASE).find(name)
       if (updateMatch != null) {
         updateVersions.add(updateMatch.groupValues[1].toInt())
       }
@@ -272,14 +275,15 @@ class HvscIngestionService(
   ): List<ArchivePlan> {
     val plans = mutableListOf<ArchivePlan>()
     if (meta.installedVersion == 0) {
-      val baselineArchive = File(workDir, "hvsc-baseline-$baselineLatest.7z")
-      val useCached = baselineArchive.exists() && baselineArchive.length() > 0
+      val cachedBaseline = resolveArchiveFile(workDir, "hvsc-baseline", baselineLatest)
+      val baselineArchive = cachedBaseline ?: File(workDir, "hvsc-baseline-$baselineLatest.7z")
+      val useCached = cachedBaseline != null
       plans.add(
         ArchivePlan(
           type = ArchiveType.BASELINE,
           version = baselineLatest,
           archiveFile = baselineArchive,
-          downloadUrl = releaseService.buildBaselineUrl(baselineLatest),
+          downloadUrl = if (useCached) null else releaseService.buildBaselineUrl(baselineLatest),
           useCached = useCached,
         ),
       )
@@ -287,14 +291,15 @@ class HvscIngestionService(
     val installedVersion = if (meta.installedVersion == 0) baselineLatest else meta.installedVersion
     if (installedVersion < updateLatest) {
       for (version in (installedVersion + 1)..updateLatest) {
-        val updateArchive = File(workDir, "hvsc-update-$version.7z")
-        val useCached = updateArchive.exists() && updateArchive.length() > 0
+        val cachedUpdate = resolveArchiveFile(workDir, "hvsc-update", version)
+        val updateArchive = cachedUpdate ?: File(workDir, "hvsc-update-$version.7z")
+        val useCached = cachedUpdate != null
         plans.add(
           ArchivePlan(
             type = ArchiveType.UPDATE,
             version = version,
             archiveFile = updateArchive,
-            downloadUrl = releaseService.buildUpdateUrl(version),
+            downloadUrl = if (useCached) null else releaseService.buildUpdateUrl(version),
             useCached = useCached,
           ),
         )
@@ -347,10 +352,19 @@ class HvscIngestionService(
 
   private fun resolveArchiveFile(workDir: File, prefix: String, version: Int): File? {
     val candidates = listOf(
+      File(workDir, "$prefix-$version"),
       File(workDir, "$prefix-$version.7z"),
       File(workDir, "$prefix-$version.zip"),
     )
-    return candidates.firstOrNull { it.exists() && it.length() > 0 }
+    return candidates.firstOrNull { candidate ->
+      candidate.exists() && (candidate.isDirectory || candidate.length() > 0)
+    }
+  }
+
+  private fun resolveArchiveSize(file: File): Long {
+    if (!file.exists()) return 0
+    if (file.isFile) return file.length()
+    return file.walkTopDown().filter { it.isFile }.sumOf { it.length() }
   }
 
   private fun prepareArchive(
@@ -360,16 +374,17 @@ class HvscIngestionService(
   ): HvscArchiveInspector.Inspection {
     val archive = plan.archiveFile
     if (plan.useCached || plan.downloadUrl == null) {
-      if (!archive.exists() || archive.length() == 0L) {
+      if (!archive.exists() || (!archive.isDirectory && archive.length() == 0L)) {
         throw IllegalStateException("Missing cached archive ${archive.name}")
       }
+      val archiveBytes = resolveArchiveSize(archive)
       emitter.emit(
         stage = Stages.Download,
         message = "Using cached ${plan.displayName}",
         archiveName = archive.name,
         percent = 100,
-        downloadedBytes = archive.length(),
-        totalBytes = archive.length(),
+        downloadedBytes = archiveBytes,
+        totalBytes = archiveBytes,
       )
     } else {
       emitter.emit(
@@ -458,7 +473,7 @@ class HvscIngestionService(
       archiveName = archive.name,
       totalCount = totalSid,
     )
-    val songlengths = mutableMapOf<String, Int>()
+    val pathDurations = mutableMapOf<String, Int>()
     val md5Durations = mutableMapOf<String, Int>()
     val batch = mutableListOf<HvscSongRecord>()
     val now = System.currentTimeMillis()
@@ -477,14 +492,32 @@ class HvscIngestionService(
               if (normalized.endsWith("/Songlengths.md5", true)) {
                 val bytes = reader.readEntryBytes()
                 val parsed = SonglengthsParser.parse(String(bytes, Charsets.UTF_8))
-                songlengths.putAll(parsed.pathToSeconds)
+                parsed.pathToSeconds.forEach { (path, seconds) -> pathDurations[path] = seconds }
                 md5Durations.putAll(parsed.md5ToSeconds)
+                emitter.emit(
+                  stage = Stages.Songlengths,
+                  message = "Loaded songlengths.md5 (${parsed.pathToSeconds.size} paths, ${parsed.md5ToSeconds.size} md5 entries)",
+                  archiveName = archive.name,
+                )
+              } else if (normalized.endsWith("/Songlengths.txt", true)) {
+                val bytes = reader.readEntryBytes()
+                val parsed = SonglengthsParser.parseText(String(bytes, Charsets.UTF_8))
+                parsed.pathToSeconds.forEach { (path, seconds) ->
+                  if (!pathDurations.containsKey(path)) {
+                    pathDurations[path] = seconds
+                  }
+                }
+                emitter.emit(
+                  stage = Stages.Songlengths,
+                  message = "Loaded songlengths.txt (${parsed.pathToSeconds.size} paths)",
+                  archiveName = archive.name,
+                )
               } else if (normalized.lowercase(Locale.getDefault()).endsWith(".sid")) {
                 val data = reader.readEntryBytes()
                 val virtualPath = normalizeVirtualPath(normalized)
                 if (virtualPath != null) {
                   val md5 = computeMd5(data)
-                  val durationSeconds = songlengths[virtualPath] ?: md5Durations[md5]
+                  val durationSeconds = pathDurations[virtualPath] ?: md5Durations[md5]
                   val dirPath = virtualPath.substringBeforeLast('/', "")
                   val fileName = virtualPath.substringAfterLast('/')
                   batch.add(
@@ -543,6 +576,7 @@ class HvscIngestionService(
           batch.clear()
         }
         database.updateDurationsByMd5(md5Durations)
+        database.updateDurationsByVirtualPath(pathDurations)
         database.updateMeta(
           installedBaselineVersion = plan.version,
           installedVersion = plan.version,
@@ -585,6 +619,7 @@ class HvscIngestionService(
       archiveName = archive.name,
       totalCount = totalSid,
     )
+    val pathDurations = mutableMapOf<String, Int>()
     val md5Durations = mutableMapOf<String, Int>()
     val deletions = mutableListOf<String>()
     val batch = mutableListOf<HvscSongRecord>()
@@ -603,7 +638,25 @@ class HvscIngestionService(
               val normalized = normalizeEntryName(entry.name)
               if (normalized.endsWith("Songlengths.md5", true)) {
                 val parsed = SonglengthsParser.parse(String(reader.readEntryBytes(), Charsets.UTF_8))
+                parsed.pathToSeconds.forEach { (path, seconds) -> pathDurations[path] = seconds }
                 md5Durations.putAll(parsed.md5ToSeconds)
+                emitter.emit(
+                  stage = Stages.Songlengths,
+                  message = "Loaded songlengths.md5 (${parsed.pathToSeconds.size} paths, ${parsed.md5ToSeconds.size} md5 entries)",
+                  archiveName = archive.name,
+                )
+              } else if (normalized.endsWith("Songlengths.txt", true)) {
+                val parsed = SonglengthsParser.parseText(String(reader.readEntryBytes(), Charsets.UTF_8))
+                parsed.pathToSeconds.forEach { (path, seconds) ->
+                  if (!pathDurations.containsKey(path)) {
+                    pathDurations[path] = seconds
+                  }
+                }
+                emitter.emit(
+                  stage = Stages.Songlengths,
+                  message = "Loaded songlengths.txt (${parsed.pathToSeconds.size} paths)",
+                  archiveName = archive.name,
+                )
               } else if (isDeletionList(normalized)) {
                 val text = String(reader.readEntryBytes(), Charsets.UTF_8)
                 deletions.addAll(parseDeletionList(text))
@@ -612,7 +665,7 @@ class HvscIngestionService(
                 val virtualPath = normalizeUpdateVirtualPath(normalized)
                 if (virtualPath != null) {
                   val md5 = computeMd5(data)
-                  val durationSeconds = md5Durations[md5]
+                  val durationSeconds = pathDurations[virtualPath] ?: md5Durations[md5]
                   val dirPath = virtualPath.substringBeforeLast('/', "")
                   val fileName = virtualPath.substringAfterLast('/')
                   batch.add(
@@ -675,6 +728,7 @@ class HvscIngestionService(
           batch.clear()
         }
         database.updateDurationsByMd5(md5Durations)
+        database.updateDurationsByVirtualPath(pathDurations)
         database.updateMeta(
           installedVersion = plan.version,
           ingestionState = "ready",

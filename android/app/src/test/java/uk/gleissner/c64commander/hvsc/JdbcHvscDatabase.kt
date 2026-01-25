@@ -142,6 +142,19 @@ class JdbcHvscDatabase(private val connection: Connection) : HvscDatabase {
     }
   }
 
+  override fun updateDurationsByVirtualPath(durations: Map<String, Int>) {
+    if (durations.isEmpty()) return
+    connection.prepareStatement(
+      "UPDATE ${HvscSchema.TABLE_SONG} SET duration_seconds = ? WHERE virtual_path = ?",
+    ).use { stmt ->
+      for ((path, seconds) in durations) {
+        stmt.setInt(1, seconds)
+        stmt.setString(2, path)
+        stmt.executeUpdate()
+      }
+    }
+  }
+
   override fun deleteByVirtualPaths(paths: List<String>) {
     if (paths.isEmpty()) return
     connection.prepareStatement(

@@ -54,6 +54,9 @@ export const mountDiskToDrive = async (
       drive,
       path: disk.path,
       location: disk.location,
+      baseUrl: api.getBaseUrl(),
+      deviceHost: api.getDeviceHost(),
+      endpoint: `/v1/drives/${drive}:mount`,
       error: (error as Error).message,
     });
     throw error;

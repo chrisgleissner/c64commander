@@ -291,7 +291,7 @@ export const SelectableActionList = ({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           type="text"
-          placeholder="Filter items..."
+          placeholder="Filter files..."
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           className="pl-9 pr-9 h-9"
@@ -362,7 +362,7 @@ export const SelectableActionList = ({
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input
                     type="text"
-                    placeholder="Filter items..."
+                    placeholder="Filter files..."
                     value={viewAllFilterText}
                     onChange={(e) => setViewAllFilterText(e.target.value)}
                     className="pl-9 pr-9 h-9"

@@ -18,7 +18,14 @@ export interface MockC64Server {
   }>;
   getState: () => CategoryState;
   resetState: () => void;
+  setReachable: (reachable: boolean) => void;
+  setFaultMode: (mode: FaultMode) => void;
+  setLatencyMs: (ms: number | null) => void;
+  isReachable: () => boolean;
+  getFaultMode: () => FaultMode;
 }
+
+export type FaultMode = 'none' | 'timeout' | 'refused' | 'auth' | 'slow';
 
 export type ConfigItemState = {
   value: string | number;
@@ -95,6 +102,9 @@ export async function createMockC64Server(
     headers: Record<string, string | string[] | undefined>;
     body: Buffer;
   }> = [];
+  let reachable = true;
+  let faultMode: FaultMode = 'none';
+  let latencyMs: number | null = null;
   
   // Use YAML as source of truth if no initial state provided
   const yamlState = Object.keys(initial).length === 0 ? await buildStateFromYaml() : {};
@@ -119,17 +129,44 @@ export async function createMockC64Server(
       'Access-Control-Allow-Headers': '*',
     };
 
+    const respond = (handler: () => void) => {
+      if (faultMode === 'refused') {
+        req.socket.destroy();
+        return;
+      }
+      const timeoutDelayMs = Math.max(latencyMs ?? 0, 1500);
+      const delayMs = faultMode === 'timeout' ? timeoutDelayMs : faultMode === 'slow' ? latencyMs ?? 300 : latencyMs ?? 0;
+      if (delayMs > 0) {
+        setTimeout(() => {
+          if (res.writableEnded) return;
+          handler();
+        }, delayMs);
+      } else {
+        handler();
+      }
+    };
+
     const sendJson = (status: number, body: any) => {
-      res.statusCode = status;
-      res.setHeader('Content-Type', 'application/json');
-      Object.entries(corsHeaders).forEach(([key, value]) => res.setHeader(key, value));
-      res.end(JSON.stringify(body));
+      respond(() => {
+        res.statusCode = status;
+        res.setHeader('Content-Type', 'application/json');
+        Object.entries(corsHeaders).forEach(([key, value]) => res.setHeader(key, value));
+        res.end(JSON.stringify(body));
+      });
     };
 
     if (method === 'OPTIONS') {
       res.writeHead(204, corsHeaders);
       res.end();
       return;
+    }
+
+    if (!reachable) {
+      return sendJson(503, { errors: ['Device unreachable'] });
+    }
+
+    if (faultMode === 'auth') {
+      return sendJson(401, { errors: ['Unauthorized'] });
     }
 
     if (method === 'GET' && parsed.pathname === '/v1/info') {
@@ -362,6 +399,17 @@ export async function createMockC64Server(
         resetState: () => {
           state = clone(defaults);
         },
+        setReachable: (next) => {
+          reachable = next;
+        },
+        setFaultMode: (mode) => {
+          faultMode = mode;
+        },
+        setLatencyMs: (ms) => {
+          latencyMs = ms;
+        },
+        isReachable: () => reachable,
+        getFaultMode: () => faultMode,
         close: () =>
           new Promise<void>((resClose) => {
             if (!server.listening) {

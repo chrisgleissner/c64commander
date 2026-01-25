@@ -173,16 +173,15 @@ test.describe('Settings diagnostics workflows', () => {
     const clearButton = page.getByRole('button', { name: /Clear|Clear logs/i });
     
     if (await clearButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      const beforeLogs = await page.evaluate(() => localStorage.getItem('c64u_app_logs'));
       await clearButton.click();
       await snap(page, testInfo, 'clear-clicked');
 
-      // Wait for clearing to complete
-      await page.waitForTimeout(500);
-
-      const stored = await page.evaluate(() => {
-        const logs = localStorage.getItem('c64u_app_logs');
-        return { logs };
-      });
+      await expect
+        .poll(async () => page.evaluate(() => localStorage.getItem('c64u_app_logs')), {
+          timeout: 5000,
+        })
+        .not.toBe(beforeLogs);
 
       // Logs should be empty or at least the clear button was clicked
       await snap(page, testInfo, 'clear-attempted');

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Monitor, Smartphone, Folder } from 'lucide-react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
+import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
@@ -45,12 +46,13 @@ const DiskIndicator = ({ mounted }: { mounted: boolean }) => (
   <Disc className={`h-4 w-4 ${mounted ? 'text-success' : 'text-muted-foreground'}`} />
 );
 
-const LocationIcon = ({ location }: { location: DiskEntry['location'] }) =>
-  location === 'local' ? (
-    <Smartphone className="h-4 w-4 text-primary/70" aria-label="Local disk" />
-  ) : (
-    <Monitor className="h-4 w-4 text-blue-500/70" aria-label="C64U disk" />
-  );
+const LocationIcon = ({ location }: { location: DiskEntry['location'] }) => (
+  <FileOriginIcon
+    origin={location === 'local' ? 'local' : 'ultimate'}
+    className="h-4 w-4 shrink-0 opacity-60"
+    label={location === 'local' ? 'Local disk' : 'C64U disk'}
+  />
+);
 
 const formatBytes = (value?: number | null) => {
   if (!value || value <= 0) return '—';
@@ -284,6 +286,16 @@ export const HomeDiskManager = () => {
       });
     } catch (error) {
       setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
+      addErrorLog('Disk mount failed (UI)', {
+        drive,
+        path: disk.path,
+        location: disk.location,
+        endpoint: `/v1/drives/${drive}:mount`,
+        baseUrl: api.getBaseUrl(),
+        deviceHost: api.getDeviceHost(),
+        demoMode: status.state === 'DEMO_ACTIVE',
+        error: (error as Error).message,
+      });
       toast({
         title: 'Mount failed',
         description: (error as Error).message,

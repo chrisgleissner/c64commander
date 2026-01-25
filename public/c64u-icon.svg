@@ -1,0 +1,27 @@
+<!-- C64 Breadbin Icon (Perspective, tuned)
+     Changes vs previous:
+     - Slanted edges are ~half as tall
+     - Slant is reduced (more upright)
+-->
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="24" height="24"
+     viewBox="0 0 24 24"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="2"
+     stroke-linecap="round"
+     stroke-linejoin="round">
+
+  <!-- thin front face (height indicator, NOT a drive slot) -->
+  <rect x="4.5" y="15" width="15" height="2" rx="1"/>
+
+  <!-- left upward slanted edge (shorter + less slanted) -->
+  <line x1="4.5" y1="15" x2="6.5" y2="10.5"/>
+
+  <!-- right upward slanted edge (shorter + less slanted) -->
+  <line x1="19.5" y1="15" x2="17.5" y2="10.5"/>
+
+  <!-- back/top edge -->
+  <line x1="6.5" y1="10.5" x2="17.5" y2="10.5"/>
+
+</svg>

@@ -662,6 +662,26 @@ export default function MusicPlayerPage() {
   const hvscCanRetry = Boolean(hvscInlineError && hvscLastAction && !hvscLoading);
 
   const progressPercent = durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0;
+  const remainingMs = durationMs ? Math.max(0, durationMs - elapsedMs) : undefined;
+  const remainingLabel = durationMs ? `-${formatTime(remainingMs)}` : '—';
+
+  const handlePlayCurrentTrack = useCallback(async () => {
+    if (!currentTrack) return;
+    try {
+      await playTrack(currentTrack);
+      toast({ title: 'Playing', description: currentTrack.title });
+    } catch (error) {
+      addErrorLog('Current track playback failed', {
+        track: currentTrack.title,
+        error: (error as Error).message,
+      });
+      toast({
+        title: 'Playback failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  }, [currentTrack, playTrack]);
 
   return (
     <div className="min-h-screen pb-24">
@@ -706,14 +726,6 @@ export default function MusicPlayerPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Progress value={progressPercent} />
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{formatTime(elapsedMs)}</span>
-              <span>{formatTime(durationMs)}</span>
-            </div>
-          </div>
-
           <div className="flex items-center justify-center gap-3">
             <Button variant="outline" size="icon" onClick={() => previous()} disabled={!queue.length}>
               <SkipBack className="h-4 w-4" />
@@ -721,7 +733,7 @@ export default function MusicPlayerPage() {
             <Button
               variant="default"
               size="lg"
-              onClick={() => currentTrack && playTrack(currentTrack)}
+              onClick={handlePlayCurrentTrack}
               disabled={!currentTrack}
             >
               <Play className="h-4 w-4 mr-2" />
@@ -730,6 +742,14 @@ export default function MusicPlayerPage() {
             <Button variant="outline" size="icon" onClick={() => next()} disabled={!queue.length}>
               <SkipForward className="h-4 w-4" />
             </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Progress value={progressPercent} />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{formatTime(elapsedMs)}</span>
+              <span>{remainingLabel}</span>
+            </div>
           </div>
         </motion.div>
 

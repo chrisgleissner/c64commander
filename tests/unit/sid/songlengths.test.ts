@@ -16,4 +16,15 @@ describe('parseSonglengths', () => {
     expect(data.md5ToSeconds.get('c0ffeec0ffeec0ffeec0ffeec0ffee00')).toBe(30);
     expect(data.md5ToSeconds.get('c0c0anutc0c0anutc0c0anutc0c0anut')).toBe(75);
   });
+
+  it('parses legacy songlengths.txt path entries', () => {
+    const txtFixture = `
+      /HVSC/Demos/demo.sid 0:25
+      /HVSC/Demos/demo2.sid 1:05
+    `;
+    const data = parseSonglengths(txtFixture);
+    expect(data.pathToSeconds.get('/HVSC/Demos/demo.sid')).toBe(25);
+    expect(data.pathToSeconds.get('/HVSC/Demos/demo2.sid')).toBe(65);
+    expect(data.md5ToSeconds.size).toBe(0);
+  });
 });

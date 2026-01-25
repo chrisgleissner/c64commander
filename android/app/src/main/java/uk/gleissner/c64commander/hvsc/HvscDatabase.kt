@@ -16,6 +16,7 @@ interface HvscDatabase {
 
   fun upsertSongs(songs: List<HvscSongRecord>)
   fun updateDurationsByMd5(durations: Map<String, Int>)
+  fun updateDurationsByVirtualPath(durations: Map<String, Int>)
   fun deleteByVirtualPaths(paths: List<String>)
 
   fun listFolders(path: String): List<String>

@@ -15,6 +15,11 @@ import { seedUiMocks } from './uiMocks';
 import { attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, assertNoUiIssues, allowWarnings } from './testArtifacts';
 import { getSourceSelectionButton } from './sourceSelection';
 
+const waitForUiStable = async (page: Page) => {
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle');
+};
+
 test.describe('Critical CTA Coverage', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -44,7 +49,7 @@ test.describe('Critical CTA Coverage', () => {
     await attachStepScreenshot(page, testInfo, 'add-button-visible');
 
     await addButton.click();
-    await page.waitForTimeout(500);
+    await waitForUiStable(page);
     await attachStepScreenshot(page, testInfo, 'source-selection-opened');
 
     // Should show source selection: Local and C64 Ultimate
@@ -97,7 +102,7 @@ test.describe('Shuffle Mode Tests', () => {
 
     // Toggle shuffle
     await shuffleCheckbox.click();
-    await page.waitForTimeout(300);
+    await expect(shuffleCheckbox).toHaveAttribute('data-state', initialState ? 'unchecked' : 'checked');
     await attachStepScreenshot(page, testInfo, 'shuffle-toggled');
 
     // Verify state changed
@@ -120,7 +125,7 @@ test.describe('Shuffle Mode Tests', () => {
       const isChecked = await shuffleCheckbox.isChecked();
       if (!isChecked) {
         await shuffleCheckbox.click();
-        await page.waitForTimeout(300);
+        await expect(shuffleCheckbox).toBeChecked();
       }
       await attachStepScreenshot(page, testInfo, 'shuffle-enabled');
 
@@ -211,7 +216,7 @@ test.describe('Home Page Quick Actions', () => {
       // Click first drive card
       const firstCard = driveCards.first();
       await firstCard.click();
-      await page.waitForTimeout(500);
+      await page.waitForURL('**/disks', { timeout: 5000 });
       await attachStepScreenshot(page, testInfo, 'after-drive-card-click');
 
       // Should navigate to disks page
@@ -255,7 +260,7 @@ test.describe('Disk Browser Coverage', () => {
 
     if (hasAddButton) {
       await addButton.click();
-      await page.waitForTimeout(500);
+      await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'browser-opened');
 
       // Verify source selection available
@@ -272,7 +277,7 @@ test.describe('Disk Browser Coverage', () => {
       // Try selecting a source
       if (hasC64U) {
         await c64uOption.click();
-        await page.waitForTimeout(500);
+        await waitForUiStable(page);
         await attachStepScreenshot(page, testInfo, 'c64u-source-selected');
       }
     } else {

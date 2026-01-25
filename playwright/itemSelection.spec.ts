@@ -156,7 +156,7 @@ test.describe('Item Selection Dialog UX', () => {
     // Select C64 Ultimate source to get file list
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await page.waitForTimeout(500);
+    await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'file-browser-opened');
 
     const scrollableContent = dialog.locator('[class*="overflow"]').first();
@@ -179,7 +179,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await page.waitForTimeout(500);
+    await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'c64u-browser-opened');
 
     // Find and select a folder checkbox (row with Open button)
@@ -210,13 +210,13 @@ test.describe('Item Selection Dialog UX', () => {
     // Select C64 Ultimate source
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await page.waitForTimeout(500);
+    await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'c64u-selected');
 
     // Navigate to Usb0 folder
     await ensureRemoteRoot(dialog);
     await openRemoteFolder(dialog, 'Usb0');
-    await page.waitForTimeout(500);
+    await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'usb2-opened');
 
     // Select a folder (row with Open action)
@@ -231,7 +231,6 @@ test.describe('Item Selection Dialog UX', () => {
     // Click confirm
     const confirmButton = page.getByTestId('add-items-confirm');
     await confirmButton.click();
-    await page.waitForTimeout(1000);
     await snap(page, testInfo, 'items-adding');
 
     // Wait for dialog to close
@@ -296,14 +295,14 @@ test.describe('Item Selection Dialog UX', () => {
     // Select C64 Ultimate source
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
-    await page.waitForTimeout(500);
+    await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'c64u-selected');
 
     // Navigate to Usb0 folder
     await ensureRemoteRoot(dialog);
     if (await dialog.getByText('Usb0', { exact: true }).isVisible({ timeout: 2000 }).catch(() => false)) {
       await openRemoteFolder(dialog, 'Usb0');
-      await page.waitForTimeout(500);
+      await waitForFtpIdle(dialog);
       await snap(page, testInfo, 'usb2-opened');
     }
 
@@ -319,7 +318,6 @@ test.describe('Item Selection Dialog UX', () => {
     // Click confirm
     const confirmButton = page.getByTestId('add-items-confirm');
     await confirmButton.click();
-    await page.waitForTimeout(1000);
     await snap(page, testInfo, 'items-adding');
 
     // Wait for dialog to close
