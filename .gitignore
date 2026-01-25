@@ -11,6 +11,7 @@ yarn-error.log*
 node_modules/
 
 # Test fixtures
+.cache/hvsc/
 android/app/src/test/fixtures/HVSC_Update_84.7z
 
 # Build output

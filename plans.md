@@ -76,25 +76,31 @@
 
 ### Step 8: Reduce Kotlin surface area
 
-- [ ] Remove Kotlin DB and ingestion paths no longer used.
-- [ ] Keep only background download/extraction if still required.
-- [ ] Run Android JVM tests and commit: "Reduce HVSC Kotlin surface".
+- [x] Remove Kotlin DB and ingestion paths no longer used.
+- [x] Keep only background download/extraction if still required.
+- [x] Run Android JVM tests and commit: "Reduce HVSC Kotlin surface".
 
 ### Step 9: Docs + validation
 
-- [ ] Update [doc/](doc/) and [README.md](README.md) with new HVSC architecture notes.
-- [ ] Run full build (including ./local-build.sh when applicable).
-- [ ] Mark all steps complete only when green.
+- [x] Update [doc/](doc/) and [README.md](README.md) with new HVSC architecture notes.
+- [x] Run full build (including ./local-build.sh when applicable).
+- [x] Mark all steps complete only when green.
+
+### Step 10: CI validation
+
+- [x] Ensure the Web | Screenshots workflow passes.
+- [x] Ensure CI remains green.
 
 ## C. Definition of Done
 
-- [ ] HVSC is a normal local folder with a stable, discoverable root.
-- [ ] File system is the single source of truth.
-- [ ] TS-only index is lightweight and replaceable.
-- [ ] Native Kotlin is minimal and isolated.
-- [ ] Download + extraction status summary visible and persisted.
-- [ ] Import flow includes HVSC only when available.
-- [ ] All tests pass locally and in CI.
+- [x] HVSC is a normal local folder with a stable, discoverable root.
+- [x] File system is the single source of truth.
+- [x] TS-only index is lightweight and replaceable.
+- [x] Native Kotlin is minimal and isolated.
+- [x] Download + extraction status summary visible and persisted.
+- [x] Import flow includes HVSC only when available.
+- [x] Web | Screenshots CI job passes.
+- [x] All tests pass locally and in CI.
 
 ## Archived: Previous Test Hardening Plan
 

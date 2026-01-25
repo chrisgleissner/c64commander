@@ -25,6 +25,7 @@ jobs:
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+      HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
 
     steps:
       - name: Checkout
@@ -64,6 +65,12 @@ jobs:
           npm ci
           end=$(date +%s)
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cache HVSC Update 84 archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/hvsc
+          key: hvsc-update-84-${{ runner.os }}
 
       - name: Run unit tests with coverage
         run: |
@@ -86,6 +93,7 @@ jobs:
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+      HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
 
     steps:
       - name: Checkout
@@ -125,6 +133,12 @@ jobs:
           npm ci
           end=$(date +%s)
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cache HVSC Update 84 archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/hvsc
+          key: hvsc-update-84-${{ runner.os }}
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
