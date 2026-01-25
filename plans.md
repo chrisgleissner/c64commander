@@ -57,9 +57,9 @@
 
 ### Step 5: UI status summary + entry point (no new UX flows)
 
-- [ ] Update Play Files page with “Download HVSC Library” action and concise status summary.
-- [ ] Ensure summary persists across restarts.
-- [ ] Run Playwright tests covering Play Files page and commit: "Add HVSC download summary".
+- [x] Update Play Files page with “Download HVSC Library” action and concise status summary.
+- [x] Ensure summary persists across restarts.
+- [x] Run Playwright tests covering Play Files page and commit: "Add HVSC download summary".
 
 ### Step 6: Import interstitial: show HVSC only when available
 

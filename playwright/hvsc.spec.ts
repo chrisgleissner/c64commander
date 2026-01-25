@@ -374,7 +374,7 @@ test.describe('HVSC Play page', () => {
     );
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
     await snap(page, testInfo, 'hvsc-installed');
   });
@@ -383,7 +383,7 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
     await snap(page, testInfo, 'install-complete');
   });
@@ -392,7 +392,7 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 0 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
@@ -417,7 +417,7 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 0, failInstall: true, failStage: 'extract' });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'extract-failed');
 
@@ -466,7 +466,7 @@ test.describe('HVSC Play page', () => {
 
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Check updates' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
     await snap(page, testInfo, 'update-complete');
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
@@ -487,7 +487,7 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 0, failCheck: true });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByText(/Simulated update check failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'update-failed');
   });
@@ -497,7 +497,7 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 0, failStage: 'extract', failInstallAttempts: 1 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'extract-failed');
   });
@@ -507,7 +507,7 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 0, failStage: 'ingest', failInstallAttempts: 1 });
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: 'Install HVSC' }).click();
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
     await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'ingest-failed');
   });
