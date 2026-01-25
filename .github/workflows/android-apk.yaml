@@ -6,14 +6,6 @@ on:
     tags: ["*"]
   pull_request:
   workflow_dispatch:
-    inputs:
-      package_manager:
-        description: "Package manager for dependency install (performance comparison)"
-        type: choice
-        options:
-          - npm
-          - bun
-        default: npm
 
 permissions:
   contents: write
@@ -23,8 +15,6 @@ jobs:
     name: Web | Unit tests (coverage)
     runs-on: ubuntu-latest
     env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
       HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
 
     steps:
@@ -37,29 +27,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup Bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun packages
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
-
-      - name: Install dependencies (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          start=$(date +%s)
-          bun install --frozen-lockfile
-          end=$(date +%s)
-          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Install dependencies (npm)
-        if: env.PACKAGE_MANAGER != 'bun'
+      - name: Install dependencies
         run: |
           start=$(date +%s)
           npm ci
@@ -75,7 +43,7 @@ jobs:
       - name: Run unit tests with coverage
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run test:coverage
+          npm run test:coverage
           end=$(date +%s)
           echo "- unit tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -91,8 +59,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: web-build-coverage
     env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
       HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
 
     steps:
@@ -105,29 +71,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup Bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun packages
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
-
-      - name: Install dependencies (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          start=$(date +%s)
-          bun install --frozen-lockfile
-          end=$(date +%s)
-          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Install dependencies (npm)
-        if: env.PACKAGE_MANAGER != 'bun'
+      - name: Install dependencies
         run: |
           start=$(date +%s)
           npm ci
@@ -163,7 +107,7 @@ jobs:
         run: |
           if [[ ! -f dist/index.html ]]; then
             echo "dist/index.html missing; rebuilding"
-            ${{ env.PM_RUN }} run build
+            npm run build
           fi
 
       - name: Run screenshot tests
@@ -174,7 +118,7 @@ jobs:
           SOURCE_DATE_EPOCH: "0"
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run screenshots
+          npm run screenshots
           end=$(date +%s)
           echo "- screenshots: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -188,9 +132,6 @@ jobs:
   web-build-coverage:
     name: Web | Build (coverage)
     runs-on: ubuntu-latest
-    env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
 
     steps:
       - name: Checkout
@@ -202,29 +143,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup Bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun packages
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
-
-      - name: Install dependencies (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          start=$(date +%s)
-          bun install --frozen-lockfile
-          end=$(date +%s)
-          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Install dependencies (npm)
-        if: env.PACKAGE_MANAGER != 'bun'
+      - name: Install dependencies
         run: |
           start=$(date +%s)
           npm ci
@@ -234,7 +153,7 @@ jobs:
       - name: Build web (coverage probes)
         run: |
           start=$(date +%s)
-          VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+          VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           end=$(date +%s)
           echo "- build (coverage): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -254,8 +173,6 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6, 7, 8]
         shardTotal: [8]
     env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
       VITE_COVERAGE: "true"
       VITE_ENABLE_TEST_PROBES: "1"
 
@@ -269,29 +186,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Setup Bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun packages
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
-
-      - name: Install dependencies (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          start=$(date +%s)
-          bun install --frozen-lockfile
-          end=$(date +%s)
-          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Install dependencies (npm)
-        if: env.PACKAGE_MANAGER != 'bun'
+      - name: Install dependencies
         run: |
           start=$(date +%s)
           npm ci
@@ -321,11 +216,11 @@ jobs:
         run: |
           if [[ ! -f dist/index.html ]]; then
             echo "dist/index.html missing; rebuilding with coverage instrumentation"
-            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           fi
           if ! grep -R "__coverage__" dist/assets 2>/dev/null | head -1 | grep -q "__coverage__"; then
             echo "coverage instrumentation missing; rebuilding with coverage instrumentation"
-            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           fi
 
       - name: Prepare coverage output
@@ -350,7 +245,7 @@ jobs:
         run: |
           start=$(date +%s)
           mapfile -t SHARD_FILES < shard-files.txt
-          ${{ env.PM_RUN }} run test:e2e -- "${SHARD_FILES[@]}"
+          npm run test:e2e -- "${SHARD_FILES[@]}"
           end=$(date +%s)
           echo "- e2e shard ${{ matrix.shard }}/${{ matrix.shardTotal }}: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -382,9 +277,6 @@ jobs:
     name: Web | Coverage + evidence merge
     runs-on: ubuntu-latest
     needs: [web-unit, web-screenshots, web-e2e]
-    env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
 
     steps:
       - name: Checkout
@@ -434,7 +326,7 @@ jobs:
       - name: Validate Playwright evidence
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run validate:evidence
+          npm run validate:evidence
           end=$(date +%s)
           echo "- evidence validation: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -489,8 +381,6 @@ jobs:
     name: Android | Tests + Coverage
     runs-on: ubuntu-latest
     env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
       GRADLE_MAX_WORKERS: "6"
 
     steps:
@@ -517,29 +407,7 @@ jobs:
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> $GITHUB_ENV
 
-      - name: Setup Bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun packages
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
-
-      - name: Install dependencies (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          start=$(date +%s)
-          bun install --frozen-lockfile
-          end=$(date +%s)
-          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Install dependencies (npm)
-        if: env.PACKAGE_MANAGER != 'bun'
+      - name: Install dependencies
         run: |
           start=$(date +%s)
           npm ci
@@ -597,7 +465,7 @@ jobs:
       - name: Build web + sync
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run cap:build
+          npm run cap:build
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -652,8 +520,6 @@ jobs:
     name: Android | Packaging
     runs-on: ubuntu-latest
     env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
-      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
       GRADLE_MAX_WORKERS: "6"
 
     steps:
@@ -680,29 +546,7 @@ jobs:
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> $GITHUB_ENV
 
-      - name: Setup Bun
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
-      - name: Cache Bun packages
-        if: env.PACKAGE_MANAGER == 'bun'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
-
-      - name: Install dependencies (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          start=$(date +%s)
-          bun install --frozen-lockfile
-          end=$(date +%s)
-          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Install dependencies (npm)
-        if: env.PACKAGE_MANAGER != 'bun'
+      - name: Install dependencies
         run: |
           start=$(date +%s)
           npm ci
@@ -760,14 +604,14 @@ jobs:
       - name: Build web + sync
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run cap:build
+          npm run cap:build
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Build APK (debug)
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run android:apk
+          npm run android:apk
           end=$(date +%s)
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -804,7 +648,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [web-coverage-merge, android-tests, android-packaging]
     env:
-      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
     steps:

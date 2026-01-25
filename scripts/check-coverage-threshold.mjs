@@ -2,11 +2,26 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-const coverageFile = process.env.COVERAGE_FILE ?? 'coverage/lcov-merged.info';
+const defaultCoverageFile = 'coverage/lcov-merged.info';
+const fallbackCoverageFile = 'coverage/lcov.info';
+const coverageFile = process.env.COVERAGE_FILE ?? defaultCoverageFile;
 const minCoverage = Number(process.env.COVERAGE_MIN ?? '80');
 
 const filePath = path.resolve(process.cwd(), coverageFile);
-const content = await fs.readFile(filePath, 'utf8');
+let content = '';
+
+try {
+  content = await fs.readFile(filePath, 'utf8');
+} catch (error) {
+  const isDefault = coverageFile === defaultCoverageFile && !process.env.COVERAGE_FILE;
+  if (!isDefault || error?.code !== 'ENOENT') {
+    throw error;
+  }
+
+  const fallbackPath = path.resolve(process.cwd(), fallbackCoverageFile);
+  content = await fs.readFile(fallbackPath, 'utf8');
+  console.warn(`Coverage file ${coverageFile} missing; using ${fallbackCoverageFile} instead.`);
+}
 
 let totalLines = 0;
 let coveredLines = 0;

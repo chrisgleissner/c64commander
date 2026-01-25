@@ -5,7 +5,7 @@ import {
   loadHvscStatusSummary,
   saveHvscStatusSummary,
   type HvscStatusSummary,
-} from '@/lib/hvsc';
+} from '@/lib/hvsc/hvscStatusStore';
 
 describe('hvscStatusStore', () => {
   beforeEach(() => {

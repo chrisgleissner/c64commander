@@ -74,4 +74,14 @@ describe('hvscArchiveExtraction', () => {
     },
     120000,
   );
+
+  it('rejects unsupported archive formats', async () => {
+    await expect(
+      extractArchiveEntries({
+        archiveName: 'hvsc.rar',
+        buffer: new Uint8Array([1, 2, 3]),
+        onEntry: async () => undefined,
+      }),
+    ).rejects.toThrow('Unsupported archive format');
+  });
 });

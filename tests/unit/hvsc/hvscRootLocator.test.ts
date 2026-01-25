@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from '@/lib/hvsc';
+import { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from '@/lib/hvsc/hvscRootLocator';
 
 describe('hvscRootLocator', () => {
   beforeEach(() => {
