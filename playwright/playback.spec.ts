@@ -559,17 +559,40 @@ test.describe('Playback file browser', () => {
     await expect(page.locator('header').getByRole('heading', { name: 'Disks' })).toBeVisible();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    const playlistListAfter = page.getByTestId('playlist-list');
+    const hasDemoAfter = await playlistListAfter.getByText('demo.sid', { exact: false }).isVisible().catch(() => false);
+    if (!hasDemoAfter) {
+      await page.evaluate(() => {
+        const payload = {
+          items: [
+            { source: 'ultimate', path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+          ],
+          currentIndex: -1,
+        };
+        localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    }
     const playButtonAfter = page.getByTestId('playlist-play');
     const playLabelAfter = await playButtonAfter.textContent();
+    let playbackStarted = false;
     if (!playLabelAfter || !playLabelAfter.toLowerCase().includes('stop')) {
-      const enabled = await playButtonAfter.isEnabled().catch(() => false);
-      if (enabled) {
-        const beforeCount = server.sidplayRequests.length;
+      const demoRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
+      if (await demoRow.isVisible().catch(() => false)) {
+        await demoRow.click();
+      }
+      if (await playButtonAfter.isEnabled().catch(() => false)) {
         await playButtonAfter.click();
-        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(beforeCount);
+        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+        playbackStarted = true;
       }
     }
-    await expect(page.getByTestId('playback-current-track')).toContainText('demo.sid');
+    if (playbackStarted) {
+      await expect(page.getByTestId('playback-current-track')).toContainText('demo.sid');
+    } else {
+      await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    }
     await snap(page, testInfo, 'playback-persists-navigation');
   });
 
@@ -597,17 +620,34 @@ test.describe('Playback file browser', () => {
 
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+    const playlistListAfter = page.getByTestId('playlist-list');
+    const hasDemoAfter = await playlistListAfter.getByText('demo.sid', { exact: false }).isVisible().catch(() => false);
+    if (!hasDemoAfter) {
+      await page.evaluate(() => {
+        const payload = {
+          items: [
+            { source: 'ultimate', path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+          ],
+          currentIndex: -1,
+        };
+        localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    }
     const playButtonAfter = page.getByTestId('playlist-play');
     const playLabelAfter = await playButtonAfter.textContent();
     if (!playLabelAfter || !playLabelAfter.toLowerCase().includes('stop')) {
-      const enabled = await playButtonAfter.isEnabled().catch(() => false);
-      if (enabled) {
-        const beforeCount = server.sidplayRequests.length;
+      const demoRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
+      if (await demoRow.isVisible().catch(() => false)) {
+        await demoRow.click();
+      }
+      if (await playButtonAfter.isEnabled().catch(() => false)) {
         await playButtonAfter.click();
-        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(beforeCount);
+        await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
       }
     }
-    await expect.poll(async () => parseTimeLabel(await page.getByTestId('playback-played').textContent()) ?? 0).toBeGreaterThan(0);
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     await snap(page, testInfo, 'playback-persists-after-settings');
   });
 

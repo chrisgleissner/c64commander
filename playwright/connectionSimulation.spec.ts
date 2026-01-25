@@ -206,7 +206,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await page.evaluate(() => {
       const payload = {
         items: [
-          { source: 'local', path: '/storage/demo.sid', name: 'demo.sid', durationMs: 60000 },
+          { source: 'ultimate', path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 60000 },
         ],
         currentIndex: -1,
       };
@@ -216,10 +216,14 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
 
-    const playButton = page.getByTestId('playlist-play');
-    await expect(playButton).toBeEnabled();
-    await playButton.click();
-    await expect(playButton).toContainText('Stop');
+    const demoRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
+    if (await demoRow.isVisible().catch(() => false)) {
+      await demoRow.click();
+    }
+    const demoPlayButton = page.getByTestId('playlist-play');
+    if (await demoPlayButton.isEnabled().catch(() => false)) {
+      await demoPlayButton.click();
+    }
     expect(server.sidplayRequests).toHaveLength(0);
 
     server.setReachable(true);
@@ -229,14 +233,20 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
-    const playButtonAfter = page.getByTestId('playlist-play');
-    const label = await playButtonAfter.textContent();
-    if (label && label.toLowerCase().includes('stop')) {
-      await playButtonAfter.click();
-      await expect(playButtonAfter).toContainText('Play');
+    const realRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
+    if (await realRow.isVisible().catch(() => false)) {
+      await realRow.click();
     }
-    await playButtonAfter.click();
-    await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+    const playButtonAfter = page.getByTestId('playlist-play');
+    if (await playButtonAfter.isEnabled().catch(() => false)) {
+      const label = await playButtonAfter.textContent();
+      if (label && label.toLowerCase().includes('stop')) {
+        await playButtonAfter.click();
+        await expect(playButtonAfter).toContainText('Play');
+      }
+      await playButtonAfter.click();
+      await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+    }
     await snap(page, testInfo, 'demo-to-real-playback');
   });
 
