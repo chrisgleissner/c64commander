@@ -19,4 +19,5 @@ export {
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
 } from './hvscService';
+export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
 export { HvscSongSource } from './hvscSource';

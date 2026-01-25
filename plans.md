@@ -36,10 +36,10 @@
 
 ### Step 2: Wire index behind existing HVSC lookup API (no behavior change)
 
-- [ ] Identify current HVSC lookup surface in [src/lib/hvsc/](src/lib/hvsc/).
-- [ ] Add adapter layer so callers can use `MediaIndex` without changing behavior.
-- [ ] Keep current Kotlin DB path intact; do not remove.
-- [ ] Run relevant unit tests and commit: "Wire media index adapter".
+- [x] Identify current HVSC lookup surface in [src/lib/hvsc/](src/lib/hvsc/).
+- [x] Add adapter layer so callers can use `MediaIndex` without changing behavior.
+- [x] Keep current Kotlin DB path intact; do not remove.
+- [x] Run relevant unit tests and commit: "Wire media index adapter".
 
 ### Step 3: Introduce file-system-first HVSC root abstraction
 
