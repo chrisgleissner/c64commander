@@ -109,7 +109,7 @@ test.describe('App screenshots', () => {
 
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
-    await expect(page.getByText('HVSC library')).toBeVisible();
+    await expect(page.getByText('HVSC library', { exact: true })).toBeVisible();
     await waitForStableRender(page);
     await waitForOverlaysToClear(page);
     await page.screenshot({ path: screenshotPath('app-play.png'), animations: 'disabled', caret: 'hide' });

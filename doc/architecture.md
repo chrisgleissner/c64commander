@@ -1,6 +1,6 @@
 # Architecture Overview
 
-C64 Commander is a React + Vite + Capacitor app that controls a C64 Ultimate device via its REST API. It runs as a web app in a Capacitor shell on Android with optional native bridges (FTP, HVSC ingestion).
+C64 Commander is a React + Vite + Capacitor app that controls a C64 Ultimate device via its REST API. It runs as a web app in a Capacitor shell on Android with optional native bridges (FTP, folder picker). HVSC ingestion and indexing run in TypeScript with the app filesystem as the source of truth.
 
 ## Stack and Layers
 
@@ -30,7 +30,7 @@ sequenceDiagram
   participant UI as PlayFilesPage
   participant Router as Playback Router
   participant C64U as C64U REST API
-  participant HVSC as HVSC Bridge
+  participant HVSC as HVSC Runtime (TS)
 
   UI->>Router: Build play plan (file type + source)
   Router->>C64U: Upload or mount (PRG/CRT/D64)

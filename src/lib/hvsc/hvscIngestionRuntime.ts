@@ -227,7 +227,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 
       const cached = await resolveCachedArchive(prefix, plan.version);
       const cacheDir = getHvscCacheDir();
-      let archivePath = cached ?? archiveName;
+      const archivePath = cached ?? archiveName;
       if (!cached) {
         emitProgress({ stage: 'download', message: `Downloading ${archiveName}…`, archiveName, percent: 0 });
         await Filesystem.downloadFile({

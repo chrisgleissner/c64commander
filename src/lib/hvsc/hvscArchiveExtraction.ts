@@ -22,7 +22,16 @@ let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 const getSevenZipModule = async () => {
   if (!sevenZipModulePromise) {
     const { default: SevenZip } = await import('7z-wasm');
-    const wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
+    let wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
+    if (typeof process !== 'undefined' && process.versions?.node) {
+      const [{ createRequire }, { pathToFileURL }] = await Promise.all([
+        import('module'),
+        import('url'),
+      ]);
+      const require = createRequire(import.meta.url);
+      const wasmPath = require.resolve('7z-wasm/7zz.wasm');
+      wasmUrl = pathToFileURL(wasmPath).toString();
+    }
     sevenZipModulePromise = (SevenZip as SevenZipFactory)({
       locateFile: (url) => (url.endsWith('.wasm') ? wasmUrl : url),
     });

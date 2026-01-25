@@ -16,7 +16,7 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 - Browse and edit the entire C64U configuration.
 - Device controls and disk management from a mobile-friendly dashboard.
 - Play files from local storage (work in progress) or the Ultimate 64 with a playlist-first workflow.
-- Download and browse the HVSC library stored locally for offline access.
+- Download and browse the HVSC library stored locally for offline access (TS-managed filesystem ingestion).
 - Diagnostics and developer tools for troubleshooting.
 
 ## Screenshots

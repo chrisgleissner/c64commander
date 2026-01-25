@@ -145,22 +145,15 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.datastore:datastore-preferences:$dataStoreVersion"
     implementation "androidx.documentfile:documentfile:1.0.1"
-    implementation "org.apache.commons:commons-compress:1.27.1"
     implementation "commons-net:commons-net:3.9.0"
-    implementation "org.tukaani:xz:1.10"
-    // TODO Remove if commons-compress + org.tukaani:xz work for HVSC 7z files
-    implementation "com.sorrowblue.sevenzipjbinding:7-Zip-JBinding-4Android:16.02-2.03"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
-    testImplementation "org.xerial:sqlite-jdbc:3.46.0.0"
     testImplementation "org.json:json:20240303"
     testImplementation "org.robolectric:robolectric:4.11.1"
     testImplementation "org.mockito:mockito-core:5.8.0"
     testImplementation "androidx.test:core:1.5.0"
     testImplementation "androidx.test.ext:junit:1.1.5"
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
-    testImplementation "net.sf.sevenzipjbinding:sevenzipjbinding:16.02-2.01"
-    testImplementation "net.sf.sevenzipjbinding:sevenzipjbinding-all-platforms:16.02-2.01"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
