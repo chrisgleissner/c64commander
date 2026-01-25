@@ -6,11 +6,12 @@ import {
   normalizeDeviceHost,
 } from '@/lib/c64api';
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ftp/ftpConfig';
-import { startMockServer, stopMockServer } from '@/lib/mock/mockServer';
+import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
 import {
   loadAutomaticDemoModeEnabled,
   loadStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
+import { addLog } from '@/lib/logging';
 
 export type ConnectionState = 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
 export type DiscoveryTrigger = 'startup' | 'manual' | 'settings' | 'background';
@@ -163,6 +164,7 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   dismissDemoInterstitial();
   await stopDemoServer();
   applyC64APIConfigFromStorage();
+  addLog('info', 'Connection switched to real device', { trigger });
   transitionTo('REAL_CONNECTED', trigger);
 };
 
@@ -171,6 +173,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   dismissDemoInterstitial();
   await stopDemoServer();
   applyC64APIConfigFromStorage();
+  addLog('info', 'Connection switched to offline', { trigger });
   transitionTo('OFFLINE_NO_DEMO', trigger);
 };
 
@@ -192,7 +195,24 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
       // On non-native platforms the internal demo servers may be unavailable.
       // Still enter DEMO_ACTIVE for deterministic UI/state behavior.
       setSnapshot({ lastProbeError: (error as Error).message });
+      addLog('info', 'Demo mode mock server unavailable', {
+        error: (error as Error).message,
+      });
     }
+  }
+
+  const activeMockUrl = getActiveMockBaseUrl();
+  if (activeMockUrl) {
+    const mockHost = getDeviceHostFromBaseUrl(activeMockUrl);
+    applyC64APIRuntimeConfig(activeMockUrl, undefined, mockHost);
+    const activeFtpPort = getActiveMockFtpPort();
+    if (activeFtpPort) setRuntimeFtpPortOverride(activeFtpPort);
+    addLog('info', 'Demo mode using mock C64U', { trigger, baseUrl: activeMockUrl });
+  } else {
+    const fallbackHost = 'localhost';
+    const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);
+    applyC64APIRuntimeConfig(fallbackBaseUrl, undefined, fallbackHost);
+    addLog('info', 'Demo mode using localhost fallback', { trigger, baseUrl: fallbackBaseUrl });
   }
 
   if (shouldShowDemoInterstitial(trigger)) {
@@ -221,7 +241,11 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     setSnapshot({ lastProbeAtMs: Date.now() });
     if (ok) {
       setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
-      await transitionToRealConnected(trigger);
+      if (snapshot.state !== 'DEMO_ACTIVE') {
+        await transitionToRealConnected(trigger);
+      } else {
+        addLog('info', 'Real device detected during demo mode', { trigger });
+      }
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
     }

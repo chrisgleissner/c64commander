@@ -1,7 +1,7 @@
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 
-export const SONGLENGTHS_FILE_NAME = 'songlengths.md5';
+export const SONGLENGTHS_FILE_NAMES = ['songlengths.md5', 'songlengths.txt'];
 export const DOCUMENTS_FOLDER = 'DOCUMENTS';
 
 const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
@@ -13,8 +13,10 @@ export const buildSonglengthsSearchPaths = (path: string) => {
   let current = folder || '/';
   while (current) {
     const base = current.endsWith('/') ? current : `${current}/`;
-    paths.push(`${base}${SONGLENGTHS_FILE_NAME}`);
-    paths.push(`${base}${DOCUMENTS_FOLDER}/${SONGLENGTHS_FILE_NAME}`);
+    SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+      paths.push(`${base}${fileName}`);
+      paths.push(`${base}${DOCUMENTS_FOLDER}/${fileName}`);
+    });
     if (base === '/') break;
     current = getParentPath(base);
   }

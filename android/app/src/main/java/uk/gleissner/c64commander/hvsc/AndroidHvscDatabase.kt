@@ -140,6 +140,20 @@ class AndroidHvscDatabase(context: Context) : SQLiteOpenHelper(
     }
   }
 
+  override fun updateDurationsByVirtualPath(durations: Map<String, Int>) {
+    if (durations.isEmpty()) return
+    val db = writableDatabase
+    val stmt = db.compileStatement(
+      "UPDATE ${HvscSchema.TABLE_SONG} SET duration_seconds = ? WHERE virtual_path = ?",
+    )
+    for ((path, seconds) in durations) {
+      stmt.clearBindings()
+      stmt.bindLong(1, seconds.toLong())
+      stmt.bindString(2, path)
+      stmt.executeUpdateDelete()
+    }
+  }
+
   override fun deleteByVirtualPaths(paths: List<String>) {
     if (paths.isEmpty()) return
     val db = writableDatabase

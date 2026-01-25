@@ -10,11 +10,14 @@ vi.mock('@/lib/mock/mockServer', () => ({
     throw new Error('Mock C64U server is only available on native platforms.');
   },
   stopMockServer: async () => undefined,
+  getActiveMockBaseUrl: () => null,
+  getActiveMockFtpPort: () => null,
 }));
 
 describe('connectionManager', () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.useFakeTimers();
   });
 

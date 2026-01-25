@@ -19,7 +19,8 @@ object HvscArchiveInspector {
     val archiveType: String,
     val totalEntries: Int,
     val sidEntries: Int,
-    val hasSonglengths: Boolean,
+    val hasSonglengthsMd5: Boolean,
+    val hasSonglengthsTxt: Boolean,
     val hasDeletionList: Boolean,
     val compressionMethods: Set<String>,
     val dictionaryBytes: List<Int>,
@@ -28,12 +29,14 @@ object HvscArchiveInspector {
   ) {
     val hasMixedMethods: Boolean = compressionMethods.size > 1
     val maxDictionaryBytes: Int? = dictionaryBytes.maxOrNull()
+    val hasSonglengths: Boolean = hasSonglengthsMd5 || hasSonglengthsTxt
   }
 
   fun inspect(archiveFile: File): Inspection {
     val name = archiveFile.name
     val lowered = name.lowercase(Locale.getDefault())
     return when {
+      archiveFile.isDirectory -> inspectDirectory(archiveFile)
       lowered.endsWith(".7z") -> inspectSevenZ(archiveFile)
       lowered.endsWith(".zip") -> inspectZip(archiveFile)
       else -> throw IllegalStateException("Unsupported archive format: $name")
@@ -56,7 +59,8 @@ object HvscArchiveInspector {
       val simple = archive.simpleInterface
       var total = 0
       var sidCount = 0
-      var hasSonglengths = false
+      var hasSonglengthsMd5 = false
+      var hasSonglengthsTxt = false
       var hasDeletionList = false
       val methods = mutableSetOf<String>()
       val dictionaryBytes = mutableListOf<Int>()
@@ -75,7 +79,8 @@ object HvscArchiveInspector {
         val entryName = normalizeEntryName(item.path ?: "")
         val lowered = entryName.lowercase(Locale.getDefault())
         if (lowered.endsWith(".sid")) sidCount += 1
-        if (lowered.endsWith("/songlengths.md5")) hasSonglengths = true
+        if (lowered.endsWith("/songlengths.md5")) hasSonglengthsMd5 = true
+        if (lowered.endsWith("/songlengths.txt")) hasSonglengthsTxt = true
         if (isDeletionList(entryName)) hasDeletionList = true
         if (encrypted != true) {
           encrypted = safeBooleanProperty(item, "isEncrypted") ?: encrypted
@@ -87,7 +92,8 @@ object HvscArchiveInspector {
         archiveType = "7z",
         totalEntries = total,
         sidEntries = sidCount,
-        hasSonglengths = hasSonglengths,
+        hasSonglengthsMd5 = hasSonglengthsMd5,
+        hasSonglengthsTxt = hasSonglengthsTxt,
         hasDeletionList = hasDeletionList,
         compressionMethods = methods,
         dictionaryBytes = dictionaryBytes,
@@ -110,7 +116,8 @@ object HvscArchiveInspector {
   private fun inspectSevenZWithCommons(archiveFile: File): Inspection {
     var total = 0
     var sidCount = 0
-    var hasSonglengths = false
+    var hasSonglengthsMd5 = false
+    var hasSonglengthsTxt = false
     var hasDeletionList = false
     val methods = mutableSetOf<String>()
     val dictionaryBytes = mutableListOf<Int>()
@@ -124,7 +131,8 @@ object HvscArchiveInspector {
           val entryName = normalizeEntryName(entry.name)
           val lowered = entryName.lowercase(Locale.getDefault())
           if (lowered.endsWith(".sid")) sidCount += 1
-          if (lowered.endsWith("/songlengths.md5")) hasSonglengths = true
+          if (lowered.endsWith("/songlengths.md5")) hasSonglengthsMd5 = true
+          if (lowered.endsWith("/songlengths.txt")) hasSonglengthsTxt = true
           if (isDeletionList(entryName)) hasDeletionList = true
           encrypted = encrypted ?: safeBooleanProperty(entry, "isEncrypted")
           val contentMethods = entry.contentMethods
@@ -146,7 +154,8 @@ object HvscArchiveInspector {
       archiveType = "7z",
       totalEntries = total,
       sidEntries = sidCount,
-      hasSonglengths = hasSonglengths,
+      hasSonglengthsMd5 = hasSonglengthsMd5,
+      hasSonglengthsTxt = hasSonglengthsTxt,
       hasDeletionList = hasDeletionList,
       compressionMethods = methods,
       dictionaryBytes = dictionaryBytes,
@@ -158,7 +167,8 @@ object HvscArchiveInspector {
   private fun inspectZip(archiveFile: File): Inspection {
     var total = 0
     var sidCount = 0
-    var hasSonglengths = false
+    var hasSonglengthsMd5 = false
+    var hasSonglengthsTxt = false
     var hasDeletionList = false
     val methods = mutableSetOf<String>()
     var encrypted: Boolean? = null
@@ -172,7 +182,8 @@ object HvscArchiveInspector {
         val entryName = normalizeEntryName(entry.name)
         val lowered = entryName.lowercase(Locale.getDefault())
         if (lowered.endsWith(".sid")) sidCount += 1
-        if (lowered.endsWith("/songlengths.md5")) hasSonglengths = true
+        if (lowered.endsWith("/songlengths.md5")) hasSonglengthsMd5 = true
+        if (lowered.endsWith("/songlengths.txt")) hasSonglengthsTxt = true
         if (isDeletionList(entryName)) hasDeletionList = true
         encrypted = encrypted ?: safeBooleanProperty(entry, "isEncrypted")
         methods.add(
@@ -190,12 +201,45 @@ object HvscArchiveInspector {
       archiveType = "zip",
       totalEntries = total,
       sidEntries = sidCount,
-      hasSonglengths = hasSonglengths,
+      hasSonglengthsMd5 = hasSonglengthsMd5,
+      hasSonglengthsTxt = hasSonglengthsTxt,
       hasDeletionList = hasDeletionList,
       compressionMethods = methods,
       dictionaryBytes = emptyList(),
       solid = null,
       encrypted = encrypted,
+    )
+  }
+
+  private fun inspectDirectory(rootDir: File): Inspection {
+    var total = 0
+    var sidCount = 0
+    var hasSonglengthsMd5 = false
+    var hasSonglengthsTxt = false
+    var hasDeletionList = false
+    rootDir.walkTopDown().forEach { file ->
+      if (!file.isFile) return@forEach
+      total += 1
+      val relative = rootDir.toPath().relativize(file.toPath()).toString().replace(File.separatorChar, '/')
+      val entryName = normalizeEntryName(relative)
+      val lowered = entryName.lowercase(Locale.getDefault())
+      if (lowered.endsWith(".sid")) sidCount += 1
+      if (lowered.endsWith("/songlengths.md5")) hasSonglengthsMd5 = true
+      if (lowered.endsWith("/songlengths.txt")) hasSonglengthsTxt = true
+      if (isDeletionList(entryName)) hasDeletionList = true
+    }
+    return Inspection(
+      archiveName = rootDir.name,
+      archiveType = "directory",
+      totalEntries = total,
+      sidEntries = sidCount,
+      hasSonglengthsMd5 = hasSonglengthsMd5,
+      hasSonglengthsTxt = hasSonglengthsTxt,
+      hasDeletionList = hasDeletionList,
+      compressionMethods = emptySet(),
+      dictionaryBytes = emptyList(),
+      solid = null,
+      encrypted = null,
     )
   }
 

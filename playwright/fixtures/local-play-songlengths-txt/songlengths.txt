@@ -1,0 +1,2 @@
+/local-play-songlengths-txt/demo.sid 0:25
+/local-play-songlengths-txt/demo2.sid 0:40

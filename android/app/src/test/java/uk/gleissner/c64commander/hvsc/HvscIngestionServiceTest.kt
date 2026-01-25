@@ -85,6 +85,15 @@ class HvscIngestionServiceTest {
       songsByPath.putAll(updated)
     }
 
+    override fun updateDurationsByVirtualPath(durations: Map<String, Int>) {
+      val updated = songsByPath.mapValues { (path, stored) ->
+        val nextDuration = durations[path]
+        if (nextDuration == null) stored else stored.copy(record = stored.record.copy(durationSeconds = nextDuration))
+      }
+      songsByPath.clear()
+      songsByPath.putAll(updated)
+    }
+
     override fun deleteByVirtualPaths(paths: List<String>) {
       paths.forEach { songsByPath.remove(it) }
     }

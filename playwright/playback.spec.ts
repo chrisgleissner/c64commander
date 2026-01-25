@@ -503,10 +503,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'slider-unmuted');
   });
 
-  test('file type filters hide disabled categories', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.addInitScript(() => {
-      localStorage.setItem('c64u_list_preview_limit', '1');
-    });
+  test('playlist text filter hides non-matching files', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 4000 },
       { source: 'ultimate' as const, path: '/Usb0/Demos/demo.prg', name: 'demo.prg', durationMs: 4000 },
@@ -515,20 +512,12 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     const list = page.getByTestId('playlist-list');
     await expect(list).toContainText('demo.sid');
-
-    await expect(page.getByRole('button', { name: 'View all' })).toBeVisible();
-    await page.getByRole('button', { name: 'View all' }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByTestId('file-type-filter-sid')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(dialog).toHaveCount(0);
-
-    await page.getByTestId('file-type-filter-sid').click();
-    await snap(page, testInfo, 'sid-disabled');
-    await expect(list).not.toContainText('demo.sid');
     await expect(list).toContainText('demo.prg');
 
-    await snap(page, testInfo, 'filters-in-view-all');
+    await page.getByTestId('list-filter-input').fill('demo.sid');
+    await snap(page, testInfo, 'playlist-filtered');
+    await expect(list).toContainText('demo.sid');
+    await expect(list).not.toContainText('demo.prg');
   });
 
   test('songlengths discovery shows path and durations', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -546,6 +535,23 @@ test.describe('Playback file browser', () => {
     await expect(list).toContainText('demo.sid');
     await expect(list).toContainText('(0:30)');
     await snap(page, testInfo, 'songlengths-loaded');
+  });
+
+  test('songlengths.txt discovery shows path and durations', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths-txt')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const songlengthsPath = page.getByText('/local-play-songlengths-txt/songlengths.txt');
+    await expect(songlengthsPath).toBeVisible();
+
+    const list = page.getByTestId('playlist-list');
+    await expect(list).toContainText('demo.sid');
+    await expect(list).toContainText('(0:25)');
+    await snap(page, testInfo, 'songlengths-txt-loaded');
   });
 
   test('DOCUMENTS songlengths are discovered for local folders', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -895,6 +901,45 @@ test.describe('Playback file browser', () => {
     await demoRow.getByRole('button', { name: 'Item actions' }).click();
     await expect(page.getByRole('menuitem', { name: /Duration: 0:20/ })).toBeVisible();
     await snap(page, testInfo, 'songlengths-duration');
+  });
+
+  test('remaining time label uses song length', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths-documents')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const demoRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' });
+    await demoRow.getByRole('button', { name: 'Play' }).click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+
+    const remaining = page.getByTestId('playback-remaining');
+    await expect.poll(async () => {
+      const text = await remaining.textContent();
+      if (!text) return null;
+      if (!text.startsWith('-')) return null;
+      return parseTimeLabel(text.replace('-', ''));
+    }).toBeGreaterThanOrEqual(19);
+    await snap(page, testInfo, 'remaining-time-label');
+  });
+
+  test('hvsc md5 duration lookup updates playlist durations', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const demoRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
+    await demoRow.getByRole('button', { name: 'Play' }).click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+
+    await demoRow.getByRole('button', { name: 'Item actions' }).click();
+    await expect(page.getByRole('menuitem', { name: /Duration: 0:42/ })).toBeVisible();
+    await snap(page, testInfo, 'hvsc-md5-duration');
   });
 
   test('local source browser filters supported files', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -1434,6 +1479,23 @@ test.describe('Playback file browser', () => {
     await page.reload();
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     await snap(page, testInfo, 'playlist-restored');
+  });
+
+  test('playlist persists across navigation', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    await snap(page, testInfo, 'playlist-before-navigation');
+
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await page.goto('/play');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    await snap(page, testInfo, 'playlist-after-navigation');
   });
 
   test('upload handler tolerates empty/binary response', async ({ page }: { page: Page }, testInfo: TestInfo) => {

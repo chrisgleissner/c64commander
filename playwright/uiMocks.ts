@@ -127,6 +127,9 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
             dataBase64: song.dataBase64,
           };
         },
+        getHvscDurationByMd5: async () => ({
+          durationSeconds: 42,
+        }),
       };
 
     },

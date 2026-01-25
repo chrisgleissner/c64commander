@@ -62,6 +62,9 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Missing SID data.');
     }
 
+    setElapsedMs(0);
+    setDurationMs(track.durationMs);
+
     let sslBlob: Blob | undefined;
     if (track.durationMs && track.durationMs > 0) {
       const payload = createSslPayload(track.durationMs);
@@ -70,8 +73,6 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
 
     await api.playSidUpload(blob, track.songNr, sslBlob);
     startedAtRef.current = Date.now();
-    setElapsedMs(0);
-    setDurationMs(track.durationMs);
     setIsPlaying(true);
   }, []);
 

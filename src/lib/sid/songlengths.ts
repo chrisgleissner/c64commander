@@ -31,23 +31,36 @@ export const parseSonglengths = (content: string): SonglengthsData => {
   lines.forEach((raw) => {
     const line = raw.trim();
     if (!line) return;
-    if (line.startsWith(';')) {
-      const path = line.replace(/^;+/, '').trim();
+    if (line.startsWith(';') || line.startsWith('#')) {
+      const path = line.replace(/^[:;#]+/, '').trim();
       if (path) currentPath = normalizePath(path);
       return;
     }
     if (line.startsWith('[')) return;
-    const parts = line.split('=');
-    if (parts.length !== 2) return;
-    const md5 = parts[0]?.trim();
-    const time = parts[1]?.trim();
-    if (!md5 || !time) return;
+
+    if (line.includes('=')) {
+      const parts = line.split('=');
+      if (parts.length !== 2) return;
+      const md5 = parts[0]?.trim();
+      const time = parts[1]?.trim();
+      if (!md5 || !time) return;
+      const seconds = parseTimeToSeconds(time);
+      if (seconds === null) return;
+      if (currentPath) {
+        pathToSeconds.set(currentPath, seconds);
+      }
+      md5ToSeconds.set(md5, seconds);
+      return;
+    }
+
+    const match = line.match(/^(.+?)\s+(\d+:\d{2}(?:\.\d{1,3})?)$/);
+    if (!match) return;
+    const path = match[1]?.trim();
+    const time = match[2]?.trim();
+    if (!path || !time) return;
     const seconds = parseTimeToSeconds(time);
     if (seconds === null) return;
-    if (currentPath) {
-      pathToSeconds.set(currentPath, seconds);
-    }
-    md5ToSeconds.set(md5, seconds);
+    pathToSeconds.set(normalizePath(path), seconds);
   });
 
   return { pathToSeconds, md5ToSeconds };
