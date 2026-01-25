@@ -43,10 +43,10 @@
 
 ### Step 3: Introduce file-system-first HVSC root abstraction
 
-- [ ] Add `HvscRootLocator` (TS) to resolve stable, user-discoverable HVSC root path.
-- [ ] Ensure path is persisted across restarts (config/store).
-- [ ] Add unit tests for path persistence and default selection.
-- [ ] Run relevant unit tests and commit: "Add HVSC root locator".
+- [x] Add `HvscRootLocator` (TS) to resolve stable, user-discoverable HVSC root path.
+- [x] Ensure path is persisted across restarts (config/store).
+- [x] Add unit tests for path persistence and default selection.
+- [x] Run relevant unit tests and commit: "Add HVSC root locator".
 
 ### Step 4: TS-only download + extraction tracking (status model)
 

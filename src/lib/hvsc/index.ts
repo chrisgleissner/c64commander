@@ -20,4 +20,5 @@ export {
   isHvscBridgeAvailable,
 } from './hvscService';
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
+export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from './hvscRootLocator';
 export { HvscSongSource } from './hvscSource';
