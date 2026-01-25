@@ -32,7 +32,7 @@ describe('c64api', () => {
     saveConfigWriteIntervalMs(0);
   });
 
-  it('adds auth headers for password and local proxy host', async () => {
+  it('adds auth headers for password', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: [] }), {
@@ -41,12 +41,12 @@ describe('c64api', () => {
       }),
     );
 
-    const api = new C64API('http://127.0.0.1:8787', 'secret', 'c64u-device');
+    const api = new C64API('http://c64u-device', 'secret', 'c64u-device');
     await api.getInfo();
 
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers['X-Password']).toBe('secret');
-    expect(headers['X-C64U-Host']).toBe('c64u-device');
+    expect(headers['X-C64U-Host']).toBeUndefined();
   });
 
   it('handles non-json responses gracefully', async () => {
@@ -99,13 +99,12 @@ describe('c64api', () => {
   });
 
   it('does not persist runtime config updates', async () => {
-    localStorage.setItem('c64u_base_url', 'http://saved');
     localStorage.setItem('c64u_password', 'saved-pass');
     localStorage.setItem('c64u_device_host', 'saved-host');
 
     applyC64APIRuntimeConfig('http://runtime', 'runtime-pass', 'runtime-host');
 
-    expect(localStorage.getItem('c64u_base_url')).toBe('http://saved');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
     expect(localStorage.getItem('c64u_password')).toBe('saved-pass');
     expect(localStorage.getItem('c64u_device_host')).toBe('saved-host');
   });
@@ -158,8 +157,8 @@ describe('c64api', () => {
     const handler = vi.fn();
     window.addEventListener('c64u-connection-change', handler as EventListener);
 
-    updateC64APIConfig('http://device', 'pw', 'host');
-    expect(localStorage.getItem('c64u_base_url')).toBe('http://device');
+    updateC64APIConfig('http://host', 'pw', 'host');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
     expect(localStorage.getItem('c64u_password')).toBe('pw');
     expect(localStorage.getItem('c64u_device_host')).toBe('host');
     expect(handler).toHaveBeenCalled();
@@ -167,11 +166,12 @@ describe('c64api', () => {
     window.removeEventListener('c64u-connection-change', handler as EventListener);
   });
 
-  it('clears stored password and device host when omitted', () => {
-    updateC64APIConfig('http://device', 'pw', 'host');
+  it('clears stored password when omitted and derives device host', () => {
+    updateC64APIConfig('http://host', 'pw', 'host');
     updateC64APIConfig('http://device');
     expect(localStorage.getItem('c64u_password')).toBeNull();
-    expect(localStorage.getItem('c64u_device_host')).toBeNull();
+    expect(localStorage.getItem('c64u_device_host')).toBe('device');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
   });
 
   it('uploads cartridge files and handles upload failures', async () => {
@@ -288,7 +288,7 @@ describe('c64api', () => {
 
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers['X-Password']).toBe('pw');
-    expect(headers['X-C64U-Host']).toBe('device-host');
+    expect(headers['X-C64U-Host']).toBeUndefined();
     expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
   });
 
@@ -318,7 +318,7 @@ describe('c64api', () => {
   });
 
   it('reuses singleton C64 API instance', () => {
-    localStorage.setItem('c64u_base_url', C64_DEFAULTS.DEFAULT_BASE_URL);
+    localStorage.setItem('c64u_device_host', C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const api1 = getC64API();
     const api2 = getC64API();
     expect(api1).toBe(api2);

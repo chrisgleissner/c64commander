@@ -45,6 +45,15 @@ const saveCache = (state: FtpCacheState) => {
 const buildCacheKey = (host: string, port: number | undefined, path: string) =>
   `${host}:${port ?? ''}:${path || '/'}`;
 
+const normalizeFtpHost = (host: string) => {
+  if (!host) return host;
+  if (host.startsWith('[')) {
+    const end = host.indexOf(']');
+    if (end !== -1) return host.slice(0, end + 1);
+  }
+  return host.split(':')[0] ?? host;
+};
+
 const getCachedEntries = (key: string): SourceEntry[] | null => {
   const cache = loadCache();
   const record = cache.entries[key];
@@ -74,7 +83,8 @@ const clearCachedEntries = (key: string) => {
 };
 
 const listEntries = async (path: string): Promise<SourceEntry[]> => {
-  const { deviceHost: host, password = '' } = getC64APIConfigSnapshot();
+  const { deviceHost: rawHost, password = '' } = getC64APIConfigSnapshot();
+  const host = normalizeFtpHost(rawHost);
   const normalizedPath = path && path !== '' ? path : '/';
   const cacheKey = buildCacheKey(host, getStoredFtpPort(), normalizedPath);
   const cached = getCachedEntries(cacheKey);
@@ -141,7 +151,8 @@ export const createUltimateSourceLocation = (): SourceLocation => ({
   listEntries,
   listFilesRecursive,
   clearCacheForPath: (path) => {
-    const { deviceHost: host } = getC64APIConfigSnapshot();
+    const { deviceHost: rawHost } = getC64APIConfigSnapshot();
+    const host = normalizeFtpHost(rawHost);
     const cacheKey = buildCacheKey(host, getStoredFtpPort(), path || '/');
     clearCachedEntries(cacheKey);
   },

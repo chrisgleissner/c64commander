@@ -16,7 +16,7 @@ import {
   Play,
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
-import { C64_DEFAULTS } from '@/lib/c64api';
+import { C64_DEFAULTS, getDeviceHostFromBaseUrl } from '@/lib/c64api';
 import { AppBar } from '@/components/AppBar';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { Input } from '@/components/ui/input';
@@ -78,10 +78,9 @@ export default function SettingsPage() {
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   
-  const [urlInput, setUrlInput] = useState(baseUrl);
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
-  const demoBaseUrl = status.state === 'DEMO_ACTIVE' ? runtimeBaseUrl : null;
+  const demoDeviceHost = status.state === 'DEMO_ACTIVE' ? getDeviceHostFromBaseUrl(runtimeBaseUrl) : null;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
@@ -104,10 +103,6 @@ export default function SettingsPage() {
   const [safError, setSafError] = useState<string | null>(null);
   const devTapTimestamps = useRef<number[]>([]);
   const isAndroid = getPlatform() === 'android';
-
-  useEffect(() => {
-    setUrlInput(baseUrl);
-  }, [baseUrl]);
 
   useEffect(() => {
     setPasswordInput(password);
@@ -246,7 +241,7 @@ export default function SettingsPage() {
   const handleSaveConnection = async () => {
     setIsSaving(true);
     try {
-      updateConfig(urlInput, passwordInput || undefined, deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+      updateConfig(deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
       await discoverConnection('settings');
       toast({ title: 'Connection settings saved' });
     } catch (error) {
@@ -331,24 +326,11 @@ export default function SettingsPage() {
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground">
-                Used for direct connections and local proxy header routing.
+                Hostname or IP from the C64 menu. The protocol is added automatically.
               </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="baseUrl" className="text-sm">C64U Hostname / IP</Label>
-              <Input
-                id="baseUrl"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder={C64_DEFAULTS.DEFAULT_BASE_URL}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Use the Hostname or IP shown in the C64 menu. The protocol can be specified but is optional (e.g. http://c64u).
-              </p>
-              {demoBaseUrl && demoBaseUrl !== urlInput ? (
+              {demoDeviceHost && demoDeviceHost !== deviceHostInput ? (
                 <p className="text-xs text-muted-foreground">
-                  Demo Hostname / IP: <span className="font-mono">{demoBaseUrl}</span>
+                  Demo Hostname / IP: <span className="font-mono">{demoDeviceHost}</span>
                 </p>
               ) : null}
             </div>
@@ -836,7 +818,7 @@ export default function SettingsPage() {
       </main>
 
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>
             <DialogDescription>Review app logs and error history.</DialogDescription>
@@ -850,7 +832,7 @@ export default function SettingsPage() {
               <TabsTrigger value="errors">Errors</TabsTrigger>
               <TabsTrigger value="logs">All logs</TabsTrigger>
             </TabsList>
-            <TabsContent value="errors" className="space-y-2 max-h-[360px] overflow-y-auto">
+            <TabsContent value="errors" className="space-y-2 max-h-[55vh] overflow-auto pr-2">
               {errorLogs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No errors recorded.</p>
               ) : (
@@ -859,7 +841,7 @@ export default function SettingsPage() {
                     <p className="text-sm font-medium">{entry.message}</p>
                     <p className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</p>
                     {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
+                      <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     )}
@@ -867,7 +849,7 @@ export default function SettingsPage() {
                 ))
               )}
             </TabsContent>
-            <TabsContent value="logs" className="space-y-2 max-h-[360px] overflow-y-auto">
+            <TabsContent value="logs" className="space-y-2 max-h-[55vh] overflow-auto pr-2">
               {logs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No logs recorded.</p>
               ) : (
@@ -878,7 +860,7 @@ export default function SettingsPage() {
                       {entry.level.toUpperCase()} · {new Date(entry.timestamp).toLocaleString()}
                     </p>
                     {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre-wrap break-words text-muted-foreground">
+                      <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                         {JSON.stringify(entry.details, null, 2)}
                       </pre>
                     )}

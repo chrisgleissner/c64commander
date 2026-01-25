@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { Page, TestInfo } from '@playwright/test';
+import type { Page, Route, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
@@ -59,11 +59,10 @@ test.describe('Automatic Demo Mode', () => {
     server = await createMockC64Server({});
 
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_base_url', 'http://127.0.0.1:1');
       localStorage.setItem('c64u_startup_discovery_window_ms', '600');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '5000');
-      localStorage.setItem('c64u_device_host', 'c64u');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.setItem('c64u_password', '');
     });
 
@@ -94,7 +93,7 @@ test.describe('Automatic Demo Mode', () => {
     await seedUiMocks(page, server.baseUrl);
 
     const seenPasswords: string[] = [];
-    await page.route('**/v1/info', async (route) => {
+    await page.route('**/v1/info', async (route: Route) => {
       const req = route.request();
       const header = req.headers()['x-password'];
       if (typeof header === 'string') {
@@ -119,10 +118,9 @@ test.describe('Automatic Demo Mode', () => {
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_base_url', 'http://192.168.1.13');
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
-      localStorage.setItem('c64u_device_host', 'c64u');
+      localStorage.setItem('c64u_device_host', '192.168.1.13');
       localStorage.setItem('c64u_password', '');
     });
 
@@ -130,11 +128,11 @@ test.describe('Automatic Demo Mode', () => {
     await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const urlInput = page.getByLabel(/hostname\s*\/\s*ip/i);
-    await expect(urlInput).toHaveValue('http://192.168.1.13');
+    const urlInput = page.locator('#deviceHost');
+    await expect(urlInput).toHaveValue('192.168.1.13');
 
     const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
-    expect(stored).toBe('http://192.168.1.13');
+    expect(stored).toBeNull();
     await snap(page, testInfo, 'demo-base-url-preserved');
   });
 
@@ -144,10 +142,9 @@ test.describe('Automatic Demo Mode', () => {
     server = await createMockC64Server({});
 
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_base_url', 'http://127.0.0.1:1');
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
-      localStorage.setItem('c64u_device_host', 'c64u');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.setItem('c64u_password', '');
     });
 
@@ -155,14 +152,15 @@ test.describe('Automatic Demo Mode', () => {
     await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const urlInput = page.getByLabel(/hostname\s*\/\s*ip/i);
-    await urlInput.fill(server.baseUrl);
+    const urlInput = page.locator('#deviceHost');
+    const host = new URL(server.baseUrl).host;
+    await urlInput.fill(host);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
-    const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
-    expect(stored).toBe(server.baseUrl);
+    const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
+    expect(stored).toBe(new URL(server.baseUrl).host);
     await snap(page, testInfo, 'demo-exit-connected');
   });
 });

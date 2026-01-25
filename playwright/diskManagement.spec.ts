@@ -183,7 +183,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-list-grouped');
   });
 
-  test('FTP directory listing shows hierarchy', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('FTP directory listing shows hierarchy @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
@@ -197,7 +197,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'c64u-folders');
   });
 
-  test('drive power toggle button updates state and issues request', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('drive power toggle button updates state and issues request @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const requests: Array<{ method: string; url: string }> = [];
     page.on('request', (request: Request) => {
       try {
@@ -234,7 +234,7 @@ test.describe('Disk management', () => {
     expect(lastRequest).toBeTruthy();
   });
 
-  test('importing C64U folders preserves hierarchy and paths', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('importing C64U folders preserves hierarchy and paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
@@ -259,7 +259,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-list');
   });
 
-  test('disk filtering greys out non-matching nodes and clears', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk filtering greys out non-matching nodes and clears @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
@@ -276,7 +276,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'filter-cleared');
   });
 
-  test('disk groups display and can be reassigned inline', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk groups display and can be reassigned inline @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
 
@@ -306,7 +306,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-group-reassigned');
   });
 
-  test('mounting ultimate disks uses mount endpoint', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('mounting ultimate disks uses mount endpoint @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
@@ -323,7 +323,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'mount-requested');
   });
 
-  test('multi-drive mounting and rotation within group', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('multi-drive mounting and rotation within group @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
@@ -344,7 +344,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'rotated-disk');
   });
 
-  test('mount dialog shows a single close button', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('mount dialog shows a single close button @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
@@ -355,7 +355,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'single-close');
   });
 
-  test('disk list view all shows full list', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk list view all shows full list @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '1');
     });
@@ -372,7 +372,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-view-all');
   });
 
-  test('disk view-all dialog is constrained and scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk view-all dialog is constrained and scrollable @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '5');
     });
@@ -418,7 +418,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disks-view-all-scrolled');
   });
 
-  test('disk presence indicator and deletion ejects mounted disks', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk presence indicator and deletion ejects mounted disks @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedUltimateTurricanDisks(page);
     const encodedPath = encodeURIComponent('/Usb0/Games/Turrican II/Disk 1.d64');
     await page.request.put(`${server.baseUrl}/v1/drives/a:mount?image=${encodedPath}`);
@@ -444,7 +444,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'drive-removed');
   });
 
-  test('disk menu shows size/date and rename works', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk menu shows size/date and rename works @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
@@ -461,7 +461,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-renamed');
   });
 
-  test('disk list select all removes selected items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk list select all removes selected items @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
@@ -475,7 +475,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disks-removed');
   });
 
-  test('disk view-all filter narrows list', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk view-all filter narrows list @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '5');
     });
@@ -502,7 +502,7 @@ test.describe('Disk management', () => {
     await expect(page.getByTestId('action-list-scroll')).not.toContainText('Disk_001.d64');
   });
 
-  test('disk removal wording is non-destructive', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk removal wording is non-destructive @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
@@ -513,7 +513,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'menu-verified');
   });
 
-  test('disk menu shows size and date for local imports', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk menu shows size and date for local imports @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64']);
 
@@ -527,7 +527,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'local-disk-size-date');
   });
 
-  test('disk menu shows size and date for C64 Ultimate imports', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk menu shows size and date for C64 Ultimate imports @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
@@ -549,7 +549,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'ftp-disk-size-date');
   });
 
-  test('importing non-disk files shows warning', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('importing non-disk files shows warning @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected warning for non-disk file imports.');
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
@@ -564,7 +564,7 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'no-disks-warning');
   });
 
-  test('FTP login failure surfaces error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('FTP login failure surfaces error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for FTP login failure.');
     const protectedServers = await startFtpTestServers({ password: 'secret' });
     await seedFtpConfig(page, {
@@ -586,7 +586,7 @@ test.describe('Disk management', () => {
     await protectedServers.close();
   });
 
-  test('FTP server unavailable surfaces error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('FTP server unavailable surfaces error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for FTP server unavailable.');
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,

@@ -203,7 +203,7 @@ export default function CoverageProbePage() {
       }, failures);
 
       await runProbe('connection + disk library', async () => {
-        connection.updateConfig(connection.baseUrl, connection.password, connection.deviceHost);
+        connection.updateConfig(connection.deviceHost, connection.password);
         await connection.refetch();
         window.dispatchEvent(
           new CustomEvent('c64u-connection-change', {

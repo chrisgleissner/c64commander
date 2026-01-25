@@ -84,7 +84,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'config-saved');
   });
 
-  test('save config with empty name shows error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('save config with empty name shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for empty config name.');
     await page.goto('/');
     await snap(page, testInfo, 'home-open');
@@ -107,7 +107,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'not-saved');
   });
 
-  test('save config with duplicate name shows error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('save config with duplicate name shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for duplicate config name.');
     
     await page.addInitScript(({ baseUrl }) => {
@@ -145,7 +145,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'not-duplicated');
   });
 
-  test('load config applies values to server', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('load config applies values to server @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(({ baseUrl }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'test-config-id',
@@ -182,7 +182,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'config-applied');
   });
 
-  test('rename config updates localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('rename config updates localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(({ baseUrl }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'rename-config-id',
@@ -222,7 +222,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'config-renamed');
   });
 
-  test('delete config removes from localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('delete config removes from localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(({ baseUrl }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'delete-config-id',

@@ -33,7 +33,6 @@ export const seedFtpConfig = async (
 ) => {
   await page.addInitScript(
     ({ host, port, bridgeUrl, password }) => {
-      localStorage.setItem('c64u_device_host', host);
       localStorage.setItem('c64u_ftp_port', String(port));
       localStorage.setItem('c64u_ftp_bridge_url', bridgeUrl);
       if (password !== undefined) {

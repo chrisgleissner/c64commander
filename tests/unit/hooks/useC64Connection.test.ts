@@ -55,6 +55,9 @@ vi.mock('@/lib/c64api', () => ({
   updateC64APIConfig: (...args: unknown[]) => updateC64APIConfigMock(...args),
   C64_DEFAULTS: { DEFAULT_DEVICE_HOST: 'c64u' },
   getDefaultBaseUrl: () => 'http://default',
+  buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
+  getDeviceHostFromBaseUrl: (baseUrl?: string) => baseUrl?.replace(/^https?:\/\//, '') ?? 'c64u',
+  normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
   getC64APIConfigSnapshot: () => ({
     baseUrl: 'http://default',
     password: undefined,
@@ -130,10 +133,10 @@ describe('useC64Connection', () => {
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
-      result.current.updateConfig('http://device', 'pw', 'host');
+      result.current.updateConfig('host', 'pw');
     });
-    expect(updateC64APIConfigMock).toHaveBeenCalledWith('http://device', 'pw', 'host');
-    await waitFor(() => expect(result.current.baseUrl).toBe('http://device'));
+    expect(updateC64APIConfigMock).toHaveBeenCalledWith('http://host', 'pw', 'host');
+    await waitFor(() => expect(result.current.baseUrl).toBe('http://host'));
     expect(result.current.password).toBe('pw');
     expect(result.current.deviceHost).toBe('host');
   });

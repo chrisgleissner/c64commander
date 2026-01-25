@@ -12,7 +12,8 @@ import {
 } from '@/lib/config/appConfigStore';
 
 vi.mock('@/lib/c64api', () => ({
-  getDefaultBaseUrl: () => 'http://default',
+  buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
+  normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
 }));
 
 describe('appConfigStore', () => {
@@ -21,13 +22,13 @@ describe('appConfigStore', () => {
   });
 
   it('uses stored base url or default', () => {
-    expect(getActiveBaseUrl()).toBe('http://default');
-    localStorage.setItem('c64u_base_url', 'http://custom');
-    expect(getActiveBaseUrl()).toBe('http://custom');
+    expect(getActiveBaseUrl()).toBe('http://c64u');
+    localStorage.setItem('c64u_device_host', 'custom-host');
+    expect(getActiveBaseUrl()).toBe('http://custom-host');
   });
 
   it('stores and loads initial snapshots', () => {
-    const snapshot = { savedAt: 'now', data: { Audio: { errors: [] } } };
+    const snapshot = { savedAt: 'now', data: { Audio: { errors: [] as string[] } } };
     expect(loadInitialSnapshot('http://device')).toBeNull();
     saveInitialSnapshot('http://device', snapshot);
     expect(loadInitialSnapshot('http://device')).toEqual(snapshot);

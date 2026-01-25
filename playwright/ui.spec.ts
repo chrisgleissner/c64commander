@@ -30,12 +30,12 @@ const resolveExpectedVersion = () => {
 
 test.describe('UI coverage', () => {
   test.describe.configure({ mode: 'parallel' });
-
-  let server: Awaited<ReturnType<typeof createMockC64Server>>;
+  const servers = new Map<string, Awaited<ReturnType<typeof createMockC64Server>>>();
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
-    server = await createMockC64Server(uiFixtures.configState);
+    const server = await createMockC64Server(uiFixtures.configState);
+    servers.set(testInfo.testId, server);
     await seedUiMocks(page, server.baseUrl);
     await page.addStyleTag({
       content: '[aria-label="Notifications (F8)"] { pointer-events: none !important; }',
@@ -43,12 +43,16 @@ test.describe('UI coverage', () => {
   });
 
   test.afterEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const server = servers.get(testInfo.testId);
     try {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server.close();
+      if (server) {
+        await server.close();
+        servers.delete(testInfo.testId);
+      }
     }
   });
 
@@ -128,6 +132,10 @@ test.describe('UI coverage', () => {
   };
 
   test('config widgets read/write and refresh', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const server = servers.get(testInfo.testId);
+    if (!server) {
+      throw new Error('Missing mock C64 server for UI coverage test.');
+    }
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'config-open');
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
