@@ -602,6 +602,23 @@ jobs:
           echo "Android coverage files:";
           find android/app/build/reports -type f -name "jacocoTestReport.xml" | sort
 
+      - name: Normalize Android coverage report path
+        if: always()
+        id: normalize_android_coverage
+        run: |
+          set -e
+          report=$(find android/app/build/reports -type f -name "*.xml" | grep -i jacoco | head -n 1)
+          if [ -z "$report" ]; then
+            echo "No JaCoCo XML report found under android/app/build/reports." >&2
+            exit 1
+          fi
+          target="android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml"
+          mkdir -p "$(dirname "$target")"
+          if [ "$report" != "$target" ]; then
+            cp "$report" "$target"
+          fi
+          echo "report=$target" >> $GITHUB_OUTPUT
+
       - name: Verify coverage artifacts
         if: always()
         env:
@@ -612,7 +629,7 @@ jobs:
         if: always()
         uses: codecov/codecov-action@v5
         with:
-          files: ./android/app/build/reports/jacoco/jacocoTestReport/jacocoTestReport.xml
+          files: ${{ steps.normalize_android_coverage.outputs.report }}
           flags: android
           name: c64-commander-android-coverage
           fail_ci_if_error: true
