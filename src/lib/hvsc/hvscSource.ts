@@ -27,7 +27,6 @@ export const HvscSongSource: SongSource = {
   getSong: async (entry: SongEntry) => {
     const payload = entry.payload as { id?: number; virtualPath?: string } | undefined;
     const song = await getHvscSong({
-      id: payload?.id ? Number(payload.id) : undefined,
       virtualPath: payload?.virtualPath || entry.path,
     });
     const data = base64ToUint8(song.dataBase64);

@@ -69,10 +69,10 @@
 
 ### Step 7: Move indexing to TS-only file-system scan
 
-- [ ] Implement file-system scan that builds lightweight index from HVSC root.
-- [ ] Replace any Kotlin DB dependency for lookups with TS index.
-- [ ] Keep Kotlin download/extraction only if unavoidable.
-- [ ] Run unit tests and Playwright as needed; commit: "Use TS index for HVSC".
+- [x] Implement file-system scan that builds lightweight index from HVSC root.
+- [x] Replace any Kotlin DB dependency for lookups with TS index.
+- [x] Keep Kotlin download/extraction only if unavoidable.
+- [x] Run unit tests and Playwright as needed; commit: "Use TS index for HVSC".
 
 ### Step 8: Reduce Kotlin surface area
 
