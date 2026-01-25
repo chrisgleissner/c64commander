@@ -1,12 +1,4 @@
 /**
- * @deprecated Use the HVSC module at src/lib/hvsc instead.
+ * @deprecated HVSC ingestion moved to TS runtime. This module is intentionally empty.
  */
-export { HvscIngestion } from '@/lib/hvsc/native/hvscIngestion';
-export type { HvscIngestionPlugin } from '@/lib/hvsc/native/hvscIngestion';
-export type {
-  HvscFolderListing,
-  HvscProgressEvent,
-  HvscSong,
-  HvscStatus,
-  HvscUpdateStatus,
-} from '@/lib/hvsc/hvscTypes';
+export {};

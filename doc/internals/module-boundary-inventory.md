@@ -3,10 +3,15 @@
 ## HVSC-related (TypeScript)
 
 - src/lib/hvsc/index.ts — public API surface (Domain logic)
-- src/lib/hvsc/hvscService.ts — orchestration + lifecycle + bridge wrapper (Domain logic)
+- src/lib/hvsc/hvscService.ts — orchestration + lifecycle for TS runtime (Domain logic)
 - src/lib/hvsc/hvscTypes.ts — shared HVSC types (Domain logic)
 - src/lib/hvsc/hvscSource.ts — HVSC SongSource implementation (Data source abstraction)
-- src/lib/hvsc/native/hvscIngestion.ts — Capacitor bridge registration (Native bridge)
+- src/lib/hvsc/hvscArchiveExtraction.ts — 7z/zip extraction helpers (Domain logic)
+- src/lib/hvsc/hvscFilesystem.ts — HVSC filesystem helpers (Domain logic)
+- src/lib/hvsc/hvscIngestionRuntime.ts — download + extraction + indexing (Domain logic)
+- src/lib/hvsc/hvscReleaseService.ts — version discovery + URLs (Domain logic)
+- src/lib/hvsc/hvscStateStore.ts — persisted ingest status (Domain logic)
+- src/lib/hvsc/native/hvscIngestion.ts — deprecated shim for web/mock usage (Native bridge, legacy shim)
 - src/lib/hvsc/native/hvscIngestion.web.ts — web/mock adapter (Platform-specific implementation)
 - src/types/hvsc-mock.d.ts — global mock typing for tests (Test-only code)
 

@@ -117,8 +117,8 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           }
           return { path: normalized, folders: [], songs: [] };
         },
-        getHvscSong: async ({ id }: { id?: number }) => {
-          if (id !== song.id) throw new Error('Song not found');
+        getHvscSong: async ({ id, virtualPath }: { id?: number; virtualPath?: string }) => {
+          if (id !== song.id && virtualPath !== song.virtualPath) throw new Error('Song not found');
           return {
             id: song.id,
             virtualPath: song.virtualPath,

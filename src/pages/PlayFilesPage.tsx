@@ -24,6 +24,7 @@ import { formatPlayCategory, getPlayCategory, isSupportedPlayFile, type PlayFile
 import { PlaybackClock } from '@/lib/playback/playbackClock';
 import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import { createHvscSourceLocation } from '@/lib/sourceNavigation/hvscSourceAdapter';
 import { createLocalSourceLocation, resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import {
@@ -57,11 +58,17 @@ import {
   checkForHvscUpdates,
   getHvscDurationByMd5Seconds,
   getHvscFolderListing,
+  loadHvscRoot,
   getHvscSong,
   getHvscStatus,
+  loadHvscStatusSummary,
+  saveHvscStatusSummary,
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  type HvscFailureCategory,
+  type HvscProgressEvent,
+  type HvscStatusSummary,
   type HvscStatus,
 } from '@/lib/hvsc';
 import { AppBar } from '@/components/AppBar';
@@ -332,6 +339,7 @@ export default function PlayFilesPage() {
   }, [sidVolumeItems]);
 
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
+  const [hvscStatusSummary, setHvscStatusSummary] = useState<HvscStatusSummary>(() => loadHvscStatusSummary());
   const [hvscLoading, setHvscLoading] = useState(false);
   const [hvscProgress, setHvscProgress] = useState<number | null>(null);
   const [hvscStage, setHvscStage] = useState<string | null>(null);
@@ -344,6 +352,7 @@ export default function PlayFilesPage() {
   const [selectedHvscFolder, setSelectedHvscFolder] = useState('/');
   const [volumeIndex, setVolumeIndex] = useState(0);
   const [volumeMuted, setVolumeMuted] = useState(false);
+  const hvscLastStageRef = useRef<string | null>(null);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const songlengthsInputRef = useRef<HTMLInputElement | null>(null);
@@ -364,12 +373,64 @@ export default function PlayFilesPage() {
     prepareDirectoryInput(localSourceInputRef.current);
   }, []);
 
+  const updateHvscSummary = useCallback((updater: (prev: HvscStatusSummary) => HvscStatusSummary) => {
+    setHvscStatusSummary((prev) => {
+      const next = updater(prev);
+      saveHvscStatusSummary(next);
+      return next;
+    });
+  }, []);
+
+  const resolveHvscFailureCategory = useCallback((event: HvscProgressEvent, lastStage: string | null): HvscFailureCategory => {
+    const details = `${event.errorType ?? ''} ${event.errorCause ?? ''}`.toLowerCase();
+    const isNetwork = /timeout|network|socket|host|dns|connection|ssl|refused|reset/.test(details);
+    const isStorage = /disk|space|permission|storage|file|io|not found|readonly|denied|enospc|eacces/.test(details);
+    if (isNetwork) return 'network';
+    if (isStorage) return 'storage';
+    if (lastStage === 'download') return 'download';
+    if (
+      lastStage === 'archive_extraction' ||
+      lastStage === 'archive_validation' ||
+      lastStage === 'sid_enumeration' ||
+      lastStage === 'songlengths' ||
+      lastStage === 'sid_metadata_parsing'
+    ) {
+      return 'extraction';
+    }
+    return 'unknown';
+  }, []);
+
+  const formatHvscDuration = (durationMs?: number | null) => {
+    if (!durationMs && durationMs !== 0) return '—';
+    const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const formatHvscTimestamp = (value?: string | null) => {
+    if (!value) return '—';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
+  };
+
   const handleSonglengthsInput = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
     const file = files[0];
     const path = normalizeSourcePath(getLocalFilePath(file));
     setSonglengthsFiles([{ path, file }]);
   }, []);
+
+  const buildHvscLocalPlayFile = useCallback((path: string, name: string): LocalPlayFile => ({
+    name,
+    webkitRelativePath: path,
+    lastModified: Date.now(),
+    arrayBuffer: async () => {
+      const detail = await getHvscSong({ virtualPath: path });
+      const data = base64ToUint8(detail.dataBase64);
+      return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    },
+  }), []);
 
   const defaultVolumeIndex = useMemo(() => {
     const zeroIndex = volumeOptions.findIndex((option) => option.numeric === 0);
@@ -642,15 +703,23 @@ export default function PlayFilesPage() {
     }
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
+  const hvscRoot = useMemo(() => loadHvscRoot(), []);
+  const hvscLibraryAvailable = hvscStatusSummary.download.status === 'success'
+    && hvscStatusSummary.extraction.status === 'success';
+
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
-    return [
+    const groups: SourceGroup[] = [
       { label: 'C64 Ultimate', sources: [ultimateSource] },
       { label: 'This device', sources: localGroupSources },
     ];
-  }, [localSources]);
+    if (hvscLibraryAvailable) {
+      groups.push({ label: 'HVSC Library', sources: [createHvscSourceLocation(hvscRoot.path)] });
+    }
+    return groups;
+  }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
 
   const localEntriesBySourceId = useMemo(() => {
     const map = new Map<
@@ -969,13 +1038,16 @@ export default function PlayFilesPage() {
               || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified) : undefined)
               || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified) : undefined)
             : undefined;
+        const hvscFile = source.type === 'hvsc'
+          ? buildHvscLocalPlayFile(normalizedPath, file.name)
+          : undefined;
         const playable: PlayableEntry = {
           source: source.type === 'ultimate' ? 'ultimate' : 'local',
           name: file.name,
           path: normalizedPath,
           durationMs: undefined,
           sourceId: source.type === 'local' ? source.id : null,
-          file: localFile,
+          file: hvscFile ?? localFile,
           sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
           modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
         };
@@ -1091,11 +1163,96 @@ export default function PlayFilesPage() {
     if (!isHvscBridgeAvailable()) return;
     let removeListener: (() => Promise<void>) | null = null;
     addHvscProgressListener((event) => {
+      const now = new Date().toISOString();
+      const lastStage = hvscLastStageRef.current;
+      if (event.stage && event.stage !== 'error') {
+        hvscLastStageRef.current = event.stage;
+      }
       if (event.message) setHvscActionLabel(event.message);
       if (event.stage) setHvscStage(event.stage);
       if (typeof event.percent === 'number') setHvscProgress(event.percent);
       if (event.currentFile) setHvscCurrentFile(event.currentFile);
       if (event.errorCause) setHvscErrorMessage(event.errorCause);
+      if (event.stage === 'download') {
+        updateHvscSummary((prev) => ({
+          ...prev,
+          download: {
+            ...prev.download,
+            status: 'in-progress',
+            startedAt: prev.download.startedAt ?? now,
+            durationMs: event.elapsedTimeMs ?? prev.download.durationMs ?? null,
+            sizeBytes: event.totalBytes ?? event.downloadedBytes ?? prev.download.sizeBytes ?? null,
+            errorCategory: null,
+            errorMessage: null,
+          },
+        }));
+      }
+      if (
+        event.stage === 'archive_extraction' ||
+        event.stage === 'archive_validation' ||
+        event.stage === 'sid_enumeration' ||
+        event.stage === 'songlengths' ||
+        event.stage === 'sid_metadata_parsing'
+      ) {
+        updateHvscSummary((prev) => ({
+          ...prev,
+          extraction: {
+            ...prev.extraction,
+            status: 'in-progress',
+            startedAt: prev.extraction.startedAt ?? now,
+            durationMs: event.elapsedTimeMs ?? prev.extraction.durationMs ?? null,
+            filesExtracted: event.processedCount ?? prev.extraction.filesExtracted ?? null,
+            errorCategory: null,
+            errorMessage: null,
+          },
+        }));
+      }
+      if (event.stage === 'complete') {
+        updateHvscSummary((prev) => ({
+          ...prev,
+          download: {
+            ...prev.download,
+            status: prev.download.status === 'success' ? prev.download.status : 'success',
+            finishedAt: prev.download.finishedAt ?? now,
+          },
+          extraction: {
+            ...prev.extraction,
+            status: prev.extraction.status === 'success' ? prev.extraction.status : 'success',
+            finishedAt: prev.extraction.finishedAt ?? now,
+          },
+          lastUpdatedAt: now,
+        }));
+      }
+      if (event.stage === 'error') {
+        const category = resolveHvscFailureCategory(event, lastStage);
+        const errorMessage = event.errorCause ?? event.message ?? null;
+        updateHvscSummary((prev) => {
+          if (lastStage === 'download') {
+            return {
+              ...prev,
+              download: {
+                ...prev.download,
+                status: 'failure',
+                finishedAt: now,
+                errorCategory: category,
+                errorMessage,
+              },
+              lastUpdatedAt: now,
+            };
+          }
+          return {
+            ...prev,
+            extraction: {
+              ...prev.extraction,
+              status: 'failure',
+              finishedAt: now,
+              errorCategory: category,
+              errorMessage,
+            },
+            lastUpdatedAt: now,
+          };
+        });
+      }
       if (event.stage === 'songlengths') {
         addLog('info', 'HVSC songlengths source loaded', {
           message: event.message,
@@ -1108,7 +1265,7 @@ export default function PlayFilesPage() {
     return () => {
       if (removeListener) void removeListener();
     };
-  }, []);
+  }, [resolveHvscFailureCategory, updateHvscSummary]);
 
   const loadHvscFolder = useCallback(async (path: string) => {
     try {
@@ -1724,11 +1881,30 @@ export default function PlayFilesPage() {
 
   const handleHvscInstall = useCallback(async () => {
     try {
+      const startedAt = new Date().toISOString();
       setHvscLoading(true);
       setHvscProgress(0);
       setHvscStage(null);
       setHvscErrorMessage(null);
       setHvscActionLabel('Checking for updates…');
+      updateHvscSummary((prev) => ({
+        ...prev,
+        download: {
+          ...prev.download,
+          status: 'in-progress',
+          startedAt,
+          finishedAt: null,
+          durationMs: null,
+          errorCategory: null,
+          errorMessage: null,
+        },
+        extraction: {
+          ...prev.extraction,
+          status: prev.extraction.status === 'success' ? prev.extraction.status : 'idle',
+          errorCategory: null,
+          errorMessage: null,
+        },
+      }));
       const updateStatus = await checkForHvscUpdates();
       if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
         toast({ title: 'HVSC up to date', description: 'No new updates detected.' });
@@ -1739,12 +1915,43 @@ export default function PlayFilesPage() {
       await installOrUpdateHvsc('hvsc-install');
       const status = await getHvscStatus();
       setHvscStatus(status);
+      const finishedAt = new Date().toISOString();
+      updateHvscSummary((prev) => ({
+        ...prev,
+        download: {
+          ...prev.download,
+          status: 'success',
+          finishedAt,
+          errorCategory: null,
+          errorMessage: null,
+        },
+        extraction: {
+          ...prev.extraction,
+          status: 'success',
+          finishedAt,
+          errorCategory: null,
+          errorMessage: null,
+        },
+        lastUpdatedAt: finishedAt,
+      }));
       toast({
         title: 'HVSC ready',
         description: `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
+      const failedAt = new Date().toISOString();
       setHvscErrorMessage((error as Error).message);
+      updateHvscSummary((prev) => ({
+        ...prev,
+        download: {
+          ...prev.download,
+          status: 'failure',
+          finishedAt: failedAt,
+          errorCategory: 'download',
+          errorMessage: (error as Error).message,
+        },
+        lastUpdatedAt: failedAt,
+      }));
       toast({
         title: 'HVSC update failed',
         description: (error as Error).message,
@@ -1753,24 +1960,61 @@ export default function PlayFilesPage() {
     } finally {
       setHvscLoading(false);
     }
-  }, [refreshHvscStatus]);
+  }, [refreshHvscStatus, updateHvscSummary]);
 
   const handleHvscIngest = useCallback(async () => {
     try {
+      const startedAt = new Date().toISOString();
       setHvscLoading(true);
       setHvscProgress(0);
       setHvscStage(null);
       setHvscErrorMessage(null);
       setHvscActionLabel('Ingesting cached HVSC…');
+      updateHvscSummary((prev) => ({
+        ...prev,
+        extraction: {
+          ...prev.extraction,
+          status: 'in-progress',
+          startedAt,
+          finishedAt: null,
+          durationMs: null,
+          errorCategory: null,
+          errorMessage: null,
+        },
+      }));
       await ingestCachedHvsc('hvsc-ingest');
       const status = await getHvscStatus();
       setHvscStatus(status);
+      const finishedAt = new Date().toISOString();
+      updateHvscSummary((prev) => ({
+        ...prev,
+        extraction: {
+          ...prev.extraction,
+          status: 'success',
+          finishedAt,
+          errorCategory: null,
+          errorMessage: null,
+        },
+        lastUpdatedAt: finishedAt,
+      }));
       toast({
         title: 'HVSC ready',
         description: `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
+      const failedAt = new Date().toISOString();
       setHvscErrorMessage((error as Error).message);
+      updateHvscSummary((prev) => ({
+        ...prev,
+        extraction: {
+          ...prev.extraction,
+          status: 'failure',
+          finishedAt: failedAt,
+          errorCategory: 'extraction',
+          errorMessage: (error as Error).message,
+        },
+        lastUpdatedAt: failedAt,
+      }));
       toast({
         title: 'HVSC ingest failed',
         description: (error as Error).message,
@@ -1779,21 +2023,11 @@ export default function PlayFilesPage() {
     } finally {
       setHvscLoading(false);
     }
-  }, []);
+  }, [updateHvscSummary]);
 
   const buildHvscFile = useCallback((song: { id: number; virtualPath: string; fileName: string }) => {
-    const name = song.fileName;
-    return {
-      name,
-      webkitRelativePath: song.virtualPath,
-      lastModified: Date.now(),
-      arrayBuffer: async () => {
-        const detail = await getHvscSong({ id: song.id });
-        const data = base64ToUint8(detail.dataBase64);
-        return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-      },
-    } as LocalPlayFile;
-  }, []);
+    return buildHvscLocalPlayFile(song.virtualPath, song.fileName) as LocalPlayFile;
+  }, [buildHvscLocalPlayFile]);
 
   const collectHvscSongs = useCallback(async (rootPath: string) => {
     const queuePaths = [rootPath || '/'];
@@ -1931,6 +2165,33 @@ export default function PlayFilesPage() {
   const hvscAvailable = isHvscBridgeAvailable();
   const hvscUpdating = hvscLoading || hvscStatus?.ingestionState === 'installing' || hvscStatus?.ingestionState === 'updating';
   const hvscInlineError = hvscErrorMessage || (hvscStatus?.ingestionState === 'error' ? hvscStatus.ingestionError : null);
+  const hvscSummaryState = useMemo(() => {
+    if (hvscStatusSummary.download.status === 'failure' || hvscStatusSummary.extraction.status === 'failure') return 'failure';
+    if (hvscStatusSummary.download.status === 'success' || hvscStatusSummary.extraction.status === 'success') return 'success';
+    return 'idle';
+  }, [hvscStatusSummary]);
+  const hvscSummaryFailureCategory = hvscStatusSummary.extraction.status === 'failure'
+    ? hvscStatusSummary.extraction.errorCategory
+    : hvscStatusSummary.download.errorCategory;
+  const hvscSummaryFailureLabel = useMemo(() => {
+    switch (hvscSummaryFailureCategory) {
+      case 'network':
+        return 'Network error';
+      case 'storage':
+        return 'Storage error';
+      case 'download':
+        return 'Download error';
+      case 'extraction':
+      case 'corrupt-archive':
+      case 'unsupported-format':
+        return 'Extraction error';
+      default:
+        return 'Download error';
+    }
+  }, [hvscSummaryFailureCategory]);
+  const hvscSummaryDurationMs = hvscStatusSummary.extraction.durationMs ?? hvscStatusSummary.download.durationMs;
+  const hvscSummaryFilesExtracted = hvscStatusSummary.extraction.filesExtracted;
+  const hvscSummaryUpdatedAt = hvscStatusSummary.lastUpdatedAt;
 
   const hvscVisibleFolders = useMemo(() => {
     if (!hvscFolderFilter) return hvscFolders;
@@ -2113,7 +2374,7 @@ export default function PlayFilesPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">Songlengths file</p>
               <Button
                 variant="outline"
@@ -2287,28 +2548,48 @@ export default function PlayFilesPage() {
                 <p className="text-xs text-muted-foreground">
                   {hvscInstalled
                     ? `Installed version ${hvscStatus?.installedVersion ?? '—'}`
-                    : 'Install HVSC to browse the SID collection.'}
+                    : 'Download the HVSC library to browse the SID collection.'}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <Button
                   variant="default"
                   size="sm"
                   onClick={() => void handleHvscInstall()}
                   disabled={hvscUpdating || !hvscAvailable}
+                  className="whitespace-normal"
                 >
-                  {hvscInstalled ? 'Check updates' : 'Install HVSC'}
+                  Download HVSC Library
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => void handleHvscIngest()}
                   disabled={hvscUpdating || !hvscAvailable}
+                  className="whitespace-normal"
                 >
                   Ingest cached
                 </Button>
               </div>
             </div>
+
+            {hvscSummaryState !== 'idle' && (
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+                {hvscSummaryState === 'success' ? (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">HVSC downloaded successfully</p>
+                    <p>Files extracted: {hvscSummaryFilesExtracted ?? '—'}</p>
+                    <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
+                    <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">HVSC download failed</p>
+                    <p>{hvscSummaryFailureLabel}</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {!hvscAvailable && (
               <p className="text-xs text-muted-foreground">

@@ -8,7 +8,7 @@ export type SourceEntry = {
   modifiedAt?: string | null;
 };
 
-export type SourceLocationType = 'ultimate' | 'local';
+export type SourceLocationType = 'ultimate' | 'local' | 'hvsc';
 
 export type SelectedItem = {
   type: SourceEntryType;

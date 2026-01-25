@@ -113,7 +113,7 @@
 | playlist-view-all | Button | View all | Opens full list dialog | List preview limit | playback.spec.ts |
 | playlist-item-play | Button | Play | Plays specific track | Network failure | playback.spec.ts |
 | playlist-item-checkbox | Checkbox | (selection) | Adds to selection | N/A | **MISSING** |
-| hvsc-install | Button | Install HVSC | Installs HVSC database | Network failure | hvsc.spec.ts |
+| hvsc-install | Button | Install HVSC | Installs HVSC library | Network failure | hvsc.spec.ts |
 | hvsc-check-updates | Button | Check updates | Checks for HVSC updates | Network failure | hvsc.spec.ts |
 | hvsc-ingest-cached | Button | Ingest cached | Ingests cached download | No cache | hvsc.spec.ts |
 | hvsc-folder-btn | Button | Folder name | Navigates to HVSC folder | Empty folder | hvsc.spec.ts |
