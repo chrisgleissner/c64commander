@@ -485,10 +485,9 @@ jobs:
           name: playwright-evidence
           path: test-results/evidence/**
 
-  android-build:
-    name: Android | Tests + APK
+  android-tests:
+    name: Android | Tests + Coverage
     runs-on: ubuntu-latest
-    needs: web-coverage-merge
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
@@ -649,6 +648,122 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  android-packaging:
+    name: Android | Packaging
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+      GRADLE_MAX_WORKERS: "6"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Resolve app version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME}"
+          else
+            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
+            if [[ -z "$APP_VERSION" ]]; then
+              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+            fi
+          fi
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
+          echo "VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> $GITHUB_ENV
+
+      - name: Setup Bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          start=$(date +%s)
+          bun install --frozen-lockfile
+          end=$(date +%s)
+          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install dependencies (npm)
+        if: env.PACKAGE_MANAGER != 'bun'
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Decode keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            mkdir -p android/keystore
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/keystore/release.keystore
+          else
+            echo "ANDROID_KEYSTORE_BASE64 is not set. Skipping keystore setup."
+          fi
+
+      - name: Export signing env
+        env:
+          KEYSTORE_STORE_PASSWORD: ${{ secrets.KEYSTORE_STORE_PASSWORD }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "KEYSTORE_STORE_PASSWORD=$KEYSTORE_STORE_PASSWORD" >> $GITHUB_ENV
+            echo "KEYSTORE_KEY_PASSWORD=$KEYSTORE_KEY_PASSWORD" >> $GITHUB_ENV
+            echo "KEYSTORE_KEY_ALIAS=c64commander" >> $GITHUB_ENV
+            echo "KEYSTORE_STORE_FILE=${{ github.workspace }}/android/keystore/release.keystore" >> $GITHUB_ENV
+            echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
+          else
+            echo "Signing secrets not set. Skipping signing env export."
+            echo "HAS_KEYSTORE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses
+
+      - name: Install SDK components
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      - name: Build web + sync
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run cap:build
+          end=$(date +%s)
+          echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
       - name: Build APK (debug)
         run: |
           start=$(date +%s)
@@ -684,27 +799,76 @@ jobs:
           name: c64-commander-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
 
+  release-artifacts:
+    name: Release | Attach APK/AAB
+    runs-on: ubuntu-latest
+    needs: [web-coverage-merge, android-tests, android-packaging]
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve app version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME}"
+          else
+            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
+            if [[ -z "$APP_VERSION" ]]; then
+              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+            fi
+          fi
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
+      - name: Resolve signing availability
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
+          else
+            echo "HAS_KEYSTORE=false" >> $GITHUB_ENV
+          fi
+
+      - name: Download debug APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: c64commander-debug-apk
+          path: artifacts/debug
+
+      - name: Download release APK artifact
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: c64commander-release-apk
+          path: artifacts/release-apk
+
+      - name: Download release AAB artifact
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: c64-commander-release-aab
+          path: artifacts/release-aab
+
       - name: Upload debug APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2.5.0
         with:
-          files: |
-            android/app/build/outputs/apk/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
+          files: artifacts/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
           generate_release_notes: true
 
       - name: Upload release APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: softprops/action-gh-release@v2.5.0
         with:
-          files: |
-            android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk
+          files: artifacts/release-apk/c64commander-${{ env.APP_VERSION }}.apk
 
       - name: Upload release AAB to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: softprops/action-gh-release@v2.5.0
         with:
-          files: |
-            android/app/build/outputs/bundle/release/app-release.aab
+          files: artifacts/release-aab/app-release.aab
 
       - name: Upload AAB to Google Play (internal)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
@@ -712,7 +876,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: uk.gleissner.c64commander
-          releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
+          releaseFiles: artifacts/release-aab/app-release.aab
           track: internal
           # TODO Change to 'completed' once all requirements met and app submitted once manually
           status: draft
