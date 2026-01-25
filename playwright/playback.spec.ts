@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
@@ -34,8 +36,8 @@ const ensureRemoteRoot = async (container: Page | Locator) => {
   const visible = await rootButton.isVisible().catch(() => false);
   if (!visible) return;
   // Avoid flakiness: during navigation the button can briefly flip enabled/disabled.
-  const disabledAttr = await rootButton.getAttribute('disabled').catch(() => null);
-  const ariaDisabled = await rootButton.getAttribute('aria-disabled').catch(() => null);
+  const disabledAttr = await rootButton.getAttribute('disabled').catch((): null => null);
+  const ariaDisabled = await rootButton.getAttribute('aria-disabled').catch((): null => null);
   if (disabledAttr !== null || ariaDisabled === 'true') return;
   try {
     await rootButton.click({ timeout: 2000 });
@@ -48,8 +50,53 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const sectorsPerTrack1541 = (track: number) => {
+  if (track <= 17) return 21;
+  if (track <= 24) return 19;
+  if (track <= 30) return 18;
+  return 17;
+};
+
+const d64Offset = (track: number, sector: number) => {
+  let offset = 0;
+  for (let t = 1; t < track; t += 1) {
+    offset += sectorsPerTrack1541(t);
+  }
+  return (offset + sector) * 256;
+};
+
+const buildTestD64 = () => {
+  const totalSectors = Array.from({ length: 35 }, (_, idx) => sectorsPerTrack1541(idx + 1))
+    .reduce((sum, value) => sum + value, 0);
+  const buffer = Buffer.alloc(totalSectors * 256, 0);
+
+  const dirOffset = d64Offset(18, 1);
+  buffer[dirOffset] = 0;
+  buffer[dirOffset + 1] = 0;
+  buffer[dirOffset + 2] = 0x82;
+  buffer[dirOffset + 3] = 1;
+  buffer[dirOffset + 4] = 0;
+  const name = Buffer.from('DMA-DEMO', 'ascii');
+  name.copy(buffer, dirOffset + 5);
+  buffer.fill(0xa0, dirOffset + 5 + name.length, dirOffset + 21);
+
+  const prgOffset = d64Offset(1, 0);
+  buffer[prgOffset] = 0;
+  const prgPayload = Buffer.from([0x01, 0x08, 0x00, 0x00, 0x0a, 0x00, 0x00]);
+  buffer[prgOffset + 1] = prgPayload.length;
+  prgPayload.copy(buffer, prgOffset + 2);
+
+  return buffer;
+};
+
+const createTempDiskDirectory = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'c64u-dma-'));
+  fs.writeFileSync(path.join(dir, 'demo.d64'), buildTestD64());
+  return dir;
+};
+
 const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }>) => {
-  await page.addInitScript(({ seedItems }) => {
+  await page.addInitScript(({ seedItems }: { seedItems: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }> }) => {
     const payload = {
       items: seedItems,
       currentIndex: -1,
@@ -57,6 +104,17 @@ const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate'
     localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
   }, { seedItems: items });
 };
+
+const buildAlphabetPlaylist = () =>
+  Array.from({ length: 26 }, (_, index) => {
+    const letter = String.fromCharCode(65 + index);
+    return {
+      source: 'ultimate' as const,
+      path: `/Usb0/Alphabet/${letter}-Track-001.sid`,
+      name: `${letter}-Track-001.sid`,
+      durationMs: 5000,
+    };
+  });
 
 const parseTimeLabel = (value: string | null) => {
   if (!value) return null;
@@ -132,20 +190,133 @@ test.describe('Playback file browser', () => {
     expect(viewport).not.toBeNull();
     if (dialogBox && viewport) {
       const heightRatio = dialogBox.height / viewport.height;
+      const widthRatio = dialogBox.width / viewport.width;
       expect(heightRatio).toBeLessThan(0.9);
+      expect(widthRatio).toBeLessThan(0.92);
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
       expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
 
     const scrollArea = page.getByTestId('action-list-scroll');
-    const scrollable = await scrollArea.evaluate((node) => node.scrollHeight > node.clientHeight);
+    const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
     expect(scrollable).toBeTruthy();
 
-    await scrollArea.evaluate((node) => {
+    await scrollArea.evaluate((node: HTMLElement) => {
       node.scrollTop = node.scrollHeight;
     });
     await expect(scrollArea).toContainText('Track_2700.sid');
     await snap(page, testInfo, 'playlist-view-all-scrolled');
+  });
+
+  test('playlist filter input filters inline and view-all lists', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '3');
+    });
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Alpha.sid', name: 'Alpha.sid', durationMs: 4000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Beta.sid', name: 'Beta.sid', durationMs: 4000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Gamma.sid', name: 'Gamma.sid', durationMs: 4000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Delta.sid', name: 'Delta.sid', durationMs: 4000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const list = page.getByTestId('playlist-list');
+    await expect(list).toContainText('Alpha.sid');
+
+    const filter = page.getByTestId('list-filter-input');
+    await filter.fill('Beta');
+    await snap(page, testInfo, 'inline-filtered');
+    await expect(list).toContainText('Beta.sid');
+    await expect(list).not.toContainText('Alpha.sid');
+
+    await filter.fill('');
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+
+    const viewAllFilter = page.getByTestId('view-all-filter-input');
+    await viewAllFilter.fill('Gamma');
+    await snap(page, testInfo, 'view-all-filtered');
+    await expect(page.getByTestId('action-list-scroll')).toContainText('Gamma.sid');
+    await expect(page.getByTestId('action-list-scroll')).not.toContainText('Alpha.sid');
+  });
+
+  test('alphabet overlay does not affect list metrics', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '5');
+    });
+    await seedPlaylistStorage(page, buildAlphabetPlaylist());
+
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'View all' }).click();
+
+    const scrollArea = page.getByTestId('action-list-scroll');
+    const initialMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
+      width: node.clientWidth,
+      height: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+    }));
+
+    await scrollArea.evaluate((node: HTMLElement) => {
+      node.scrollTop = node.scrollHeight / 2;
+    });
+    await expect.poll(async () => {
+      const opacity = await page.getByTestId('alphabet-overlay').evaluate((node: HTMLElement) =>
+        Number(window.getComputedStyle(node).opacity),
+      );
+      return opacity;
+    }).toBeGreaterThan(0.8);
+
+    const afterMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
+      width: node.clientWidth,
+      height: node.clientHeight,
+      scrollHeight: node.scrollHeight,
+    }));
+
+    expect(afterMetrics).toEqual(initialMetrics);
+    await snap(page, testInfo, 'alphabet-overlay-metrics');
+  });
+
+  test('alphabet overlay jumps to selected letter and auto-hides', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '5');
+    });
+    await seedPlaylistStorage(page, buildAlphabetPlaylist());
+
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'View all' }).click();
+
+    const touchArea = page.getByTestId('alphabet-touch-area');
+    const box = await touchArea.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+
+    const targetY = box.y + box.height * 0.95;
+    const clientX = box.x + box.width / 2;
+
+    const touchPoint = { identifier: 1, clientX, clientY: targetY };
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', 'touchstart', {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', 'touchmove', {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
+
+    await expect(page.getByTestId('alphabet-badge')).toBeVisible();
+    await expect(page.getByText('Z-Track-001.sid', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'alphabet-jump');
+
+    await page.waitForTimeout(1700);
+    const overlayOpacity = await page.getByTestId('alphabet-overlay').evaluate((node: HTMLElement) =>
+      window.getComputedStyle(node).opacity,
+    );
+    expect(Number(overlayOpacity)).toBeLessThan(0.2);
   });
 
   test('playback counters reflect played, total, and remaining time', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -159,14 +330,16 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'play-open');
 
     const counters = page.getByTestId('playback-counters');
+    const playedLabel = page.getByTestId('playback-played');
     await expect(counters).toContainText('Total: 0:12');
+    await expect(playedLabel).toContainText('Played: 0:00');
 
     await page.getByTestId('playlist-play').click();
     await page.waitForTimeout(1200);
     await snap(page, testInfo, 'playback-running');
 
     await expect.poll(async () => {
-      const text = await counters.textContent();
+      const text = await playedLabel.textContent();
       const played = parseTimeLabel(text);
       return played ?? 0;
     }).toBeGreaterThanOrEqual(1);
@@ -198,6 +371,47 @@ test.describe('Playback file browser', () => {
     const counters = page.getByTestId('playback-counters');
     await expect(counters).toContainText('Total: 3:04');
     await expect(counters).toContainText('Remaining: 3:04');
+  });
+
+  test('stop does not auto-resume playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    const playButton = page.getByTestId('playlist-play');
+    await playButton.click();
+    await expect(playButton).toContainText('Stop');
+    await snap(page, testInfo, 'play-started');
+
+    await playButton.click();
+    await expect(playButton).toContainText('Play');
+    await snap(page, testInfo, 'play-stopped');
+
+    await page.waitForTimeout(12000);
+    await expect(playButton).toContainText('Play');
+    await snap(page, testInfo, 'no-autoresume');
+  });
+
+  test('played time advances steadily while playing', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    const playButton = page.getByTestId('playlist-play');
+    const played = page.getByTestId('playback-played');
+    await playButton.click();
+    await snap(page, testInfo, 'play-started');
+
+    await page.waitForTimeout(1200);
+    const firstValue = parseTimeLabel(await played.textContent());
+    await page.waitForTimeout(1200);
+    const secondValue = parseTimeLabel(await played.textContent());
+
+    expect(firstValue ?? 0).toBeGreaterThanOrEqual(1);
+    expect(secondValue ?? 0).toBeGreaterThan(firstValue ?? 0);
+    expect(secondValue ?? 0).toBeLessThanOrEqual(5);
   });
 
   test('playback controls are stateful and show current track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -266,6 +480,138 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playback-stopped');
   });
 
+  test('mute button toggles and slider unmutes', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await expect(page.getByText('Connected')).toBeVisible();
+
+    const muteButton = page.getByTestId('volume-mute');
+    const slider = page.getByTestId('volume-slider');
+    await expect(muteButton).toBeEnabled();
+
+    await muteButton.click();
+    await expect(muteButton).toContainText('Unmute');
+    await snap(page, testInfo, 'muted');
+
+    await muteButton.click();
+    await expect(muteButton).toContainText('Mute');
+    await snap(page, testInfo, 'unmuted');
+
+    await muteButton.click();
+    await expect(muteButton).toContainText('Unmute');
+    await slider.click({ position: { x: 10, y: 5 } });
+    await expect(muteButton).toContainText('Mute');
+    await snap(page, testInfo, 'slider-unmuted');
+  });
+
+  test('file type filters hide disabled categories', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '1');
+    });
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 4000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/demo.prg', name: 'demo.prg', durationMs: 4000 },
+    ]);
+
+    await page.goto('/play');
+    const list = page.getByTestId('playlist-list');
+    await expect(list).toContainText('demo.sid');
+
+    await expect(page.getByRole('button', { name: 'View all' })).toBeVisible();
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByTestId('file-type-filter-sid')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+
+    await page.getByTestId('file-type-filter-sid').click();
+    await snap(page, testInfo, 'sid-disabled');
+    await expect(list).not.toContainText('demo.sid');
+    await expect(list).toContainText('demo.prg');
+
+    await snap(page, testInfo, 'filters-in-view-all');
+  });
+
+  test('songlengths discovery shows path and durations', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const songlengthsPath = page.getByText('/local-play-songlengths/songlengths.md5');
+    await expect(songlengthsPath).toBeVisible();
+
+    const list = page.getByTestId('playlist-list');
+    await expect(list).toContainText('demo.sid');
+    await expect(list).toContainText('(0:30)');
+    await snap(page, testInfo, 'songlengths-loaded');
+  });
+
+  test('DOCUMENTS songlengths are discovered for local folders', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths-documents')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const songlengthsPath = page.getByText('/DOCUMENTS/songlengths.md5');
+    await expect(songlengthsPath).toBeVisible();
+    await snap(page, testInfo, 'documents-songlengths');
+  });
+
+  test('playlist menu shows size and date', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const row = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
+    await row.getByRole('button', { name: 'Item actions' }).click();
+    const sizeItem = page.getByRole('menuitem', { name: /Size:/i });
+    const dateItem = page.getByRole('menuitem', { name: /Date:/i });
+    await expect(sizeItem).toBeVisible();
+    await expect(dateItem).toBeVisible();
+    await expect(sizeItem).not.toContainText('—');
+    await expect(dateItem).not.toContainText('—');
+    await snap(page, testInfo, 'playlist-size-date');
+  });
+
+  test('playlist menu shows size and date for C64 Ultimate items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await openRemoteFolder(dialog, 'Usb0');
+    await openRemoteFolder(dialog, 'Demos');
+    await openRemoteFolder(dialog, 'Krestage 3');
+    await selectEntryCheckbox(dialog, 'Part 1.d64');
+    await page.getByRole('button', { name: 'Add to playlist' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    const row = page.getByTestId('playlist-item').filter({ hasText: 'Part 1.d64' }).first();
+    await row.getByRole('button', { name: 'Item actions' }).click();
+    const sizeItem = page.getByRole('menuitem', { name: /Size:/i });
+    const dateItem = page.getByRole('menuitem', { name: /Date:/i });
+    await expect(sizeItem).toBeVisible();
+    await expect(dateItem).toBeVisible();
+    await expect(sizeItem).not.toContainText('—');
+    await expect(dateItem).not.toContainText('—');
+    await snap(page, testInfo, 'playlist-ftp-size-date');
+  });
+
+  test('playback headers removed and played label is prominent', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await expect(page.getByText('Playback controls')).toHaveCount(0);
+    await expect(page.getByText('SID options')).toHaveCount(0);
+    await expect(page.getByText('Current duration')).toHaveCount(0);
+    await expect(page.getByTestId('playback-played')).toContainText('Played:');
+    await snap(page, testInfo, 'headers-removed');
+  });
+
   test('volume slider updates non-muted SID outputs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const initialState = server.getState()['Audio Mixer'];
 
@@ -285,7 +631,7 @@ test.describe('Playback file browser', () => {
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).not.toBe(initialState['Vol UltiSid 2'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).not.toBe(initialState['Vol Socket 1'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).not.toBe(initialState['Vol Socket 2'].value);
-    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).toBe(initialState['Vol UltiSid 1'].value);
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 1'].value).not.toBe(initialState['Vol UltiSid 1'].value);
     await snap(page, testInfo, 'volume-updated');
   });
 
@@ -297,6 +643,8 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
+
+    await expect(page.getByTestId('playlist-item')).toHaveCount(1);
 
     const playButton = page.getByTestId('playlist-play');
     const pauseButton = page.getByTestId('playlist-pause');
@@ -383,7 +731,7 @@ test.describe('Playback file browser', () => {
         listChildren,
         readFileFromTree,
         readFile: async () => ({ data: '' }),
-        getPersistedUris: async () => ({ uris: [] }),
+        getPersistedUris: async () => ({ uris: [] as Array<{ uri: string }> }),
       };
     });
 
@@ -433,7 +781,7 @@ test.describe('Playback file browser', () => {
         listChildren,
         readFileFromTree: async () => ({ data: '' }),
         readFile: async () => ({ data: '' }),
-        getPersistedUris: async () => ({ uris: [] }),
+        getPersistedUris: async () => ({ uris: [] as Array<{ uri: string }> }),
       };
     });
 
@@ -469,7 +817,7 @@ test.describe('Playback file browser', () => {
         listChildren,
         readFileFromTree: async () => ({ data: '' }),
         readFile: async () => ({ data: '' }),
-        getPersistedUris: async () => ({ uris: [] }),
+        getPersistedUris: async () => ({ uris: [] as Array<{ uri: string }> }),
       };
     });
 
@@ -597,33 +945,55 @@ test.describe('Playback file browser', () => {
   });
 
   test('reshuffle changes playlist order and keeps current track index', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    const playlist = {
-      items: Array.from({ length: 6 }, (_, index) => ({
+    const playlistItems: Array<{
+      source: 'ultimate';
+      path: string;
+      name: string;
+      durationMs: number;
+      songNr: number;
+      sourceId: string | null;
+    }> = [];
+
+    for (let index = 0; index < 6; index += 1) {
+      playlistItems.push({
         source: 'ultimate',
         path: `/Usb0/Demos/shuffle-${index}.sid`,
         name: `shuffle-${index}.sid`,
         durationMs: 5000,
         songNr: 1,
         sourceId: null,
-      })),
+      });
+    }
+
+    const playlist = {
+      items: playlistItems,
       currentIndex: 0,
     };
 
-    await page.addInitScript((payload) => {
+    await page.addInitScript((payload: { items: Array<Record<string, unknown>>; currentIndex: number }) => {
       localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
     }, playlist);
 
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    const shuffleCheckbox = page.getByText('Shuffle').locator('..').getByRole('checkbox');
+    const shuffleCheckbox = page.getByTestId('playback-shuffle');
     await shuffleCheckbox.click();
 
     await page.getByTestId('playlist-play').click();
     await expect(page.getByTestId('playback-current-track')).toContainText('shuffle-0.sid');
 
-    const getTitles = async () =>
-      page.getByTestId('playlist-item').locator('button').filter({ hasText: /\.sid$/i }).allTextContents();
+    const getTitles = async () => {
+      const rows = page.getByTestId('playlist-item');
+      const count = await rows.count();
+      const titles: string[] = [];
+      for (let i = 0; i < count; i += 1) {
+        const row = rows.nth(i);
+        const title = await row.locator('button span').first().textContent();
+        if (title?.trim()) titles.push(title.trim());
+      }
+      return titles;
+    };
 
     const beforeTitles = await getTitles();
     const currentTrack = 'shuffle-0.sid';
@@ -632,6 +1002,7 @@ test.describe('Playback file browser', () => {
     await page.getByRole('button', { name: 'Reshuffle' }).click();
     await snap(page, testInfo, 'reshuffle-clicked');
 
+    await expect.poll(async () => (await getTitles()).join('|')).not.toBe(beforeTitles.join('|'));
     const afterTitles = await getTitles();
     const afterIndex = afterTitles.indexOf(currentTrack);
 
@@ -741,6 +1112,121 @@ test.describe('Playback file browser', () => {
       server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length > rebootAfterPlay,
     );
     await snap(page, testInfo, 'disk-stop-reboot');
+  });
+
+  test('disk image uses DMA autostart when enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_disk_autostart_mode', 'dma');
+    });
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    const tempDir = createTempDiskDirectory();
+    try {
+      await input.setInputFiles(tempDir);
+      await expect(page.getByRole('dialog')).toBeHidden();
+      await snap(page, testInfo, 'playlist-ready');
+
+      await page
+        .getByTestId('playlist-item')
+        .filter({ hasText: 'demo.d64' })
+        .getByRole('button', { name: 'Play' })
+        .click();
+
+      await waitForRequests(() =>
+        server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),
+      );
+      await waitForRequests(() =>
+        server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/machine:writemem')),
+      );
+      await snap(page, testInfo, 'dma-autostart-complete');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  test('volume slider updates enabled SID volumes and restores after mute', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+          'SID Socket 2': 'Disabled',
+        },
+        'SID Addressing': {
+          'UltiSID 1 Address': 'Unmapped',
+          'UltiSID 2 Address': '$D420',
+        },
+      },
+    });
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    const slider = page.getByTestId('volume-slider');
+    const muteButton = page.getByTestId('volume-mute');
+    await expect(slider).toBeVisible();
+    await expect(muteButton).toBeVisible();
+
+    const initialState = server.getState()['Audio Mixer'];
+    const initialSocket1 = initialState['Vol Socket 1']?.value;
+    const initialUlti2 = initialState['Vol UltiSid 2']?.value;
+    const initialSocket2 = initialState['Vol Socket 2']?.value;
+    const initialUlti1 = initialState['Vol UltiSid 1']?.value;
+    const initialUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    const box = await slider.boundingBox();
+    expect(box).not.toBeNull();
+    if (box) {
+      await page.mouse.move(box.x + 4, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2);
+      await page.mouse.up();
+    }
+
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > initialUpdateCount,
+    );
+
+    const updatedState = server.getState()['Audio Mixer'];
+    const target = updatedState['Vol Socket 1']?.value;
+    expect(target).toBeDefined();
+    expect(updatedState['Vol UltiSid 2']?.value).toBe(target);
+    expect(updatedState['Vol Socket 1']?.value).not.toBe(initialSocket1);
+    expect(updatedState['Vol UltiSid 2']?.value).not.toBe(initialUlti2);
+    expect(updatedState['Vol Socket 2']?.value).toBe(initialSocket2);
+    expect(updatedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
+
+    const muteUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await muteButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > muteUpdateCount,
+    );
+    await expect(slider).not.toHaveAttribute('data-disabled');
+    const mutedState = server.getState()['Audio Mixer'];
+    expect(mutedState['Vol Socket 1']?.value).toBe('OFF');
+    expect(mutedState['Vol UltiSid 2']?.value).toBe('OFF');
+    expect(mutedState['Vol Socket 2']?.value).toBe(initialSocket2);
+    expect(mutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
+
+    const unmuteUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await muteButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > unmuteUpdateCount,
+    );
+    const unmutedState = server.getState()['Audio Mixer'];
+    expect(unmutedState['Vol Socket 1']?.value).toBe(target);
+    expect(unmutedState['Vol UltiSid 2']?.value).toBe(target);
+    expect(unmutedState['Vol Socket 2']?.value).toBe(initialSocket2);
+    expect(unmutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
+
+    await snap(page, testInfo, 'volume-updated');
   });
 
   test('FTP failure shows error toast', async ({ page }: { page: Page }, testInfo: TestInfo) => {

@@ -138,7 +138,7 @@ export default function CoverageProbePage() {
         await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/music.mod' }));
         await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/demo.prg' }), { loadMode: 'load' });
         await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/demo.crt' }));
-        await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/disk.d64' }), { drive: 'b', resetBeforeMount: false });
+        await executePlayPlan(api, buildPlayPlan({ source: 'ultimate', path: '/disk.d64' }), { drive: 'b', rebootBeforeMount: true });
       }, failures);
 
       await runProbe('sid player', async () => {
@@ -203,7 +203,7 @@ export default function CoverageProbePage() {
       }, failures);
 
       await runProbe('connection + disk library', async () => {
-        connection.updateConfig(connection.baseUrl, connection.password, connection.deviceHost);
+        connection.updateConfig(connection.deviceHost, connection.password);
         await connection.refetch();
         window.dispatchEvent(
           new CustomEvent('c64u-connection-change', {

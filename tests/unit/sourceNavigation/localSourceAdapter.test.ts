@@ -59,4 +59,30 @@ describe('localSourceAdapter', () => {
 
     await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
   });
+
+  it('maps SAF size and modified fields', async () => {
+    const source = buildAndroidSource();
+    listChildrenMock.mockResolvedValue({
+      entries: [
+        {
+          type: 'file',
+          name: 'song.sid',
+          path: '/song.sid',
+          sizeBytes: 1234,
+          modifiedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const location = createLocalSourceLocation(source);
+    const result = await location.listEntries('/');
+
+    expect(result[0]).toEqual({
+      type: 'file',
+      name: 'song.sid',
+      path: '/song.sid',
+      sizeBytes: 1234,
+      modifiedAt: '2026-01-01T00:00:00.000Z',
+    });
+  });
 });

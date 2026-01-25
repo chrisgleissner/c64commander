@@ -28,18 +28,18 @@ test.describe('Settings connection management', () => {
     }
   });
 
-  test('change base URL and save reconnects', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('change device host and save reconnects', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected connection failures to non-existent URL' });
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    const urlInput = page.getByLabel(/base url|connection url/i);
+    const urlInput = page.locator('#deviceHost');
     await expect(urlInput).toBeVisible();
     
     const originalUrl = await urlInput.inputValue();
     await snap(page, testInfo, 'original-url');
 
-    await urlInput.fill('http://localhost:8080');
+    await urlInput.fill('localhost:8080');
     await snap(page, testInfo, 'url-changed');
 
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
@@ -48,16 +48,17 @@ test.describe('Settings connection management', () => {
     await expect(page.getByText(/Connection settings saved|Saved/i).first()).toBeVisible();
     await snap(page, testInfo, 'toast-shown');
 
-    const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
-    expect(stored).toBe('http://localhost:8080');
+    const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
+    expect(stored).toBe('localhost:8080');
     await snap(page, testInfo, 'url-saved');
   });
 
-  test('invalid URL format shows validation or accepts input', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('invalid host format shows validation or accepts input', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected connection failures to invalid URL.');
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    const urlInput = page.getByLabel(/base url|connection url/i);
+    const urlInput = page.locator('#deviceHost');
     await expect(urlInput).toBeVisible();
 
     await urlInput.fill('not-a-valid-url');
@@ -152,5 +153,25 @@ test.describe('Settings connection management', () => {
 
     const storedOn = await page.evaluate(() => localStorage.getItem('c64u_automatic_demo_mode_enabled'));
     expect(storedOn).toBe('1');
+  });
+
+  test('settings sections appear in expected order', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_dev_mode_enabled', '1');
+    });
+
+    await page.goto('/settings');
+    await snap(page, testInfo, 'settings-open');
+
+    const headings = await page.locator('h2').allTextContents();
+    expect(headings).toEqual([
+      'Connection',
+      'Diagnostics',
+      'Appearance',
+      'Play and Disk',
+      'Config',
+      'Experimental',
+      'About',
+    ]);
   });
 });

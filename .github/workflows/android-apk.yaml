@@ -19,9 +19,70 @@ permissions:
   contents: write
 
 jobs:
-  web-tests:
-    name: Web tests (unit + Playwright)
+  web-unit:
+    name: Web | Unit tests (coverage)
     runs-on: ubuntu-latest
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          start=$(date +%s)
+          bun install --frozen-lockfile
+          end=$(date +%s)
+          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install dependencies (npm)
+        if: env.PACKAGE_MANAGER != 'bun'
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run unit tests with coverage
+        run: |
+          start=$(date +%s)
+          ${{ env.PM_RUN }} run test:coverage
+          end=$(date +%s)
+          echo "- unit tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload unit coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage/lcov.info
+
+  web-screenshots:
+    name: Web | Screenshots
+    runs-on: ubuntu-latest
+    needs: web-build-coverage
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
@@ -71,26 +132,25 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
 
-      - name: Build web (screenshots)
-        run: |
-          start=$(date +%s)
-          ${{ env.PM_RUN }} run build
-          end=$(date +%s)
-          echo "- build (screenshots): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Run unit tests with coverage
-        run: |
-          start=$(date +%s)
-          ${{ env.PM_RUN }} run test:coverage
-          end=$(date +%s)
-          echo "- unit tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
       - name: Install Playwright browsers
         run: |
           start=$(date +%s)
           npx playwright install --with-deps
           end=$(date +%s)
           echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Download coverage build output
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-coverage
+          path: .
+
+      - name: Ensure build output exists
+        run: |
+          if [[ ! -f dist/index.html ]]; then
+            echo "dist/index.html missing; rebuilding"
+            ${{ env.PM_RUN }} run build
+          fi
 
       - name: Run screenshot tests
         env:
@@ -104,6 +164,59 @@ jobs:
           end=$(date +%s)
           echo "- screenshots: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Upload screenshot evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence-screenshots
+          path: test-results/evidence/**
+
+  web-build-coverage:
+    name: Web | Build (coverage)
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          start=$(date +%s)
+          bun install --frozen-lockfile
+          end=$(date +%s)
+          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install dependencies (npm)
+        if: env.PACKAGE_MANAGER != 'bun'
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
       - name: Build web (coverage probes)
         run: |
           start=$(date +%s)
@@ -111,21 +224,200 @@ jobs:
           end=$(date +%s)
           echo "- build (coverage): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
-      - name: Run Playwright e2e tests
+      - name: Upload coverage build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist-coverage
+          path: dist
+
+  web-e2e:
+    name: Web | E2E (sharded)
+    runs-on: ubuntu-latest
+    needs: web-build-coverage
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shardTotal: [8]
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+      VITE_COVERAGE: "true"
+      VITE_ENABLE_TEST_PROBES: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Cache Bun packages
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
+
+      - name: Install dependencies (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          start=$(date +%s)
+          bun install --frozen-lockfile
+          end=$(date +%s)
+          echo "- deps install (bun): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install dependencies (npm)
+        if: env.PACKAGE_MANAGER != 'bun'
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: |
+          start=$(date +%s)
+          npx playwright install --with-deps
+          end=$(date +%s)
+          echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Download coverage build output
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist-coverage
+          path: .
+
+      - name: Ensure coverage build exists
+        run: |
+          if [[ ! -f dist/index.html ]]; then
+            echo "dist/index.html missing; rebuilding with coverage instrumentation"
+            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+          fi
+          if ! grep -R "__coverage__" dist/assets 2>/dev/null | head -1 | grep -q "__coverage__"; then
+            echo "coverage instrumentation missing; rebuilding with coverage instrumentation"
+            VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 ${{ env.PM_RUN }} run build
+          fi
+
+      - name: Prepare coverage output
+        run: |
+          mkdir -p .nyc_output
+
+      - name: Select Playwright shard files
+        run: |
+          node scripts/get-playwright-shard-files.mjs \
+            --shard=${{ matrix.shard }} \
+            --total=${{ matrix.shardTotal }} \
+            > shard-files.txt
+          echo "Shard files:" >> $GITHUB_STEP_SUMMARY
+          sed 's/^/- /' shard-files.txt >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Playwright e2e tests (shard ${{ matrix.shard }}/${{ matrix.shardTotal }})
         env:
           PLAYWRIGHT_SKIP_BUILD: "1"
           VITE_GIT_SHA: "ci"
           VITE_BUILD_TIME: "1970-01-01T00:00:00Z"
           SOURCE_DATE_EPOCH: "0"
-          VITE_COVERAGE: "true"
         run: |
           start=$(date +%s)
-          ${{ env.PM_RUN }} run test:e2e
+          mapfile -t SHARD_FILES < shard-files.txt
+          ${{ env.PM_RUN }} run test:e2e -- "${SHARD_FILES[@]}"
           end=$(date +%s)
-          echo "- e2e tests: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- e2e shard ${{ matrix.shard }}/${{ matrix.shardTotal }}: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify nyc output
+        if: always()
+        run: |
+          if ! find .nyc_output -type f -name "*.json" | grep -q .; then
+            echo "No nyc coverage output found in shard ${{ matrix.shard }}/${{ matrix.shardTotal }}"
+            exit 1
+          fi
+
+      - name: Upload e2e coverage shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-nyc-output-${{ matrix.shard }}
+          path: .nyc_output/**
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+      - name: Upload e2e evidence shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-evidence-e2e-${{ matrix.shard }}
+          path: test-results/evidence/**
+
+  web-coverage-merge:
+    name: Web | Coverage + evidence merge
+    runs-on: ubuntu-latest
+    needs: [web-unit, web-screenshots, web-e2e]
+    env:
+      PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
+      PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (npm)
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Download unit coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage
+
+      - name: Download e2e nyc outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: e2e-nyc-output-*
+          path: artifacts/nyc
+          merge-multiple: true
+
+      - name: Download Playwright evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playwright-evidence-*
+          path: test-results/evidence
+          merge-multiple: true
+
+      - name: Collect nyc coverage
+        run: |
+          mkdir -p .nyc_output
+          mkdir -p artifacts/nyc
+          if find artifacts/nyc -type f -name "*.json" | grep -q .; then
+            find artifacts/nyc -type f -name "*.json" -exec cp -f {} .nyc_output/ \;
+          fi
 
       - name: Validate Playwright evidence
-        if: always()
         run: |
           start=$(date +%s)
           ${{ env.PM_RUN }} run validate:evidence
@@ -133,7 +425,6 @@ jobs:
           echo "- evidence validation: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Merge coverage reports
-        if: always()
         run: |
           start=$(date +%s)
           echo "==> Generating E2E coverage report..."
@@ -150,25 +441,21 @@ jobs:
           echo "- coverage merge: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: List web coverage artifacts
-        if: always()
         run: |
           echo "Coverage files:";
           find coverage -maxdepth 3 -type f \( -name "*.info" -o -name "*.json" -o -name "*.html" \) | sort
 
       - name: Verify coverage artifacts
-        if: always()
         env:
           EXPECT_WEB_COVERAGE: "1"
         run: node scripts/verify-coverage-artifacts.mjs
 
       - name: Enforce coverage threshold
-        if: always()
         env:
           COVERAGE_MIN: "80"
         run: node scripts/check-coverage-threshold.mjs
 
       - name: Upload web coverage to Codecov
-        if: always()
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage/lcov-merged.info
@@ -177,23 +464,17 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      - name: Upload Playwright test results
+      - name: Upload Playwright evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-test-results
-          path: test-results/**
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
+          name: playwright-evidence
+          path: test-results/evidence/**
 
   android-build:
-    name: Android tests + APK
+    name: Android | Tests + APK
     runs-on: ubuntu-latest
+    needs: web-coverage-merge
     env:
       PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'npm' }}
       PM_RUN: ${{ github.event.inputs.package_manager == 'bun' && 'bun' || 'npm' }}

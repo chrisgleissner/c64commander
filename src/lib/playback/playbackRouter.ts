@@ -1,10 +1,18 @@
 import { addErrorLog } from '@/lib/logging';
 import type { C64API } from '@/lib/c64api';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
-import { formatPlayCategory, getMountTypeForExtension, getPlayCategory, type PlayFileCategory } from './fileTypes';
-import { mountDiskToDrive } from '@/lib/disks/diskMount';
+import {
+  formatPlayCategory,
+  getFileExtension,
+  getMountTypeForExtension,
+  getPlayCategory,
+  type PlayFileCategory,
+} from './fileTypes';
+import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
 import { createSslPayload } from '@/lib/sid/sidUtils';
+import { loadDiskAutostartMode, type DiskAutostartMode } from '@/lib/config/appSettings';
+import { loadFirstDiskPrgViaDma, type DiskImageType } from './diskFirstPrg';
 
 export type PlaySource = 'local' | 'ultimate';
 
@@ -61,6 +69,7 @@ export type PlayExecutionOptions = {
   loadMode?: 'run' | 'load';
   resetBeforeMount?: boolean;
   rebootBeforeMount?: boolean;
+  diskAutostartMode?: DiskAutostartMode;
 };
 
 export const executePlayPlan = async (
@@ -69,10 +78,11 @@ export const executePlayPlan = async (
   options: PlayExecutionOptions = {},
 ) => {
   const drive = options.drive ?? 'a';
-  const resetBeforeMount = options.resetBeforeMount ?? true;
   const loadMode = options.loadMode ?? 'run';
   const rebootBeforeMount = options.rebootBeforeMount ?? false;
+  const resetBeforeMount = options.resetBeforeMount ?? true;
   const resetDelayMs = 500;
+  const diskAutostartMode = options.diskAutostartMode ?? loadDiskAutostartMode();
 
   try {
     switch (plan.category) {
@@ -136,6 +146,8 @@ export const executePlayPlan = async (
           await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
         }
 
+        let localBlob: Blob | null = null;
+
         if (plan.source === 'ultimate') {
           const diskEntry = createDiskEntry({
             path: plan.path,
@@ -143,9 +155,9 @@ export const executePlayPlan = async (
           });
           await mountDiskToDrive(api, drive, diskEntry);
         } else if (plan.file) {
-          const blob = await toBlob(plan.file);
-          if (!blob) throw new Error('Missing local disk data.');
-          await api.mountDriveUpload(drive, blob, plan.mountType, 'readwrite');
+          localBlob = await toBlob(plan.file);
+          if (!localBlob) throw new Error('Missing local disk data.');
+          await api.mountDriveUpload(drive, localBlob, plan.mountType, 'readwrite');
         } else {
           const diskEntry = createDiskEntry({
             path: plan.path,
@@ -154,7 +166,36 @@ export const executePlayPlan = async (
           await mountDiskToDrive(api, drive, diskEntry);
         }
 
-        await injectAutostart(api, AUTOSTART_SEQUENCE);
+        const diskType = getFileExtension(plan.path);
+        const dmaEligible =
+          diskAutostartMode === 'dma'
+          && plan.source === 'local'
+          && (diskType === 'd64' || diskType === 'd71' || diskType === 'd81')
+          && localBlob;
+
+        if (dmaEligible) {
+          const image = new Uint8Array(await localBlob.arrayBuffer());
+          await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
+        } else if (
+          diskAutostartMode === 'dma'
+          && plan.source === 'local'
+          && !localBlob
+          && (diskType === 'd64' || diskType === 'd71' || diskType === 'd81')
+        ) {
+          const diskEntry = createDiskEntry({
+            path: plan.path,
+            location: 'local',
+          });
+          try {
+            const blob = await resolveLocalDiskBlob(diskEntry);
+            const image = new Uint8Array(await blob.arrayBuffer());
+            await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
+          } catch {
+            await injectAutostart(api, AUTOSTART_SEQUENCE);
+          }
+        } else {
+          await injectAutostart(api, AUTOSTART_SEQUENCE);
+        }
         return;
       }
       default: {

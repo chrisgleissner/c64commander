@@ -1,4 +1,4 @@
-import { ConfigResponse, getDefaultBaseUrl } from '@/lib/c64api';
+import { ConfigResponse, buildBaseUrlFromDeviceHost, normalizeDeviceHost } from '@/lib/c64api';
 
 export type ConfigSnapshot = {
   savedAt: string;
@@ -29,8 +29,11 @@ const safeParse = <T>(raw: string | null, fallback: T): T => {
   }
 };
 
-export const getActiveBaseUrl = () =>
-  localStorage.getItem('c64u_base_url') || getDefaultBaseUrl();
+export const getActiveBaseUrl = () => {
+  localStorage.removeItem('c64u_base_url');
+  const deviceHost = normalizeDeviceHost(localStorage.getItem('c64u_device_host'));
+  return buildBaseUrlFromDeviceHost(deviceHost);
+};
 
 export const loadInitialSnapshot = (baseUrl: string): ConfigSnapshot | null => {
   const raw = localStorage.getItem(buildInitialSnapshotKey(baseUrl));

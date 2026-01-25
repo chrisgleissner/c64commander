@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowWarnings } from './testArtifacts';
+import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -34,6 +35,7 @@ test.describe('Home page app config management', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server(uiFixtures.configState);
     await seedUiMocks(page, server.baseUrl);
@@ -52,7 +54,7 @@ test.describe('Home page app config management', () => {
     }
   });
 
-  test('save config with valid name stores in localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  layoutTest('save config with valid name stores in localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
     await snap(page, testInfo, 'home-open');
 
@@ -82,7 +84,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'config-saved');
   });
 
-  test('save config with empty name shows error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('save config with empty name shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for empty config name.');
     await page.goto('/');
     await snap(page, testInfo, 'home-open');
@@ -105,7 +107,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'not-saved');
   });
 
-  test('save config with duplicate name shows error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('save config with duplicate name shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for duplicate config name.');
     
     await page.addInitScript(({ baseUrl }) => {
@@ -143,7 +145,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'not-duplicated');
   });
 
-  test('load config applies values to server', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('load config applies values to server @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(({ baseUrl }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'test-config-id',
@@ -180,7 +182,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'config-applied');
   });
 
-  test('rename config updates localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('rename config updates localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(({ baseUrl }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'rename-config-id',
@@ -220,7 +222,7 @@ test.describe('Home page app config management', () => {
     await snap(page, testInfo, 'config-renamed');
   });
 
-  test('delete config removes from localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('delete config removes from localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(({ baseUrl }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'delete-config-id',

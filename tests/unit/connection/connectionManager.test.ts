@@ -26,8 +26,7 @@ describe('connectionManager', () => {
     } = await import('@/lib/connection/connectionManager');
 
     // Force an unreachable URL so probes always fail quickly.
-    localStorage.setItem('c64u_base_url', 'http://127.0.0.1:1');
-    localStorage.setItem('c64u_device_host', 'c64u');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
     localStorage.setItem('c64u_password', '');
 
     await initializeConnectionManager();

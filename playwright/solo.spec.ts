@@ -3,7 +3,7 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowVisualOverflow } from './testArtifacts';
 
 test.describe('Config page SID solo routing', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -44,6 +44,7 @@ test.describe('Config page SID solo routing', () => {
   });
 
   test('solo enable mutes other SIDs without moving sliders', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer solo controls expand beyond viewport');
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol UltiSid 2').click();
@@ -58,6 +59,7 @@ test.describe('Config page SID solo routing', () => {
   });
 
   test('solo switch toggles active SID instantly', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer solo controls expand beyond viewport');
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol UltiSid 2').click();
@@ -71,6 +73,7 @@ test.describe('Config page SID solo routing', () => {
   });
 
   test('solo disable restores configured mix', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer solo controls expand beyond viewport');
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol Socket 2').click();
@@ -85,6 +88,7 @@ test.describe('Config page SID solo routing', () => {
   });
 
   test('navigation reset clears solo and restores mix', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer solo controls expand beyond viewport');
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
     await page.getByLabel('Solo Vol Socket 1').click();

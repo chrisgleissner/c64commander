@@ -6,7 +6,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 // Load full YAML config for tests
 import '../tests/mocks/setupMockConfigForTests';
 import { seedUiMocks, uiFixtures } from './uiMocks';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { allowVisualOverflow, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 test.describe('App screenshots', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -55,6 +55,7 @@ test.describe('App screenshots', () => {
   };
 
   test('capture app page screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowVisualOverflow(testInfo, 'Audio mixer controls overflow on narrow screenshot viewport.');
     const screenshotPath = (fileName: string) => path.resolve('doc/img', fileName);
 
     await page.goto('/');

@@ -1,4 +1,5 @@
-import http from 'node:http';
+import * as http from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getMockConfigPayload, setMockConfigLoader } from '../../src/lib/mock/mockConfig.js';
 import { loadConfigYaml } from '../../src/lib/mock/mockConfigLoader.node.js';
 
@@ -49,10 +50,10 @@ const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value));
 /**
  * Convert the mock config payload from YAML into the internal state format
  */
-const buildStateFromYaml = (): CategoryState => {
-  const payload = getMockConfigPayload();
+const buildStateFromYaml = async (): Promise<CategoryState> => {
+  const payload = await getMockConfigPayload();
   const state: CategoryState = {};
-  
+
   Object.entries(payload.categories).forEach(([categoryName, items]) => {
     state[categoryName] = {};
     Object.entries(items).forEach(([itemName, item]) => {
@@ -63,7 +64,7 @@ const buildStateFromYaml = (): CategoryState => {
       };
     });
   });
-  
+
   return state;
 };
 
@@ -83,7 +84,7 @@ const normalizeInitialState = (initial: Record<string, Record<string, string | n
   return normalized;
 };
 
-export function createMockC64Server(
+export async function createMockC64Server(
   initial: Record<string, Record<string, string | number | ConfigItemState>> = {},
   itemDetails: ItemDetailsState = {},
 ): Promise<MockC64Server> {
@@ -96,7 +97,7 @@ export function createMockC64Server(
   }> = [];
   
   // Use YAML as source of truth if no initial state provided
-  const yamlState = Object.keys(initial).length === 0 ? buildStateFromYaml() : {};
+  const yamlState = Object.keys(initial).length === 0 ? await buildStateFromYaml() : {};
   const defaults = Object.keys(initial).length === 0 ? yamlState : normalizeInitialState(initial);
   let state: CategoryState = clone(defaults);
   const driveState: Record<'a' | 'b', { enabled: boolean; bus_id: number; type: string; image_file?: string; image_path?: string }> = {
@@ -105,7 +106,7 @@ export function createMockC64Server(
   };
   const sockets = new Set<import('node:net').Socket>();
 
-  const server = http.createServer((req, res) => {
+  const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
     const method = req.method ?? 'GET';
     const url = req.url ?? '/';
     requests.push({ method, url });
@@ -226,7 +227,7 @@ export function createMockC64Server(
 
     if (parsed.pathname === '/v1/runners:sidplay' && (method === 'POST' || method === 'PUT')) {
       const chunks: Buffer[] = [];
-      req.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      req.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
       req.on('end', () => {
         sidplayRequests.push({
           method,
@@ -268,7 +269,7 @@ export function createMockC64Server(
 
     if (method === 'POST' && parsed.pathname === '/v1/configs') {
       let body = '';
-      req.on('data', (chunk) => {
+      req.on('data', (chunk: Buffer) => {
         body += chunk;
       });
       req.on('end', () => {
@@ -343,7 +344,7 @@ export function createMockC64Server(
     return sendJson(404, { errors: ['Not found'] });
   });
 
-  server.on('connection', (socket) => {
+  server.on('connection', (socket: import('node:net').Socket) => {
     sockets.add(socket);
     socket.on('close', () => sockets.delete(socket));
   });

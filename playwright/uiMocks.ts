@@ -47,19 +47,17 @@ export const uiFixtures = {
 
 export async function seedUiMocks(page: Page, baseUrl: string) {
   await page.addInitScript(
-    ({ baseUrl: baseUrlArg, songData, snapshot }) => {
+    ({ baseUrl: baseUrlArg, songData, snapshot }: { baseUrl: string; songData: string; snapshot: unknown }) => {
       try {
         delete (window as Window & { showDirectoryPicker?: unknown }).showDirectoryPicker;
       } catch (error) {
         console.warn('Unable to clear showDirectoryPicker', error);
       }
-      localStorage.setItem('c64u_base_url', baseUrlArg);
+      const host = baseUrlArg?.replace(/^https?:\/\//, '');
       if (!localStorage.getItem('c64u_password')) {
         localStorage.setItem('c64u_password', '');
       }
-      if (!localStorage.getItem('c64u_device_host')) {
-        localStorage.setItem('c64u_device_host', 'c64u');
-      }
+      localStorage.setItem('c64u_device_host', host || 'c64u');
       localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
       sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
 

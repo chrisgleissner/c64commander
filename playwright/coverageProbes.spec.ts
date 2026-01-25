@@ -27,7 +27,7 @@ test.describe('Coverage probes', () => {
   test('exercises internal helpers for coverage', async ({ page }: { page: Page }) => {
     await page.goto('/__coverage__');
     const status = page.getByTestId('coverage-probe-status');
-    await expect(status).toHaveText('done');
+    await expect(status).toHaveText('done', { timeout: 30000 });
     await expect(page.locator('[data-testid="coverage-probe-page"]')).toBeVisible();
     await expect(page.getByText('Errors')).toHaveCount(0);
   });

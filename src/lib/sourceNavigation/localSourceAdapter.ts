@@ -14,10 +14,11 @@ import {
 } from './localSourcesStore';
 import { LocalSourceListingError } from './localSourceErrors';
 
-const toLocalPlayFile = (entry: { relativePath: string; name: string }): LocalPlayFile => ({
+const toLocalPlayFile = (entry: { relativePath: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null }): LocalPlayFile & { size?: number } => ({
   name: entry.name,
   webkitRelativePath: entry.relativePath,
-  lastModified: Date.now(),
+  lastModified: entry.modifiedAt ? new Date(entry.modifiedAt).getTime() : Date.now(),
+  size: entry.sizeBytes ?? 0,
   arrayBuffer: async () => new ArrayBuffer(0),
 });
 
@@ -155,6 +156,8 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
       type: 'file' as const,
       name: file.name,
       path: file.path,
+      sizeBytes: file.sizeBytes ?? null,
+      modifiedAt: file.modifiedAt ?? null,
     }));
     return [...folders, ...fileEntries].sort((a, b) => a.name.localeCompare(b.name));
   };

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection, initializeConnectionManager } from '@/lib/connection/connectionManager';
+import { buildBaseUrlFromDeviceHost, normalizeDeviceHost } from '@/lib/c64api';
 import { loadBackgroundRediscoveryIntervalMs } from '@/lib/config/appSettings';
 
 const invalidateC64Queries = (queryClient: ReturnType<typeof useQueryClient>) => {
@@ -71,10 +72,12 @@ export function ConnectionController() {
     };
 
     // Prime the comparison with current persisted settings.
+    localStorage.removeItem('c64u_base_url');
+    const storedDeviceHost = normalizeDeviceHost(localStorage.getItem('c64u_device_host'));
     lastSettingsRef.current = {
-      baseUrl: localStorage.getItem('c64u_base_url') || '',
+      baseUrl: buildBaseUrlFromDeviceHost(storedDeviceHost),
       password: localStorage.getItem('c64u_password') || '',
-      deviceHost: localStorage.getItem('c64u_device_host') || '',
+      deviceHost: storedDeviceHost,
     };
 
     window.addEventListener('c64u-connection-change', handler as EventListener);

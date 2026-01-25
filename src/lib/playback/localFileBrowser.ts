@@ -32,6 +32,8 @@ export const listLocalFiles = (files: LocalPlayFile[], path: string) => {
       file,
       path: getLocalPath(file),
       name: getLocalPath(file).split('/').pop() || (file as any).name,
+      sizeBytes: (file as File).size ?? null,
+      modifiedAt: (file as File).lastModified ? new Date((file as File).lastModified).toISOString() : null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 };

@@ -349,7 +349,8 @@ test.describe('HVSC Play page', () => {
           getHvscDurationByMd5: async () => ({ durationSeconds: null as number | null }),
         };
 
-        localStorage.setItem('c64u_base_url', c64BaseUrl);
+        const host = c64BaseUrl.replace(/^https?:\/\//, '');
+        localStorage.setItem('c64u_device_host', host);
         localStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
       },
       {

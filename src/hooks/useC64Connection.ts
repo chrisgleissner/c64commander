@@ -1,6 +1,16 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getC64API, updateC64APIConfig, DeviceInfo, CategoriesResponse, ConfigResponse, DrivesResponse, C64_DEFAULTS, getDefaultBaseUrl } from '@/lib/c64api';
+import {
+  getC64API,
+  updateC64APIConfig,
+  DeviceInfo,
+  CategoriesResponse,
+  ConfigResponse,
+  DrivesResponse,
+  getC64APIConfigSnapshot,
+  buildBaseUrlFromDeviceHost,
+  normalizeDeviceHost,
+} from '@/lib/c64api';
 import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
 import { useConnectionState } from '@/hooks/useConnectionState';
 
@@ -14,15 +24,20 @@ export interface ConnectionStatus {
 
 export function useC64Connection() {
   const connection = useConnectionState();
-  const [baseUrl, setBaseUrl] = useState(() =>
-    localStorage.getItem('c64u_base_url') || getDefaultBaseUrl()
-  );
+  const [baseUrl, setBaseUrl] = useState(() => {
+    const storedDeviceHost = localStorage.getItem('c64u_device_host');
+    localStorage.removeItem('c64u_base_url');
+    const resolvedDeviceHost = normalizeDeviceHost(storedDeviceHost);
+    return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+  });
   const [password, setPassword] = useState(() => 
     localStorage.getItem('c64u_password') || ''
   );
-  const [deviceHost, setDeviceHost] = useState(() =>
-    localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST
-  );
+  const [deviceHost, setDeviceHost] = useState(() => {
+    const storedDeviceHost = localStorage.getItem('c64u_device_host');
+    localStorage.removeItem('c64u_base_url');
+    return normalizeDeviceHost(storedDeviceHost);
+  });
   const queryClient = useQueryClient();
 
   const { data: deviceInfo, error, isLoading, refetch } = useQuery({
@@ -60,11 +75,13 @@ export function useC64Connection() {
     return () => window.removeEventListener('c64u-connection-change', handler as EventListener);
   }, [queryClient, refetch]);
 
-  const updateConfig = useCallback((newUrl: string, newPassword?: string, newDeviceHost?: string) => {
-    setBaseUrl(newUrl);
+  const updateConfig = useCallback((newDeviceHost: string, newPassword?: string) => {
+    const resolvedDeviceHost = normalizeDeviceHost(newDeviceHost);
+    const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+    setBaseUrl(resolvedBaseUrl);
     setPassword(newPassword || '');
-    setDeviceHost(newDeviceHost || C64_DEFAULTS.DEFAULT_DEVICE_HOST);
-    updateC64APIConfig(newUrl, newPassword, newDeviceHost);
+    setDeviceHost(resolvedDeviceHost);
+    updateC64APIConfig(resolvedBaseUrl, newPassword, resolvedDeviceHost);
     queryClient.invalidateQueries({
       predicate: (query) =>
         Array.isArray(query.queryKey) &&
@@ -81,9 +98,12 @@ export function useC64Connection() {
     deviceInfo: deviceInfo || null,
   };
 
+  const runtimeBaseUrl = getC64APIConfigSnapshot().baseUrl;
+
   return {
     status,
     baseUrl,
+    runtimeBaseUrl,
     password,
     deviceHost,
     updateConfig,

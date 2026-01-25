@@ -1,6 +1,8 @@
 import type { Page, TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
+import { createEvidenceMetadata } from './evidenceConsolidation';
 
 const sanitizeLabel = (label: string) =>
   label
@@ -26,22 +28,34 @@ const getTitlePath = (testInfo: TestInfo) => {
   return (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [testInfo.title];
 };
 
-const getEvidenceDirName = (testInfo: TestInfo) => {
+const generateTestId = (testInfo: TestInfo): string => {
+  const fileName = path.basename(testInfo.file, '.ts').replace(/\.spec$/, '');
   const titlePath = getTitlePath(testInfo);
-  const describeParts = titlePath.slice(0, -1).map(sanitizeSegment).filter(Boolean);
-  const testPart = sanitizeSegment(titlePath[titlePath.length - 1] ?? testInfo.title);
-  const describeSlug = describeParts.length ? describeParts.join('--') : 'root';
-  return `${describeSlug}--${testPart}`;
+  
+  const parts = [fileName, ...titlePath].map((part) =>
+    part
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]+/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+  ).filter(Boolean);
+  
+  return parts.join('--');
 };
 
-const getEvidenceDir = (testInfo: TestInfo) =>
-  path.resolve(process.cwd(), 'test-results', 'evidence', getEvidenceDirName(testInfo));
+const getEvidenceDir = (testInfo: TestInfo) => {
+  const testId = generateTestId(testInfo);
+  const deviceId = testInfo.project.name;
+  return path.resolve(process.cwd(), 'test-results', 'evidence', testId, deviceId);
+};
 
 type StrictUiTracker = {
   consoleErrors: string[];
   consoleWarnings: string[];
   pageErrors: string[];
   toastIssues: string[];
+  horizontalOverflows: string[];
   detach: () => void;
 };
 
@@ -67,10 +81,20 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   const step = String(getStepIndex(testInfo)).padStart(2, '0');
   const name = safe.length ? `${step}-${safe}.png` : `${step}-step.png`;
   const evidenceDir = getEvidenceDir(testInfo);
-  await fs.mkdir(evidenceDir, { recursive: true });
-  const filePath = path.join(evidenceDir, name);
+  const screenshotsDir = path.join(evidenceDir, 'screenshots');
+  await fs.mkdir(screenshotsDir, { recursive: true });
+  const filePath = path.join(screenshotsDir, name);
   await page.screenshot({ path: filePath, fullPage: true });
-  await testInfo.attach(name, { path: filePath, contentType: 'image/png' });
+  
+  // Note: We no longer call testInfo.attach() to avoid creating duplicate evidence
+  // in Playwright's outputDir. All evidence is now in the canonical structure:
+  // test-results/evidence/<testId>/<deviceId>/
+
+  // Enforce visual boundaries after capturing screenshot (unless explicitly allowed)
+  const allowOverflow = testInfo.annotations.some((a) => a.type === 'allow-visual-overflow');
+  if (!allowOverflow) {
+    await enforceVisualBoundaries(page, testInfo);
+  }
 };
 
 const copyIfExists = async (source: string, destination: string) => {
@@ -125,7 +149,6 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
     try {
       await video.path();
       await video.saveAs(expectedVideo);
-      return;
     } catch {
       // Fall through to outputPath fallback below.
     }
@@ -133,20 +156,32 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
 
   const videoPath = testInfo.outputPath('video.webm');
   await copyIfExists(videoPath, expectedVideo);
+
+  // Create evidence metadata in canonical structure (now created directly, no consolidation needed)
+  const viewport = page.viewportSize ? page.viewportSize() : null;
+  await createEvidenceMetadata(testInfo, viewport);
 };
 
 export const allowWarnings = (testInfo: TestInfo, reason?: string) => {
   testInfo.annotations.push({ type: 'allow-warnings', description: reason ?? 'Expected warning or error UI.' });
 };
 
+export const allowVisualOverflow = (testInfo: TestInfo, reason: string) => {
+  testInfo.annotations.push({ type: 'allow-visual-overflow', description: reason });
+};
+
 export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) => {
   if (getTracker(testInfo)) return;
+
+  // Validate viewport configuration immediately
+  await validateViewport(page, testInfo);
 
   const tracker: StrictUiTracker = {
     consoleErrors: [],
     consoleWarnings: [],
     pageErrors: [],
     toastIssues: [],
+    horizontalOverflows: [],
     detach: () => {},
   };
 
@@ -235,10 +270,56 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
   setTracker(testInfo, tracker);
 };
 
+const checkHorizontalOverflow = async (page: Page, testInfo: TestInfo) => {
+  const tracker = getTracker(testInfo);
+  if (!tracker) return;
+
+  // Skip overflow checks if test allows visual overflow
+  if (testInfo.annotations.some((a) => a.type === 'allow-visual-overflow')) return;
+
+  const viewportWidth = page.viewportSize()?.width;
+  if (!viewportWidth) return;
+
+  const SUBPIXEL_TOLERANCE = 3; // Match viewportValidation.ts tolerance
+  const overflows = await page.evaluate((config) => {
+    const results: string[] = [];
+    const elements = document.querySelectorAll('body *');
+    const isToastElement = (element: Element) =>
+      Boolean(
+        element.closest(
+          '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive'
+        )
+      );
+
+    elements.forEach((element) => {
+      if (isToastElement(element)) return;
+      const rect = element.getBoundingClientRect();
+      if (rect.width > config.maxWidth + config.tolerance || rect.right > config.maxWidth + config.tolerance) {
+        const tag = element.tagName.toLowerCase();
+        const id = element.id ? `#${element.id}` : '';
+        const classes = element.className
+          ? `.${String(element.className).replace(/\s+/g, '.')}`
+          : '';
+        const selector = `${tag}${id}${classes}`.slice(0, 100);
+        results.push(`${selector} (width: ${rect.width}px, right: ${rect.right}px, viewport: ${config.maxWidth}px)`);
+      }
+    });
+
+    return results;
+  }, { maxWidth: viewportWidth, tolerance: SUBPIXEL_TOLERANCE });
+
+  overflows.forEach((overflow) => tracker.horizontalOverflows.push(overflow));
+};
+
 export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
   const tracker = getTracker(testInfo);
   if (!tracker) return;
   if (testInfo.annotations.some((annotation) => annotation.type === 'allow-warnings')) return;
+
+  // Check for horizontal overflow before other checks
+  // Note: We don't call enforceVisualBoundaries here because it throws immediately.
+  // Instead, we use checkHorizontalOverflow which accumulates issues and reports them all.
+  await checkHorizontalOverflow(page, testInfo);
 
   const activeToastTexts = await page
     .locator('[data-sonner-toast][data-type="error"], [data-sonner-toast][data-type="warning"], [data-state="open"].destructive')
@@ -253,6 +334,7 @@ export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
     ...tracker.consoleErrors.map((message) => `console error: ${message}`),
     ...tracker.pageErrors.map((message) => `page error: ${message}`),
     ...tracker.toastIssues.map((message) => `ui issue: ${message}`),
+    ...tracker.horizontalOverflows.map((message) => `horizontal overflow: ${message}`),
   ];
 
   tracker.detach();

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { C64API, getC64API, updateC64APIConfig, C64_DEFAULTS } from '@/lib/c64api';
+import { C64API, getC64API, updateC64APIConfig, applyC64APIRuntimeConfig, C64_DEFAULTS } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
@@ -32,7 +32,7 @@ describe('c64api', () => {
     saveConfigWriteIntervalMs(0);
   });
 
-  it('adds auth headers for password and local proxy host', async () => {
+  it('adds auth headers for password', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: [] }), {
@@ -41,12 +41,12 @@ describe('c64api', () => {
       }),
     );
 
-    const api = new C64API('http://127.0.0.1:8787', 'secret', 'c64u-device');
+    const api = new C64API('http://c64u-device', 'secret', 'c64u-device');
     await api.getInfo();
 
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers['X-Password']).toBe('secret');
-    expect(headers['X-C64U-Host']).toBe('c64u-device');
+    expect(headers['X-C64U-Host']).toBeUndefined();
   });
 
   it('handles non-json responses gracefully', async () => {
@@ -85,7 +85,12 @@ describe('c64api', () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({ status: 200, data: JSON.stringify({ errors: [] }) });
+    capacitorRequestMock.mockResolvedValue({
+      status: 200,
+      data: JSON.stringify({ errors: [] }),
+      headers: {},
+      url: 'http://c64u/v1/info',
+    });
 
     const api = new C64API('http://c64u');
     const result = await api.getInfo();
@@ -93,11 +98,27 @@ describe('c64api', () => {
     expect(capacitorRequestMock).toHaveBeenCalled();
   });
 
+  it('does not persist runtime config updates', async () => {
+    localStorage.setItem('c64u_password', 'saved-pass');
+    localStorage.setItem('c64u_device_host', 'saved-host');
+
+    applyC64APIRuntimeConfig('http://runtime', 'runtime-pass', 'runtime-host');
+
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
+    expect(localStorage.getItem('c64u_password')).toBe('saved-pass');
+    expect(localStorage.getItem('c64u_device_host')).toBe('saved-host');
+  });
+
   it('handles CapacitorHttp non-string payloads', async () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({ status: 200, data: { errors: [] } });
+    capacitorRequestMock.mockResolvedValue({
+      status: 200,
+      data: { errors: [] },
+      headers: {},
+      url: 'http://c64u/v1/version',
+    });
 
     const api = new C64API('http://c64u');
     const result = await api.getVersion();
@@ -120,7 +141,12 @@ describe('c64api', () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({ status: 400, data: { errors: ['bad'] } });
+    capacitorRequestMock.mockResolvedValue({
+      status: 400,
+      data: { errors: ['bad'] },
+      headers: {},
+      url: 'http://c64u/v1/info',
+    });
 
     const api = new C64API('http://c64u');
     await expect(api.getInfo()).rejects.toThrow('HTTP 400');
@@ -131,8 +157,8 @@ describe('c64api', () => {
     const handler = vi.fn();
     window.addEventListener('c64u-connection-change', handler as EventListener);
 
-    updateC64APIConfig('http://device', 'pw', 'host');
-    expect(localStorage.getItem('c64u_base_url')).toBe('http://device');
+    updateC64APIConfig('http://host', 'pw', 'host');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
     expect(localStorage.getItem('c64u_password')).toBe('pw');
     expect(localStorage.getItem('c64u_device_host')).toBe('host');
     expect(handler).toHaveBeenCalled();
@@ -140,11 +166,12 @@ describe('c64api', () => {
     window.removeEventListener('c64u-connection-change', handler as EventListener);
   });
 
-  it('clears stored password and device host when omitted', () => {
-    updateC64APIConfig('http://device', 'pw', 'host');
+  it('clears stored password when omitted and derives device host', () => {
+    updateC64APIConfig('http://host', 'pw', 'host');
     updateC64APIConfig('http://device');
     expect(localStorage.getItem('c64u_password')).toBeNull();
-    expect(localStorage.getItem('c64u_device_host')).toBeNull();
+    expect(localStorage.getItem('c64u_device_host')).toBe('device');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
   });
 
   it('uploads cartridge files and handles upload failures', async () => {
@@ -221,6 +248,7 @@ describe('c64api', () => {
     expect(Array.from(await api.readMemory('0400', 3))).toEqual([1, 2, 3]);
 
     await api.writeMemory('0400', new Uint8Array([0, 15, 255]));
+    await api.writeMemoryBlock('1000', new Uint8Array([1, 2, 3, 4]));
     await api.mountDrive('a', '/path/my disk.d64', '1541', 'readonly');
     await api.unmountDrive('a');
     await api.resetDrive('a');
@@ -231,6 +259,8 @@ describe('c64api', () => {
     const urls = fetchMock.mock.calls.map((call) => call[0]);
     expect(urls).toContain('http://c64u/v1/machine:writemem?address=0400&data=000fff');
     expect(urls).toContain('http://c64u/v1/drives/a:mount?image=%2Fpath%2Fmy%20disk.d64&type=1541&mode=readonly');
+    const writeBlockCall = fetchMock.mock.calls.find((call) => call[0] === 'http://c64u/v1/machine:writemem?address=1000');
+    expect(writeBlockCall?.[1]).toEqual(expect.objectContaining({ method: 'POST' }));
   });
 
   it('uploads drives and runner files with auth headers', async () => {
@@ -258,7 +288,7 @@ describe('c64api', () => {
 
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers['X-Password']).toBe('pw');
-    expect(headers['X-C64U-Host']).toBe('device-host');
+    expect(headers['X-C64U-Host']).toBeUndefined();
     expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
   });
 
@@ -288,7 +318,7 @@ describe('c64api', () => {
   });
 
   it('reuses singleton C64 API instance', () => {
-    localStorage.setItem('c64u_base_url', C64_DEFAULTS.DEFAULT_BASE_URL);
+    localStorage.setItem('c64u_device_host', C64_DEFAULTS.DEFAULT_DEVICE_HOST);
     const api1 = getC64API();
     const api2 = getC64API();
     expect(api1).toBe(api2);

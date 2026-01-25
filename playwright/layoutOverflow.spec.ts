@@ -6,6 +6,7 @@ import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
 import { clickSourceSelectionButton } from './sourceSelection';
+import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -53,10 +54,21 @@ const seedDiskLibrary = async (page: Page, disks: Array<{ id: string; name: stri
   }, { disks });
 };
 
+const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }>) => {
+  await page.addInitScript(({ seedItems }) => {
+    const payload = {
+      items: seedItems,
+      currentIndex: -1,
+    };
+    localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+  }, { seedItems: items });
+};
+
 test.describe('Layout overflow safeguards', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }, testInfo) => {
+    enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server();
     await seedUiMocks(page, server.baseUrl);
@@ -73,7 +85,7 @@ test.describe('Layout overflow safeguards', () => {
     }
   });
 
-  test('disks page handles long names without overflow', async ({ page }, testInfo) => {
+  layoutTest('disks page handles long names without overflow @layout', async ({ page }, testInfo) => {
     await seedDiskLibrary(page, [
       {
         id: 'local:/Extremely/Long/Path/With/Deep/Structure/And-A-Super-Long-Disk-Name-That-Should-Not-Overflow-Device-Width.d64',
@@ -100,13 +112,15 @@ test.describe('Layout overflow safeguards', () => {
     const viewAll = page.getByRole('button', { name: 'View all' }).first();
     if (await viewAll.isVisible()) {
       await viewAll.click();
+      const dialog = page.getByRole('dialog');
+      await expectDialogWithinViewport(page, dialog);
       await snap(page, testInfo, 'disks-view-all');
       await expectNoHorizontalOverflow(page);
       await page.keyboard.press('Escape');
     }
   });
 
-  test('playlist list handles long names without overflow', async ({ page }, testInfo) => {
+  layoutTest('playlist list handles long names without overflow @layout', async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       const payload = {
         items: [
@@ -131,13 +145,37 @@ test.describe('Layout overflow safeguards', () => {
     const viewAll = page.getByRole('button', { name: 'View all' }).first();
     if (await viewAll.isVisible()) {
       await viewAll.click();
+      const dialog = page.getByRole('dialog');
+      await expectDialogWithinViewport(page, dialog);
       await snap(page, testInfo, 'playlist-view-all');
       await expectNoHorizontalOverflow(page);
       await page.keyboard.press('Escape');
     }
   });
 
-  test('FTP browser handles long names without overflow', async ({ page }, testInfo) => {
+  layoutTest('playlist filter header does not cause overflow @layout', async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_list_preview_limit', '5');
+    });
+    await seedPlaylistStorage(page, Array.from({ length: 60 }, (_, index) => ({
+      source: 'ultimate' as const,
+      path: `/Usb0/Demos/Track_${String(index + 1).padStart(3, '0')}.sid`,
+      name: `Track_${String(index + 1).padStart(3, '0')}.sid`,
+      durationMs: 5000,
+    })));
+
+    await page.goto('/play', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'View all' }).click();
+    const dialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, dialog);
+
+    const filter = page.getByTestId('view-all-filter-input');
+    await filter.fill('Track_0');
+    await snap(page, testInfo, 'view-all-filter');
+    await expectNoHorizontalOverflow(page);
+  });
+
+  layoutTest('FTP browser handles long names without overflow @layout', async ({ page }, testInfo) => {
     const ftpServers = await startFtpTestServers();
     await seedFtpConfig(page, {
       host: ftpServers.ftpServer.host,
@@ -151,16 +189,24 @@ test.describe('Layout overflow safeguards', () => {
     await clickSourceSelectionButton(page.getByRole('dialog'), 'C64 Ultimate');
 
     const dialog = page.getByRole('dialog');
+    await expectDialogWithinViewport(page, dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
     await dialog.getByText('Long-Names-For-Overflow-Testing', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.getByText('Super-Long-Folder-Name-That-Is-Definitely-Too-Wide-For-Mobile-Viewports-And-Should-Wrap', { exact: true })
+      .locator('..')
+      .locator('..')
+      .locator('..')
+      .getByRole('button', { name: 'Open' })
+      .click();
     await snap(page, testInfo, 'ftp-long-names');
     await expectNoHorizontalOverflow(page);
+    await expectDialogWithinViewport(page, dialog);
 
     await ftpServers.close();
   });
 
-  test('diagnostics dialog stays within viewport', async ({ page }, testInfo) => {
+  layoutTest('diagnostics dialog stays within viewport @layout', async ({ page }, testInfo) => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'settings-open');
     await expectNoHorizontalOverflow(page);
@@ -183,7 +229,7 @@ test.describe('Layout overflow safeguards', () => {
     }
   });
 
-  test('play dialogs stay within viewport', async ({ page }, testInfo) => {
+  layoutTest('play dialogs stay within viewport @layout', async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       const payload = {
         items: [
@@ -228,7 +274,7 @@ test.describe('Layout overflow safeguards', () => {
     await expectNoHorizontalOverflow(page);
   });
 
-  test('primary pages avoid horizontal overflow', async ({ page }, testInfo) => {
+  layoutTest('primary pages avoid horizontal overflow @layout', async ({ page }, testInfo) => {
     const pages = [
       { path: '/', label: 'home' },
       { path: '/play', label: 'play' },
@@ -245,7 +291,7 @@ test.describe('Layout overflow safeguards', () => {
     }
   });
 
-  test('disk dialogs stay within viewport', async ({ page }, testInfo) => {
+  layoutTest('disk dialogs stay within viewport @layout', async ({ page }, testInfo) => {
     await seedDiskLibrary(page, [
       {
         id: 'local:/Extremely/Long/Path/With/Deep/Structure/And-A-Super-Long-Disk-Name-That-Should-Not-Overflow-Device-Width.d64',

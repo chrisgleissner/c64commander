@@ -494,6 +494,22 @@ export const HomeDiskManager = () => {
       };
 
       const files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
+      const listingCache = new Map<string, SourceEntry[]>();
+      const resolveSelectionEntry = async (filePath: string) => {
+        const normalizedPath = normalizeSourcePath(filePath);
+        const parent = normalizedPath.slice(0, normalizedPath.lastIndexOf('/') + 1) || '/';
+        if (!listingCache.has(parent)) {
+          try {
+            listingCache.set(parent, await source.listEntries(parent));
+          } catch {
+            listingCache.set(parent, []);
+          }
+        }
+        const entries = listingCache.get(parent) ?? [];
+        return entries.find(
+          (entry) => entry.type === 'file' && normalizeSourcePath(entry.path) === normalizedPath,
+        ) ?? null;
+      };
       for (const selection of selections) {
         if (selection.type === 'dir') {
           const nested = await collectRecursive(selection.path);
@@ -503,7 +519,14 @@ export const HomeDiskManager = () => {
           });
         } else {
           const entryPath = normalizeSourcePath(selection.path);
-          files.push({ path: entryPath, name: selection.name, sourceId: source.id });
+          const meta = await resolveSelectionEntry(entryPath);
+          files.push({
+            path: entryPath,
+            name: meta?.name ?? selection.name,
+            sizeBytes: meta?.sizeBytes ?? null,
+            modifiedAt: meta?.modifiedAt ?? null,
+            sourceId: source.id,
+          });
           updateProgress(1);
         }
       }

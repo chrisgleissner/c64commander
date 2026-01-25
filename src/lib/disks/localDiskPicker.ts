@@ -33,9 +33,9 @@ export const prepareDiskDirectoryInput = (input: HTMLInputElement | null) => {
   input.setAttribute('directory', '');
 };
 
-const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string }[]> => {
+const listSafFiles = async (treeUri: string): Promise<{ name: string; path: string; sizeBytes?: number | null; modifiedAt?: string | null }[]> => {
   const queue = ['/'];
-  const files: { name: string; path: string }[] = [];
+  const files: { name: string; path: string; sizeBytes?: number | null; modifiedAt?: string | null }[] = [];
   while (queue.length) {
     const path = queue.shift();
     if (!path) continue;
@@ -44,7 +44,12 @@ const listSafFiles = async (treeUri: string): Promise<{ name: string; path: stri
       if (entry.type === 'dir') {
         queue.push(normalizeDiskPath(entry.path));
       } else {
-        files.push({ name: entry.name, path: normalizeDiskPath(entry.path) });
+        files.push({
+          name: entry.name,
+          path: normalizeDiskPath(entry.path),
+          sizeBytes: entry.sizeBytes ?? null,
+          modifiedAt: entry.modifiedAt ?? null,
+        });
       }
     });
   }
@@ -76,8 +81,8 @@ export const importLocalDiskFolder = async (): Promise<LocalDiskSelection | null
         location: 'local',
         group: autoGroup ?? fallbackGroup ?? null,
         localTreeUri: treeUri,
-        modifiedAt: null,
-        sizeBytes: null,
+        modifiedAt: entry.modifiedAt ?? null,
+        sizeBytes: entry.sizeBytes ?? null,
         importOrder: index,
       });
     });

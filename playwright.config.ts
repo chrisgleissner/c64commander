@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices as playwrightDevices } from '@playwright/test';
 import os from 'os';
 
 const coverageEnv = process.env.VITE_COVERAGE ? 'VITE_COVERAGE=true ' : '';
@@ -7,12 +7,47 @@ const skipBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1';
 const explicitWorkers = process.env.PLAYWRIGHT_WORKERS?.trim();
 const parsedWorkers =
   explicitWorkers && /^[0-9]+$/.test(explicitWorkers) ? Number(explicitWorkers) : undefined;
+const serverPort = Number(process.env.PLAYWRIGHT_PORT ?? '4173');
 const cpuCount = os.cpus().length;
 const defaultWorkers = Math.min(4, Math.max(1, cpuCount));
 const resolvedWorkers = parsedWorkers ?? defaultWorkers;
 const webServerCommand = skipBuild
-  ? `${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port 4173`
-  : `${coverageEnv}${probeEnv}npm run build && ${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port 4173`;
+  ? `${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port ${serverPort}`
+  : `${coverageEnv}${probeEnv}npm run build && ${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port ${serverPort}`;
+
+// Device selection logic
+const devicesEnv = process.env.PLAYWRIGHT_DEVICES?.toLowerCase().trim();
+const phoneProject = {
+  name: 'android-phone',
+  use: playwrightDevices['Pixel 5'],
+};
+const tabletProject = {
+  name: 'android-tablet',
+  use: {
+    viewport: { width: 800, height: 1280 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+  },
+  // Tablet only runs layout-annotated tests by default
+  grep: devicesEnv ? undefined : /@layout/,
+};
+
+// Determine active projects based on environment variable
+const getActiveProjects = () => {
+  if (!devicesEnv) {
+    // Default: phone for all tests, tablet only for layout tests
+    return [phoneProject, tabletProject];
+  }
+
+  const normalized = devicesEnv === 'all' ? 'phone,tablet' : devicesEnv;
+  const requested = normalized.split(',').map((d) => d.trim());
+
+  const projects = [];
+  if (requested.includes('phone')) projects.push(phoneProject);
+  if (requested.includes('tablet')) projects.push(tabletProject);
+
+  return projects.length > 0 ? projects : [phoneProject];
+};
 
 export default defineConfig({
   testDir: './playwright',
@@ -26,8 +61,9 @@ export default defineConfig({
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
+  projects: getActiveProjects(),
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: `http://127.0.0.1:${serverPort}`,
     trace: 'on',
     screenshot: 'on',
     video: 'on',
@@ -36,8 +72,8 @@ export default defineConfig({
   },
   webServer: {
     command: webServerCommand,
-    url: 'http://127.0.0.1:4173',
-    reuseExistingServer: false,
+    url: `http://127.0.0.1:${serverPort}`,
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
     timeout: 120000,
   },
 });

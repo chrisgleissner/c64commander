@@ -1,8 +1,9 @@
 import {
-  C64_DEFAULTS,
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
-  getDefaultBaseUrl,
+  buildBaseUrlFromDeviceHost,
+  getDeviceHostFromBaseUrl,
+  normalizeDeviceHost,
 } from '@/lib/c64api';
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ftp/ftpConfig';
 import { startMockServer, stopMockServer } from '@/lib/mock/mockServer';
@@ -38,10 +39,12 @@ const isLocalProxy = (baseUrl: string) => {
 };
 
 const loadPersistedConnectionConfig = () => {
-  const baseUrl = localStorage.getItem('c64u_base_url') || getDefaultBaseUrl();
+  localStorage.removeItem('c64u_base_url');
   const passwordRaw = localStorage.getItem('c64u_password');
   const password = passwordRaw ? passwordRaw : undefined;
-  const deviceHost = localStorage.getItem('c64u_device_host') || C64_DEFAULTS.DEFAULT_DEVICE_HOST;
+  const storedDeviceHost = localStorage.getItem('c64u_device_host');
+  const deviceHost = normalizeDeviceHost(storedDeviceHost);
+  const baseUrl = buildBaseUrlFromDeviceHost(deviceHost);
   return { baseUrl, password, deviceHost };
 };
 
@@ -102,6 +105,7 @@ const listeners = new Set<() => void>();
 let activeDiscovery: { abort: AbortController; cancel: () => void } | null = null;
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
+const DEMO_INTERSTITIAL_SESSION_KEY = 'c64u_demo_interstitial_shown';
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -181,7 +185,7 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     try {
       const { baseUrl, ftpPort } = await startMockServer();
       demoServerStartedThisSession = true;
-      const mockHost = '127.0.0.1';
+      const mockHost = getDeviceHostFromBaseUrl(baseUrl);
       applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
       if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
     } catch (error) {
@@ -193,6 +197,7 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
 
   if (shouldShowDemoInterstitial(trigger)) {
     demoInterstitialShownThisSession = true;
+    sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, '1');
     setSnapshot({ demoInterstitialVisible: true });
   }
 };
@@ -279,7 +284,8 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
-  demoInterstitialShownThisSession = false;
+  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
+  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   setSnapshot({
     state: 'UNKNOWN',
     lastDiscoveryTrigger: null,

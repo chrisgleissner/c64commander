@@ -18,6 +18,7 @@ RUN_TEST_E2E_CI=false
 RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
+PLAYWRIGHT_DEVICES=""
 APK_PATH=""
 DEVICE_ID=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
@@ -51,6 +52,7 @@ Options:
   --skip-android-tests  Skip Android instrumentation tests
   --skip-android-coverage Skip Android Jacoco coverage check
   
+  --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
   --skip-install        Skip npm install
   --skip-build          Skip npm run cap:build
   --skip-tests          Skip npm test
@@ -151,6 +153,16 @@ while [[ $# -gt 0 ]]; do
     --skip-android-coverage)
       RUN_ANDROID_COVERAGE=false
       shift
+      ;;
+    --devices)
+      if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
+        PLAYWRIGHT_DEVICES="$2"
+        export PLAYWRIGHT_DEVICES
+        shift 2
+      else
+        echo "Error: --devices requires a value" >&2
+        exit 1
+      fi
       ;;
     --device)
       if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
