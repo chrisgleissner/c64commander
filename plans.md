@@ -2,32 +2,46 @@
 
 ## 1) Baseline: reproduce + scope
 - [ ] Reproduce vertical label rendering on Configuration → Audio Mixer.
-- [ ] Identify affected components and categories beyond Audio Mixer.
-- [ ] Record current coverage and threshold results.
-- [ ] Capture current Playwright + screenshots commands used by CI.
+- [x] Identify affected components and categories beyond Audio Mixer.
+	- ConfigItemRow (all config rows), Audio Mixer + Drive A Settings
+- [x] Record current coverage and threshold results.
+	- npm run test:coverage (89.01% lines)
+	- node scripts/check-coverage-threshold.mjs (Line coverage: 89.01%)
+- [x] Capture current Playwright + screenshots commands used by CI.
+	- npm run test:e2e
+	- npm run screenshots
 - [ ] Identify any currently failing CI jobs (if any), including “Web | Screenshots”.
 
 ## 2) Tests first (red)
-- [ ] Add component/unit tests that fail on vertical text rendering.
-- [ ] Add Playwright checks for vertical labels + overflow at narrow widths.
+- [x] Add component/unit tests that fail on vertical text rendering.
+	- tests/unit/components/ConfigItemRow.test.tsx
+- [x] Add Playwright checks for vertical labels + overflow at narrow widths.
+	- playwright/solo.spec.ts
 
 ## 3) Smart layout abstraction
-- [ ] Introduce reusable label+widget layout logic with dynamic measurement.
-- [ ] Cover layout decision logic with unit tests.
+- [x] Introduce reusable label+widget layout logic with dynamic measurement.
+	- src/components/ConfigItemRow.tsx
+- [x] Cover layout decision logic with unit tests.
+	- tests/unit/components/ConfigItemRow.test.tsx
 
 ## 4) Apply fixes
-- [ ] Apply layout logic to Audio Mixer sliders.
-- [ ] Apply layout logic to at least one other configuration category.
-- [ ] Ensure at least one non-slider widget uses the layout logic.
+- [x] Apply layout logic to Audio Mixer sliders.
+- [x] Apply layout logic to at least one other configuration category.
+- [x] Ensure at least one non-slider widget uses the layout logic.
 
 ## 5) Test hardening
-- [ ] Ensure layout tests fail on vertical/rotated labels.
-- [ ] Verify overflow guards on narrow viewports.
+- [x] Ensure layout tests fail on vertical/rotated labels.
+- [x] Verify overflow guards on narrow viewports.
+	- npm run test:e2e -- playwright/solo.spec.ts
 
 ## 6) Coverage improvements (>= 88.5%)
-- [ ] Identify low-coverage files from latest report.
-- [ ] Add meaningful tests to raise average coverage to >= 88.5%.
-- [ ] Verify coverage threshold locally.
+- [x] Identify low-coverage files from latest report.
+	- ConfigItemRow.tsx
+- [x] Add meaningful tests to raise average coverage to >= 88.5%.
+	- tests/unit/components/ConfigItemRow.test.tsx
+- [x] Verify coverage threshold locally.
+	- npm run test:coverage (89.01% lines)
+	- node scripts/check-coverage-threshold.mjs (Line coverage: 89.01%)
 
 ## 7) Final verification
 - [ ] Run full local verification (unit, Playwright, screenshots, local-build).
