@@ -66,3 +66,5 @@ C64 Commander is an Android app that connects to a C64 Ultimate device on your l
 ## Developer documentation
 
 For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).
+
+Chaos/fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).

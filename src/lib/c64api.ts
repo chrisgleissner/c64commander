@@ -2,6 +2,7 @@
 
 import { CapacitorHttp } from '@capacitor/core';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 
 const DEFAULT_BASE_URL = 'http://c64u';
@@ -207,6 +208,17 @@ export class C64API {
     let status: number | 'error' = 'error';
 
     try {
+      if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
+        addErrorLog('Fuzz mode blocked real device request', {
+          path,
+          url,
+          baseUrl,
+          deviceHost: this.deviceHost,
+        });
+        const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
+        blocked.__fuzzBlocked = true;
+        throw blocked;
+      }
       if (isNativePlatform()) {
         const body = options.body ? options.body : undefined;
         const nativeResponse = await CapacitorHttp.request({
@@ -245,11 +257,14 @@ export class C64API {
 
       return this.parseResponseJson<T>(response);
     } catch (error) {
-      addErrorLog('C64 API request failed', {
-        path,
-        url,
-        error: (error as Error).message,
-      });
+      const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
+      if (!fuzzBlocked) {
+        addErrorLog('C64 API request failed', {
+          path,
+          url,
+          error: (error as Error).message,
+        });
+      }
       throw error;
     } finally {
       this.logRestCall(method, path, status, startedAt);

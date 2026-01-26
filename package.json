@@ -20,6 +20,7 @@
     "validate:evidence": "node scripts/validate-playwright-evidence.mjs",
     "test:e2e:ci": "npm run screenshots && npm run test:e2e && npm run validate:evidence",
     "test:ci": "npm run lint && npm run test:coverage && npm run test:e2e:ci && npm run build",
+    "fuzz": "node scripts/run-fuzz.mjs",
     "proxy": "node proxy/server.mjs",
     "dev:proxy": "npm run proxy",
     "cap:init": "cap init \"C64 Commander\" \"uk.gleissner.c64commander\" --web-dir dist",
