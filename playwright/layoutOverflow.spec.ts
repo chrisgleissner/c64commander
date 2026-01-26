@@ -357,7 +357,7 @@ test.describe('Layout overflow safeguards', () => {
     await snap(page, testInfo, 'disks-open');
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     const addDialog = page.getByRole('dialog');
     await expectDialogWithinViewport(page, addDialog);
     await snap(page, testInfo, 'disks-add-items-dialog');
