@@ -24,6 +24,13 @@ const parseDurationMs = (value) => {
   return undefined;
 };
 
+const toPositiveInt = (value, fallback) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  const intValue = Math.floor(numeric);
+  return intValue > 0 ? intValue : fallback;
+};
+
 const seed = parseArg('--fuzz-seed');
 const steps = parseArg('--fuzz-steps');
 const timeBudget = parseArg('--fuzz-time-budget');
@@ -98,9 +105,9 @@ const getPhysicalCoreCount = async () => {
   }
 };
 
-const baseSeed = seed ? Number(seed) : Date.now();
+const baseSeed = toPositiveInt(seed, Date.now());
 const defaultConcurrency = (await getPhysicalCoreCount()) || os.cpus().length;
-const concurrency = Math.max(1, Number(concurrencyArg || env.FUZZ_CONCURRENCY || defaultConcurrency));
+const concurrency = toPositiveInt(concurrencyArg || env.FUZZ_CONCURRENCY || defaultConcurrency, 1);
 const runId = env.FUZZ_RUN_ID || `${baseSeed}`;
 if (!env.FUZZ_SEED) env.FUZZ_SEED = String(baseSeed);
 
@@ -117,6 +124,7 @@ const mergeReports = async () => {
   let sessions = 0;
   await fs.mkdir(outputRoot, { recursive: true });
 
+  let parseErrors = 0;
   for (let shard = 0; shard < concurrency; shard += 1) {
     const shardRoot = concurrency === 1 ? outputRoot : path.join(outputRoot, `shard-${shard}`);
     const reportPath = concurrency === 1
@@ -124,7 +132,14 @@ const mergeReports = async () => {
       : path.join(shardRoot, 'fuzz-issue-report.json');
     try {
       const raw = await fs.readFile(reportPath, 'utf8');
-      const parsed = JSON.parse(raw);
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (error) {
+        console.error(`Failed to parse fuzz report for shard ${shard}:`, error);
+        parseErrors += 1;
+        continue;
+      }
       totalSteps += parsed?.meta?.totalSteps || 0;
       sessions += parsed?.meta?.sessions || 0;
       const groups = parsed?.issueGroups || [];
@@ -155,8 +170,12 @@ const mergeReports = async () => {
           existing.examples.push(...remappedExamples.slice(0, 3 - existing.examples.length));
         }
       }
-    } catch {
-      // ignore missing shard reports
+    } catch (error) {
+      if ((error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+        continue;
+      }
+      console.error(`Failed to read fuzz report for shard ${shard}:`, error);
+      parseErrors += 1;
     }
   }
 
@@ -216,10 +235,31 @@ const mergeReports = async () => {
   const summaryContent = summaryLines.join('\n');
   await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryContent, 'utf8');
   await fs.writeFile(path.join(outputRoot, 'README.md'), summaryContent, 'utf8');
+
+  return { parseErrors };
 };
 
 const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const basePort = Number(process.env.PLAYWRIGHT_PORT || '4173');
+
+const runCommand = (command, argsList, commandEnv) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(command, argsList, { stdio: 'inherit', env: commandEnv });
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} ${argsList.join(' ')} failed with code ${code ?? 1}`));
+    });
+  });
+
+if (process.env.PLAYWRIGHT_SKIP_BUILD !== '1') {
+  await runCommand(npmCmd, ['run', 'build'], env).catch((error) => {
+    console.error('Failed to build before fuzz shards:', error);
+    process.exit(1);
+  });
+  env.PLAYWRIGHT_SKIP_BUILD = '1';
+}
 
 const runShard = (index) =>
   new Promise((resolve) => {
@@ -230,6 +270,7 @@ const runShard = (index) =>
       FUZZ_SHARD_INDEX: String(index),
       FUZZ_SHARD_TOTAL: String(concurrency),
       FUZZ_SEED: String(baseSeed + index),
+      PLAYWRIGHT_SKIP_BUILD: env.PLAYWRIGHT_SKIP_BUILD,
       PLAYWRIGHT_PORT: String(basePort + index),
       PLAYWRIGHT_OUTPUT_DIR: path.join('test-results', 'playwright-fuzz', `shard-${index}`),
       PLAYWRIGHT_REPORT_DIR: path.join('playwright-report', 'fuzz', `shard-${index}`),
@@ -241,10 +282,20 @@ const runShard = (index) =>
     }
 
     const child = spawn(cmd, playwrightArgs, { stdio: 'inherit', env: shardEnv });
-    child.on('exit', (code) => resolve(code ?? 1));
+    let settled = false;
+    const finish = (code) => {
+      if (settled) return;
+      settled = true;
+      resolve(code ?? 1);
+    };
+    child.on('error', (error) => {
+      console.error(`Failed to start fuzz shard ${index}:`, error);
+      finish(1);
+    });
+    child.on('exit', (code) => finish(code));
   });
 
 const exitCodes = await Promise.all(Array.from({ length: concurrency }, (_, index) => runShard(index)));
-await mergeReports();
+const { parseErrors } = await mergeReports();
 const failed = exitCodes.find((code) => code !== 0);
-process.exit(failed ?? 0);
+process.exit(failed ?? (parseErrors > 0 ? 1 : 0));

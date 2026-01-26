@@ -442,6 +442,7 @@ test.describe('Chaos fuzz', () => {
       const page = await context.newPage();
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(12000);
+      let networkOffline = false;
 
       const readUiSignature = async () => {
         try {
@@ -664,10 +665,39 @@ test.describe('Chaos fuzz', () => {
         return false;
       };
 
+      const chaosTapAt = async (point: { x: number; y: number }) => {
+        if (clickActionsDisabled) return { ok: false, log: 'chaos-tap disabled' };
+        const meta = await page.evaluate(({ x, y }) => {
+          const el = document.elementFromPoint(x, y) as HTMLElement | null;
+          if (!el) return { isExternal: false };
+          const anchor = el.closest('a') as HTMLAnchorElement | null;
+          if (!anchor) return { isExternal: false };
+          const href = anchor.getAttribute('href') || '';
+          const target = anchor.getAttribute('target');
+          const external = target === '_blank' || /^https?:\/\//i.test(href) || (/^[a-z]+:/i.test(href) && !href.startsWith('/') && !href.startsWith('#'));
+          return { isExternal: external };
+        }, point);
+        if (meta.isExternal && externalClickUsed) {
+          return { ok: false, log: 'chaos-tap external blocked' };
+        }
+        if (meta.isExternal) {
+          externalClickUsed = true;
+          clickActionsDisabled = true;
+        }
+        await page.evaluate(({ x, y }) => {
+          (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse?.(x, y);
+        }, point);
+        const clickCount = rng.int(1, 5);
+        for (let i = 0; i < clickCount; i += 1) {
+          await page.mouse.click(point.x, point.y, { delay: rng.int(0, 10) });
+        }
+        return { ok: true, log: `chaos-tap ${Math.round(point.x)},${Math.round(point.y)} x${clickCount}` };
+      };
+
       const actions = [
         {
           name: 'click',
-          weight: 20,
+          weight: 16,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, 'button, [role="button"], a[href], [data-clickable="true"]');
@@ -687,8 +717,8 @@ test.describe('Chaos fuzz', () => {
             );
             if (!pick) return { log: 'click skip' };
             const isExternal = await isExternalOrBlankTarget(pick.target);
-            const clickCount = rng.int(1, 3);
-            const delay = rng.int(0, 20);
+            const clickCount = rng.int(1, 4);
+            const delay = rng.int(0, 10);
             const result = await safeClick(page, pick, rng, selector, { clickCount, delay });
             if (isExternal) {
               externalClickUsed = true;
@@ -700,56 +730,48 @@ test.describe('Chaos fuzz', () => {
         },
         {
           name: 'rage-click',
-          weight: 16,
+          weight: 20,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, 'button, [role="button"], [role="tab"], [role="option"], a[href], [data-clickable="true"]');
           },
           run: async () => {
             const selector = 'button, [role="button"], [role="tab"], [role="option"], a[href], [data-clickable="true"]';
-            const pick = await pickVisibleElement(page, selector, rng);
+            const pick = await pickVisibleElement(
+              page,
+              selector,
+              rng,
+              async (element) => {
+                if (await isExternalOrBlankTarget(element)) {
+                  return !externalClickUsed;
+                }
+                return true;
+              },
+            );
             if (!pick) return { log: 'rage-click skip' };
-            const clickCount = rng.int(4, 8);
-            await safeClick(page, pick, rng, selector, { clickCount, delay: rng.int(0, 15) });
+            const isExternal = await isExternalOrBlankTarget(pick.target);
+            const clickCount = rng.int(5, 10);
+            await safeClick(page, pick, rng, selector, { clickCount, delay: rng.int(0, 8) });
+            if (isExternal) {
+              externalClickUsed = true;
+              clickActionsDisabled = true;
+            }
             return { log: `rage-click ${pick.description} x${clickCount}` };
           },
         },
         {
           name: 'chaos-tap',
-          weight: 14,
-          canRun: async () => true,
+          weight: 20,
+          canRun: async () => !clickActionsDisabled,
           run: async () => {
             const point = await randomViewportPoint(page, rng);
-            const meta = await page.evaluate(({ x, y }) => {
-              const el = document.elementFromPoint(x, y) as HTMLElement | null;
-              if (!el) return { isExternal: false, tag: 'none' };
-              const anchor = el.closest('a') as HTMLAnchorElement | null;
-              if (!anchor) return { isExternal: false, tag: el.tagName.toLowerCase() };
-              const href = anchor.getAttribute('href') || '';
-              const target = anchor.getAttribute('target');
-              const external = target === '_blank' || /^https?:\/\//i.test(href) || (/^[a-z]+:/i.test(href) && !href.startsWith('/') && !href.startsWith('#'));
-              return { isExternal: external, tag: anchor.tagName.toLowerCase() };
-            }, point);
-            if (meta.isExternal && externalClickUsed) {
-              return { log: 'chaos-tap skip external' };
-            }
-            if (meta.isExternal) {
-              externalClickUsed = true;
-              clickActionsDisabled = true;
-            }
-            await page.evaluate(({ x, y }) => {
-              (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse?.(x, y);
-            }, point);
-            const clickCount = rng.int(1, 4);
-            for (let i = 0; i < clickCount; i += 1) {
-              await page.mouse.click(point.x, point.y, { delay: rng.int(0, 15) });
-            }
-            return { log: `chaos-tap ${Math.round(point.x)},${Math.round(point.y)} x${clickCount}` };
+            const result = await chaosTapAt(point);
+            return { log: result.log };
           },
         },
         {
           name: 'drag',
-          weight: 6,
+          weight: 8,
           canRun: async () => true,
           run: async () => {
             const start = await randomViewportPoint(page, rng);
@@ -765,11 +787,79 @@ test.describe('Chaos fuzz', () => {
           },
         },
         {
-          name: 'random-key',
-          weight: 10,
+          name: 'panic',
+          weight: 14,
           canRun: async () => true,
           run: async () => {
-            const bursts = rng.int(1, 4);
+            const burst = rng.int(6, 16);
+            const logs: string[] = [];
+            for (let i = 0; i < burst; i += 1) {
+              const roll = rng.next();
+              if (roll < 0.45 && !clickActionsDisabled) {
+                const point = await randomViewportPoint(page, rng);
+                const result = await chaosTapAt(point);
+                logs.push(result.log);
+              } else if (roll < 0.7) {
+                const delta = rng.int(-1200, 1200);
+                await page.mouse.wheel(0, delta);
+                logs.push(`wheel ${delta}`);
+              } else {
+                const key = randomKey(rng);
+                await page.keyboard.press(key).catch(() => {});
+                logs.push(`key ${key}`);
+              }
+              await page.waitForTimeout(rng.int(0, 15));
+            }
+            return { log: `panic ${logs.slice(0, 6).join('|')}${logs.length > 6 ? '…' : ''}` };
+          },
+        },
+        {
+          name: 'connection-flap',
+          weight: 6,
+          canRun: async () => true,
+          run: async () => {
+            const nextReachable = rng.next() > 0.5;
+            server.setReachable(nextReachable);
+            return { log: `connection ${nextReachable ? 'online' : 'offline'}` };
+          },
+        },
+        {
+          name: 'latency-spike',
+          weight: 6,
+          canRun: async () => true,
+          run: async () => {
+            const previousMode = server.getFaultMode();
+            const spikeMs = rng.int(1500, 7000);
+            server.setFaultMode('slow');
+            server.setLatencyMs(spikeMs);
+            const recoveryDelay = rng.int(2000, 6000);
+            setTimeout(() => {
+              server.setFaultMode(previousMode);
+              server.setLatencyMs(null);
+            }, recoveryDelay);
+            return { log: `latency spike ${spikeMs}ms` };
+          },
+        },
+        {
+          name: 'network-offline',
+          weight: 4,
+          canRun: async () => !networkOffline,
+          run: async () => {
+            networkOffline = true;
+            await context.setOffline(true).catch(() => {});
+            const duration = rng.int(500, 2500);
+            await page.waitForTimeout(duration);
+            await context.setOffline(false).catch(() => {});
+            networkOffline = false;
+            return { log: `network offline ${duration}ms` };
+          },
+        },
+        {
+          name: 'random-key',
+          weight: 12,
+          canRun: async () => true,
+          run: async () => {
+            const bursts = rng.int(2, 5);
             const keys = [] as string[];
             for (let i = 0; i < bursts; i += 1) {
               const key = randomKey(rng);
@@ -781,7 +871,7 @@ test.describe('Chaos fuzz', () => {
         },
         {
           name: 'tab',
-          weight: 8,
+          weight: 6,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, '.tab-bar button');
@@ -795,13 +885,13 @@ test.describe('Chaos fuzz', () => {
         },
         {
           name: 'scroll',
-          weight: 14,
+          weight: 16,
           canRun: async () => true,
           run: async () => {
             const bursts = rng.int(1, 4);
             const deltas = [] as number[];
             for (let i = 0; i < bursts; i += 1) {
-              const delta = rng.int(-1000, 1000);
+              const delta = rng.int(-1200, 1200);
               deltas.push(delta);
               await page.mouse.wheel(0, delta);
               await page.waitForTimeout(rng.int(0, 30));
@@ -811,7 +901,7 @@ test.describe('Chaos fuzz', () => {
         },
         {
           name: 'select',
-          weight: 8,
+          weight: 6,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]');
@@ -844,7 +934,7 @@ test.describe('Chaos fuzz', () => {
         },
         {
           name: 'toggle',
-          weight: 8,
+          weight: 6,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, 'input[type="checkbox"], [role="switch"]');
@@ -858,7 +948,7 @@ test.describe('Chaos fuzz', () => {
         },
         {
           name: 'modal',
-          weight: 6,
+          weight: 4,
           canRun: async () => !clickActionsDisabled,
           run: async () => {
             const dialog = await page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
@@ -1008,7 +1098,7 @@ test.describe('Chaos fuzz', () => {
           logInteraction(`s=${totalSteps}\ta=session\tmin-steps`);
           break;
         }
-        await page.waitForTimeout(rng.int(5, 80));
+        await page.waitForTimeout(rng.int(0, 25));
       }
 
       let route: string | undefined;
