@@ -257,15 +257,15 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'play-open');
 
     const counters = page.getByTestId('playback-counters');
-    const playedLabel = page.getByTestId('playback-played');
+    const elapsedLabel = page.getByTestId('playback-elapsed');
     await expect(counters).toContainText('Total: 0:12');
-    await expect(playedLabel).toContainText('Played: 0:00');
+    await expect(elapsedLabel).toContainText('0:00');
 
     await page.getByTestId('playlist-play').click();
     await snap(page, testInfo, 'playback-running');
 
     await expect.poll(async () => {
-      const text = await playedLabel.textContent();
+      const text = await elapsedLabel.textContent();
       const played = parseTimeLabel(text);
       return played ?? 0;
     }).toBeGreaterThanOrEqual(1);
@@ -337,7 +337,7 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     const playButton = page.getByTestId('playlist-play');
-    const played = page.getByTestId('playback-played');
+    const played = page.getByTestId('playback-elapsed');
     await playButton.click();
     await snap(page, testInfo, 'play-started');
     await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThanOrEqual(1);
@@ -530,7 +530,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     const playButton = page.getByTestId('playlist-play');
-    const played = page.getByTestId('playback-played');
+    const played = page.getByTestId('playback-elapsed');
     await playButton.click();
     await expect(playButton).toContainText('Stop');
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);

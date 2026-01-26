@@ -17,7 +17,7 @@
 - [ ] Identify any currently failing CI jobs (if any), including “Web | Screenshots”.
 
 ## 2) Stepwise implementation (each step = code change → tests → commit)
-- [ ] Step: progress slider layout change (passed left, remaining right) + remove “Played: 0:00”.
+- [x] Step: progress slider layout change (passed left, remaining right) + remove “Played: 0:00”.
 - [ ] Step: move type filters under “Filter files” + wire filtering logic.
 - [ ] Step: overflow hardening (global) + add/extend regression tests.
 - [ ] Step: Audio Mixer “SOLO” spacing fix + validate screenshots.

@@ -2267,17 +2267,14 @@ export default function PlayFilesPage() {
                 </Button>
               </div>
               <div className="space-y-2">
-                <Progress value={progressPercent} className="w-full" />
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span data-testid="playback-elapsed">{formatTime(elapsedMs)}</span>
-                  <span data-testid="playback-remaining">{remainingLabel}</span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="shrink-0" data-testid="playback-elapsed">{formatTime(elapsedMs)}</span>
+                  <Progress value={progressPercent} className="flex-1 min-w-0" />
+                  <span className="shrink-0" data-testid="playback-remaining">{remainingLabel}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground" data-testid="playback-counters">
                   <span>Total: {formatTime(playlistTotals.total)}</span>
                   <span>Remaining: {formatTime(playlistTotals.remaining)}</span>
-                </div>
-                <div className="text-xs text-muted-foreground text-right" data-testid="playback-played">
-                  Played: {formatTime(playedMs)}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-3">
