@@ -56,7 +56,14 @@ All common development tasks use `./local-build.sh`:
 
 ```bash
 ./local-build.sh --screenshots    # Update app screenshots in doc/img
+./local-build.sh --screenshots-only  # Capture screenshots only (no tests or APK)
 ```
+
+Notes:
+- `--screenshots` keeps the default full pipeline and then captures screenshots.
+- `--screenshots-only` skips unit tests, E2E tests, and Android builds.
+- `--test-e2e` runs Playwright without screenshots.
+- `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
 
 ## Test architecture
 

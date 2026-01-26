@@ -18,6 +18,7 @@ RUN_TEST_E2E_CI=false
 RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
+RUN_SCREENSHOTS_ONLY=false
 PLAYWRIGHT_DEVICES=""
 APK_PATH=""
 DEVICE_ID=""
@@ -58,6 +59,7 @@ Options:
   --skip-tests          Skip npm test
   --skip-apk            Skip npm run android:apk
   --screenshots         Capture app screenshots into doc/img
+  --screenshots-only    Capture screenshots only (no tests, no APK, no Android)
 
   -h, --help            Show this help
 
@@ -68,6 +70,13 @@ Examples:
   ./local-build.sh --apk-path /path/to/app-debug.apk --install
   ./local-build.sh --emulator
   ./local-build.sh --screenshots
+  ./local-build.sh --screenshots-only
+
+Notes:
+  --screenshots       Runs full build/tests by default, then captures screenshots.
+  --screenshots-only  Captures screenshots without running tests or Android builds.
+  --test-e2e          Runs Playwright E2E tests excluding @screenshots.
+  --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
 EOF
 }
 
@@ -197,6 +206,21 @@ while [[ $# -gt 0 ]]; do
       RUN_SCREENSHOTS=true
       shift
       ;;
+    --screenshots-only)
+      RUN_SCREENSHOTS_ONLY=true
+      RUN_SCREENSHOTS=true
+      RUN_TEST=false
+      RUN_TEST_UNIT=false
+      RUN_TEST_E2E=false
+      RUN_TEST_E2E_CI=false
+      RUN_VALIDATE_EVIDENCE=false
+      RUN_COVERAGE=false
+      RUN_ANDROID_TESTS=false
+      RUN_ANDROID_COVERAGE=false
+      RUN_APK=false
+      RUN_INSTALL_APK=false
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -208,6 +232,19 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$RUN_SCREENSHOTS_ONLY" == "true" ]]; then
+  RUN_TEST=false
+  RUN_TEST_UNIT=false
+  RUN_TEST_E2E=false
+  RUN_TEST_E2E_CI=false
+  RUN_VALIDATE_EVIDENCE=false
+  RUN_COVERAGE=false
+  RUN_ANDROID_TESTS=false
+  RUN_ANDROID_COVERAGE=false
+  RUN_APK=false
+  RUN_INSTALL_APK=false
+fi
 
 if [[ "$RUN_EMULATOR" == "true" ]]; then
   log "Starting Android emulator flow"
@@ -258,6 +295,13 @@ if [[ "$RUN_BUILD" == "true" ]]; then
   if [[ -f "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle" ]]; then
     sed -i.bak '/flatDir{/,/}/d' "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle"
     rm -f "$ROOT_DIR/android/capacitor-cordova-android-plugins/build.gradle.bak"
+  fi
+fi
+
+if [[ "$RUN_SCREENSHOTS_ONLY" == "true" && "$RUN_BUILD" == "false" ]]; then
+  if [[ ! -f "$ROOT_DIR/dist/index.html" ]]; then
+    echo "Missing dist/index.html. Run without --skip-build or build assets first." >&2
+    exit 1
   fi
 fi
 

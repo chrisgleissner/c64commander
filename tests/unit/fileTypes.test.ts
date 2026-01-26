@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getMountTypeForExtension, getPlayCategory, isSupportedPlayFile } from '@/lib/playback/fileTypes';
+import { formatPlayCategory, getFileExtension, getMountTypeForExtension, getPlayCategory, isSupportedPlayFile } from '@/lib/playback/fileTypes';
 
 describe('fileTypes', () => {
   it('detects file categories case-insensitively', () => {
@@ -19,5 +19,20 @@ describe('fileTypes', () => {
   it('returns mount type for disk images', () => {
     expect(getMountTypeForExtension('disk.d64')).toBe('d64');
     expect(getMountTypeForExtension('image.dnp')).toBeUndefined();
+  });
+
+  it('extracts file extensions safely', () => {
+    expect(getFileExtension('/path/to/demo.sid')).toBe('sid');
+    expect(getFileExtension('demo')).toBe('');
+    expect(getFileExtension('.hiddenfile')).toBe('hiddenfile');
+    expect(getFileExtension('archive.TAP')).toBe('tap');
+  });
+
+  it('formats play category labels', () => {
+    expect(formatPlayCategory('sid')).toBe('SID music');
+    expect(formatPlayCategory('mod')).toBe('MOD music');
+    expect(formatPlayCategory('prg')).toBe('PRG program');
+    expect(formatPlayCategory('crt')).toBe('CRT cartridge');
+    expect(formatPlayCategory('disk')).toBe('Disk image');
   });
 });

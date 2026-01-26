@@ -28,7 +28,7 @@ const removeDriveRequest = (requests: Array<{ method: string; url: string }>, dr
   );
 
 const openAddItemsDialog = async (page: Page) => {
-  await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+  await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
@@ -183,6 +183,35 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-list-grouped');
   });
 
+  test('disks header layout matches play list pattern @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('button', { name: 'Add items' })).toBeVisible();
+    const playAddButton = page.getByRole('button', { name: /Add items|Add more items/i });
+    await expect(playAddButton).toBeVisible();
+
+    const playFilter = page.getByTestId('list-filter-input');
+    await expect(playFilter).toBeVisible();
+
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    const disksAddButton = page.getByRole('button', { name: /Add disks|Add more disks/i });
+    await expect(disksAddButton).toBeVisible();
+    await expect(disksAddButton).toHaveText('Add disks');
+
+    const disksFilter = page.getByTestId('list-filter-input');
+    await expect(disksFilter).toBeVisible();
+    await expect(disksFilter).toHaveAttribute('placeholder', 'Filter disks...');
+
+    const appBar = page.locator('header');
+    await expect(appBar.locator('input[placeholder="Filter disks..."]')).toHaveCount(0);
+
+    const listHeader = page.getByText('Disk list', { exact: true });
+    const [headerBox, filterBox] = await Promise.all([listHeader.boundingBox(), disksFilter.boundingBox()]);
+    if (headerBox && filterBox) {
+      expect(filterBox.y).toBeGreaterThan(headerBox.y);
+    }
+    await snap(page, testInfo, 'disks-header-layout');
+  });
+
   test('FTP directory listing shows hierarchy @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
@@ -259,20 +288,20 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'disk-list');
   });
 
-  test('disk filtering greys out non-matching nodes and clears @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('disk filtering removes non-matching nodes and restores on clear @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await addLocalFolder(page, path.resolve('playwright/fixtures/disks-local/Turrican II'), ['Disk 1.d64', 'Disk 2.d64']);
 
-    const filter = page.getByPlaceholder('Filter disks…');
+    const filter = page.getByTestId('list-filter-input');
     await filter.fill('Disk 1');
 
     const nonMatchRow = getDiskRow(page, 'Disk 2.d64');
-    await expect(nonMatchRow).toHaveClass(/opacity-40/);
+    await expect(nonMatchRow).toHaveCount(0);
     await snap(page, testInfo, 'filter-applied');
 
     await page.getByRole('button', { name: 'Clear filter' }).click();
-    await expect(nonMatchRow).not.toHaveClass(/opacity-40/);
+    await expect(getDiskRow(page, 'Disk 2.d64')).toBeVisible();
     await snap(page, testInfo, 'filter-cleared');
   });
 

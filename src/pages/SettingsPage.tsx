@@ -334,7 +334,7 @@ export default function SettingsPage() {
                 Hostname or IP from the C64 menu.
               </p>
               <p className="text-xs text-muted-foreground">
-                Currently using: <span className="font-mono">{runtimeDeviceHost}</span>
+                Currently using: <span className="font-mono break-all">{runtimeDeviceHost}</span>
                 {isDemoActive ? ' (Demo mock)' : ''}
               </p>
               {isDemoActive ? (

@@ -470,7 +470,7 @@ function CategorySection({
                     const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
                     const testIdBase = item.name.toLowerCase().replace(/\s+/g, '-');
                     const rowClassName = cn(
-                      isSidVolume && 'rounded-md px-2',
+                      isSidVolume && 'rounded-md px-3',
                       isSoloed && 'bg-primary/10',
                       isMutedBySolo && 'bg-muted/20',
                     );

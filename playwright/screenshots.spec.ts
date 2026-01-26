@@ -129,4 +129,38 @@ test.describe('App screenshots', () => {
     await page.screenshot({ path: screenshotPath('app-documentation.png'), animations: 'disabled', caret: 'hide' });
     await attachStepScreenshot(page, testInfo, 'docs');
   });
+
+  test('capture demo mode play screenshot', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const screenshotPath = (fileName: string) => path.resolve('doc/img', fileName);
+
+    await page.route('**/*', async (route) => {
+      const url = route.request().url();
+      if (url.includes('demo.invalid')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: '{"product":""}' });
+        return;
+      }
+      await route.continue();
+    });
+
+    await page.addInitScript(({ baseUrl }) => {
+      localStorage.setItem('c64u_startup_discovery_window_ms', '600');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_background_rediscovery_interval_ms', '5000');
+      localStorage.setItem('c64u_device_host', 'demo.invalid');
+      localStorage.setItem('c64u_password', '');
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = baseUrl;
+    }, { baseUrl: server.baseUrl });
+
+    await page.goto('/play', { waitUntil: 'domcontentloaded' });
+    const demoDialog = page.getByRole('heading', { name: 'Demo Mode' });
+    if (await demoDialog.isVisible().catch(() => false)) {
+      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+      await expect(demoDialog).toHaveCount(0);
+    }
+    await expect(page.getByTestId('connectivity-indicator')).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
+    await waitForStableRender(page);
+    await waitForOverlaysToClear(page);
+    await page.screenshot({ path: screenshotPath('app-play-demo.png'), animations: 'disabled', caret: 'hide' });
+    await attachStepScreenshot(page, testInfo, 'play-demo');
+  });
 });

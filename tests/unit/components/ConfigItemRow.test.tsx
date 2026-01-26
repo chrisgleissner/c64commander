@@ -261,6 +261,51 @@ describe('ConfigItemRow slider and input behaviors', () => {
     expect(screen.getByTestId('volume-value')).toHaveTextContent('0 dB');
   });
 
+  it('orders off/low/medium/high slider options', () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Fan Speed"
+        value="Low"
+        options={['Off', 'Low', 'Medium', 'High']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Fan Speed slider')).toBeTruthy();
+    expect(screen.getByText('Low')).toBeTruthy();
+  });
+
+  it('maps numeric values when option formatting differs', () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Gain"
+        value="0"
+        options={['0 dB', '+6 dB']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Gain slider')).toBeTruthy();
+    expect(screen.getByText('0 dB')).toBeTruthy();
+  });
+
+  it('supports left/center/right slider ordering', () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Pan"
+        value="Center"
+        options={['Left 40', 'Right 20', 'Center']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Pan slider')).toBeTruthy();
+    expect(screen.getByText('Center')).toBeTruthy();
+  });
+
   it('commits text input on enter without waiting for debounce', () => {
     vi.useFakeTimers();
     try {
@@ -305,5 +350,98 @@ describe('ConfigItemRow slider and input behaviors', () => {
     fireEvent.blur(input);
 
     expect(onValueChange).not.toHaveBeenCalled();
+  });
+});
+
+describe('ConfigItemRow adaptive layout', () => {
+  const setLayoutMetrics = (
+    layoutEl: HTMLElement,
+    labelEl: HTMLElement,
+    metrics: { containerWidth: number; labelWidth: number; labelHeight: number },
+  ) => {
+    Object.defineProperty(layoutEl, 'clientWidth', {
+      value: metrics.containerWidth,
+      configurable: true,
+    });
+    Object.defineProperty(labelEl, 'scrollWidth', {
+      value: metrics.labelWidth,
+      configurable: true,
+    });
+    labelEl.getBoundingClientRect = () => ({
+      width: metrics.labelWidth,
+      height: metrics.labelHeight,
+      top: 0,
+      left: 0,
+      bottom: metrics.labelHeight,
+      right: metrics.labelWidth,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    } as DOMRect);
+  };
+
+  it('uses horizontal layout when label and widget fit', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="VolUltiSid1+6dB"
+        value="0 dB"
+        options={['-6 dB', '0 dB', '+6 dB']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    const layout = screen.getByTestId('config-item-layout');
+    const label = screen.getByTestId('config-item-label');
+    setLayoutMetrics(layout, label, { containerWidth: 640, labelWidth: 140, labelHeight: 16 });
+    fireEvent(window, new Event('resize'));
+
+    await waitFor(() => {
+      expect(layout).toHaveAttribute('data-layout', 'horizontal');
+    });
+    expect(label.className).toContain('whitespace-nowrap');
+  });
+
+  it('switches to vertical layout when label would overflow horizontally', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="VolUltiSid1+6dB"
+        value="0 dB"
+        options={['-6 dB', '0 dB', '+6 dB']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    const layout = screen.getByTestId('config-item-layout');
+    const label = screen.getByTestId('config-item-label');
+    setLayoutMetrics(layout, label, { containerWidth: 240, labelWidth: 140, labelHeight: 16 });
+    fireEvent(window, new Event('resize'));
+
+    await waitFor(() => {
+      expect(layout).toHaveAttribute('data-layout', 'vertical');
+    });
+    expect(label.className).toContain('break-words');
+  });
+
+  it('forces vertical layout when label appears vertically stacked', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Drive A Settings"
+        name="DriveType123456"
+        value="1541"
+        options={['1541', '1571', '1581']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    const layout = screen.getByTestId('config-item-layout');
+    const label = screen.getByTestId('config-item-label');
+    setLayoutMetrics(layout, label, { containerWidth: 640, labelWidth: 12, labelHeight: 64 });
+    fireEvent(window, new Event('resize'));
+
+    await waitFor(() => {
+      expect(layout).toHaveAttribute('data-layout', 'vertical');
+    });
   });
 });

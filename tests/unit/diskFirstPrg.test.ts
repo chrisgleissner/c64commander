@@ -17,6 +17,13 @@ const sectorsPerTrack1541 = (track: number) => {
   return 17;
 };
 
+const sectorsPerTrack1571 = (track: number) => {
+  const localTrack = ((track - 1) % 35) + 1;
+  return sectorsPerTrack1541(localTrack);
+};
+
+const sectorsPerTrack1581 = () => 40;
+
 const totalSectors1541 = (tracks: number) => {
   let total = 0;
   for (let t = 1; t <= tracks; t += 1) {
@@ -33,12 +40,20 @@ const tsOffset = (track: number, sector: number) => {
   return (offset + sector) * 256;
 };
 
-const writeDirectoryEntry = (image: Uint8Array, startTrack: number, startSector: number, name: string) => {
+const tsOffsetGeneric = (sectorsPerTrack: (track: number) => number, track: number, sector: number) => {
+  let offset = 0;
+  for (let t = 1; t < track; t += 1) {
+    offset += sectorsPerTrack(t);
+  }
+  return (offset + sector) * 256;
+};
+
+const writeDirectoryEntry = (image: Uint8Array, startTrack: number, startSector: number, name: string, fileType = 0x82) => {
   const dirOffset = tsOffset(18, 1);
   image[dirOffset] = 0;
   image[dirOffset + 1] = 0;
   const entryOffset = dirOffset + 2;
-  image[entryOffset] = 0x82;
+  image[entryOffset] = fileType;
   image[entryOffset + 1] = startTrack;
   image[entryOffset + 2] = startSector;
   const nameBytes = new TextEncoder().encode(name);
@@ -52,6 +67,75 @@ const writePrgSector = (image: Uint8Array, track: number, sector: number, prg: U
   image[offset] = 0;
   image[offset + 1] = Math.max(1, Math.min(254, prg.length));
   image.set(prg, offset + 2);
+};
+
+const writePrgSectorWithNext = (
+  image: Uint8Array,
+  track: number,
+  sector: number,
+  prg: Uint8Array,
+  nextTrack: number,
+  nextSector: number,
+) => {
+  const offset = tsOffset(track, sector);
+  image[offset] = nextTrack;
+  image[offset + 1] = nextSector;
+  image.set(prg, offset + 2);
+};
+
+const writeDirectoryEntryGeneric = (
+  image: Uint8Array,
+  sectorsPerTrack: (track: number) => number,
+  dirTrack: number,
+  dirSector: number,
+  startTrack: number,
+  startSector: number,
+  name: string,
+) => {
+  const dirOffset = tsOffsetGeneric(sectorsPerTrack, dirTrack, dirSector);
+  image[dirOffset] = 0;
+  image[dirOffset + 1] = 0;
+  const entryOffset = dirOffset + 2;
+  image[entryOffset] = 0x82;
+  image[entryOffset + 1] = startTrack;
+  image[entryOffset + 2] = startSector;
+  const nameBytes = new TextEncoder().encode(name);
+  for (let i = 0; i < 16; i += 1) {
+    image[entryOffset + 3 + i] = nameBytes[i] ?? 0xa0;
+  }
+};
+
+const writePrgSectorGeneric = (
+  image: Uint8Array,
+  sectorsPerTrack: (track: number) => number,
+  track: number,
+  sector: number,
+  prg: Uint8Array,
+) => {
+  const offset = tsOffsetGeneric(sectorsPerTrack, track, sector);
+  image[offset] = 0;
+  image[offset + 1] = Math.max(1, Math.min(254, prg.length));
+  image.set(prg, offset + 2);
+};
+
+const createDiskImageForLayout = (
+  sectorsPerTrack: (track: number) => number,
+  tracks: number,
+  dirTrack: number,
+  dirSector: number,
+  prg: Uint8Array,
+  name = 'TEST',
+) => {
+  let totalSectors = 0;
+  for (let t = 1; t <= tracks; t += 1) {
+    totalSectors += sectorsPerTrack(t);
+  }
+  const image = new Uint8Array(totalSectors * 256);
+  const startTrack = 1;
+  const startSector = 0;
+  writeDirectoryEntryGeneric(image, sectorsPerTrack, dirTrack, dirSector, startTrack, startSector, name);
+  writePrgSectorGeneric(image, sectorsPerTrack, startTrack, startSector, prg);
+  return image;
 };
 
 const createDiskImage = (prg: Uint8Array, name = 'TEST') => {
@@ -145,5 +229,94 @@ describe('diskFirstPrg DMA loader', () => {
     };
     const image = new Uint8Array(1234);
     await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('Unsupported D64 size');
+  });
+
+  it('accepts D64 images with error tables', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const baseImage = createDiskImage(prg, 'SYS');
+    const errorTableBytes = totalSectors1541(35);
+    const image = new Uint8Array(baseImage.length + errorTableBytes);
+    image.set(baseImage, 0);
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd64');
+
+    expect(result.loadAddress).toBe(0x1000);
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+  });
+
+  it('rejects directory listings without PRG entries', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const image = createDiskImage(prg, 'SYS');
+    writeDirectoryEntry(image, 1, 0, 'NO-PRG', 0x00);
+
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('No PRG found in directory');
+  });
+
+  it('rejects disk images with looping PRG sector chains', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const image = createDiskImage(prg, 'SYS');
+    writePrgSectorWithNext(image, 1, 0, prg, 1, 0);
+
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('Loop detected while reading PRG sectors');
+  });
+
+  it('loads D71 images and issues SYS when program is non-basic', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const image = createDiskImageForLayout(sectorsPerTrack1571, 70, 18, 1, prg, 'SYS');
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd71');
+
+    expect(result.isBasic).toBe(false);
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+  });
+
+  it('loads D81 images and issues RUN when program is basic', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeBasicPrg();
+    const image = createDiskImageForLayout(sectorsPerTrack1581, 80, 40, 3, prg, 'BASIC');
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd81');
+
+    expect(result.isBasic).toBe(true);
+    const command = vi.mocked(injectAutostart).mock.calls.at(-1)?.[1] as Uint8Array;
+    expect(bytesToString(command)).toContain('RUN');
+  });
+
+  it('rejects PRG payloads that are too small', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const tinyPrg = new Uint8Array([0x00]);
+    const image = createDiskImage(tinyPrg, 'TINY');
+
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('Extracted PRG is too small');
+  });
+
+  it('rejects PRG payloads that exceed C64 address space', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const payload = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const prg = new Uint8Array(payload.length + 2);
+    prg[0] = 0xfe;
+    prg[1] = 0xff;
+    prg.set(payload, 2);
+    const image = createDiskImage(prg, 'BIG');
+
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('PRG payload exceeds C64 address space');
   });
 });

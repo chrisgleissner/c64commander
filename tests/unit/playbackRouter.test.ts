@@ -3,6 +3,8 @@ import { buildPlayPlan, executePlayPlan } from '@/lib/playback/playbackRouter';
 import { addErrorLog } from '@/lib/logging';
 import { injectAutostart } from '@/lib/playback/autostart';
 import { loadFirstDiskPrgViaDma } from '@/lib/playback/diskFirstPrg';
+import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
+import { loadDiskAutostartMode } from '@/lib/config/appSettings';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
@@ -25,9 +27,22 @@ vi.mock('@/lib/playback/diskFirstPrg', () => ({
   }),
 }));
 
+vi.mock('@/lib/disks/diskMount', () => ({
+  mountDiskToDrive: vi.fn().mockResolvedValue({ errors: [] }),
+  resolveLocalDiskBlob: vi.fn(),
+}));
+
+vi.mock('@/lib/config/appSettings', () => ({
+  loadDiskAutostartMode: vi.fn().mockReturnValue('kernal'),
+}));
+
 beforeEach(() => {
   vi.mocked(injectAutostart).mockClear();
   vi.mocked(loadFirstDiskPrgViaDma).mockClear();
+  vi.mocked(mountDiskToDrive).mockClear();
+  vi.mocked(resolveLocalDiskBlob).mockReset();
+  vi.mocked(loadDiskAutostartMode).mockReset();
+  vi.mocked(loadDiskAutostartMode).mockReturnValue('kernal');
 });
 
 const createApiMock = () => ({
@@ -65,6 +80,28 @@ describe('playbackRouter', () => {
     expect(api.playSidUpload).toHaveBeenCalled();
   });
 
+  it('routes MOD playback for Ultimate files', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.MOD' });
+    await executePlayPlan(api as any, plan);
+    expect(api.playMod).toHaveBeenCalledWith('/MUSIC/DEMO.MOD');
+  });
+
+  it('routes CRT playback for local uploads', async () => {
+    const api = createApiMock();
+    const file = new File(['crt'], 'demo.crt');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.crt', file });
+    await executePlayPlan(api as any, plan);
+    expect(api.runCartridgeUpload).toHaveBeenCalled();
+  });
+
+  it('routes PRG playback for Ultimate in run mode', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/demo.prg' });
+    await executePlayPlan(api as any, plan, { loadMode: 'run' });
+    expect(api.runPrg).toHaveBeenCalledWith('/demo.prg');
+  });
+
   it('routes disk images to mount + autostart', async () => {
     vi.useFakeTimers();
     const api = createApiMock();
@@ -76,6 +113,21 @@ describe('playbackRouter', () => {
     expect(api.machineReboot).toHaveBeenCalled();
     expect(api.mountDriveUpload).toHaveBeenCalled();
     expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('mounts Ultimate disk images via disk mount helper', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/Usb0/DEMO.D64' });
+    const task = executePlayPlan(api as any, plan, { drive: 'b' });
+    await vi.runAllTimersAsync();
+    await task;
+    expect(vi.mocked(mountDiskToDrive)).toHaveBeenCalledWith(
+      api,
+      'b',
+      expect.objectContaining({ path: '/Usb0/DEMO.D64', location: 'ultimate' }),
+    );
     vi.useRealTimers();
   });
 
@@ -94,6 +146,35 @@ describe('playbackRouter', () => {
     await task;
     expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
     expect(vi.mocked(injectAutostart)).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('uses DMA loader for local disk paths when blob can be resolved', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    vi.mocked(loadDiskAutostartMode).mockReturnValue('dma');
+    const resolvedBlob = { arrayBuffer: async () => new ArrayBuffer(4) } as Blob;
+    vi.mocked(resolveLocalDiskBlob).mockResolvedValue(resolvedBlob);
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64' });
+    const task = executePlayPlan(api as any, plan, { drive: 'a' });
+    await vi.runAllTimersAsync();
+    await task;
+    expect(vi.mocked(resolveLocalDiskBlob)).toHaveBeenCalled();
+    expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
+    expect(vi.mocked(injectAutostart)).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('falls back to autostart when DMA loader cannot resolve local disk blob', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    vi.mocked(loadDiskAutostartMode).mockReturnValue('dma');
+    vi.mocked(resolveLocalDiskBlob).mockRejectedValue(new Error('missing'));
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64' });
+    const task = executePlayPlan(api as any, plan, { drive: 'a' });
+    await vi.runAllTimersAsync();
+    await task;
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalled();
     vi.useRealTimers();
   });
 
