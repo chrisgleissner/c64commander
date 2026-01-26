@@ -1,56 +1,30 @@
-# Vertical Label Layout + Coverage Plan
+# Disks UX Consistency + Screenshots-only Build Plan
 
-## 1) Baseline: reproduce + scope
-- [x] Verify vertical label rendering is absent on Configuration → Audio Mixer.
-	- npm run test:e2e -- playwright/solo.spec.ts (config labels stay horizontal at narrow widths)
-- [x] Identify affected components and categories beyond Audio Mixer.
-	- ConfigItemRow (all config rows), Audio Mixer + Drive A Settings
-- [x] Record current coverage and threshold results.
-	- npm run test:coverage (89.01% lines)
-	- node scripts/check-coverage-threshold.mjs (Line coverage: 89.01%)
-- [x] Capture current Playwright + screenshots commands used by CI.
-	- npm run test:e2e
-	- npm run screenshots
-- [ ] Identify any currently failing CI jobs (if any), including “Web | Screenshots”.
+## 1) Baseline
+- [ ] Capture current Play/Disks UI behavior (button labels, filter placement).
+- [ ] Identify current tests that cover Play/Disks headers and import flows.
+- [ ] Record local-build.sh current screenshots/test flow and help output.
 
 ## 2) Tests first (red)
-- [x] Add component/unit tests that fail on vertical text rendering.
-	- tests/unit/components/ConfigItemRow.test.tsx
-- [x] Add Playwright checks for vertical labels + overflow at narrow widths.
-	- playwright/solo.spec.ts
+- [ ] Add/update Playwright assertions for Play/Disks button labels, filter placement, and import flow.
+- [ ] Add coverage to ensure non-matching items are removed (no dimming) in Play/Disks lists.
+- [ ] Add structural layout consistency assertion between Play and Disks.
 
-## 3) Smart layout abstraction
-- [x] Introduce reusable label+widget layout logic with dynamic measurement.
-	- src/components/ConfigItemRow.tsx
-- [x] Cover layout decision logic with unit tests.
-	- tests/unit/components/ConfigItemRow.test.tsx
+## 3) UI consistency fixes
+- [ ] Keep Play primary button label as “Add items” / “Add more items” (amended requirement).
+- [ ] Update Disks primary button label to “Add disks”.
+- [ ] Move Disks filter input under list header (no filter under page header).
+- [ ] Ensure Disks uses Play-style list header layout without file type toggles.
+- [ ] Remove dimming: hide non-matching items in Play/Disks lists.
 
-## 4) Apply fixes
-- [x] Apply layout logic to Audio Mixer sliders.
-- [x] Apply layout logic to at least one other configuration category.
-- [x] Ensure at least one non-slider widget uses the layout logic.
+## 4) Screenshots-only build mode
+- [ ] Add --screenshots-only option to local-build.sh (no tests, no APK).
+- [ ] Ensure screenshots-only validates build artifacts or builds web assets.
+- [ ] Update --help output with new option semantics.
+- [ ] Document usage in README.md or doc/developer.md.
 
-## 5) Test hardening
-- [x] Ensure layout tests fail on vertical/rotated labels.
-- [x] Verify overflow guards on narrow viewports.
-	- npm run test:e2e -- playwright/solo.spec.ts
-
-## 6) Coverage improvements (>= 88.5%)
-- [x] Identify low-coverage files from latest report.
-	- ConfigItemRow.tsx
-- [x] Add meaningful tests to raise average coverage to >= 88.5%.
-	- tests/unit/components/ConfigItemRow.test.tsx
-- [x] Verify coverage threshold locally.
-	- npm run test:coverage (89.01% lines)
-	- node scripts/check-coverage-threshold.mjs (Line coverage: 89.01%)
-
-## 7) Final verification
-- [x] Run full local verification (unit, Playwright, screenshots, local-build).
-	- ./local-build.sh --screenshots (passed locally)
-- [x] Confirm screenshots match expectations.
-	- npm run screenshots (2 passed)
-- [x] Confirm coverage >= 88.5%.
-	- npm run test:coverage (89.01% lines)
-- [x] Confirm no overflow regressions.
-	- npm run test:e2e (267 passed)
-- [x] Mark all items complete only when verified green.
+## 5) Verification
+- [ ] Run targeted Playwright test(s) for Play/Disks header/layout assertions.
+- [ ] Run ./local-build.sh --screenshots-only.
+- [ ] Run ./local-build.sh --screenshots to ensure legacy behavior unchanged.
+- [ ] Mark all items complete only when verified green.
