@@ -19,9 +19,14 @@ RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
 RUN_SCREENSHOTS_ONLY=false
+RUN_FUZZ=false
 PLAYWRIGHT_DEVICES=""
 APK_PATH=""
 DEVICE_ID=""
+FUZZ_SEED=""
+FUZZ_STEPS=""
+FUZZ_TIME_BUDGET=""
+FUZZ_LAST_INTERACTIONS=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -52,6 +57,11 @@ Options:
   --android-tests       Run Android instrumentation tests (requires a device/emulator)
   --skip-android-tests  Skip Android instrumentation tests
   --skip-android-coverage Skip Android Jacoco coverage check
+  --fuzz                Run Playwright chaos fuzz runner (mock device only)
+  --seed <num>          Seed for fuzz RNG
+  --steps <num>         Max fuzz steps (optional)
+  --time-budget <dur>   Time budget for fuzz run (e.g. 120s, 10m)
+  --last-interactions N Last-N interactions stored per issue (default 50)
   
   --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
   --skip-install        Skip npm install
@@ -151,6 +161,22 @@ while [[ $# -gt 0 ]]; do
       RUN_TEST=false
       shift
       ;;
+    --fuzz)
+      RUN_FUZZ=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
+      RUN_TEST=false
+      RUN_TEST_UNIT=false
+      RUN_TEST_E2E=false
+      RUN_TEST_E2E_CI=false
+      RUN_VALIDATE_EVIDENCE=false
+      RUN_COVERAGE=false
+      RUN_ANDROID_TESTS=false
+      RUN_ANDROID_COVERAGE=false
+      RUN_APK=false
+      RUN_INSTALL_APK=false
+      shift
+      ;;
     --android-tests)
       RUN_ANDROID_TESTS=true
       shift
@@ -162,6 +188,22 @@ while [[ $# -gt 0 ]]; do
     --skip-android-coverage)
       RUN_ANDROID_COVERAGE=false
       shift
+      ;;
+    --seed)
+      FUZZ_SEED="$2"
+      shift 2
+      ;;
+    --steps)
+      FUZZ_STEPS="$2"
+      shift 2
+      ;;
+    --time-budget)
+      FUZZ_TIME_BUDGET="$2"
+      shift 2
+      ;;
+    --last-interactions)
+      FUZZ_LAST_INTERACTIONS="$2"
+      shift 2
       ;;
     --devices)
       if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
@@ -365,6 +407,20 @@ if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
     VITE_BUILD_TIME="1970-01-01T00:00:00Z" \
     SOURCE_DATE_EPOCH="0" \
     npm run screenshots)
+fi
+
+if [[ "$RUN_FUZZ" == "true" ]]; then
+  log "Running chaos fuzz runner"
+  (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
+  FUZZ_ARGS=()
+  if [[ -n "$FUZZ_SEED" ]]; then FUZZ_ARGS+=(--seed "$FUZZ_SEED"); fi
+  if [[ -n "$FUZZ_STEPS" ]]; then FUZZ_ARGS+=(--steps "$FUZZ_STEPS"); fi
+  if [[ -n "$FUZZ_TIME_BUDGET" ]]; then FUZZ_ARGS+=(--time-budget "$FUZZ_TIME_BUDGET"); fi
+  if [[ -n "$FUZZ_LAST_INTERACTIONS" ]]; then FUZZ_ARGS+=(--last-interactions "$FUZZ_LAST_INTERACTIONS"); fi
+  if [[ "$RUN_BUILD" == "true" || -f "$ROOT_DIR/dist/index.html" ]]; then
+    export PLAYWRIGHT_SKIP_BUILD=1
+  fi
+  (cd "$ROOT_DIR" && FUZZ_RUN_MODE="local" node scripts/run-fuzz.mjs "${FUZZ_ARGS[@]}")
 fi
 
 if [[ "$RUN_APK" == "true" ]]; then

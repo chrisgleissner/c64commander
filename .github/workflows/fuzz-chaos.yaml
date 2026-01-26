@@ -1,0 +1,48 @@
+name: Chaos Fuzz (Nightly)
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    name: Chaos fuzz (Playwright)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run chaos fuzz
+        env:
+          FUZZ_RUN_MODE: ci
+          VITE_FUZZ_MODE: '1'
+        run: |
+          SEED=$(date -u +%Y%m%d)
+          node scripts/run-fuzz.mjs --seed "$SEED" --time-budget 15m --platform android-phone
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-fuzz-artifacts
+          path: test-results/fuzz/**

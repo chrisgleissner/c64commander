@@ -11,6 +11,7 @@ import {
   loadAutomaticDemoModeEnabled,
   loadStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
+import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
 import { addLog } from '@/lib/logging';
 
 export type ConnectionState = 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
@@ -184,6 +185,16 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   transitionTo('DEMO_ACTIVE', trigger);
 
+  if (isFuzzModeEnabled()) {
+    const fuzzBaseUrl = getFuzzMockBaseUrl();
+    if (fuzzBaseUrl) {
+      const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
+      applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
+      addLog('info', 'Fuzz mode using forced mock base URL', { trigger, baseUrl: fuzzBaseUrl });
+      return;
+    }
+  }
+
   if (!demoServerStartedThisSession) {
     try {
       const { baseUrl, ftpPort } = await startMockServer();
@@ -231,6 +242,11 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
  */
 export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
   cancelActiveDiscovery();
+
+  if (isFuzzModeEnabled()) {
+    await transitionToDemoActive(trigger);
+    return;
+  }
 
   if (trigger === 'background') {
     if (snapshot.state !== 'DEMO_ACTIVE' && snapshot.state !== 'OFFLINE_NO_DEMO') return;
@@ -308,6 +324,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
+  applyFuzzModeDefaults();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   setSnapshot({

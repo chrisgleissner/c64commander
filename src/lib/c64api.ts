@@ -2,6 +2,7 @@
 
 import { CapacitorHttp } from '@capacitor/core';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 
 const DEFAULT_BASE_URL = 'http://c64u';
@@ -207,6 +208,15 @@ export class C64API {
     let status: number | 'error' = 'error';
 
     try {
+      if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
+        addErrorLog('Fuzz mode blocked real device request', {
+          path,
+          url,
+          baseUrl,
+          deviceHost: this.deviceHost,
+        });
+        throw new Error('Fuzz mode blocked request');
+      }
       if (isNativePlatform()) {
         const body = options.body ? options.body : undefined;
         const nativeResponse = await CapacitorHttp.request({
