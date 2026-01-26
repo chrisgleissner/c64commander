@@ -33,6 +33,28 @@ test.describe('Config page SID solo routing', () => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
+  const assertLabelsHorizontal = async (page: Page, groupName: string, viewportWidth: number) => {
+    const groupCard = page.getByRole('button', { name: groupName }).locator('..');
+    const labels = groupCard.getByTestId('config-item-label');
+    const count = await labels.count();
+    expect(count).toBeGreaterThan(0);
+
+    for (let index = 0; index < count; index += 1) {
+      const label = labels.nth(index);
+      await expect(label).toBeVisible();
+      const box = await label.boundingBox();
+      if (!box) continue;
+      expect(box.width).toBeGreaterThan(0);
+      expect(box.width).toBeGreaterThan(box.height * 1.1);
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(viewportWidth + 1);
+      const writingMode = await label.evaluate((el) => getComputedStyle(el).writingMode);
+      expect(writingMode).toBe('horizontal-tb');
+      const transform = await label.evaluate((el) => getComputedStyle(el).transform);
+      expect(transform === 'none' || transform === 'matrix(1, 0, 0, 1, 0, 0)').toBeTruthy();
+    }
+  };
+
   test('default state has no solo enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');
@@ -102,5 +124,18 @@ test.describe('Config page SID solo routing', () => {
     await expect(page.getByLabel('Solo Vol Socket 1')).not.toBeChecked();
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe('+1 dB');
     await snap(page, testInfo, 'solo-cleared');
+  });
+
+  test('config labels stay horizontal at narrow widths', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await page.goto('/config');
+
+    await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    await assertLabelsHorizontal(page, 'Audio Mixer', 360);
+
+    await page.getByRole('button', { name: 'Drive A Settings' }).click();
+    await assertLabelsHorizontal(page, 'Drive A Settings', 360);
+
+    await snap(page, testInfo, 'config-labels-horizontal');
   });
 });

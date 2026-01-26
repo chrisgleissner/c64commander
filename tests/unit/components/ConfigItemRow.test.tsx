@@ -307,3 +307,96 @@ describe('ConfigItemRow slider and input behaviors', () => {
     expect(onValueChange).not.toHaveBeenCalled();
   });
 });
+
+describe('ConfigItemRow adaptive layout', () => {
+  const setLayoutMetrics = (
+    layoutEl: HTMLElement,
+    labelEl: HTMLElement,
+    metrics: { containerWidth: number; labelWidth: number; labelHeight: number },
+  ) => {
+    Object.defineProperty(layoutEl, 'clientWidth', {
+      value: metrics.containerWidth,
+      configurable: true,
+    });
+    Object.defineProperty(labelEl, 'scrollWidth', {
+      value: metrics.labelWidth,
+      configurable: true,
+    });
+    labelEl.getBoundingClientRect = () => ({
+      width: metrics.labelWidth,
+      height: metrics.labelHeight,
+      top: 0,
+      left: 0,
+      bottom: metrics.labelHeight,
+      right: metrics.labelWidth,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    } as DOMRect);
+  };
+
+  it('uses horizontal layout when label and widget fit', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="VolUltiSid1+6dB"
+        value="0 dB"
+        options={['-6 dB', '0 dB', '+6 dB']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    const layout = screen.getByTestId('config-item-layout');
+    const label = screen.getByTestId('config-item-label');
+    setLayoutMetrics(layout, label, { containerWidth: 640, labelWidth: 140, labelHeight: 16 });
+    fireEvent(window, new Event('resize'));
+
+    await waitFor(() => {
+      expect(layout).toHaveAttribute('data-layout', 'horizontal');
+    });
+    expect(label.className).toContain('whitespace-nowrap');
+  });
+
+  it('switches to vertical layout when label would overflow horizontally', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Audio Mixer"
+        name="VolUltiSid1+6dB"
+        value="0 dB"
+        options={['-6 dB', '0 dB', '+6 dB']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    const layout = screen.getByTestId('config-item-layout');
+    const label = screen.getByTestId('config-item-label');
+    setLayoutMetrics(layout, label, { containerWidth: 240, labelWidth: 140, labelHeight: 16 });
+    fireEvent(window, new Event('resize'));
+
+    await waitFor(() => {
+      expect(layout).toHaveAttribute('data-layout', 'vertical');
+    });
+    expect(label.className).toContain('break-words');
+  });
+
+  it('forces vertical layout when label appears vertically stacked', async () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Drive A Settings"
+        name="DriveType123456"
+        value="1541"
+        options={['1541', '1571', '1581']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    const layout = screen.getByTestId('config-item-layout');
+    const label = screen.getByTestId('config-item-label');
+    setLayoutMetrics(layout, label, { containerWidth: 640, labelWidth: 12, labelHeight: 64 });
+    fireEvent(window, new Event('resize'));
+
+    await waitFor(() => {
+      expect(layout).toHaveAttribute('data-layout', 'vertical');
+    });
+  });
+});
