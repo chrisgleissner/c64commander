@@ -39,6 +39,7 @@ if (!Element.prototype.scrollIntoView) {
 // Radix Slider uses ResizeObserver in JSDOM.
 if (typeof (window as any).ResizeObserver === "undefined") {
   (window as any).ResizeObserver = class {
+    constructor(_callback?: ResizeObserverCallback) {}
     observe() {}
     unobserve() {}
     disconnect() {}
