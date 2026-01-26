@@ -21,7 +21,7 @@
 - [x] Step: move type filters under “Filter files” + wire filtering logic.
 - [x] Step: overflow hardening (global) + add/extend regression tests.
 - [x] Step: Audio Mixer “SOLO” spacing fix + validate screenshots.
-- [ ] Step: add screenshot artifact doc/img/app-play-demo.png (from ./local-build.sh --screenshots) + update expectations if needed.
+- [x] Step: add screenshot artifact doc/img/app-play-demo.png (from ./local-build.sh --screenshots) + update expectations if needed.
 - [ ] Step: coverage improvements to reach >= 88%.
 
 ## 3) Final verification
