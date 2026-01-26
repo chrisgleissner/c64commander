@@ -45,8 +45,12 @@
 	- node scripts/check-coverage-threshold.mjs (Line coverage: 89.01%)
 
 ## 7) Final verification
-- [ ] Run full local verification (unit, Playwright, screenshots, local-build).
-- [ ] Confirm screenshots match expectations.
-- [ ] Confirm coverage >= 88.5%.
-- [ ] Confirm no overflow regressions.
-- [ ] Mark all items complete only when verified green.
+- [x] Run full local verification (unit, Playwright, screenshots, local-build).
+	- ./local-build.sh --screenshots (passed locally)
+- [x] Confirm screenshots match expectations.
+	- npm run screenshots (2 passed)
+- [x] Confirm coverage >= 88.5%.
+	- npm run test:coverage (89.01% lines)
+- [x] Confirm no overflow regressions.
+	- npm run test:e2e (267 passed)
+- [x] Mark all items complete only when verified green.
