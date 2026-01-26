@@ -463,7 +463,7 @@ test.describe('Layout overflow safeguards', () => {
       await snap(page, testInfo, `matrix-disks-${viewport.label}`);
       await expectNoHorizontalOverflow(page);
 
-      const diskAddItems = page.getByRole('button', { name: /Add items|Add more items/i });
+      const diskAddItems = page.getByRole('button', { name: /Add disks|Add more disks/i });
       if (await diskAddItems.isVisible({ timeout: 2000 }).catch(() => false)) {
         await diskAddItems.click();
         const diskDialog = page.getByRole('dialog');

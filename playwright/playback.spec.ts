@@ -169,6 +169,15 @@ test.describe('Playback file browser', () => {
     await expect(page.getByTestId('action-list-scroll')).not.toContainText('Alpha.sid');
   });
 
+  test('play add button uses "Add items" label and opens dialog', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    const addButton = page.getByRole('button', { name: 'Add items' });
+    await expect(addButton).toBeVisible();
+    await addButton.click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await snap(page, testInfo, 'add-items-opened');
+  });
+
   test('alphabet overlay does not affect list metrics', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '5');

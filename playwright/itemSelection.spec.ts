@@ -272,7 +272,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-open');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
 
@@ -289,7 +289,7 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-initial');
 
     // Open add items dialog
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     await snap(page, testInfo, 'add-items-opened');
 
     // Select C64 Ultimate source
@@ -350,7 +350,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
@@ -402,7 +402,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
@@ -417,7 +417,7 @@ test.describe('Item Selection Dialog UX', () => {
     });
     expect(firstCount).toBeGreaterThan(0);
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -469,14 +469,14 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'disks-initial');
 
     for (let i = 0; i < 2; i += 1) {
-      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
       await expect(page.getByRole('dialog')).toBeHidden();
     }
 
     const addDisk = async (diskName: string) => {
-      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
       const dialog = page.getByRole('dialog');
       await clickSourceSelectionButton(dialog, 'C64 Ultimate');
       await ensureRemoteRoot(dialog);

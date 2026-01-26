@@ -43,8 +43,8 @@ test.describe('Critical CTA Coverage', () => {
     await page.goto('/disks');
     await attachStepScreenshot(page, testInfo, 'disks-page');
 
-    // Find "Add items" or "Add more items" button
-    const addButton = page.getByRole('button', { name: /Add (more )?items/i });
+    // Find "Add disks" or "Add more disks" button
+    const addButton = page.getByRole('button', { name: /Add (more )?disks/i });
     await expect(addButton).toBeVisible();
     await attachStepScreenshot(page, testInfo, 'add-button-visible');
 
