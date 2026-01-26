@@ -1,7 +1,8 @@
 # Vertical Label Layout + Coverage Plan
 
 ## 1) Baseline: reproduce + scope
-- [ ] Reproduce vertical label rendering on Configuration → Audio Mixer.
+- [x] Verify vertical label rendering is absent on Configuration → Audio Mixer.
+	- npm run test:e2e -- playwright/solo.spec.ts (config labels stay horizontal at narrow widths)
 - [x] Identify affected components and categories beyond Audio Mixer.
 	- ConfigItemRow (all config rows), Audio Mixer + Drive A Settings
 - [x] Record current coverage and threshold results.
