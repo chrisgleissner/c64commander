@@ -126,28 +126,24 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'reshuffle-changed');
   });
 
-  test('shuffle category checkboxes filter eligible files @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('playlist type filters hide non-matching files @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play'));
     await snap(page, testInfo, 'playlist-ready');
 
-    await page.getByTestId('playback-recurse').scrollIntoViewIfNeeded();
-    const shuffleCheckbox = page.getByTestId('playback-shuffle');
-    await shuffleCheckbox.click();
-    await snap(page, testInfo, 'shuffle-enabled');
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
 
-    // Category checkboxes appear after shuffle is enabled (indices 3+ are categories)
-    const sidCategoryCheckbox = page.getByTestId('shuffle-category-sid');
-    if (await sidCategoryCheckbox.isVisible()) {
-      await expect(sidCategoryCheckbox).toBeChecked();
-      await sidCategoryCheckbox.click();
-      await expect(sidCategoryCheckbox).not.toBeChecked();
-      await snap(page, testInfo, 'sid-category-unchecked');
-    } else {
-      await snap(page, testInfo, 'category-checkboxes-not-visible');
-    }
+    const sidCategoryCheckbox = page.getByTestId('playlist-type-sid');
+    await expect(sidCategoryCheckbox).toBeChecked();
+    await sidCategoryCheckbox.click();
+    await expect(sidCategoryCheckbox).not.toBeChecked();
+    await snap(page, testInfo, 'sid-category-unchecked');
+
+    await expect(page.getByTestId('playlist-item')).toHaveCount(1);
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.d64');
+    await expect(page.getByTestId('playlist-list')).not.toContainText('demo.sid');
   });
 
   test('repeat mode checkbox toggles state @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {

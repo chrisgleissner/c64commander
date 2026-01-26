@@ -279,7 +279,7 @@ export default function PlayFilesPage() {
   const [recurseFolders, setRecurseFolders] = useState(true);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
-  const [shuffleCategories, setShuffleCategories] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
+  const [playlistTypeFilters, setPlaylistTypeFilters] = useState<PlayFileCategory[]>(CATEGORY_OPTIONS);
   const [isPlaylistLoading, setIsPlaylistLoading] = useState(false);
   const [selectedPlaylistIds, setSelectedPlaylistIds] = useState<Set<string>>(new Set());
   const [songPickerOpen, setSongPickerOpen] = useState(false);
@@ -1447,8 +1447,8 @@ export default function PlayFilesPage() {
   const hasPrev = currentIndex > 0;
   const hasNext = hasPlaylist && (currentIndex < playlist.length - 1 || repeatEnabled);
 
-  const toggleShuffleCategory = (category: PlayFileCategory) => {
-    setShuffleCategories((prev) =>
+  const togglePlaylistTypeFilter = (category: PlayFileCategory) => {
+    setPlaylistTypeFilters((prev) =>
       prev.includes(category) ? prev.filter((item) => item !== category) : [...prev, category],
     );
   };
@@ -2099,7 +2099,10 @@ export default function PlayFilesPage() {
     return calculatePlaylistTotals(durations, playedMs);
   }, [playlist, playedMs, playlistItemDuration]);
 
-  const filteredPlaylist = useMemo(() => playlist, [playlist]);
+  const filteredPlaylist = useMemo(
+    () => playlist.filter((item) => playlistTypeFilters.includes(item.category)),
+    [playlist, playlistTypeFilters],
+  );
 
   const playlistListItems = useMemo(() => {
     const items: ActionListItem[] = [];
@@ -2448,20 +2451,6 @@ export default function PlayFilesPage() {
                 ) : null}
               </div>
             ) : null}
-            <div className="flex flex-wrap gap-2">
-              {CATEGORY_OPTIONS.map((category) => (
-                <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Checkbox
-                    checked={shuffleCategories.includes(category)}
-                    onCheckedChange={() => toggleShuffleCategory(category)}
-                    disabled={!shuffleEnabled}
-                    aria-label={formatPlayCategory(category)}
-                    data-testid={`shuffle-category-${category}`}
-                  />
-                  {formatPlayCategory(category)}
-                </label>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -2481,6 +2470,21 @@ export default function PlayFilesPage() {
           viewAllTitle="Playlist"
           listTestId="playlist-list"
           rowTestId="playlist-item"
+          filterHeader={(
+            <div className="flex flex-wrap gap-2">
+              {CATEGORY_OPTIONS.map((category) => (
+                <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <Checkbox
+                    checked={playlistTypeFilters.includes(category)}
+                    onCheckedChange={() => togglePlaylistTypeFilter(category)}
+                    aria-label={formatPlayCategory(category)}
+                    data-testid={`playlist-type-${category}`}
+                  />
+                  {formatPlayCategory(category)}
+                </label>
+              ))}
+            </div>
+          )}
           headerActions={
             <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
               {hasPlaylist ? 'Add more items' : 'Add items'}

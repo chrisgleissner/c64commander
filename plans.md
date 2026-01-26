@@ -18,7 +18,7 @@
 
 ## 2) Stepwise implementation (each step = code change → tests → commit)
 - [x] Step: progress slider layout change (passed left, remaining right) + remove “Played: 0:00”.
-- [ ] Step: move type filters under “Filter files” + wire filtering logic.
+- [x] Step: move type filters under “Filter files” + wire filtering logic.
 - [ ] Step: overflow hardening (global) + add/extend regression tests.
 - [ ] Step: Audio Mixer “SOLO” spacing fix + validate screenshots.
 - [ ] Step: add screenshot artifact doc/img/app-play-demo.png (from ./local-build.sh --screenshots) + update expectations if needed.
