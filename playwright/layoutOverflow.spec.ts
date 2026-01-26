@@ -244,6 +244,40 @@ test.describe('Layout overflow safeguards', () => {
     }
   });
 
+  layoutTest('settings page handles long hostnames without overflow @layout', async ({ page }, testInfo) => {
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    const hostInput = page.getByLabel('C64U Hostname / IP');
+    await hostInput.fill('super-long-hostname-with-many-subdomains-and-segments-that-should-wrap-without-overflow.example.c64u.local');
+    const passwordInput = page.getByLabel('Network Password');
+    await passwordInput.fill('ultra-long-password-value-that-should-not-force-horizontal-scrolling-on-small-devices');
+    await snap(page, testInfo, 'settings-long-hostname');
+    await expectNoHorizontalOverflow(page);
+  });
+
+  layoutTest('settings logs handle long error messages without overflow @layout', async ({ page }, testInfo) => {
+    await page.addInitScript(() => {
+      const payload = [
+        {
+          id: 'long-error-1',
+          level: 'error',
+          message: 'Extremely-long-error-message-with-a-very-long-url-https://example.c64u.local/some/really/long/path/that/should-not-overflow',
+          timestamp: new Date().toISOString(),
+          details: {
+            requestUrl: 'https://example.c64u.local/some/really/long/path/that/should-not-overflow?with=query&and=parameters',
+          },
+        },
+      ];
+      localStorage.setItem('c64u_app_logs', JSON.stringify(payload));
+    });
+
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Logs' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await snap(page, testInfo, 'settings-long-log');
+    await expectNoHorizontalOverflow(page);
+  });
+
   layoutTest('play dialogs stay within viewport @layout', async ({ page }, testInfo) => {
     await page.addInitScript(() => {
       const payload = {

@@ -141,6 +141,15 @@
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
+  :where(p, span, a, button, label, li, td, th) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  :where(.flex > *, .grid > *) {
+    min-width: 0;
+  }
+
   /* Custom font families */
   .font-mono {
     font-family: 'JetBrains Mono', ui-monospace, monospace;

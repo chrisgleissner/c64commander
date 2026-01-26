@@ -9,7 +9,7 @@ export const PathWrap = ({ path, className }: PathWrapProps) => {
   if (!path) return null;
   const parts = String(path).split(/([\\/])/g);
   return (
-    <span className={cn('break-normal whitespace-normal', className)}>
+    <span className={cn('break-words whitespace-normal', className)}>
       {parts.map((part, index) =>
         part === '/' || part === '\\' ? (
           <span key={`${part}-${index}`}>
