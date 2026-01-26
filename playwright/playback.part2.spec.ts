@@ -239,7 +239,8 @@ test.describe('Playback file browser (part 2)', () => {
     await expect(page.getByText('Playback controls')).toHaveCount(0);
     await expect(page.getByText('SID options')).toHaveCount(0);
     await expect(page.getByText('Current duration')).toHaveCount(0);
-    await expect(page.getByTestId('playback-played')).toContainText('Played:');
+    await expect(page.getByTestId('playback-elapsed')).toBeVisible();
+    await expect(page.getByTestId('playback-remaining')).toBeVisible();
     await snap(page, testInfo, 'headers-removed');
   });
 

@@ -25,8 +25,15 @@
 - [x] Step: coverage improvements to reach >= 88%.
 
 ## 3) Final verification
-- [ ] Run full local verification including unit tests, Playwright, coverage, and ./local-build.sh --screenshots.
-- [ ] Confirm “Web | Screenshots” expectations pass locally.
-- [ ] Confirm coverage >= 88%.
-- [ ] Confirm no overflow regressions with long filenames/hostnames/errors.
-- [ ] Mark all items complete only when verified green.
+- [x] Run full local verification including unit tests, Playwright, coverage, and ./local-build.sh --screenshots.
+	- npm run test:coverage (88.1% lines)
+	- npm run test:e2e (266 passed)
+	- npm run screenshots (2 passed)
+	- ./local-build.sh --screenshots (passed locally)
+- [x] Confirm “Web | Screenshots” expectations pass locally.
+	- npm run screenshots (2 passed)
+- [x] Confirm coverage >= 88%.
+	- node scripts/check-coverage-threshold.mjs (Line coverage: 88.11%)
+- [x] Confirm no overflow regressions with long filenames/hostnames/errors.
+	- npm run test:e2e (layout overflow specs passed)
+- [x] Mark all items complete only when verified green.

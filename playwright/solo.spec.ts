@@ -53,8 +53,8 @@ test.describe('Config page SID solo routing', () => {
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe('OFF');
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe('OFF');
 
-    await expect(page.getByText('Vol Socket 1').locator('..').getByText('-6 dB')).toBeVisible();
-    await expect(page.getByText('Vol Socket 2').locator('..').getByText('+1 dB')).toBeVisible();
+    await expect(page.getByTestId('audio-mixer-value-vol-socket-1')).toHaveText('-6 dB');
+    await expect(page.getByTestId('audio-mixer-value-vol-socket-2')).toHaveText('+1 dB');
     await snap(page, testInfo, 'mix-muted');
   });
 
