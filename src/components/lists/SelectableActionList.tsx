@@ -27,6 +27,7 @@ export type ActionListItem = {
   title: string;
   titleSuffix?: string | null;
   subtitle?: string | null;
+  filterText?: string | null;
   meta?: React.ReactNode;
   icon?: React.ReactNode;
   variant?: 'item' | 'header';
@@ -62,6 +63,7 @@ export type SelectableActionListProps = {
   rowTestId?: string;
   headerActions?: React.ReactNode;
   filterHeader?: React.ReactNode;
+  filterPlaceholder?: string;
   showSelectionControls?: boolean;
   selectionLabel?: string;
 };
@@ -204,6 +206,7 @@ export const SelectableActionList = ({
   rowTestId,
   headerActions,
   filterHeader,
+  filterPlaceholder = 'Filter files...',
   showSelectionControls = true,
   selectionLabel,
 }: SelectableActionListProps) => {
@@ -217,8 +220,10 @@ export const SelectableActionList = ({
     const lower = filterText.toLowerCase();
     return items.filter(item => {
       if (item.variant === 'header') return true; // Keep headers for now
+      const extra = item.filterText?.toLowerCase() ?? '';
       return item.title.toLowerCase().includes(lower) || 
-             item.subtitle?.toLowerCase().includes(lower);
+             item.subtitle?.toLowerCase().includes(lower) ||
+             extra.includes(lower);
     });
   }, [items, filterText]);
 
@@ -227,8 +232,10 @@ export const SelectableActionList = ({
     const lower = viewAllFilterText.toLowerCase();
     return items.filter(item => {
       if (item.variant === 'header') return true; // Keep headers for now
+      const extra = item.filterText?.toLowerCase() ?? '';
       return item.title.toLowerCase().includes(lower) || 
-             item.subtitle?.toLowerCase().includes(lower);
+             item.subtitle?.toLowerCase().includes(lower) ||
+             extra.includes(lower);
     });
   }, [items, viewAllFilterText]);
   
@@ -291,7 +298,7 @@ export const SelectableActionList = ({
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           type="text"
-          placeholder="Filter files..."
+          placeholder={filterPlaceholder}
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
           className="pl-9 pr-9 h-9"
@@ -362,7 +369,7 @@ export const SelectableActionList = ({
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input
                     type="text"
-                    placeholder="Filter files..."
+                    placeholder={filterPlaceholder}
                     value={viewAllFilterText}
                     onChange={(e) => setViewAllFilterText(e.target.value)}
                     className="pl-9 pr-9 h-9"

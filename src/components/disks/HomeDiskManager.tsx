@@ -258,20 +258,9 @@ export const HomeDiskManager = () => {
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([name, count]) => ({ name, count, color: pickDiskGroupColor(name) }));
   }, [diskLibrary.disks]);
-  const filterText = diskLibrary.filter.trim().toLowerCase();
   const sortedDisks = useMemo(
     () => diskLibrary.disks.slice().sort((a, b) => a.path.localeCompare(b.path)),
     [diskLibrary.disks],
-  );
-  const matchesFilter = useCallback(
-    (disk: DiskEntry) => {
-      if (!filterText) return true;
-      const name = disk.name.toLowerCase();
-      const path = disk.path.toLowerCase();
-      const group = disk.group?.toLowerCase() ?? '';
-      return name.includes(filterText) || path.includes(filterText) || group.includes(filterText);
-    },
-    [filterText],
   );
 
   const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) => {
@@ -716,8 +705,6 @@ export const HomeDiskManager = () => {
           });
           lastFolder = folderPath;
         }
-        const matches = matchesFilter(disk);
-        const isDimmed = filterText.length > 0 && !matches;
         const groupColor = disk.group ? pickDiskGroupColor(disk.group) : null;
         const groupMeta = disk.group ? (
           <span className="flex items-center gap-1 min-w-0">
@@ -728,12 +715,12 @@ export const HomeDiskManager = () => {
         acc.push({
           id: disk.id,
           title: disk.name,
+          filterText: `${disk.name} ${disk.path} ${disk.group ?? ''}`,
           meta: groupMeta,
           icon: <LocationIcon location={disk.location} />,
           selected: selectedDiskIds.has(disk.id),
           onSelectToggle: (selected) => handleDiskSelect(disk, selected),
           menuItems: buildDiskMenuItems(disk, options?.disableActions),
-          isDimmed,
           disableActions: options?.disableActions,
           actionLabel: 'Mount',
           onAction: () => options?.onMount?.(disk),
@@ -745,7 +732,7 @@ export const HomeDiskManager = () => {
         return acc;
       }, []);
     },
-    [buildDiskMenuItems, filterText.length, handleDiskSelect, matchesFilter, selectedDiskIds],
+    [buildDiskMenuItems, handleDiskSelect, selectedDiskIds],
   );
 
   const driveRows = DRIVE_KEYS.map((key) => {
@@ -876,24 +863,6 @@ export const HomeDiskManager = () => {
           <span className="w-1.5 h-1.5 rounded-full bg-primary" />
           Disks
         </h3>
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Filter disks…"
-              value={diskLibrary.filter}
-              onChange={(event) => diskLibrary.setFilter(event.target.value)}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2"
-              onClick={() => diskLibrary.setFilter('')}
-              aria-label="Clear filter"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
 
         <SelectableActionList
           title="Disk list"
@@ -917,15 +886,15 @@ export const HomeDiskManager = () => {
           onRemoveSelected={() => setBulkDeleteOpen(true)}
           maxVisible={listPreviewLimit}
           viewAllTitle="All disks"
+          filterPlaceholder="Filter disks..."
           listTestId="disk-list"
           rowTestId="disk-row"
+          headerActions={
+            <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+              {diskLibrary.disks.length ? 'Add more disks' : 'Add disks'}
+            </Button>
+          }
         />
-
-        <div className="flex flex-col gap-2">
-          <Button variant="outline" onClick={() => setBrowserOpen(true)}>
-            {diskLibrary.disks.length ? 'Add more items' : 'Add items'}
-          </Button>
-        </div>
       </section>
 
       <input
