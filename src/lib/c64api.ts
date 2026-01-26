@@ -215,7 +215,9 @@ export class C64API {
           baseUrl,
           deviceHost: this.deviceHost,
         });
-        throw new Error('Fuzz mode blocked request');
+        const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
+        blocked.__fuzzBlocked = true;
+        throw blocked;
       }
       if (isNativePlatform()) {
         const body = options.body ? options.body : undefined;
@@ -255,11 +257,14 @@ export class C64API {
 
       return this.parseResponseJson<T>(response);
     } catch (error) {
-      addErrorLog('C64 API request failed', {
-        path,
-        url,
-        error: (error as Error).message,
-      });
+      const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
+      if (!fuzzBlocked) {
+        addErrorLog('C64 API request failed', {
+          path,
+          url,
+          error: (error as Error).message,
+        });
+      }
       throw error;
     } finally {
       this.logRestCall(method, path, status, startedAt);

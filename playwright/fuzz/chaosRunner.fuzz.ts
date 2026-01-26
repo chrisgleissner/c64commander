@@ -97,10 +97,20 @@ const buildSignature = (issue: IssueRecord): IssueSignature => {
   return { exception, message, topFrames };
 };
 
+const hashString = (value: string) => {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 33) ^ value.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+};
+
 const buildGroupId = (signature: IssueSignature) => {
   const frame = signature.topFrames[0] || 'unknown';
   const base = `${signature.exception}@${frame}`;
-  return base.replace(/[^a-z0-9@._:-]+/gi, '-').slice(0, 120);
+  const signatureKey = `${signature.exception}|${signature.message}|${signature.topFrames.join('|')}`;
+  const hash = hashString(signatureKey).slice(0, 8);
+  return `${base}-${hash}`.replace(/[^a-z0-9@._:-]+/gi, '-').slice(0, 128);
 };
 
 const parseActionTimeout = (error: unknown) => {
@@ -692,9 +702,7 @@ test.describe('Chaos fuzz', () => {
         try {
           const recorded = await video.path();
           if (issue) {
-            const safeName = issue
-              ? buildGroupId(buildSignature(issue))
-              : sessionId;
+            const safeName = buildGroupId(buildSignature(issue));
             const target = path.join(videosDir, `${safeName}-${sessionId}.webm`);
             await fs.rename(recorded, target).catch(async () => {
               await fs.copyFile(recorded, target);

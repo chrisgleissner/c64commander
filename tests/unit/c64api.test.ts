@@ -4,6 +4,7 @@ import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
+import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
@@ -16,9 +17,16 @@ vi.mock('@capacitor/core', () => ({
   },
 }));
 
+vi.mock('@/lib/fuzz/fuzzMode', () => ({
+  isFuzzModeEnabled: vi.fn(() => false),
+  isFuzzSafeBaseUrl: vi.fn(() => true),
+}));
+
 const addErrorLogMock = vi.mocked(addErrorLog);
 const addLogMock = vi.mocked(addLog);
 const capacitorRequestMock = vi.mocked(CapacitorHttp.request);
+const fuzzEnabledMock = vi.mocked(isFuzzModeEnabled);
+const fuzzSafeMock = vi.mocked(isFuzzSafeBaseUrl);
 
 describe('c64api', () => {
   beforeEach(() => {
@@ -26,6 +34,10 @@ describe('c64api', () => {
     addErrorLogMock.mockReset();
     addLogMock.mockReset();
     capacitorRequestMock.mockReset();
+    fuzzEnabledMock.mockReset();
+    fuzzSafeMock.mockReset();
+    fuzzEnabledMock.mockReturnValue(false);
+    fuzzSafeMock.mockReturnValue(true);
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     vi.stubGlobal('fetch', vi.fn());
     resetConfigWriteThrottle();
@@ -79,6 +91,34 @@ describe('c64api', () => {
       path: '/v1/info',
       status: 500,
     }));
+  });
+
+  it('blocks requests in fuzz mode for non-local base urls', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fuzzEnabledMock.mockReturnValue(true);
+    fuzzSafeMock.mockReturnValue(false);
+
+    const api = new C64API('http://example.com');
+    await expect(api.getInfo()).rejects.toThrow('Fuzz mode blocked request');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).toHaveBeenCalledWith('Fuzz mode blocked real device request', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows requests in fuzz mode for safe base urls', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    fuzzEnabledMock.mockReturnValue(true);
+    fuzzSafeMock.mockReturnValue(true);
+
+    const api = new C64API('http://127.0.0.1');
+    await expect(api.getInfo()).resolves.toBeTruthy();
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it('uses CapacitorHttp on native platforms', async () => {

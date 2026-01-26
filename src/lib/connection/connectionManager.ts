@@ -326,7 +326,6 @@ export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   applyFuzzModeDefaults();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
-  demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   setSnapshot({
     state: 'UNKNOWN',
     lastDiscoveryTrigger: null,

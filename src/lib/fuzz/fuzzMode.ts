@@ -60,9 +60,18 @@ export const applyFuzzModeDefaults = () => {
 const isLocalHost = (host: string) =>
   host === '127.0.0.1' || host === 'localhost' || host === '0.0.0.0';
 
+const isSafeMockBaseUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return isLocalHost(url.hostname);
+  } catch {
+    return !value.startsWith('http://') && !value.startsWith('https://');
+  }
+};
+
 export const isFuzzSafeBaseUrl = (baseUrl: string) => {
   const fuzzMock = getFuzzMockBaseUrl();
-  if (fuzzMock && baseUrl === fuzzMock) return true;
+  if (fuzzMock && baseUrl === fuzzMock && isSafeMockBaseUrl(fuzzMock)) return true;
   try {
     const url = new URL(baseUrl);
     return isLocalHost(url.hostname);

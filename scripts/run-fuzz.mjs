@@ -44,11 +44,13 @@ const budgetMs = parseDurationMs(timeBudget);
 if (budgetMs) env.FUZZ_TIME_BUDGET_MS = String(budgetMs);
 
 const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-const child = spawn(
-  cmd,
-  ['playwright', 'test', 'playwright/fuzz/chaosRunner.fuzz.ts', '--workers=1'],
-  { stdio: 'inherit', env },
-);
+const playwrightArgs = ['playwright', 'test', 'playwright/fuzz/chaosRunner.fuzz.ts', '--workers=1'];
+
+if (platform) {
+  playwrightArgs.push('--project', platform);
+}
+
+const child = spawn(cmd, playwrightArgs, { stdio: 'inherit', env });
 
 child.on('exit', (code) => {
   process.exit(code ?? 1);
