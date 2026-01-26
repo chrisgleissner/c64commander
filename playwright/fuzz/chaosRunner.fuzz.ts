@@ -243,22 +243,47 @@ const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
   return true;
 };
 
+const jitterClick = async (
+  page: import('@playwright/test').Page,
+  target: import('@playwright/test').ElementHandle<HTMLElement>,
+  rng: SeededRng,
+  clickCount = 1,
+  delay = 0,
+) => {
+  const box = await target.boundingBox();
+  if (!box) {
+    await showInteractionPulse(page, target);
+    await target.click({ clickCount, delay });
+    return;
+  }
+  for (let i = 0; i < clickCount; i += 1) {
+    const jitterX = rng.int(-Math.max(1, Math.floor(box.width * 0.25)), Math.max(1, Math.floor(box.width * 0.25)));
+    const jitterY = rng.int(-Math.max(1, Math.floor(box.height * 0.25)), Math.max(1, Math.floor(box.height * 0.25)));
+    const x = box.x + box.width / 2 + jitterX;
+    const y = box.y + box.height / 2 + jitterY;
+    await page.evaluate(({ x: xPos, y: yPos }) => {
+      (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse?.(xPos, yPos);
+    }, { x, y });
+    await page.mouse.click(x, y, { delay, clickCount: 1 });
+    if (delay) await page.waitForTimeout(delay);
+  }
+};
+
 const safeClick = async (
   page: import('@playwright/test').Page,
   pick: { target: import('@playwright/test').ElementHandle<HTMLElement>; description: string },
   rng: SeededRng,
   selector: string,
+  options?: { clickCount?: number; delay?: number },
 ) => {
   try {
-    await showInteractionPulse(page, pick.target);
-    await pick.target.click();
+    await jitterClick(page, pick.target, rng, options?.clickCount ?? 1, options?.delay ?? 0);
     return { ok: true, log: `click ${pick.description}` };
   } catch (error) {
     const message = (error as Error)?.message || '';
     if (message.includes('intercepts pointer events')) {
       await closeBlockingOverlay(page);
-      await showInteractionPulse(page, pick.target);
-      await pick.target.click();
+      await jitterClick(page, pick.target, rng, options?.clickCount ?? 1, options?.delay ?? 0);
       return { ok: true, log: `click ${pick.description}` };
     }
     if (message.includes('not attached') || message.includes('Element is not attached')) {
@@ -269,8 +294,7 @@ const safeClick = async (
         async (element) => !(await isExternalOrBlankTarget(element)),
       );
       if (refreshed) {
-        await showInteractionPulse(page, refreshed.target);
-        await refreshed.target.click();
+        await jitterClick(page, refreshed.target, rng, options?.clickCount ?? 1, options?.delay ?? 0);
         return { ok: true, log: `click ${refreshed.description}` };
       }
     }
@@ -286,6 +310,25 @@ const randomText = (rng: SeededRng) => {
     chars.push(String.fromCharCode(code));
   }
   return chars.join('');
+};
+
+const randomKey = (rng: SeededRng) => {
+  const keys = ['Enter', 'Escape', 'Tab', 'Backspace', 'Delete', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'] as const;
+  return rng.pick([...keys]);
+};
+
+const randomViewportPoint = async (page: import('@playwright/test').Page, rng: SeededRng) => {
+  const viewport = page.viewportSize();
+  if (viewport?.width && viewport?.height) {
+    return {
+      x: rng.int(4, Math.max(5, viewport.width - 4)),
+      y: rng.int(4, Math.max(5, viewport.height - 4)),
+    };
+  }
+  return page.evaluate(() => ({
+    x: Math.max(4, Math.floor(Math.random() * (window.innerWidth - 8)) + 4),
+    y: Math.max(4, Math.floor(Math.random() * (window.innerHeight - 8)) + 4),
+  }));
 };
 
 const writeJson = async (filePath: string, payload: unknown) => {
@@ -624,7 +667,7 @@ test.describe('Chaos fuzz', () => {
       const actions = [
         {
           name: 'click',
-          weight: 28,
+          weight: 20,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, 'button, [role="button"], a[href], [data-clickable="true"]');
@@ -644,7 +687,9 @@ test.describe('Chaos fuzz', () => {
             );
             if (!pick) return { log: 'click skip' };
             const isExternal = await isExternalOrBlankTarget(pick.target);
-            const result = await safeClick(page, pick, rng, selector);
+            const clickCount = rng.int(1, 3);
+            const delay = rng.int(0, 20);
+            const result = await safeClick(page, pick, rng, selector, { clickCount, delay });
             if (isExternal) {
               externalClickUsed = true;
               clickActionsDisabled = true;
@@ -654,8 +699,89 @@ test.describe('Chaos fuzz', () => {
           },
         },
         {
-          name: 'tab',
+          name: 'rage-click',
+          weight: 16,
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            return hasVisibleElement(page, 'button, [role="button"], [role="tab"], [role="option"], a[href], [data-clickable="true"]');
+          },
+          run: async () => {
+            const selector = 'button, [role="button"], [role="tab"], [role="option"], a[href], [data-clickable="true"]';
+            const pick = await pickVisibleElement(page, selector, rng);
+            if (!pick) return { log: 'rage-click skip' };
+            const clickCount = rng.int(4, 8);
+            await safeClick(page, pick, rng, selector, { clickCount, delay: rng.int(0, 15) });
+            return { log: `rage-click ${pick.description} x${clickCount}` };
+          },
+        },
+        {
+          name: 'chaos-tap',
+          weight: 14,
+          canRun: async () => true,
+          run: async () => {
+            const point = await randomViewportPoint(page, rng);
+            const meta = await page.evaluate(({ x, y }) => {
+              const el = document.elementFromPoint(x, y) as HTMLElement | null;
+              if (!el) return { isExternal: false, tag: 'none' };
+              const anchor = el.closest('a') as HTMLAnchorElement | null;
+              if (!anchor) return { isExternal: false, tag: el.tagName.toLowerCase() };
+              const href = anchor.getAttribute('href') || '';
+              const target = anchor.getAttribute('target');
+              const external = target === '_blank' || /^https?:\/\//i.test(href) || (/^[a-z]+:/i.test(href) && !href.startsWith('/') && !href.startsWith('#'));
+              return { isExternal: external, tag: anchor.tagName.toLowerCase() };
+            }, point);
+            if (meta.isExternal && externalClickUsed) {
+              return { log: 'chaos-tap skip external' };
+            }
+            if (meta.isExternal) {
+              externalClickUsed = true;
+              clickActionsDisabled = true;
+            }
+            await page.evaluate(({ x, y }) => {
+              (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse?.(x, y);
+            }, point);
+            const clickCount = rng.int(1, 4);
+            for (let i = 0; i < clickCount; i += 1) {
+              await page.mouse.click(point.x, point.y, { delay: rng.int(0, 15) });
+            }
+            return { log: `chaos-tap ${Math.round(point.x)},${Math.round(point.y)} x${clickCount}` };
+          },
+        },
+        {
+          name: 'drag',
+          weight: 6,
+          canRun: async () => true,
+          run: async () => {
+            const start = await randomViewportPoint(page, rng);
+            const end = await randomViewportPoint(page, rng);
+            await page.evaluate(({ x, y }) => {
+              (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse?.(x, y);
+            }, start);
+            await page.mouse.move(start.x, start.y);
+            await page.mouse.down();
+            await page.mouse.move(end.x, end.y, { steps: rng.int(4, 10) });
+            await page.mouse.up();
+            return { log: `drag ${Math.round(start.x)},${Math.round(start.y)}->${Math.round(end.x)},${Math.round(end.y)}` };
+          },
+        },
+        {
+          name: 'random-key',
           weight: 10,
+          canRun: async () => true,
+          run: async () => {
+            const bursts = rng.int(1, 4);
+            const keys = [] as string[];
+            for (let i = 0; i < bursts; i += 1) {
+              const key = randomKey(rng);
+              keys.push(key);
+              await page.keyboard.press(key).catch(() => {});
+            }
+            return { log: `key ${keys.join(',')}` };
+          },
+        },
+        {
+          name: 'tab',
+          weight: 8,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, '.tab-bar button');
@@ -663,24 +789,29 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, '.tab-bar button', rng);
             if (!pick) return { log: 'tab skip' };
-            await showInteractionPulse(page, pick.target);
-            await pick.target.click();
+            await safeClick(page, pick, rng, '.tab-bar button', { clickCount: 1, delay: rng.int(0, 20) });
             return { log: `tab ${pick.description}` };
           },
         },
         {
           name: 'scroll',
-          weight: 12,
+          weight: 14,
           canRun: async () => true,
           run: async () => {
-            const delta = rng.int(-600, 600);
-            await page.mouse.wheel(0, delta);
-            return { log: `scroll ${delta}` };
+            const bursts = rng.int(1, 4);
+            const deltas = [] as number[];
+            for (let i = 0; i < bursts; i += 1) {
+              const delta = rng.int(-1000, 1000);
+              deltas.push(delta);
+              await page.mouse.wheel(0, delta);
+              await page.waitForTimeout(rng.int(0, 30));
+            }
+            return { log: `scroll ${deltas.join(',')}` };
           },
         },
         {
           name: 'select',
-          weight: 6,
+          weight: 8,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]');
@@ -688,14 +819,13 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]', rng);
             if (!pick) return { log: 'select skip' };
-            await showInteractionPulse(page, pick.target);
-            await pick.target.click();
+            await safeClick(page, pick, rng, '[role="option"], [role="menuitem"], li[role="option"]', { clickCount: 1, delay: rng.int(0, 20) });
             return { log: `select ${pick.description}` };
           },
         },
         {
           name: 'type',
-          weight: 8,
+          weight: 12,
           canRun: async () =>
             hasVisibleElement(page, 'input[type="text"], input[type="search"], textarea, [contenteditable="true"]'),
           run: async () => {
@@ -703,13 +833,18 @@ test.describe('Chaos fuzz', () => {
             if (!pick) return { log: 'type skip' };
             const text = randomText(rng);
             await showInteractionPulse(page, pick.target);
-            await pick.target.fill(text);
+            if (rng.next() > 0.4) {
+              await pick.target.click().catch(() => {});
+              await page.keyboard.type(text, { delay: rng.int(0, 15) });
+            } else {
+              await pick.target.fill(text);
+            }
             return { log: `type ${pick.description} "${text}"` };
           },
         },
         {
           name: 'toggle',
-          weight: 6,
+          weight: 8,
           canRun: async () => {
             if (clickActionsDisabled) return false;
             return hasVisibleElement(page, 'input[type="checkbox"], [role="switch"]');
@@ -717,8 +852,7 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, 'input[type="checkbox"], [role="switch"]', rng);
             if (!pick) return { log: 'toggle skip' };
-            await showInteractionPulse(page, pick.target);
-            await pick.target.click();
+            await safeClick(page, pick, rng, 'input[type="checkbox"], [role="switch"]', { clickCount: 1, delay: rng.int(0, 20) });
             return { log: `toggle ${pick.description}` };
           },
         },
@@ -729,13 +863,19 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const dialog = await page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
             if (dialog) {
-              await page.keyboard.press('Escape');
-              return { log: 'modal close' };
+              const buttons = await dialog.$$('button, [role="button"]');
+              if (buttons.length) {
+                const target = rng.pick(buttons);
+                await showInteractionPulse(page, target);
+                await target.click().catch(() => {});
+                return { log: 'modal button' };
+              }
+              await page.keyboard.press('Escape').catch(() => {});
+              return { log: 'modal escape' };
             }
             const pick = await pickVisibleElement(page, 'button[aria-haspopup="dialog"], [data-state="closed"][data-radix-collection-item]', rng);
             if (!pick) return { log: 'modal open skip' };
-            await showInteractionPulse(page, pick.target);
-            await pick.target.click();
+            await safeClick(page, pick, rng, 'button[aria-haspopup="dialog"], [data-state="closed"][data-radix-collection-item]', { clickCount: rng.int(1, 3), delay: rng.int(0, 15) });
             return { log: `modal open ${pick.description}` };
           },
         },
@@ -868,7 +1008,7 @@ test.describe('Chaos fuzz', () => {
           logInteraction(`s=${totalSteps}\ta=session\tmin-steps`);
           break;
         }
-        await page.waitForTimeout(rng.int(40, 200));
+        await page.waitForTimeout(rng.int(5, 80));
       }
 
       let route: string | undefined;
