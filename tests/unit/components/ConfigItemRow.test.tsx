@@ -261,6 +261,51 @@ describe('ConfigItemRow slider and input behaviors', () => {
     expect(screen.getByTestId('volume-value')).toHaveTextContent('0 dB');
   });
 
+  it('orders off/low/medium/high slider options', () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Fan Speed"
+        value="Low"
+        options={['Off', 'Low', 'Medium', 'High']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Fan Speed slider')).toBeTruthy();
+    expect(screen.getByText('Low')).toBeTruthy();
+  });
+
+  it('maps numeric values when option formatting differs', () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Gain"
+        value="0"
+        options={['0 dB', '+6 dB']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Gain slider')).toBeTruthy();
+    expect(screen.getByText('0 dB')).toBeTruthy();
+  });
+
+  it('supports left/center/right slider ordering', () => {
+    renderWithQuery(
+      <ConfigItemRow
+        category="Test Category"
+        name="Pan"
+        value="Center"
+        options={['Left 40', 'Right 20', 'Center']}
+        onValueChange={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText('Pan slider')).toBeTruthy();
+    expect(screen.getByText('Center')).toBeTruthy();
+  });
+
   it('commits text input on enter without waiting for debounce', () => {
     vi.useFakeTimers();
     try {
