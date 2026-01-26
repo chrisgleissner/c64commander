@@ -49,10 +49,13 @@ const getActiveProjects = () => {
   return projects.length > 0 ? projects : [phoneProject];
 };
 
+const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results/playwright';
+const reportDir = process.env.PLAYWRIGHT_REPORT_DIR || 'playwright-report';
+
 export default defineConfig({
   testDir: './playwright',
   testMatch: ['**/*.spec.ts', '**/*.test.ts', '**/*.fuzz.ts'],
-  outputDir: 'test-results/playwright',
+  outputDir,
   preserveOutput: 'always',
   workers: resolvedWorkers,
   timeout: 60000,
@@ -60,7 +63,7 @@ export default defineConfig({
   globalTeardown: './playwright/global-teardown-coverage.ts',
   reporter: [
     ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['html', { outputFolder: reportDir, open: 'never' }],
   ],
   projects: getActiveProjects(),
   use: {

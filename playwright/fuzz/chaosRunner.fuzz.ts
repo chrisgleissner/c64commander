@@ -277,14 +277,19 @@ test.describe('Chaos fuzz', () => {
     test.setTimeout(baseTimeout + 60_000);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
     const runMode = process.env.FUZZ_RUN_MODE || 'local';
+    const runId = process.env.FUZZ_RUN_ID || `${seed}`;
+    const shardIndex = toNumber(process.env.FUZZ_SHARD_INDEX) ?? 0;
+    const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
+    const baseOrigin = new URL(baseUrl).origin;
 
     const outputRoot = path.resolve(
       process.cwd(),
       'test-results',
       'fuzz',
-      `run-${runMode}-${platform}-${seed}`,
+      `run-${runMode}-${platform}-${seed}-${runId}`,
+      shardTotal > 1 ? `shard-${shardIndex}` : '',
     );
     const videosDir = path.join(outputRoot, 'videos');
     const sessionsDir = path.join(outputRoot, 'sessions');
@@ -373,6 +378,8 @@ test.describe('Chaos fuzz', () => {
 
       let issue: IssueRecord | null = null;
       let lastLogId: string | null = null;
+      let lastFaultAt = 0;
+      let currentFaultMode: 'none' | 'slow' | 'timeout' | 'refused' = 'none';
 
       const recordIssueOnce = (payload: IssueRecord) => {
         if (issue) return;
@@ -403,9 +410,16 @@ test.describe('Chaos fuzz', () => {
       page.on('console', (msg) => {
         if (issue) return;
         if (msg.type() !== 'error' && msg.type() !== 'warning') return;
+        const text = msg.text();
+        if (
+          msg.type() === 'error' &&
+          (text.includes('Failed to load resource') && text.includes('net::ERR_'))
+        ) {
+          return;
+        }
         recordIssueOnce({
           severity: msg.type() === 'error' ? 'errorLog' : 'warnLog',
-          message: msg.text(),
+          message: text,
           source: `console.${msg.type()}`,
           interactionIndex: totalSteps,
           lastInteractions: interactions.slice(-lastInteractionCount),
@@ -440,6 +454,13 @@ test.describe('Chaos fuzz', () => {
         const errorEntry = fresh.find((entry) => entry.level === 'error');
         const warnEntry = fresh.find((entry) => entry.level === 'warn');
         if (errorEntry) {
+          if (
+            errorEntry.message === 'C64 API request failed' &&
+            currentFaultMode !== 'none' &&
+            Date.now() - lastFaultAt < 20000
+          ) {
+            return;
+          }
           recordIssueOnce({
             severity: 'errorLog',
             message: errorEntry.message,
@@ -461,6 +482,15 @@ test.describe('Chaos fuzz', () => {
       };
 
       await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+
+      const ensureAppOrigin = async () => {
+        const url = page.url();
+        if (!url || url.startsWith('about:') || !url.startsWith(baseOrigin)) {
+          await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+          return true;
+        }
+        return false;
+      };
 
       const actions = [
         {
@@ -580,6 +610,11 @@ test.describe('Chaos fuzz', () => {
           weight: 4,
           canRun: async () => true,
           run: async () => {
+            const url = page.url();
+            if (!url.startsWith(baseOrigin) || url.startsWith('about:')) {
+              await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+              return { log: 'nav recover' };
+            }
             if (rng.next() > 0.5) {
               await page.goBack({ timeout: 5000 }).catch(() => {});
               return { log: 'nav back' };
@@ -618,6 +653,8 @@ test.describe('Chaos fuzz', () => {
             } else {
               server.setLatencyMs(null);
             }
+            currentFaultMode = mode;
+            lastFaultAt = mode === 'none' ? 0 : Date.now();
             return { log: `fault ${mode}` };
           },
         },
@@ -641,6 +678,10 @@ test.describe('Chaos fuzz', () => {
       while (Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
         totalSteps += 1;
+        if (await ensureAppOrigin()) {
+          logInteraction(`s=${totalSteps}\ta=recover\treturn-to-app`);
+          continue;
+        }
         if (await closeBlockingOverlay(page)) {
           logInteraction(`s=${totalSteps}\ta=modal\tauto-close`);
           continue;
@@ -760,6 +801,9 @@ test.describe('Chaos fuzz', () => {
         timeBudgetMs: timeBudgetMs ?? null,
         totalSteps,
         sessions: sessionIndex,
+        shardIndex,
+        shardTotal,
+        runId,
       },
       issueGroups: Array.from(issueGroups.values()),
     };

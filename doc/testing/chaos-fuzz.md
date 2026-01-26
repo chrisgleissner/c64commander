@@ -106,6 +106,17 @@ Use the same seed and platform, then re-run:
 - Local: `./local-build.sh --fuzz --seed <seed>`
 - Script: `node scripts/run-fuzz.mjs --seed <seed>`
 
+## Concurrency
+
+The fuzz runner supports concurrent shards. Each shard uses a unique Playwright port and writes to its own subdirectory, then results are merged into a consolidated report.
+
+- Default: number of CPU cores
+- Override: `--concurrency <n>` or `FUZZ_CONCURRENCY=<n>`
+
+Example:
+
+- `node scripts/run-fuzz.mjs --time-budget 15m --concurrency 4`
+
 The interaction logs and last-N traces in the issue report provide the step index where the failure occurred.
 
 ## Safety guarantees
