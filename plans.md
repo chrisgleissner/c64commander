@@ -22,7 +22,7 @@
 - [x] Step: overflow hardening (global) + add/extend regression tests.
 - [x] Step: Audio Mixer “SOLO” spacing fix + validate screenshots.
 - [x] Step: add screenshot artifact doc/img/app-play-demo.png (from ./local-build.sh --screenshots) + update expectations if needed.
-- [ ] Step: coverage improvements to reach >= 88%.
+- [x] Step: coverage improvements to reach >= 88%.
 
 ## 3) Final verification
 - [ ] Run full local verification including unit tests, Playwright, coverage, and ./local-build.sh --screenshots.
