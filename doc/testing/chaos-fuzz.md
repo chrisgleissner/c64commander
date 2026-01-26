@@ -6,7 +6,7 @@ This document describes the platform-agnostic chaos/fuzz runner built on Playwri
 
 - **Runner**: [playwright/fuzz/chaosRunner.fuzz.ts](../../playwright/fuzz/chaosRunner.fuzz.ts)
 - **Launcher**: [scripts/run-fuzz.mjs](../../scripts/run-fuzz.mjs)
-- **Artifacts**: `test-results/fuzz/run-<runMode>-<platform>-<seed>/`
+- **Artifacts**: `test-results/fuzz/run-<runMode>-<platform>-<seed>-<runId>/`
 - **App contract**: [src/lib/fuzz/fuzzMode.ts](../../src/lib/fuzz/fuzzMode.ts)
 
 The runner executes a series of **fuzz sessions**. Each session starts from a clean app state, records a Playwright video, performs weighted UI actions, and **terminates immediately** on the first detected issue. The session is reset and a new session begins until the run reaches its step or time budget.
@@ -73,8 +73,8 @@ Each session records a Playwright video:
 
 - Recording begins at clean launch.
 - Stops on issue or session completion.
-- Videos are kept **only for failing sessions**.
-- Video filenames are deterministic and tied to issue group + session ID.
+- Videos are kept for failing sessions, plus the last N successful sessions (default 10).
+- Video filenames are deterministic and tied to issue group + session ID for failures.
 
 ## Issue grouping strategy
 
@@ -103,21 +103,53 @@ Paste `fuzz-issue-summary.md` first, then attach `fuzz-issue-report.json` for st
 
 Use the same seed and platform, then re-run:
 
-- Local: `./local-build.sh --fuzz --seed <seed>`
-- Script: `node scripts/run-fuzz.mjs --seed <seed>`
+- Local: `./local-build.sh --fuzz --fuzz-seed <seed>`
+- Script: `node scripts/run-fuzz.mjs --fuzz-seed <seed>`
+
+If no seed is provided, the runner uses the current epoch milliseconds. Each shard uses baseSeed + shardIndex.
+If no time budget is provided, the runner defaults to 30 minutes.
 
 ## Concurrency
 
-The fuzz runner supports concurrent shards. Each shard uses a unique Playwright port and writes to its own subdirectory, then results are merged into a consolidated report.
+The fuzz runner supports concurrent shards. Each shard uses a unique Playwright port, then results are merged into a single consolidated artifact folder.
 
-- Default: number of CPU cores
-- Override: `--concurrency <n>` or `FUZZ_CONCURRENCY=<n>`
+- Default: number of physical CPU cores (best-effort; falls back to logical cores when unavailable)
+- Override: `--fuzz-concurrency <n>` or `FUZZ_CONCURRENCY=<n>`
 
 Example:
 
-- `node scripts/run-fuzz.mjs --time-budget 15m --concurrency 4`
+- `node scripts/run-fuzz.mjs --fuzz-time-budget 15m --fuzz-concurrency 4`
 
 The interaction logs and last-N traces in the issue report provide the step index where the failure occurred.
+
+## Session length controls
+
+Each session runs for at least **200 steps** by default. It will end early if no progress is detected for a configurable number of consecutive steps.
+
+- `FUZZ_MIN_SESSION_STEPS` (default: 200)
+- `FUZZ_NO_PROGRESS_STEPS` (default: 20)
+
+The no-progress detector uses a lightweight UI signature (route, title, scroll position, and a small text sample).
+
+### Consolidated artifacts
+
+For sharded runs, a merged folder is created at:
+
+`test-results/fuzz/run-<runMode>-<platform>-<seed>-<runId>/`
+
+It contains:
+
+- `sessions/` (merged session logs)
+- `videos/` (merged videos)
+- `fuzz-issue-summary.md` (merged summary)
+- `README.md` (merged summary)
+- `fuzz-issue-report.json` (merged report)
+
+Failing sessions are always retained. By default, the **last 10 successful sessions** are also kept.
+
+- `FUZZ_RETAIN_SUCCESS` (default: 10; set to 0 to keep only failures)
+
+Per-shard folders are removed after merging so the run output stays consolidated.
 
 ## Safety guarantees
 

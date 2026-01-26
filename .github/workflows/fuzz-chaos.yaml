@@ -38,7 +38,7 @@ jobs:
           VITE_FUZZ_MODE: '1'
         run: |
           SEED=$(date -u +%Y%m%d)
-          node scripts/run-fuzz.mjs --seed "$SEED" --time-budget 15m --platform android-phone
+          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget 2h --fuzz-platform android-phone
 
       - name: Upload fuzz artifacts
         if: always()

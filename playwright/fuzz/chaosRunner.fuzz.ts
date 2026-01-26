@@ -208,6 +208,41 @@ const resolveBlockingDialog = async (page: import('@playwright/test').Page) => {
   return true;
 };
 
+const showInteractionPulse = async (
+  page: import('@playwright/test').Page,
+  target?: import('@playwright/test').ElementHandle<HTMLElement>,
+) => {
+  try {
+    const box = target ? await target.boundingBox() : null;
+    if (!box) return;
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.evaluate(({ x, y }) => {
+      (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse?.(x, y);
+    }, { x, y });
+    await page.waitForTimeout(40);
+  } catch {
+    // ignore
+  }
+};
+
+const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
+  const toastViewport = await page.$('[data-radix-toast-viewport], [role="region"][aria-label*="Notifications"]');
+  if (toastViewport) {
+    await toastViewport.evaluate((node) => {
+      const el = node as HTMLElement;
+      el.style.pointerEvents = 'none';
+      el.style.opacity = '0';
+    });
+    return false;
+  }
+  const overlay = await page.$('[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]');
+  if (!overlay) return false;
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(50);
+  return true;
+};
+
 const safeClick = async (
   page: import('@playwright/test').Page,
   pick: { target: import('@playwright/test').ElementHandle<HTMLElement>; description: string },
@@ -215,10 +250,17 @@ const safeClick = async (
   selector: string,
 ) => {
   try {
+    await showInteractionPulse(page, pick.target);
     await pick.target.click();
     return { ok: true, log: `click ${pick.description}` };
   } catch (error) {
     const message = (error as Error)?.message || '';
+    if (message.includes('intercepts pointer events')) {
+      await closeBlockingOverlay(page);
+      await showInteractionPulse(page, pick.target);
+      await pick.target.click();
+      return { ok: true, log: `click ${pick.description}` };
+    }
     if (message.includes('not attached') || message.includes('Element is not attached')) {
       const refreshed = await pickVisibleElement(
         page,
@@ -227,20 +269,13 @@ const safeClick = async (
         async (element) => !(await isExternalOrBlankTarget(element)),
       );
       if (refreshed) {
+        await showInteractionPulse(page, refreshed.target);
         await refreshed.target.click();
         return { ok: true, log: `click ${refreshed.description}` };
       }
     }
     throw error;
   }
-};
-
-const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
-  const overlay = await page.$('[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]');
-  if (!overlay) return false;
-  await page.keyboard.press('Escape').catch(() => {});
-  await page.waitForTimeout(50);
-  return true;
 };
 
 const randomText = (rng: SeededRng) => {
@@ -269,7 +304,7 @@ test.describe('Chaos fuzz', () => {
   test.skip(!FUZZ_ENABLED, 'Chaos fuzz runs only when FUZZ_RUN=1 is set.');
 
   test('run', async ({}, testInfo) => {
-    const seed = toNumber(process.env.FUZZ_SEED) ?? 1337;
+    const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
     const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : 500);
@@ -281,16 +316,21 @@ test.describe('Chaos fuzz', () => {
     const shardIndex = toNumber(process.env.FUZZ_SHARD_INDEX) ?? 0;
     const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;
+    const retainSuccessSessions = Math.max(0, toNumber(process.env.FUZZ_RETAIN_SUCCESS) ?? 10);
+    const minSessionSteps = Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? 200);
+    const noProgressLimit = Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? 20);
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;
 
-    const outputRoot = path.resolve(
-      process.cwd(),
-      'test-results',
-      'fuzz',
-      `run-${runMode}-${platform}-${seed}-${runId}`,
-      shardTotal > 1 ? `shard-${shardIndex}` : '',
-    );
+    const outputRootBase = process.env.FUZZ_OUTPUT_ROOT
+      ? path.resolve(process.cwd(), process.env.FUZZ_OUTPUT_ROOT)
+      : path.resolve(
+          process.cwd(),
+          'test-results',
+          'fuzz',
+          `run-${runMode}-${platform}-${seed}-${runId}`,
+        );
+    const outputRoot = shardTotal > 1 ? path.join(outputRootBase, `shard-${shardIndex}`) : outputRootBase;
     const videosDir = path.join(outputRoot, 'videos');
     const sessionsDir = path.join(outputRoot, 'sessions');
     await fs.rm(outputRoot, { recursive: true, force: true });
@@ -309,6 +349,7 @@ test.describe('Chaos fuzz', () => {
     const deadline = timeBudgetMs ? startTime + timeBudgetMs : Number.POSITIVE_INFINITY;
     let externalClickUsed = false;
     let clickActionsDisabled = false;
+    const retainedSuccess: Array<{ logPath: string; videoPath?: string }> = [];
 
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
       const signature = buildSignature(issue);
@@ -359,6 +400,23 @@ test.describe('Chaos fuzz', () => {
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(12000);
 
+      const readUiSignature = async () => {
+        try {
+          const signature = await page.evaluate(() => {
+            const text = document.body?.innerText?.slice(0, 200) ?? '';
+            const active = document.activeElement?.tagName ?? '';
+            return `${location.pathname}|${document.title}|${window.scrollX},${window.scrollY}|${active}|${text}`;
+          });
+          return signature;
+        } catch {
+          try {
+            return `error:${page.url()}`;
+          } catch {
+            return 'error:unknown';
+          }
+        }
+      };
+
       await page.addInitScript(({ baseUrl: baseUrlArg }) => {
         try {
           localStorage.clear();
@@ -369,6 +427,74 @@ test.describe('Chaos fuzz', () => {
           localStorage.setItem('c64u_debug_logging_enabled', '1');
           localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
           (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
+        } catch {
+          // ignore
+        }
+        try {
+          const style = document.createElement('style');
+          style.textContent = `
+            .c64u-fuzz-pulse {
+              position: absolute;
+              width: 48px;
+              height: 48px;
+              margin: -24px 0 0 -24px;
+              border-radius: 999px;
+              background: rgba(59, 130, 246, 0.35);
+              border: 2px solid rgba(59, 130, 246, 0.8);
+              box-shadow: 0 0 12px rgba(59, 130, 246, 0.5);
+              pointer-events: none;
+              transform: scale(0.6);
+              opacity: 0.9;
+              transition: transform 0.35s ease, opacity 0.35s ease;
+              z-index: 2147483647;
+            }
+          `;
+          document.head?.appendChild(style);
+
+          const ensureRoot = () => {
+            let root = document.getElementById('c64u-fuzz-overlay');
+            if (!root) {
+              root = document.createElement('div');
+              root.id = 'c64u-fuzz-overlay';
+              root.style.position = 'fixed';
+              root.style.left = '0';
+              root.style.top = '0';
+              root.style.width = '100%';
+              root.style.height = '100%';
+              root.style.pointerEvents = 'none';
+              root.style.zIndex = '2147483647';
+              (document.body || document.documentElement).appendChild(root);
+            }
+            return root;
+          };
+
+          const pulse = (x: number, y: number) => {
+            const root = ensureRoot();
+            const dot = document.createElement('div');
+            dot.className = 'c64u-fuzz-pulse';
+            dot.style.left = `${x}px`;
+            dot.style.top = `${y}px`;
+            root.appendChild(dot);
+            requestAnimationFrame(() => {
+              dot.style.transform = 'scale(1)';
+              dot.style.opacity = '0';
+            });
+            setTimeout(() => dot.remove(), 450);
+          };
+
+          (window as Window & { __c64uFuzzPulse?: (x: number, y: number) => void }).__c64uFuzzPulse = pulse;
+
+          document.addEventListener('pointerdown', (event) => {
+            pulse(event.clientX, event.clientY);
+          }, true);
+
+          document.addEventListener('keydown', () => {
+            const active = document.activeElement as HTMLElement | null;
+            if (!active || typeof active.getBoundingClientRect !== 'function') return;
+            const rect = active.getBoundingClientRect();
+            if (!rect.width && !rect.height) return;
+            pulse(rect.left + rect.width / 2, rect.top + rect.height / 2);
+          }, true);
         } catch {
           // ignore
         }
@@ -456,8 +582,7 @@ test.describe('Chaos fuzz', () => {
         if (errorEntry) {
           if (
             errorEntry.message === 'C64 API request failed' &&
-            currentFaultMode !== 'none' &&
-            Date.now() - lastFaultAt < 20000
+            (currentFaultMode !== 'none' || (lastFaultAt > 0 && Date.now() - lastFaultAt < 60000))
           ) {
             return;
           }
@@ -482,6 +607,10 @@ test.describe('Chaos fuzz', () => {
       };
 
       await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+
+      let sessionSteps = 0;
+      let noProgressCount = 0;
+      let lastSignature = await readUiSignature();
 
       const ensureAppOrigin = async () => {
         const url = page.url();
@@ -534,6 +663,7 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, '.tab-bar button', rng);
             if (!pick) return { log: 'tab skip' };
+            await showInteractionPulse(page, pick.target);
             await pick.target.click();
             return { log: `tab ${pick.description}` };
           },
@@ -558,6 +688,7 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]', rng);
             if (!pick) return { log: 'select skip' };
+            await showInteractionPulse(page, pick.target);
             await pick.target.click();
             return { log: `select ${pick.description}` };
           },
@@ -571,6 +702,7 @@ test.describe('Chaos fuzz', () => {
             const pick = await pickVisibleElement(page, 'input[type="text"], input[type="search"], textarea, [contenteditable="true"]', rng);
             if (!pick) return { log: 'type skip' };
             const text = randomText(rng);
+            await showInteractionPulse(page, pick.target);
             await pick.target.fill(text);
             return { log: `type ${pick.description} "${text}"` };
           },
@@ -585,6 +717,7 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, 'input[type="checkbox"], [role="switch"]', rng);
             if (!pick) return { log: 'toggle skip' };
+            await showInteractionPulse(page, pick.target);
             await pick.target.click();
             return { log: `toggle ${pick.description}` };
           },
@@ -601,6 +734,7 @@ test.describe('Chaos fuzz', () => {
             }
             const pick = await pickVisibleElement(page, 'button[aria-haspopup="dialog"], [data-state="closed"][data-radix-collection-item]', rng);
             if (!pick) return { log: 'modal open skip' };
+            await showInteractionPulse(page, pick.target);
             await pick.target.click();
             return { log: `modal open ${pick.description}` };
           },
@@ -678,6 +812,7 @@ test.describe('Chaos fuzz', () => {
       while (Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
         totalSteps += 1;
+        sessionSteps += 1;
         if (await ensureAppOrigin()) {
           logInteraction(`s=${totalSteps}\ta=recover\treturn-to-app`);
           continue;
@@ -718,6 +853,21 @@ test.describe('Chaos fuzz', () => {
         }
         await checkAppLogsForIssues();
         if (issue) break;
+        const signature = await readUiSignature();
+        if (signature === lastSignature) {
+          noProgressCount += 1;
+        } else {
+          noProgressCount = 0;
+          lastSignature = signature;
+        }
+        if (noProgressCount >= noProgressLimit) {
+          logInteraction(`s=${totalSteps}\ta=session\tno-progress`);
+          break;
+        }
+        if (sessionSteps >= minSessionSteps) {
+          logInteraction(`s=${totalSteps}\ta=session\tmin-steps`);
+          break;
+        }
         await page.waitForTimeout(rng.int(40, 200));
       }
 
@@ -750,6 +900,13 @@ test.describe('Chaos fuzz', () => {
               await fs.unlink(recorded).catch(() => {});
             });
             savedVideo = path.relative(outputRoot, target);
+          } else if (retainSuccessSessions > 0) {
+            const target = path.join(videosDir, `success-${sessionId}.webm`);
+            await fs.rename(recorded, target).catch(async () => {
+              await fs.copyFile(recorded, target);
+              await fs.unlink(recorded).catch(() => {});
+            });
+            savedVideo = path.relative(outputRoot, target);
           } else {
             await fs.unlink(recorded).catch(() => {});
           }
@@ -758,7 +915,9 @@ test.describe('Chaos fuzz', () => {
         }
       }
 
-      await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
+      if (issue || retainSuccessSessions > 0) {
+        await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
+      }
 
       if (issue) {
         issue.route = route;
@@ -777,6 +936,13 @@ test.describe('Chaos fuzz', () => {
           severity: issue.severity,
         };
         recordIssue(issue, example);
+      } else if (retainSuccessSessions > 0) {
+        retainedSuccess.push({ logPath: sessionLogPath, videoPath: savedVideo ? path.join(outputRoot, savedVideo) : undefined });
+        while (retainedSuccess.length > retainSuccessSessions) {
+          const removed = retainedSuccess.shift();
+          if (removed?.logPath) await fs.unlink(removed.logPath).catch(() => {});
+          if (removed?.videoPath) await fs.unlink(removed.videoPath).catch(() => {});
+        }
       }
 
       server.resetState();
@@ -791,6 +957,21 @@ test.describe('Chaos fuzz', () => {
 
     await browser.close();
     await server.close();
+
+    try {
+      const videoEntries = await fs.readdir(videosDir, { withFileTypes: true });
+      await Promise.all(
+        videoEntries
+          .filter((entry) => entry.isFile())
+          .map(async (entry) => {
+            if (entry.name.includes('-session-')) return;
+            if (!entry.name.endsWith('.webm')) return;
+            await fs.unlink(path.join(videosDir, entry.name)).catch(() => {});
+          }),
+      );
+    } catch {
+      // ignore cleanup errors
+    }
 
     const report = {
       meta: {

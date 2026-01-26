@@ -61,8 +61,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         localStorage.setItem('c64u_device_host', host || 'c64u');
         localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
         sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
-      } catch (error) {
-        console.warn('Unable to seed storage for ui mocks', error);
+      } catch {
         return;
       }
 
