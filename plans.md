@@ -1,39 +1,37 @@
-# Play UI + Coverage Hardening Plan
+# Vertical Label Layout + Coverage Plan
 
-## 1) Baseline: verify current failing/passing state
-- [x] Capture current coverage % (note command output).
-	- Coverage (vitest): 85.31% (from npm run test:coverage)
-	- Coverage threshold check: 85.32% line coverage (node scripts/check-coverage-threshold.mjs)
-- [x] Record current unit test command (Vitest) used by CI.
-	- npm run test:coverage
-- [x] Record current Playwright E2E command used by CI.
-	- npm run test:e2e -- "$(cat shard-files.txt)" (CI shards via scripts/get-playwright-shard-files.mjs)
-- [x] Record current “Web | Screenshots” command used by CI.
-	- npm run screenshots
-- [x] Record current coverage threshold command used by CI.
-	- node scripts/check-coverage-threshold.mjs
-- [x] Record current ./local-build.sh --screenshots result.
-	- ./local-build.sh --screenshots (passed locally)
+## 1) Baseline: reproduce + scope
+- [ ] Reproduce vertical label rendering on Configuration → Audio Mixer.
+- [ ] Identify affected components and categories beyond Audio Mixer.
+- [ ] Record current coverage and threshold results.
+- [ ] Capture current Playwright + screenshots commands used by CI.
 - [ ] Identify any currently failing CI jobs (if any), including “Web | Screenshots”.
 
-## 2) Stepwise implementation (each step = code change → tests → commit)
-- [x] Step: progress slider layout change (passed left, remaining right) + remove “Played: 0:00”.
-- [x] Step: move type filters under “Filter files” + wire filtering logic.
-- [x] Step: overflow hardening (global) + add/extend regression tests.
-- [x] Step: Audio Mixer “SOLO” spacing fix + validate screenshots.
-- [x] Step: add screenshot artifact doc/img/app-play-demo.png (from ./local-build.sh --screenshots) + update expectations if needed.
-- [x] Step: coverage improvements to reach >= 88%.
+## 2) Tests first (red)
+- [ ] Add component/unit tests that fail on vertical text rendering.
+- [ ] Add Playwright checks for vertical labels + overflow at narrow widths.
 
-## 3) Final verification
-- [x] Run full local verification including unit tests, Playwright, coverage, and ./local-build.sh --screenshots.
-	- npm run test:coverage (88.1% lines)
-	- npm run test:e2e (266 passed)
-	- npm run screenshots (2 passed)
-	- ./local-build.sh --screenshots (passed locally)
-- [x] Confirm “Web | Screenshots” expectations pass locally.
-	- npm run screenshots (2 passed)
-- [x] Confirm coverage >= 88%.
-	- node scripts/check-coverage-threshold.mjs (Line coverage: 88.11%)
-- [x] Confirm no overflow regressions with long filenames/hostnames/errors.
-	- npm run test:e2e (layout overflow specs passed)
-- [x] Mark all items complete only when verified green.
+## 3) Smart layout abstraction
+- [ ] Introduce reusable label+widget layout logic with dynamic measurement.
+- [ ] Cover layout decision logic with unit tests.
+
+## 4) Apply fixes
+- [ ] Apply layout logic to Audio Mixer sliders.
+- [ ] Apply layout logic to at least one other configuration category.
+- [ ] Ensure at least one non-slider widget uses the layout logic.
+
+## 5) Test hardening
+- [ ] Ensure layout tests fail on vertical/rotated labels.
+- [ ] Verify overflow guards on narrow viewports.
+
+## 6) Coverage improvements (>= 88.5%)
+- [ ] Identify low-coverage files from latest report.
+- [ ] Add meaningful tests to raise average coverage to >= 88.5%.
+- [ ] Verify coverage threshold locally.
+
+## 7) Final verification
+- [ ] Run full local verification (unit, Playwright, screenshots, local-build).
+- [ ] Confirm screenshots match expectations.
+- [ ] Confirm coverage >= 88.5%.
+- [ ] Confirm no overflow regressions.
+- [ ] Mark all items complete only when verified green.
