@@ -191,6 +191,8 @@ test.describe('Chaos fuzz', () => {
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
     const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : 500);
+    const baseTimeout = timeBudgetMs ?? 10 * 60 * 1000;
+    test.setTimeout(baseTimeout + 60_000);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
     const runMode = process.env.FUZZ_RUN_MODE || 'local';
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;

@@ -51,6 +51,7 @@ const getActiveProjects = () => {
 
 export default defineConfig({
   testDir: './playwright',
+  testMatch: ['**/*.spec.ts', '**/*.test.ts', '**/*.fuzz.ts'],
   outputDir: 'test-results/playwright',
   preserveOutput: 'always',
   workers: resolvedWorkers,
