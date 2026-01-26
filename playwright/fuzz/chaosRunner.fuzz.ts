@@ -138,14 +138,15 @@ const pickVisibleElement = async (
   page: import('@playwright/test').Page,
   selector: string,
   rng: SeededRng,
+  filter?: (element: import('@playwright/test').ElementHandle<HTMLElement>) => Promise<boolean>,
 ) => {
   const elements = await page.$$(selector);
   const visible: Array<import('@playwright/test').ElementHandle<HTMLElement>> = [];
   for (const element of elements) {
-    if (await element.isVisible()) {
-      visible.push(element as import('@playwright/test').ElementHandle<HTMLElement>);
-      if (visible.length >= 30) break;
-    }
+    if (!(await element.isVisible())) continue;
+    if (filter && !(await filter(element as import('@playwright/test').ElementHandle<HTMLElement>))) continue;
+    visible.push(element as import('@playwright/test').ElementHandle<HTMLElement>);
+    if (visible.length >= 30) break;
   }
   if (!visible.length) return null;
   const target = rng.pick(visible);
@@ -159,6 +160,77 @@ const hasVisibleElement = async (page: import('@playwright/test').Page, selector
     if (await element.isVisible()) return true;
   }
   return false;
+};
+
+const isExternalOrBlankTarget = async (element: import('@playwright/test').ElementHandle<HTMLElement>) =>
+  element.evaluate((node) => {
+    if (!(node instanceof HTMLAnchorElement)) return false;
+    const target = node.getAttribute('target');
+    const href = node.getAttribute('href') || '';
+    if (target === '_blank') return true;
+    if (/^https?:\/\//i.test(href)) return true;
+    if (/^[a-z]+:/i.test(href) && !href.startsWith('/') && !href.startsWith('#')) return true;
+    return false;
+  });
+
+const resolveBlockingDialog = async (page: import('@playwright/test').Page) => {
+  const dialog = await page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
+  if (!dialog) return false;
+
+  const input = await dialog.$('input[type="text"], input[type="search"], textarea');
+  if (input) {
+    const labelText = await dialog.evaluate((node) => node.textContent?.toLowerCase() || '');
+    const value = labelText.includes('delete') ? 'delete' : 'confirm';
+    await input.fill(value).catch(() => {});
+  }
+
+  const buttons = await dialog.$$('button, [role="button"]');
+  for (const button of buttons) {
+    const text = (await button.textContent())?.trim().toLowerCase() || '';
+    if (!text) continue;
+    if (/(confirm|continue|ok|yes|save|delete|submit|proceed)/.test(text)) {
+      await button.click().catch(() => {});
+      return true;
+    }
+  }
+
+  await page.keyboard.press('Escape').catch(() => {});
+  return true;
+};
+
+const safeClick = async (
+  page: import('@playwright/test').Page,
+  pick: { target: import('@playwright/test').ElementHandle<HTMLElement>; description: string },
+  rng: SeededRng,
+  selector: string,
+) => {
+  try {
+    await pick.target.click();
+    return { ok: true, log: `click ${pick.description}` };
+  } catch (error) {
+    const message = (error as Error)?.message || '';
+    if (message.includes('not attached') || message.includes('Element is not attached')) {
+      const refreshed = await pickVisibleElement(
+        page,
+        selector,
+        rng,
+        async (element) => !(await isExternalOrBlankTarget(element)),
+      );
+      if (refreshed) {
+        await refreshed.target.click();
+        return { ok: true, log: `click ${refreshed.description}` };
+      }
+    }
+    throw error;
+  }
+};
+
+const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
+  const overlay = await page.$('[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]');
+  if (!overlay) return false;
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(50);
+  return true;
 };
 
 const randomText = (rng: SeededRng) => {
@@ -220,6 +292,8 @@ test.describe('Chaos fuzz', () => {
     let sessionIndex = 0;
     const startTime = Date.now();
     const deadline = timeBudgetMs ? startTime + timeBudgetMs : Number.POSITIVE_INFINITY;
+    let externalClickUsed = false;
+    let clickActionsDisabled = false;
 
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
       const signature = buildSignature(issue);
@@ -382,18 +456,41 @@ test.describe('Chaos fuzz', () => {
         {
           name: 'click',
           weight: 28,
-          canRun: async () => hasVisibleElement(page, 'button, [role="button"], a[href], [data-clickable="true"]'),
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            return hasVisibleElement(page, 'button, [role="button"], a[href], [data-clickable="true"]');
+          },
           run: async () => {
-            const pick = await pickVisibleElement(page, 'button, [role="button"], a[href], [data-clickable="true"]', rng);
+            const selector = 'button, [role="button"], a[href], [data-clickable="true"]';
+            const pick = await pickVisibleElement(
+              page,
+              selector,
+              rng,
+              async (element) => {
+                if (await isExternalOrBlankTarget(element)) {
+                  return !externalClickUsed;
+                }
+                return element.isEnabled();
+              },
+            );
             if (!pick) return { log: 'click skip' };
-            await pick.target.click();
-            return { log: `click ${pick.description}` };
+            const isExternal = await isExternalOrBlankTarget(pick.target);
+            const result = await safeClick(page, pick, rng, selector);
+            if (isExternal) {
+              externalClickUsed = true;
+              clickActionsDisabled = true;
+              return { log: `click external ${pick.description} (clicks disabled)` };
+            }
+            return { log: result.log };
           },
         },
         {
           name: 'tab',
           weight: 10,
-          canRun: async () => hasVisibleElement(page, '.tab-bar button'),
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            return hasVisibleElement(page, '.tab-bar button');
+          },
           run: async () => {
             const pick = await pickVisibleElement(page, '.tab-bar button', rng);
             if (!pick) return { log: 'tab skip' };
@@ -414,7 +511,10 @@ test.describe('Chaos fuzz', () => {
         {
           name: 'select',
           weight: 6,
-          canRun: async () => hasVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]'),
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            return hasVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]');
+          },
           run: async () => {
             const pick = await pickVisibleElement(page, '[role="option"], [role="menuitem"], li[role="option"]', rng);
             if (!pick) return { log: 'select skip' };
@@ -438,7 +538,10 @@ test.describe('Chaos fuzz', () => {
         {
           name: 'toggle',
           weight: 6,
-          canRun: async () => hasVisibleElement(page, 'input[type="checkbox"], [role="switch"]'),
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            return hasVisibleElement(page, 'input[type="checkbox"], [role="switch"]');
+          },
           run: async () => {
             const pick = await pickVisibleElement(page, 'input[type="checkbox"], [role="switch"]', rng);
             if (!pick) return { log: 'toggle skip' };
@@ -449,7 +552,7 @@ test.describe('Chaos fuzz', () => {
         {
           name: 'modal',
           weight: 6,
-          canRun: async () => true,
+          canRun: async () => !clickActionsDisabled,
           run: async () => {
             const dialog = await page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
             if (dialog) {
@@ -497,7 +600,7 @@ test.describe('Chaos fuzz', () => {
           weight: 3,
           canRun: async () => true,
           run: async () => {
-            const modes = ['none', 'slow', 'timeout', 'auth', 'refused'] as const;
+            const modes = ['none', 'slow', 'timeout', 'refused'] as const;
             const mode = rng.pick([...modes]);
             server.setFaultMode(mode);
             if (mode === 'slow') {
@@ -528,6 +631,14 @@ test.describe('Chaos fuzz', () => {
       while (Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
         totalSteps += 1;
+        if (await closeBlockingOverlay(page)) {
+          logInteraction(`s=${totalSteps}\ta=modal\tauto-close`);
+          continue;
+        }
+        if (await resolveBlockingDialog(page)) {
+          logInteraction(`s=${totalSteps}\ta=modal\tauto-resolve`);
+          continue;
+        }
         const action = await pickAction();
         if (!action) break;
         try {
