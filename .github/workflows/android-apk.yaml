@@ -338,7 +338,8 @@ jobs:
             --reporter=text-summary
           echo "==> Merging unit + E2E LCOV for Codecov..."
           npx lcov-result-merger \
-            "coverage/{lcov.info,e2e/lcov.info}" \
+            coverage/lcov.info \
+            coverage/e2e/lcov.info \
             coverage/lcov-merged.info
           end=$(date +%s)
           echo "- coverage merge: $((end-start))s" >> $GITHUB_STEP_SUMMARY
