@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
 import { createMockFtpServer, type MockFtpServer } from '../tests/mocks/mockFtpServer';
@@ -47,8 +48,16 @@ const ensureLargeFtpFixture = async (rootDir: string) => {
   await fs.writeFile(marker, new Date().toISOString(), 'utf8');
 };
 
+const cloneFtpFixture = async (sourceDir: string) => {
+  const tempBase = path.join(os.tmpdir(), 'c64u-ftp-root-');
+  const targetDir = await fs.mkdtemp(tempBase);
+  await fs.cp(sourceDir, targetDir, { recursive: true });
+  return targetDir;
+};
+
 export const startFtpTestServers = async (options?: { password?: string }) => {
-  const rootDir = path.resolve('playwright/fixtures/ftp-root');
+  const baseRoot = path.resolve('playwright/fixtures/ftp-root');
+  const rootDir = await cloneFtpFixture(baseRoot);
   await ensureLargeFtpFixture(rootDir);
   const ftpServer = await createMockFtpServer({
     rootDir,
