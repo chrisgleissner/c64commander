@@ -31,10 +31,11 @@ When fuzz mode is active:
 Actions are finite, weighted, and preconditioned. No random pixel clicks.
 
 - `click` (weight 28): visible buttons/links
+- `add-items-*`: dialog-aware add-to-playlist/library flows (C64 Ultimate source, folder open, selection, confirm)
 - `tab` (10): navigation bar buttons
 - `scroll` (12)
 - `select` (6): list/menu options
-- `type` (8): text inputs
+- `type` (8): text inputs (includes large paste bursts)
 - `toggle` (6): switches/checkboxes
 - `modal` (6): open/close dialog
 - `navigate` (4): back/forward

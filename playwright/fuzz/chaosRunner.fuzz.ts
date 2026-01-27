@@ -172,6 +172,44 @@ const hasVisibleElement = async (page: import('@playwright/test').Page, selector
   return false;
 };
 
+const pickVisibleElementByText = async (
+  page: import('@playwright/test').Page,
+  selector: string,
+  matcher: RegExp,
+  rng: SeededRng,
+) => {
+  const elements = await page.$$(selector);
+  const visible: Array<import('@playwright/test').ElementHandle<HTMLElement>> = [];
+  for (const element of elements) {
+    if (!(await element.isVisible())) continue;
+    const text = ((await element.textContent()) || '').trim();
+    if (!matcher.test(text)) continue;
+    visible.push(element as import('@playwright/test').ElementHandle<HTMLElement>);
+    if (visible.length >= 20) break;
+  }
+  if (!visible.length) return null;
+  const target = rng.pick(visible);
+  const description = await describeElement(target);
+  return { target, description };
+};
+
+const hasVisibleElementByText = async (
+  page: import('@playwright/test').Page,
+  selector: string,
+  matcher: RegExp,
+) => {
+  const elements = await page.$$(selector);
+  for (const element of elements) {
+    if (!(await element.isVisible())) continue;
+    const text = ((await element.textContent()) || '').trim();
+    if (matcher.test(text)) return true;
+  }
+  return false;
+};
+
+const getActiveDialog = async (page: import('@playwright/test').Page) =>
+  page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
+
 const isExternalOrBlankTarget = async (element: import('@playwright/test').ElementHandle<HTMLElement>) =>
   element.evaluate((node) => {
     if (!(node instanceof HTMLAnchorElement)) return false;
@@ -250,10 +288,27 @@ const jitterClick = async (
   clickCount = 1,
   delay = 0,
 ) => {
-  const box = await target.boundingBox();
+  let box: { x: number; y: number; width: number; height: number } | null = null;
+  try {
+    box = await target.boundingBox();
+  } catch (error) {
+    const message = (error as Error)?.message || '';
+    if (message.includes('not attached') || message.includes('Element is not attached')) {
+      throw new Error('Element is not attached');
+    }
+    throw error;
+  }
   if (!box) {
     await showInteractionPulse(page, target);
-    await target.click({ clickCount, delay });
+    try {
+      await target.click({ clickCount, delay });
+    } catch (error) {
+      const message = (error as Error)?.message || '';
+      if (message.includes('not attached') || message.includes('Element is not attached')) {
+        throw new Error('Element is not attached');
+      }
+      throw error;
+    }
     return;
   }
   for (let i = 0; i < clickCount; i += 1) {
@@ -302,6 +357,31 @@ const safeClick = async (
   }
 };
 
+const safeClickByText = async (
+  page: import('@playwright/test').Page,
+  selector: string,
+  matcher: RegExp,
+  rng: SeededRng,
+  options?: { clickCount?: number; delay?: number },
+) => {
+  const pick = await pickVisibleElementByText(page, selector, matcher, rng);
+  if (!pick) return null;
+  try {
+    await jitterClick(page, pick.target, rng, options?.clickCount ?? 1, options?.delay ?? 0);
+    return { ok: true, log: `click ${pick.description}` };
+  } catch (error) {
+    const message = (error as Error)?.message || '';
+    if (message.includes('not attached') || message.includes('Element is not attached')) {
+      const refreshed = await pickVisibleElementByText(page, selector, matcher, rng);
+      if (refreshed) {
+        await jitterClick(page, refreshed.target, rng, options?.clickCount ?? 1, options?.delay ?? 0);
+        return { ok: true, log: `click ${refreshed.description}` };
+      }
+    }
+    throw error;
+  }
+};
+
 const randomText = (rng: SeededRng) => {
   const length = rng.int(1, 12);
   const chars = [] as string[];
@@ -310,6 +390,24 @@ const randomText = (rng: SeededRng) => {
     chars.push(String.fromCharCode(code));
   }
   return chars.join('');
+};
+
+const randomLargeText = (rng: SeededRng) => {
+  const wordCount = rng.int(80, 320);
+  const parts: string[] = [];
+  for (let i = 0; i < wordCount; i += 1) {
+    const wordLength = rng.int(2, 12);
+    const chars = [] as string[];
+    for (let j = 0; j < wordLength; j += 1) {
+      const code = rng.int(97, 122);
+      chars.push(String.fromCharCode(code));
+    }
+    parts.push(chars.join(''));
+    if (rng.next() > 0.92) {
+      parts.push('\n');
+    }
+  }
+  return parts.join(' ').replace(/\s+\n\s+/g, '\n');
 };
 
 const randomKey = (rng: SeededRng) => {
@@ -774,6 +872,115 @@ test.describe('Chaos fuzz', () => {
           },
         },
         {
+          name: 'add-items-open',
+          weight: 10,
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            if (await getActiveDialog(page)) return false;
+            return hasVisibleElementByText(page, 'button', /Add (items|more items|disks|more disks)/i);
+          },
+          run: async () => {
+            const result = await safeClickByText(page, 'button', /Add (items|more items|disks|more disks)/i, rng, {
+              clickCount: 1,
+              delay: rng.int(0, 15),
+            });
+            return { log: result?.log ?? 'add-items open skip' };
+          },
+        },
+        {
+          name: 'add-items-source-ultimate',
+          weight: 10,
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            if (!(await getActiveDialog(page))) return false;
+            return hasVisibleElementByText(page, '[role="dialog"] button', /C64 Ultimate/i);
+          },
+          run: async () => {
+            const result = await safeClickByText(page, '[role="dialog"] button', /C64 Ultimate/i, rng, {
+              clickCount: 1,
+              delay: rng.int(0, 10),
+            });
+            return { log: result?.log ?? 'add-items source skip' };
+          },
+        },
+        {
+          name: 'add-items-open-folder',
+          weight: 12,
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            if (!(await getActiveDialog(page))) return false;
+            return hasVisibleElementByText(page, '[role="dialog"] button', /^Open$/i);
+          },
+          run: async () => {
+            const result = await safeClickByText(page, '[role="dialog"] button', /^Open$/i, rng, {
+              clickCount: 1,
+              delay: rng.int(0, 10),
+            });
+            return { log: result?.log ?? 'open folder skip' };
+          },
+        },
+        {
+          name: 'add-items-select',
+          weight: 16,
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            if (!(await getActiveDialog(page))) return false;
+            return hasVisibleElement(page, '[data-testid="source-entry-row"] [role="checkbox"], [data-testid="source-entry-row"] input[type="checkbox"]');
+          },
+          run: async () => {
+            const selector = '[data-testid="source-entry-row"] [role="checkbox"], [data-testid="source-entry-row"] input[type="checkbox"]';
+            const toggles = rng.int(2, 6);
+            const logs: string[] = [];
+            for (let i = 0; i < toggles; i += 1) {
+              const pick = await pickVisibleElement(page, selector, rng);
+              if (!pick) break;
+              await safeClick(page, pick, rng, selector, { clickCount: 1, delay: rng.int(0, 10) });
+              logs.push(pick.description);
+            }
+            return { log: `add-items select ${logs.length}` };
+          },
+        },
+        {
+          name: 'add-items-filter',
+          weight: 8,
+          canRun: async () => {
+            if (!(await getActiveDialog(page))) return false;
+            return hasVisibleElement(page, '[data-testid="add-items-filter"]');
+          },
+          run: async () => {
+            const pick = await pickVisibleElement(page, '[data-testid="add-items-filter"]', rng);
+            if (!pick) return { log: 'add-items filter skip' };
+            const text = rng.next() > 0.5 ? randomLargeText(rng) : randomText(rng);
+            await showInteractionPulse(page, pick.target);
+            await pick.target.click().catch(() => {});
+            await page.keyboard.press('Control+A').catch(() => {});
+            await page.keyboard.press('Backspace').catch(() => {});
+            await page.keyboard.insertText(text);
+            return { log: `add-items filter ${text.length} chars` };
+          },
+        },
+        {
+          name: 'add-items-confirm',
+          weight: 10,
+          canRun: async () => {
+            if (clickActionsDisabled) return false;
+            if (!(await getActiveDialog(page))) return false;
+            const button = await page.$('[data-testid="add-items-confirm"]');
+            if (!button || !(await button.isVisible())) return false;
+            const disabled = await button.evaluate((node) => {
+              const el = node as HTMLButtonElement;
+              return el.disabled || el.getAttribute('aria-disabled') === 'true';
+            });
+            return !disabled;
+          },
+          run: async () => {
+            const pick = await pickVisibleElement(page, '[data-testid="add-items-confirm"]', rng);
+            if (!pick) return { log: 'add-items confirm skip' };
+            await safeClick(page, pick, rng, '[data-testid="add-items-confirm"]', { clickCount: 1, delay: rng.int(0, 10) });
+            return { log: `add-items confirm ${pick.description}` };
+          },
+        },
+        {
           name: 'config-toggle',
           weight: 18,
           canRun: async () =>
@@ -1020,15 +1227,26 @@ test.describe('Chaos fuzz', () => {
           run: async () => {
             const pick = await pickVisibleElement(page, 'input[type="text"], input[type="search"], textarea, [contenteditable="true"]', rng);
             if (!pick) return { log: 'type skip' };
-            const text = randomText(rng);
+            const supportsFill = await pick.target.evaluate((node) =>
+              node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement,
+            );
+            const modeRoll = rng.next();
+            const text = modeRoll < 0.35 ? randomLargeText(rng) : randomText(rng);
             await showInteractionPulse(page, pick.target);
-            if (rng.next() > 0.4) {
+            if (modeRoll < 0.35) {
+              await pick.target.click().catch(() => {});
+              await page.keyboard.press('Control+A').catch(() => {});
+              await page.keyboard.press('Backspace').catch(() => {});
+              await page.keyboard.insertText(text);
+              return { log: `paste ${pick.description} (${text.length} chars)` };
+            }
+            if (rng.next() > 0.45 || !supportsFill) {
               await pick.target.click().catch(() => {});
               await page.keyboard.type(text, { delay: rng.int(0, 15) });
-            } else {
-              await pick.target.fill(text);
+              return { log: `type ${pick.description} "${text}"` };
             }
-            return { log: `type ${pick.description} "${text}"` };
+            await pick.target.fill(text);
+            return { log: `fill ${pick.description} "${text}"` };
           },
         },
         {
