@@ -34,7 +34,7 @@ test.describe('Config page SID solo routing', () => {
   };
 
   const assertLabelsHorizontal = async (page: Page, groupName: string, viewportWidth: number) => {
-    const groupButton = page.getByRole('button', { name: groupName });
+    const groupButton = page.getByRole('button', { name: groupName, exact: true });
     await groupButton.scrollIntoViewIfNeeded();
     const groupCard = groupButton.locator('..');
     const labels = groupCard.getByTestId('config-item-label');
@@ -132,10 +132,10 @@ test.describe('Config page SID solo routing', () => {
     await page.setViewportSize({ width: 360, height: 780 });
     await page.goto('/config');
 
-    await page.getByRole('button', { name: 'Audio Mixer' }).click();
+    await page.getByRole('button', { name: 'Audio Mixer', exact: true }).click();
     await assertLabelsHorizontal(page, 'Audio Mixer', 360);
 
-    await page.getByRole('button', { name: 'Drive A Settings' }).click();
+    await page.getByRole('button', { name: 'Drive A Settings', exact: true }).click();
     await assertLabelsHorizontal(page, 'Drive A Settings', 360);
 
     await snap(page, testInfo, 'config-labels-horizontal');
