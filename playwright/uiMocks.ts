@@ -54,12 +54,16 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
         console.warn('Unable to clear showDirectoryPicker', error);
       }
       const host = baseUrlArg?.replace(/^https?:\/\//, '');
-      if (!localStorage.getItem('c64u_password')) {
-        localStorage.setItem('c64u_password', '');
+      try {
+        if (!localStorage.getItem('c64u_password')) {
+          localStorage.setItem('c64u_password', '');
+        }
+        localStorage.setItem('c64u_device_host', host || 'c64u');
+        localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
+        sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
+      } catch {
+        return;
       }
-      localStorage.setItem('c64u_device_host', host || 'c64u');
-      localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
-      sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
 
       const listeners: Array<(event: any) => void> = [];
       const song = {

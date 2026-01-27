@@ -27,6 +27,9 @@ FUZZ_SEED=""
 FUZZ_STEPS=""
 FUZZ_TIME_BUDGET=""
 FUZZ_LAST_INTERACTIONS=""
+FUZZ_RETAIN_SUCCESS=""
+FUZZ_MIN_SESSION_STEPS=""
+FUZZ_NO_PROGRESS_STEPS=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -58,10 +61,13 @@ Options:
   --skip-android-tests  Skip Android instrumentation tests
   --skip-android-coverage Skip Android Jacoco coverage check
   --fuzz                Run Playwright chaos fuzz runner (mock device only)
-  --seed <num>          Seed for fuzz RNG
-  --steps <num>         Max fuzz steps (optional)
-  --time-budget <dur>   Time budget for fuzz run (e.g. 120s, 10m)
-  --last-interactions N Last-N interactions stored per issue (default 50)
+  --fuzz-seed <num>          Base seed for fuzz RNG (default: epoch millis; each shard adds its index)
+  --fuzz-steps <num>         Max fuzz steps (optional; default: unbounded when time budget is set)
+  --fuzz-time-budget <dur>   Time budget for fuzz run (default 30m; e.g. 120s, 10m)
+  --fuzz-last-interactions N Last-N interactions stored per issue (default 50)
+  --fuzz-retain-success N    Keep last N successful sessions (default 10)
+  --fuzz-min-session-steps N Minimum steps per session (default 200)
+  --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
   
   --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
   --skip-install        Skip npm install
@@ -189,20 +195,32 @@ while [[ $# -gt 0 ]]; do
       RUN_ANDROID_COVERAGE=false
       shift
       ;;
-    --seed)
+    --fuzz-seed)
       FUZZ_SEED="$2"
       shift 2
       ;;
-    --steps)
+    --fuzz-steps)
       FUZZ_STEPS="$2"
       shift 2
       ;;
-    --time-budget)
+    --fuzz-time-budget)
       FUZZ_TIME_BUDGET="$2"
       shift 2
       ;;
-    --last-interactions)
+    --fuzz-last-interactions)
       FUZZ_LAST_INTERACTIONS="$2"
+      shift 2
+      ;;
+    --fuzz-retain-success)
+      FUZZ_RETAIN_SUCCESS="$2"
+      shift 2
+      ;;
+    --fuzz-min-session-steps)
+      FUZZ_MIN_SESSION_STEPS="$2"
+      shift 2
+      ;;
+    --fuzz-no-progress-steps)
+      FUZZ_NO_PROGRESS_STEPS="$2"
       shift 2
       ;;
     --devices)
@@ -413,10 +431,13 @@ if [[ "$RUN_FUZZ" == "true" ]]; then
   log "Running chaos fuzz runner"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   FUZZ_ARGS=()
-  if [[ -n "$FUZZ_SEED" ]]; then FUZZ_ARGS+=(--seed "$FUZZ_SEED"); fi
-  if [[ -n "$FUZZ_STEPS" ]]; then FUZZ_ARGS+=(--steps "$FUZZ_STEPS"); fi
-  if [[ -n "$FUZZ_TIME_BUDGET" ]]; then FUZZ_ARGS+=(--time-budget "$FUZZ_TIME_BUDGET"); fi
-  if [[ -n "$FUZZ_LAST_INTERACTIONS" ]]; then FUZZ_ARGS+=(--last-interactions "$FUZZ_LAST_INTERACTIONS"); fi
+  if [[ -n "$FUZZ_SEED" ]]; then FUZZ_ARGS+=(--fuzz-seed "$FUZZ_SEED"); fi
+  if [[ -n "$FUZZ_STEPS" ]]; then FUZZ_ARGS+=(--fuzz-steps "$FUZZ_STEPS"); fi
+  if [[ -n "$FUZZ_TIME_BUDGET" ]]; then FUZZ_ARGS+=(--fuzz-time-budget "$FUZZ_TIME_BUDGET"); fi
+  if [[ -n "$FUZZ_LAST_INTERACTIONS" ]]; then FUZZ_ARGS+=(--fuzz-last-interactions "$FUZZ_LAST_INTERACTIONS"); fi
+  if [[ -n "$FUZZ_RETAIN_SUCCESS" ]]; then FUZZ_ARGS+=(--fuzz-retain-success "$FUZZ_RETAIN_SUCCESS"); fi
+  if [[ -n "$FUZZ_MIN_SESSION_STEPS" ]]; then FUZZ_ARGS+=(--fuzz-min-session-steps "$FUZZ_MIN_SESSION_STEPS"); fi
+  if [[ -n "$FUZZ_NO_PROGRESS_STEPS" ]]; then FUZZ_ARGS+=(--fuzz-no-progress-steps "$FUZZ_NO_PROGRESS_STEPS"); fi
   if [[ "$RUN_BUILD" == "true" || -f "$ROOT_DIR/dist/index.html" ]]; then
     export PLAYWRIGHT_SKIP_BUILD=1
   fi
