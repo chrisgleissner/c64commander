@@ -18,23 +18,32 @@ jobs:
   fuzz:
     name: Chaos fuzz (Playwright)
     runs-on: ubuntu-latest
-    container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci-web:latest', github.repository_owner) }}
     env:
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore node_modules from image
-        run: |
-          if [[ -f /opt/node_modules.tar.gz ]]; then
-            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
-          else
-            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
-            exit 1
-          fi
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.11.1
+          cache: npm
+
+      - name: Restore Playwright browsers cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-1.57.0
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
 
       - name: Run chaos fuzz
         env:
