@@ -14,7 +14,7 @@ if (!Number.isFinite(shardIndex) || !Number.isFinite(shardTotal) || shardIndex <
   process.exit(1);
 }
 
-const listCommand = 'PLAYWRIGHT_SKIP_BUILD=1 PLAYWRIGHT_SKIP_WEB_SERVER=1 npx playwright test --list --project=android-phone';
+const listCommand = 'PLAYWRIGHT_SKIP_BUILD=1 npx playwright test --list --project=android-phone';
 let output = '';
 try {
   output = execSync(listCommand, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });

@@ -4,7 +4,6 @@ import os from 'os';
 const coverageEnv = process.env.VITE_COVERAGE ? 'VITE_COVERAGE=true ' : '';
 const probeEnv = 'VITE_ENABLE_TEST_PROBES=1 ';
 const skipBuild = process.env.PLAYWRIGHT_SKIP_BUILD === '1';
-const skipWebServer = process.env.PLAYWRIGHT_SKIP_WEB_SERVER === '1';
 const explicitWorkers = process.env.PLAYWRIGHT_WORKERS?.trim();
 const parsedWorkers =
   explicitWorkers && /^[0-9]+$/.test(explicitWorkers) ? Number(explicitWorkers) : undefined;
@@ -75,12 +74,10 @@ export default defineConfig({
     actionTimeout: 15000,
     navigationTimeout: 30000,
   },
-  webServer: skipWebServer
-    ? undefined
-    : {
-        command: webServerCommand,
-        url: `http://127.0.0.1:${serverPort}`,
-        reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
-        timeout: 120000,
-      },
+  webServer: {
+    command: webServerCommand,
+    url: `http://127.0.0.1:${serverPort}`,
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
+    timeout: 120000,
+  },
 });

@@ -4,43 +4,30 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
-    inputs:
-      time_budget:
-        description: 'Fuzz time budget (e.g., 5m, 30m, 2h)'
-        required: false
-        default: '2h'
-
-permissions:
-  contents: read
-  packages: read
 
 jobs:
   fuzz:
     name: Chaos fuzz (Playwright)
     runs-on: ubuntu-latest
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.11.1
+          node-version: 20
           cache: npm
 
-      - name: Restore Playwright browsers cache
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-1.57.0
-          restore-keys: |
-            playwright-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
@@ -51,8 +38,7 @@ jobs:
           VITE_FUZZ_MODE: '1'
         run: |
           SEED=$(date -u +%Y%m%d)
-          TIME_BUDGET="${{ github.event.inputs.time_budget || '2h' }}"
-          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget "$TIME_BUDGET" --fuzz-platform android-phone
+          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget 2h --fuzz-platform android-phone
 
       - name: Upload fuzz artifacts
         if: always()
