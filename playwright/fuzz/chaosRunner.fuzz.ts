@@ -110,8 +110,16 @@ const buildGroupId = (signature: IssueSignature) => {
   const base = `${signature.exception}@${frame}`;
   const signatureKey = `${signature.exception}|${signature.message}|${signature.topFrames.join('|')}`;
   const hash = hashString(signatureKey).slice(0, 8);
-  return `${base}-${hash}`.replace(/[^a-z0-9@._:-]+/gi, '-').slice(0, 128);
+  return `${base}-${hash}`.replace(/[^a-z0-9@._-]+/gi, '-').slice(0, 128);
 };
+
+const sanitizeFileComponent = (value: string) =>
+  value
+    .replace(/[<>:"/\\|?*\r\n]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+    .slice(0, 128);
 
 const parseActionTimeout = (error: unknown) => {
   const message = (error as Error)?.message || String(error);
@@ -443,6 +451,7 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
 
 test.describe('Chaos fuzz', () => {
   test.skip(!FUZZ_ENABLED, 'Chaos fuzz runs only when FUZZ_RUN=1 is set.');
+  test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
   test('run', async ({}, testInfo) => {
     const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();
@@ -450,7 +459,9 @@ test.describe('Chaos fuzz', () => {
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
     const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : 500);
     const baseTimeout = timeBudgetMs ?? 10 * 60 * 1000;
-    test.setTimeout(baseTimeout + 60_000);
+    const timeoutMs = baseTimeout + 60_000;
+    test.setTimeout(timeoutMs);
+    testInfo.setTimeout(timeoutMs);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
     const runMode = process.env.FUZZ_RUN_MODE || 'local';
     const runId = process.env.FUZZ_RUN_ID || `${seed}`;
@@ -1440,7 +1451,7 @@ test.describe('Chaos fuzz', () => {
         try {
           const recorded = await video.path();
           if (issue) {
-            const safeName = buildGroupId(buildSignature(issue));
+            const safeName = sanitizeFileComponent(buildGroupId(buildSignature(issue)) || 'issue');
             const target = path.join(videosDir, `${safeName}-${sessionId}.webm`);
             await fs.rename(recorded, target).catch(async () => {
               await fs.copyFile(recorded, target);
