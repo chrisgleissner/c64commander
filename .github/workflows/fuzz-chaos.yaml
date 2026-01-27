@@ -19,7 +19,7 @@ jobs:
     name: Chaos fuzz (Playwright)
     runs-on: ubuntu-latest
     container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ format('ghcr.io/{0}/c64commander-ci-web:latest', github.repository_owner) }}
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 

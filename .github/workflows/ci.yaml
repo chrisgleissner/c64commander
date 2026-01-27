@@ -37,17 +37,22 @@ jobs:
           filters: |
             docker:
               - 'Dockerfile'
+              - 'Dockerfile.web'
               - 'apt-packages.txt'
+              - 'apt-packages-web.txt'
               - '.github/workflows/docker-build.yaml'
 
   docker-image:
-    name: Build Docker image
+    name: Build Web CI Docker image
     needs: detect-changes
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/docker-build.yaml
     with:
+      image_name: ${{ format('ghcr.io/{0}/c64commander-ci-web', github.repository_owner) }}
+      dockerfile: Dockerfile.web
+      apt_packages: apt-packages-web.txt
       force: ${{ needs.detect-changes.outputs.docker == 'true' }}
     secrets: inherit
 

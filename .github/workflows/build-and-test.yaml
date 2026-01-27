@@ -21,7 +21,7 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     container:
-      image: ${{ inputs.image != '' && inputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ inputs.image != '' && inputs.image || format('ghcr.io/{0}/c64commander-ci-web:latest', github.repository_owner) }}
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
     defaults:

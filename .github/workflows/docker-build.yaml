@@ -7,6 +7,16 @@ on:
         required: false
         type: string
         description: "Container image name to publish (defaults to ghcr.io/<owner>/c64commander-ci)"
+      dockerfile:
+        required: false
+        type: string
+        description: "Dockerfile path to build"
+        default: "Dockerfile"
+      apt_packages:
+        required: false
+        type: string
+        description: "APT package list file used by the Dockerfile"
+        default: "apt-packages.txt"
       force:
         required: false
         type: boolean
@@ -22,6 +32,14 @@ on:
         description: "Container image name to publish"
         required: false
         default: ""
+      dockerfile:
+        description: "Dockerfile path to build"
+        required: false
+        default: "Dockerfile"
+      apt_packages:
+        description: "APT package list file used by the Dockerfile"
+        required: false
+        default: "apt-packages.txt"
       force:
         description: "Force rebuild even if image is fresh"
         required: false
@@ -40,6 +58,8 @@ jobs:
 
     env:
       IMAGE_NAME: ${{ inputs.image_name || format('ghcr.io/{0}/c64commander-ci', github.repository_owner) }}
+      DOCKERFILE: ${{ inputs.dockerfile || 'Dockerfile' }}
+      APT_PACKAGES: ${{ inputs.apt_packages || 'apt-packages.txt' }}
 
     steps:
       - name: Checkout
@@ -47,8 +67,11 @@ jobs:
 
       - name: Determine Docker context hash
         id: context
+        env:
+          DOCKERFILE: ${{ env.DOCKERFILE }}
+          APT_PACKAGES: ${{ env.APT_PACKAGES }}
         run: |
-          HASH=$(git ls-files Dockerfile apt-packages.txt package.json package-lock.json patches | xargs cat | sha256sum | cut -d' ' -f1)
+          HASH=$(git ls-files "$DOCKERFILE" "$APT_PACKAGES" package.json package-lock.json patches | xargs cat | sha256sum | cut -d' ' -f1)
           echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Check image freshness
@@ -56,9 +79,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
-          IMAGE_SLUG: c64commander-ci
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
           set -euo pipefail
+          IMAGE_SLUG="${IMAGE_NAME##*/}"
           force_flag="${{ inputs.force }}"
           if [[ "$force_flag" == "true" ]]; then
             echo "rebuild=true" >> "$GITHUB_OUTPUT"
@@ -124,7 +148,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile
+          file: ${{ env.DOCKERFILE }}
           push: true
           build-args: |
             CONTEXT_HASH=${{ steps.context.outputs.hash }}
