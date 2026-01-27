@@ -72,7 +72,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 | CTA | Label | Purpose | Importance | Test Coverage | Test File | Notes |
 |-----|-------|---------|------------|---------------|-----------|-------|
-| Button | "Install HVSC" | Download HVSC library | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | One-time setup |
+| Button | "Download HVSC" | Download HVSC library | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | One-time setup |
 | Button | "Check for updates" | Query HVSC version | **LOW** | ✅ FULL | hvsc.spec.ts:133 | Maintenance |
 | Progress bar | HVSC installation | Show library download progress | **MEDIUM** | ✅ FULL | hvsc.spec.ts:79 | Feedback |
 | Button | "Cancel" (HVSC install) | Abort installation | **MEDIUM** | ❌ NONE | - | Installation control |
@@ -253,7 +253,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | **Bulk remove disks** | 1. Select multiple disks<br>2. Click "Remove selected"<br>3. Confirm | **HIGH** | ✅ FULL | diskManagement.spec.ts:324 | Library management |
 | **Save config to app** | 1. Modify config<br>2. Click "Save"<br>3. Enter name<br>4. Confirm | **HIGH** | ✅ FULL | homeConfigManagement.spec.ts:121 | Config persistence |
 | **Load config from app** | 1. Click "Load"<br>2. Select config<br>3. Confirm | **HIGH** | ✅ FULL | homeConfigManagement.spec.ts:143 | Config restoration |
-| **Install HVSC** | 1. Navigate to Play<br>2. Click "Install HVSC"<br>3. Confirm<br>4. Wait for completion | **HIGH** | ✅ FULL | hvsc.spec.ts:79 | HVSC setup |
+| **Download HVSC** | 1. Navigate to Play<br>2. Click "Download HVSC"<br>3. Confirm<br>4. Wait for completion | **HIGH** | ✅ FULL | hvsc.spec.ts:79 | HVSC setup |
 
 ### 7.3 MEDIUM Priority Flows
 

@@ -45,14 +45,14 @@ test.describe('Feature flags', () => {
     const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeChecked();
     await page.goto('/play');
-    await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download HVSC' })).toBeVisible();
     await snap(page, testInfo, 'hvsc-visible');
 
     await page.goto('/settings');
     await toggle.click();
     await expect(toggle).not.toBeChecked();
     await page.goto('/play');
-    await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Download HVSC' })).toHaveCount(0);
     await snap(page, testInfo, 'hvsc-hidden');
   });
 
