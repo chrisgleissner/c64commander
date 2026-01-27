@@ -34,10 +34,12 @@ test.describe('Config page SID solo routing', () => {
   };
 
   const assertLabelsHorizontal = async (page: Page, groupName: string, viewportWidth: number) => {
-    const groupCard = page.getByRole('button', { name: groupName }).locator('..');
+    const groupButton = page.getByRole('button', { name: groupName });
+    await groupButton.scrollIntoViewIfNeeded();
+    const groupCard = groupButton.locator('..');
     const labels = groupCard.getByTestId('config-item-label');
+    await expect.poll(async () => labels.count()).toBeGreaterThan(0);
     const count = await labels.count();
-    expect(count).toBeGreaterThan(0);
 
     for (let index = 0; index < count; index += 1) {
       const label = labels.nth(index);
