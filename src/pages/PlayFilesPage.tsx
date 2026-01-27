@@ -16,6 +16,7 @@ import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { reportUserError } from '@/lib/uiErrors';
 import { getC64API } from '@/lib/c64api';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
@@ -379,6 +380,8 @@ export default function PlayFilesPage() {
   const addItemsStartedAtRef = useRef<number | null>(null);
   const manualMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
+  const volumeUpdateTimerRef = useRef<number | null>(null);
+  const volumeUpdateSeqRef = useRef(0);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -477,19 +480,39 @@ export default function PlayFilesPage() {
     return updates;
   }, []);
 
+  const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number, operation: string) => {
+    let timeoutId: number | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(`${operation} timed out`)), timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    }
+  }, []);
+
   const applyAudioMixerUpdates = useCallback(async (updates: Record<string, string | number>, context: string) => {
     if (!Object.keys(updates).length) return;
     try {
-      await updateConfigBatch.mutateAsync({ category: 'Audio Mixer', updates });
+      await withTimeout(
+        updateConfigBatch.mutateAsync({ category: 'Audio Mixer', updates }),
+        4000,
+        `${context} audio mixer update`,
+      );
     } catch (error) {
-      addErrorLog(`${context} audio mixer update failed`, { error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'VOLUME_UPDATE',
         title: 'Audio mixer update failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          context,
+          updates: Object.keys(updates),
+        },
       });
     }
-  }, [updateConfigBatch]);
+  }, [reportUserError, updateConfigBatch, withTimeout]);
 
   const resolveSidVolumeItems = useCallback(async (forceRefresh = false) => {
     if (sidVolumeItems.length && !forceRefresh) return sidVolumeItems;
@@ -553,6 +576,13 @@ export default function PlayFilesPage() {
     trackStartedAtRef.current = null;
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
+
+  useEffect(() => () => {
+    if (volumeUpdateTimerRef.current) {
+      window.clearTimeout(volumeUpdateTimerRef.current);
+      volumeUpdateTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (addItemsProgress.status !== 'scanning') return undefined;
@@ -1093,7 +1123,16 @@ export default function PlayFilesPage() {
           reason,
           totalFiles: selectedFiles.length,
         });
-        toast({ title: 'No supported files', description: 'Found no supported files.', variant: 'destructive' });
+        reportUserError({
+          operation: 'PLAYLIST_ADD',
+          title: 'No supported files',
+          description: 'Found no supported files.',
+          context: {
+            sourceId: source.id,
+            sourceType: source.type,
+            totalFiles: selectedFiles.length,
+          },
+        });
         setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No supported files found.' }));
         return false;
       }
@@ -1128,20 +1167,20 @@ export default function PlayFilesPage() {
           error: err.message,
         });
       }
-      addErrorLog('Add items failed', {
-        sourceId: source.id,
-        sourceType: source.type,
-        platform: getPlatform(),
-        treeUri: localTreeUri ? redactTreeUri(localTreeUri) : null,
-        error: {
-          name: err.name,
-          message: err.message,
-          stack: err.stack,
-        },
-        details: listingDetails,
-      });
       setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
-      toast({ title: 'Add items failed', description: err.message, variant: 'destructive' });
+      reportUserError({
+        operation: 'PLAYLIST_ADD',
+        title: 'Add items failed',
+        description: err.message,
+        error: err,
+        context: {
+          sourceId: source.id,
+          sourceType: source.type,
+          platform: getPlatform(),
+          treeUri: localTreeUri ? redactTreeUri(localTreeUri) : null,
+          details: listingDetails,
+        },
+      });
       return false;
     } finally {
       setIsAddingItems(false);
@@ -1170,6 +1209,7 @@ export default function PlayFilesPage() {
     buildPlaylistItem,
     localEntriesBySourceId,
     localSourceTreeUris,
+    reportUserError,
     recurseFolders,
     songlengthsFiles,
   ]);
@@ -1320,14 +1360,15 @@ export default function PlayFilesPage() {
       setHvscSongs(listing.songs);
       setSelectedHvscFolder(listing.path);
     } catch (error) {
-      addErrorLog('HVSC folder listing failed', { path, error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'HVSC_BROWSE',
         title: 'HVSC browse failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { path },
       });
     }
-  }, []);
+  }, [reportUserError]);
 
   useEffect(() => {
     if (!hvscStatus?.installedVersion) return;
@@ -1687,14 +1728,14 @@ export default function PlayFilesPage() {
     try {
       await playItem(resolvedItems[startIndex]);
     } catch (error) {
-      addErrorLog('Playlist playback failed', {
-        error: (error as Error).message,
-        item: resolvedItems[startIndex]?.label,
-      });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          item: resolvedItems[startIndex]?.label,
+        },
       });
       setIsPlaying(false);
       setIsPaused(false);
@@ -1702,7 +1743,7 @@ export default function PlayFilesPage() {
     } finally {
       setIsPlaylistLoading(false);
     }
-  }, [applySonglengthsToItems, playItem]);
+  }, [applySonglengthsToItems, playItem, reportUserError]);
 
   const handlePlay = useCallback(async () => {
     if (!playlist.length) return;
@@ -1713,17 +1754,17 @@ export default function PlayFilesPage() {
       }
       await playItem(playlist[currentIndex]);
     } catch (error) {
-      addErrorLog('Play action failed', {
-        error: (error as Error).message,
-        item: playlist[currentIndex]?.label,
-      });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          item: playlist[currentIndex]?.label,
+        },
       });
     }
-  }, [currentIndex, playItem, playlist, startPlaylist]);
+  }, [currentIndex, playItem, playlist, reportUserError, startPlaylist]);
 
   const handleStop = useCallback(async () => {
     if (!isPlaying && !isPaused) return;
@@ -1731,13 +1772,29 @@ export default function PlayFilesPage() {
     const shouldReboot = currentItem?.category === 'disk';
     try {
       const api = getC64API();
+      if (isPaused) {
+        try {
+          await withTimeout(api.machineResume(), 2000, 'Resume');
+        } catch (error) {
+          addErrorLog('Resume before stop failed', { error: (error as Error).message });
+        }
+      }
       if (shouldReboot) {
-        await api.machineReboot();
+        await withTimeout(api.machineReboot(), 3000, 'Reboot');
       } else {
-        await api.machineReset();
+        await withTimeout(api.machineReset(), 3000, 'Reset');
       }
     } catch (error) {
-      addErrorLog('Stop failed', { error: (error as Error).message });
+      reportUserError({
+        operation: 'PLAYBACK_STOP',
+        title: 'Stop failed',
+        description: (error as Error).message,
+        error,
+        context: {
+          currentIndex,
+          category: currentItem?.category,
+        },
+      });
     }
     const now = Date.now();
     playedClockRef.current.stop(now, true);
@@ -1748,7 +1805,7 @@ export default function PlayFilesPage() {
     setDurationMs(undefined);
     setCurrentSubsongCount(null);
     trackStartedAtRef.current = null;
-  }, [currentIndex, isPaused, isPlaying, playlist]);
+  }, [currentIndex, isPaused, isPlaying, playlist, reportUserError, withTimeout]);
 
   const handlePauseResume = useCallback(async () => {
     if (!isPlaying) return;
@@ -1763,7 +1820,7 @@ export default function PlayFilesPage() {
         if (pauseMuteSnapshotRef.current && resumeItems.length) {
           await applyAudioMixerUpdates(pauseMuteSnapshotRef.current, 'Resume');
         }
-        await api.machineResume();
+        await withTimeout(api.machineResume(), 3000, 'Resume');
         pauseMuteSnapshotRef.current = null;
         setIsPaused(false);
         setVolumeMuted(wasMuted);
@@ -1776,7 +1833,7 @@ export default function PlayFilesPage() {
         if (pauseItems.length) {
           pauseMuteSnapshotRef.current = buildSidVolumeSnapshot(pauseItems);
         }
-        await api.machinePause();
+        await withTimeout(api.machinePause(), 3000, 'Pause');
         if (pauseItems.length) {
           await applyAudioMixerUpdates(buildSidMuteUpdates(pauseItems), 'Pause');
           setVolumeMuted(true);
@@ -1787,13 +1844,47 @@ export default function PlayFilesPage() {
         setIsPaused(true);
       }
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_CONTROL',
         title: 'Playback control failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          isPaused,
+          isPlaying,
+        },
       });
     }
-  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, resolveSidVolumeItems]);
+  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveSidVolumeItems, withTimeout]);
+
+  const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
+    if (!volumeOptions.length || !sidVolumeItems.length) return;
+    const target = volumeOptions[nextIndex]?.option;
+    if (!target) return;
+    const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
+    manualMuteSnapshotRef.current = null;
+
+    volumeUpdateSeqRef.current += 1;
+    const token = volumeUpdateSeqRef.current;
+
+    const runUpdate = () => {
+      if (token !== volumeUpdateSeqRef.current) return;
+      void applyAudioMixerUpdates(updates, 'Volume');
+      setVolumeMuted(false);
+    };
+
+    if (volumeUpdateTimerRef.current) {
+      window.clearTimeout(volumeUpdateTimerRef.current);
+      volumeUpdateTimerRef.current = null;
+    }
+
+    if (immediate) {
+      runUpdate();
+      return;
+    }
+
+    volumeUpdateTimerRef.current = window.setTimeout(runUpdate, 200);
+  }, [applyAudioMixerUpdates, buildEnabledSidVolumeUpdates, sidEnablement, sidVolumeItems, volumeOptions]);
 
   const handleVolumeChange = useCallback((value: number[]) => {
     const nextIndex = value[0] ?? 0;
@@ -1801,17 +1892,12 @@ export default function PlayFilesPage() {
     if (volumeMuted) {
       setVolumeMuted(false);
     }
-  }, [volumeMuted]);
+    scheduleVolumeUpdate(nextIndex);
+  }, [scheduleVolumeUpdate, volumeMuted]);
 
   const handleVolumeCommit = useCallback(async (nextIndex: number) => {
-    if (!volumeOptions.length || !sidVolumeItems.length) return;
-    const target = volumeOptions[nextIndex]?.option;
-    if (!target) return;
-    const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
-    manualMuteSnapshotRef.current = null;
-    await applyAudioMixerUpdates(updates, 'Volume');
-    setVolumeMuted(false);
-  }, [applyAudioMixerUpdates, sidEnablement, sidVolumeItems, volumeOptions]);
+    scheduleVolumeUpdate(nextIndex, true);
+  }, [scheduleVolumeUpdate]);
 
   const handleVolumeInteraction = useCallback(() => {
     if (!volumeMuted) return;
@@ -1964,13 +2050,18 @@ export default function PlayFilesPage() {
         description: `${formatPlayCategory(item.category)} added to playlist`,
       });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          source: entry.source,
+          path: entry.path,
+        },
       });
     }
-  }, [buildPlaylistItem, startPlaylist]);
+  }, [buildPlaylistItem, reportUserError, startPlaylist]);
 
 
   const handleHvscInstall = useCallback(async () => {
@@ -2071,16 +2162,17 @@ export default function PlayFilesPage() {
         },
         lastUpdatedAt: failedAt,
       }));
-      toast({
+      reportUserError({
+        operation: 'HVSC_DOWNLOAD',
         title: 'HVSC update failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     } finally {
       setHvscLoading(false);
       setHvscActiveToken(null);
     }
-  }, [refreshHvscStatus, updateHvscSummary]);
+  }, [refreshHvscStatus, reportUserError, updateHvscSummary]);
 
   const handleHvscIngest = useCallback(async () => {
     try {
@@ -2139,16 +2231,17 @@ export default function PlayFilesPage() {
         },
         lastUpdatedAt: failedAt,
       }));
-      toast({
+      reportUserError({
+        operation: 'HVSC_INGEST',
         title: 'HVSC ingest failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     } finally {
       setHvscLoading(false);
       setHvscActiveToken(null);
     }
-  }, [updateHvscSummary]);
+  }, [reportUserError, updateHvscSummary]);
 
   const handleHvscCancel = useCallback(async () => {
     const token = hvscActiveToken ?? 'hvsc-install';
@@ -2186,13 +2279,14 @@ export default function PlayFilesPage() {
       setHvscActiveToken(null);
       toast({ title: 'HVSC update cancelled' });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'HVSC_CANCEL',
         title: 'Cancel failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     }
-  }, [cancelHvscInstall, hvscActiveToken, updateHvscSummary]);
+  }, [cancelHvscInstall, hvscActiveToken, reportUserError, updateHvscSummary]);
 
   const buildHvscFile = useCallback((song: { id: number; virtualPath: string; fileName: string }) => {
     return buildHvscLocalPlayFile(song.virtualPath, song.fileName) as LocalPlayFile;
@@ -2221,19 +2315,21 @@ export default function PlayFilesPage() {
   const handlePlayHvscFolder = useCallback(async (path: string) => {
     try {
       if (!hvscStatus?.installedVersion) {
-        toast({
+        reportUserError({
+          operation: 'HVSC_PLAYBACK',
           title: 'HVSC unavailable',
           description: 'Install HVSC to play the collection.',
-          variant: 'destructive',
+          context: { path },
         });
         return;
       }
       const songs = await collectHvscSongs(path);
       if (!songs.length) {
-        toast({
+        reportUserError({
+          operation: 'HVSC_PLAYBACK',
           title: 'No HVSC songs',
           description: 'No SID files found in this folder.',
-          variant: 'destructive',
+          context: { path },
         });
         return;
       }
@@ -2256,13 +2352,15 @@ export default function PlayFilesPage() {
         description: `${playlistItems.length} files added to playlist`,
       });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'HVSC_PLAYBACK',
         title: 'HVSC playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { path },
       });
     }
-  }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscRoot.path, hvscStatus?.installedVersion, shuffleEnabled, startPlaylist]);
+  }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscRoot.path, hvscStatus?.installedVersion, reportUserError, shuffleEnabled, startPlaylist]);
 
   const playlistTotals = useMemo(() => {
     const durations = playlist.map((item, index) => playlistItemDuration(item, index));
@@ -2790,7 +2888,7 @@ export default function PlayFilesPage() {
                   disabled={hvscUpdating || !hvscAvailable}
                   className="whitespace-normal"
                 >
-                  Ingest cached
+                  Ingest HVSC
                 </Button>
                 {hvscInProgress && (
                   <Button

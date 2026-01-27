@@ -150,7 +150,15 @@ export const extractArchiveEntries = async (options: ExtractArchiveOptions) => {
     return extractZip(options);
   }
   if (lowered.endsWith(SEVEN_Z_EXTENSION)) {
-    return extractSevenZ(options);
+    try {
+      return await extractSevenZ(options);
+    } catch (error) {
+      try {
+        return await extractZip(options);
+      } catch {
+        throw error;
+      }
+    }
   }
   throw new Error(`Unsupported archive format: ${options.archiveName}`);
 };

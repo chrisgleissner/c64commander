@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSidPlayer } from '@/hooks/useSidPlayer';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { reportUserError } from '@/lib/uiErrors';
 import {
   addHvscProgressListener,
   checkForHvscUpdates,
@@ -404,22 +405,18 @@ export default function MusicPlayerPage() {
       });
     } catch (error) {
       setHvscErrorMessage((error as Error).message);
-      addErrorLog('HVSC update failed', {
-        error: {
-          name: (error as Error).name,
-          message: (error as Error).message,
-          stack: (error as Error).stack,
-        },
-        online: navigator.onLine,
-        action: currentAction ?? hvscActionLabel,
-        ingestionId: hvscIngestionId,
-        stage: hvscStage,
-        archiveName: hvscCurrentFile,
-      });
-      toast({
+      reportUserError({
+        operation: 'HVSC_DOWNLOAD',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          online: navigator.onLine,
+          action: currentAction ?? hvscActionLabel,
+          ingestionId: hvscIngestionId,
+          stage: hvscStage,
+          archiveName: hvscCurrentFile,
+        },
       });
     } finally {
       setHvscLoading(false);
@@ -448,16 +445,16 @@ export default function MusicPlayerPage() {
       });
     } catch (error) {
       setHvscErrorMessage((error as Error).message);
-      addErrorLog('HVSC cached ingest failed', {
-        error: (error as Error).message,
-        ingestionId: hvscIngestionId,
-        stage: hvscStage,
-        archiveName: hvscCurrentFile,
-      });
-      toast({
+      reportUserError({
+        operation: 'HVSC_INGEST',
         title: 'Ingest failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          ingestionId: hvscIngestionId,
+          stage: hvscStage,
+          archiveName: hvscCurrentFile,
+        },
       });
     } finally {
       setHvscLoading(false);
@@ -483,11 +480,12 @@ export default function MusicPlayerPage() {
       await playFromSource(entry, hvscSource);
       toast({ title: 'Playing', description: entry.title });
     } catch (error) {
-      addErrorLog('HVSC track playback failed', { path: entry.path, error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { path: entry.path, source: 'hvsc' },
       });
     }
   };
@@ -515,11 +513,12 @@ export default function MusicPlayerPage() {
         description: `${queue.length.toLocaleString()} tracks queued`,
       });
     } catch (error) {
-      addErrorLog('HVSC folder playback failed', { folder: selectedHvscFolder, error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { folder: selectedHvscFolder, source: 'hvsc' },
       });
     }
   };
@@ -531,17 +530,11 @@ export default function MusicPlayerPage() {
         setLocalFiles(files);
       }
     } catch (error) {
-      addErrorLog('Local folder pick failed', {
-        error: {
-          name: (error as Error).name,
-          message: (error as Error).message,
-          stack: (error as Error).stack,
-        },
-      });
-      toast({
+      reportUserError({
+        operation: 'LOCAL_FOLDER_PICK',
         title: 'Folder selection failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     }
   };
@@ -559,17 +552,11 @@ export default function MusicPlayerPage() {
         });
       }
     } catch (error) {
-      addErrorLog('Local archive ingest failed', {
-        error: {
-          name: (error as Error).name,
-          message: (error as Error).message,
-          stack: (error as Error).stack,
-        },
-      });
-      toast({
+      reportUserError({
+        operation: 'LOCAL_ARCHIVE_INGEST',
         title: 'Archive ingest failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     }
   };
@@ -598,11 +585,12 @@ export default function MusicPlayerPage() {
       await playQueue(queue);
       toast({ title: 'Playing folder', description: `${queue.length} tracks queued` });
     } catch (error) {
-      addErrorLog('Local folder playback failed', { folder: selectedLocalFolder, error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { folder: selectedLocalFolder, source: 'local' },
       });
     }
   };
@@ -635,11 +623,12 @@ export default function MusicPlayerPage() {
         description: randomFolder.path,
       });
     } catch (error) {
-      addErrorLog('Random local folder playback failed', { folder: randomFolder.path, error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { folder: randomFolder.path, source: 'local' },
       });
     }
   };
@@ -649,11 +638,12 @@ export default function MusicPlayerPage() {
       await playFromSource(entry, localSource);
       toast({ title: 'Playing', description: entry.title });
     } catch (error) {
-      addErrorLog('Local track playback failed', { file: entry.title, error: (error as Error).message });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { file: entry.title, source: 'local' },
       });
     }
   };
@@ -671,17 +661,15 @@ export default function MusicPlayerPage() {
       await playTrack(currentTrack);
       toast({ title: 'Playing', description: currentTrack.title });
     } catch (error) {
-      addErrorLog('Current track playback failed', {
-        track: currentTrack.title,
-        error: (error as Error).message,
-      });
-      toast({
+      reportUserError({
+        operation: 'PLAYBACK_START',
         title: 'Playback failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { track: currentTrack.title },
       });
     }
-  }, [currentTrack, playTrack]);
+  }, [currentTrack, playTrack, reportUserError]);
 
   return (
     <div className="min-h-screen pb-24">

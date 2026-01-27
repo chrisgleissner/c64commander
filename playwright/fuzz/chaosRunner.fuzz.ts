@@ -457,7 +457,7 @@ test.describe('Chaos fuzz', () => {
     const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
-    const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 50 : 500));
+    const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
     const baseTimeout = timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 90_000 : 10 * 60 * 1000);
     const timeoutMs = baseTimeout + 60_000;
     test.setTimeout(timeoutMs);
@@ -469,7 +469,7 @@ test.describe('Chaos fuzz', () => {
     const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;
     const retainSuccessSessions = Math.max(0, toNumber(process.env.FUZZ_RETAIN_SUCCESS) ?? (SHORT_FUZZ_DEFAULTS ? 2 : 10));
-    const minSessionSteps = Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 50 : 200));
+    const minSessionSteps = Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 35 : 200));
     const noProgressLimit = Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;

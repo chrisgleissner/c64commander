@@ -17,6 +17,15 @@ const openAddItemsDialog = async (page: Page) => {
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
+const addLocalFolder = async (page: Page, folderPath: string) => {
+  await openAddItemsDialog(page);
+  await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+  const input = page.locator('input[type="file"][webkitdirectory]');
+  await expect(input).toHaveCount(1);
+  await input.setInputFiles([folderPath]);
+  await expect(page.getByRole('dialog')).toBeHidden();
+};
+
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
@@ -130,6 +139,85 @@ test.describe('Playback file browser', () => {
     await expect(page.getByTestId('playlist-list')).toContainText('Track_0001.sid');
     await snap(page, testInfo, 'playlist-restored');
     server.setFaultMode('none');
+  });
+
+  test('pause then stop never hangs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'pause-stop-open');
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
+
+    await page.getByTestId('playlist-pause').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/machine:pause')));
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/machine:reset')));
+
+    await expect(page.getByTestId('playlist-play')).toContainText('Play');
+    await snap(page, testInfo, 'pause-stop-complete');
+  });
+
+  test('volume slider updates during playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
+
+    const slider = page.getByTestId('volume-slider').getByRole('slider');
+    await slider.focus();
+    await slider.press('ArrowRight');
+
+    await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
+    await snap(page, testInfo, 'volume-update');
+  });
+
+  test('local SID playback uploads before play', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-sids'));
+    await snap(page, testInfo, 'local-playlist-ready');
+
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+
+    const lastUpload = server.sidplayRequests[server.sidplayRequests.length - 1];
+    expect(lastUpload.method).toBe('POST');
+    await snap(page, testInfo, 'local-playback-uploaded');
+  });
+
+  test('playback errors emit log entries', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected playback failure warnings for unreachable device.');
+    server.setReachable(false);
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+
+    await expect.poll(async () => {
+      return page.evaluate(() => {
+        const raw = localStorage.getItem('c64u_app_logs');
+        if (!raw) return false;
+        try {
+          const logs = JSON.parse(raw) as Array<{ message: string }>;
+          return logs.some((entry) => entry.message.includes('PLAYBACK_START: Playback failed'));
+        } catch {
+          return false;
+        }
+      });
+    }).toBe(true);
+
+    await snap(page, testInfo, 'playback-error-logged');
   });
 
   test('playlist view-all dialog is constrained and scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {

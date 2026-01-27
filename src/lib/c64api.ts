@@ -319,10 +319,13 @@ export class C64API {
   }
 
   private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
-    if (isNativePlatform()) {
+    const body = options.body;
+    const shouldUseWebFetch =
+      isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
+
+    if (isNativePlatform() && !shouldUseWebFetch) {
       const headers = (options.headers as Record<string, string>) || {};
       const method = (options.method || 'GET').toString().toUpperCase();
-      const body = options.body;
       let data: unknown = undefined;
 
       if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
@@ -332,8 +335,6 @@ export class C64API {
         data = new Uint8Array(body);
       } else if (ArrayBuffer.isView(body)) {
         data = new Uint8Array(body.buffer);
-      } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
-        data = body;
       } else if (typeof body === 'string') {
         data = body;
       } else if (body) {

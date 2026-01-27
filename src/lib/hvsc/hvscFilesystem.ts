@@ -27,8 +27,84 @@ const decodeBase64Text = (raw: string) => {
   }
 };
 
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+      return (error as { message?: string }).message ?? '';
+    }
+    if ('error' in error && typeof (error as { error?: unknown }).error === 'string') {
+      return (error as { error?: string }).error ?? '';
+    }
+    if ('error' in error && (error as { error?: unknown }).error && typeof (error as { error?: any }).error === 'object') {
+      const nested = (error as { error?: { message?: unknown } }).error;
+      if (nested && typeof nested.message === 'string') return nested.message;
+    }
+  }
+  return String(error ?? '');
+};
+
+const isExistsError = (error: unknown) =>
+  /exists|already exists/i.test(getErrorMessage(error));
+
+const encodeText = (value: string) => {
+  const bytes = new TextEncoder().encode(value);
+  return uint8ToBase64(bytes);
+};
+
+const statPath = async (path: string) => {
+  try {
+    return await Filesystem.stat({ directory: Directory.Data, path });
+  } catch {
+    return null;
+  }
+};
+
+const writeFileWithRetry = async (path: string, data: string) => {
+  try {
+    await Filesystem.writeFile({ directory: Directory.Data, path, data });
+    return;
+  } catch (error) {
+    if (!isExistsError(error)) throw error;
+    const existing = await statPath(path);
+    if (existing?.type === 'file') return;
+    try {
+      await Filesystem.rmdir({ directory: Directory.Data, path, recursive: true });
+    } catch {
+      // ignore
+    }
+    try {
+      await Filesystem.deleteFile({ directory: Directory.Data, path });
+    } catch {
+      // ignore
+    }
+    try {
+      await Filesystem.writeFile({ directory: Directory.Data, path, data });
+    } catch (retryError) {
+      if (isExistsError(retryError)) {
+        const retryExisting = await statPath(path);
+        if (retryExisting?.type === 'file') return;
+      }
+      throw retryError;
+    }
+  }
+};
+
 const ensureDir = async (path: string) => {
-  await Filesystem.mkdir({ directory: Directory.Data, path, recursive: true });
+  const existing = await statPath(path);
+  if (existing?.type === 'directory') return;
+  if (existing?.type === 'file') {
+    try {
+      await Filesystem.deleteFile({ directory: Directory.Data, path });
+    } catch {
+      // ignore
+    }
+  }
+  try {
+    await Filesystem.mkdir({ directory: Directory.Data, path, recursive: true });
+  } catch (error) {
+    if (!isExistsError(error)) throw error;
+  }
 };
 
 export const ensureHvscDirs = async () => {
@@ -169,7 +245,7 @@ export const writeLibraryFile = async (virtualPath: string, data: Uint8Array) =>
   if (parent) {
     await ensureDir(parent);
   }
-  await Filesystem.writeFile({ directory: Directory.Data, path, data: uint8ToBase64(data) });
+  await writeFileWithRetry(path, uint8ToBase64(data));
 };
 
 export const deleteLibraryFile = async (virtualPath: string) => {
@@ -194,5 +270,51 @@ export const readCachedArchive = async (relativePath: string) => {
 
 export const writeCachedArchive = async (relativePath: string, data: Uint8Array) => {
   await ensureDir(HVSC_CACHE_DIR);
-  await Filesystem.writeFile({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}`, data: uint8ToBase64(data) });
+  await writeFileWithRetry(`${HVSC_CACHE_DIR}/${relativePath}`, uint8ToBase64(data));
+};
+
+export type HvscArchiveMarker = {
+  version: number;
+  type: 'baseline' | 'update';
+  sizeBytes?: number | null;
+  completedAt: string;
+};
+
+export const getHvscCacheMarkerPath = (relativePath: string) => `${HVSC_CACHE_DIR}/${relativePath}.complete.json`;
+
+export const writeCachedArchiveMarker = async (relativePath: string, marker: HvscArchiveMarker) => {
+  await ensureDir(HVSC_CACHE_DIR);
+  const payload = JSON.stringify(marker);
+  await writeFileWithRetry(getHvscCacheMarkerPath(relativePath), encodeText(payload));
+};
+
+export const readCachedArchiveMarker = async (relativePath: string): Promise<HvscArchiveMarker | null> => {
+  try {
+    const result = await Filesystem.readFile({
+      directory: Directory.Data,
+      path: getHvscCacheMarkerPath(relativePath),
+    });
+    const parsed = JSON.parse(decodeBase64Text(result.data)) as HvscArchiveMarker;
+    if (!parsed?.completedAt) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+export const deleteCachedArchive = async (relativePath: string) => {
+  try {
+    await Filesystem.deleteFile({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}` });
+  } catch {
+    try {
+      await Filesystem.rmdir({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}`, recursive: true });
+    } catch {
+      // ignore
+    }
+  }
+  try {
+    await Filesystem.deleteFile({ directory: Directory.Data, path: getHvscCacheMarkerPath(relativePath) });
+  } catch {
+    // ignore
+  }
 };

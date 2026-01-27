@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import { reportUserError } from '@/lib/uiErrors';
 import {
   Dialog,
   DialogContent,
@@ -189,7 +190,11 @@ export default function SettingsPage() {
     if (!isAndroid) return;
     const treeUri = safUris[0]?.uri;
     if (!treeUri) {
-      toast({ title: 'SAF diagnostics', description: 'No persisted SAF permissions found.', variant: 'destructive' });
+      reportUserError({
+        operation: 'SAF_DIAGNOSTICS',
+        title: 'SAF diagnostics',
+        description: 'No persisted SAF permissions found.',
+      });
       return;
     }
     setSafBusy(true);
@@ -228,10 +233,11 @@ export default function SettingsPage() {
       await navigator.clipboard.writeText(content);
       toast({ title: 'Copied error details to clipboard' });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'LOG_SHARE',
         title: 'Unable to share',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     }
   };
@@ -250,10 +256,11 @@ export default function SettingsPage() {
       await discoverConnection('settings');
       toast({ title: 'Connection settings saved' });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'CONNECTION_SAVE',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
       });
     } finally {
       setIsSaving(false);

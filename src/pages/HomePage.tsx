@@ -29,6 +29,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 
 export default function HomePage() {
@@ -79,10 +80,12 @@ export default function HomePage() {
       await action();
       toast({ title: successMessage });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'HOME_ACTION',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { action: successMessage },
       });
     }
   };
@@ -104,10 +107,12 @@ export default function HomePage() {
       setSaveDialogOpen(false);
       setSaveName('');
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'APP_CONFIG_SAVE',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { name: trimmed },
       });
     }
   };
@@ -121,10 +126,12 @@ export default function HomePage() {
       toast({ title: 'Config loaded', description: entry.name });
       setLoadDialogOpen(false);
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'APP_CONFIG_LOAD',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { name: entry.name },
       });
     } finally {
       setApplyingConfigId(null);

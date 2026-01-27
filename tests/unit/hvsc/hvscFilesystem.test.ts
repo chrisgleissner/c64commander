@@ -4,9 +4,11 @@ import {
   deleteLibraryFile,
   getHvscDurationByMd5,
   getHvscSongByVirtualPath,
+  readCachedArchiveMarker,
   listHvscFolder,
   resetLibraryRoot,
   resetSonglengthsCache,
+  writeCachedArchiveMarker,
   writeCachedArchive,
   writeLibraryFile,
 } from '@/lib/hvsc/hvscFilesystem';
@@ -157,5 +159,19 @@ describe('hvscFilesystem', () => {
     await writeCachedArchive('hvsc-update-84.7z', new Uint8Array([1, 2]));
     const cached = files.get('hvsc/cache/hvsc-update-84.7z');
     expect(cached?.type).toBe('file');
+  });
+
+  it('writes and reads cached archive markers', async () => {
+    await writeCachedArchiveMarker('hvsc-baseline-85.7z', {
+      version: 85,
+      type: 'baseline',
+      sizeBytes: 1024,
+      completedAt: new Date('2024-01-01T00:00:00Z').toISOString(),
+    });
+
+    const marker = await readCachedArchiveMarker('hvsc-baseline-85.7z');
+    expect(marker?.version).toBe(85);
+    expect(marker?.type).toBe('baseline');
+    expect(marker?.sizeBytes).toBe(1024);
   });
 });

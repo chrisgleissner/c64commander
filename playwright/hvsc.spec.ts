@@ -3,6 +3,7 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Page, Route, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
+import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 
 declare global {
@@ -40,6 +41,20 @@ test.describe('HVSC Play page', () => {
 
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
+  };
+
+  const seedBaseConfig = async (page: Page, baseUrl: string, hvscBaseUrl: string) => {
+    await page.addInitScript(
+      ({ baseUrlArg, hvscUrl, snapshot }: { baseUrlArg: string; hvscUrl: string; snapshot: unknown }) => {
+        const host = baseUrlArg?.replace(/^https?:\/\//, '');
+        localStorage.setItem('c64u_password', '');
+        localStorage.setItem('c64u_device_host', host || 'c64u');
+        localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
+        sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
+        localStorage.setItem('c64u_hvsc_base_url', hvscUrl);
+      },
+      { baseUrlArg: baseUrl, hvscUrl: hvscBaseUrl, snapshot: uiFixtures.initialSnapshot },
+    );
   };
 
   type InstallOptions = {
@@ -478,6 +493,38 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'install-complete');
   });
 
+  test('HVSC download + ingest uses mock server and plays a track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedBaseConfig(page, c64Server.baseUrl, `${hvscServer.baseUrl}/hvsc/`);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'hvsc-runtime-open');
+
+    await page.getByRole('button', { name: 'Download HVSC' }).click();
+    await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+
+    const markerExists = await page.evaluate(async ({ baselineVersion }) => {
+      const fs = (window as any)?.Capacitor?.Plugins?.Filesystem;
+      const dir = (window as any)?.Capacitor?.Plugins?.Filesystem?.Directory?.Data ?? 'DATA';
+      if (!fs) return false;
+      try {
+        await fs.readFile({ directory: dir, path: `hvsc/cache/hvsc-baseline-${baselineVersion}.7z.complete.json` });
+        return true;
+      } catch {
+        return false;
+      }
+    }, { baselineVersion: hvscServer.baseline.version });
+    expect(markerExists).toBe(true);
+
+    await page.getByRole('button', { name: 'Ingest HVSC' }).click();
+    await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+
+    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
+    await page.getByRole('button', { name: 'Play folder' }).click();
+
+    await expect.poll(() => c64Server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay'))).toBe(true);
+    await snap(page, testInfo, 'hvsc-playback-requested');
+  });
+
   test('HVSC stop cancels install', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, { installedVersion: 0 });
     await installMocks(page, { installedVersion: 0, seedInProgressSummary: true });
@@ -559,7 +606,7 @@ test.describe('HVSC Play page', () => {
     await expect(page.getByText(/Simulated extraction failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'extract-failed');
 
-    await page.getByRole('button', { name: 'Ingest cached', exact: true }).click();
+    await page.getByRole('button', { name: 'Ingest HVSC', exact: true }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
     await snap(page, testInfo, 'ingest-complete');
 

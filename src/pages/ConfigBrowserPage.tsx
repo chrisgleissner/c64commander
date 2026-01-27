@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/hooks/use-toast';
+import { reportUserError } from '@/lib/uiErrors';
 import { addErrorLog } from '@/lib/logging';
 import { resolveAudioMixerResetValue } from '@/lib/config/audioMixer';
 import { useRefreshControl } from '@/hooks/useRefreshControl';
@@ -145,19 +146,19 @@ function CategorySection({
           }
         }
       } catch (error) {
-        addErrorLog('Solo routing update failed', {
-          error: (error as Error).message,
-          category: categoryName,
-          soloItem: soloItem ?? 'none',
-        });
-        toast({
+        reportUserError({
+          operation: 'AUDIO_ROUTING',
           title: 'Audio routing error',
           description: (error as Error).message,
-          variant: 'destructive',
+          error,
+          context: {
+            category: categoryName,
+            soloItem: soloItem ?? 'none',
+          },
         });
       }
     },
-    [isAudioMixer, categoryName],
+    [isAudioMixer, categoryName, reportUserError],
   );
 
   useEffect(() => {
@@ -236,10 +237,15 @@ function CategorySection({
       });
       toast({ title: `${itemName} updated` });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'CONFIG_UPDATE',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          category: categoryName,
+          item: itemName,
+        },
       });
     }
   };
@@ -280,14 +286,14 @@ function CategorySection({
         await updateConfigBatch.mutateAsync({ category: categoryName, updates });
         soloSnapshotRef.current = audioConfiguredRef.current.length ? audioConfiguredRef.current : items;
       } catch (error) {
-        addErrorLog('Audio mixer update failed', {
-          error: (error as Error).message,
-          category: categoryName,
-        });
-        toast({
+        reportUserError({
+          operation: 'AUDIO_MIXER_UPDATE',
           title: 'Error',
           description: (error as Error).message,
-          variant: 'destructive',
+          error,
+          context: {
+            category: categoryName,
+          },
         });
       }
       return;
@@ -323,10 +329,11 @@ function CategorySection({
     setIfMatch((name) => name.includes('second'), now.getSeconds());
 
     if (Object.keys(updates).length === 0) {
-      toast({
+      reportUserError({
+        operation: 'CLOCK_SYNC',
         title: 'Clock sync unavailable',
         description: 'No matching clock fields found in this section.',
-        variant: 'destructive',
+        context: { category: categoryName },
       });
       return;
     }
@@ -336,14 +343,12 @@ function CategorySection({
       markChanged();
       toast({ title: 'Clock synced', description: 'C64U clock updated from device time.' });
     } catch (error) {
-      addErrorLog('Clock sync failed', {
-        error: (error as Error).message,
-        category: categoryName,
-      });
-      toast({
+      reportUserError({
+        operation: 'CLOCK_SYNC',
         title: 'Clock sync failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { category: categoryName },
       });
     }
   };
@@ -373,14 +378,12 @@ function CategorySection({
       markChanged();
       toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
     } catch (error) {
-      addErrorLog('Audio Mixer reset failed', {
-        error: (error as Error).message,
-        category: categoryName,
-      });
-      toast({
+      reportUserError({
+        operation: 'AUDIO_MIXER_RESET',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { category: categoryName },
       });
     } finally {
       setIsResetting(false);

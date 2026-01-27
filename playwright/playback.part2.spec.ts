@@ -468,7 +468,7 @@ test.describe('Playback file browser (part 2)', () => {
 
     await expect.poll(async () => {
       const logs = await page.evaluate(() => JSON.parse(localStorage.getItem('c64u_app_logs') ?? '[]'));
-      return logs.some((entry: { level: string; message: string }) => entry.level === 'error' && entry.message === 'Add items failed');
+      return logs.some((entry: { level: string; message: string }) => entry.level === 'error' && entry.message === 'PLAYLIST_ADD: Add items failed');
     }).toBe(true);
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
