@@ -55,6 +55,7 @@ import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import {
   addHvscProgressListener,
+  cancelHvscInstall,
   checkForHvscUpdates,
   getHvscDurationByMd5Seconds,
   getHvscFolderListing,
@@ -121,6 +122,8 @@ type AudioMixerItem = {
 
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
+const LAST_DEVICE_ID_KEY = 'c64u_last_device_id';
+const PLAYLIST_STORAGE_PREFIX = 'c64u_playlist:v1:';
 const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 const DURATION_MIN_SECONDS = 1;
 const DURATION_MAX_SECONDS = 3600;
@@ -261,10 +264,11 @@ export default function PlayFilesPage() {
   const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
   const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
   const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
-  const uniqueId = status.deviceInfo?.unique_id || 'default';
+  const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
+  const hasPlaylistRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -299,16 +303,20 @@ export default function PlayFilesPage() {
   const isAndroid = getPlatform() === 'android';
 
   const { flags, isLoaded } = useFeatureFlags();
-  const [hvscFlagStorage, setHvscFlagStorage] = useState(false);
+  const [hvscFlagStorage, setHvscFlagStorage] = useState<boolean | null>(null);
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
-    const localFlag = localStorage.getItem('c64u_feature_flag:hvsc_enabled') === '1';
-    const sessionFlag = typeof sessionStorage !== 'undefined'
-      ? sessionStorage.getItem('c64u_feature_flag:hvsc_enabled') === '1'
-      : false;
-    setHvscFlagStorage(localFlag || sessionFlag);
+    const localValue = localStorage.getItem('c64u_feature_flag:hvsc_enabled');
+    const sessionValue = typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem('c64u_feature_flag:hvsc_enabled')
+      : null;
+    if (localValue === null && sessionValue === null) {
+      setHvscFlagStorage(null);
+      return;
+    }
+    setHvscFlagStorage(localValue === '1' || sessionValue === '1');
   }, [flags.hvsc_enabled, isLoaded]);
-  const hvscControlsEnabled = flags.hvsc_enabled || hvscFlagStorage;
+  const hvscControlsEnabled = hvscFlagStorage ?? flags.hvsc_enabled;
 
   const audioMixerItems = useMemo(() => extractAudioMixerItems(audioMixerCategory as Record<string, unknown> | undefined), [audioMixerCategory]);
   const sidVolumeItems = useMemo(
@@ -346,6 +354,8 @@ export default function PlayFilesPage() {
   const [hvscActionLabel, setHvscActionLabel] = useState<string | null>(null);
   const [hvscCurrentFile, setHvscCurrentFile] = useState<string | null>(null);
   const [hvscErrorMessage, setHvscErrorMessage] = useState<string | null>(null);
+  const [hvscActiveToken, setHvscActiveToken] = useState<'hvsc-install' | 'hvsc-ingest' | null>(null);
+  const [hvscElapsedNow, setHvscElapsedNow] = useState(() => Date.now());
   const [hvscFolderFilter, setHvscFolderFilter] = useState('');
   const [hvscFolders, setHvscFolders] = useState<string[]>([]);
   const [hvscSongs, setHvscSongs] = useState<Array<{ id: number; virtualPath: string; fileName: string; durationSeconds?: number | null }>>([]);
@@ -353,6 +363,7 @@ export default function PlayFilesPage() {
   const [volumeIndex, setVolumeIndex] = useState(0);
   const [volumeMuted, setVolumeMuted] = useState(false);
   const hvscLastStageRef = useRef<string | null>(null);
+  const hvscProgressThrottleRef = useRef(0);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const songlengthsInputRef = useRef<HTMLInputElement | null>(null);
@@ -671,7 +682,23 @@ export default function PlayFilesPage() {
     return loader;
   }, [readLocalText, songlengthsFilesByDir]);
 
-  const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(uniqueId), [uniqueId]);
+  const [lastKnownDeviceId, setLastKnownDeviceId] = useState<string | null>(() => {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage.getItem(LAST_DEVICE_ID_KEY);
+  });
+
+  useEffect(() => {
+    if (!deviceInfoId || typeof localStorage === 'undefined') return;
+    setLastKnownDeviceId(deviceInfoId);
+    try {
+      localStorage.setItem(LAST_DEVICE_ID_KEY, deviceInfoId);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [deviceInfoId]);
+
+  const resolvedDeviceId = deviceInfoId || lastKnownDeviceId || 'default';
+  const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(resolvedDeviceId), [resolvedDeviceId]);
 
   const handleAutoConfirmStart = useCallback(() => {
     setAddItemsSurface('page');
@@ -704,8 +731,10 @@ export default function PlayFilesPage() {
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
   const hvscRoot = useMemo(() => loadHvscRoot(), []);
-  const hvscLibraryAvailable = hvscStatusSummary.download.status === 'success'
-    && hvscStatusSummary.extraction.status === 'success';
+  const hvscAvailable = isHvscBridgeAvailable();
+  const hvscLibraryAvailable = hvscAvailable
+    && (Boolean(hvscStatus?.installedVersion)
+      || (hvscStatusSummary.download.status === 'success' && hvscStatusSummary.extraction.status === 'success'));
 
 
   const sourceGroups: SourceGroup[] = useMemo(() => {
@@ -781,7 +810,8 @@ export default function PlayFilesPage() {
       file: entry.file,
       songNr: Number.isNaN(songNrValue) ? undefined : songNrValue,
     };
-    const idParts = [entry.source, entry.sourceId ?? ''];
+    const resolvedSourceId = entry.sourceId ?? (entry.source === 'hvsc' ? 'hvsc-library' : null);
+    const idParts = [entry.source, resolvedSourceId ?? ''];
     return {
       id: `${idParts.join(':')}:${entry.path}`,
       request,
@@ -789,7 +819,7 @@ export default function PlayFilesPage() {
       label: entry.name,
       path: entry.path,
       durationMs: entry.durationMs,
-      sourceId: entry.sourceId ?? null,
+      sourceId: resolvedSourceId,
       sizeBytes: entry.sizeBytes ?? null,
       modifiedAt: entry.modifiedAt ?? null,
       addedAt: addedAtOverride ?? new Date().toISOString(),
@@ -1042,11 +1072,11 @@ export default function PlayFilesPage() {
           ? buildHvscLocalPlayFile(normalizedPath, file.name)
           : undefined;
         const playable: PlayableEntry = {
-          source: source.type === 'ultimate' ? 'ultimate' : 'local',
+          source: source.type === 'ultimate' ? 'ultimate' : source.type === 'hvsc' ? 'hvsc' : 'local',
           name: file.name,
           path: normalizedPath,
           durationMs: undefined,
-          sourceId: source.type === 'local' ? source.id : null,
+          sourceId: source.type === 'local' || source.type === 'hvsc' ? source.id : null,
           file: hvscFile ?? localFile,
           sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
           modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
@@ -1168,24 +1198,37 @@ export default function PlayFilesPage() {
       if (event.stage && event.stage !== 'error') {
         hvscLastStageRef.current = event.stage;
       }
-      if (event.message) setHvscActionLabel(event.message);
-      if (event.stage) setHvscStage(event.stage);
-      if (typeof event.percent === 'number') setHvscProgress(event.percent);
-      if (event.currentFile) setHvscCurrentFile(event.currentFile);
+      const nowMs = Date.now();
+      const shouldUpdate =
+        event.stage === 'complete'
+        || event.stage === 'error'
+        || event.stage !== lastStage
+        || nowMs - hvscProgressThrottleRef.current >= 120;
+      if (shouldUpdate) {
+        hvscProgressThrottleRef.current = nowMs;
+        if (event.message) setHvscActionLabel(event.message);
+        if (event.stage) setHvscStage(event.stage);
+        if (typeof event.percent === 'number') setHvscProgress(event.percent);
+        if (event.currentFile) setHvscCurrentFile(event.currentFile);
+      }
       if (event.errorCause) setHvscErrorMessage(event.errorCause);
       if (event.stage === 'download') {
-        updateHvscSummary((prev) => ({
-          ...prev,
-          download: {
-            ...prev.download,
-            status: 'in-progress',
-            startedAt: prev.download.startedAt ?? now,
-            durationMs: event.elapsedTimeMs ?? prev.download.durationMs ?? null,
-            sizeBytes: event.totalBytes ?? event.downloadedBytes ?? prev.download.sizeBytes ?? null,
-            errorCategory: null,
-            errorMessage: null,
-          },
-        }));
+        if (shouldUpdate) {
+          updateHvscSummary((prev) => ({
+            ...prev,
+            download: {
+              ...prev.download,
+              status: 'in-progress',
+              startedAt: prev.download.startedAt ?? now,
+              durationMs: event.elapsedTimeMs ?? prev.download.durationMs ?? null,
+              sizeBytes: event.totalBytes ?? event.downloadedBytes ?? prev.download.sizeBytes ?? null,
+              downloadedBytes: event.downloadedBytes ?? prev.download.downloadedBytes ?? null,
+              totalBytes: event.totalBytes ?? prev.download.totalBytes ?? null,
+              errorCategory: null,
+              errorMessage: null,
+            },
+          }));
+        }
       }
       if (
         event.stage === 'archive_extraction' ||
@@ -1194,18 +1237,21 @@ export default function PlayFilesPage() {
         event.stage === 'songlengths' ||
         event.stage === 'sid_metadata_parsing'
       ) {
-        updateHvscSummary((prev) => ({
-          ...prev,
-          extraction: {
-            ...prev.extraction,
-            status: 'in-progress',
-            startedAt: prev.extraction.startedAt ?? now,
-            durationMs: event.elapsedTimeMs ?? prev.extraction.durationMs ?? null,
-            filesExtracted: event.processedCount ?? prev.extraction.filesExtracted ?? null,
-            errorCategory: null,
-            errorMessage: null,
-          },
-        }));
+        if (shouldUpdate) {
+          updateHvscSummary((prev) => ({
+            ...prev,
+            extraction: {
+              ...prev.extraction,
+              status: 'in-progress',
+              startedAt: prev.extraction.startedAt ?? now,
+              durationMs: event.elapsedTimeMs ?? prev.extraction.durationMs ?? null,
+              filesExtracted: event.processedCount ?? prev.extraction.filesExtracted ?? null,
+              totalFiles: event.totalCount ?? prev.extraction.totalFiles ?? null,
+              errorCategory: null,
+              errorMessage: null,
+            },
+          }));
+        }
       }
       if (event.stage === 'complete') {
         updateHvscSummary((prev) => ({
@@ -1526,7 +1572,9 @@ export default function PlayFilesPage() {
               || (localTreeUri
                 ? buildLocalPlayFileFromTree(entry.name, normalizedPath, localTreeUri, parseModifiedAt(localEntry?.modifiedAt))
                 : undefined)
-            : undefined,
+            : entry.source === 'hvsc'
+              ? buildHvscLocalPlayFile(normalizedPath, entry.name)
+              : undefined,
           sizeBytes: localEntry?.sizeBytes ?? entry.sizeBytes ?? null,
           modifiedAt: localEntry?.modifiedAt ?? entry.modifiedAt ?? null,
         };
@@ -1537,21 +1585,62 @@ export default function PlayFilesPage() {
   }, [buildPlaylistItem, localEntriesBySourceId, localSourceTreeUris]);
 
   useEffect(() => {
+    hasPlaylistRef.current = playlist.length > 0;
+  }, [playlist]);
+
+  useEffect(() => {
     if (typeof localStorage === 'undefined') return;
     try {
-      let raw = localStorage.getItem(playlistStorageKey);
-      if (!raw && uniqueId !== 'default') {
-        raw = localStorage.getItem(buildPlaylistStorageKey('default'));
+      const seenKeys = new Set<string>();
+      const candidateKeys: string[] = [];
+      const pushKey = (key: string | null | undefined) => {
+        if (!key || seenKeys.has(key)) return;
+        seenKeys.add(key);
+        candidateKeys.push(key);
+      };
+
+      const defaultKey = buildPlaylistStorageKey('default');
+      pushKey(playlistStorageKey);
+      if (resolvedDeviceId !== 'default') {
+        pushKey(defaultKey);
       }
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as StoredPlaylistState;
-      const restored = hydrateStoredPlaylist(parsed);
+
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(PLAYLIST_STORAGE_PREFIX)) {
+          pushKey(key);
+        }
+      }
+
+      if (!candidateKeys.length) return;
+
+      const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];
+      for (const key of candidateKeys) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw) as StoredPlaylistState;
+          candidates.push({ key, parsed });
+        } catch {
+          // Ignore invalid stored playlists.
+        }
+      }
+
+      if (!candidates.length) return;
+
+      const preferred =
+        candidates.find((entry) => entry.parsed?.items?.length)
+        ?? candidates[0];
+      const restored = hydrateStoredPlaylist(preferred.parsed);
+      if (hasPlaylistRef.current && restored.items.length === 0) {
+        return;
+      }
       setPlaylist(restored.items);
       setCurrentIndex(restored.index);
     } catch {
       // Ignore invalid stored playlists.
     }
-  }, [hydrateStoredPlaylist, playlistStorageKey, uniqueId]);
+  }, [hydrateStoredPlaylist, playlistStorageKey, resolvedDeviceId]);
 
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
@@ -1570,7 +1659,12 @@ export default function PlayFilesPage() {
       currentIndex,
     };
     try {
-      localStorage.setItem(playlistStorageKey, JSON.stringify(stored));
+      const payload = JSON.stringify(stored);
+      localStorage.setItem(playlistStorageKey, payload);
+      const defaultKey = buildPlaylistStorageKey('default');
+      if (playlistStorageKey !== defaultKey) {
+        localStorage.setItem(defaultKey, payload);
+      }
     } catch {
       // Ignore storage failures.
     }
@@ -1882,6 +1976,7 @@ export default function PlayFilesPage() {
   const handleHvscInstall = useCallback(async () => {
     try {
       const startedAt = new Date().toISOString();
+      setHvscActiveToken('hvsc-install');
       setHvscLoading(true);
       setHvscProgress(0);
       setHvscStage(null);
@@ -1908,6 +2003,27 @@ export default function PlayFilesPage() {
       const updateStatus = await checkForHvscUpdates();
       if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
         toast({ title: 'HVSC up to date', description: 'No new updates detected.' });
+        const status = await getHvscStatus();
+        setHvscStatus(status);
+        const finishedAt = new Date().toISOString();
+        updateHvscSummary((prev) => ({
+          ...prev,
+          download: {
+            ...prev.download,
+            status: 'success',
+            finishedAt,
+            errorCategory: null,
+            errorMessage: null,
+          },
+          extraction: {
+            ...prev.extraction,
+            status: 'success',
+            finishedAt,
+            errorCategory: null,
+            errorMessage: null,
+          },
+          lastUpdatedAt: finishedAt,
+        }));
         refreshHvscStatus();
         return;
       }
@@ -1939,6 +2055,9 @@ export default function PlayFilesPage() {
         description: `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
+      if (/cancelled/i.test((error as Error).message)) {
+        return;
+      }
       const failedAt = new Date().toISOString();
       setHvscErrorMessage((error as Error).message);
       updateHvscSummary((prev) => ({
@@ -1959,12 +2078,14 @@ export default function PlayFilesPage() {
       });
     } finally {
       setHvscLoading(false);
+      setHvscActiveToken(null);
     }
   }, [refreshHvscStatus, updateHvscSummary]);
 
   const handleHvscIngest = useCallback(async () => {
     try {
       const startedAt = new Date().toISOString();
+      setHvscActiveToken('hvsc-ingest');
       setHvscLoading(true);
       setHvscProgress(0);
       setHvscStage(null);
@@ -2002,6 +2123,9 @@ export default function PlayFilesPage() {
         description: `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
+      if (/cancelled/i.test((error as Error).message)) {
+        return;
+      }
       const failedAt = new Date().toISOString();
       setHvscErrorMessage((error as Error).message);
       updateHvscSummary((prev) => ({
@@ -2022,8 +2146,53 @@ export default function PlayFilesPage() {
       });
     } finally {
       setHvscLoading(false);
+      setHvscActiveToken(null);
     }
   }, [updateHvscSummary]);
+
+  const handleHvscCancel = useCallback(async () => {
+    const token = hvscActiveToken ?? 'hvsc-install';
+    try {
+      await cancelHvscInstall(token);
+      const stoppedAt = new Date().toISOString();
+      setHvscLoading(false);
+      setHvscProgress(null);
+      setHvscStage(null);
+      setHvscActionLabel(null);
+      setHvscCurrentFile(null);
+      setHvscErrorMessage('Cancelled');
+      updateHvscSummary((prev) => ({
+        ...prev,
+        download: prev.download.status === 'in-progress'
+          ? {
+            ...prev.download,
+            status: 'idle',
+            finishedAt: stoppedAt,
+            errorCategory: null,
+            errorMessage: 'Cancelled',
+          }
+          : prev.download,
+        extraction: prev.extraction.status === 'in-progress'
+          ? {
+            ...prev.extraction,
+            status: 'idle',
+            finishedAt: stoppedAt,
+            errorCategory: null,
+            errorMessage: 'Cancelled',
+          }
+          : prev.extraction,
+        lastUpdatedAt: stoppedAt,
+      }));
+      setHvscActiveToken(null);
+      toast({ title: 'HVSC update cancelled' });
+    } catch (error) {
+      toast({
+        title: 'Cancel failed',
+        description: (error as Error).message,
+        variant: 'destructive',
+      });
+    }
+  }, [cancelHvscInstall, hvscActiveToken, updateHvscSummary]);
 
   const buildHvscFile = useCallback((song: { id: number; virtualPath: string; fileName: string }) => {
     return buildHvscLocalPlayFile(song.virtualPath, song.fileName) as LocalPlayFile;
@@ -2069,11 +2238,12 @@ export default function PlayFilesPage() {
         return;
       }
       const entries: PlayableEntry[] = songs.map((song) => ({
-        source: 'local',
+        source: 'hvsc',
         name: song.fileName,
         path: song.virtualPath,
         file: buildHvscFile(song),
         durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
+        sourceId: hvscRoot.path,
       }));
       const items = entries
         .map((entry) => buildPlaylistItem(entry))
@@ -2092,7 +2262,7 @@ export default function PlayFilesPage() {
         variant: 'destructive',
       });
     }
-  }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscStatus?.installedVersion, shuffleEnabled, startPlaylist]);
+  }, [buildHvscFile, buildPlaylistItem, collectHvscSongs, hvscRoot.path, hvscStatus?.installedVersion, shuffleEnabled, startPlaylist]);
 
   const playlistTotals = useMemo(() => {
     const durations = playlist.map((item, index) => playlistItemDuration(item, index));
@@ -2125,7 +2295,11 @@ export default function PlayFilesPage() {
       }
       const playlistIndex = playlist.findIndex((entry) => entry.id === item.id);
       const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
-      const sourceLabel = item.request.source === 'ultimate' ? 'C64 Ultimate' : 'This device';
+      const sourceLabel = item.request.source === 'ultimate'
+        ? 'C64 Ultimate'
+        : item.request.source === 'hvsc'
+          ? 'HVSC Library'
+          : 'This device';
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
       const menuItems: ActionListMenuItem[] = [
         { type: 'label', label: 'Details' },
@@ -2148,6 +2322,7 @@ export default function PlayFilesPage() {
         icon: (
           <FileOriginIcon
             origin={item.request.source === 'ultimate' ? 'ultimate' : 'local'}
+            label={item.request.source === 'hvsc' ? 'HVSC library file' : undefined}
             className="h-4 w-4 shrink-0 opacity-60"
           />
         ),
@@ -2165,8 +2340,11 @@ export default function PlayFilesPage() {
   }, [filteredPlaylist, handlePlaylistSelect, isPlaylistLoading, playlist, playlistItemDuration, removePlaylistItemsById, selectedPlaylistIds, startPlaylist]);
 
   const hvscInstalled = Boolean(hvscStatus?.installedVersion);
-  const hvscAvailable = isHvscBridgeAvailable();
-  const hvscUpdating = hvscLoading || hvscStatus?.ingestionState === 'installing' || hvscStatus?.ingestionState === 'updating';
+  const hvscInProgress = hvscStatusSummary.download.status === 'in-progress'
+    || hvscStatusSummary.extraction.status === 'in-progress'
+    || hvscStatus?.ingestionState === 'installing'
+    || hvscStatus?.ingestionState === 'updating';
+  const hvscUpdating = hvscLoading || hvscInProgress;
   const hvscInlineError = hvscErrorMessage || (hvscStatus?.ingestionState === 'error' ? hvscStatus.ingestionError : null);
   const hvscSummaryState = useMemo(() => {
     if (hvscStatusSummary.download.status === 'failure' || hvscStatusSummary.extraction.status === 'failure') return 'failure';
@@ -2195,11 +2373,52 @@ export default function PlayFilesPage() {
   const hvscSummaryDurationMs = hvscStatusSummary.extraction.durationMs ?? hvscStatusSummary.download.durationMs;
   const hvscSummaryFilesExtracted = hvscStatusSummary.extraction.filesExtracted;
   const hvscSummaryUpdatedAt = hvscStatusSummary.lastUpdatedAt;
+  const hvscDownloadBytes = hvscStatusSummary.download.downloadedBytes ?? null;
+  const hvscDownloadTotalBytes = hvscStatusSummary.download.totalBytes ?? hvscStatusSummary.download.sizeBytes ?? null;
+  const hvscExtractionTotalFiles = hvscStatusSummary.extraction.totalFiles ?? null;
+
+  const resolveElapsedMs = useCallback((startedAt?: string | null, fallback?: number | null) => {
+    if (startedAt) {
+      const started = new Date(startedAt).getTime();
+      if (!Number.isNaN(started)) {
+        return Math.max(0, hvscElapsedNow - started);
+      }
+    }
+    return fallback ?? null;
+  }, [hvscElapsedNow]);
+
+  const hvscDownloadElapsedMs = hvscStatusSummary.download.status === 'in-progress'
+    ? resolveElapsedMs(hvscStatusSummary.download.startedAt, hvscStatusSummary.download.durationMs)
+    : hvscStatusSummary.download.durationMs;
+  const hvscExtractionElapsedMs = hvscStatusSummary.extraction.status === 'in-progress'
+    ? resolveElapsedMs(hvscStatusSummary.extraction.startedAt, hvscStatusSummary.extraction.durationMs)
+    : hvscStatusSummary.extraction.durationMs;
+
+  const hvscDownloadPercent = hvscDownloadBytes !== null && hvscDownloadTotalBytes
+    ? Math.min(100, (hvscDownloadBytes / hvscDownloadTotalBytes) * 100)
+    : hvscProgress;
+  const hvscExtractionPercent = hvscSummaryFilesExtracted !== null && hvscExtractionTotalFiles
+    ? Math.min(100, (hvscSummaryFilesExtracted / hvscExtractionTotalFiles) * 100)
+    : hvscProgress;
 
   const hvscVisibleFolders = useMemo(() => {
     if (!hvscFolderFilter) return hvscFolders;
     return hvscFolders.filter((folder) => folder.toLowerCase().includes(hvscFolderFilter.toLowerCase()));
   }, [hvscFolders, hvscFolderFilter]);
+
+  useEffect(() => {
+    if (!hvscInProgress) return;
+    const timer = window.setInterval(() => setHvscElapsedNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [hvscInProgress]);
+
+  useEffect(() => {
+    if (hvscStatusSummary.download.status === 'in-progress') {
+      setHvscActiveToken('hvsc-install');
+    } else if (hvscStatusSummary.extraction.status === 'in-progress') {
+      setHvscActiveToken('hvsc-ingest');
+    }
+  }, [hvscStatusSummary.download.status, hvscStatusSummary.extraction.status]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/95">
@@ -2454,43 +2673,45 @@ export default function PlayFilesPage() {
           </div>
         </div>
 
-        <SelectableActionList
-          title="Playlist"
-          selectionLabel="items"
-          items={playlistListItems}
-          emptyLabel="No tracks in playlist yet."
-          selectAllLabel="Select all"
-          deselectAllLabel="Deselect all"
-          removeSelectedLabel={selectedPlaylistCount ? 'Remove selected items' : undefined}
-          selectedCount={selectedPlaylistCount}
-          allSelected={allPlaylistSelected}
-          onToggleSelectAll={toggleSelectAllPlaylist}
-          onRemoveSelected={handleRemoveSelectedPlaylist}
-          maxVisible={listPreviewLimit}
-          viewAllTitle="Playlist"
-          listTestId="playlist-list"
-          rowTestId="playlist-item"
-          filterHeader={(
-            <div className="flex flex-wrap gap-2">
-              {CATEGORY_OPTIONS.map((category) => (
-                <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Checkbox
-                    checked={playlistTypeFilters.includes(category)}
-                    onCheckedChange={() => togglePlaylistTypeFilter(category)}
-                    aria-label={formatPlayCategory(category)}
-                    data-testid={`playlist-type-${category}`}
-                  />
-                  {formatPlayCategory(category)}
-                </label>
-              ))}
-            </div>
-          )}
-          headerActions={
-            <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
-              {hasPlaylist ? 'Add more items' : 'Add items'}
-            </Button>
-          }
-        />
+        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <SelectableActionList
+            title="Playlist"
+            selectionLabel="items"
+            items={playlistListItems}
+            emptyLabel="No tracks in playlist yet."
+            selectAllLabel="Select all"
+            deselectAllLabel="Deselect all"
+            removeSelectedLabel={selectedPlaylistCount ? 'Remove selected items' : undefined}
+            selectedCount={selectedPlaylistCount}
+            allSelected={allPlaylistSelected}
+            onToggleSelectAll={toggleSelectAllPlaylist}
+            onRemoveSelected={handleRemoveSelectedPlaylist}
+            maxVisible={listPreviewLimit}
+            viewAllTitle="Playlist"
+            listTestId="playlist-list"
+            rowTestId="playlist-item"
+            filterHeader={(
+              <div className="flex flex-wrap gap-2">
+                {CATEGORY_OPTIONS.map((category) => (
+                  <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Checkbox
+                      checked={playlistTypeFilters.includes(category)}
+                      onCheckedChange={() => togglePlaylistTypeFilter(category)}
+                      aria-label={formatPlayCategory(category)}
+                      data-testid={`playlist-type-${category}`}
+                    />
+                    {formatPlayCategory(category)}
+                  </label>
+                ))}
+              </div>
+            )}
+            headerActions={
+              <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+                {hasPlaylist ? 'Add more items' : 'Add items'}
+              </Button>
+            }
+          />
+        </div>
 
         <input
           ref={localSourceInputRef}
@@ -2542,7 +2763,7 @@ export default function PlayFilesPage() {
         ) : null}
 
         {hvscControlsEnabled && (
-          <div className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-4 space-y-4" data-testid="hvsc-controls">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium">HVSC library</p>
@@ -2560,7 +2781,7 @@ export default function PlayFilesPage() {
                   disabled={hvscUpdating || !hvscAvailable}
                   className="whitespace-normal"
                 >
-                  Download HVSC Library
+                  Download HVSC
                 </Button>
                 <Button
                   variant="outline"
@@ -2571,11 +2792,22 @@ export default function PlayFilesPage() {
                 >
                   Ingest cached
                 </Button>
+                {hvscInProgress && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleHvscCancel()}
+                    className="whitespace-normal"
+                    data-testid="hvsc-stop"
+                  >
+                    Stop
+                  </Button>
+                )}
               </div>
             </div>
 
             {hvscSummaryState !== 'idle' && (
-              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="hvsc-summary">
                 {hvscSummaryState === 'success' ? (
                   <div className="space-y-1">
                     <p className="text-sm font-medium">HVSC downloaded successfully</p>
@@ -2598,16 +2830,42 @@ export default function PlayFilesPage() {
               </p>
             )}
 
-            {hvscUpdating && (
-              <div className="space-y-2">
+            {(hvscUpdating || hvscSummaryState !== 'idle') && (
+              <div className="space-y-2" data-testid="hvsc-progress">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{hvscActionLabel || 'Processing HVSC…'}</span>
-                  <span>{hvscProgress !== null ? `${Math.round(hvscProgress)}%` : '—'}</span>
+                  <span>{hvscStage ? hvscStage : '—'}</span>
                 </div>
-                <Progress value={hvscProgress ?? 0} />
-                {hvscStage && (
-                  <p className="text-[11px] text-muted-foreground">Stage: {hvscStage}</p>
-                )}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Download</span>
+                    <span>{hvscDownloadPercent !== null && hvscDownloadPercent !== undefined ? `${Math.round(hvscDownloadPercent)}%` : '—'}</span>
+                  </div>
+                  <Progress value={hvscDownloadPercent ?? 0} />
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
+                    <span>Downloaded: {formatBytes(hvscDownloadBytes)}</span>
+                    <span>Total: {formatBytes(hvscDownloadTotalBytes)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-elapsed">
+                    <span>Elapsed: {formatHvscDuration(hvscDownloadElapsedMs)}</span>
+                    <span>Status: {hvscStatusSummary.download.status}</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Extraction + indexing</span>
+                    <span>{hvscExtractionPercent !== null && hvscExtractionPercent !== undefined ? `${Math.round(hvscExtractionPercent)}%` : '—'}</span>
+                  </div>
+                  <Progress value={hvscExtractionPercent ?? 0} />
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-files">
+                    <span>Files: {hvscSummaryFilesExtracted ?? '—'}</span>
+                    <span>Total: {hvscExtractionTotalFiles ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-elapsed">
+                    <span>Elapsed: {formatHvscDuration(hvscExtractionElapsedMs)}</span>
+                    <span>Status: {hvscStatusSummary.extraction.status}</span>
+                  </div>
+                </div>
                 {hvscCurrentFile && (
                   <p className="text-[11px] text-muted-foreground truncate">Current: {hvscCurrentFile}</p>
                 )}
@@ -2619,7 +2877,7 @@ export default function PlayFilesPage() {
             )}
 
             {hvscInstalled && hvscAvailable && (
-              <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Browse HVSC folders</p>
@@ -2683,11 +2941,12 @@ export default function PlayFilesPage() {
                         size="sm"
                         onClick={() =>
                           void handlePlayEntry({
-                            source: 'local',
+                            source: 'hvsc',
                             name: song.fileName,
                             path: song.virtualPath,
                             file: buildHvscFile(song),
                             durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
+                            sourceId: hvscRoot.path,
                           })
                         }
                         disabled={hvscUpdating}

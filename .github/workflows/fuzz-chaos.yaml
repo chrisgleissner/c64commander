@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '0 3 * * *'
   workflow_dispatch:
+    inputs:
+      time_budget:
+        description: 'Fuzz time budget (e.g., 10m, 2h)'
+        required: false
+        default: '2h'
 
 jobs:
   fuzz:
@@ -38,7 +43,8 @@ jobs:
           VITE_FUZZ_MODE: '1'
         run: |
           SEED=$(date -u +%Y%m%d)
-          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget 2h --fuzz-platform android-phone
+          TIME_BUDGET="${{ github.event.inputs.time_budget || '2h' }}"
+          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget "$TIME_BUDGET" --fuzz-platform android-phone
 
       - name: Upload fuzz artifacts
         if: always()

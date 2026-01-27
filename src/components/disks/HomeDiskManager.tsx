@@ -864,37 +864,39 @@ export const HomeDiskManager = () => {
           Disks
         </h3>
 
-        <SelectableActionList
-          title="Disk list"
-          selectionLabel="items"
-          items={buildDiskListItems(sortedDisks, {
-            onMount: (entry) => {
-              if (!status.isConnected) {
-                toast({ title: 'Offline', description: 'Connect to mount disks.', variant: 'destructive' });
-                return;
-              }
-              setActiveDisk(entry);
-            },
-          })}
-          emptyLabel="No disks in the collection yet."
-          selectAllLabel="Select all"
-          deselectAllLabel="Deselect all"
-          removeSelectedLabel={selectedCount ? 'Remove selected items' : undefined}
-          selectedCount={selectedCount}
-          allSelected={allSelected}
-          onToggleSelectAll={toggleSelectAll}
-          onRemoveSelected={() => setBulkDeleteOpen(true)}
-          maxVisible={listPreviewLimit}
-          viewAllTitle="All disks"
-          filterPlaceholder="Filter disks..."
-          listTestId="disk-list"
-          rowTestId="disk-row"
-          headerActions={
-            <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
-              {diskLibrary.disks.length ? 'Add more disks' : 'Add disks'}
-            </Button>
-          }
-        />
+        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <SelectableActionList
+            title="Disk list"
+            selectionLabel="items"
+            items={buildDiskListItems(sortedDisks, {
+              onMount: (entry) => {
+                if (!status.isConnected) {
+                  toast({ title: 'Offline', description: 'Connect to mount disks.', variant: 'destructive' });
+                  return;
+                }
+                setActiveDisk(entry);
+              },
+            })}
+            emptyLabel="No disks in the collection yet."
+            selectAllLabel="Select all"
+            deselectAllLabel="Deselect all"
+            removeSelectedLabel={selectedCount ? 'Remove selected items' : undefined}
+            selectedCount={selectedCount}
+            allSelected={allSelected}
+            onToggleSelectAll={toggleSelectAll}
+            onRemoveSelected={() => setBulkDeleteOpen(true)}
+            maxVisible={listPreviewLimit}
+            viewAllTitle="All disks"
+            filterPlaceholder="Filter disks..."
+            listTestId="disk-list"
+            rowTestId="disk-row"
+            headerActions={
+              <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+                {diskLibrary.disks.length ? 'Add more disks' : 'Add disks'}
+              </Button>
+            }
+          />
+        </div>
       </section>
 
       <input

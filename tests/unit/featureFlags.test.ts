@@ -19,7 +19,7 @@ describe('featureFlags', () => {
     await manager.load();
     const snapshot = manager.getSnapshot();
     expect(snapshot.isLoaded).toBe(true);
-    expect(snapshot.flags.hvsc_enabled).toBe(false);
+    expect(snapshot.flags.hvsc_enabled).toBe(true);
   });
 
   it('persists flag updates in repository', async () => {

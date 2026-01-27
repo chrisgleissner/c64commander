@@ -10,6 +10,7 @@ import {
   getC64APIConfigSnapshot,
   buildBaseUrlFromDeviceHost,
   normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
 import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
 import { useConnectionState } from '@/hooks/useConnectionState';
@@ -25,18 +26,14 @@ export interface ConnectionStatus {
 export function useC64Connection() {
   const connection = useConnectionState();
   const [baseUrl, setBaseUrl] = useState(() => {
-    const storedDeviceHost = localStorage.getItem('c64u_device_host');
-    localStorage.removeItem('c64u_base_url');
-    const resolvedDeviceHost = normalizeDeviceHost(storedDeviceHost);
+    const resolvedDeviceHost = resolveDeviceHostFromStorage();
     return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
   });
   const [password, setPassword] = useState(() => 
     localStorage.getItem('c64u_password') || ''
   );
   const [deviceHost, setDeviceHost] = useState(() => {
-    const storedDeviceHost = localStorage.getItem('c64u_device_host');
-    localStorage.removeItem('c64u_base_url');
-    return normalizeDeviceHost(storedDeviceHost);
+    return resolveDeviceHostFromStorage();
   });
   const queryClient = useQueryClient();
 

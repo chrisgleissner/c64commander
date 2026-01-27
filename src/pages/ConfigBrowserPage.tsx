@@ -350,6 +350,9 @@ function CategorySection({
 
   const resetAudioMixer = async () => {
     if (categoryName !== 'Audio Mixer') return;
+    skipSoloRoutingRef.current = true;
+    dispatchSolo({ type: 'reset' });
+    soloSnapshotRef.current = [];
     setIsResetting(true);
     try {
       const updates: Record<string, string | number> = {};
@@ -366,6 +369,7 @@ function CategorySection({
       }
 
       await updateConfigBatch.mutateAsync({ category: categoryName, updates });
+      await refetch();
       markChanged();
       toast({ title: 'Audio Mixer reset', description: 'Volumes set to 0 dB, pans centered.' });
     } catch (error) {
@@ -381,6 +385,16 @@ function CategorySection({
     } finally {
       setIsResetting(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    if (isAudioMixer) {
+      skipSoloRoutingRef.current = true;
+      dispatchSolo({ type: 'reset' });
+      soloSnapshotRef.current = [];
+      syncAudioConfiguredItems([]);
+    }
+    await refetch();
   };
 
   const displayItems = isAudioMixer && audioConfiguredItems.length ? audioConfiguredItems : items;
@@ -428,7 +442,7 @@ function CategorySection({
                       disabled={isResetting || isLoading || items.length === 0}
                       className="text-xs"
                     >
-                      Reset Audio Mixer
+                      Reset
                     </Button>
                   )}
                   {categoryName === 'Clock Settings' && (
@@ -446,7 +460,7 @@ function CategorySection({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => refetch()}
+                  onClick={handleRefresh}
                   className="text-xs"
                 >
                   <RefreshCw className="h-3 w-3 mr-1" />

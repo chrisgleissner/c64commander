@@ -80,6 +80,7 @@ const normalizeOptions = (options?: Array<string | number>) =>
   options?.map((entry) => asString(entry)).filter((entry) => entry.length > 0);
 
 let customYamlLoader: (() => unknown | Promise<unknown>) | null = null;
+let bundledConfigYaml: string | null = null;
 
 /**
  * Set a custom YAML loader (for tests with full config)
@@ -87,6 +88,12 @@ let customYamlLoader: (() => unknown | Promise<unknown>) | null = null;
 export const setMockConfigLoader = (loader: () => unknown | Promise<unknown>) => {
   customYamlLoader = loader;
   cachedPayload = null; // Clear cache
+  cachedPromise = null;
+};
+
+export const clearMockConfigLoader = () => {
+  customYamlLoader = null;
+  cachedPayload = null;
   cachedPromise = null;
 };
 const resolveYamlUrl = () => {
@@ -103,16 +110,39 @@ const loadYamlFromAssets = async () => {
   return response.text();
 };
 
-const loadRawConfig = async (): Promise<RawConfig> => {
-  if (customYamlLoader) {
-    const loaded = await customYamlLoader();
-    if (typeof loaded === 'string') {
-      return (yaml.load(loaded) as RawConfig) ?? {};
-    }
-    return (loaded as RawConfig) ?? {};
+const loadBundledConfigYaml = async () => {
+  if (bundledConfigYaml !== null) return bundledConfigYaml;
+  if (typeof window === 'undefined') {
+    bundledConfigYaml = '';
+    return bundledConfigYaml;
   }
-  const yamlText = await loadYamlFromAssets();
-  return (yaml.load(yamlText) as RawConfig) ?? {};
+  try {
+    const module = await import('../../../doc/c64/c64u-config.yaml?raw');
+    bundledConfigYaml = typeof module.default === 'string' ? module.default : '';
+  } catch {
+    bundledConfigYaml = '';
+  }
+  return bundledConfigYaml;
+};
+
+const loadRawConfig = async (): Promise<RawConfig> => {
+  try {
+    if (customYamlLoader) {
+      const loaded = await customYamlLoader();
+      if (typeof loaded === 'string') {
+        return (yaml.load(loaded) as RawConfig) ?? {};
+      }
+      return (loaded as RawConfig) ?? {};
+    }
+    const yamlText = await loadYamlFromAssets();
+    return (yaml.load(yamlText) as RawConfig) ?? {};
+  } catch {
+    const bundled = await loadBundledConfigYaml();
+    if (bundled) {
+      return (yaml.load(bundled) as RawConfig) ?? {};
+    }
+    return {};
+  }
 };
 
 const buildPayload = (parsed: RawConfig): MockConfigPayload => {

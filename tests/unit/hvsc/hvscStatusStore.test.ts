@@ -24,6 +24,8 @@ describe('hvscStatusStore', () => {
         finishedAt: 'later',
         durationMs: 1234,
         sizeBytes: 987,
+        downloadedBytes: 456,
+        totalBytes: 1024,
       },
       extraction: {
         status: 'success',
@@ -31,6 +33,7 @@ describe('hvscStatusStore', () => {
         finishedAt: 'later',
         durationMs: 5678,
         filesExtracted: 42,
+        totalFiles: 120,
       },
       lastUpdatedAt: 'later',
     };

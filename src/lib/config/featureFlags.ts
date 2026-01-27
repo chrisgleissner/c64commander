@@ -3,7 +3,7 @@ import { addErrorLog } from '@/lib/logging';
 
 export const FEATURE_FLAG_DEFINITIONS = {
   hvsc_enabled: {
-    defaultValue: false,
+    defaultValue: true,
   },
 } as const;
 

@@ -738,49 +738,47 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {isDeveloperModeEnabled && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-            className="bg-card border border-border rounded-xl p-4 space-y-4"
-          >
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Cpu className="h-5 w-5 text-primary" />
-              </div>
-              <h2 className="font-medium">Experimental</h2>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Cpu className="h-5 w-5 text-primary" />
             </div>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3 min-w-0">
-                <div className="space-y-1 min-w-0">
-                  <Label htmlFor="hvsc-flag" className="font-medium">
-                    Enable HVSC downloads
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Shows HVSC download and ingest controls on the Play page.
-                  </p>
-                </div>
-                <Checkbox
-                  id="hvsc-flag"
-                  checked={isHvscEnabled}
-                  onCheckedChange={(checked) => {
-                    const enabled = checked === true;
-                    void setHvscEnabled(enabled);
-                    try {
-                      localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
-                      sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
-                    } catch (error) {
-                      addErrorLog('Feature flag storage failed', {
-                        error: (error as Error).message,
-                      });
-                    }
-                  }}
-                />
+            <h2 className="font-medium">HVSC Library</h2>
+          </div>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="hvsc-flag" className="font-medium">
+                  Enable HVSC downloads
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Shows HVSC download and ingest controls on the Play page.
+                </p>
               </div>
+              <Checkbox
+                id="hvsc-flag"
+                checked={isHvscEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  void setHvscEnabled(enabled);
+                  try {
+                    localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+                    sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+                  } catch (error) {
+                    addErrorLog('Feature flag storage failed', {
+                      error: (error as Error).message,
+                    });
+                  }
+                }}
+              />
             </div>
-          </motion.div>
-        )}
+          </div>
+        </motion.div>
 
         {/* 7. About */}
         <motion.div

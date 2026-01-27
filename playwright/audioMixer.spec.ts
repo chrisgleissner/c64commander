@@ -128,7 +128,7 @@ test.describe('Audio Mixer volumes', () => {
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 
-    await page.getByRole('button', { name: 'Reset Audio Mixer' }).click();
+    await page.getByRole('button', { name: 'Reset' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Audio Mixer reset' }).first(),
     ).toBeVisible();

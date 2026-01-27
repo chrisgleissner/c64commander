@@ -16,6 +16,8 @@ export type HvscDownloadStatus = {
   finishedAt?: string | null;
   durationMs?: number | null;
   sizeBytes?: number | null;
+  downloadedBytes?: number | null;
+  totalBytes?: number | null;
   errorCategory?: HvscFailureCategory | null;
   errorMessage?: string | null;
 };
@@ -26,6 +28,7 @@ export type HvscExtractionStatus = {
   finishedAt?: string | null;
   durationMs?: number | null;
   filesExtracted?: number | null;
+  totalFiles?: number | null;
   errorCategory?: HvscFailureCategory | null;
   errorMessage?: string | null;
 };

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { C64API, getC64API, updateC64APIConfig, applyC64APIRuntimeConfig, C64_DEFAULTS } from '@/lib/c64api';
+import {
+  C64API,
+  getC64API,
+  updateC64APIConfig,
+  applyC64APIRuntimeConfig,
+  C64_DEFAULTS,
+  resolveDeviceHostFromStorage,
+} from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
@@ -149,6 +156,16 @@ describe('c64api', () => {
     expect(localStorage.getItem('c64u_device_host')).toBe('saved-host');
   });
 
+  it('migrates legacy base url into device host storage', () => {
+    localStorage.setItem('c64u_base_url', 'http://192.168.1.55');
+
+    const resolvedHost = resolveDeviceHostFromStorage();
+
+    expect(resolvedHost).toBe('192.168.1.55');
+    expect(localStorage.getItem('c64u_device_host')).toBe('192.168.1.55');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
+  });
+
   it('handles CapacitorHttp non-string payloads', async () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
@@ -231,6 +248,45 @@ describe('c64api', () => {
     fetchMock.mockResolvedValueOnce(new Response('fail', { status: 500, statusText: 'Server Error' }));
     await expect(api.runCartridgeUpload(payload)).rejects.toThrow('HTTP 500');
     expect(addErrorLogMock).toHaveBeenCalledWith('CRT upload failed', expect.any(Object));
+  });
+
+  it('maps failed fetch in SID uploads to host unreachable', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const api = new C64API('http://c64u');
+    const payload = new Blob(['SID'], { type: 'application/octet-stream' });
+
+    await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable');
+  });
+
+  it('maps timed out control requests to host unreachable', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((_, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_, reject) => {
+        if (!signal) {
+          reject(new Error('Missing abort signal'));
+          return;
+        }
+        if (signal.aborted) {
+          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+          return;
+        }
+        signal.addEventListener('abort', () => {
+          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+        });
+      });
+    });
+
+    const api = new C64API('http://c64u');
+    const promise = api.machineReset();
+    const expectation = expect(promise).rejects.toThrow('Host unreachable');
+    await vi.advanceTimersByTimeAsync(3100);
+
+    await expectation;
+    vi.useRealTimers();
   });
 
   it('builds request urls for config writes and machine actions', async () => {
@@ -330,6 +386,27 @@ describe('c64api', () => {
     expect(headers['X-Password']).toBe('pw');
     expect(headers['X-C64U-Host']).toBeUndefined();
     expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
+  });
+
+  it('uses CapacitorHttp for binary uploads on native platforms', async () => {
+    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+      isNativePlatform: () => true,
+    };
+    capacitorRequestMock.mockResolvedValue({
+      status: 200,
+      data: { errors: [] },
+      headers: {},
+      url: 'http://c64u/v1/drives/a:mount',
+    });
+
+    const api = new C64API('http://c64u');
+    await api.mountDriveUpload('a', new Blob(['disk'], { type: 'application/octet-stream' }));
+
+    expect(capacitorRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'http://c64u/v1/drives/a:mount',
+    }));
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
   it('covers runner and drive request helpers', async () => {

@@ -14,7 +14,7 @@ import { createSslPayload } from '@/lib/sid/sidUtils';
 import { loadDiskAutostartMode, type DiskAutostartMode } from '@/lib/config/appSettings';
 import { loadFirstDiskPrgViaDma, type DiskImageType } from './diskFirstPrg';
 
-export type PlaySource = 'local' | 'ultimate';
+export type PlaySource = 'local' | 'ultimate' | 'hvsc';
 
 export type LocalPlayFile = File | {
   name: string;
@@ -60,8 +60,17 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
 const toBlob = async (file?: LocalPlayFile) => {
   if (!file) return null;
   if (file instanceof Blob) return file;
-  const buffer = await file.arrayBuffer();
-  return new Blob([buffer], { type: 'application/octet-stream' });
+  try {
+    const buffer = await file.arrayBuffer();
+    return new Blob([buffer], { type: 'application/octet-stream' });
+  } catch (error) {
+    const message = (error as Error).message || 'Local file unavailable.';
+    const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(message);
+    if (isNetworkFailure) {
+      throw new Error('Local file unavailable. Re-add it to the playlist.');
+    }
+    throw error;
+  }
 };
 
 export type PlayExecutionOptions = {

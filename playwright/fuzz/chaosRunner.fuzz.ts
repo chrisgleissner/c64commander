@@ -5,6 +5,8 @@ import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
 
 const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
+const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
+test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
 type Severity = 'crash' | 'freeze' | 'errorLog' | 'warnLog';
 
@@ -110,8 +112,16 @@ const buildGroupId = (signature: IssueSignature) => {
   const base = `${signature.exception}@${frame}`;
   const signatureKey = `${signature.exception}|${signature.message}|${signature.topFrames.join('|')}`;
   const hash = hashString(signatureKey).slice(0, 8);
-  return `${base}-${hash}`.replace(/[^a-z0-9@._:-]+/gi, '-').slice(0, 128);
+  return `${base}-${hash}`.replace(/[^a-z0-9@._-]+/gi, '-').slice(0, 128);
 };
+
+const sanitizeFileComponent = (value: string) =>
+  value
+    .replace(/[<>:"/\\|?*\r\n]+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
+    .slice(0, 128);
 
 const parseActionTimeout = (error: unknown) => {
   const message = (error as Error)?.message || String(error);
@@ -442,24 +452,25 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
 };
 
 test.describe('Chaos fuzz', () => {
-  test.skip(!FUZZ_ENABLED, 'Chaos fuzz runs only when FUZZ_RUN=1 is set.');
-
-  test('run', async ({}, testInfo) => {
+  test('run', async ({ page }, testInfo) => {
+    void page;
     const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
-    const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : 500);
-    const baseTimeout = timeBudgetMs ?? 10 * 60 * 1000;
-    test.setTimeout(baseTimeout + 60_000);
+    const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 50 : 500));
+    const baseTimeout = timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 90_000 : 10 * 60 * 1000);
+    const timeoutMs = baseTimeout + 60_000;
+    test.setTimeout(timeoutMs);
+    testInfo.setTimeout(timeoutMs);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
     const runMode = process.env.FUZZ_RUN_MODE || 'local';
     const runId = process.env.FUZZ_RUN_ID || `${seed}`;
     const shardIndex = toNumber(process.env.FUZZ_SHARD_INDEX) ?? 0;
     const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;
-    const retainSuccessSessions = Math.max(0, toNumber(process.env.FUZZ_RETAIN_SUCCESS) ?? 10);
-    const minSessionSteps = Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? 200);
-    const noProgressLimit = Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? 20);
+    const retainSuccessSessions = Math.max(0, toNumber(process.env.FUZZ_RETAIN_SUCCESS) ?? (SHORT_FUZZ_DEFAULTS ? 2 : 10));
+    const minSessionSteps = Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 50 : 200));
+    const noProgressLimit = Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;
 
@@ -489,7 +500,7 @@ test.describe('Chaos fuzz', () => {
     const startTime = Date.now();
     const deadline = timeBudgetMs ? startTime + timeBudgetMs : Number.POSITIVE_INFINITY;
     let externalClickUsed = false;
-    let clickActionsDisabled = false;
+    const clickActionsDisabled = false;
     const retainedSuccess: Array<{ logPath: string; videoPath?: string }> = [];
 
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
@@ -1440,7 +1451,7 @@ test.describe('Chaos fuzz', () => {
         try {
           const recorded = await video.path();
           if (issue) {
-            const safeName = buildGroupId(buildSignature(issue));
+            const safeName = sanitizeFileComponent(buildGroupId(buildSignature(issue)) || 'issue');
             const target = path.join(videosDir, `${safeName}-${sessionId}.webm`);
             await fs.rename(recorded, target).catch(async () => {
               await fs.copyFile(recorded, target);

@@ -53,6 +53,30 @@ test.describe('Automatic Demo Mode', () => {
     await snap(page, testInfo, 'real-connected-indicator');
   });
 
+  test('legacy base URL migrates to device host on startup', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    server = await createMockC64Server({});
+    await seedUiMocks(page, server.baseUrl);
+
+    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
+      localStorage.setItem('c64u_base_url', baseUrl);
+      localStorage.removeItem('c64u_device_host');
+    }, { baseUrl: server.baseUrl });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toBeVisible();
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+
+    const storedHost = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
+    expect(storedHost).toBe(new URL(server.baseUrl).host);
+    const legacyBase = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
+    expect(legacyBase).toBeNull();
+
+    await snap(page, testInfo, 'legacy-base-url-migrated');
+  });
+
   test('demo interstitial appears once per session and manual retry uses discovery', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');

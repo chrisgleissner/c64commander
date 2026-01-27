@@ -1,9 +1,10 @@
 import {
+  C64API,
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
   buildBaseUrlFromDeviceHost,
   getDeviceHostFromBaseUrl,
-  normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ftp/ftpConfig';
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
@@ -29,7 +30,7 @@ export type ConnectionSnapshot = Readonly<{
 }>;
 
 const STARTUP_PROBE_INTERVAL_MS = 500;
-const PROBE_REQUEST_TIMEOUT_MS = 1000;
+const PROBE_REQUEST_TIMEOUT_MS = 2500;
 
 const isLocalProxy = (baseUrl: string) => {
   try {
@@ -41,11 +42,9 @@ const isLocalProxy = (baseUrl: string) => {
 };
 
 const loadPersistedConnectionConfig = () => {
-  localStorage.removeItem('c64u_base_url');
   const passwordRaw = localStorage.getItem('c64u_password');
   const password = passwordRaw ? passwordRaw : undefined;
-  const storedDeviceHost = localStorage.getItem('c64u_device_host');
-  const deviceHost = normalizeDeviceHost(storedDeviceHost);
+  const deviceHost = resolveDeviceHostFromStorage();
   const baseUrl = buildBaseUrlFromDeviceHost(deviceHost);
   return { baseUrl, password, deviceHost };
 };
@@ -57,11 +56,48 @@ const buildProbeHeaders = (config: { baseUrl: string; password?: string; deviceH
   return headers;
 };
 
+const isProbePayloadHealthy = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') return false;
+  const maybeErrors = (payload as { errors?: unknown }).errors;
+  if (Array.isArray(maybeErrors) && maybeErrors.length > 0) return false;
+  const product = (payload as { product?: unknown }).product;
+  if (typeof product === 'string') {
+    return product.trim().length > 0;
+  }
+  return true;
+};
+
+const isNativePlatform = () => {
+  try {
+    return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
+  } catch {
+    return false;
+  }
+};
+
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = loadPersistedConnectionConfig();
   const url = `${config.baseUrl.replace(/\/$/, '')}/v1/info`;
   const timeoutMs = options.timeoutMs ?? PROBE_REQUEST_TIMEOUT_MS;
   const outerSignal = options.signal;
+
+  if (isNativePlatform()) {
+    if (outerSignal?.aborted) return false;
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+    }, timeoutMs);
+    try {
+      const api = new C64API(config.baseUrl, config.password, config.deviceHost);
+      const response = await api.getInfo();
+      if (timedOut) return false;
+      return isProbePayloadHealthy(response);
+    } catch {
+      return false;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
 
   const requestController = new AbortController();
   const abort = () => requestController.abort();
@@ -78,12 +114,8 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
       signal: requestController.signal,
     });
     if (!response.ok) return false;
-    const payload = (await response.json().catch(() => null)) as
-      | { product?: string; errors?: unknown }
-      | null;
-    const product = payload?.product || '';
-    if (typeof product !== 'string') return false;
-    return product.toLowerCase().includes('c64 ultimate');
+    const payload = (await response.json().catch(() => null)) as unknown;
+    return isProbePayloadHealthy(payload);
   } catch {
     return false;
   } finally {
