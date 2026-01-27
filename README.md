@@ -13,11 +13,15 @@ Control your Commodore 64 Ultimate from your Android device
 
 C64 Commander is an Android app that connects to a C64 Ultimate device on your local network:
 
-- Browse and edit the entire C64U configuration.
-- Device controls and disk management from a mobile-friendly dashboard.
-- Play files from local storage (work in progress) or the Ultimate 64 with a playlist-first workflow.
-- Download and browse the HVSC library stored locally for offline access (TS-managed filesystem ingestion).
-- Diagnostics and developer tools for troubleshooting.
+- Browse and edit the full C64 Ultimate configuration.
+- Control the device and manage disks from a mobile-friendly interface.
+- Access and play files stored locally or on the C64 Ultimate.
+- Play SID and MOD music, PRG and CRT programs, and auto-run disk images.
+- Automatic playback for all supported file types, including shuffle.
+- Create and manage playlists and disk collections.
+- Switch disks for multi-disk games and demos.
+- Download and browse the HVSC library for offline use.
+- Diagnostics and developer tools for inspection and troubleshooting.
 
 ## Screenshots
 
