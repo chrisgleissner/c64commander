@@ -58,6 +58,7 @@ vi.mock('@/lib/c64api', () => ({
   buildBaseUrlFromDeviceHost: (host?: string) => `http://${host ?? 'c64u'}`,
   getDeviceHostFromBaseUrl: (baseUrl?: string) => baseUrl?.replace(/^https?:\/\//, '') ?? 'c64u',
   normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
+  resolveDeviceHostFromStorage: () => 'c64u',
   getC64APIConfigSnapshot: () => ({
     baseUrl: 'http://default',
     password: undefined,

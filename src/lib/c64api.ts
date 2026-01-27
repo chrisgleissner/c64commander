@@ -41,6 +41,25 @@ export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
 export const buildBaseUrlFromDeviceHost = (deviceHost?: string) =>
   `http://${normalizeDeviceHost(deviceHost)}`;
 
+export const resolveDeviceHostFromStorage = () => {
+  if (typeof localStorage === 'undefined') return DEFAULT_DEVICE_HOST;
+  const storedDeviceHost = localStorage.getItem('c64u_device_host');
+  const normalizedStoredHost = normalizeDeviceHost(storedDeviceHost);
+  if (storedDeviceHost) {
+    localStorage.removeItem('c64u_base_url');
+    return normalizedStoredHost;
+  }
+  const legacyBaseUrl = localStorage.getItem('c64u_base_url');
+  if (legacyBaseUrl) {
+    const migratedHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(legacyBaseUrl));
+    localStorage.setItem('c64u_device_host', migratedHost);
+    localStorage.removeItem('c64u_base_url');
+    return migratedHost;
+  }
+  localStorage.removeItem('c64u_base_url');
+  return normalizedStoredHost;
+};
+
 const isLocalProxy = (baseUrl: string) => {
   try {
     const url = new URL(baseUrl);
@@ -678,9 +697,7 @@ let apiInstance: C64API | null = null;
 
 export function getC64API(): C64API {
   if (!apiInstance) {
-    const storedDeviceHost = localStorage.getItem('c64u_device_host');
-    localStorage.removeItem('c64u_base_url');
-    const resolvedDeviceHost = normalizeDeviceHost(storedDeviceHost);
+    const resolvedDeviceHost = resolveDeviceHostFromStorage();
     const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
     const savedPassword = localStorage.getItem('c64u_password') || undefined;
     apiInstance = new C64API(resolvedBaseUrl, savedPassword, resolvedDeviceHost);
@@ -745,10 +762,8 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
 }
 
 export function applyC64APIConfigFromStorage() {
-  localStorage.removeItem('c64u_base_url');
   const savedPassword = localStorage.getItem('c64u_password') || undefined;
-  const savedDeviceHost = localStorage.getItem('c64u_device_host');
-  const resolvedDeviceHost = normalizeDeviceHost(savedDeviceHost);
+  const resolvedDeviceHost = resolveDeviceHostFromStorage();
   const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
   applyC64APIRuntimeConfig(resolvedBaseUrl, savedPassword, resolvedDeviceHost);
 }

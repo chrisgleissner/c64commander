@@ -93,5 +93,29 @@ describe('connectionManager', () => {
       getDeviceHostFromBaseUrl('http://127.0.0.1:9999'),
     );
   });
+
+  it('connects to real device when legacy base url is reachable', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('@/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_base_url', 'http://127.0.0.1:9999');
+    localStorage.removeItem('c64u_device_host');
+    localStorage.setItem('c64u_password', '');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    expect(localStorage.getItem('c64u_device_host')).toBe('127.0.0.1:9999');
+  });
 });
 

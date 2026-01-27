@@ -3,7 +3,7 @@ import {
   applyC64APIRuntimeConfig,
   buildBaseUrlFromDeviceHost,
   getDeviceHostFromBaseUrl,
-  normalizeDeviceHost,
+  resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ftp/ftpConfig';
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
@@ -41,11 +41,9 @@ const isLocalProxy = (baseUrl: string) => {
 };
 
 const loadPersistedConnectionConfig = () => {
-  localStorage.removeItem('c64u_base_url');
   const passwordRaw = localStorage.getItem('c64u_password');
   const password = passwordRaw ? passwordRaw : undefined;
-  const storedDeviceHost = localStorage.getItem('c64u_device_host');
-  const deviceHost = normalizeDeviceHost(storedDeviceHost);
+  const deviceHost = resolveDeviceHostFromStorage();
   const baseUrl = buildBaseUrlFromDeviceHost(deviceHost);
   return { baseUrl, password, deviceHost };
 };

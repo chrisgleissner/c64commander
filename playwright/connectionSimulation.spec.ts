@@ -250,6 +250,45 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await snap(page, testInfo, 'demo-to-real-playback');
   });
 
+  test('switches real → demo → real using manual discovery', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+
+    server = await createMockC64Server({});
+    demoServer = await createMockC64Server({});
+
+    const host = new URL(server.baseUrl).host;
+    const demoHost = new URL(demoServer.baseUrl).host;
+    await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_device_host', hostArg);
+      localStorage.setItem('c64u_password', '');
+    }, { host, demoBaseUrl: demoServer.baseUrl });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+
+    server.setReachable(false);
+    await indicator.click();
+    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
+    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();
+    await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
+
+    server.setReachable(true);
+    await page.getByTestId('connectivity-indicator').click();
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    await expect(page.getByText(`Currently using: ${host}`)).toBeVisible();
+
+    await snap(page, testInfo, 'real-demo-real-manual');
+  });
+
   test('currently using indicator updates between demo and real', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');

@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { C64API, getC64API, updateC64APIConfig, applyC64APIRuntimeConfig, C64_DEFAULTS } from '@/lib/c64api';
+import {
+  C64API,
+  getC64API,
+  updateC64APIConfig,
+  applyC64APIRuntimeConfig,
+  C64_DEFAULTS,
+  resolveDeviceHostFromStorage,
+} from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
@@ -147,6 +154,16 @@ describe('c64api', () => {
     expect(localStorage.getItem('c64u_base_url')).toBeNull();
     expect(localStorage.getItem('c64u_password')).toBe('saved-pass');
     expect(localStorage.getItem('c64u_device_host')).toBe('saved-host');
+  });
+
+  it('migrates legacy base url into device host storage', () => {
+    localStorage.setItem('c64u_base_url', 'http://192.168.1.55');
+
+    const resolvedHost = resolveDeviceHostFromStorage();
+
+    expect(resolvedHost).toBe('192.168.1.55');
+    expect(localStorage.getItem('c64u_device_host')).toBe('192.168.1.55');
+    expect(localStorage.getItem('c64u_base_url')).toBeNull();
   });
 
   it('handles CapacitorHttp non-string payloads', async () => {
