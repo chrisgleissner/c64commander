@@ -5,6 +5,7 @@ import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
 
 const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
+test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
 type Severity = 'crash' | 'freeze' | 'errorLog' | 'warnLog';
 
@@ -451,7 +452,6 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
 
 test.describe('Chaos fuzz', () => {
   test.skip(!FUZZ_ENABLED, 'Chaos fuzz runs only when FUZZ_RUN=1 is set.');
-  test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
   test('run', async ({}, testInfo) => {
     const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();

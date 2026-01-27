@@ -29,6 +29,10 @@ playwright-report/
 test-results/
 test-results/evidence/
 
+# Symlinks
+sidflow
+sidflow/**
+
 # Local config
 *.local
 .env
