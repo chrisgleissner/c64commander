@@ -43,13 +43,12 @@ jobs:
   docker-image:
     name: Build Docker image
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.docker == 'true' }}
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/docker-build.yaml
     with:
-      force: true
+      force: ${{ needs.detect-changes.outputs.docker == 'true' }}
     secrets: inherit
 
   build-and-test:
@@ -57,7 +56,7 @@ jobs:
     needs:
       - detect-changes
       - docker-image
-    if: ${{ always() && needs.detect-changes.result == 'success' && (needs.detect-changes.outputs.docker != 'true' || needs.docker-image.result == 'success') }}
+    if: ${{ always() && needs.detect-changes.result == 'success' && needs.docker-image.result == 'success' }}
     uses: ./.github/workflows/build-and-test.yaml
     with:
       ref: ${{ github.sha }}

@@ -12,11 +12,21 @@ permissions:
   packages: read
 
 jobs:
+  docker-image:
+    name: Build CI Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yaml
+    secrets: inherit
+
   web-unit:
     name: Web | Unit tests (coverage)
     runs-on: ubuntu-latest
+    needs: docker-image
     container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     env:
       HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
@@ -55,9 +65,9 @@ jobs:
   web-screenshots:
     name: Web | Screenshots
     runs-on: ubuntu-latest
-    needs: web-build-coverage
+    needs: [docker-image, web-build-coverage]
     container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     env:
       HVSC_UPDATE_84_CACHE: ${{ github.workspace }}/.cache/hvsc
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
@@ -114,8 +124,9 @@ jobs:
   web-build-coverage:
     name: Web | Build (coverage)
     runs-on: ubuntu-latest
+    needs: docker-image
     container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
@@ -146,9 +157,9 @@ jobs:
   web-e2e:
     name: Web | E2E (sharded)
     runs-on: ubuntu-latest
-    needs: web-build-coverage
+    needs: [docker-image, web-build-coverage]
     container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     strategy:
       fail-fast: false
       matrix:
@@ -240,9 +251,9 @@ jobs:
   web-coverage-merge:
     name: Web | Coverage + evidence merge
     runs-on: ubuntu-latest
-    needs: [web-unit, web-screenshots, web-e2e]
+    needs: [docker-image, web-unit, web-screenshots, web-e2e]
     container:
-      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     env:
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
