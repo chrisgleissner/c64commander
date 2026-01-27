@@ -8,6 +8,9 @@ import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
 const DEFAULT_PROXY_URL = 'http://127.0.0.1:8787';
+const CONTROL_REQUEST_TIMEOUT_MS = 3000;
+const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
+const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 
 const sanitizeHostInput = (input?: string) => {
   const raw = input?.trim() ?? '';
@@ -212,7 +215,7 @@ export class C64API {
 
   private async request<T>(
     path: string,
-    options: RequestInit = {}
+    options: (RequestInit & { timeoutMs?: number }) = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -225,6 +228,9 @@ export class C64API {
     const method = (options.method || 'GET').toString().toUpperCase();
     const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
     let status: number | 'error' = 'error';
+    const timeoutMs = options.timeoutMs;
+    const requestOptions = { ...options };
+    delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     try {
       if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
@@ -239,13 +245,21 @@ export class C64API {
         throw blocked;
       }
       if (isNativePlatform()) {
-        const body = options.body ? options.body : undefined;
-        const nativeResponse = await CapacitorHttp.request({
+        const body = requestOptions.body ? requestOptions.body : undefined;
+        const requestPromise = CapacitorHttp.request({
           url,
           method,
           headers,
           data: typeof body === 'string' ? JSON.parse(body) : body,
         });
+        const nativeResponse = timeoutMs
+          ? await Promise.race([
+            requestPromise,
+            new Promise<never>((_, reject) => {
+              window.setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+            }),
+          ])
+          : await requestPromise;
 
         status = nativeResponse.status;
         if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
@@ -264,10 +278,14 @@ export class C64API {
         return nativeResponse.data as T;
       }
 
+      const controller = timeoutMs ? new AbortController() : null;
+      const timeoutId = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : null;
       const response = await fetch(url, {
-        ...options,
+        ...requestOptions,
         headers,
+        ...(controller ? { signal: controller.signal } : {}),
       });
+      if (timeoutId) window.clearTimeout(timeoutId);
 
       status = response.status;
       if (!response.ok) {
@@ -277,16 +295,45 @@ export class C64API {
       return this.parseResponseJson<T>(response);
     } catch (error) {
       const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
+      const rawMessage = (error as Error).message || 'Request failed';
+      const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
+      const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(rawMessage);
+      const normalizedError = isAbort || isNetworkFailure ? 'Host unreachable' : rawMessage;
       if (!fuzzBlocked) {
         addErrorLog('C64 API request failed', {
           path,
           url,
-          error: (error as Error).message,
+          error: normalizedError,
+          rawError: rawMessage,
         });
+      }
+      if (isAbort || isNetworkFailure) {
+        throw new Error('Host unreachable');
       }
       throw error;
     } finally {
       this.logRestCall(method, path, status, startedAt);
+    }
+  }
+
+  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
+    const controller = timeoutMs ? new AbortController() : null;
+    const timeoutId = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : null;
+    try {
+      return await fetch(url, {
+        ...options,
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+    } catch (error) {
+      const rawMessage = (error as Error).message || 'Request failed';
+      const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
+      const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(rawMessage);
+      if (isAbort || isNetworkFailure) {
+        throw new Error('Host unreachable');
+      }
+      throw error;
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
     }
   }
 
@@ -349,27 +396,27 @@ export class C64API {
 
   // Machine control endpoints
   async machineReset(): Promise<{ errors: string[] }> {
-    return this.request('/v1/machine:reset', { method: 'PUT' });
+    return this.request('/v1/machine:reset', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
   async machineReboot(): Promise<{ errors: string[] }> {
-    return this.request('/v1/machine:reboot', { method: 'PUT' });
+    return this.request('/v1/machine:reboot', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
   async machinePause(): Promise<{ errors: string[] }> {
-    return this.request('/v1/machine:pause', { method: 'PUT' });
+    return this.request('/v1/machine:pause', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
   async machineResume(): Promise<{ errors: string[] }> {
-    return this.request('/v1/machine:resume', { method: 'PUT' });
+    return this.request('/v1/machine:resume', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
   async machinePowerOff(): Promise<{ errors: string[] }> {
-    return this.request('/v1/machine:poweroff', { method: 'PUT' });
+    return this.request('/v1/machine:poweroff', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
   async machineMenuButton(): Promise<{ errors: string[] }> {
-    return this.request('/v1/machine:menu_button', { method: 'PUT' });
+    return this.request('/v1/machine:menu_button', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
   async readMemory(address: string, length = 1): Promise<Uint8Array> {
@@ -464,14 +511,18 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...this.buildAuthHeaders(),
-          'Content-Type': 'application/octet-stream',
+      response = await this.fetchWithTimeout(
+        `${baseUrl}${path}`,
+        {
+          method,
+          headers: {
+            ...this.buildAuthHeaders(),
+            'Content-Type': 'application/octet-stream',
+          },
+          body: image,
         },
-        body: image,
-      });
+        UPLOAD_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);
@@ -510,7 +561,7 @@ export class C64API {
   async playSid(file: string, songNr?: number): Promise<{ errors: string[] }> {
     let path = `/v1/runners:sidplay?file=${encodeURIComponent(file)}`;
     if (songNr !== undefined) path += `&songnr=${songNr}`;
-    return this.request(path, { method: 'PUT' });
+    return this.request(path, { method: 'PUT', timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS });
   }
 
   async playSidUpload(
@@ -536,11 +587,15 @@ export class C64API {
     const method = 'POST';
     let response: Response;
     try {
-      response = await fetch(url.toString(), {
-        method,
-        headers,
-        body: form,
-      });
+      response = await this.fetchWithTimeout(
+        url.toString(),
+        {
+          method,
+          headers,
+          body: form,
+        },
+        UPLOAD_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);
@@ -556,7 +611,10 @@ export class C64API {
   }
 
   async playMod(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:modplay?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+    return this.request(`/v1/runners:modplay?file=${encodeURIComponent(file)}`, {
+      method: 'PUT',
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async playModUpload(modFile: Blob): Promise<{ errors: string[] }> {
@@ -567,14 +625,18 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...this.buildAuthHeaders(),
-          'Content-Type': 'application/octet-stream',
+      response = await this.fetchWithTimeout(
+        `${baseUrl}${path}`,
+        {
+          method,
+          headers: {
+            ...this.buildAuthHeaders(),
+            'Content-Type': 'application/octet-stream',
+          },
+          body: modFile,
         },
-        body: modFile,
-      });
+        UPLOAD_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);
@@ -590,7 +652,10 @@ export class C64API {
   }
 
   async runPrg(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:run_prg?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+    return this.request(`/v1/runners:run_prg?file=${encodeURIComponent(file)}`, {
+      method: 'PUT',
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async runPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
@@ -601,14 +666,18 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...this.buildAuthHeaders(),
-          'Content-Type': 'application/octet-stream',
+      response = await this.fetchWithTimeout(
+        `${baseUrl}${path}`,
+        {
+          method,
+          headers: {
+            ...this.buildAuthHeaders(),
+            'Content-Type': 'application/octet-stream',
+          },
+          body: prgFile,
         },
-        body: prgFile,
-      });
+        UPLOAD_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);
@@ -624,7 +693,10 @@ export class C64API {
   }
 
   async loadPrg(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:load_prg?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+    return this.request(`/v1/runners:load_prg?file=${encodeURIComponent(file)}`, {
+      method: 'PUT',
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async loadPrgUpload(prgFile: Blob): Promise<{ errors: string[] }> {
@@ -635,14 +707,18 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...this.buildAuthHeaders(),
-          'Content-Type': 'application/octet-stream',
+      response = await this.fetchWithTimeout(
+        `${baseUrl}${path}`,
+        {
+          method,
+          headers: {
+            ...this.buildAuthHeaders(),
+            'Content-Type': 'application/octet-stream',
+          },
+          body: prgFile,
         },
-        body: prgFile,
-      });
+        UPLOAD_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);
@@ -658,7 +734,10 @@ export class C64API {
   }
 
   async runCartridge(file: string): Promise<{ errors: string[] }> {
-    return this.request(`/v1/runners:run_crt?file=${encodeURIComponent(file)}`, { method: 'PUT' });
+    return this.request(`/v1/runners:run_crt?file=${encodeURIComponent(file)}`, {
+      method: 'PUT',
+      timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS,
+    });
   }
 
   async runCartridgeUpload(crtFile: Blob): Promise<{ errors: string[] }> {
@@ -669,14 +748,18 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
-      response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...this.buildAuthHeaders(),
-          'Content-Type': 'application/octet-stream',
+      response = await this.fetchWithTimeout(
+        `${baseUrl}${path}`,
+        {
+          method,
+          headers: {
+            ...this.buildAuthHeaders(),
+            'Content-Type': 'application/octet-stream',
+          },
+          body: crtFile,
         },
-        body: crtFile,
-      });
+        UPLOAD_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);

@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach } from 'vitest';
-import { getMockConfigPayload, setMockConfigLoader } from '@/lib/mock/mockConfig';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { clearMockConfigLoader, getMockConfigPayload, setMockConfigLoader } from '@/lib/mock/mockConfig';
 
 describe('mockConfig', () => {
   beforeEach(() => {
@@ -43,5 +43,27 @@ config:
     const second = await getMockConfigPayload();
     expect(second.general.baseUrl).toBe('http://other');
     expect(second).not.toBe(first);
+  });
+
+  it('falls back to defaults when loader throws', async () => {
+    setMockConfigLoader(() => {
+      throw new Error('boom');
+    });
+
+    const payload = await getMockConfigPayload();
+    expect(payload.general.baseUrl).toBe('http://c64u');
+    expect(payload.general.deviceType).toBe('Ultimate 64 Elite');
+    expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
+  });
+
+  it('falls back to bundled yaml when asset fetch fails', async () => {
+    clearMockConfigLoader();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('nope'));
+
+    const payload = await getMockConfigPayload();
+
+    expect(payload.general.deviceType).toBe('Ultimate 64 Elite');
+    expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
+    fetchSpy.mockRestore();
   });
 });

@@ -80,6 +80,20 @@ describe('playbackRouter', () => {
     expect(api.playSidUpload).toHaveBeenCalled();
   });
 
+  it('surfaces local SID read failures with a re-add message', async () => {
+    const api = createApiMock();
+    const file = {
+      name: 'demo.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => {
+        throw new TypeError('Failed to fetch');
+      },
+    };
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.sid', file });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Local file unavailable. Re-add it to the playlist.');
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
+  });
+
   it('routes MOD playback for Ultimate files', async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.MOD' });

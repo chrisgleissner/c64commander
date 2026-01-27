@@ -117,5 +117,47 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
     expect(localStorage.getItem('c64u_device_host')).toBe('127.0.0.1:9999');
   });
+
+  it('accepts healthy probe payload without product field', async () => {
+    const { probeOnce } = await import('@/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.setItem('c64u_password', '');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+
+    await expect(probeOnce()).resolves.toBe(true);
+  });
+
+  it('returns false when probe exceeds timeout', async () => {
+    const { probeOnce } = await import('@/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.setItem('c64u_password', '');
+
+    vi.stubGlobal('fetch', vi.fn((_: RequestInfo, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        setTimeout(() => {
+          resolve(new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }));
+        }, 200);
+      });
+    }));
+
+    const resultPromise = probeOnce({ timeoutMs: 50 });
+    await vi.advanceTimersByTimeAsync(60);
+    await expect(resultPromise).resolves.toBe(false);
+  });
 });
 

@@ -250,6 +250,45 @@ describe('c64api', () => {
     expect(addErrorLogMock).toHaveBeenCalledWith('CRT upload failed', expect.any(Object));
   });
 
+  it('maps failed fetch in SID uploads to host unreachable', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const api = new C64API('http://c64u');
+    const payload = new Blob(['SID'], { type: 'application/octet-stream' });
+
+    await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable');
+  });
+
+  it('maps timed out control requests to host unreachable', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((_, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((_, reject) => {
+        if (!signal) {
+          reject(new Error('Missing abort signal'));
+          return;
+        }
+        if (signal.aborted) {
+          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+          return;
+        }
+        signal.addEventListener('abort', () => {
+          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+        });
+      });
+    });
+
+    const api = new C64API('http://c64u');
+    const promise = api.machineReset();
+    const expectation = expect(promise).rejects.toThrow('Host unreachable');
+    await vi.advanceTimersByTimeAsync(3100);
+
+    await expectation;
+    vi.useRealTimers();
+  });
+
   it('builds request urls for config writes and machine actions', async () => {
     const fetchMock = vi.mocked(fetch);
     const okResponse = () =>

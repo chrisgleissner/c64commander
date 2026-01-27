@@ -28,54 +28,29 @@ test.describe('Feature flags', () => {
     }
   });
 
-  const enableDeveloperMode = async (page: Page) => {
-    await page.goto('/settings');
-    const aboutButton = page.getByRole('button', { name: 'About' });
-    for (let i = 0; i < 7; i += 1) {
-      await aboutButton.click();
-    }
-  };
-
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
   };
 
-  test('developer mode gating hides HVSC toggle', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('hvsc toggle is visible by default', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
-    await expect(page.getByLabel('Enable HVSC downloads')).toHaveCount(0);
-    await snap(page, testInfo, 'toggle-hidden');
-  });
-
-  test('developer mode shows toggle and default is off', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await enableDeveloperMode(page);
     const toggle = page.getByLabel('Enable HVSC downloads');
     await expect(toggle).toBeVisible();
-    await expect(toggle).not.toBeChecked();
-    await snap(page, testInfo, 'toggle-off');
-    await page.goto('/play');
-    await expect(page.getByText('Download HVSC Library')).toHaveCount(0);
-    await snap(page, testInfo, 'hvsc-hidden');
+    await expect(toggle).toBeChecked();
+    await snap(page, testInfo, 'toggle-visible');
   });
 
-  test('dynamic enablement shows HVSC controls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await enableDeveloperMode(page);
+  test('hvsc toggle controls play page visibility', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/settings');
     const toggle = page.getByLabel('Enable HVSC downloads');
-    await toggle.click();
     await expect(toggle).toBeChecked();
-    await snap(page, testInfo, 'toggle-on');
     await page.goto('/play');
     await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toBeVisible();
     await snap(page, testInfo, 'hvsc-visible');
-  });
 
-  test('dynamic disablement hides HVSC controls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await enableDeveloperMode(page);
-    const toggle = page.getByLabel('Enable HVSC downloads');
-    await toggle.click();
-    await expect(toggle).toBeChecked();
+    await page.goto('/settings');
     await toggle.click();
     await expect(toggle).not.toBeChecked();
-    await snap(page, testInfo, 'toggle-disabled');
     await page.goto('/play');
     await expect(page.getByRole('button', { name: 'Download HVSC Library' })).toHaveCount(0);
     await snap(page, testInfo, 'hvsc-hidden');

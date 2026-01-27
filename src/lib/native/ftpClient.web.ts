@@ -8,17 +8,31 @@ export class FtpClientWeb implements FtpClientPlugin {
       throw new Error('FTP browsing is unavailable: missing FTP bridge URL.');
     }
 
-    const response = await fetch(`${bridgeUrl.replace(/\/$/, '')}/v1/ftp/list`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        host: options.host,
-        port: options.port,
-        username: options.username,
-        password: options.password,
-        path: options.path,
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 3000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${bridgeUrl.replace(/\/$/, '')}/v1/ftp/list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          host: options.host,
+          port: options.port,
+          username: options.username,
+          password: options.password,
+          path: options.path,
+        }),
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError') {
+        throw new Error('FTP bridge request timed out');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       const errorPayload = await response.json().catch(() => null);

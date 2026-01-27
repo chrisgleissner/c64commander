@@ -170,7 +170,7 @@ test.describe('Settings connection management', () => {
       'Appearance',
       'Play and Disk',
       'Config',
-      'Experimental',
+      'HVSC Library',
       'About',
     ]);
   });
