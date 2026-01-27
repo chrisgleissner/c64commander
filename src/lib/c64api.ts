@@ -210,6 +210,8 @@ export class C64API {
       path,
       status,
       latencyMs,
+      baseUrl: this.getBaseUrl(),
+      deviceHost: this.deviceHost,
     });
   }
 
@@ -317,6 +319,65 @@ export class C64API {
   }
 
   private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
+    if (isNativePlatform()) {
+      const headers = (options.headers as Record<string, string>) || {};
+      const method = (options.method || 'GET').toString().toUpperCase();
+      const body = options.body;
+      let data: unknown = undefined;
+
+      if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
+        const buffer = await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
+        data = new Uint8Array(buffer);
+      } else if (body instanceof ArrayBuffer) {
+        data = new Uint8Array(body);
+      } else if (ArrayBuffer.isView(body)) {
+        data = new Uint8Array(body.buffer);
+      } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        data = body;
+      } else if (typeof body === 'string') {
+        data = body;
+      } else if (body) {
+        data = body;
+      }
+
+      try {
+        const requestPromise = CapacitorHttp.request({
+          url,
+          method,
+          headers,
+          data,
+        });
+        const nativeResponse = timeoutMs
+          ? await Promise.race([
+            requestPromise,
+            new Promise<never>((_, reject) => {
+              window.setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+            }),
+          ])
+          : await requestPromise;
+
+        const responseHeaders = new Headers();
+        if (nativeResponse.headers) {
+          Object.entries(nativeResponse.headers).forEach(([key, value]) => {
+            if (typeof value === 'string') responseHeaders.set(key, value);
+          });
+        }
+
+        const bodyText = typeof nativeResponse.data === 'string'
+          ? nativeResponse.data
+          : JSON.stringify(nativeResponse.data ?? { errors: [] });
+        return new Response(bodyText, { status: nativeResponse.status, headers: responseHeaders });
+      } catch (error) {
+        const rawMessage = (error as Error).message || 'Request failed';
+        const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
+        const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(rawMessage);
+        if (isAbort || isNetworkFailure) {
+          throw new Error('Host unreachable');
+        }
+        throw error;
+      }
+    }
+
     const controller = timeoutMs ? new AbortController() : null;
     const timeoutId = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : null;
     try {
@@ -452,14 +513,18 @@ export class C64API {
     try {
       const baseUrl = this.getBaseUrl();
       const payload = new Uint8Array(data).buffer;
-      response = await fetch(`${baseUrl}${path}`, {
-        method,
-        headers: {
-          ...this.buildAuthHeaders(),
-          'Content-Type': 'application/octet-stream',
+      response = await this.fetchWithTimeout(
+        `${baseUrl}${path}`,
+        {
+          method,
+          headers: {
+            ...this.buildAuthHeaders(),
+            'Content-Type': 'application/octet-stream',
+          },
+          body: payload,
         },
-        body: payload,
-      });
+        CONTROL_REQUEST_TIMEOUT_MS,
+      );
       status = response.status;
     } finally {
       this.logRestCall(method, path, status, startedAt);

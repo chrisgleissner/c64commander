@@ -101,6 +101,8 @@ const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate'
       currentIndex: -1,
     };
     localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+    localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(payload));
+    localStorage.setItem('c64u_last_device_id', 'TEST-123');
   }, { seedItems: items });
 };
 
@@ -643,6 +645,8 @@ test.describe('Playback file browser (part 2)', () => {
 
     await page.addInitScript((payload: { items: Array<Record<string, unknown>>; currentIndex: number }) => {
       localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+      localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(payload));
+      localStorage.setItem('c64u_last_device_id', 'TEST-123');
     }, playlist);
 
     await page.goto('/play');

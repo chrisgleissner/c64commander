@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
-import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const waitForRequests = async (predicate: () => boolean) => {
@@ -28,6 +28,8 @@ const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate'
       currentIndex: -1,
     };
     localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+    localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(payload));
+    localStorage.setItem('c64u_last_device_id', 'TEST-123');
   }, { seedItems: items });
 };
 
@@ -88,6 +90,46 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
     await snap(page, testInfo, 'play-page-loaded');
+  });
+
+  test('playback sends runner request to real device mock', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
+
+    const lastRequest = [...server.requests]
+      .reverse()
+      .find((req) => req.url.startsWith('/v1/runners:sidplay'));
+    expect(lastRequest?.method).toBe('PUT');
+    await snap(page, testInfo, 'play-requested');
+  });
+
+  test('playback failure does not clear playlist across navigation', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected playback failure warnings for unreachable device.');
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'play-open');
+
+    server.setFaultMode('refused');
+    await page.getByTestId('playlist-play').click();
+    await expect(page.getByText('Playback failed', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('playlist-list')).toContainText('Track_0001.sid');
+    await snap(page, testInfo, 'play-failed');
+
+    await page.goto('/disks');
+    await page.goto('/play');
+    await expect(page.getByTestId('playlist-list')).toContainText('Track_0001.sid');
+    await snap(page, testInfo, 'playlist-restored');
+    server.setFaultMode('none');
   });
 
   test('playlist view-all dialog is constrained and scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {

@@ -491,6 +491,17 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'sidplay-requested');
   });
 
+  test('HVSC download attempt runs while connected to device mock', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await installMocks(page, { installedVersion: 0 });
+    await page.goto('/play');
+    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'play-connected');
+
+    await page.getByRole('button', { name: 'Download HVSC Library' }).click();
+    await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+    await snap(page, testInfo, 'hvsc-download-attempted');
+  });
+
   test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected extraction failure toast before cached ingest.');
     await installMocks(page, { installedVersion: 0, failInstall: true, failStage: 'extract' });

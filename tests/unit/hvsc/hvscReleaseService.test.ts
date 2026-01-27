@@ -4,10 +4,22 @@ import {
   buildHvscUpdateUrl,
   fetchLatestHvscVersions,
 } from '@/lib/hvsc/hvscReleaseService';
+import { Capacitor, CapacitorHttp } from '@capacitor/core';
+
+vi.mock('@capacitor/core', () => ({
+  Capacitor: {
+    isNativePlatform: vi.fn(() => false),
+  },
+  CapacitorHttp: {
+    request: vi.fn(),
+  },
+}));
 
 describe('hvscReleaseService', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    vi.mocked(CapacitorHttp.request).mockReset();
   });
 
   it('parses latest baseline and update versions', async () => {
@@ -55,5 +67,24 @@ describe('hvscReleaseService', () => {
     await expect(fetchLatestHvscVersions('https://example.com/hvsc/')).rejects.toThrow(
       'HVSC release fetch failed: 500 Server Error',
     );
+  });
+
+  it('uses CapacitorHttp for native HVSC index fetches', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    const html = '<a href="HVSC_90-all-of-them.7z">HVSC_90-all-of-them.7z</a>';
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: html,
+      headers: {},
+      url: 'https://example.com/hvsc/',
+    });
+
+    const result = await fetchLatestHvscVersions('https://example.com/hvsc/');
+    expect(result.baselineVersion).toBe(90);
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(vi.mocked(CapacitorHttp.request)).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://example.com/hvsc/',
+      method: 'GET',
+    }));
   });
 });

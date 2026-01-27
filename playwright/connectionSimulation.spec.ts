@@ -142,12 +142,15 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_password', '');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
-      localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify({
+      const playlistPayload = JSON.stringify({
         items: [
           { source: 'local', path: '/storage/demo.sid', name: 'demo.sid', durationMs: 60000 },
         ],
         currentIndex: -1,
-      }));
+      });
+      localStorage.setItem('c64u_playlist:v1:TEST-123', playlistPayload);
+      localStorage.setItem('c64u_playlist:v1:default', playlistPayload);
+      localStorage.setItem('c64u_last_device_id', 'TEST-123');
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await seedUiMocks(page, server.baseUrl);
@@ -211,6 +214,8 @@ test.describe('Deterministic Connectivity Simulation', () => {
         currentIndex: -1,
       };
       localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
+      localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(payload));
+      localStorage.setItem('c64u_last_device_id', 'TEST-123');
     });
 
     await page.reload({ waitUntil: 'domcontentloaded' });

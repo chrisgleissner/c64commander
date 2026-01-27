@@ -388,6 +388,27 @@ describe('c64api', () => {
     expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
   });
 
+  it('uses CapacitorHttp for binary uploads on native platforms', async () => {
+    (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
+      isNativePlatform: () => true,
+    };
+    capacitorRequestMock.mockResolvedValue({
+      status: 200,
+      data: { errors: [] },
+      headers: {},
+      url: 'http://c64u/v1/drives/a:mount',
+    });
+
+    const api = new C64API('http://c64u');
+    await api.mountDriveUpload('a', new Blob(['disk'], { type: 'application/octet-stream' }));
+
+    expect(capacitorRequestMock).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'http://c64u/v1/drives/a:mount',
+    }));
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
   it('covers runner and drive request helpers', async () => {
     const fetchMock = vi.mocked(fetch);
     const okResponse = () =>

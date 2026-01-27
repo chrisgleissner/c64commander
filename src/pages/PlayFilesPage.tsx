@@ -122,6 +122,8 @@ type AudioMixerItem = {
 
 const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
+const LAST_DEVICE_ID_KEY = 'c64u_last_device_id';
+const PLAYLIST_STORAGE_PREFIX = 'c64u_playlist:v1:';
 const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 const DURATION_MIN_SECONDS = 1;
 const DURATION_MAX_SECONDS = 3600;
@@ -262,10 +264,11 @@ export default function PlayFilesPage() {
   const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
   const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
   const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
-  const uniqueId = status.deviceInfo?.unique_id || 'default';
+  const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([]);
+  const hasPlaylistRef = useRef(false);
   const [currentIndex, setCurrentIndex] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -678,7 +681,23 @@ export default function PlayFilesPage() {
     return loader;
   }, [readLocalText, songlengthsFilesByDir]);
 
-  const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(uniqueId), [uniqueId]);
+  const [lastKnownDeviceId, setLastKnownDeviceId] = useState<string | null>(() => {
+    if (typeof localStorage === 'undefined') return null;
+    return localStorage.getItem(LAST_DEVICE_ID_KEY);
+  });
+
+  useEffect(() => {
+    if (!deviceInfoId || typeof localStorage === 'undefined') return;
+    setLastKnownDeviceId(deviceInfoId);
+    try {
+      localStorage.setItem(LAST_DEVICE_ID_KEY, deviceInfoId);
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [deviceInfoId]);
+
+  const resolvedDeviceId = deviceInfoId || lastKnownDeviceId || 'default';
+  const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(resolvedDeviceId), [resolvedDeviceId]);
 
   const handleAutoConfirmStart = useCallback(() => {
     setAddItemsSurface('page');
@@ -1547,21 +1566,62 @@ export default function PlayFilesPage() {
   }, [buildPlaylistItem, localEntriesBySourceId, localSourceTreeUris]);
 
   useEffect(() => {
+    hasPlaylistRef.current = playlist.length > 0;
+  }, [playlist]);
+
+  useEffect(() => {
     if (typeof localStorage === 'undefined') return;
     try {
-      let raw = localStorage.getItem(playlistStorageKey);
-      if (!raw && uniqueId !== 'default') {
-        raw = localStorage.getItem(buildPlaylistStorageKey('default'));
+      const seenKeys = new Set<string>();
+      const candidateKeys: string[] = [];
+      const pushKey = (key: string | null | undefined) => {
+        if (!key || seenKeys.has(key)) return;
+        seenKeys.add(key);
+        candidateKeys.push(key);
+      };
+
+      const defaultKey = buildPlaylistStorageKey('default');
+      pushKey(playlistStorageKey);
+      if (resolvedDeviceId !== 'default') {
+        pushKey(defaultKey);
       }
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as StoredPlaylistState;
-      const restored = hydrateStoredPlaylist(parsed);
+
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(PLAYLIST_STORAGE_PREFIX)) {
+          pushKey(key);
+        }
+      }
+
+      if (!candidateKeys.length) return;
+
+      const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];
+      for (const key of candidateKeys) {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw) as StoredPlaylistState;
+          candidates.push({ key, parsed });
+        } catch {
+          // Ignore invalid stored playlists.
+        }
+      }
+
+      if (!candidates.length) return;
+
+      const preferred =
+        candidates.find((entry) => entry.parsed?.items?.length)
+        ?? candidates[0];
+      const restored = hydrateStoredPlaylist(preferred.parsed);
+      if (hasPlaylistRef.current && restored.items.length === 0) {
+        return;
+      }
       setPlaylist(restored.items);
       setCurrentIndex(restored.index);
     } catch {
       // Ignore invalid stored playlists.
     }
-  }, [hydrateStoredPlaylist, playlistStorageKey, uniqueId]);
+  }, [hydrateStoredPlaylist, playlistStorageKey, resolvedDeviceId]);
 
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
@@ -1580,7 +1640,12 @@ export default function PlayFilesPage() {
       currentIndex,
     };
     try {
-      localStorage.setItem(playlistStorageKey, JSON.stringify(stored));
+      const payload = JSON.stringify(stored);
+      localStorage.setItem(playlistStorageKey, payload);
+      const defaultKey = buildPlaylistStorageKey('default');
+      if (playlistStorageKey !== defaultKey) {
+        localStorage.setItem(defaultKey, payload);
+      }
     } catch {
       // Ignore storage failures.
     }
@@ -2560,43 +2625,45 @@ export default function PlayFilesPage() {
           </div>
         </div>
 
-        <SelectableActionList
-          title="Playlist"
-          selectionLabel="items"
-          items={playlistListItems}
-          emptyLabel="No tracks in playlist yet."
-          selectAllLabel="Select all"
-          deselectAllLabel="Deselect all"
-          removeSelectedLabel={selectedPlaylistCount ? 'Remove selected items' : undefined}
-          selectedCount={selectedPlaylistCount}
-          allSelected={allPlaylistSelected}
-          onToggleSelectAll={toggleSelectAllPlaylist}
-          onRemoveSelected={handleRemoveSelectedPlaylist}
-          maxVisible={listPreviewLimit}
-          viewAllTitle="Playlist"
-          listTestId="playlist-list"
-          rowTestId="playlist-item"
-          filterHeader={(
-            <div className="flex flex-wrap gap-2">
-              {CATEGORY_OPTIONS.map((category) => (
-                <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Checkbox
-                    checked={playlistTypeFilters.includes(category)}
-                    onCheckedChange={() => togglePlaylistTypeFilter(category)}
-                    aria-label={formatPlayCategory(category)}
-                    data-testid={`playlist-type-${category}`}
-                  />
-                  {formatPlayCategory(category)}
-                </label>
-              ))}
-            </div>
-          )}
-          headerActions={
-            <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
-              {hasPlaylist ? 'Add more items' : 'Add items'}
-            </Button>
-          }
-        />
+        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <SelectableActionList
+            title="Playlist"
+            selectionLabel="items"
+            items={playlistListItems}
+            emptyLabel="No tracks in playlist yet."
+            selectAllLabel="Select all"
+            deselectAllLabel="Deselect all"
+            removeSelectedLabel={selectedPlaylistCount ? 'Remove selected items' : undefined}
+            selectedCount={selectedPlaylistCount}
+            allSelected={allPlaylistSelected}
+            onToggleSelectAll={toggleSelectAllPlaylist}
+            onRemoveSelected={handleRemoveSelectedPlaylist}
+            maxVisible={listPreviewLimit}
+            viewAllTitle="Playlist"
+            listTestId="playlist-list"
+            rowTestId="playlist-item"
+            filterHeader={(
+              <div className="flex flex-wrap gap-2">
+                {CATEGORY_OPTIONS.map((category) => (
+                  <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Checkbox
+                      checked={playlistTypeFilters.includes(category)}
+                      onCheckedChange={() => togglePlaylistTypeFilter(category)}
+                      aria-label={formatPlayCategory(category)}
+                      data-testid={`playlist-type-${category}`}
+                    />
+                    {formatPlayCategory(category)}
+                  </label>
+                ))}
+              </div>
+            )}
+            headerActions={
+              <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+                {hasPlaylist ? 'Add more items' : 'Add items'}
+              </Button>
+            }
+          />
+        </div>
 
         <input
           ref={localSourceInputRef}
@@ -2648,7 +2715,7 @@ export default function PlayFilesPage() {
         ) : null}
 
         {hvscControlsEnabled && (
-          <div className="space-y-4" data-testid="hvsc-controls">
+          <div className="bg-card border border-border rounded-xl p-4 space-y-4" data-testid="hvsc-controls">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-medium">HVSC library</p>
@@ -2762,7 +2829,7 @@ export default function PlayFilesPage() {
             )}
 
             {hvscInstalled && hvscAvailable && (
-              <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Browse HVSC folders</p>
