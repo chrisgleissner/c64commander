@@ -10,32 +10,25 @@ on:
         required: false
         default: '2h'
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   fuzz:
     name: Chaos fuzz (Playwright)
     runs-on: ubuntu-latest
+    container:
+      image: ${{ format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
 
       - name: Run chaos fuzz
         env:

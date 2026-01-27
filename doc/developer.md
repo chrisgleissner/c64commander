@@ -141,10 +141,15 @@ Checks:
 
 ## CI workflow
 
-CI runs on every push with two parallel jobs:
+CI uses a prebuilt Docker image for web workflows to avoid repeated Playwright browser installs.
+The image is defined by [Dockerfile](../Dockerfile) and [apt-packages.txt](../apt-packages.txt),
+and built by [.github/workflows/docker-build.yaml](../.github/workflows/docker-build.yaml).
 
-1. **Web tests** (unit + Playwright) producing Playwright evidence + report
-2. **Android build** (Gradle tests + APK/AAB)
+Primary workflows:
+
+1. **Web CI**: [.github/workflows/ci.yaml](../.github/workflows/ci.yaml) runs build + tests in the container.
+2. **Android + packaging**: [.github/workflows/android-apk.yaml](../.github/workflows/android-apk.yaml) handles Android builds and packaging,
+   with web jobs also running inside the CI container.
 
 Artifacts:
 
