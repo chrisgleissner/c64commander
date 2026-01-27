@@ -34,8 +34,14 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Restore node_modules from image
+        run: |
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
 
       - name: Run CI test suite
         env:

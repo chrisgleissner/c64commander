@@ -34,12 +34,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Cache HVSC Update 84 archive
         uses: actions/cache@v4
@@ -75,12 +80,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Cache HVSC Update 84 archive
         uses: actions/cache@v4
@@ -133,12 +143,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Build web (coverage probes)
         run: |
@@ -173,12 +188,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download coverage build output
         uses: actions/download-artifact@v4
@@ -260,12 +280,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies (npm)
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download unit coverage
         uses: actions/download-artifact@v4
@@ -352,18 +377,15 @@ jobs:
   android-tests:
     name: Android | Tests + Coverage
     runs-on: ubuntu-latest
+    needs: docker-image
+    container:
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     env:
       GRADLE_MAX_WORKERS: "6"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
 
       - name: Resolve app version
         run: |
@@ -379,22 +401,27 @@ jobs:
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> $GITHUB_ENV
 
-      - name: Install dependencies
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Cache Gradle
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/build.gradle', 'android/**/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
       - name: Decode keystore
         env:
@@ -423,16 +450,6 @@ jobs:
             echo "Signing secrets not set. Skipping signing env export."
             echo "HAS_KEYSTORE=false" >> $GITHUB_ENV
           fi
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Install SDK components
-        run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
 
       - name: Build web + sync
         run: |
@@ -491,18 +508,15 @@ jobs:
   android-packaging:
     name: Android | Packaging
     runs-on: ubuntu-latest
+    needs: docker-image
+    container:
+      image: ${{ needs.docker-image.outputs.image || format('ghcr.io/{0}/c64commander-ci:latest', github.repository_owner) }}
     env:
       GRADLE_MAX_WORKERS: "6"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
 
       - name: Resolve app version
         run: |
@@ -518,22 +532,27 @@ jobs:
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> $GITHUB_ENV
 
-      - name: Install dependencies
+      - name: Restore node_modules from image
         run: |
           start=$(date +%s)
-          npm ci
+          if [[ -f /opt/node_modules.tar.gz ]]; then
+            tar -xzf /opt/node_modules.tar.gz -C "$GITHUB_WORKSPACE"
+          else
+            echo "Missing /opt/node_modules.tar.gz in CI image" >&2
+            exit 1
+          fi
           end=$(date +%s)
-          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- deps restore (image): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Cache Gradle
+        uses: actions/cache@v4
         with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/build.gradle', 'android/**/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
 
       - name: Decode keystore
         env:
@@ -562,16 +581,6 @@ jobs:
             echo "Signing secrets not set. Skipping signing env export."
             echo "HAS_KEYSTORE=false" >> $GITHUB_ENV
           fi
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Install SDK components
-        run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
 
       - name: Build web + sync
         run: |

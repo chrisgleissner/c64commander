@@ -44,7 +44,7 @@ jobs:
       - name: Determine Docker context hash
         id: context
         run: |
-          HASH=$(git ls-files Dockerfile apt-packages.txt | xargs cat | sha256sum | cut -d' ' -f1)
+          HASH=$(git ls-files Dockerfile apt-packages.txt package.json package-lock.json patches | xargs cat | sha256sum | cut -d' ' -f1)
           echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Check image freshness
