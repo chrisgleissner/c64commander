@@ -397,7 +397,6 @@ jobs:
   android-tests:
     name: Android | Tests + Coverage
     runs-on: ubuntu-latest
-    needs: []
     env:
       GRADLE_MAX_WORKERS: "6"
 
@@ -534,7 +533,6 @@ jobs:
   android-packaging:
     name: Android | Packaging
     runs-on: ubuntu-latest
-    needs: []
     env:
       GRADLE_MAX_WORKERS: "6"
 
