@@ -53,13 +53,13 @@ RUN set -eux; \
       "build-tools;34.0.0" \
       "build-tools;35.0.0"
 
-# Pre-install Playwright browser binaries (Chromium + headless shell)
+# Pre-install Playwright browser binaries (all)
 RUN set -eux; \
     mkdir -p /tmp/pw-install; \
     cd /tmp/pw-install; \
     npm init -y >/dev/null 2>&1; \
     npm install --no-fund --no-audit --silent @playwright/test@${PLAYWRIGHT_VERSION}; \
-    npx playwright install --with-deps chromium chromium-headless-shell; \
+    npx playwright install --with-deps; \
     rm -rf /tmp/pw-install
 
 # Pre-install Node dependencies based on lockfile (for CI extraction)
