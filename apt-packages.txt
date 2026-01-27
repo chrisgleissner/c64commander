@@ -6,6 +6,7 @@ nodejs
 npm
 python3
 bash
+gnupg
 openjdk-17-jdk
 unzip
 zip
