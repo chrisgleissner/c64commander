@@ -453,7 +453,7 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
 test.describe('Chaos fuzz', () => {
   test.skip(!FUZZ_ENABLED, 'Chaos fuzz runs only when FUZZ_RUN=1 is set.');
 
-  test('run', async (_unused, testInfo) => {
+  test('run', async ({ page: _page }, testInfo) => {
     const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
