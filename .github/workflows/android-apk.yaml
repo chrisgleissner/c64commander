@@ -424,6 +424,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Export Android SDK env
+        run: |
+          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          elif [[ -n "${ANDROID_HOME:-}" ]]; then
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+
       - name: Decode keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -562,6 +570,14 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+
+      - name: Export Android SDK env
+        run: |
+          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          elif [[ -n "${ANDROID_HOME:-}" ]]; then
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
 
       - name: Decode keystore
         env:

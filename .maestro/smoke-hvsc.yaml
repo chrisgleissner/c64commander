@@ -1,0 +1,25 @@
+appId: uk.gleissner.c64commander
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- scroll
+- scroll
+- tapOn: "Enable HVSC downloads"
+- takeScreenshot: "hvsc-enabled"
+- tapOn: "Play"
+- assertVisible: "Play Files"
+- scroll
+- scroll
+- assertVisible: "HVSC library"
+- takeScreenshot: "hvsc-controls"
+- assertVisible: "Download HVSC"
+- assertVisible: "Ingest HVSC"
+- takeScreenshot: "hvsc-actions"
+- assertVisible:
+    text: "Browse HVSC folders"
+    optional: true
+- assertVisible:
+    text: "Filter folders…"
+    optional: true
+- takeScreenshot: "hvsc-browse"

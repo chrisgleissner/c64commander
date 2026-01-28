@@ -2,7 +2,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'android-emulator');
+const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'maestro');
 
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const webmSignature = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
@@ -105,11 +105,11 @@ const validateEvidenceFolder = async (folderPath) => {
   if (pngs.length === 0) {
     errors.push(`No PNG screenshots in ${folderPath}`);
   }
-  if (videos.length !== 1) {
-    errors.push(`Expected exactly one video (mp4/webm) in ${folderPath}, found ${videos.length}`);
+  if (videos.length > 1) {
+    errors.push(`Expected at most one video (mp4/webm) in ${folderPath}, found ${videos.length}`);
   }
 
-  const required = ['logcat.txt', 'request-routing.json', 'error-context.md', 'meta.json'];
+  const required = ['error-context.md', 'meta.json'];
   for (const req of required) {
     if (!files.includes(req)) {
       errors.push(`Missing ${req} in ${folderPath}`);

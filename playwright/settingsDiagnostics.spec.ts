@@ -84,8 +84,9 @@ test.describe('Settings diagnostics workflows', () => {
     await snap(page, testInfo, 'diagnostics-open');
 
     await dialog.getByRole('tab', { name: 'All logs' }).click();
-    await expect(dialog.getByText('C64 API request')).toBeVisible();
-    await expect(dialog.getByText('DEBUG')).toBeVisible();
+    const apiRequestEntry = dialog.getByText('C64 API request', { exact: true }).first();
+    await expect(apiRequestEntry).toBeVisible();
+    await expect(apiRequestEntry.locator('xpath=..')).toContainText(/DEBUG/i);
     await snap(page, testInfo, 'debug-log-entry');
   });
 

@@ -50,9 +50,10 @@ All common development tasks use `./local-build.sh`:
 ./local-build.sh --emulator       # Launch Android emulator
 ./local-build.sh --install        # Build and install APK to connected device
 ./local-build.sh --device R5CRC3ZY9XH --install  # Install to specific device
-./local-build.sh --smoke-android-emulator  # Run emulator smoke tests (demo mock + real mock)
-./local-build.sh --smoke-android-emulator --c64u-target real --c64u-host C64U
-./local-build.sh --smoke-android-emulator --c64u-target real --c64u-host auto  # External mock for emulator
+./local-build.sh --smoke-android-emulator  # Run emulator smoke tests (mock target only)
+./local-build.sh --smoke-android-real      # Run mock + real target smoke tests
+./local-build.sh --smoke-android-real --c64u-host C64U
+./local-build.sh --smoke-android-real --c64u-host auto  # External mock for emulator
 ```
 
 You can also run the Maestro flows directly from repo root:

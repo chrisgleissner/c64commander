@@ -21,6 +21,7 @@ RUN_ANDROID_COVERAGE=true
 RUN_SCREENSHOTS_ONLY=false
 RUN_FUZZ=false
 RUN_SMOKE_ANDROID_EMULATOR=false
+RUN_SMOKE_ANDROID_REAL=false
 PLAYWRIGHT_DEVICES=""
 APK_PATH=""
 DEVICE_ID=""
@@ -34,6 +35,7 @@ FUZZ_NO_PROGRESS_STEPS=""
 C64U_TARGET="mock"
 C64U_HOST="C64U"
 C64U_TARGET_SET=false
+C64U_HOST_SET=false
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -64,9 +66,10 @@ Options:
   --android-tests       Run Android instrumentation tests (requires a device/emulator)
   --skip-android-tests  Skip Android instrumentation tests
   --skip-android-coverage Skip Android Jacoco coverage check
-  --smoke-android-emulator Run Android emulator smoke test (non-destructive)
-  --c64u-target mock|real   Target for emulator smoke (default: mock)
-  --c64u-host <hostname>    Hostname/IP for real device (default: C64U)
+  --smoke-android-emulator Run Android emulator smoke test (mock target only)
+  --smoke-android-real  Also run emulator smoke test against real target (requires flag)
+  --c64u-target mock|real   Target for emulator smoke (default: mock; real requires --smoke-android-real)
+  --c64u-host <hostname>    Hostname/IP for real target (default: C64U)
   --fuzz                Run Playwright chaos fuzz runner (mock device only)
   --fuzz-seed <num>          Base seed for fuzz RNG (default: epoch millis; each shard adds its index)
   --fuzz-steps <num>         Max fuzz steps (optional; default: unbounded when time budget is set)
@@ -302,6 +305,21 @@ while [[ $# -gt 0 ]]; do
       RUN_ANDROID_COVERAGE=false
       shift
       ;;
+    --smoke-android-real)
+      RUN_SMOKE_ANDROID_REAL=true
+      RUN_SMOKE_ANDROID_EMULATOR=true
+      RUN_BUILD=true
+      RUN_APK=true
+      RUN_TEST=false
+      RUN_TEST_UNIT=false
+      RUN_TEST_E2E=false
+      RUN_TEST_E2E_CI=false
+      RUN_VALIDATE_EVIDENCE=false
+      RUN_COVERAGE=false
+      RUN_ANDROID_TESTS=false
+      RUN_ANDROID_COVERAGE=false
+      shift
+      ;;
     --c64u-target)
       C64U_TARGET="$2"
       C64U_TARGET_SET=true
@@ -309,6 +327,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --c64u-host)
       C64U_HOST="$2"
+      C64U_HOST_SET=true
       shift 2
       ;;
     -h|--help)
@@ -483,18 +502,27 @@ fi
 if [[ "$RUN_SMOKE_ANDROID_EMULATOR" == "true" ]]; then
   log "Running Android emulator smoke test"
   SMOKE_APK_PATH="${APK_PATH:-$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk}"
-  if [[ "$C64U_TARGET_SET" == "true" ]]; then
+  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" == "real" && "$RUN_SMOKE_ANDROID_REAL" != "true" ]]; then
+    echo "--c64u-target real requires --smoke-android-real" >&2
+    exit 1
+  fi
+  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" == "mock" ]]; then
     (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
-      --c64u-target "$C64U_TARGET" \
-      --c64u-host "$C64U_HOST" \
+      --c64u-target "mock" \
       --apk-path "$SMOKE_APK_PATH")
   else
     (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
       --c64u-target "mock" \
       --apk-path "$SMOKE_APK_PATH")
+  fi
+  if [[ "$RUN_SMOKE_ANDROID_REAL" == "true" ]]; then
+    REAL_HOST="$C64U_HOST"
+    if [[ "$C64U_HOST_SET" != "true" ]]; then
+      REAL_HOST="auto"
+    fi
     (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
       --c64u-target "real" \
-      --c64u-host "auto" \
+      --c64u-host "$REAL_HOST" \
       --apk-path "$SMOKE_APK_PATH")
   fi
   log "Validating Android emulator evidence"

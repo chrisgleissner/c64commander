@@ -6,23 +6,17 @@ appId: uk.gleissner.c64commander
     text: "Add file / folder from device"
 - takeScreenshot: "file-picker-open"
 - tapOn:
-    text: "Allow"
-    optional: true
-- tapOn:
-    text: "Allow access"
-    optional: true
-- tapOn:
-    text: "Allow all the time"
-    optional: true
-- tapOn:
     text: "Cancel"
     optional: true
 - tapOn:
     text: "Back"
+    optional: true
+- tapOn:
+    text: "Navigate up"
     optional: true
 - back
 - back
 - launchApp
 - assertVisible: "Play Files"
 - assertVisible: "Playlist"
-- takeScreenshot: "play-return"
+- takeScreenshot: "picker-cancelled"

@@ -47,13 +47,15 @@ Required structure:
 
 ```
 /.maestro/
-  config.yaml
-  smoke-launch.yaml
-  smoke-file-picker.yaml
-  smoke-playback.yaml
+  config.yaml              # Maestro configuration with output paths and retry settings
+  smoke-launch.yaml        # Basic app launch and navigation smoke test
+  smoke-file-picker.yaml   # File picker integration test
+  smoke-playback.yaml      # Playback UI readiness test
+  smoke-local-playback.yaml # Local file source playback test
+  smoke-hvsc.yaml          # HVSC (High Voltage SID Collection) source test
   subflows/
-    launch-and-wait.yaml
-    common-navigation.yaml
+    launch-and-wait.yaml   # Reusable app launch subflow
+    common-navigation.yaml # Reusable navigation verification subflow
 ```
 
 ### Why this works
@@ -75,6 +77,15 @@ This avoids collisions and allows different capture formats while keeping a sing
 2. Use subflows for shared navigation or launch steps.
 3. Ensure each flow takes screenshots for evidence.
 4. Update [doc/developer.md](../developer.md) if the flow adds new prerequisites.
+
+## New test flows (Android device-sourced songs)
+
+Added flows specifically targeting playback from Android device local storage:
+
+- **smoke-local-playback.yaml**: Tests the "This device" source selection flow, verifying local file picker integration and navigation back to the playlist.
+- **smoke-hvsc.yaml**: Tests the HVSC (High Voltage SID Collection) source selection flow for browsing the C64 music library.
+
+These flows complement the existing smoke tests by specifically targeting high-value user workflows around local file playback and HVSC library browsing, which are critical differentiators for the Android app experience.
 
 ## Summary
 

@@ -1,0 +1,14 @@
+appId: uk.gleissner.c64commander
+tags:
+  - subflow
+---
+- runFlow: launch-and-wait.yaml
+- tapOn: "Play"
+- assertVisible: "Play Files"
+- takeScreenshot: "play-files"
+- scroll
+- tapOn:
+    text: "Add items to playlist"
+- assertVisible: "Choose source"
+- assertVisible: "This device"
+- takeScreenshot: "choose-source"

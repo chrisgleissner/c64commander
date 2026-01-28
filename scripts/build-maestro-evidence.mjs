@@ -232,7 +232,15 @@ const main = async () => {
   const allScreenshots = rawFiles.filter((file) => file.toLowerCase().endsWith('.png'));
   const globalArtifacts = rawFiles.filter((file) => {
     const base = path.basename(file).toLowerCase();
-    return ['maestro.log', 'report.xml', 'report.json', 'maestro-report.xml', 'maestro-report.json'].includes(base);
+    return [
+      'maestro.log',
+      'report.xml',
+      'report.json',
+      'maestro-report.xml',
+      'maestro-report.json',
+      'logcat.txt',
+      'emulator.log',
+    ].includes(base);
   });
 
   await fs.mkdir(EVIDENCE_ROOT, { recursive: true });

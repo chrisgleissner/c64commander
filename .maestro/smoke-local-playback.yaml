@@ -20,9 +20,13 @@ appId: uk.gleissner.c64commander
 - tapOn:
     text: "Back"
     optional: true
+- tapOn:
+    text: "Navigate up"
+    optional: true
 - back
 - back
 - launchApp
 - assertVisible: "Play Files"
 - assertVisible: "Playlist"
-- takeScreenshot: "play-return"
+- assertVisible: "Select a playlist item to start"
+- takeScreenshot: "playlist-return"
