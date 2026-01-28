@@ -5,12 +5,14 @@ appId: uk.gleissner.c64commander
 - extendedWaitUntil:
     visible: "Play Files"
     timeout: 10000
-- setAirplaneMode: true
+- setAirplaneMode:
+    enabled: true
 - extendedWaitUntil:
     visible: "Offline"
     timeout: 10000
 - takeScreenshot: "offline-mode"
-- setAirplaneMode: false
+- setAirplaneMode:
+    disabled: true
 - extendedWaitUntil:
     visible: "Connected"
     timeout: 30000 # Reconnecting might take longer

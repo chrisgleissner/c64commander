@@ -8,7 +8,6 @@ const RAW_ROOT = path.resolve(ROOT, 'test-results', 'maestro');
 const EVIDENCE_ROOT = path.resolve(ROOT, 'test-results', 'evidence', 'maestro');
 const FLOWS_ROOT = path.resolve(ROOT, '.maestro');
 
-const DEVICE_TYPE = process.env.MAESTRO_DEVICE_TYPE || 'android-emulator';
 const MAESTRO_EXIT_CODE = Number(process.env.MAESTRO_EXIT_CODE ?? '0');
 
 const statSafe = async (target) => {
@@ -36,7 +35,8 @@ const walkFiles = async (dir) => {
 const listFlowFiles = async () => {
   const entries = await fs.readdir(FLOWS_ROOT, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml') && entry.name !== 'config.yaml')
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.yaml'))
+    .filter((entry) => entry.name !== 'config.yaml' && entry.name !== 'probe-health.yaml')
     .map((entry) => path.join(FLOWS_ROOT, entry.name));
 };
 
@@ -150,15 +150,19 @@ const normalizeStatus = (status) => {
   return lower;
 };
 
-const buildEvidenceForFlow = async ({ flowName, rawFiles, reportEntries, allScreenshots, globalArtifacts }) => {
-  const flowDir = path.join(EVIDENCE_ROOT, flowName, DEVICE_TYPE);
+const buildEvidenceForFlow = async ({ flowName }) => {
+  const flowDir = path.join(EVIDENCE_ROOT, flowName);
+  const flowRawDir = path.join(RAW_ROOT, flowName);
+  const flowRawStat = await statSafe(flowRawDir);
+  if (!flowRawStat?.isDirectory()) {
+    return false;
+  }
+  const flowRawFiles = await walkFiles(flowRawDir);
+  const reportEntries = await loadReportEntries(flowRawFiles);
   await fs.mkdir(flowDir, { recursive: true });
 
-  const flowMatches = rawFiles.filter((file) => file.toLowerCase().includes(flowName.toLowerCase()));
-  let screenshots = flowMatches.filter((file) => file.toLowerCase().endsWith('.png'));
-  if (screenshots.length === 0 && allScreenshots.length) {
-    screenshots = allScreenshots;
-  }
+  const flowMatches = flowRawFiles;
+  const screenshots = flowMatches.filter((file) => file.toLowerCase().endsWith('.png'));
 
   const screenshotsDir = path.join(flowDir, 'screenshots');
   await fs.mkdir(screenshotsDir, { recursive: true });
@@ -180,6 +184,19 @@ const buildEvidenceForFlow = async ({ flowName, rawFiles, reportEntries, allScre
     await copyFile(log, path.join(flowDir, path.basename(log)));
   }
 
+  const globalArtifacts = flowMatches.filter((file) => {
+    const base = path.basename(file).toLowerCase();
+    return [
+      'maestro.log',
+      'report.xml',
+      'report.json',
+      'maestro-report.xml',
+      'maestro-report.json',
+      'logcat.txt',
+      'emulator.log',
+    ].includes(base);
+  });
+
   for (const artifact of globalArtifacts) {
     await copyFile(artifact, path.join(flowDir, path.basename(artifact)));
   }
@@ -191,8 +208,7 @@ const buildEvidenceForFlow = async ({ flowName, rawFiles, reportEntries, allScre
     flow: flowName,
     status,
     durationMs: reportEntry?.durationMs,
-    deviceType: DEVICE_TYPE,
-    rawOutputRoot: RAW_ROOT,
+    rawOutputRoot: flowRawDir,
     capturedAt: new Date().toISOString(),
     artifacts: {
       screenshots: sortedScreenshots.length,
@@ -213,6 +229,7 @@ const buildEvidenceForFlow = async ({ flowName, rawFiles, reportEntries, allScre
   }
 
   await fs.writeFile(path.join(flowDir, 'error-context.md'), errorContext.join('\n'));
+  return true;
 };
 
 const main = async () => {
@@ -226,28 +243,11 @@ const main = async () => {
     throw new Error('No Maestro flows found in .maestro');
   }
 
-  const rawFiles = await walkFiles(RAW_ROOT);
-  const reportEntries = await loadReportEntries(rawFiles);
-
-  const allScreenshots = rawFiles.filter((file) => file.toLowerCase().endsWith('.png'));
-  const globalArtifacts = rawFiles.filter((file) => {
-    const base = path.basename(file).toLowerCase();
-    return [
-      'maestro.log',
-      'report.xml',
-      'report.json',
-      'maestro-report.xml',
-      'maestro-report.json',
-      'logcat.txt',
-      'emulator.log',
-    ].includes(base);
-  });
-
   await fs.mkdir(EVIDENCE_ROOT, { recursive: true });
 
   for (const flowFile of flowFiles) {
     const flowName = path.basename(flowFile, '.yaml');
-    await buildEvidenceForFlow({ flowName, rawFiles, reportEntries, allScreenshots, globalArtifacts });
+    await buildEvidenceForFlow({ flowName });
   }
 
   console.log(`Maestro evidence written to ${EVIDENCE_ROOT}`);

@@ -14,13 +14,23 @@ appId: uk.gleissner.c64commander
         notVisible: "HVSC library"
     commands:
         - tapOn: "Settings"
+        - extendedWaitUntil:
+            visible: "Settings"
+            timeout: 10000
         - scroll
         - scroll
         - tapOn: "Enable HVSC downloads"
+        - takeScreenshot: "hvsc-enabled"
         - tapOn: "Play"
+        - extendedWaitUntil:
+            visible: "Play Files"
+            timeout: 10000
         - scroll
         - scroll
 
+- extendedWaitUntil:
+    visible: "HVSC library"
+    timeout: 10000
 - tapOn: "HVSC library"
 - extendedWaitUntil:
     visible: "Browse HVSC folders"
@@ -45,9 +55,12 @@ appId: uk.gleissner.c64commander
 - extendedWaitUntil:
     visible: "0-9"
     timeout: 10000
+# Evidence for added item
+- takeScreenshot: "playlist-item-added"
 # Select item to remove (long press to enter selection mode)
 - longPressOn: "0-9"
 # Remove
 - tapOn: "Remove selected items"
 # Verify gone
 - assertNotVisible: "0-9"
+- takeScreenshot: "playlist-item-removed"

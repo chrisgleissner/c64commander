@@ -99,14 +99,17 @@ const validateEvidenceFolder = async (folderPath) => {
   }
 
   const videos = files
-    .filter((file) => file.toLowerCase() === 'video.webm' || file.toLowerCase() === 'video.mp4')
+    .filter((file) => file.toLowerCase() === 'video.mp4')
     .map((file) => path.join(folderPath, file));
 
   if (pngs.length === 0) {
     errors.push(`No PNG screenshots in ${folderPath}`);
   }
+  if (videos.length === 0) {
+    errors.push(`Missing video.mp4 in ${folderPath}`);
+  }
   if (videos.length > 1) {
-    errors.push(`Expected at most one video (mp4/webm) in ${folderPath}, found ${videos.length}`);
+    errors.push(`Expected exactly one video.mp4 in ${folderPath}, found ${videos.length}`);
   }
 
   const required = ['error-context.md', 'meta.json'];

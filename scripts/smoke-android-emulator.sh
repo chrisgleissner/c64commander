@@ -30,6 +30,7 @@ EMULATOR_START_TIMEOUT=60     # Max time to wait for emulator to appear
 MAESTRO_FLOW_TIMEOUT=90       # Max time per Maestro flow
 MAESTRO_TOTAL_TIMEOUT=300     # Max total Maestro run time (5 minutes for all flows)
 ADB_COMMAND_TIMEOUT=10        # Max time for individual adb commands
+SCREENRECORD_LIMIT=180        # Max screenrecord time per flow (seconds)
 
 # Evidence directories
 EVIDENCE_DIR="$ROOT_DIR/test-results/evidence/maestro"
@@ -396,6 +397,39 @@ cleanup() {
   fi
 }
 
+start_screenrecord() {
+  local emulator_id="$1"
+  local flow_name="$2"
+  local device_path="/sdcard/maestro-${flow_name}.mp4"
+
+  log_info "Starting screenrecord for ${flow_name}..."
+  timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell rm -f "$device_path" >/dev/null 2>&1 || true
+  adb -s "$emulator_id" shell screenrecord --time-limit "$SCREENRECORD_LIMIT" "$device_path" >/dev/null 2>&1 &
+  echo "$!:$device_path"
+}
+
+stop_screenrecord() {
+  local emulator_id="$1"
+  local flow_name="$2"
+  local raw_dir="$3"
+  local record_pid="$4"
+  local device_path="$5"
+
+  if [[ -n "$record_pid" ]]; then
+    log_info "Stopping screenrecord for ${flow_name}..."
+    kill -INT "$record_pid" >/dev/null 2>&1 || true
+    wait "$record_pid" >/dev/null 2>&1 || true
+  fi
+
+  if timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell ls "$device_path" >/dev/null 2>&1; then
+    mkdir -p "$raw_dir"
+    timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" pull "$device_path" "$raw_dir/video.mp4" >/dev/null 2>&1 || true
+    timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell rm -f "$device_path" >/dev/null 2>&1 || true
+  else
+    log_warn "No screenrecord video found for ${flow_name}"
+  fi
+}
+
 trap cleanup EXIT
 
 # Parse arguments
@@ -425,6 +459,15 @@ require_cmd maestro
 # Find APK
 if [[ ! -f "$APK_PATH" ]]; then
   APK_PATH=$(ls -1 "$ROOT_DIR"/android/app/build/outputs/apk/debug/*-debug.apk 2>/dev/null | head -n 1 || true)
+fi
+if [[ -z "$APK_PATH" || ! -f "$APK_PATH" ]]; then
+  APK_METADATA="$ROOT_DIR/android/app/build/outputs/apk/debug/output-metadata.json"
+  if [[ -f "$APK_METADATA" ]]; then
+    APK_FILE=$(node -e "const fs=require('fs');const data=JSON.parse(fs.readFileSync(process.argv[1],'utf8'));const out=data.elements?.[0]?.outputFile||'';process.stdout.write(out);" "$APK_METADATA")
+    if [[ -n "$APK_FILE" ]]; then
+      APK_PATH="$ROOT_DIR/android/app/build/outputs/apk/debug/$APK_FILE"
+    fi
+  fi
 fi
 if [[ -z "$APK_PATH" || ! -f "$APK_PATH" ]]; then
   log_error "APK not found: $APK_PATH"
@@ -518,13 +561,14 @@ fi
 
 # Run health probe first (must pass before running full suite)
 log_info "Running health probe (max 30s)..."
+PROBE_OUTPUT_DIR="$RAW_OUTPUT_DIR/probe-health"
 PROBE_STATUS=0
 set +e
 if command -v timeout >/dev/null 2>&1; then
-  (cd "$ROOT_DIR" && timeout --preserve-status 30 maestro test .maestro/probe-health.yaml)
+  (cd "$ROOT_DIR" && timeout --preserve-status 30 maestro test .maestro/probe-health.yaml --test-output-dir "$PROBE_OUTPUT_DIR" --debug-output "$PROBE_OUTPUT_DIR/debug" --format JUNIT --output "$PROBE_OUTPUT_DIR/report.xml")
   PROBE_STATUS=$?
 else
-  (cd "$ROOT_DIR" && maestro test .maestro/probe-health.yaml)
+  (cd "$ROOT_DIR" && maestro test .maestro/probe-health.yaml --test-output-dir "$PROBE_OUTPUT_DIR" --debug-output "$PROBE_OUTPUT_DIR/debug" --format JUNIT --output "$PROBE_OUTPUT_DIR/report.xml")
   PROBE_STATUS=$?
 fi
 set -e
@@ -538,37 +582,59 @@ fi
 
 log_info "Health probe passed, proceeding with full test suite"
 
-# Run Maestro with strict timeout
+# Run Maestro flow-by-flow with strict timeout and per-flow artifacts
 log_info "Running Maestro tests (max ${MAESTRO_TOTAL_TIMEOUT}s)..."
 
 MAESTRO_STATUS=0
 set +e
-if command -v timeout >/dev/null 2>&1; then
-  (cd "$ROOT_DIR" && timeout --preserve-status "$MAESTRO_TOTAL_TIMEOUT" maestro test .maestro --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT")
-  MAESTRO_STATUS=$?
-else
-  # Fallback: run without timeout but monitor
-  (cd "$ROOT_DIR" && maestro test .maestro --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT") &
-  MAESTRO_PID=$!
-  
-  maestro_start=$(date +%s)
-  maestro_max=$((maestro_start + MAESTRO_TOTAL_TIMEOUT))
-  
-  while kill -0 "$MAESTRO_PID" 2>/dev/null; do
-    if [[ $(date +%s) -gt $maestro_max ]]; then
-      log_error "Maestro exceeded timeout, killing..."
-      kill -9 "$MAESTRO_PID" 2>/dev/null || true
-      MAESTRO_STATUS=124
-      break
-    fi
-    sleep 1
-  done
-  
-  if [[ $MAESTRO_STATUS -eq 0 ]]; then
-    wait "$MAESTRO_PID"
-    MAESTRO_STATUS=$?
+
+maestro_start=$(date +%s)
+FLOW_FILES=$(find "$ROOT_DIR/.maestro" -maxdepth 1 -type f -name "*.yaml" -printf "%f\n" | sort)
+
+for flow_file in $FLOW_FILES; do
+  flow_name="${flow_file%.yaml}"
+  if [[ "$flow_name" == "config" || "$flow_name" == "probe-health" ]]; then
+    continue
   fi
-fi
+
+  if [[ $(date +%s) -ge $((maestro_start + MAESTRO_TOTAL_TIMEOUT)) ]]; then
+    log_error "Maestro exceeded total timeout (${MAESTRO_TOTAL_TIMEOUT}s), stopping..."
+    MAESTRO_STATUS=124
+    break
+  fi
+
+  log_info "Running Maestro flow: ${flow_name}"
+  flow_output_dir="$RAW_OUTPUT_DIR/$flow_name"
+  mkdir -p "$flow_output_dir"
+  if [[ -f "$RAW_OUTPUT_DIR/emulator.log" ]]; then
+    cp "$RAW_OUTPUT_DIR/emulator.log" "$flow_output_dir/emulator.log" || true
+  fi
+  if [[ -f "$RAW_OUTPUT_DIR/logcat-pretest.txt" ]]; then
+    cp "$RAW_OUTPUT_DIR/logcat-pretest.txt" "$flow_output_dir/logcat.txt" || true
+  fi
+
+  record_meta=$(start_screenrecord "$EMULATOR_ID" "$flow_name")
+  record_pid="${record_meta%%:*}"
+  record_path="${record_meta#*:}"
+
+  if command -v timeout >/dev/null 2>&1; then
+    (cd "$ROOT_DIR" && timeout --preserve-status "$MAESTRO_FLOW_TIMEOUT" maestro test ".maestro/${flow_file}" --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT" --test-output-dir "$flow_output_dir" --debug-output "$flow_output_dir/debug" --format JUNIT --output "$flow_output_dir/report.xml")
+    flow_status=$?
+  else
+    (cd "$ROOT_DIR" && maestro test ".maestro/${flow_file}" --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT" --test-output-dir "$flow_output_dir" --debug-output "$flow_output_dir/debug" --format JUNIT --output "$flow_output_dir/report.xml")
+    flow_status=$?
+  fi
+
+  stop_screenrecord "$EMULATOR_ID" "$flow_name" "$flow_output_dir" "$record_pid" "$record_path"
+  timeout "$ADB_COMMAND_TIMEOUT" adb -s "$EMULATOR_ID" logcat -d > "$flow_output_dir/logcat-posttest.txt" 2>/dev/null || true
+
+  if [[ "$flow_status" -ne 0 ]]; then
+    MAESTRO_STATUS="$flow_status"
+    log_error "Flow failed: ${flow_name} (exit ${flow_status})"
+    break
+  fi
+done
+
 set -e
 
 # Capture post-test diagnostics
@@ -576,7 +642,6 @@ timeout "$ADB_COMMAND_TIMEOUT" adb -s "$EMULATOR_ID" logcat -d > "$RAW_OUTPUT_DI
 
 # Build evidence
 export MAESTRO_EXIT_CODE="$MAESTRO_STATUS"
-export MAESTRO_DEVICE_TYPE="$DEVICE_TYPE"
 (cd "$ROOT_DIR" && node scripts/build-maestro-evidence.mjs)
 
 # Handle failure

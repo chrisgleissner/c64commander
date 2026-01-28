@@ -2,7 +2,9 @@ appId: uk.gleissner.c64commander
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn: "Play"
-- assertVisible: "Play Files"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: 10000
 - assertVisible: "Playlist"
 - assertVisible: "Select a playlist item to start"
 - assertVisible: "Play"
