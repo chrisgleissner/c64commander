@@ -337,18 +337,15 @@ export default function HomePage() {
               className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left"
               data-testid="home-sid-status"
             >
+              <p className="text-xs font-semibold text-muted-foreground" data-testid="sid-status-label">SID</p>
               {sidStatusEntries.map((entry) => {
                 const enabled = entry.enabled;
                 const statusLabel = enabled === undefined ? '—' : enabled ? 'ON' : 'OFF';
                 const statusClass = enabled === true
                   ? 'text-success'
                   : 'text-muted-foreground';
-                const dotClass = enabled === true
-                  ? 'bg-success'
-                  : 'bg-muted-foreground/60';
                 return (
                   <div key={entry.key} className="flex items-center gap-2 min-w-0">
-                    <span className={`w-2 h-2 rounded-full ${dotClass}`} aria-hidden="true" />
                     <span className="font-medium shrink-0">{entry.label}:</span>
                     <span className={`${statusClass} shrink-0`}>{statusLabel}</span>
                   </div>

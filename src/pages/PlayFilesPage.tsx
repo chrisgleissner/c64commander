@@ -43,6 +43,7 @@ import {
   isSonglengthsFileName,
 } from '@/lib/sid/songlengthsDiscovery';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
+import { mergeAudioMixerOptions } from '@/lib/config/audioMixer';
 import {
   buildEnabledSidMuteUpdates,
   buildEnabledSidUnmuteUpdates,
@@ -222,10 +223,14 @@ const extractAudioMixerItems = (payload: Record<string, unknown> | undefined): A
   if (!itemsData || typeof itemsData !== 'object') return [];
   return Object.entries(itemsData)
     .filter(([key]) => key !== 'errors')
-    .map(([name, config]) => ({
-      name,
-      ...normalizeConfigItem(config),
-    }));
+    .map(([name, config]) => {
+      const normalized = normalizeConfigItem(config);
+      return {
+        name,
+        value: normalized.value,
+        options: mergeAudioMixerOptions(normalized.options, normalized.details?.presets),
+      };
+    });
 };
 
 const shuffleArray = <T,>(items: T[]) => {
@@ -545,13 +550,17 @@ export default function PlayFilesPage() {
       const snapshotIndices = snapshot
         ? Object.values(snapshot).map((value) => resolveVolumeIndex(value))
         : [];
+      const muteIndices = muteValues.map((value) => resolveVolumeIndex(value));
+      const muteCounts = new Map<number, number>();
+      muteIndices.forEach((index) => muteCounts.set(index, (muteCounts.get(index) ?? 0) + 1));
+      const muteIndex = Array.from(muteCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
       if (snapshotIndices.length) {
         const counts = new Map<number, number>();
         snapshotIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
         const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
         setVolumeIndex(nextIndex);
       } else {
-        setVolumeIndex(defaultVolumeIndex);
+        setVolumeIndex(muteIndex);
       }
       return;
     }

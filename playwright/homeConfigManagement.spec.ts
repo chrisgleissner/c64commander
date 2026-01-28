@@ -273,6 +273,8 @@ test.describe('Home page app config management', () => {
     await page.goto('/');
     const sidGroup = page.getByTestId('home-sid-status');
     await expect(sidGroup).toBeVisible();
+    await expect(sidGroup.getByTestId('sid-status-label')).toHaveText('SID');
+    await expect(sidGroup.locator('[data-testid="sid-status-dot"]')).toHaveCount(0);
     await expect(sidGroup).toContainText('Socket 1');
     await expect(sidGroup).toContainText('ON');
     await expect(sidGroup).toContainText('Socket 2');
