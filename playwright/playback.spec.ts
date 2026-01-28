@@ -181,13 +181,19 @@ test.describe('Playback file browser', () => {
 
   test('local SID playback uploads before play', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
     await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-sids'));
     await snap(page, testInfo, 'local-playlist-ready');
 
+    await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
+    await expect(page.getByTestId('playlist-list')).toContainText('demo2.sid');
     await expect(page.getByTestId('playlist-item')).toHaveCount(2);
 
     await page.getByTestId('playlist-play').click();
     await waitForRequests(() => server.sidplayRequests.length > 0);
+
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED');
 
     const lastUpload = server.sidplayRequests[server.sidplayRequests.length - 1];
     expect(lastUpload.method).toBe('POST');

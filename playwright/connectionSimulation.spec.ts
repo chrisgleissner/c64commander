@@ -64,6 +64,58 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await snap(page, testInfo, 'demo-usable-navigation');
   });
 
+  test('reachable device connects as real and never shows demo fallback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+
+    server = await createMockC64Server({});
+    demoServer = await createMockC64Server({});
+
+    const host = new URL(server.baseUrl).host;
+    await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_device_host', hostArg);
+      localStorage.setItem('c64u_password', '');
+    }, { host, demoBaseUrl: demoServer.baseUrl });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    await expect(page.getByRole('heading', { name: 'Demo Mode' })).toHaveCount(0);
+    expect(demoServer.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(false);
+
+    await snap(page, testInfo, 'real-connected-no-demo');
+  });
+
+  test('demo fallback appears once per session', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+
+    server = await createMockC64Server({});
+    demoServer = await createMockC64Server({});
+    server.setReachable(false);
+
+    const host = new URL(server.baseUrl).host;
+    await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+      localStorage.setItem('c64u_startup_discovery_window_ms', '300');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_device_host', hostArg);
+      localStorage.setItem('c64u_password', '');
+    }, { host, demoBaseUrl: demoServer.baseUrl });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
+    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'Demo Mode' })).toHaveCount(0);
+
+    await snap(page, testInfo, 'demo-fallback-once');
+  });
+
   test('demo enabled → real device reachable (informational only)', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');

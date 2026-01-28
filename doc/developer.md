@@ -50,6 +50,14 @@ All common development tasks use `./local-build.sh`:
 ./local-build.sh --emulator       # Launch Android emulator
 ./local-build.sh --install        # Build and install APK to connected device
 ./local-build.sh --device R5CRC3ZY9XH --install  # Install to specific device
+./local-build.sh --smoke-android-emulator  # Run emulator smoke test (non-destructive)
+./local-build.sh --smoke-android-emulator --c64u-target real --c64u-host C64U
+```
+
+Emulator smoke runs capture logcat output at:
+
+```
+test-results/smoke-android-emulator/logcat.txt
 ```
 
 ### Screenshots

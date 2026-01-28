@@ -20,6 +20,7 @@ RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
 RUN_SCREENSHOTS_ONLY=false
 RUN_FUZZ=false
+RUN_SMOKE_ANDROID_EMULATOR=false
 PLAYWRIGHT_DEVICES=""
 APK_PATH=""
 DEVICE_ID=""
@@ -30,6 +31,8 @@ FUZZ_LAST_INTERACTIONS=""
 FUZZ_RETAIN_SUCCESS=""
 FUZZ_MIN_SESSION_STEPS=""
 FUZZ_NO_PROGRESS_STEPS=""
+C64U_TARGET="mock"
+C64U_HOST="C64U"
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -60,6 +63,9 @@ Options:
   --android-tests       Run Android instrumentation tests (requires a device/emulator)
   --skip-android-tests  Skip Android instrumentation tests
   --skip-android-coverage Skip Android Jacoco coverage check
+  --smoke-android-emulator Run Android emulator smoke test (non-destructive)
+  --c64u-target mock|real   Target for emulator smoke (default: mock)
+  --c64u-host <hostname>    Hostname/IP for real device (default: C64U)
   --fuzz                Run Playwright chaos fuzz runner (mock device only)
   --fuzz-seed <num>          Base seed for fuzz RNG (default: epoch millis; each shard adds its index)
   --fuzz-steps <num>         Max fuzz steps (optional; default: unbounded when time budget is set)
@@ -281,6 +287,28 @@ while [[ $# -gt 0 ]]; do
       RUN_INSTALL_APK=false
       shift
       ;;
+    --smoke-android-emulator)
+      RUN_SMOKE_ANDROID_EMULATOR=true
+      RUN_BUILD=true
+      RUN_APK=true
+      RUN_TEST=false
+      RUN_TEST_UNIT=false
+      RUN_TEST_E2E=false
+      RUN_TEST_E2E_CI=false
+      RUN_VALIDATE_EVIDENCE=false
+      RUN_COVERAGE=false
+      RUN_ANDROID_TESTS=false
+      RUN_ANDROID_COVERAGE=false
+      shift
+      ;;
+    --c64u-target)
+      C64U_TARGET="$2"
+      shift 2
+      ;;
+    --c64u-host)
+      C64U_HOST="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -447,6 +475,15 @@ fi
 if [[ "$RUN_APK" == "true" ]]; then
   log "Building debug APK"
   (cd "$ROOT_DIR" && npm run android:apk -- --warning-mode none)
+fi
+
+if [[ "$RUN_SMOKE_ANDROID_EMULATOR" == "true" ]]; then
+  log "Running Android emulator smoke test"
+  SMOKE_APK_PATH="${APK_PATH:-$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk}"
+  (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
+    --c64u-target "$C64U_TARGET" \
+    --c64u-host "$C64U_HOST" \
+    --apk-path "$SMOKE_APK_PATH")
 fi
 
 if [[ "$RUN_INSTALL_APK" == "true" ]]; then

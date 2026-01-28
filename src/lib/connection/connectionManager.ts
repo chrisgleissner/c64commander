@@ -14,6 +14,7 @@ import {
 } from '@/lib/config/appSettings';
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
 import { addLog } from '@/lib/logging';
+import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
 
 export type ConnectionState = 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
 export type DiscoveryTrigger = 'startup' | 'manual' | 'settings' | 'background';
@@ -192,6 +193,18 @@ const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) 
   });
 };
 
+const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger | null, details?: Record<string, unknown>) => {
+  addLog('info', 'Discovery decision', { state, trigger, ...details });
+  if (isSmokeModeEnabled()) {
+    console.info('C64U_DISCOVERY_DECISION', { state, trigger, ...details });
+    void recordSmokeStatus({
+      state,
+      mode: typeof details?.mode === 'string' ? details.mode : undefined,
+      baseUrl: typeof details?.baseUrl === 'string' ? details.baseUrl : undefined,
+    });
+  }
+};
+
 const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
@@ -199,6 +212,7 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   applyC64APIConfigFromStorage();
   addLog('info', 'Connection switched to real device', { trigger });
   transitionTo('REAL_CONNECTED', trigger);
+  logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
@@ -208,6 +222,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   applyC64APIConfigFromStorage();
   addLog('info', 'Connection switched to offline', { trigger });
   transitionTo('OFFLINE_NO_DEMO', trigger);
+  logDiscoveryDecision('OFFLINE_NO_DEMO', trigger, { mode: 'offline' });
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
@@ -216,6 +231,7 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   transitionTo('DEMO_ACTIVE', trigger);
+  logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 
   if (isFuzzModeEnabled()) {
     const fuzzBaseUrl = getFuzzMockBaseUrl();
@@ -265,6 +281,28 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   }
 };
 
+const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
+  cancelActiveDiscovery();
+  dismissDemoInterstitial();
+  const { baseUrl, ftpPort } = await startMockServer();
+  demoServerStartedThisSession = true;
+  const mockHost = getDeviceHostFromBaseUrl(baseUrl);
+  applyC64APIRuntimeConfig(baseUrl, undefined, mockHost);
+  if (ftpPort) setRuntimeFtpPortOverride(ftpPort);
+  setSnapshot({
+    lastProbeAtMs: Date.now(),
+    lastProbeSucceededAtMs: Date.now(),
+    lastProbeFailedAtMs: null,
+    lastProbeError: null,
+    demoInterstitialVisible: false,
+  });
+  transitionTo('REAL_CONNECTED', trigger);
+  logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'mock', baseUrl });
+  if (isSmokeModeEnabled()) {
+    console.info('C64U_SMOKE_MOCK_CONNECTED', { baseUrl, host: mockHost });
+  }
+};
+
 /**
  * Centralized discovery entry point used for:
  * - App startup
@@ -274,6 +312,18 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
  */
 export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
   cancelActiveDiscovery();
+
+  const smokeConfig = getSmokeConfig();
+  if (smokeConfig) {
+    addLog('info', 'Smoke discovery override active', { target: smokeConfig.target, host: smokeConfig.host });
+    if (isSmokeModeEnabled()) {
+      console.info('C64U_SMOKE_DISCOVERY_OVERRIDE', { target: smokeConfig.target, host: smokeConfig.host });
+    }
+  }
+  if (smokeConfig?.target === 'mock') {
+    await transitionToSmokeMockConnected(trigger);
+    return;
+  }
 
   if (isFuzzModeEnabled()) {
     await transitionToDemoActive(trigger);
@@ -289,6 +339,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     setSnapshot({ lastProbeAtMs: Date.now() });
     if (ok) {
       setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+      addLog('info', 'Discovery probe succeeded', { trigger });
+      if (isSmokeModeEnabled()) {
+        console.info('C64U_PROBE_OK', { trigger });
+      }
       if (snapshot.state !== 'DEMO_ACTIVE') {
         await transitionToRealConnected(trigger);
       } else {
@@ -296,6 +350,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       }
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
+      addLog('warn', 'Discovery probe failed', { trigger });
+      if (isSmokeModeEnabled()) {
+        console.warn('C64U_PROBE_FAILED', { trigger });
+      }
     }
     activeDiscovery = null;
     return;
@@ -306,6 +364,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   const abort = new AbortController();
   let cancelled = false;
   let probeInFlight = false;
+  const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
   const windowMs = loadStartupDiscoveryWindowMs();
   const windowTimer = window.setTimeout(() => {
@@ -314,7 +373,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       cancelled = true;
       window.clearInterval(probeTimer);
       cancelActiveDiscovery();
-      if (loadAutomaticDemoModeEnabled()) {
+      if (autoDemoEnabled) {
         await transitionToDemoActive(trigger);
       } else {
         await transitionToOfflineNoDemo(trigger);
@@ -331,12 +390,19 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     if (cancelled) return;
     if (ok) {
       setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+      addLog('info', 'Discovery probe succeeded', { trigger });
+      if (isSmokeModeEnabled()) {
+        console.info('C64U_PROBE_OK', { trigger });
+      }
       cancelled = true;
       window.clearTimeout(windowTimer);
       window.clearInterval(probeTimer);
       await transitionToRealConnected(trigger);
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
+      if (isSmokeModeEnabled()) {
+        console.warn('C64U_PROBE_FAILED', { trigger });
+      }
     }
   };
 
@@ -357,6 +423,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 export async function initializeConnectionManager() {
   cancelActiveDiscovery();
   applyFuzzModeDefaults();
+  await initializeSmokeMode();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
   setSnapshot({
     state: 'UNKNOWN',

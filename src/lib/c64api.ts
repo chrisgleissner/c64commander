@@ -2,6 +2,7 @@
 
 import { CapacitorHttp } from '@capacitor/core';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 
@@ -85,6 +86,10 @@ const isNativePlatform = () => {
     return false;
   }
 };
+
+const isReadOnlyMethod = (method: string) => ['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+const shouldBlockSmokeMutation = (method: string) => isSmokeModeEnabled() && isSmokeReadOnlyEnabled() && !isReadOnlyMethod(method);
 
 export const getDefaultBaseUrl = () => DEFAULT_BASE_URL;
 
@@ -241,6 +246,17 @@ export class C64API {
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     try {
+      if (shouldBlockSmokeMutation(method)) {
+        addErrorLog('Smoke mode blocked mutating request', {
+          path,
+          url,
+          method,
+          baseUrl,
+          deviceHost: this.deviceHost,
+        });
+        console.error('C64U_SMOKE_MUTATION_BLOCKED', { method, path, url });
+        throw new Error('Smoke mode blocked mutating request');
+      }
       if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
         addErrorLog('Fuzz mode blocked real device request', {
           path,
@@ -253,6 +269,9 @@ export class C64API {
         throw blocked;
       }
       if (isNativePlatform()) {
+        if (isSmokeModeEnabled()) {
+          console.info('C64U_HTTP_NATIVE', { method, path, url });
+        }
         const body = requestOptions.body ? requestOptions.body : undefined;
         const requestPromise = CapacitorHttp.request({
           url,
@@ -341,6 +360,10 @@ export class C64API {
       const headers = (options.headers as Record<string, string>) || {};
       const method = (options.method || 'GET').toString().toUpperCase();
       let data: unknown = undefined;
+
+      if (isSmokeModeEnabled()) {
+        console.info('C64U_HTTP_NATIVE', { method, url });
+      }
 
       if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
         const buffer = await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
@@ -921,6 +944,14 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
     localStorage.removeItem('c64u_password');
   }
 
+  addLog('info', 'API routing updated (persisted)', {
+    baseUrl: resolvedBaseUrl,
+    deviceHost: resolvedDeviceHost,
+  });
+  if (isSmokeModeEnabled()) {
+    console.info('C64U_ROUTING_UPDATED', { baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'persisted' });
+  }
+
   window.dispatchEvent(
     new CustomEvent('c64u-connection-change', {
       detail: {
@@ -958,6 +989,13 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
+  addLog('info', 'API routing updated (runtime)', {
+    baseUrl: resolvedBaseUrl,
+    deviceHost: resolvedDeviceHost,
+  });
+  if (isSmokeModeEnabled()) {
+    console.info('C64U_ROUTING_UPDATED', { baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'runtime' });
+  }
 }
 
 export function applyC64APIConfigFromStorage() {
