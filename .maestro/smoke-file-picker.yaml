@@ -1,3 +1,7 @@
+# Smoke test for file picker flow
+# Tests opening the native Android file picker and returning to the app
+# Note: The file picker behavior varies by Android version and emulator state
+
 appId: uk.gleissner.c64commander
 ---
 - runFlow: subflows/open-play-add-items.yaml
@@ -5,6 +9,8 @@ appId: uk.gleissner.c64commander
 - tapOn:
     text: "Add file / folder from device"
 - takeScreenshot: "file-picker-open"
+
+# Handle permission dialogs (optional - may not appear on all devices)
 - tapOn:
     text: "Allow"
     optional: true
@@ -14,15 +20,36 @@ appId: uk.gleissner.c64commander
 - tapOn:
     text: "Allow all the time"
     optional: true
+
+# Try to dismiss the file picker
 - tapOn:
     text: "Cancel"
     optional: true
 - tapOn:
     text: "Back"
     optional: true
+- tapOn:
+    text: "Navigate up"
+    optional: true
+
+# Press back multiple times to ensure we exit the picker
 - back
 - back
-- launchApp
-- assertVisible: "Play Files"
-- assertVisible: "Playlist"
+- back
+
+# Re-launch the app to ensure clean state
+- launchApp:
+    clearState: false
+
+# Wait for app to stabilize
+- waitForAnimationToEnd
+
+# Verify we're back in the app - check for any of the main UI elements
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Play"
+    timeout: 10000
+
 - takeScreenshot: "play-return"

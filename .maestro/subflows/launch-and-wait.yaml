@@ -3,6 +3,8 @@ tags:
   - subflow
 ---
 - launchApp
-- assertVisible: "C64 Commander"
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: "home"

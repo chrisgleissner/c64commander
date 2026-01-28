@@ -16,10 +16,10 @@ appId: uk.gleissner.c64commander
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
 - takeScreenshot: "hvsc-actions"
-- assertVisible:
-    text: "Browse HVSC folders"
-    optional: true
-- assertVisible:
-    text: "Filter folders…"
-    optional: true
+- extendedWaitUntil:
+    visible: "Browse HVSC folders"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Filter folders…"
+    timeout: 10000
 - takeScreenshot: "hvsc-browse"

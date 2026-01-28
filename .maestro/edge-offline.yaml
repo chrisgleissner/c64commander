@@ -1,0 +1,17 @@
+appId: uk.gleissner.c64commander
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: 10000
+- setAirplaneMode: true
+- extendedWaitUntil:
+    visible: "Offline"
+    timeout: 10000
+- takeScreenshot: "offline-mode"
+- setAirplaneMode: false
+- extendedWaitUntil:
+    visible: "Connected"
+    timeout: 30000 # Reconnecting might take longer
+- takeScreenshot: "online-mode"

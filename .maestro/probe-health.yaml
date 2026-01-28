@@ -1,0 +1,31 @@
+# Minimal health probe flow
+# This flow verifies the emulator and app are responsive before running other tests.
+# It should complete in under 10 seconds.
+# If this flow fails, the emulator/app state is not suitable for testing.
+
+appId: uk.gleissner.c64commander
+tags:
+  - probe
+---
+# Step 1: Verify app launches
+- launchApp
+
+# Step 2: Verify main UI is visible (app title)
+- assertVisible: "C64 Commander"
+
+# Step 3: Take a screenshot to prove UI is rendered
+- takeScreenshot: "probe-health-home"
+
+# Step 4: Verify navigation is responsive - tap a tab
+- tapOn: "Play"
+
+# Step 5: Verify navigation worked
+- assertVisible: "Play Files"
+
+# Step 6: Return to home
+- tapOn: "Home"
+
+# Step 7: Final verification
+- assertVisible: "C64 Commander"
+
+- takeScreenshot: "probe-health-complete"

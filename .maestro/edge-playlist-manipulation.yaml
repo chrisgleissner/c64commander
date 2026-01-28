@@ -1,0 +1,53 @@
+appId: uk.gleissner.c64commander
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: 10000
+- scroll
+- scroll
+
+# Ensure HVSC is enabled
+- runFlow:
+    when:
+        notVisible: "HVSC library"
+    commands:
+        - tapOn: "Settings"
+        - scroll
+        - scroll
+        - tapOn: "Enable HVSC downloads"
+        - tapOn: "Play"
+        - scroll
+        - scroll
+
+- tapOn: "HVSC library"
+- extendedWaitUntil:
+    visible: "Browse HVSC folders"
+    timeout: 10000
+- tapOn: "Browse HVSC folders"
+- extendedWaitUntil:
+    visible: "C64Music"
+    timeout: 30000 # Initial load might be slow
+- tapOn: "C64Music"
+- extendedWaitUntil:
+    visible: "DEMOS"
+    timeout: 10000
+- tapOn: "DEMOS"
+- extendedWaitUntil:
+    visible: "0-9"
+    timeout: 10000
+# Select "0-9" folder
+- tapOn: "0-9"
+# Add to playlist
+- tapOn: "Add to playlist"
+# Should return to playlist
+- extendedWaitUntil:
+    visible: "0-9"
+    timeout: 10000
+# Select item to remove (long press to enter selection mode)
+- longPressOn: "0-9"
+# Remove
+- tapOn: "Remove selected items"
+# Verify gone
+- assertNotVisible: "0-9"

@@ -1,0 +1,28 @@
+appId: uk.gleissner.c64commander
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- scroll
+- scroll
+- tapOn: "Enable HVSC downloads"
+- takeScreenshot: "hvsc-toggled"
+- launchApp:
+    stopApp: true
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: 10000
+- scroll
+- scroll
+# If we enabled it, "HVSC library" should be visible.
+# If we disabled it, it should not.
+# Since we don't know the initial state, this is tricky.
+# But we can assume default is OFF. So first toggle turns it ON.
+- extendedWaitUntil:
+    visible: "HVSC library"
+    timeout: 10000
+- takeScreenshot: "hvsc-persisted"

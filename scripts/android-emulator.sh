@@ -196,20 +196,24 @@ wait_for_boot() {
   local emulator_id
   emulator_id="$(get_emulator_id)"
   if [[ -z "$emulator_id" ]]; then
-    adb wait-for-device
+    timeout 30 adb wait-for-device || {
+      echo "adb wait-for-device timed out after 30s" >&2
+      exit 1
+    }
     emulator_id="$(get_emulator_id)"
   fi
   local boot_completed=""
   local attempts=0
-  while [[ "$boot_completed" != "1" && $attempts -lt 120 ]]; do
-    boot_completed="$(adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+  # Max 30 attempts × 2s = 60s (strict timeout guardrail)
+  while [[ "$boot_completed" != "1" && $attempts -lt 30 ]]; do
+    boot_completed="$(timeout 10 adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
     if [[ "$boot_completed" != "1" ]]; then
       sleep 2
       attempts=$((attempts + 1))
     fi
   done
   if [[ "$boot_completed" != "1" ]]; then
-    echo "Emulator did not finish booting in time." >&2
+    echo "Emulator did not finish booting within 60s." >&2
     exit 1
   fi
 }
