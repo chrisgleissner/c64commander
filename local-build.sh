@@ -33,6 +33,7 @@ FUZZ_MIN_SESSION_STEPS=""
 FUZZ_NO_PROGRESS_STEPS=""
 C64U_TARGET="mock"
 C64U_HOST="C64U"
+C64U_TARGET_SET=false
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -303,6 +304,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --c64u-target)
       C64U_TARGET="$2"
+      C64U_TARGET_SET=true
       shift 2
       ;;
     --c64u-host)
@@ -398,9 +400,9 @@ if [[ "$RUN_TEST" == "true" ]]; then
   (cd "$ROOT_DIR" && npm test)
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
-    (cd "$ROOT_DIR" && npm run test:e2e)
+    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npm run test:e2e)
   else
-    (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
+    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npx playwright test --grep-invert @screenshots)
   fi
   (cd "$ROOT_DIR/android" && ./gradlew test --warning-mode none)
   if [[ "$RUN_ANDROID_TESTS" == "true" ]]; then
@@ -416,13 +418,13 @@ fi
 if [[ "$RUN_TEST_E2E" == "true" ]]; then
   log "Running E2E tests"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && npx playwright test --grep-invert @screenshots)
+  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npx playwright test --grep-invert @screenshots)
 fi
 
 if [[ "$RUN_TEST_E2E_CI" == "true" ]]; then
   log "Running CI mirror (screenshots + E2E + validation)"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && npm run test:e2e:ci)
+  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npm run test:e2e:ci)
 fi
 
 if [[ "$RUN_VALIDATE_EVIDENCE" == "true" ]]; then
@@ -452,6 +454,7 @@ if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
     VITE_GIT_SHA="screenshots" \
     VITE_BUILD_TIME="1970-01-01T00:00:00Z" \
     SOURCE_DATE_EPOCH="0" \
+    PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" \
     npm run screenshots)
 fi
 
@@ -480,10 +483,22 @@ fi
 if [[ "$RUN_SMOKE_ANDROID_EMULATOR" == "true" ]]; then
   log "Running Android emulator smoke test"
   SMOKE_APK_PATH="${APK_PATH:-$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk}"
-  (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
-    --c64u-target "$C64U_TARGET" \
-    --c64u-host "$C64U_HOST" \
-    --apk-path "$SMOKE_APK_PATH")
+  if [[ "$C64U_TARGET_SET" == "true" ]]; then
+    (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
+      --c64u-target "$C64U_TARGET" \
+      --c64u-host "$C64U_HOST" \
+      --apk-path "$SMOKE_APK_PATH")
+  else
+    (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
+      --c64u-target "mock" \
+      --apk-path "$SMOKE_APK_PATH")
+    (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
+      --c64u-target "real" \
+      --c64u-host "auto" \
+      --apk-path "$SMOKE_APK_PATH")
+  fi
+  log "Validating Android emulator evidence"
+  (cd "$ROOT_DIR" && node scripts/validate-android-emulator-evidence.mjs)
 fi
 
 if [[ "$RUN_INSTALL_APK" == "true" ]]; then

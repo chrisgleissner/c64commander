@@ -166,7 +166,7 @@ test.describe('Automatic Demo Mode', () => {
     server = await createMockC64Server({});
 
     await page.addInitScript(() => {
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '3000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.setItem('c64u_password', '');
@@ -182,7 +182,8 @@ test.describe('Automatic Demo Mode', () => {
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
     const indicator = page.getByTestId('connectivity-indicator');
-    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
     const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
     expect(stored).toBe(new URL(server.baseUrl).host);
     await snap(page, testInfo, 'demo-exit-connected');

@@ -87,7 +87,7 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
   }
 
   addLog('info', 'Smoke mode enabled', { target: config.target, host: config.host, readOnly: config.readOnly });
-  console.info('C64U_SMOKE_ENABLED', { target: config.target, host: config.host, readOnly: config.readOnly });
+  console.info('C64U_SMOKE_ENABLED', JSON.stringify({ target: config.target, host: config.host, readOnly: config.readOnly }));
 
   return config;
 };

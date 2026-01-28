@@ -1,0 +1,31 @@
+appId: uk.gleissner.c64commander
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Play"
+- assertVisible: "Play Files"
+- takeScreenshot: "play-files"
+- scroll
+- tapOn:
+    text: "Add items to playlist"
+- assertVisible: "Choose source"
+- assertVisible: "This device"
+- takeScreenshot: "choose-source"
+- scroll
+- tapOn:
+    text: "Add file / folder from device"
+- takeScreenshot: "file-picker-open"
+- tapOn:
+    text: "Allow"
+    optional: true
+- tapOn:
+    text: "Allow access"
+    optional: true
+- tapOn:
+    text: "Allow all the time"
+    optional: true
+- tapOn:
+    text: "Cancel"
+    optional: true
+- assertVisible: "Add items"
+- takeScreenshot: "add-items-return"
+- tapOn: "Cancel"

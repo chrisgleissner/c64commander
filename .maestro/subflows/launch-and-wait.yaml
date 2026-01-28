@@ -1,0 +1,8 @@
+appId: uk.gleissner.c64commander
+tags:
+  - subflow
+---
+- launchApp
+- assertVisible: "C64 Commander"
+- waitForAnimationToEnd
+- takeScreenshot: "home"

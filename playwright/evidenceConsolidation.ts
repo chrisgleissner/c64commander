@@ -38,12 +38,12 @@ const generateTestId = (testInfo: TestInfo): string => {
 };
 
 /**
- * Get canonical evidence path: test-results/evidence/<testId>/<deviceId>/
+ * Get canonical evidence path: test-results/evidence/playwright/<testId>/<deviceId>/
  */
 export const getCanonicalEvidencePath = (testInfo: TestInfo): string => {
   const testId = generateTestId(testInfo);
   const deviceId = testInfo.project.name;
-  return path.resolve(process.cwd(), 'test-results', 'evidence', testId, deviceId);
+  return path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright', testId, deviceId);
 };
 
 /**

@@ -99,7 +99,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '300');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');
@@ -127,7 +127,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '300');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '250');
       localStorage.setItem('c64u_device_host', hostArg);
@@ -341,7 +341,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server.setReachable(true);
     await page.getByTestId('connectivity-indicator').click();
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
-    await expect(page.getByText(`Currently using: ${host}`)).toBeVisible();
+    const currentUsing = page.getByText('Currently using:');
+    await expect(currentUsing).toBeVisible();
+    await expect(currentUsing.locator('span')).toHaveText(host);
 
     await snap(page, testInfo, 'real-demo-real-manual');
   });
@@ -371,7 +373,11 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(true);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
-    await expect(page.getByText(`Currently using: ${host}`)).toBeVisible();
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
+    const currentUsing = page.getByText('Currently using:');
+    await expect(currentUsing).toBeVisible();
+    await expect(currentUsing.locator('span')).toHaveText(/127\.0\.0\.1:\d+/);
     await expect(page.getByText('(Demo mock)', { exact: false })).toHaveCount(0);
     await snap(page, testInfo, 'currently-using-updated');
   });

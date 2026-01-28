@@ -8,6 +8,10 @@ export const getSourceSelectionButton = (container: Page | Locator, label: Sourc
     .locator('..')
     .getByRole('button', { name: 'Add file / folder' });
 
-export const clickSourceSelectionButton = async (container: Page | Locator, label: SourceSelectionLabel) => {
-  await getSourceSelectionButton(container, label).click();
+export const clickSourceSelectionButton = async (
+  container: Page | Locator,
+  label: SourceSelectionLabel,
+  options: { force?: boolean } = {},
+) => {
+  await getSourceSelectionButton(container, label).click({ force: options.force });
 };

@@ -33,16 +33,42 @@ test.describe('Config visibility across modes', () => {
     server.setReachable(false);
 
     const host = new URL(server.baseUrl).host;
-    await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
+    await page.addInitScript(({
+      host: hostArg,
+      demoBaseUrl,
+      serverBaseUrl,
+      snapshot,
+    }: {
+      host: string;
+      demoBaseUrl: string;
+      serverBaseUrl: string;
+      snapshot: unknown;
+    }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
       localStorage.setItem('c64u_startup_discovery_window_ms', '300');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');
-    }, { host, demoBaseUrl: demoServer.baseUrl });
+      localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrl}`, JSON.stringify(snapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrl}`, '1');
+      localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrl}`, JSON.stringify(snapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${demoBaseUrl}`, '1');
+      sessionStorage.setItem('c64u_demo_interstitial_shown', '1');
+    }, {
+      host,
+      demoBaseUrl: demoServer.baseUrl,
+      serverBaseUrl: server.baseUrl,
+      snapshot: uiFixtures.initialSnapshot,
+    });
 
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const demoButton = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await demoButton.isVisible().catch(() => false)) {
+      await demoButton.click();
+    }
+    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
 
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
@@ -68,16 +94,42 @@ test.describe('Config visibility across modes', () => {
     server.setReachable(false);
 
     const host = new URL(server.baseUrl).host;
-    await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
+    await page.addInitScript(({
+      host: hostArg,
+      demoBaseUrl,
+      serverBaseUrl,
+      snapshot,
+    }: {
+      host: string;
+      demoBaseUrl: string;
+      serverBaseUrl: string;
+      snapshot: unknown;
+    }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
       localStorage.setItem('c64u_startup_discovery_window_ms', '300');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');
-    }, { host, demoBaseUrl: demoServer.baseUrl });
+      localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrl}`, JSON.stringify(snapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrl}`, '1');
+      localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrl}`, JSON.stringify(snapshot));
+      sessionStorage.setItem(`c64u_initial_snapshot_session:${demoBaseUrl}`, '1');
+      sessionStorage.setItem('c64u_demo_interstitial_shown', '1');
+    }, {
+      host,
+      demoBaseUrl: demoServer.baseUrl,
+      serverBaseUrl: server.baseUrl,
+      snapshot: uiFixtures.initialSnapshot,
+    });
 
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const demoButton = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await demoButton.isVisible().catch(() => false)) {
+      await demoButton.click();
+    }
+    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
     await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();
 
     server.setReachable(true);

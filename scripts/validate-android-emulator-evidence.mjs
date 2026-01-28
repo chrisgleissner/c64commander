@@ -2,12 +2,10 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright');
+const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'android-emulator');
 
 const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const webmSignature = Buffer.from([0x1a, 0x45, 0xdf, 0xa3]);
-const zipSignature = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
-
 const errors = [];
 
 const statSafe = async (target) => {
@@ -41,10 +39,10 @@ const validateSignature = async (filePath) => {
     if (!header.equals(webmSignature)) {
       errors.push(`Invalid WEBM signature: ${filePath}`);
     }
-  } else if (ext === '.zip') {
-    const header = await readHeader(filePath, zipSignature.length);
-    if (!header.equals(zipSignature)) {
-      errors.push(`Invalid ZIP signature: ${filePath}`);
+  } else if (ext === '.mp4') {
+    const header = await readHeader(filePath, 12);
+    if (header.toString('utf8', 4, 8) !== 'ftyp') {
+      errors.push(`Invalid MP4 signature: ${filePath}`);
     }
   }
 };
@@ -75,10 +73,9 @@ const listFiles = async (dirPath) => {
 const getEvidenceLeafFolders = async (rootPath) => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true });
   const hasScreenshotsDir = entries.some((entry) => entry.isDirectory() && entry.name === 'screenshots');
-  const hasPng = entries.some((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.png'));
-  const hasVideo = entries.some((entry) => entry.isFile() && entry.name.toLowerCase() === 'video.webm');
+  const hasVideo = entries.some((entry) => entry.isFile() && entry.name.toLowerCase().startsWith('video.'));
 
-  if (hasScreenshotsDir || hasPng || hasVideo) {
+  if (hasScreenshotsDir || hasVideo) {
     return [rootPath];
   }
 
@@ -99,37 +96,31 @@ const validateEvidenceFolder = async (folderPath) => {
     const screenshotFiles = await listFiles(screenshotsDir);
     pngs = screenshotFiles.filter((file) => file.toLowerCase().endsWith('.png'))
       .map((file) => path.join(screenshotsDir, file));
-  } else {
-    pngs = files.filter((file) => file.toLowerCase().endsWith('.png'))
-      .map((file) => path.join(folderPath, file));
   }
 
-  const videos = files.filter((file) => file.toLowerCase() === 'video.webm')
+  const videos = files
+    .filter((file) => file.toLowerCase() === 'video.webm' || file.toLowerCase() === 'video.mp4')
     .map((file) => path.join(folderPath, file));
 
   if (pngs.length === 0) {
     errors.push(`No PNG screenshots in ${folderPath}`);
   }
   if (videos.length !== 1) {
-    errors.push(`Expected exactly one video.webm in ${folderPath}, found ${videos.length}`);
+    errors.push(`Expected exactly one video (mp4/webm) in ${folderPath}, found ${videos.length}`);
   }
 
-  const metaPath = path.join(folderPath, 'meta.json');
-  const metaStat = await statSafe(metaPath);
-  if (screenshotsStat?.isDirectory() && !metaStat) {
-    errors.push(`Missing meta.json in ${folderPath}`);
+  const required = ['logcat.txt', 'request-routing.json', 'error-context.md', 'meta.json'];
+  for (const req of required) {
+    if (!files.includes(req)) {
+      errors.push(`Missing ${req} in ${folderPath}`);
+    }
   }
 
-  await Promise.all(
-    [
-      ...pngs,
-      ...videos,
-      ...files
-        .filter((file) => file.toLowerCase().endsWith('.zip'))
-        .map((file) => path.join(folderPath, file)),
-      ...(metaStat ? [metaPath] : []),
-    ].map((filePath) => validateFile(filePath))
-  );
+  await Promise.all([
+    ...pngs,
+    ...videos,
+    ...required.filter((file) => files.includes(file)).map((file) => path.join(folderPath, file)),
+  ].map((filePath) => validateFile(filePath)));
 };
 
 const main = async () => {
@@ -141,15 +132,6 @@ const main = async () => {
     if (folders.length === 0) {
       errors.push('No evidence folders found.');
     }
-    
-    // Check for flat structure folders (device prefix format)
-    for (const folder of folders) {
-      const folderName = path.basename(folder);
-      if (folderName.startsWith('android-phone__') || folderName.startsWith('android-tablet__')) {
-        errors.push(`Found flat structure folder (should use canonical structure): ${folderName}`);
-      }
-    }
-    
     for (const folder of folders) {
       const leaves = await getEvidenceLeafFolders(folder);
       for (const leaf of leaves) {
@@ -159,10 +141,10 @@ const main = async () => {
   }
 
   if (errors.length) {
-    console.error('Playwright evidence validation failed:\n' + errors.join('\n'));
+    console.error('Android emulator evidence validation failed:\n' + errors.join('\n'));
     process.exit(1);
   }
-  console.log('Playwright evidence validation passed.');
+  console.log('Android emulator evidence validation passed.');
 };
 
 main().catch((error) => {

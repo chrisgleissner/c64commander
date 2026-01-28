@@ -196,7 +196,7 @@ const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) 
 const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger | null, details?: Record<string, unknown>) => {
   addLog('info', 'Discovery decision', { state, trigger, ...details });
   if (isSmokeModeEnabled()) {
-    console.info('C64U_DISCOVERY_DECISION', { state, trigger, ...details });
+    console.info('C64U_DISCOVERY_DECISION', JSON.stringify({ state, trigger, ...details }));
     void recordSmokeStatus({
       state,
       mode: typeof details?.mode === 'string' ? details.mode : undefined,
@@ -299,7 +299,7 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   transitionTo('REAL_CONNECTED', trigger);
   logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'mock', baseUrl });
   if (isSmokeModeEnabled()) {
-    console.info('C64U_SMOKE_MOCK_CONNECTED', { baseUrl, host: mockHost });
+    console.info('C64U_SMOKE_MOCK_CONNECTED', JSON.stringify({ baseUrl, host: mockHost }));
   }
 };
 
@@ -317,7 +317,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   if (smokeConfig) {
     addLog('info', 'Smoke discovery override active', { target: smokeConfig.target, host: smokeConfig.host });
     if (isSmokeModeEnabled()) {
-      console.info('C64U_SMOKE_DISCOVERY_OVERRIDE', { target: smokeConfig.target, host: smokeConfig.host });
+      console.info('C64U_SMOKE_DISCOVERY_OVERRIDE', JSON.stringify({ target: smokeConfig.target, host: smokeConfig.host }));
     }
   }
   if (smokeConfig?.target === 'mock') {
@@ -341,7 +341,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
       addLog('info', 'Discovery probe succeeded', { trigger });
       if (isSmokeModeEnabled()) {
-        console.info('C64U_PROBE_OK', { trigger });
+        console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
       }
       if (snapshot.state !== 'DEMO_ACTIVE') {
         await transitionToRealConnected(trigger);
@@ -352,7 +352,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
       addLog('warn', 'Discovery probe failed', { trigger });
       if (isSmokeModeEnabled()) {
-        console.warn('C64U_PROBE_FAILED', { trigger });
+        console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
       }
     }
     activeDiscovery = null;
@@ -392,7 +392,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
       addLog('info', 'Discovery probe succeeded', { trigger });
       if (isSmokeModeEnabled()) {
-        console.info('C64U_PROBE_OK', { trigger });
+        console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
       }
       cancelled = true;
       window.clearTimeout(windowTimer);
@@ -401,7 +401,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
       if (isSmokeModeEnabled()) {
-        console.warn('C64U_PROBE_FAILED', { trigger });
+        console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
       }
     }
   };

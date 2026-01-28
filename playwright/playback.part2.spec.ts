@@ -613,6 +613,7 @@ test.describe('Playback file browser (part 2)', () => {
     const input = page.locator('input[type="file"][webkitdirectory]');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     await snap(page, testInfo, 'playlist-populated');
   });
@@ -797,6 +798,7 @@ test.describe('Playback file browser (part 2)', () => {
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', 'demo.invalid');
       localStorage.setItem('c64u_password', '');
+      sessionStorage.setItem('c64u_demo_interstitial_shown', '1');
     }, { demoBaseUrl: server.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
@@ -814,10 +816,20 @@ test.describe('Playback file browser (part 2)', () => {
       }
     };
 
+    const dismissBlockingDialogs = async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await dismissDemoDialog();
+        const stillVisible = await page.getByRole('dialog', { name: 'Demo Mode' }).isVisible().catch(() => false);
+        if (!stillVisible) break;
+      }
+    };
+
+    await dismissBlockingDialogs();
     await openAddItemsDialog(page);
     const addDialog = page.getByRole('dialog').filter({ has: page.getByText('Add items') });
-    await dismissDemoDialog();
-    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    await dismissBlockingDialogs();
+    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device', { force: true });
     await expect(page.getByText('Connected', { exact: true })).toBeVisible();
     const input = page.locator('input[type="file"][webkitdirectory]');
     const tempDir = createTempDiskDirectory();

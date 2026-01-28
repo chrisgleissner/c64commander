@@ -2887,7 +2887,12 @@ export default function PlayFilesPage() {
               </div>
             )}
             headerActions={
-              <Button variant="outline" size="sm" onClick={() => setBrowserOpen(true)}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBrowserOpen(true)}
+                aria-label="Add items to playlist"
+              >
                 {hasPlaylist ? 'Add more items' : 'Add items'}
               </Button>
             }

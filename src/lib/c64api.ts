@@ -254,7 +254,7 @@ export class C64API {
           baseUrl,
           deviceHost: this.deviceHost,
         });
-        console.error('C64U_SMOKE_MUTATION_BLOCKED', { method, path, url });
+        console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url }));
         throw new Error('Smoke mode blocked mutating request');
       }
       if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
@@ -270,7 +270,7 @@ export class C64API {
       }
       if (isNativePlatform()) {
         if (isSmokeModeEnabled()) {
-          console.info('C64U_HTTP_NATIVE', { method, path, url });
+          console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, path, url }));
         }
         const body = requestOptions.body ? requestOptions.body : undefined;
         const requestPromise = CapacitorHttp.request({
@@ -362,7 +362,7 @@ export class C64API {
       let data: unknown = undefined;
 
       if (isSmokeModeEnabled()) {
-        console.info('C64U_HTTP_NATIVE', { method, url });
+        console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, url }));
       }
 
       if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
@@ -949,7 +949,7 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
     deviceHost: resolvedDeviceHost,
   });
   if (isSmokeModeEnabled()) {
-    console.info('C64U_ROUTING_UPDATED', { baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'persisted' });
+    console.info('C64U_ROUTING_UPDATED', JSON.stringify({ baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'persisted' }));
   }
 
   window.dispatchEvent(
@@ -994,8 +994,18 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
     deviceHost: resolvedDeviceHost,
   });
   if (isSmokeModeEnabled()) {
-    console.info('C64U_ROUTING_UPDATED', { baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'runtime' });
+    console.info('C64U_ROUTING_UPDATED', JSON.stringify({ baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'runtime' }));
   }
+
+  window.dispatchEvent(
+    new CustomEvent('c64u-connection-change', {
+      detail: {
+        baseUrl: resolvedBaseUrl,
+        password: password || '',
+        deviceHost: resolvedDeviceHost,
+      },
+    }),
+  );
 }
 
 export function applyC64APIConfigFromStorage() {

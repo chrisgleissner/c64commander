@@ -30,6 +30,7 @@
 - `./local-build.sh --test-e2e` (local E2E flow)
 - `./local-build.sh --android-tests` (connected Android instrumentation tests; requires device/emulator)
 - `./scripts/android-emulator.sh` (provisions and starts Android emulator)
+- `./scripts/smoke-android-emulator.sh` (Android emulator smoke runner entrypoint)
 - `npm run proxy` (local C64U proxy server)
 
 ### Key file paths and why they matter
@@ -44,6 +45,12 @@
   - Provides local-only hooks for Android instrumentation tests and emulator startup, but not used in CI.
 - scripts/android-emulator.sh
   - End-to-end emulator setup script (not wired into CI).
+- .maestro/
+  - Maestro YAML flows for Android emulator smoke tests.
+- scripts/build-maestro-evidence.mjs
+  - Projects raw Maestro output into curated evidence.
+- scripts/validate-android-emulator-evidence.mjs
+  - Validates Maestro evidence artifacts.
 - src/lib/connection/connectionManager.ts
   - Implements discovery state machine, demo fallback, and probe logic; core of “real vs mock” behavior.
 - src/lib/c64api.ts

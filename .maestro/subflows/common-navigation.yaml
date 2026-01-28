@@ -1,0 +1,16 @@
+appId: uk.gleissner.c64commander
+tags:
+  - subflow
+---
+- tapOn: "Play"
+- assertVisible: "Play Files"
+- takeScreenshot: "play-tab"
+- tapOn: "Settings"
+- assertVisible: "Settings"
+- takeScreenshot: "settings-tab"
+- tapOn: "Config"
+- assertVisible: "Configuration"
+- takeScreenshot: "config-tab"
+- tapOn: "Home"
+- assertVisible: "C64 Commander"
+- takeScreenshot: "home-tab"
