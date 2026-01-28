@@ -10,6 +10,7 @@ type ExtractArchiveOptions = {
   buffer: Uint8Array;
   onEntry: ArchiveEntryHandler;
   onProgress?: (processed: number, total?: number) => void;
+  onEnumerate?: (total: number) => void;
 };
 
 const SEVEN_Z_EXTENSION = '.7z';
@@ -39,11 +40,12 @@ const getSevenZipModule = async () => {
   return sevenZipModulePromise;
 };
 
-const extractZip = async ({ buffer, onEntry, onProgress }: ExtractArchiveOptions) => {
+const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
   const entries = unzipSync(buffer);
   const files = Object.entries(entries).filter(([, data]) => data instanceof Uint8Array);
   let processed = 0;
   const total = files.length;
+  onEnumerate?.(total);
   for (const [path, data] of files) {
     processed += 1;
     await onEntry(normalizePath(path), data as Uint8Array);
@@ -51,7 +53,7 @@ const extractZip = async ({ buffer, onEntry, onProgress }: ExtractArchiveOptions
   }
 };
 
-const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress }: ExtractArchiveOptions) => {
+const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
   const module = await getSevenZipModule();
   const workingDir = `/work-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
   const archivePath = `${workingDir}/${normalizePath(archiveName) || `archive${SEVEN_Z_EXTENSION}`}`;
@@ -99,6 +101,7 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress }: Extra
 
     let processed = 0;
     const total = files.length;
+    onEnumerate?.(total);
     for (const file of files) {
       processed += 1;
       const data = module.FS.readFile(file.fullPath, { encoding: 'binary' }) as Uint8Array;

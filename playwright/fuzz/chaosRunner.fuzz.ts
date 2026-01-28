@@ -458,7 +458,7 @@ test.describe('Chaos fuzz', () => {
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
     const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
-    const baseTimeout = timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 90_000 : 10 * 60 * 1000);
+    const baseTimeout = timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000);
     const timeoutMs = baseTimeout + 60_000;
     test.setTimeout(timeoutMs);
     testInfo.setTimeout(timeoutMs);

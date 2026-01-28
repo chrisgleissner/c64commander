@@ -789,6 +789,68 @@ test.describe('Playback file browser (part 2)', () => {
     await snap(page, testInfo, 'disk-stop-reboot');
   });
 
+  test('demo mode disk image waits for keyboard buffer readiness', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected probe failures during demo mode.');
+    await page.addInitScript(({ demoBaseUrl }) => {
+      (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+      localStorage.setItem('c64u_startup_discovery_window_ms', '300');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_device_host', 'demo.invalid');
+      localStorage.setItem('c64u_password', '');
+    }, { demoBaseUrl: server.baseUrl });
+
+    await page.goto('/play', { waitUntil: 'domcontentloaded' });
+    const demoButton = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await demoButton.isVisible().catch(() => false)) {
+      await demoButton.click();
+      await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
+    }
+
+    const dismissDemoDialog = async () => {
+      const demoDialog = page.getByRole('dialog', { name: 'Demo Mode' });
+      if (await demoDialog.isVisible().catch(() => false)) {
+        await demoDialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+        await expect(demoDialog).toBeHidden();
+      }
+    };
+
+    await openAddItemsDialog(page);
+    const addDialog = page.getByRole('dialog').filter({ has: page.getByText('Add items') });
+    await dismissDemoDialog();
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    const tempDir = createTempDiskDirectory();
+    try {
+      await input.setInputFiles(tempDir);
+      await expect(addDialog).toBeHidden();
+      const lingeringDialog = page.getByRole('dialog');
+      if (await lingeringDialog.isVisible().catch(() => false)) {
+        const cancelButton = lingeringDialog.getByRole('button', { name: 'Cancel' });
+        if (await cancelButton.isVisible().catch(() => false)) {
+          await cancelButton.click();
+          await expect(lingeringDialog).toBeHidden();
+        }
+        if (await lingeringDialog.isVisible().catch(() => false)) {
+          await page.keyboard.press('Escape');
+          await expect(lingeringDialog).toBeHidden();
+        }
+      }
+      await expect(page.locator('[data-testid="add-items-overlay"]')).toHaveCount(0);
+      const playlistItem = page.getByTestId('playlist-item').filter({ hasText: 'demo.d64' }).first();
+      await expect(playlistItem).toBeVisible();
+      await page.getByTestId('playlist-play').click({ force: true });
+
+      await waitForRequests(() =>
+        server.requests.some((req) => req.url.startsWith('/v1/machine:writemem')),
+      );
+      await expect(page.getByText(/Keyboard buffer remained busy/i)).toHaveCount(0);
+      await snap(page, testInfo, 'demo-autostart');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   test('disk image uses DMA autostart when enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
       localStorage.setItem('c64u_disk_autostart_mode', 'dma');
@@ -841,6 +903,7 @@ test.describe('Playback file browser (part 2)', () => {
 
     const slider = page.getByTestId('volume-slider');
     const muteButton = page.getByTestId('volume-mute');
+    const volumeLabel = page.getByTestId('volume-label');
     await expect(slider).toBeVisible();
     await expect(muteButton).toBeVisible();
 
@@ -888,6 +951,18 @@ test.describe('Playback file browser (part 2)', () => {
     expect(mutedState['Vol Socket 2']?.value).toBe(initialSocket2);
     expect(mutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
 
+    const boxMuted = await slider.boundingBox();
+    expect(boxMuted).not.toBeNull();
+    if (boxMuted) {
+      await page.mouse.move(boxMuted.x + 4, boxMuted.y + boxMuted.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(boxMuted.x + boxMuted.width - 4, boxMuted.y + boxMuted.height / 2);
+      await page.mouse.up();
+    }
+    const mutedStateAfterSlider = server.getState()['Audio Mixer'];
+    expect(mutedStateAfterSlider['Vol Socket 1']?.value).toBe('OFF');
+    expect(mutedStateAfterSlider['Vol UltiSid 2']?.value).toBe('OFF');
+
     const unmuteUpdateCount = server.requests.filter(
       (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
     ).length;
@@ -896,12 +971,61 @@ test.describe('Playback file browser (part 2)', () => {
       server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > unmuteUpdateCount,
     );
     const unmutedState = server.getState()['Audio Mixer'];
-    expect(unmutedState['Vol Socket 1']?.value).toBe(target);
-    expect(unmutedState['Vol UltiSid 2']?.value).toBe(target);
+    const updatedTarget = unmutedState['Vol Socket 1']?.value;
+    expect(updatedTarget).toBeDefined();
+    expect(unmutedState['Vol UltiSid 2']?.value).toBe(updatedTarget);
     expect(unmutedState['Vol Socket 2']?.value).toBe(initialSocket2);
     expect(unmutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
 
     await snap(page, testInfo, 'volume-updated');
+  });
+
+  test('volume slider respects left-off and right-max bounds', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+          'SID Socket 2': 'Enabled',
+        },
+        'SID Addressing': {
+          'UltiSID 1 Address': '$D400',
+          'UltiSID 2 Address': '$D420',
+        },
+      },
+    });
+
+    await page.goto('/play');
+    const slider = page.getByTestId('volume-slider');
+    const label = page.getByTestId('volume-label');
+    await expect(slider).toBeVisible();
+    await expect(slider).not.toHaveAttribute('data-disabled');
+
+    const thumb = slider.getByRole('slider');
+    await thumb.focus();
+    await thumb.press('Home');
+    await expect(label).toHaveText(/OFF/i);
+
+    await thumb.press('End');
+    await expect(label).toHaveText(/\+6 dB/i);
+
+    await snap(page, testInfo, 'volume-bounds');
+  });
+
+  test('reshuffle button does not stick', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+    await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    await page.getByTestId('playback-shuffle').click();
+    const reshuffle = page.getByTestId('playlist-reshuffle');
+    await expect(reshuffle).toBeEnabled();
+    await reshuffle.click();
+    await expect(reshuffle).toHaveAttribute('data-active', 'true');
+    await expect.poll(async () => reshuffle.getAttribute('data-active')).toBe('false');
+    await snap(page, testInfo, 'reshuffle-momentary');
   });
 
   test('FTP failure shows error toast', async ({ page }: { page: Page }, testInfo: TestInfo) => {

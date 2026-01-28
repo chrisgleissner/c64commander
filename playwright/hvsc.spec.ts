@@ -65,6 +65,8 @@ test.describe('HVSC Play page', () => {
     failInstallAttempts?: number;
     installDelayMs?: number;
     seedInProgressSummary?: boolean;
+    downloadProgressSteps?: number[];
+    ingestionProgressSteps?: number[];
   };
 
   const installMocks = async (page: Page, options: InstallOptions = { installedVersion: 0 }) => {
@@ -81,6 +83,8 @@ test.describe('HVSC Play page', () => {
         failInstallAttempts,
         installDelayMs,
         seedInProgressSummary,
+        downloadProgressSteps,
+        ingestionProgressSteps,
       }: {
         baseUrl: string;
         baseline: typeof hvscServer.baseline;
@@ -93,6 +97,8 @@ test.describe('HVSC Play page', () => {
         failInstallAttempts?: number;
         installDelayMs?: number;
         seedInProgressSummary?: boolean;
+        downloadProgressSteps?: number[];
+        ingestionProgressSteps?: number[];
       }) => {
         const listeners: Array<(event: any) => void> = [];
         const now = () => Date.now();
@@ -227,12 +233,21 @@ test.describe('HVSC Play page', () => {
 
             if (state.installedVersion === 0) {
               const archiveName = `HVSC_${baseline.version}-all-of-them.7z`;
-              emitStage('download', 'Downloading baseline…', {
-                archiveName,
-                percent: 10,
-                downloadedBytes: 512,
-                totalBytes: 4096,
-              });
+              const downloadSteps = downloadProgressSteps?.length
+                ? downloadProgressSteps
+                : [512];
+              for (let index = 0; index < downloadSteps.length; index += 1) {
+                const loaded = downloadSteps[index];
+                emitStage('download', 'Downloading baseline…', {
+                  archiveName,
+                  percent: Math.round(((index + 1) / downloadSteps.length) * 100),
+                  downloadedBytes: loaded,
+                  totalBytes: 4096,
+                });
+                if (downloadSteps.length > 1) {
+                  await new Promise((resolve) => setTimeout(resolve, 40));
+                }
+              }
               ensureNotCancelled();
               await fetch(`${baseUrl}/hvsc/archive/baseline`).then((res) => res.arrayBuffer());
               ensureNotCancelled();
@@ -251,13 +266,24 @@ test.describe('HVSC Play page', () => {
               ensureNotCancelled();
               maybeFail('archive_extraction', 'Simulated extraction failure');
               if (baseline.songs.length) {
-                emitStage('sid_metadata_parsing', `Parsed ${baseline.songs[0].virtualPath}`, {
-                  archiveName,
-                  currentFile: baseline.songs[0].virtualPath,
-                  processedCount: 1,
-                  totalCount: baseline.songs.length,
-                  percent: 20,
-                });
+                const progressSteps = ingestionProgressSteps?.length
+                  ? ingestionProgressSteps
+                  : [1];
+                for (let index = 0; index < progressSteps.length; index += 1) {
+                  const count = progressSteps[index];
+                  const bounded = Math.min(count, baseline.songs.length);
+                  const song = baseline.songs[bounded - 1] ?? baseline.songs[0];
+                  emitStage('sid_metadata_parsing', `Parsed ${song.virtualPath}`, {
+                    archiveName,
+                    currentFile: song.virtualPath,
+                    processedCount: bounded,
+                    totalCount: baseline.songs.length,
+                    percent: Math.round((bounded / baseline.songs.length) * 100),
+                  });
+                  if (progressSteps.length > 1) {
+                    await new Promise((resolve) => setTimeout(resolve, 40));
+                  }
+                }
               }
               emitStage('database_insertion', 'Inserted baseline entries', {
                 archiveName,
@@ -450,6 +476,8 @@ test.describe('HVSC Play page', () => {
             extraction: { status: 'idle' },
             lastUpdatedAt: nowIso,
           }));
+        } else {
+          localStorage.removeItem('c64u_hvsc_status:v1');
         }
 
         const host = c64BaseUrl.replace(/^https?:\/\//, '');
@@ -468,6 +496,8 @@ test.describe('HVSC Play page', () => {
         failInstallAttempts: options.failInstallAttempts,
         installDelayMs: options.installDelayMs,
         seedInProgressSummary: options.seedInProgressSummary,
+        downloadProgressSteps: options.downloadProgressSteps,
+        ingestionProgressSteps: options.ingestionProgressSteps,
       },
     );
   };
@@ -595,6 +625,36 @@ test.describe('HVSC Play page', () => {
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
     await snap(page, testInfo, 'hvsc-download-attempted');
+  });
+
+  test('HVSC download progress updates incrementally', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await installMocks(page, {
+      installedVersion: 0,
+      downloadProgressSteps: [512, 2048, 4096],
+      ingestionProgressSteps: [1],
+    });
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Download HVSC' }).click();
+
+    const bytes = page.getByTestId('hvsc-download-bytes');
+    await expect(bytes).toContainText('Downloaded');
+    await expect.poll(async () => bytes.textContent()).toContain('512 B');
+    await expect.poll(async () => bytes.textContent()).toContain('4.0 KB');
+    await snap(page, testInfo, 'hvsc-download-progress');
+  });
+
+  test('HVSC ingestion progress updates incrementally', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await installMocks(page, {
+      installedVersion: 0,
+      ingestionProgressSteps: [1],
+    });
+    await page.goto('/play');
+    await page.getByRole('button', { name: 'Download HVSC' }).click();
+
+    const files = page.getByTestId('hvsc-extraction-files');
+    await expect(files).toContainText('Files:');
+    await expect.poll(async () => files.textContent()).toContain('Files: 1');
+    await snap(page, testInfo, 'hvsc-extraction-progress');
   });
 
   test('HVSC cached download -> ingest -> play track', async ({ page }: { page: Page }, testInfo: TestInfo) => {

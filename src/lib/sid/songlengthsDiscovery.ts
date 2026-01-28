@@ -4,6 +4,9 @@ import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 export const SONGLENGTHS_FILE_NAMES = ['songlengths.md5', 'songlengths.txt'];
 export const DOCUMENTS_FOLDER = 'DOCUMENTS';
 
+export const isSonglengthsFileName = (name: string) =>
+  SONGLENGTHS_FILE_NAMES.includes(name.trim().toLowerCase());
+
 const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
 export const buildSonglengthsSearchPaths = (path: string) => {

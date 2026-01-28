@@ -55,6 +55,15 @@ class MockC64UState private constructor(
   var debugRegister: String = "00"
   val memory: MutableMap<Int, Int> = mutableMapOf()
 
+  fun resetKeyboardBuffer() {
+    val bufferStart = 0x0277
+    val bufferLength = 10
+    memory[0x00C6] = 0
+    repeat(bufferLength) { offset ->
+      memory[bufferStart + offset] = 0
+    }
+  }
+
   companion object {
     fun fromPayload(payload: JSONObject): MockC64UState {
       val generalObj = payload.optJSONObject("general") ?: JSONObject()
@@ -78,12 +87,12 @@ class MockC64UState private constructor(
       val categoriesObj = payload.optJSONObject("categories") ?: JSONObject()
       val categories = mutableMapOf<String, Map<String, MockConfigItem>>()
       val categoryKeys = categoriesObj.keys()
-      while (categoryKeys?.hasNext() == true) {
+      while (categoryKeys.hasNext()) {
         val categoryName = categoryKeys.next()
         val itemsObj = categoriesObj.optJSONObject(categoryName) ?: JSONObject()
         val itemKeys = itemsObj.keys()
         val items = mutableMapOf<String, MockConfigItem>()
-        while (itemKeys?.hasNext() == true) {
+        while (itemKeys.hasNext()) {
           val itemName = itemKeys.next()
           val itemObj = itemsObj.optJSONObject(itemName) ?: continue
           val value = unwrapJson(itemObj.opt("value")) ?: ""

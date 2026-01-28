@@ -716,7 +716,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playback-persists-after-settings');
   });
 
-  test('mute button toggles and slider unmutes', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('mute button toggles and slider does not unmute', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
     await expect(page.getByText('Connected')).toBeVisible();
 
@@ -735,6 +735,10 @@ test.describe('Playback file browser', () => {
     await muteButton.click();
     await expect(muteButton).toContainText('Unmute');
     await slider.click({ position: { x: 10, y: 5 } });
+    await expect(muteButton).toContainText('Unmute');
+    await snap(page, testInfo, 'slider-muted');
+
+    await muteButton.click();
     await expect(muteButton).toContainText('Mute');
     await snap(page, testInfo, 'slider-unmuted');
   });

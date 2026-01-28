@@ -19,13 +19,21 @@ import {
   writeCachedArchiveMarker,
 } from './hvscFilesystem';
 import { loadHvscState, markUpdateApplied, updateHvscState, isUpdateApplied } from './hvscStateStore';
+import { updateHvscStatusSummaryFromEvent } from './hvscStatusStore';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
 import { addErrorLog } from '@/lib/logging';
 
 const listeners = new Set<(event: HvscProgressEvent) => void>();
 const cancelTokens = new Map<string, { cancelled: boolean }>();
 
+let summaryLastStage: string | null = null;
+
 const emit = (event: HvscProgressEvent) => {
+  const lastStage = summaryLastStage;
+  if (event.stage && event.stage !== 'error') {
+    summaryLastStage = event.stage;
+  }
+  updateHvscStatusSummaryFromEvent(event, lastStage);
   listeners.forEach((listener) => listener(event));
 };
 
@@ -57,6 +65,24 @@ const shouldUseNativeDownload = () => {
   } catch {
     return false;
   }
+};
+
+const parseContentLength = (value: string | null) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
+const concatChunks = (chunks: Uint8Array[], totalLength?: number | null) => {
+  const length = totalLength ?? chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const buffer = new Uint8Array(length);
+  let offset = 0;
+  chunks.forEach((chunk) => {
+    buffer.set(chunk, offset);
+    offset += chunk.length;
+  });
+  return buffer;
 };
 
 const normalizeVirtualPath = (entryName: string) => {
@@ -221,6 +247,7 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
 };
 
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
+  summaryLastStage = null;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createEmitter(ingestionId);
   emitProgress({ stage: 'start', message: 'HVSC install/update started' });
@@ -334,16 +361,49 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           if (!response.ok) {
             throw new Error(`Download failed: ${response.status} ${response.statusText}`);
           }
-          const buffer = new Uint8Array(await response.arrayBuffer());
-          await writeCachedArchive(archivePath, buffer);
-          emitProgress({
-            stage: 'download',
-            message: `Downloaded ${archiveName}`,
-            archiveName,
-            downloadedBytes: buffer.byteLength,
-            totalBytes: buffer.byteLength,
-            percent: 100,
-          });
+          const totalBytes = parseContentLength(response.headers.get('content-length'));
+          if (!response.body) {
+            const buffer = new Uint8Array(await response.arrayBuffer());
+            await writeCachedArchive(archivePath, buffer);
+            emitProgress({
+              stage: 'download',
+              message: `Downloaded ${archiveName}`,
+              archiveName,
+              downloadedBytes: buffer.byteLength,
+              totalBytes: buffer.byteLength,
+              percent: 100,
+            });
+          } else {
+            const reader = response.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let loaded = 0;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) {
+                chunks.push(value);
+                loaded += value.length;
+                emitProgress({
+                  stage: 'download',
+                  message: `Downloading ${archiveName}…`,
+                  archiveName,
+                  downloadedBytes: loaded,
+                  totalBytes: totalBytes ?? undefined,
+                  percent: totalBytes ? Math.round((loaded / totalBytes) * 100) : undefined,
+                });
+              }
+            }
+            const buffer = concatChunks(chunks, totalBytes);
+            await writeCachedArchive(archivePath, buffer);
+            emitProgress({
+              stage: 'download',
+              message: `Downloaded ${archiveName}`,
+              archiveName,
+              downloadedBytes: buffer.byteLength,
+              totalBytes: totalBytes ?? buffer.byteLength,
+              percent: totalBytes ? 100 : undefined,
+            });
+          }
         }
         try {
           const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${archivePath}` });
@@ -420,6 +480,15 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       await extractArchiveEntries({
         archiveName: archivePath,
         buffer: archiveBuffer,
+        onEnumerate: (total) => {
+          emitProgress({
+            stage: 'sid_enumeration',
+            message: `Discovered ${total} files`,
+            archiveName,
+            processedCount: 0,
+            totalCount: total,
+          });
+        },
         onProgress: (processed, total) => {
           emitProgress({
             stage: 'archive_extraction',

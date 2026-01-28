@@ -255,4 +255,31 @@ test.describe('Home page app config management', () => {
     expect(stored || []).toHaveLength(0);
     await snap(page, testInfo, 'config-deleted');
   });
+
+  test('home page renders SID status group @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+          'SID Socket 2': 'Disabled',
+        },
+        'SID Addressing': {
+          'UltiSID 1 Address': '',
+          'UltiSID 2 Address': '$D420',
+        },
+      },
+    });
+
+    await page.goto('/');
+    const sidGroup = page.getByTestId('home-sid-status');
+    await expect(sidGroup).toBeVisible();
+    await expect(sidGroup).toContainText('Socket 1');
+    await expect(sidGroup).toContainText('ON');
+    await expect(sidGroup).toContainText('Socket 2');
+    await expect(sidGroup).toContainText('OFF');
+    await expect(sidGroup).toContainText('UltiSID 1');
+    await expect(sidGroup).toContainText('—');
+    await expect(sidGroup).toContainText('UltiSID 2');
+    await snap(page, testInfo, 'sid-status');
+  });
 });
