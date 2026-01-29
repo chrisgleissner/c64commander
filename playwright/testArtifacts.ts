@@ -47,7 +47,7 @@ const generateTestId = (testInfo: TestInfo): string => {
 const getEvidenceDir = (testInfo: TestInfo) => {
   const testId = generateTestId(testInfo);
   const deviceId = testInfo.project.name;
-  return path.resolve(process.cwd(), 'test-results', 'evidence', testId, deviceId);
+  return path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright', testId, deviceId);
 };
 
 type StrictUiTracker = {
@@ -89,7 +89,7 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   
   // Note: We no longer call testInfo.attach() to avoid creating duplicate evidence
   // in Playwright's outputDir. All evidence is now in the canonical structure:
-  // test-results/evidence/<testId>/<deviceId>/
+  // test-results/evidence/playwright/<testId>/<deviceId>/
 
   // Enforce visual boundaries after capturing screenshot (unless explicitly allowed)
   const allowOverflow = testInfo.annotations.some((a) => a.type === 'allow-visual-overflow');

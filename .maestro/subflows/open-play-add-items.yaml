@@ -1,0 +1,21 @@
+appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+tags:
+  - subflow
+---
+- runFlow: launch-and-wait.yaml
+- tapOn: "Play"
+- assertVisible: "Play Files"
+- takeScreenshot: play-files
+- scrollUntilVisible:
+    element: "Add items to playlist"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn:
+    text: "Add items to playlist"
+- assertVisible: "Choose source"
+- assertVisible: "This device"
+- takeScreenshot: choose-source

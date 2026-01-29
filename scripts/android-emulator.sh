@@ -4,7 +4,40 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 AVD_NAME="C64Commander"
-SDK_DIR="${ANDROID_HOME:-$HOME/Android}"
+resolve_sdk_dir() {
+  if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+    echo "$ANDROID_SDK_ROOT"
+    return
+  fi
+  if [[ -n "${ANDROID_HOME:-}" ]]; then
+    echo "$ANDROID_HOME"
+    return
+  fi
+  if [[ -d "$HOME/Android/Sdk" ]]; then
+    echo "$HOME/Android/Sdk"
+    return
+  fi
+  local props="$ROOT_DIR/android/local.properties"
+  if [[ -f "$props" ]]; then
+    local sdk_dir
+    sdk_dir=$(grep -E '^sdk.dir=' "$props" | head -n 1 | cut -d= -f2-)
+    if [[ -n "$sdk_dir" ]]; then
+      sdk_dir="${sdk_dir//\\/:}"
+      echo "$sdk_dir"
+      return
+    fi
+  fi
+  echo "$HOME/Android/Sdk"
+}
+
+configure_android_sdk_env() {
+  local sdk_dir="$1"
+  export ANDROID_SDK_ROOT="$sdk_dir"
+  export ANDROID_HOME="$sdk_dir"
+  export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+}
+
+SDK_DIR="$(resolve_sdk_dir)"
 API_LEVEL="34"
 BUILD_TOOLS="34.0.0"
 DEVICE_PROFILE="pixel_6"
@@ -65,8 +98,7 @@ while [[ $# -gt 0 ]]; do
   esac
  done
 
-export ANDROID_HOME="$SDK_DIR"
-export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+  configure_android_sdk_env "$SDK_DIR"
 export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
 export PATH="$JAVA_HOME/bin:$PATH"
 
@@ -145,11 +177,13 @@ build_apk() {
 
 start_emulator() {
   adb start-server
+  local extra_args=""
   if [[ -z "${DISPLAY:-}" ]]; then
-    echo "Warning: DISPLAY is not set. Emulator UI may not be visible." >&2
+    echo "DISPLAY is not set. Launching emulator headless." >&2
+    extra_args="-no-window -no-audio -no-boot-anim"
   fi
   if ! adb devices | grep -q "emulator-"; then
-    nohup setsid emulator -avd "$AVD_NAME" -gpu "$EMULATOR_GPU" $EMULATOR_ARGS </dev/null >/tmp/c64-emu.log 2>&1 &
+    nohup setsid emulator -avd "$AVD_NAME" -gpu "$EMULATOR_GPU" $EMULATOR_ARGS $extra_args </dev/null >/tmp/c64-emu.log 2>&1 &
     disown || true
   fi
 }
@@ -162,20 +196,24 @@ wait_for_boot() {
   local emulator_id
   emulator_id="$(get_emulator_id)"
   if [[ -z "$emulator_id" ]]; then
-    adb wait-for-device
+    timeout 30 adb wait-for-device || {
+      echo "adb wait-for-device timed out after 30s" >&2
+      exit 1
+    }
     emulator_id="$(get_emulator_id)"
   fi
   local boot_completed=""
   local attempts=0
-  while [[ "$boot_completed" != "1" && $attempts -lt 120 ]]; do
-    boot_completed="$(adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+  # Max 30 attempts × 2s = 60s (strict timeout guardrail)
+  while [[ "$boot_completed" != "1" && $attempts -lt 30 ]]; do
+    boot_completed="$(timeout 10 adb -s "$emulator_id" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
     if [[ "$boot_completed" != "1" ]]; then
       sleep 2
       attempts=$((attempts + 1))
     fi
   done
   if [[ "$boot_completed" != "1" ]]; then
-    echo "Emulator did not finish booting in time." >&2
+    echo "Emulator did not finish booting within 60s." >&2
     exit 1
   fi
 }
@@ -190,7 +228,7 @@ install_apk() {
   fi
   wait_for_boot
   adb -s "$emulator_id" install -r "$apk_path"
-  adb -s "$emulator_id" shell am start -n com.c64.commander/.MainActivity
+  adb -s "$emulator_id" shell am start -n uk.gleissner.c64commander/.MainActivity
 }
 
 if [[ $WITH_PREREQS -eq 1 ]]; then

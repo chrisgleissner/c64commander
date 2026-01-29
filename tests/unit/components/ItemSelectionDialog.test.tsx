@@ -3,9 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import type { SourceEntry } from '@/lib/sourceNavigation/types';
+import { reportUserError } from '@/lib/uiErrors';
 
 vi.mock('@/lib/sourceNavigation/useSourceNavigator', () => ({
   useSourceNavigator: vi.fn(),
+}));
+
+vi.mock('@/lib/uiErrors', () => ({
+  reportUserError: vi.fn(),
 }));
 
 const buildSource = (id: string, name: string, type: 'ultimate' | 'local') => ({
@@ -111,5 +116,48 @@ describe('ItemSelectionDialog source picker', () => {
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
     vi.useRealTimers();
+  });
+
+  it('reports an error when confirmation fails', async () => {
+    const entries: SourceEntry[] = [
+      { type: 'file', name: 'song.sid', path: '/song.sid' },
+    ];
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries,
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const sourceGroups: SourceGroup[] = [
+      { label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] },
+    ];
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={vi.fn().mockRejectedValue(new Error('Failed to add'))}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getAllByRole('checkbox')[0]);
+    fireEvent.click(screen.getByTestId('add-items-confirm'));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'ITEM_SELECTION',
+      title: 'Add items failed',
+    }));
   });
 });

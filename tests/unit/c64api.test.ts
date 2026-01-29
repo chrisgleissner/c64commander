@@ -12,6 +12,7 @@ import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
+import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
@@ -29,11 +30,18 @@ vi.mock('@/lib/fuzz/fuzzMode', () => ({
   isFuzzSafeBaseUrl: vi.fn(() => true),
 }));
 
+vi.mock('@/lib/smoke/smokeMode', () => ({
+  isSmokeModeEnabled: vi.fn(() => false),
+  isSmokeReadOnlyEnabled: vi.fn(() => true),
+}));
+
 const addErrorLogMock = vi.mocked(addErrorLog);
 const addLogMock = vi.mocked(addLog);
 const capacitorRequestMock = vi.mocked(CapacitorHttp.request);
 const fuzzEnabledMock = vi.mocked(isFuzzModeEnabled);
 const fuzzSafeMock = vi.mocked(isFuzzSafeBaseUrl);
+const smokeEnabledMock = vi.mocked(isSmokeModeEnabled);
+const smokeReadOnlyMock = vi.mocked(isSmokeReadOnlyEnabled);
 
 describe('c64api', () => {
   beforeEach(() => {
@@ -43,8 +51,12 @@ describe('c64api', () => {
     capacitorRequestMock.mockReset();
     fuzzEnabledMock.mockReset();
     fuzzSafeMock.mockReset();
+    smokeEnabledMock.mockReset();
+    smokeReadOnlyMock.mockReset();
     fuzzEnabledMock.mockReturnValue(false);
     fuzzSafeMock.mockReturnValue(true);
+    smokeEnabledMock.mockReturnValue(false);
+    smokeReadOnlyMock.mockReturnValue(true);
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     vi.stubGlobal('fetch', vi.fn());
     resetConfigWriteThrottle();
@@ -126,6 +138,17 @@ describe('c64api', () => {
     const api = new C64API('http://127.0.0.1');
     await expect(api.getInfo()).resolves.toBeTruthy();
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('blocks mutating requests in smoke read-only mode', async () => {
+    const fetchMock = vi.mocked(fetch);
+    smokeEnabledMock.mockReturnValue(true);
+    smokeReadOnlyMock.mockReturnValue(true);
+
+    const api = new C64API('http://c64u');
+    await expect(api.saveConfig()).rejects.toThrow('Smoke mode blocked mutating request');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(addErrorLogMock).toHaveBeenCalledWith('Smoke mode blocked mutating request', expect.any(Object));
   });
 
   it('uses CapacitorHttp on native platforms', async () => {
@@ -258,6 +281,16 @@ describe('c64api', () => {
     const payload = new Blob(['SID'], { type: 'application/octet-stream' });
 
     await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable');
+  });
+
+  it('maps unknown host errors in SID uploads to DNS unreachable', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError('Unknown host'));
+
+    const api = new C64API('http://c64u');
+    const payload = new Blob(['SID'], { type: 'application/octet-stream' });
+
+    await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable (DNS)');
   });
 
   it('maps timed out control requests to host unreachable', async () => {

@@ -2,6 +2,7 @@
 
 import { CapacitorHttp } from '@capacitor/core';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 
@@ -11,6 +12,12 @@ const DEFAULT_PROXY_URL = 'http://127.0.0.1:8787';
 const CONTROL_REQUEST_TIMEOUT_MS = 3000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
+
+const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
+const isNetworkFailureMessage = (message: string) =>
+  /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
+const resolveHostErrorMessage = (message: string) =>
+  (isDnsFailure(message) ? 'Host unreachable (DNS)' : 'Host unreachable');
 
 const sanitizeHostInput = (input?: string) => {
   const raw = input?.trim() ?? '';
@@ -79,6 +86,10 @@ const isNativePlatform = () => {
     return false;
   }
 };
+
+const isReadOnlyMethod = (method: string) => ['GET', 'HEAD', 'OPTIONS'].includes(method);
+
+const shouldBlockSmokeMutation = (method: string) => isSmokeModeEnabled() && isSmokeReadOnlyEnabled() && !isReadOnlyMethod(method);
 
 export const getDefaultBaseUrl = () => DEFAULT_BASE_URL;
 
@@ -235,6 +246,17 @@ export class C64API {
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     try {
+      if (shouldBlockSmokeMutation(method)) {
+        addErrorLog('Smoke mode blocked mutating request', {
+          path,
+          url,
+          method,
+          baseUrl,
+          deviceHost: this.deviceHost,
+        });
+        console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url }));
+        throw new Error('Smoke mode blocked mutating request');
+      }
       if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
         addErrorLog('Fuzz mode blocked real device request', {
           path,
@@ -247,6 +269,9 @@ export class C64API {
         throw blocked;
       }
       if (isNativePlatform()) {
+        if (isSmokeModeEnabled()) {
+          console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, path, url }));
+        }
         const body = requestOptions.body ? requestOptions.body : undefined;
         const requestPromise = CapacitorHttp.request({
           url,
@@ -299,18 +324,19 @@ export class C64API {
       const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
       const rawMessage = (error as Error).message || 'Request failed';
       const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
-      const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(rawMessage);
-      const normalizedError = isAbort || isNetworkFailure ? 'Host unreachable' : rawMessage;
+      const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+      const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
       if (!fuzzBlocked) {
         addErrorLog('C64 API request failed', {
           path,
           url,
           error: normalizedError,
           rawError: rawMessage,
+          errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
         });
       }
       if (isAbort || isNetworkFailure) {
-        throw new Error('Host unreachable');
+        throw new Error(resolveHostErrorMessage(rawMessage));
       }
       throw error;
     } finally {
@@ -318,12 +344,26 @@ export class C64API {
     }
   }
 
+  private async buildMultipartPayload(form: FormData): Promise<{ contentType: string; body: Uint8Array }> {
+    const response = new Response(form);
+    const contentType = response.headers.get('content-type') ?? 'multipart/form-data';
+    const buffer = await response.arrayBuffer();
+    return { contentType, body: new Uint8Array(buffer) };
+  }
+
   private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
-    if (isNativePlatform()) {
+    const body = options.body;
+    const shouldUseWebFetch =
+      isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
+
+    if (isNativePlatform() && !shouldUseWebFetch) {
       const headers = (options.headers as Record<string, string>) || {};
       const method = (options.method || 'GET').toString().toUpperCase();
-      const body = options.body;
       let data: unknown = undefined;
+
+      if (isSmokeModeEnabled()) {
+        console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, url }));
+      }
 
       if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
         const buffer = await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
@@ -332,8 +372,6 @@ export class C64API {
         data = new Uint8Array(body);
       } else if (ArrayBuffer.isView(body)) {
         data = new Uint8Array(body.buffer);
-      } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
-        data = body;
       } else if (typeof body === 'string') {
         data = body;
       } else if (body) {
@@ -370,9 +408,9 @@ export class C64API {
       } catch (error) {
         const rawMessage = (error as Error).message || 'Request failed';
         const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
-        const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(rawMessage);
+        const isNetworkFailure = isNetworkFailureMessage(rawMessage);
         if (isAbort || isNetworkFailure) {
-          throw new Error('Host unreachable');
+          throw new Error(resolveHostErrorMessage(rawMessage));
         }
         throw error;
       }
@@ -388,9 +426,9 @@ export class C64API {
     } catch (error) {
       const rawMessage = (error as Error).message || 'Request failed';
       const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
-      const isNetworkFailure = /failed to fetch|networkerror|network request failed/i.test(rawMessage);
+      const isNetworkFailure = isNetworkFailureMessage(rawMessage);
       if (isAbort || isNetworkFailure) {
-        throw new Error('Host unreachable');
+        throw new Error(resolveHostErrorMessage(rawMessage));
       }
       throw error;
     } finally {
@@ -626,6 +664,16 @@ export class C64API {
   async playSid(file: string, songNr?: number): Promise<{ errors: string[] }> {
     let path = `/v1/runners:sidplay?file=${encodeURIComponent(file)}`;
     if (songNr !== undefined) path += `&songnr=${songNr}`;
+    const baseUrl = this.getBaseUrl();
+    const headers = this.buildAuthHeaders();
+    addLog('debug', 'SID playback request', {
+      baseUrl,
+      deviceHost: this.deviceHost,
+      url: `${baseUrl}${path}`,
+      headerKeys: Object.keys(headers),
+      proxyHostHeader: headers['X-C64U-Host'] ?? null,
+      hasPasswordHeader: Boolean(headers['X-Password']),
+    });
     return this.request(path, { method: 'PUT', timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS });
   }
 
@@ -652,6 +700,42 @@ export class C64API {
     const method = 'POST';
     let response: Response;
     try {
+      if (isNativePlatform()) {
+        try {
+          const { contentType, body } = await this.buildMultipartPayload(form);
+          const nativeResponse = await CapacitorHttp.request({
+            url: url.toString(),
+            method,
+            headers: {
+              ...headers,
+              'Content-Type': contentType,
+            },
+            data: body,
+          });
+          status = nativeResponse.status;
+          if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+            throw new Error(`HTTP ${nativeResponse.status}`);
+          }
+
+          const responseHeaders = new Headers();
+          if (nativeResponse.headers) {
+            Object.entries(nativeResponse.headers).forEach(([key, value]) => {
+              if (typeof value === 'string') responseHeaders.set(key, value);
+            });
+          }
+          const bodyText = typeof nativeResponse.data === 'string'
+            ? nativeResponse.data
+            : JSON.stringify(nativeResponse.data ?? { errors: [] });
+          response = new Response(bodyText, { status: nativeResponse.status, headers: responseHeaders });
+          return this.parseResponseJson(response);
+        } catch (error) {
+          const rawMessage = (error as Error).message || 'Request failed';
+          if (isNetworkFailureMessage(rawMessage)) {
+            throw new Error(resolveHostErrorMessage(rawMessage));
+          }
+          throw error;
+        }
+      }
       response = await this.fetchWithTimeout(
         url.toString(),
         {
@@ -870,6 +954,14 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
     localStorage.removeItem('c64u_password');
   }
 
+  addLog('info', 'API routing updated (persisted)', {
+    baseUrl: resolvedBaseUrl,
+    deviceHost: resolvedDeviceHost,
+  });
+  if (isSmokeModeEnabled()) {
+    console.info('C64U_ROUTING_UPDATED', JSON.stringify({ baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'persisted' }));
+  }
+
   window.dispatchEvent(
     new CustomEvent('c64u-connection-change', {
       detail: {
@@ -907,6 +999,23 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
+  addLog('info', 'API routing updated (runtime)', {
+    baseUrl: resolvedBaseUrl,
+    deviceHost: resolvedDeviceHost,
+  });
+  if (isSmokeModeEnabled()) {
+    console.info('C64U_ROUTING_UPDATED', JSON.stringify({ baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'runtime' }));
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('c64u-connection-change', {
+      detail: {
+        baseUrl: resolvedBaseUrl,
+        password: password || '',
+        deviceHost: resolvedDeviceHost,
+      },
+    }),
+  );
 }
 
 export function applyC64APIConfigFromStorage() {

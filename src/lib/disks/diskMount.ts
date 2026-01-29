@@ -1,4 +1,4 @@
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import type { C64API } from '@/lib/c64api';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { getFileExtension } from '@/lib/playback/fileTypes';
@@ -42,6 +42,14 @@ export const mountDiskToDrive = async (
 ) => {
   try {
     const mountType = buildDiskMountType(disk.path);
+    addLog('debug', 'Disk mount request', {
+      drive,
+      path: disk.path,
+      location: disk.location,
+      mountType,
+      baseUrl: api.getBaseUrl(),
+      deviceHost: api.getDeviceHost(),
+    });
     if (disk.location === 'ultimate') {
       await api.mountDrive(drive, disk.path, mountType, 'readwrite');
       return;

@@ -1,5 +1,5 @@
-import { useMemo, useState, useRef } from 'react';
-import { MoreVertical, Search, X } from 'lucide-react';
+import { useCallback, useMemo, useState, useRef } from 'react';
+import { MoreVertical, Play, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -40,6 +40,10 @@ export type ActionListItem = {
   onAction?: () => void;
   onTitleClick?: () => void;
   actionAriaLabel?: string;
+  actionIcon?: React.ReactNode;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
+  secondaryActionAriaLabel?: string;
   subtitleTestId?: string;
   showMenu?: boolean;
   showSelection?: boolean;
@@ -68,6 +72,8 @@ export type SelectableActionListProps = {
   selectionLabel?: string;
 };
 
+const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
+
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
   if (item.variant === 'header') {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
@@ -85,21 +91,26 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
     );
   }
 
+  const selectionTestId = rowTestId ? `${rowTestId}-select-${sanitizeForTestId(item.title)}` : undefined;
+  const actionMenuTestId = rowTestId ? `${rowTestId}-actions-${sanitizeForTestId(item.title)}` : undefined;
+
   return (
     <div
       className={cn(
-        'flex items-start gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
+        'flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
         item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
       data-testid={rowTestId}
       data-row-id={item.id}
     >
-      <div className="flex items-center gap-2 pt-0.5 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {item.showSelection !== false ? (
           <Checkbox
             checked={item.selected}
             onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
             aria-label={`Select ${item.title}`}
+            id={selectionTestId}
+            data-testid={selectionTestId}
           />
         ) : null}
         {item.showMenu === false ? null : (
@@ -108,9 +119,11 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7"
+                className="h-9 w-9 min-h-[44px] min-w-[44px]"
                 aria-label="Item actions"
                 disabled={item.disableActions}
+                id={actionMenuTestId}
+                data-testid={actionMenuTestId}
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
@@ -145,18 +158,18 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           </DropdownMenu>
         )}
       </div>
-      <div className="flex flex-1 items-start gap-2 min-w-0 max-w-full">
-        {item.icon ? <div className="pt-0.5">{item.icon}</div> : null}
+      <div className="flex flex-1 items-center gap-2 min-w-0 max-w-full">
+        {item.icon ? <div className="shrink-0">{item.icon}</div> : null}
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className="text-sm font-medium break-words whitespace-normal text-left hover:underline max-w-full"
+            className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
             onClick={item.onTitleClick}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span>{item.title}</span>
+            <span className="truncate">{item.title}</span>
             {item.titleSuffix ? (
-              <span className="ml-1 text-xs text-muted-foreground tabular-nums">{item.titleSuffix}</span>
+              <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
           </button>
           {item.subtitle ? (
@@ -174,16 +187,30 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           ) : null}
         </div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 px-2 text-xs shrink-0"
-        onClick={item.onAction}
-        disabled={item.isDimmed || item.disableActions}
-        aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
-      >
-        {item.actionLabel}
-      </Button>
+      <div className="flex flex-col gap-1 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 min-h-[44px] min-w-[44px]"
+          onClick={item.onAction}
+          disabled={item.isDimmed || item.disableActions}
+          aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
+        >
+          {item.actionIcon ?? <Play className="h-4 w-4" />}
+        </Button>
+        {item.secondaryActionLabel && item.onSecondaryAction ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+            onClick={item.onSecondaryAction}
+            disabled={item.isDimmed || item.disableActions}
+            aria-label={item.secondaryActionAriaLabel || `${item.secondaryActionLabel} ${item.title}`}
+          >
+            {item.secondaryActionLabel}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 };
@@ -215,29 +242,46 @@ export const SelectableActionList = ({
   const [viewAllFilterText, setViewAllFilterText] = useState('');
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
   
-  const filteredItems = useMemo(() => {
-    if (!filterText.trim()) return items;
-    const lower = filterText.toLowerCase();
-    return items.filter(item => {
-      if (item.variant === 'header') return true; // Keep headers for now
-      const extra = item.filterText?.toLowerCase() ?? '';
-      return item.title.toLowerCase().includes(lower) || 
-             item.subtitle?.toLowerCase().includes(lower) ||
-             extra.includes(lower);
-    });
-  }, [items, filterText]);
+  const filterWithHeaders = useCallback((query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return items;
+    const lower = trimmed.toLowerCase();
+    const list: ActionListItem[] = [];
+    let pendingHeader: ActionListItem | null = null;
+    let hasMatchInSection = false;
 
-  const viewAllFilteredItems = useMemo(() => {
-    if (!viewAllFilterText.trim()) return items;
-    const lower = viewAllFilterText.toLowerCase();
-    return items.filter(item => {
-      if (item.variant === 'header') return true; // Keep headers for now
+    const matchesItem = (item: ActionListItem) => {
       const extra = item.filterText?.toLowerCase() ?? '';
-      return item.title.toLowerCase().includes(lower) || 
-             item.subtitle?.toLowerCase().includes(lower) ||
-             extra.includes(lower);
+      const subtitle = item.subtitle?.toLowerCase() ?? '';
+      return item.title.toLowerCase().includes(lower) || subtitle.includes(lower) || extra.includes(lower);
+    };
+
+    items.forEach((item) => {
+      if (item.variant === 'header') {
+        if (pendingHeader && hasMatchInSection) {
+          list.push(pendingHeader);
+        }
+        pendingHeader = item;
+        hasMatchInSection = false;
+        return;
+      }
+      if (!matchesItem(item)) return;
+      if (pendingHeader && !hasMatchInSection) {
+        list.push(pendingHeader);
+        hasMatchInSection = true;
+      }
+      list.push(item);
     });
-  }, [items, viewAllFilterText]);
+
+    return list;
+  }, [items]);
+
+  const filteredItems = useMemo(() => filterWithHeaders(filterText), [items, filterText]);
+
+  const viewAllFilteredItems = useMemo(() => filterWithHeaders(viewAllFilterText), [items, viewAllFilterText]);
+
+  const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
+  const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
   
   const { visibleItems, hasMore } = useMemo(() => {
     const totalItems = filteredItems.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
@@ -335,6 +379,8 @@ export const SelectableActionList = ({
               onClick={onToggleSelectAll}
               disabled={!items.length}
               className="max-w-full truncate"
+              id={selectionToggleId}
+              data-testid={selectionToggleId}
             >
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
@@ -344,6 +390,8 @@ export const SelectableActionList = ({
                 size="sm"
                 onClick={onRemoveSelected}
                 className="text-destructive hover:text-destructive max-w-full truncate"
+                id={removeSelectedId}
+                data-testid={removeSelectedId}
               >
                 {removeSelectedLabel}
               </Button>

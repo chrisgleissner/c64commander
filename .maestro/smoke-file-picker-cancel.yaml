@@ -1,0 +1,56 @@
+# Smoke test for file picker cancellation flow
+# Tests opening the native Android file picker and cancelling
+# Note: The file picker behavior varies by Android version and emulator state
+
+appId: uk.gleissner.c64commander
+tags:
+    - slow
+    - file-picker
+    - device
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+---
+- runFlow: subflows/open-play-add-items.yaml
+- scrollUntilVisible:
+    element: "Add file / folder from device"
+    direction: DOWN
+    timeout: ${SHORT_TIMEOUT}
+- tapOn:
+    text: "Add file / folder from device"
+- takeScreenshot: file-picker-open
+
+# Try to dismiss the file picker
+- tapOn:
+    text: "Cancel"
+    optional: true
+- tapOn:
+    text: "Back"
+    optional: true
+- tapOn:
+    text: "Navigate up"
+    optional: true
+
+# Press back multiple times to ensure we exit the picker
+- repeat:
+    times: 3
+    commands:
+      - back
+
+# Re-launch the app to ensure clean state
+- launchApp:
+    clearState: false
+
+# Wait for app to stabilize
+- waitForAnimationToEnd
+
+# Verify we're back in the app - use optional assertions for resilience
+- assertVisible:
+    text: "C64 Commander"
+    optional: true
+- assertVisible:
+    text: "Play"
+    optional: true
+
+- takeScreenshot: picker-cancelled

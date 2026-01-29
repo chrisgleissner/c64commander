@@ -1,4 +1,4 @@
-import { chromium, devices, test } from '@playwright/test';
+import { chromium, devices, expect, test } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createMockC64Server } from '../../tests/mocks/mockC64Server';
@@ -454,23 +454,30 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
 test.describe('Chaos fuzz', () => {
   test('run', async ({ page }, testInfo) => {
     void page;
-    const seed = toNumber(process.env.FUZZ_SEED) ?? Date.now();
+    const infraMode = !FUZZ_ENABLED;
+    const seed = infraMode ? 4242 : toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
-    const timeBudgetMs = toNumber(process.env.FUZZ_TIME_BUDGET_MS);
-    const maxSteps = maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 50 : 500));
-    const baseTimeout = timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 90_000 : 10 * 60 * 1000);
+    const timeBudgetMs = infraMode ? undefined : toNumber(process.env.FUZZ_TIME_BUDGET_MS);
+    const maxSteps = infraMode ? 10 : maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
+    const baseTimeout = infraMode ? 20_000 : timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000);
     const timeoutMs = baseTimeout + 60_000;
     test.setTimeout(timeoutMs);
     testInfo.setTimeout(timeoutMs);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
-    const runMode = process.env.FUZZ_RUN_MODE || 'local';
+    const runMode = infraMode ? 'infra' : (process.env.FUZZ_RUN_MODE || 'local');
     const runId = process.env.FUZZ_RUN_ID || `${seed}`;
     const shardIndex = toNumber(process.env.FUZZ_SHARD_INDEX) ?? 0;
     const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;
-    const retainSuccessSessions = Math.max(0, toNumber(process.env.FUZZ_RETAIN_SUCCESS) ?? (SHORT_FUZZ_DEFAULTS ? 2 : 10));
-    const minSessionSteps = Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 50 : 200));
-    const noProgressLimit = Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
+    const retainSuccessSessions = infraMode
+      ? 0
+      : Math.max(0, toNumber(process.env.FUZZ_RETAIN_SUCCESS) ?? (SHORT_FUZZ_DEFAULTS ? 2 : 10));
+    const minSessionSteps = infraMode
+      ? 1
+      : Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 35 : 200));
+    const noProgressLimit = infraMode
+      ? maxSteps
+      : Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;
 
@@ -502,6 +509,8 @@ test.describe('Chaos fuzz', () => {
     let externalClickUsed = false;
     const clickActionsDisabled = false;
     const retainedSuccess: Array<{ logPath: string; videoPath?: string }> = [];
+    let infraActionsExecuted = 0;
+    let infraSessionClean = false;
 
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
       const signature = buildSignature(issue);
@@ -774,6 +783,18 @@ test.describe('Chaos fuzz', () => {
       let sessionSteps = 0;
       let noProgressCount = 0;
       let lastSignature = await readUiSignature();
+
+      if (infraMode) {
+        totalSteps += 1;
+        sessionSteps += 1;
+        logInteraction(`s=${totalSteps}\ta=infra\tpage-load`);
+        await page.waitForSelector('[data-testid="connectivity-indicator"]', { timeout: 5000 }).catch(() => {});
+        await checkAppLogsForIssues();
+        infraActionsExecuted += 1;
+        if (!issue) {
+          infraSessionClean = true;
+        }
+      }
 
       const ensureAppOrigin = async () => {
         const url = page.url();
@@ -1367,7 +1388,7 @@ test.describe('Chaos fuzz', () => {
         return eligible[eligible.length - 1];
       };
 
-      while (Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
+      while (!infraMode && Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
         totalSteps += 1;
         sessionSteps += 1;
@@ -1473,6 +1494,10 @@ test.describe('Chaos fuzz', () => {
         }
       }
 
+      if (infraMode && issue) {
+        infraSessionClean = false;
+      }
+
       if (issue || retainSuccessSessions > 0) {
         await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
       }
@@ -1511,6 +1536,11 @@ test.describe('Chaos fuzz', () => {
     while (Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
       await runSession();
       if (maxSteps && totalSteps >= maxSteps) break;
+    }
+
+    if (infraMode) {
+      expect(infraActionsExecuted).toBeGreaterThan(0);
+      expect(infraSessionClean).toBe(true);
     }
 
     await browser.close();

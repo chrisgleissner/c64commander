@@ -1,4 +1,4 @@
-import { Monitor, Smartphone, MoreVertical } from 'lucide-react';
+import { HardDrive, Monitor, Smartphone, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -108,11 +108,11 @@ const DiskRow = ({
   return (
     <div
       className={cn(
-        'flex items-start gap-2 py-2 px-1 rounded-md min-w-0',
+        'flex items-center gap-2 py-2 px-1 rounded-md min-w-0',
         isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
     >
-      <div className="flex items-center gap-2 pt-0.5">
+      <div className="flex items-center gap-1 shrink-0">
         {showSelection ? (
           <Checkbox
             checked={selected}
@@ -125,7 +125,7 @@ const DiskRow = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-9 w-9 min-h-[44px] min-w-[44px]"
               aria-label="Disk actions"
               disabled={disableActions}
             >
@@ -153,17 +153,17 @@ const DiskRow = ({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="flex flex-1 items-start gap-2 min-w-0">
+      <div className="flex flex-1 items-center gap-2 min-w-0">
         <div className="min-w-0">
           <button
             type="button"
-            className="text-sm font-medium break-words whitespace-normal text-left hover:underline"
+            className="text-sm font-medium text-left hover:underline truncate max-w-full"
             onClick={() => onMount?.(disk)}
             disabled={isDimmed || disableActions}
           >
             {highlightText(disk.name, filter)}
           </button>
-          <div className="text-[11px] text-muted-foreground break-words whitespace-normal">
+          <div className="text-[11px] text-muted-foreground truncate">
             {highlightText(disk.path, filter)}
           </div>
           {disk.group ? (
@@ -172,7 +172,7 @@ const DiskRow = ({
                 className={cn('h-2 w-2 rounded-full border', groupColor?.chip)}
                 aria-hidden="true"
               />
-              <span className={cn(groupColor?.text, 'break-words min-w-0')}>
+              <span className={cn(groupColor?.text, 'truncate min-w-0')}>
                 Group: {highlightText(disk.group, filter)}
               </span>
             </div>
@@ -180,14 +180,14 @@ const DiskRow = ({
         </div>
       </div>
       <Button
-        variant="outline"
-        size="sm"
-        className="h-7 px-2 text-xs"
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9 min-h-[44px] min-w-[44px]"
         onClick={() => onMount?.(disk)}
         disabled={isDimmed || disableActions}
         aria-label={`Mount ${disk.name}`}
       >
-        Mount
+        <HardDrive className="h-4 w-4" />
       </Button>
     </div>
   );

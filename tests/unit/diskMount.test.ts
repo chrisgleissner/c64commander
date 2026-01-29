@@ -25,6 +25,8 @@ describe('mountDiskToDrive', () => {
     const api = {
       mountDrive: vi.fn().mockResolvedValue(undefined),
       mountDriveUpload: vi.fn(),
+      getBaseUrl: vi.fn().mockReturnValue('http://c64u'),
+      getDeviceHost: vi.fn().mockReturnValue('c64u'),
     } as unknown as C64API;
 
     const disk = createDiskEntry({
@@ -42,6 +44,8 @@ describe('mountDiskToDrive', () => {
     const api = {
       mountDrive: vi.fn(),
       mountDriveUpload: vi.fn().mockResolvedValue(undefined),
+      getBaseUrl: vi.fn().mockReturnValue('http://c64u'),
+      getDeviceHost: vi.fn().mockReturnValue('c64u'),
     } as unknown as C64API;
 
     const disk = createDiskEntry({

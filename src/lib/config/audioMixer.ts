@@ -22,6 +22,19 @@ export const isAudioMixerValueEqual = (
   right: string | number | undefined,
 ) => normalizeAudioMixerValue(left) === normalizeAudioMixerValue(right);
 
+export const mergeAudioMixerOptions = (options?: string[], presets?: string[]) => {
+  const merged = [...(options ?? []), ...(presets ?? [])].map((value) => String(value));
+  const seen = new Set<string>();
+  const result: string[] = [];
+  merged.forEach((value) => {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    result.push(value);
+  });
+  return result;
+};
+
 const asRecord = (value: unknown): Record<string, unknown> | null =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 
@@ -44,7 +57,7 @@ const extractOptions = (response: ConfigResponse, category: string, item: string
   const presetsCandidate = detailsRecord?.presets ?? itemRecord.presets ?? [];
   const optionsList = Array.isArray(optionsCandidate) ? optionsCandidate : [];
   const presetsList = Array.isArray(presetsCandidate) ? presetsCandidate : [];
-  return [...optionsList, ...presetsList].map((opt) => String(opt));
+  return mergeAudioMixerOptions(optionsList.map(String), presetsList.map(String));
 };
 
 export const resolveAudioMixerResetValue = async (

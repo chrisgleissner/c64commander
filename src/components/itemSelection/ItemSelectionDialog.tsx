@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { reportUserError } from '@/lib/uiErrors';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
 import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
@@ -76,12 +76,13 @@ export const ItemSelectionDialog = ({
 
   useEffect(() => {
     if (!browser.error || !open) return;
-    toast({
+    reportUserError({
+      operation: 'BROWSE',
       title: 'Browse failed',
       description: browser.error,
-      variant: 'destructive',
+      context: { sourceId: selectedSourceId },
     });
-  }, [browser.error, open]);
+  }, [browser.error, open, reportUserError, selectedSourceId]);
 
   useEffect(() => {
     if (!open) return;
@@ -115,11 +116,15 @@ export const ItemSelectionDialog = ({
         }
       }
     } catch (error) {
-      addErrorLog('Add items failed', { error: (error as Error).message });
-      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
+      reportUserError({
+        operation: 'ITEM_SELECTION',
+        title: 'Add items failed',
+        description: (error as Error).message,
+        error,
+      });
     }
     setAutoConfirming(false);
-  }, [autoConfirmCloseBefore, autoConfirming, isConfirming, onAutoConfirmStart, onConfirm, onOpenChange]);
+  }, [autoConfirmCloseBefore, autoConfirming, isConfirming, onAutoConfirmStart, onConfirm, onOpenChange, reportUserError]);
 
   useEffect(() => {
     if (!open || !pendingLocalSource || selectedSourceId) return;
@@ -162,7 +167,11 @@ export const ItemSelectionDialog = ({
     if (!source) return;
     if (isConfirming || autoConfirming) return;
     if (!selection.size) {
-      toast({ title: 'Select items', description: 'Choose at least one item to add.', variant: 'destructive' });
+      reportUserError({
+        operation: 'ITEM_SELECTION',
+        title: 'Select items',
+        description: 'Choose at least one item to add.',
+      });
       return;
     }
     const selections: SelectedItem[] = Array.from(selection.values()).map((entry) => ({
@@ -177,8 +186,12 @@ export const ItemSelectionDialog = ({
         onOpenChange(false);
       }
     } catch (error) {
-      addErrorLog('Add items failed', { error: (error as Error).message });
-      toast({ title: 'Add items failed', description: (error as Error).message, variant: 'destructive' });
+      reportUserError({
+        operation: 'ITEM_SELECTION',
+        title: 'Add items failed',
+        description: (error as Error).message,
+        error,
+      });
     }
   };
 
@@ -204,8 +217,12 @@ export const ItemSelectionDialog = ({
     } catch (error) {
       setPendingLocalSource(false);
       setPendingLocalSourceId(null);
-      addErrorLog('Folder picker failed', { error: (error as Error).message });
-      toast({ title: 'Unable to add folder', description: (error as Error).message, variant: 'destructive' });
+      reportUserError({
+        operation: 'LOCAL_FOLDER_PICK',
+        title: 'Unable to add folder',
+        description: (error as Error).message,
+        error,
+      });
     }
   };
 
@@ -260,6 +277,7 @@ export const ItemSelectionDialog = ({
                           className="justify-start min-w-0"
                           disabled={pendingLocalSource}
                           aria-busy={pendingLocalSource}
+                          aria-label="Add file / folder from device"
                         >
                           <FolderPlus className="h-4 w-4 mr-1" />
                           <span className="truncate">Add file / folder</span>

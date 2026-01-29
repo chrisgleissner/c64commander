@@ -6,6 +6,7 @@ import {
   buildEnabledSidVolumeSnapshot,
   buildEnabledSidVolumeUpdates,
   buildSidEnablement,
+  buildSidVolumeSteps,
   filterEnabledSidVolumeItems,
   type SidEnablement,
   type SidVolumeItem,
@@ -110,5 +111,14 @@ describe('sid volume control helpers', () => {
       'Vol Socket 1': '+6 dB',
       'Vol Socket 2': '+6 dB',
     });
+  });
+
+  it('orders volume steps from OFF to max', () => {
+    const steps = buildSidVolumeSteps(options);
+    expect(steps.length).toBeGreaterThan(0);
+    expect(steps[0]?.isOff).toBe(true);
+    const numericSteps = steps.filter((step) => !step.isOff && step.numeric !== null);
+    expect(numericSteps[0]?.numeric).toBe(-6);
+    expect(numericSteps[numericSteps.length - 1]?.numeric).toBe(6);
   });
 });

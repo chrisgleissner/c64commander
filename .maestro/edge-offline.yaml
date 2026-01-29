@@ -1,0 +1,27 @@
+appId: uk.gleissner.c64commander
+tags:
+    - edge
+    - slow
+    - device
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${SHORT_TIMEOUT}
+- setAirplaneMode:
+    value: enabled
+- extendedWaitUntil:
+    visible: "Offline"
+    timeout: ${SHORT_TIMEOUT}
+- takeScreenshot: offline-mode
+- setAirplaneMode:
+    value: disabled
+- extendedWaitUntil:
+    visible: "Connected"
+    timeout: ${TIMEOUT} # Reconnecting might take longer
+- takeScreenshot: online-mode
