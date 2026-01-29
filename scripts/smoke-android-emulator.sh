@@ -22,16 +22,16 @@ MOCK_SERVER_PID=""
 MOCK_INFO_PATH=""
 
 # STRICT TIMEOUT LIMITS (all in seconds)
-BOOT_WAIT_TIMEOUT=60          # Max time to wait for boot
-BOOT_CHECK_INTERVAL=2         # Interval between boot checks
-APP_LAUNCH_TIMEOUT=30         # Max time to wait for app launch
-APP_LAUNCH_INTERVAL=1         # Interval between app launch checks
-EMULATOR_START_TIMEOUT=60     # Max time to wait for emulator to appear
-MAESTRO_FLOW_TIMEOUT=90       # Max time per Maestro flow
-MAESTRO_TOTAL_TIMEOUT=300     # Max total Maestro run time (5 minutes for all flows)
-ADB_COMMAND_TIMEOUT=10        # Max time for individual adb commands
-SCREENRECORD_LIMIT=180        # Max screenrecord time per flow (seconds)
-HVSC_GENERATION_TIMEOUT=180   # Max time to generate HVSC-like library
+BOOT_WAIT_TIMEOUT=${BOOT_WAIT_TIMEOUT:-60}          # Max time to wait for boot
+BOOT_CHECK_INTERVAL=${BOOT_CHECK_INTERVAL:-2}       # Interval between boot checks
+APP_LAUNCH_TIMEOUT=${APP_LAUNCH_TIMEOUT:-30}        # Max time to wait for app launch
+APP_LAUNCH_INTERVAL=${APP_LAUNCH_INTERVAL:-1}       # Interval between app launch checks
+EMULATOR_START_TIMEOUT=${EMULATOR_START_TIMEOUT:-120} # Max time to wait for emulator to appear
+MAESTRO_FLOW_TIMEOUT=${MAESTRO_FLOW_TIMEOUT:-90}    # Max time per Maestro flow
+MAESTRO_TOTAL_TIMEOUT=${MAESTRO_TOTAL_TIMEOUT:-300} # Max total Maestro run time (5 minutes for all flows)
+ADB_COMMAND_TIMEOUT=${ADB_COMMAND_TIMEOUT:-10}      # Max time for individual adb commands
+SCREENRECORD_LIMIT=${SCREENRECORD_LIMIT:-180}       # Max screenrecord time per flow (seconds)
+HVSC_GENERATION_TIMEOUT=${HVSC_GENERATION_TIMEOUT:-180} # Max time to generate HVSC-like library
 HVSC_MIN_SID_FILES=2000       # Minimum SID files required
 HVSC_MIN_DIRS=200             # Minimum directories required
 HVSC_ROOT_PATH="/sdcard/Download/C64Music"
