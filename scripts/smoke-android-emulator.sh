@@ -403,7 +403,7 @@ get_emulator_id() {
     echo "$EMULATOR_ID"
     return
   fi
-  timeout "$ADB_COMMAND_TIMEOUT" adb devices 2>/dev/null | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1}' | tail -n 1
+  timeout "$ADB_COMMAND_TIMEOUT" adb devices 2>/dev/null | awk 'NR>1 && $1 ~ /^emulator-/ {print $1}' | tail -n 1
 }
 
 # Check if emulator is responsive (not just present)
