@@ -1,19 +1,23 @@
 appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Play Files"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - setAirplaneMode:
     value: enabled
 - extendedWaitUntil:
     visible: "Offline"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - takeScreenshot: offline-mode
 - setAirplaneMode:
     value: disabled
 - extendedWaitUntil:
     visible: "Connected"
-    timeout: 30000 # Reconnecting might take longer
+    timeout: ${TIMEOUT} # Reconnecting might take longer
 - takeScreenshot: online-mode

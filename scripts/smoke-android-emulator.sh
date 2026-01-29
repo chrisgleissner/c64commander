@@ -112,131 +112,175 @@ log_warn() {
 
 generate_hvsc_library() {
   local emulator_id="$1"
-  log_info "Generating HVSC library at ${HVSC_ROOT_PATH} (timeout ${HVSC_GENERATION_TIMEOUT}s)..."
+  log_info "Preparing HVSC library at ${HVSC_ROOT_PATH} (timeout ${HVSC_GENERATION_TIMEOUT}s)..."
+
+  local existing_output
+  if existing_output=$(timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell <<'EOF'
+BASE="/sdcard/Download/C64Music"
+if [ -d "$BASE" ] && [ -f "$BASE/.hvsc-seed" ]; then
+  sid_count=$(find "$BASE" -type f -name "*.sid" | wc -l | tr -d ' ')
+  dir_count=$(find "$BASE" -type d | wc -l | tr -d ' ')
+  echo "SID_COUNT=$sid_count"
+  echo "DIR_COUNT=$dir_count"
+  echo "READY=1"
+fi
+EOF
+  ); then
+    local existing_sid
+    local existing_dir
+    existing_sid=$(echo "$existing_output" | awk -F= '/^SID_COUNT=/{print $2}' | tail -n 1)
+    existing_dir=$(echo "$existing_output" | awk -F= '/^DIR_COUNT=/{print $2}' | tail -n 1)
+    if [[ -n "$existing_sid" && -n "$existing_dir" && "$existing_sid" -ge "$HVSC_MIN_SID_FILES" && "$existing_dir" -ge "$HVSC_MIN_DIRS" ]]; then
+      log_info "HVSC library already present: sid=$existing_sid dir=$existing_dir"
+      return 0
+    fi
+  fi
+
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  local base_dir="$tmp_dir/C64Music"
+  local songlengths="$base_dir/DOCUMENTS/Songlengths.md5"
+  local archive="$tmp_dir/C64Music.tar.gz"
+
+  mkdir -p "$base_dir/DEMOS/0-9" "$base_dir/DOCUMENTS"
+  echo "[Database]" > "$songlengths"
+
+  entry_index=1
+  add_songlength() {
+    local rel="$1"
+    local idx="$2"
+    local md5
+    md5=$(printf "%032x" "$idx")
+    local minutes=$(( (idx % 5) + 1 ))
+    local seconds=$(( (idx * 7) % 60 ))
+    local duration
+    if [ $((idx % 2)) -eq 0 ]; then
+      duration=$(printf "%d:%02d.000" "$minutes" "$seconds")
+    else
+      duration=$(printf "%d:%02d" "$minutes" "$seconds")
+    fi
+    echo "; /$rel" >> "$songlengths"
+    echo "$md5=$duration" >> "$songlengths"
+  }
+
+  demo_index=1
+  while [ "$demo_index" -le 200 ]; do
+    name=$(printf "%02d_Years.sid" "$demo_index")
+    path="DEMOS/0-9/$name"
+    printf "SIDDATA-%s\n" "$demo_index" > "$base_dir/$path"
+    if [ "$entry_index" -le 400 ]; then
+      add_songlength "$path" "$entry_index"
+    fi
+    entry_index=$((entry_index + 1))
+    demo_index=$((demo_index + 1))
+  done
+
+  for letter in A B C D E F; do
+    artist=1
+    while [ "$artist" -le 12 ]; do
+      release=1
+      while [ "$release" -le 5 ]; do
+        dir="$base_dir/MUSICIANS/$letter/Artist_${letter}_${artist}/Release_${release}"
+        mkdir -p "$dir"
+        printf "Artist ${letter} ${artist} release ${release}\n" > "$dir/INFO_${artist}_${release}.nfo"
+        track=1
+        while [ "$track" -le 4 ]; do
+          name=$(printf "%02d_${letter}_Tune_${artist}_${release}.sid" "$track")
+          rel="MUSICIANS/$letter/Artist_${letter}_${artist}/Release_${release}/$name"
+          printf "SIDDATA-%s-%s-%s\n" "$letter" "$artist" "$release" > "$base_dir/$rel"
+          if [ "$entry_index" -le 400 ]; then
+            add_songlength "$rel" "$entry_index"
+          fi
+          entry_index=$((entry_index + 1))
+          track=$((track + 1))
+        done
+        release=$((release + 1))
+      done
+      artist=$((artist + 1))
+    done
+  done
+
+  group=1
+  while [ "$group" -le 12 ]; do
+    collection=1
+    while [ "$collection" -le 4 ]; do
+      dir="$base_dir/GROUPS/Group_${group}/Collection_${collection}"
+      mkdir -p "$dir"
+      printf "Group ${group} collection ${collection}\n" > "$dir/README_${group}_${collection}.txt"
+      track=1
+      while [ "$track" -le 5 ]; do
+        name=$(printf "%02d_Group_${group}_${collection}.sid" "$track")
+        rel="GROUPS/Group_${group}/Collection_${collection}/$name"
+        printf "SIDDATA-G${group}-C${collection}\n" > "$base_dir/$rel"
+        if [ "$entry_index" -le 400 ]; then
+          add_songlength "$rel" "$entry_index"
+        fi
+        entry_index=$((entry_index + 1))
+        track=$((track + 1))
+      done
+      collection=$((collection + 1))
+    done
+    group=$((group + 1))
+  done
+
+  publisher=1
+  while [ "$publisher" -le 8 ]; do
+    game=1
+    while [ "$game" -le 5 ]; do
+      part=1
+      while [ "$part" -le 3 ]; do
+        dir="$base_dir/GAMES/Publisher_${publisher}/Game_${game}/Part_${part}"
+        mkdir -p "$dir"
+        printf "Notes for ${publisher}-${game}-${part}\n" > "$dir/notes_${publisher}_${game}_${part}.txt"
+        track=1
+        while [ "$track" -le 4 ]; do
+          name=$(printf "%02d_Game_${game}_${part}.sid" "$track")
+          rel="GAMES/Publisher_${publisher}/Game_${game}/Part_${part}/$name"
+          printf "SIDDATA-P${publisher}-G${game}\n" > "$base_dir/$rel"
+          if [ "$entry_index" -le 400 ]; then
+            add_songlength "$rel" "$entry_index"
+          fi
+          entry_index=$((entry_index + 1))
+          track=$((track + 1))
+        done
+        part=$((part + 1))
+      done
+      game=$((game + 1))
+    done
+    publisher=$((publisher + 1))
+  done
+
+  deep_dir="$base_dir/GAMES/Deep/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8"
+  mkdir -p "$deep_dir"
+  printf "SIDDATA-Deep\n" > "$deep_dir/8-Bit_Bard.sid"
+  add_songlength "GAMES/Deep/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8/8-Bit_Bard.sid" "$entry_index"
+
+  printf "HVSC seed data\n" > "$base_dir/DOCUMENTS/Readme.txt"
+  printf "generated=%s\n" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$base_dir/.hvsc-seed"
+
+  (cd "$tmp_dir" && tar -czf "$archive" C64Music)
+
+  if ! timeout "$HVSC_GENERATION_TIMEOUT" adb -s "$emulator_id" shell "rm -rf '$HVSC_ROOT_PATH' '/sdcard/Download/C64Music.tar.gz'"; then
+    rm -rf "$tmp_dir"
+    log_error "HVSC cleanup on device failed"
+    return 1
+  fi
+  if ! timeout "$HVSC_GENERATION_TIMEOUT" adb -s "$emulator_id" push "$archive" /sdcard/Download/C64Music.tar.gz >/dev/null; then
+    rm -rf "$tmp_dir"
+    log_error "HVSC archive push failed"
+    return 1
+  fi
+  if ! timeout "$HVSC_GENERATION_TIMEOUT" adb -s "$emulator_id" shell "cd /sdcard/Download && tar -xzf C64Music.tar.gz"; then
+    rm -rf "$tmp_dir"
+    log_error "HVSC archive extraction failed"
+    return 1
+  fi
+  timeout "$ADB_COMMAND_TIMEOUT" adb -s "$emulator_id" shell "rm -f /sdcard/Download/C64Music.tar.gz" >/dev/null 2>&1 || true
+  rm -rf "$tmp_dir"
 
   local output
   if ! output=$(timeout "$HVSC_GENERATION_TIMEOUT" adb -s "$emulator_id" shell <<'EOF'
-set -e
-
 BASE="/sdcard/Download/C64Music"
-rm -rf "$BASE"
-mkdir -p "$BASE/DEMOS/0-9" "$BASE/DOCUMENTS"
-
-songlengths="$BASE/DOCUMENTS/Songlengths.md5"
-echo "[Database]" > "$songlengths"
-
-entry_index=1
-add_songlength() {
-  local rel="$1"
-  local idx="$2"
-  local md5
-  md5=$(printf "%032x" "$idx")
-  local minutes=$(( (idx % 5) + 1 ))
-  local seconds=$(( (idx * 7) % 60 ))
-  local duration
-  if [ $((idx % 2)) -eq 0 ]; then
-    duration=$(printf "%d:%02d.000" "$minutes" "$seconds")
-  else
-    duration=$(printf "%d:%02d" "$minutes" "$seconds")
-  fi
-  echo "; /$rel" >> "$songlengths"
-  echo "$md5=$duration" >> "$songlengths"
-}
-
-demo_index=1
-while [ "$demo_index" -le 200 ]; do
-  name=$(printf "%02d_Years.sid" "$demo_index")
-  path="DEMOS/0-9/$name"
-  printf "SIDDATA-%s\n" "$demo_index" > "$BASE/$path"
-  if [ "$entry_index" -le 400 ]; then
-    add_songlength "$path" "$entry_index"
-  fi
-  entry_index=$((entry_index + 1))
-  demo_index=$((demo_index + 1))
-done
-
-for letter in A B C D E F; do
-  artist=1
-  while [ "$artist" -le 12 ]; do
-    release=1
-    while [ "$release" -le 5 ]; do
-      dir="$BASE/MUSICIANS/$letter/Artist_${letter}_${artist}/Release_${release}"
-      mkdir -p "$dir"
-      printf "Artist ${letter} ${artist} release ${release}\n" > "$dir/INFO_${artist}_${release}.nfo"
-      track=1
-      while [ "$track" -le 4 ]; do
-        name=$(printf "%02d_${letter}_Tune_${artist}_${release}.sid" "$track")
-        rel="MUSICIANS/$letter/Artist_${letter}_${artist}/Release_${release}/$name"
-        printf "SIDDATA-%s-%s-%s\n" "$letter" "$artist" "$release" > "$BASE/$rel"
-        if [ "$entry_index" -le 400 ]; then
-          add_songlength "$rel" "$entry_index"
-        fi
-        entry_index=$((entry_index + 1))
-        track=$((track + 1))
-      done
-      release=$((release + 1))
-    done
-    artist=$((artist + 1))
-  done
-done
-
-group=1
-while [ "$group" -le 12 ]; do
-  collection=1
-  while [ "$collection" -le 4 ]; do
-    dir="$BASE/GROUPS/Group_${group}/Collection_${collection}"
-    mkdir -p "$dir"
-    printf "Group ${group} collection ${collection}\n" > "$dir/README_${group}_${collection}.txt"
-    track=1
-    while [ "$track" -le 5 ]; do
-      name=$(printf "%02d_Group_${group}_${collection}.sid" "$track")
-      rel="GROUPS/Group_${group}/Collection_${collection}/$name"
-      printf "SIDDATA-G${group}-C${collection}\n" > "$BASE/$rel"
-      if [ "$entry_index" -le 400 ]; then
-        add_songlength "$rel" "$entry_index"
-      fi
-      entry_index=$((entry_index + 1))
-      track=$((track + 1))
-    done
-    collection=$((collection + 1))
-  done
-  group=$((group + 1))
-done
-
-publisher=1
-while [ "$publisher" -le 8 ]; do
-  game=1
-  while [ "$game" -le 5 ]; do
-    part=1
-    while [ "$part" -le 3 ]; do
-      dir="$BASE/GAMES/Publisher_${publisher}/Game_${game}/Part_${part}"
-      mkdir -p "$dir"
-      printf "Notes for ${publisher}-${game}-${part}\n" > "$dir/notes_${publisher}_${game}_${part}.txt"
-      track=1
-      while [ "$track" -le 4 ]; do
-        name=$(printf "%02d_Game_${game}_${part}.sid" "$track")
-        rel="GAMES/Publisher_${publisher}/Game_${game}/Part_${part}/$name"
-        printf "SIDDATA-P${publisher}-G${game}\n" > "$BASE/$rel"
-        if [ "$entry_index" -le 400 ]; then
-          add_songlength "$rel" "$entry_index"
-        fi
-        entry_index=$((entry_index + 1))
-        track=$((track + 1))
-      done
-      part=$((part + 1))
-    done
-    game=$((game + 1))
-  done
-  publisher=$((publisher + 1))
-done
-
-deep_dir="$BASE/GAMES/Deep/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8"
-mkdir -p "$deep_dir"
-printf "SIDDATA-Deep\n" > "$deep_dir/8-Bit_Bard.sid"
-add_songlength "GAMES/Deep/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8/8-Bit_Bard.sid" "$entry_index"
-
-printf "HVSC seed data\n" > "$BASE/DOCUMENTS/Readme.txt"
-
 sid_count=$(find "$BASE" -type f -name "*.sid" | wc -l | tr -d ' ')
 dir_count=$(find "$BASE" -type d | wc -l | tr -d ' ')
 echo "SID_COUNT=$sid_count"
@@ -741,14 +785,15 @@ fi
 
 # Run health probe first (must pass before running full suite)
 log_info "Running health probe (max 30s)..."
+export ANDROID_SERIAL="$EMULATOR_ID"
 PROBE_OUTPUT_DIR="$RAW_OUTPUT_DIR/probe-health"
 PROBE_STATUS=0
 set +e
 if command -v timeout >/dev/null 2>&1; then
-  (cd "$ROOT_DIR" && timeout --preserve-status 30 maestro test .maestro/probe-health.yaml --test-output-dir "$PROBE_OUTPUT_DIR" --debug-output "$PROBE_OUTPUT_DIR/debug" --format JUNIT --output "$PROBE_OUTPUT_DIR/report.xml")
+  (cd "$ROOT_DIR" && timeout --preserve-status 30 maestro test .maestro/probe-health.yaml --udid "$EMULATOR_ID" --test-output-dir "$PROBE_OUTPUT_DIR" --debug-output "$PROBE_OUTPUT_DIR/debug" --format JUNIT --output "$PROBE_OUTPUT_DIR/report.xml")
   PROBE_STATUS=$?
 else
-  (cd "$ROOT_DIR" && maestro test .maestro/probe-health.yaml --test-output-dir "$PROBE_OUTPUT_DIR" --debug-output "$PROBE_OUTPUT_DIR/debug" --format JUNIT --output "$PROBE_OUTPUT_DIR/report.xml")
+  (cd "$ROOT_DIR" && maestro test .maestro/probe-health.yaml --udid "$EMULATOR_ID" --test-output-dir "$PROBE_OUTPUT_DIR" --debug-output "$PROBE_OUTPUT_DIR/debug" --format JUNIT --output "$PROBE_OUTPUT_DIR/report.xml")
   PROBE_STATUS=$?
 fi
 set -e
@@ -764,6 +809,7 @@ log_info "Health probe passed, proceeding with full test suite"
 
 # Run Maestro flow-by-flow with strict timeout and per-flow artifacts
 log_info "Running Maestro tests (max ${MAESTRO_TOTAL_TIMEOUT}s)..."
+export ANDROID_SERIAL="$EMULATOR_ID"
 
 MAESTRO_STATUS=0
 set +e
@@ -806,10 +852,10 @@ for flow_file in $FLOW_FILES; do
   record_path="${record_meta#*:}"
 
   if command -v timeout >/dev/null 2>&1; then
-    (cd "$ROOT_DIR" && timeout --preserve-status "$MAESTRO_FLOW_TIMEOUT" maestro test ".maestro/${flow_file}" --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT" --test-output-dir "$flow_output_dir" --debug-output "$flow_output_dir/debug" --format JUNIT --output "$flow_output_dir/report.xml")
+    (cd "$ROOT_DIR" && timeout --preserve-status "$MAESTRO_FLOW_TIMEOUT" maestro test ".maestro/${flow_file}" --udid "$EMULATOR_ID" --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT" --test-output-dir "$flow_output_dir" --debug-output "$flow_output_dir/debug" --format JUNIT --output "$flow_output_dir/report.xml")
     flow_status=$?
   else
-    (cd "$ROOT_DIR" && maestro test ".maestro/${flow_file}" --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT" --test-output-dir "$flow_output_dir" --debug-output "$flow_output_dir/debug" --format JUNIT --output "$flow_output_dir/report.xml")
+    (cd "$ROOT_DIR" && maestro test ".maestro/${flow_file}" --udid "$EMULATOR_ID" --env=MAESTRO_FLOW_TIMEOUT="$MAESTRO_FLOW_TIMEOUT" --test-output-dir "$flow_output_dir" --debug-output "$flow_output_dir/debug" --format JUNIT --output "$flow_output_dir/report.xml")
     flow_status=$?
   fi
 

@@ -2498,6 +2498,9 @@ export default function PlayFilesPage() {
         actionLabel: 'Play',
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
+        secondaryActionLabel: 'Remove item',
+        onSecondaryAction: () => removePlaylistItemsById(new Set([item.id])),
+        secondaryActionAriaLabel: 'Remove item',
         disableActions: isPlaylistLoading,
       } as ActionListItem);
     });
@@ -2874,14 +2877,27 @@ export default function PlayFilesPage() {
               </div>
             )}
             headerActions={
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBrowserOpen(true)}
-                aria-label="Add items to playlist"
-              >
-                {hasPlaylist ? 'Add more items' : 'Add items'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBrowserOpen(true)}
+                  aria-label="Add items to playlist"
+                >
+                  {hasPlaylist ? 'Add more items' : 'Add items'}
+                </Button>
+                {hasPlaylist ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => removePlaylistItemsById(new Set(playlistIds))}
+                    aria-label="Clear playlist"
+                    className="text-destructive hover:text-destructive"
+                  >
+                    Clear playlist
+                  </Button>
+                ) : null}
+              </div>
             }
           />
         </div>

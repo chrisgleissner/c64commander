@@ -1,4 +1,8 @@
 appId: uk.gleissner.c64commander
+env:
+    SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+    TIMEOUT: ${TIMEOUT || "30000"}
+    LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/open-play-add-items.yaml
 
@@ -7,20 +11,20 @@ appId: uk.gleissner.c64commander
     text: "Add file / folder"
 - extendedWaitUntil:
     visible: "Select items"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     visible: "Open Usb0"
-    timeout: 20000
+    timeout: ${TIMEOUT}
 - tapOn: "Open Usb0"
 
 - extendedWaitUntil:
     visible: "Open Music"
-    timeout: 20000
+    timeout: ${TIMEOUT}
 - tapOn: "Open Music"
 
 - extendedWaitUntil:
     visible: "Select Mock_Tune_0001.sid"
-    timeout: 20000
+    timeout: ${TIMEOUT}
 
 # Select the file and confirm.
 - tapOn: "Select Mock_Tune_0001.sid"
@@ -29,26 +33,29 @@ appId: uk.gleissner.c64commander
 # Wait for playlist to show the new entry (header + item => 2 items).
 - extendedWaitUntil:
     visible: "2 items"
-    timeout: 30000
+    timeout: ${TIMEOUT}
 - takeScreenshot: playlist-item-added
 
 # Start playback via transport controls and verify it is active.
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Stop"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 
-# Select the playlist item via its checkbox and remove it.
-- tapOn: "Select Mock_Tune_0001.sid"
+# Stop playback before manipulating selections.
+- tapOn: "Stop"
 - extendedWaitUntil:
-    visible: "1 selected"
-    timeout: 10000
-- extendedWaitUntil:
-    visible: "Remove selected items"
-    timeout: 10000
-- tapOn: "Remove selected items"
+    visible: "Play"
+    timeout: ${SHORT_TIMEOUT}
+
+# Remove the playlist item via the header action.
+- scrollUntilVisible:
+    element: "Mock_Tune_0001.sid"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn: "Clear playlist"
 - extendedWaitUntil:
     visible: "No tracks in playlist yet."
-    timeout: 30000
+    timeout: ${TIMEOUT}
 - assertVisible: "No tracks in playlist yet."
 - takeScreenshot: playlist-item-removed

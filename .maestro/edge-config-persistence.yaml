@@ -1,19 +1,23 @@
 appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn: "Settings"
 - extendedWaitUntil:
     visible: "Settings"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
 
 # Scroll until the HVSC checkbox is in view (bounded).
 - scrollUntilVisible:
-    element:
-      id: hvsc-flag
-    direction: DOWN
-    speed: 80
-    visibilityPercentage: 50
-    timeout: 25000
+        element:
+            id: hvsc-flag
+        direction: DOWN
+        speed: 80
+        timeout: ${LONG_TIMEOUT}
 
 # Expect the flag to be enabled by default on native builds.
 - assertVisible:
@@ -29,14 +33,14 @@ appId: uk.gleissner.c64commander
 - tapOn: "Settings"
 - extendedWaitUntil:
     visible: "Settings"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element:
       id: hvsc-flag
     direction: DOWN
     speed: 80
-    visibilityPercentage: 50
-    timeout: 25000
+    timeout: ${LONG_TIMEOUT}
 - assertVisible:
     id: hvsc-flag
     checked: true

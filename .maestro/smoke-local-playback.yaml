@@ -3,12 +3,16 @@
 # Note: The file picker behavior varies by Android version and emulator state
 
 appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/open-play-add-items.yaml
 - scrollUntilVisible:
     element: "Add file / folder from device"
     direction: DOWN
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - tapOn:
     text: "Add file / folder from device"
 - takeScreenshot: file-picker-open
@@ -51,9 +55,9 @@ appId: uk.gleissner.c64commander
 # Verify we're back in the app - use optional assertions for resilience
 - extendedWaitUntil:
     visible: "C64 Commander"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     visible: "Play"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 
 - takeScreenshot: playlist-return

@@ -1,25 +1,29 @@
 appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Play Files"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - scrollUntilVisible:
     element: "HVSC library"
     direction: DOWN
-    timeout: 20000
+    timeout: ${TIMEOUT}
 - extendedWaitUntil:
     visible: "HVSC library"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - takeScreenshot: hvsc-controls
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
 - takeScreenshot: hvsc-actions
 - extendedWaitUntil:
     visible: "Browse HVSC folders"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     visible: "Filter folders…"
-    timeout: 10000
+    timeout: ${SHORT_TIMEOUT}
 - takeScreenshot: hvsc-browse

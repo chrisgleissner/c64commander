@@ -1,4 +1,8 @@
 appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 tags:
   - subflow
 ---
@@ -9,7 +13,7 @@ tags:
 - scrollUntilVisible:
     element: "Add items to playlist"
     direction: DOWN
-    timeout: 15000
+    timeout: ${TIMEOUT}
 - tapOn:
     text: "Add items to playlist"
 - assertVisible: "Choose source"

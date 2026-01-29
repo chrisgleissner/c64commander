@@ -40,6 +40,9 @@ export type ActionListItem = {
   onAction?: () => void;
   onTitleClick?: () => void;
   actionAriaLabel?: string;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
+  secondaryActionAriaLabel?: string;
   subtitleTestId?: string;
   showMenu?: boolean;
   showSelection?: boolean;
@@ -68,6 +71,8 @@ export type SelectableActionListProps = {
   selectionLabel?: string;
 };
 
+const sanitizeForTestId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
+
 const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: string }) => {
   if (item.variant === 'header') {
     const headerTestId = rowTestId ? `${rowTestId}-header` : undefined;
@@ -85,6 +90,9 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
     );
   }
 
+  const selectionTestId = rowTestId ? `${rowTestId}-select-${sanitizeForTestId(item.title)}` : undefined;
+  const actionMenuTestId = rowTestId ? `${rowTestId}-actions-${sanitizeForTestId(item.title)}` : undefined;
+
   return (
     <div
       className={cn(
@@ -100,6 +108,8 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             checked={item.selected}
             onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
             aria-label={`Select ${item.title}`}
+            id={selectionTestId}
+            data-testid={selectionTestId}
           />
         ) : null}
         {item.showMenu === false ? null : (
@@ -107,12 +117,15 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-7 w-7"
+                size="sm"
+                className="h-7 px-2 text-xs"
                 aria-label="Item actions"
                 disabled={item.disableActions}
+                id={actionMenuTestId}
+                data-testid={actionMenuTestId}
               >
                 <MoreVertical className="h-4 w-4" />
+                <span className="ml-1">Actions</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -174,16 +187,30 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           ) : null}
         </div>
       </div>
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-7 px-2 text-xs shrink-0"
-        onClick={item.onAction}
-        disabled={item.isDimmed || item.disableActions}
-        aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
-      >
-        {item.actionLabel}
-      </Button>
+      <div className="flex flex-col gap-1 shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={item.onAction}
+          disabled={item.isDimmed || item.disableActions}
+          aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
+        >
+          {item.actionLabel}
+        </Button>
+        {item.secondaryActionLabel && item.onSecondaryAction ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+            onClick={item.onSecondaryAction}
+            disabled={item.isDimmed || item.disableActions}
+            aria-label={item.secondaryActionAriaLabel || `${item.secondaryActionLabel} ${item.title}`}
+          >
+            {item.secondaryActionLabel}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 };
@@ -252,6 +279,9 @@ export const SelectableActionList = ({
   const filteredItems = useMemo(() => filterWithHeaders(filterText), [items, filterText]);
 
   const viewAllFilteredItems = useMemo(() => filterWithHeaders(viewAllFilterText), [items, viewAllFilterText]);
+
+  const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
+  const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
   
   const { visibleItems, hasMore } = useMemo(() => {
     const totalItems = filteredItems.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
@@ -349,6 +379,8 @@ export const SelectableActionList = ({
               onClick={onToggleSelectAll}
               disabled={!items.length}
               className="max-w-full truncate"
+              id={selectionToggleId}
+              data-testid={selectionToggleId}
             >
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
@@ -358,6 +390,8 @@ export const SelectableActionList = ({
                 size="sm"
                 onClick={onRemoveSelected}
                 className="text-destructive hover:text-destructive max-w-full truncate"
+                id={removeSelectedId}
+                data-testid={removeSelectedId}
               >
                 {removeSelectedLabel}
               </Button>
