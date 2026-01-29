@@ -293,8 +293,12 @@ while [[ $# -gt 0 ]]; do
       ;;
     --smoke-android-emulator)
       RUN_SMOKE_ANDROID_EMULATOR=true
-      RUN_BUILD=true
-      RUN_APK=true
+      if [[ "$RUN_BUILD" != "false" ]]; then
+        RUN_BUILD=true
+      fi
+      if [[ "$RUN_APK" != "false" ]]; then
+        RUN_APK=true
+      fi
       RUN_TEST=false
       RUN_TEST_UNIT=false
       RUN_TEST_E2E=false
@@ -308,8 +312,12 @@ while [[ $# -gt 0 ]]; do
     --smoke-android-real)
       RUN_SMOKE_ANDROID_REAL=true
       RUN_SMOKE_ANDROID_EMULATOR=true
-      RUN_BUILD=true
-      RUN_APK=true
+      if [[ "$RUN_BUILD" != "false" ]]; then
+        RUN_BUILD=true
+      fi
+      if [[ "$RUN_APK" != "false" ]]; then
+        RUN_APK=true
+      fi
       RUN_TEST=false
       RUN_TEST_UNIT=false
       RUN_TEST_E2E=false
