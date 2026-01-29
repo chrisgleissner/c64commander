@@ -80,6 +80,18 @@ export default function SettingsPage() {
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
+
+  const setHvscEnabledAndPersist = (enabled: boolean) => {
+    void setHvscEnabled(enabled);
+    try {
+      localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+      sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
+    } catch (error) {
+      addErrorLog('Feature flag storage failed', {
+        error: (error as Error).message,
+      });
+    }
+  };
   
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
@@ -759,28 +771,29 @@ export default function SettingsPage() {
           </div>
           <div className="space-y-3 text-sm">
             <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
+              <div
+                className="space-y-1 min-w-0 cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setHvscEnabledAndPersist(!isHvscEnabled);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  setHvscEnabledAndPersist(!isHvscEnabled);
+                }}
+              >
                 <Label htmlFor="hvsc-flag" className="font-medium">
                   Enable HVSC downloads
                 </Label>
-                <p className="text-xs text-muted-foreground">
-                  Shows HVSC download and ingest controls on the Play page.
-                </p>
+                <p className="text-xs text-muted-foreground">Shows HVSC download and ingest controls on the Play page.</p>
               </div>
               <Checkbox
                 id="hvsc-flag"
                 checked={isHvscEnabled}
                 onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  void setHvscEnabled(enabled);
-                  try {
-                    localStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
-                    sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', enabled ? '1' : '0');
-                  } catch (error) {
-                    addErrorLog('Feature flag storage failed', {
-                      error: (error as Error).message,
-                    });
-                  }
+                  setHvscEnabledAndPersist(checked === true);
                 }}
               />
             </div>

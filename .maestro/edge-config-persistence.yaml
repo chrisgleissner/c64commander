@@ -1,51 +1,58 @@
 appId: uk.gleissner.c64commander
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Play"
+- tapOn: "Settings"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Settings"
     timeout: 10000
+
+# Scroll until the HVSC section is in view (bounded).
 - scroll
 - scroll
-- runFlow:
-    when:
-      notVisible: "HVSC library"
-    commands:
-      - tapOn: "Settings"
-      - extendedWaitUntil:
-          visible: "Settings"
-          timeout: 10000
-      - scroll
-      - scroll
-      - scroll
-      - scroll
-      - extendedWaitUntil:
-          visible: "Enable HVSC downloads"
-          timeout: 10000
-      - scroll
-      - scroll
-      - tapOn: "Enable HVSC downloads"
-      - takeScreenshot: "hvsc-toggled"
-      - tapOn: "Play"
-      - extendedWaitUntil:
-          visible: "Play Files"
-          timeout: 10000
-      - scroll
-      - scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+
 - extendedWaitUntil:
-    visible: "HVSC library"
+    visible: "Enable HVSC downloads"
     timeout: 10000
-- takeScreenshot: "hvsc-visible"
+
+# Expect the flag to be enabled by default on native builds.
+- assertVisible:
+    text: "Enable HVSC downloads"
+    checked: true
+
+- takeScreenshot: "hvsc-enabled"
 - launchApp:
     stopApp: true
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Play"
+- tapOn: "Settings"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Settings"
     timeout: 10000
+
 - scroll
 - scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+- scroll
+
 - extendedWaitUntil:
-    visible: "HVSC library"
+    visible: "Enable HVSC downloads"
     timeout: 10000
+
+- assertVisible:
+    text: "Enable HVSC downloads"
+    checked: true
+
 - takeScreenshot: "hvsc-persisted"

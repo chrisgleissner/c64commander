@@ -306,20 +306,7 @@ export default function PlayFilesPage() {
   const isAndroid = getPlatform() === 'android';
 
   const { flags, isLoaded } = useFeatureFlags();
-  const [hvscFlagStorage, setHvscFlagStorage] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (typeof localStorage === 'undefined') return;
-    const localValue = localStorage.getItem('c64u_feature_flag:hvsc_enabled');
-    const sessionValue = typeof sessionStorage !== 'undefined'
-      ? sessionStorage.getItem('c64u_feature_flag:hvsc_enabled')
-      : null;
-    if (localValue === null && sessionValue === null) {
-      setHvscFlagStorage(null);
-      return;
-    }
-    setHvscFlagStorage(localValue === '1' || sessionValue === '1');
-  }, [flags.hvsc_enabled, isLoaded]);
-  const hvscControlsEnabled = hvscFlagStorage ?? flags.hvsc_enabled;
+  const hvscControlsEnabled = flags.hvsc_enabled;
 
   const audioMixerItems = useMemo(() => extractAudioMixerItems(audioMixerCategory as Record<string, unknown> | undefined), [audioMixerCategory]);
   const sidVolumeItems = useMemo(

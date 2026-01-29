@@ -1,66 +1,51 @@
 appId: uk.gleissner.c64commander
 ---
-- runFlow: subflows/launch-and-wait.yaml
+- runFlow: subflows/open-play-add-items.yaml
+
+# Add a known SID from the C64 Ultimate mock source.
+- tapOn:
+    text: "Add file / folder"
+- extendedWaitUntil:
+    visible: "Select items"
+    timeout: 10000
+- extendedWaitUntil:
+    visible: "Open Usb0"
+    timeout: 20000
+- tapOn: "Open Usb0"
+
+- extendedWaitUntil:
+    visible: "Open Music"
+    timeout: 20000
+- tapOn: "Open Music"
+
+- extendedWaitUntil:
+    visible: "Select Mock_Tune_0001.sid"
+    timeout: 20000
+
+# Select the file and confirm.
+- tapOn: "Select Mock_Tune_0001.sid"
+- tapOn: "Add to playlist"
+
+# Wait for playlist to show the new entry (header + item => 2 items).
+- extendedWaitUntil:
+    visible: "2 items"
+    timeout: 30000
+- takeScreenshot: "playlist-item-added"
+
+# Start playback via transport controls and verify it is active.
 - tapOn: "Play"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Stop"
     timeout: 10000
-- scroll
-- scroll
 
-# Ensure HVSC is enabled
-- runFlow:
-    when:
-        notVisible: "HVSC library"
-    commands:
-        - tapOn: "Settings"
-        - extendedWaitUntil:
-            visible: "Settings"
-            timeout: 10000
-        - scroll
-        - scroll
-        - tapOn: "Enable HVSC downloads"
-        - takeScreenshot: "hvsc-enabled"
-        - tapOn: "Play"
-        - extendedWaitUntil:
-            visible: "Play Files"
-            timeout: 10000
-        - scroll
-        - scroll
-
+# Select all items and remove.
+- tapOn: "Select all"
 - extendedWaitUntil:
-    visible: "HVSC library"
+    visible: "Remove selected items"
     timeout: 10000
-- tapOn: "HVSC library"
-- extendedWaitUntil:
-    visible: "Browse HVSC folders"
-    timeout: 10000
-- tapOn: "Browse HVSC folders"
-- extendedWaitUntil:
-    visible: "C64Music"
-    timeout: 30000 # Initial load might be slow
-- tapOn: "C64Music"
-- extendedWaitUntil:
-    visible: "DEMOS"
-    timeout: 10000
-- tapOn: "DEMOS"
-- extendedWaitUntil:
-    visible: "0-9"
-    timeout: 10000
-# Select "0-9" folder
-- tapOn: "0-9"
-# Add to playlist
-- tapOn: "Add to playlist"
-# Should return to playlist
-- extendedWaitUntil:
-    visible: "0-9"
-    timeout: 10000
-# Evidence for added item
-- takeScreenshot: "playlist-item-added"
-# Select item to remove (long press to enter selection mode)
-- longPressOn: "0-9"
-# Remove
 - tapOn: "Remove selected items"
-# Verify gone
-- assertNotVisible: "0-9"
+- extendedWaitUntil:
+    visible: "No tracks in playlist yet."
+    timeout: 30000
+- assertVisible: "No tracks in playlist yet."
 - takeScreenshot: "playlist-item-removed"

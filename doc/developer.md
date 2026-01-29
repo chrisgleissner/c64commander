@@ -56,6 +56,8 @@ All common development tasks use `./local-build.sh`:
 ./local-build.sh --smoke-android-real --c64u-host auto  # External mock for emulator
 ```
 
+Read `doc/testing/maestro.md` before writing or editing Maestro flows.
+
 You can also run the Maestro flows directly from repo root:
 
 ```bash
@@ -155,7 +157,7 @@ test-results/
           meta.json
 ```
 
-Android emulator smoke tests are Maestro flows under `.maestro/`:
+Android emulator smoke tests are Maestro flows under `.maestro/` (read `doc/testing/maestro.md` before editing):
 
 ```
 .maestro/

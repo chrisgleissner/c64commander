@@ -7,10 +7,11 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 1. Start with `README.md` for overview, local build steps, and Android notes.
 2. REST API details live in `doc/c64/c64u-openapi.yaml`
 3. Read the UX design in `doc/ux-guidelines.md` before any UX work.
-4. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
-5. Networking + data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
-6. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
-7. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
+4. Read `doc/testing/maestro.md` before authoring or editing any Maestro flows.
+5. UI routes live in `src/pages/` and navigation in `src/components/TabBar.tsx`.
+6. Networking + data hooks are in `src/lib/c64api.ts` and `src/hooks/`.
+7. Song sources live in `src/lib/sources/` and the HVSC module lives in `src/lib/hvsc/`.
+8. Use `.github/copilot-instructions.md` for mandatory workflows (it overrides this file on conflicts).
 
 ## Source of truth
 
@@ -39,6 +40,7 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - **E2E**: `npm run test:e2e` with specs in `playwright/` and fixtures in `playwright/fixtures/`
 - **Android JVM**: `cd android && ./gradlew test` with tests in `android/app/src/test/java/com/c64/commander/hvsc/`
 - **Android fixtures**: `android/app/src/test/fixtures/hvsc/`
+- **Maestro**: Read `doc/testing/maestro.md` before creating or updating flows under `.maestro/`
 
 ## Release tag APKs
 

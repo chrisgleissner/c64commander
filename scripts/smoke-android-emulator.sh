@@ -31,6 +31,10 @@ MAESTRO_FLOW_TIMEOUT=90       # Max time per Maestro flow
 MAESTRO_TOTAL_TIMEOUT=300     # Max total Maestro run time (5 minutes for all flows)
 ADB_COMMAND_TIMEOUT=10        # Max time for individual adb commands
 SCREENRECORD_LIMIT=180        # Max screenrecord time per flow (seconds)
+HVSC_GENERATION_TIMEOUT=180   # Max time to generate HVSC-like library
+HVSC_MIN_SID_FILES=2000       # Minimum SID files required
+HVSC_MIN_DIRS=200             # Minimum directories required
+HVSC_ROOT_PATH="/sdcard/Download/C64Music"
 
 # Evidence directories
 EVIDENCE_DIR="$ROOT_DIR/test-results/evidence/maestro"
@@ -104,6 +108,175 @@ log_error() {
 
 log_warn() {
   echo "[$(timestamp)] WARN: $*" >&2
+}
+
+generate_hvsc_library() {
+  local emulator_id="$1"
+  log_info "Generating HVSC library at ${HVSC_ROOT_PATH} (timeout ${HVSC_GENERATION_TIMEOUT}s)..."
+
+  local output
+  if ! output=$(timeout "$HVSC_GENERATION_TIMEOUT" adb -s "$emulator_id" shell <<'EOF'
+set -e
+
+BASE="/sdcard/Download/C64Music"
+rm -rf "$BASE"
+mkdir -p "$BASE/DEMOS/0-9" "$BASE/DOCUMENTS"
+
+songlengths="$BASE/DOCUMENTS/Songlengths.md5"
+echo "[Database]" > "$songlengths"
+
+entry_index=1
+add_songlength() {
+  local rel="$1"
+  local idx="$2"
+  local md5
+  md5=$(printf "%032x" "$idx")
+  local minutes=$(( (idx % 5) + 1 ))
+  local seconds=$(( (idx * 7) % 60 ))
+  local duration
+  if [ $((idx % 2)) -eq 0 ]; then
+    duration=$(printf "%d:%02d.000" "$minutes" "$seconds")
+  else
+    duration=$(printf "%d:%02d" "$minutes" "$seconds")
+  fi
+  echo "; /$rel" >> "$songlengths"
+  echo "$md5=$duration" >> "$songlengths"
+}
+
+demo_index=1
+while [ "$demo_index" -le 200 ]; do
+  name=$(printf "%02d_Years.sid" "$demo_index")
+  path="DEMOS/0-9/$name"
+  printf "SIDDATA-%s\n" "$demo_index" > "$BASE/$path"
+  if [ "$entry_index" -le 400 ]; then
+    add_songlength "$path" "$entry_index"
+  fi
+  entry_index=$((entry_index + 1))
+  demo_index=$((demo_index + 1))
+done
+
+for letter in A B C D E F; do
+  artist=1
+  while [ "$artist" -le 12 ]; do
+    release=1
+    while [ "$release" -le 5 ]; do
+      dir="$BASE/MUSICIANS/$letter/Artist_${letter}_${artist}/Release_${release}"
+      mkdir -p "$dir"
+      printf "Artist ${letter} ${artist} release ${release}\n" > "$dir/INFO_${artist}_${release}.nfo"
+      track=1
+      while [ "$track" -le 4 ]; do
+        name=$(printf "%02d_${letter}_Tune_${artist}_${release}.sid" "$track")
+        rel="MUSICIANS/$letter/Artist_${letter}_${artist}/Release_${release}/$name"
+        printf "SIDDATA-%s-%s-%s\n" "$letter" "$artist" "$release" > "$BASE/$rel"
+        if [ "$entry_index" -le 400 ]; then
+          add_songlength "$rel" "$entry_index"
+        fi
+        entry_index=$((entry_index + 1))
+        track=$((track + 1))
+      done
+      release=$((release + 1))
+    done
+    artist=$((artist + 1))
+  done
+done
+
+group=1
+while [ "$group" -le 12 ]; do
+  collection=1
+  while [ "$collection" -le 4 ]; do
+    dir="$BASE/GROUPS/Group_${group}/Collection_${collection}"
+    mkdir -p "$dir"
+    printf "Group ${group} collection ${collection}\n" > "$dir/README_${group}_${collection}.txt"
+    track=1
+    while [ "$track" -le 5 ]; do
+      name=$(printf "%02d_Group_${group}_${collection}.sid" "$track")
+      rel="GROUPS/Group_${group}/Collection_${collection}/$name"
+      printf "SIDDATA-G${group}-C${collection}\n" > "$BASE/$rel"
+      if [ "$entry_index" -le 400 ]; then
+        add_songlength "$rel" "$entry_index"
+      fi
+      entry_index=$((entry_index + 1))
+      track=$((track + 1))
+    done
+    collection=$((collection + 1))
+  done
+  group=$((group + 1))
+done
+
+publisher=1
+while [ "$publisher" -le 8 ]; do
+  game=1
+  while [ "$game" -le 5 ]; do
+    part=1
+    while [ "$part" -le 3 ]; do
+      dir="$BASE/GAMES/Publisher_${publisher}/Game_${game}/Part_${part}"
+      mkdir -p "$dir"
+      printf "Notes for ${publisher}-${game}-${part}\n" > "$dir/notes_${publisher}_${game}_${part}.txt"
+      track=1
+      while [ "$track" -le 4 ]; do
+        name=$(printf "%02d_Game_${game}_${part}.sid" "$track")
+        rel="GAMES/Publisher_${publisher}/Game_${game}/Part_${part}/$name"
+        printf "SIDDATA-P${publisher}-G${game}\n" > "$BASE/$rel"
+        if [ "$entry_index" -le 400 ]; then
+          add_songlength "$rel" "$entry_index"
+        fi
+        entry_index=$((entry_index + 1))
+        track=$((track + 1))
+      done
+      part=$((part + 1))
+    done
+    game=$((game + 1))
+  done
+  publisher=$((publisher + 1))
+done
+
+deep_dir="$BASE/GAMES/Deep/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8"
+mkdir -p "$deep_dir"
+printf "SIDDATA-Deep\n" > "$deep_dir/8-Bit_Bard.sid"
+add_songlength "GAMES/Deep/Level1/Level2/Level3/Level4/Level5/Level6/Level7/Level8/8-Bit_Bard.sid" "$entry_index"
+
+printf "HVSC seed data\n" > "$BASE/DOCUMENTS/Readme.txt"
+
+sid_count=$(find "$BASE" -type f -name "*.sid" | wc -l | tr -d ' ')
+dir_count=$(find "$BASE" -type d | wc -l | tr -d ' ')
+echo "SID_COUNT=$sid_count"
+echo "DIR_COUNT=$dir_count"
+echo "ROOT=$BASE"
+EOF
+  ); then
+    log_error "HVSC generation failed or timed out"
+    return 1
+  fi
+
+  local sid_count
+  local dir_count
+  sid_count=$(echo "$output" | awk -F= '/^SID_COUNT=/{print $2}' | tail -n 1)
+  dir_count=$(echo "$output" | awk -F= '/^DIR_COUNT=/{print $2}' | tail -n 1)
+  if [[ -z "$sid_count" || -z "$dir_count" ]]; then
+    log_error "HVSC generation did not return counts"
+    return 1
+  fi
+  if [[ "$sid_count" -lt "$HVSC_MIN_SID_FILES" || "$dir_count" -lt "$HVSC_MIN_DIRS" ]]; then
+    log_error "HVSC generation below threshold: sid=$sid_count dir=$dir_count"
+    return 1
+  fi
+  log_info "HVSC generation complete: sid=$sid_count dir=$dir_count"
+  return 0
+}
+
+scan_logcat_for_crashes() {
+  local log_file="$1"
+  local output_dir="$2"
+  if [[ ! -f "$log_file" ]]; then
+    return 0
+  fi
+  local crash_hits
+  crash_hits=$(grep -nE "Process: uk\.gleissner\.c64commander|ANR in uk\.gleissner\.c64commander|Fatal signal.*uk\.gleissner\.c64commander|FATAL EXCEPTION.*uk\.gleissner\.c64commander" "$log_file" || true)
+  if [[ -n "$crash_hits" ]]; then
+    echo "$crash_hits" > "$output_dir/logcat-crash.txt"
+    return 1
+  fi
+  return 0
 }
 
 # Capture comprehensive diagnostics
@@ -548,14 +721,21 @@ if [[ -f /tmp/c64-emu.log ]]; then
 fi
 timeout "$ADB_COMMAND_TIMEOUT" adb -s "$EMULATOR_ID" logcat -d > "$RAW_OUTPUT_DIR/logcat-pretest.txt" 2>/dev/null || true
 
-# Configure app for smoke test
-BUILD_PAYLOAD=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:true,debugLogging:true};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
+# Configure app for smoke test (allow mutations for mock playback)
+BUILD_PAYLOAD=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
 timeout "$ADB_COMMAND_TIMEOUT" adb -s "$EMULATOR_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c64u-smoke.json'" <<<"$BUILD_PAYLOAD"
 
 # Run pre-flight checks
 if ! preflight_checks "$EMULATOR_ID"; then
   diag_dir=$(capture_diagnostics "$EMULATOR_ID" "preflight_failure")
   write_error_context "Emulator instability" "Pre-flight checks failed" "$diag_dir"
+  exit 1
+fi
+
+# Generate HVSC-like library on device before Maestro flows
+if ! generate_hvsc_library "$EMULATOR_ID"; then
+  diag_dir=$(capture_diagnostics "$EMULATOR_ID" "hvsc_generation_failure")
+  write_error_context "Test data generation failure" "Failed to generate HVSC-like library" "$diag_dir"
   exit 1
 fi
 
@@ -597,6 +777,14 @@ for flow_file in $FLOW_FILES; do
     continue
   fi
 
+  # edge-offline validates loss/recovery of a real network connection. In smoke mock mode
+  # we force a local in-app mock connection that will remain "connected" even when the
+  # emulator is put into airplane mode.
+  if [[ "$C64U_TARGET" == "mock" && "$flow_name" == "edge-offline" ]]; then
+    log_info "Skipping ${flow_name} for --c64u-target mock"
+    continue
+  fi
+
   if [[ $(date +%s) -ge $((maestro_start + MAESTRO_TOTAL_TIMEOUT)) ]]; then
     log_error "Maestro exceeded total timeout (${MAESTRO_TOTAL_TIMEOUT}s), stopping..."
     MAESTRO_STATUS=124
@@ -631,6 +819,12 @@ for flow_file in $FLOW_FILES; do
   if [[ "$flow_status" -ne 0 ]]; then
     MAESTRO_STATUS="$flow_status"
     log_error "Flow failed: ${flow_name} (exit ${flow_status})"
+    break
+  fi
+
+  if ! scan_logcat_for_crashes "$flow_output_dir/logcat-posttest.txt" "$flow_output_dir"; then
+    MAESTRO_STATUS=1
+    log_error "Crash markers detected in logcat for ${flow_name}"
     break
   fi
 done
