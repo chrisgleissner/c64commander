@@ -6,28 +6,23 @@ appId: uk.gleissner.c64commander
     visible: "Settings"
     timeout: 10000
 
-# Scroll until the HVSC section is in view (bounded).
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-
-- extendedWaitUntil:
-    visible: "Enable HVSC downloads"
-    timeout: 10000
+# Scroll until the HVSC checkbox is in view (bounded).
+- scrollUntilVisible:
+    element:
+      id: hvsc-flag
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 50
+    timeout: 25000
 
 # Expect the flag to be enabled by default on native builds.
 - assertVisible:
-    text: "Enable HVSC downloads"
+    id: hvsc-flag
     checked: true
 
-- takeScreenshot: "hvsc-enabled"
+- takeScreenshot: hvsc-enabled
+
+# Restart and confirm it persisted.
 - launchApp:
     stopApp: true
 - runFlow: subflows/launch-and-wait.yaml
@@ -35,24 +30,14 @@ appId: uk.gleissner.c64commander
 - extendedWaitUntil:
     visible: "Settings"
     timeout: 10000
-
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-- scroll
-
-- extendedWaitUntil:
-    visible: "Enable HVSC downloads"
-    timeout: 10000
-
+- scrollUntilVisible:
+    element:
+      id: hvsc-flag
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 50
+    timeout: 25000
 - assertVisible:
-    text: "Enable HVSC downloads"
+    id: hvsc-flag
     checked: true
-
-- takeScreenshot: "hvsc-persisted"
+- takeScreenshot: hvsc-persisted

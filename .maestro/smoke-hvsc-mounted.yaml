@@ -4,10 +4,13 @@
 appId: uk.gleissner.c64commander
 ---
 - runFlow: subflows/open-play-add-items.yaml
-- scroll
+- scrollUntilVisible:
+    element: "Add file / folder from device"
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     text: "Add file / folder from device"
-- takeScreenshot: "picker-open"
+- takeScreenshot: picker-open
 
 # Handle permission dialogs (optional - may not appear on all devices)
 - tapOn:
@@ -31,9 +34,9 @@ appId: uk.gleissner.c64commander
 - extendedWaitUntil:
     visible: "C64Music"
     timeout: 20000
-- takeScreenshot: "picker-downloads"
+- takeScreenshot: picker-downloads
 - tapOn: "C64Music"
-- takeScreenshot: "picker-c64music"
+- takeScreenshot: picker-c64music
 - extendedWaitUntil:
     visible: "Use this folder"
     timeout: 10000
@@ -50,14 +53,14 @@ appId: uk.gleissner.c64commander
     element: "35_Years.sid"
     direction: DOWN
     timeout: 60000
-- takeScreenshot: "playlist-populated"
+- takeScreenshot: playlist-populated
 
 # Filter to SID-only
 - tapOn: "MOD music"
 - tapOn: "PRG program"
 - tapOn: "CRT cartridge"
 - tapOn: "Disk image"
-- takeScreenshot: "filter-sid-only"
+- takeScreenshot: filter-sid-only
 
 - scrollUntilVisible:
     element: "35_Years.sid"
@@ -73,4 +76,4 @@ appId: uk.gleissner.c64commander
 - assertNotVisible: "Playback failed"
 - assertNotVisible: "No supported files"
 - assertNotVisible: "Add items failed"
-- takeScreenshot: "now-playing"
+- takeScreenshot: now-playing

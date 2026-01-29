@@ -5,10 +5,13 @@
 appId: uk.gleissner.c64commander
 ---
 - runFlow: subflows/open-play-add-items.yaml
-- scroll
+- scrollUntilVisible:
+    element: "Add file / folder from device"
+    direction: DOWN
+    timeout: 10000
 - tapOn:
     text: "Add file / folder from device"
-- takeScreenshot: "file-picker-open"
+- takeScreenshot: file-picker-open
 
 # Handle permission dialogs (optional - may not appear on all devices)
 - tapOn:
@@ -33,9 +36,10 @@ appId: uk.gleissner.c64commander
     optional: true
 
 # Press back multiple times to ensure we exit the picker
-- back
-- back
-- back
+- repeat:
+    times: 3
+    commands:
+      - back
 
 # Re-launch the app to ensure clean state
 - launchApp:
@@ -52,4 +56,4 @@ appId: uk.gleissner.c64commander
     visible: "Play"
     timeout: 10000
 
-- takeScreenshot: "play-return"
+- takeScreenshot: play-return

@@ -7,4 +7,4 @@ tags:
     visible: "C64 Commander"
     timeout: 10000
 - waitForAnimationToEnd
-- takeScreenshot: "home"
+- takeScreenshot: home

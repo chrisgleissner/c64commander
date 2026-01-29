@@ -14,7 +14,7 @@ tags:
 - assertVisible: "C64 Commander"
 
 # Step 3: Take a screenshot to prove UI is rendered
-- takeScreenshot: "probe-health-home"
+- takeScreenshot: probe-health-home
 
 # Step 4: Verify navigation is responsive - tap a tab
 - tapOn: "Play"
@@ -28,4 +28,4 @@ tags:
 # Step 7: Final verification
 - assertVisible: "C64 Commander"
 
-- takeScreenshot: "probe-health-complete"
+- takeScreenshot: probe-health-complete

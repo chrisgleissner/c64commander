@@ -11,6 +11,42 @@ Source: https://docs.maestro.dev/api-reference/commands
     yaml
 ```
 
+## Rules
+
+### Use env defaults for config-like values
+
+Define config-like constants (app id, timeouts, fixture names, screenshot names) in `env` with fallbacks. Use the variables in commands so values can be overridden by CI or local runs.
+
+```yaml
+appId: ${APP_ID}
+env:
+  APP_ID: ${APP_ID || "uk.gleissner.c64commander"}
+  USERNAME: ${USERNAME || "my-test-user@example.com"}
+  PASSWORD: ${PASSWORD || "hunter2"}
+  DEFAULT_TIMEOUT: ${DEFAULT_TIMEOUT || 10000}
+---
+- tapOn: "Your Username"
+- inputText: ${USERNAME}
+- tapOn: "Your Password"
+- inputText: ${PASSWORD}
+```
+
+Keep stable UI selector strings inline unless they genuinely vary by environment (localization, build flavor, OS-specific picker labels).
+
+Sort `env` keys alphabetically within each flow or subflow.
+
+### Prefer conditional scroll loops
+
+When scrolling to reach a target, prefer a `repeat` loop with a `while` condition over hard-coded scroll counts.
+
+```yaml
+- repeat:
+    while:
+      notVisible: "ValueX"
+    commands:
+      - scroll
+```
+
 ## `addMedia`
 
 Add PNG, JPEG, GIF, or MP4 media to device gallery in Maestro tests.

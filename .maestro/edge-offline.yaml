@@ -10,10 +10,10 @@ appId: uk.gleissner.c64commander
 - extendedWaitUntil:
     visible: "Offline"
     timeout: 10000
-- takeScreenshot: "offline-mode"
+- takeScreenshot: offline-mode
 - setAirplaneMode:
     value: disabled
 - extendedWaitUntil:
     visible: "Connected"
     timeout: 30000 # Reconnecting might take longer
-- takeScreenshot: "online-mode"
+- takeScreenshot: online-mode

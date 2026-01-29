@@ -8,4 +8,4 @@ appId: uk.gleissner.c64commander
 - assertVisible: "Playlist"
 - assertVisible: "Select a playlist item to start"
 - assertVisible: "Play"
-- takeScreenshot: "playback-ready"
+- takeScreenshot: playback-ready

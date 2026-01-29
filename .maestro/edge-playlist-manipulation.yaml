@@ -30,7 +30,7 @@ appId: uk.gleissner.c64commander
 - extendedWaitUntil:
     visible: "2 items"
     timeout: 30000
-- takeScreenshot: "playlist-item-added"
+- takeScreenshot: playlist-item-added
 
 # Start playback via transport controls and verify it is active.
 - tapOn: "Play"
@@ -38,8 +38,11 @@ appId: uk.gleissner.c64commander
     visible: "Stop"
     timeout: 10000
 
-# Select all items and remove.
-- tapOn: "Select all"
+# Select the playlist item via its checkbox and remove it.
+- tapOn: "Select Mock_Tune_0001.sid"
+- extendedWaitUntil:
+    visible: "1 selected"
+    timeout: 10000
 - extendedWaitUntil:
     visible: "Remove selected items"
     timeout: 10000
@@ -48,4 +51,4 @@ appId: uk.gleissner.c64commander
     visible: "No tracks in playlist yet."
     timeout: 30000
 - assertVisible: "No tracks in playlist yet."
-- takeScreenshot: "playlist-item-removed"
+- takeScreenshot: playlist-item-removed

@@ -1,31 +1,25 @@
 appId: uk.gleissner.c64commander
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Settings"
-- extendedWaitUntil:
-    visible: "Settings"
-    timeout: 10000
-- scroll
-- scroll
-- tapOn: "Enable HVSC downloads"
-- takeScreenshot: "hvsc-enabled"
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Play Files"
     timeout: 10000
-- scroll
-- scroll
+- scrollUntilVisible:
+    element: "HVSC library"
+    direction: DOWN
+    timeout: 20000
 - extendedWaitUntil:
     visible: "HVSC library"
     timeout: 10000
-- takeScreenshot: "hvsc-controls"
+- takeScreenshot: hvsc-controls
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
-- takeScreenshot: "hvsc-actions"
+- takeScreenshot: hvsc-actions
 - extendedWaitUntil:
     visible: "Browse HVSC folders"
     timeout: 10000
 - extendedWaitUntil:
     visible: "Filter folders…"
     timeout: 10000
-- takeScreenshot: "hvsc-browse"
+- takeScreenshot: hvsc-browse

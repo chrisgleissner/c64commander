@@ -5,10 +5,13 @@ tags:
 - runFlow: launch-and-wait.yaml
 - tapOn: "Play"
 - assertVisible: "Play Files"
-- takeScreenshot: "play-files"
-- scroll
+- takeScreenshot: play-files
+- scrollUntilVisible:
+    element: "Add items to playlist"
+    direction: DOWN
+    timeout: 15000
 - tapOn:
     text: "Add items to playlist"
 - assertVisible: "Choose source"
 - assertVisible: "This device"
-- takeScreenshot: "choose-source"
+- takeScreenshot: choose-source

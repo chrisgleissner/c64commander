@@ -791,6 +791,8 @@ export default function SettingsPage() {
               </div>
               <Checkbox
                 id="hvsc-flag"
+                aria-label="Enable HVSC downloads"
+                data-testid="hvsc-toggle"
                 checked={isHvscEnabled}
                 onCheckedChange={(checked) => {
                   setHvscEnabledAndPersist(checked === true);
