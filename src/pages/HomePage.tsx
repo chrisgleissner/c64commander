@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -15,7 +15,7 @@ import {
   Download,
   FolderOpen
 } from 'lucide-react';
-import { useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64Category, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { AppBar } from '@/components/AppBar';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
@@ -29,12 +29,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
+import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
+import { buildSidStatusEntries } from '@/lib/config/sidStatus';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
+  const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
+  const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
   const controls = useC64MachineControl();
   const {
     appConfigs,
@@ -79,10 +84,12 @@ export default function HomePage() {
       await action();
       toast({ title: successMessage });
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'HOME_ACTION',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { action: successMessage },
       });
     }
   };
@@ -104,10 +111,12 @@ export default function HomePage() {
       setSaveDialogOpen(false);
       setSaveName('');
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'APP_CONFIG_SAVE',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { name: trimmed },
       });
     }
   };
@@ -121,10 +130,12 @@ export default function HomePage() {
       toast({ title: 'Config loaded', description: entry.name });
       setLoadDialogOpen(false);
     } catch (error) {
-      toast({
+      reportUserError({
+        operation: 'APP_CONFIG_LOAD',
         title: 'Error',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { name: entry.name },
       });
     } finally {
       setApplyingConfigId(null);
@@ -136,6 +147,15 @@ export default function HomePage() {
 
   const driveA = resolveDrive('a');
   const driveB = resolveDrive('b');
+
+  const sidEnablement = useMemo(
+    () => buildSidEnablement(
+      sidSocketsCategory as Record<string, unknown> | undefined,
+      sidAddressingCategory as Record<string, unknown> | undefined,
+    ),
+    [sidAddressingCategory, sidSocketsCategory],
+  );
+  const sidStatusEntries = useMemo(() => buildSidStatusEntries(sidEnablement), [sidEnablement]);
 
   return (
     <div className="min-h-screen pb-24">
@@ -289,29 +309,50 @@ export default function HomePage() {
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Drives
           </h3>
-          <button
-            type="button"
-            className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
-            onClick={() => navigate('/disks')}
-            aria-label="Open Disks"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-medium shrink-0">Drive A:</span>
-              <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
-                {driveA?.enabled ? 'ON' : 'OFF'}
-              </span>
-              <span className="shrink-0">–</span>
-              <span className="font-medium truncate min-w-0">
-                {driveA?.enabled ? driveA?.image_file || '—' : '—'}
-              </span>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <button
+              type="button"
+              className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
+              onClick={() => navigate('/disks')}
+              aria-label="Open Disks"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium shrink-0">Drive A:</span>
+                <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
+                  {driveA?.enabled ? 'ON' : 'OFF'}
+                </span>
+                <span className="shrink-0">–</span>
+                <span className="font-medium truncate min-w-0">
+                  {driveA?.enabled ? driveA?.image_file || '—' : '—'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-medium shrink-0">Drive B:</span>
+                <span className={driveB?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
+                  {driveB?.enabled ? 'ON' : 'OFF'}
+                </span>
+              </div>
+            </button>
+            <div
+              className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left"
+              data-testid="home-sid-status"
+            >
+              <p className="text-xs font-semibold text-muted-foreground" data-testid="sid-status-label">SID</p>
+              {sidStatusEntries.map((entry) => {
+                const enabled = entry.enabled;
+                const statusLabel = enabled === undefined ? '—' : enabled ? 'ON' : 'OFF';
+                const statusClass = enabled === true
+                  ? 'text-success'
+                  : 'text-muted-foreground';
+                return (
+                  <div key={entry.key} className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium shrink-0">{entry.label}:</span>
+                    <span className={`${statusClass} shrink-0`}>{statusLabel}</span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-medium shrink-0">Drive B:</span>
-              <span className={driveB?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
-                {driveB?.enabled ? 'ON' : 'OFF'}
-              </span>
-            </div>
-          </button>
+          </div>
         </motion.div>
 
         {/* Config Actions */}

@@ -4,20 +4,26 @@
 
 set -e
 
-EVIDENCE_ROOT="test-results/evidence"
+EVIDENCE_ROOTS=("test-results/evidence/playwright")
 
-if [ ! -d "$EVIDENCE_ROOT" ]; then
+found_root=false
+for root in "${EVIDENCE_ROOTS[@]}"; do
+    if [ ! -d "$root" ]; then
+        continue
+    fi
+    found_root=true
+    echo "Cleaning up old flat-format evidence directories in $root..."
+    # Find directories with device prefix pattern (e.g., android-phone__*)
+    # These are the old flat format that should be removed
+    find "$root" -maxdepth 1 -type d -name '*__*' -print0 | while IFS= read -r -d '' dir; do
+            echo "Removing old format: $(basename "$dir")"
+            rm -rf "$dir"
+    done
+done
+
+if [ "$found_root" = false ]; then
     echo "No evidence directory found"
     exit 0
 fi
-
-echo "Cleaning up old flat-format evidence directories..."
-
-# Find directories with device prefix pattern (e.g., android-phone__*)
-# These are the old flat format that should be removed
-find "$EVIDENCE_ROOT" -maxdepth 1 -type d -name '*__*' -print0 | while IFS= read -r -d '' dir; do
-    echo "Removing old format: $(basename "$dir")"
-    rm -rf "$dir"
-done
 
 echo "Cleanup complete. Only canonical format (testId/deviceId/) remains."

@@ -109,6 +109,35 @@ class MockC64UServerTest {
     assertEquals(1, data.getInt(0))
     server.stop()
   }
+
+  @Test
+  fun resetClearsKeyboardBuffer() {
+    val config = JSONObject().apply {
+      put("general", JSONObject().apply { put("baseUrl", "http://localhost") })
+    }
+    val state = MockC64UState.fromPayload(config)
+    val server = MockC64UServer(state)
+    server.start()
+    waitForServer(server)
+
+    val writeConnection = URL("${server.baseUrl}/v1/machine:writemem?address=00C6&data=05").openConnection() as HttpURLConnection
+    writeConnection.requestMethod = "PUT"
+    assertEquals(200, writeConnection.responseCode)
+    writeConnection.disconnect()
+
+    val resetConnection = URL("${server.baseUrl}/v1/machine:reset").openConnection() as HttpURLConnection
+    resetConnection.requestMethod = "PUT"
+    assertEquals(200, resetConnection.responseCode)
+    resetConnection.disconnect()
+
+    val readConnection = URL("${server.baseUrl}/v1/machine:readmem?address=00C6&length=1").openConnection() as HttpURLConnection
+    readConnection.requestMethod = "GET"
+    val body = readBody(readConnection)
+    val response = JSONObject(body)
+    val data = response.getJSONArray("data")
+    assertEquals(0, data.getInt(0))
+    server.stop()
+  }
   @Test
   fun mockC64UServerCanBeInstantiated() {
     val config = JSONObject()

@@ -50,6 +50,10 @@ test.describe('Audio Mixer volumes', () => {
     });
 
     await page.goto('/config');
+    const demoButton = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await demoButton.isVisible().catch(() => false)) {
+      await demoButton.click();
+    }
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 
@@ -82,6 +86,10 @@ test.describe('Audio Mixer volumes', () => {
     allowVisualOverflow(testInfo, 'Audio mixer controls expand beyond viewport during solo interactions');
     const initialState = server.getState()['Audio Mixer'];
     await page.goto('/config');
+    const demoButton = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await demoButton.isVisible().catch(() => false)) {
+      await demoButton.click();
+    }
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 
@@ -106,6 +114,10 @@ test.describe('Audio Mixer volumes', () => {
   test('solo routing is disabled while editing volumes', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowVisualOverflow(testInfo, 'Audio mixer controls expand beyond viewport during volume editing');
     await page.goto('/config');
+    const demoButton = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await demoButton.isVisible().catch(() => false)) {
+      await demoButton.click();
+    }
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 

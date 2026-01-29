@@ -1,0 +1,43 @@
+appId: uk.gleissner.c64commander
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+
+# Scroll until the HVSC checkbox is in view (bounded).
+- scrollUntilVisible:
+    element:
+      id: hvsc-flag
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 50
+    timeout: 25000
+
+# Expect the flag to be enabled by default on native builds.
+- assertVisible:
+    id: hvsc-flag
+    checked: true
+
+- takeScreenshot: hvsc-enabled
+
+# Restart and confirm it persisted.
+- launchApp:
+    stopApp: true
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: 10000
+- scrollUntilVisible:
+    element:
+      id: hvsc-flag
+    direction: DOWN
+    speed: 80
+    visibilityPercentage: 50
+    timeout: 25000
+- assertVisible:
+    id: hvsc-flag
+    checked: true
+- takeScreenshot: hvsc-persisted

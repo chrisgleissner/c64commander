@@ -7,6 +7,7 @@ export type HvscReleaseStatus = {
 };
 
 const DEFAULT_BASE_URL = 'https://hvsc.brona.dk/HVSC/';
+const HVSC_BASE_URL_KEY = 'c64u_hvsc_base_url';
 
 const isNativePlatform = () => {
   try {
@@ -14,6 +15,17 @@ const isNativePlatform = () => {
   } catch {
     return false;
   }
+};
+
+const normalizeBaseUrl = (baseUrl: string) => (baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
+
+const resolveHvscBaseUrl = (override?: string) => {
+  if (override) return normalizeBaseUrl(override);
+  if (typeof localStorage !== 'undefined') {
+    const stored = localStorage.getItem(HVSC_BASE_URL_KEY);
+    if (stored) return normalizeBaseUrl(stored);
+  }
+  return DEFAULT_BASE_URL;
 };
 
 const fetchHvscIndex = async (baseUrl: string) => {
@@ -36,8 +48,9 @@ const fetchHvscIndex = async (baseUrl: string) => {
   return response.text();
 };
 
-export const fetchLatestHvscVersions = async (baseUrl = DEFAULT_BASE_URL): Promise<HvscReleaseStatus> => {
-  const html = await fetchHvscIndex(baseUrl);
+export const fetchLatestHvscVersions = async (baseUrl?: string): Promise<HvscReleaseStatus> => {
+  const resolvedBaseUrl = resolveHvscBaseUrl(baseUrl);
+  const html = await fetchHvscIndex(resolvedBaseUrl);
   const baselineRegex = /HVSC_(\d+)-all-of-them\.7z/gi;
   const updateRegex = /HVSC_Update_(\d+)\.7z/gi;
   const baselineVersions = Array.from(html.matchAll(baselineRegex))
@@ -49,11 +62,11 @@ export const fetchLatestHvscVersions = async (baseUrl = DEFAULT_BASE_URL): Promi
 
   const baselineVersion = baselineVersions.length ? Math.max(...baselineVersions) : 0;
   const updateVersion = updateVersions.length ? Math.max(...updateVersions) : baselineVersion;
-  return { baselineVersion, updateVersion, baseUrl };
+  return { baselineVersion, updateVersion, baseUrl: resolvedBaseUrl };
 };
 
-export const buildHvscBaselineUrl = (version: number, baseUrl = DEFAULT_BASE_URL) =>
-  `${baseUrl}HVSC_${version}-all-of-them.7z`;
+export const buildHvscBaselineUrl = (version: number, baseUrl?: string) =>
+  `${resolveHvscBaseUrl(baseUrl)}HVSC_${version}-all-of-them.7z`;
 
-export const buildHvscUpdateUrl = (version: number, baseUrl = DEFAULT_BASE_URL) =>
-  `${baseUrl}HVSC_Update_${version}.7z`;
+export const buildHvscUpdateUrl = (version: number, baseUrl?: string) =>
+  `${resolveHvscBaseUrl(baseUrl)}HVSC_Update_${version}.7z`;

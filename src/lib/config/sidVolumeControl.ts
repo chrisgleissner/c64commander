@@ -14,7 +14,23 @@ export type SidEnablement = {
   ultiSid2?: boolean;
 };
 
+export type SidVolumeOption = {
+  option: string;
+  label: string;
+  numeric: number | null;
+  isOff: boolean;
+};
+
 const normalizeToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+const isOffOption = (value: string) => {
+  const normalized = normalizeToken(value);
+  return normalized === 'off' || normalized === 'mute' || normalized === 'muted';
+};
+
+const parseNumericOption = (option: string) => {
+  const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+};
 
 const resolveEnabledValue = (value: string | number | undefined, disabledTokens: string[]) => {
   if (value === undefined || value === null) return undefined;
@@ -55,6 +71,32 @@ export const buildSidEnablement = (
     ultiSid1: resolveEnabledValue(ultiSid1Value, ['unmapped', 'disabled', 'off']),
     ultiSid2: resolveEnabledValue(ultiSid2Value, ['unmapped', 'disabled', 'off']),
   };
+};
+
+export const buildSidVolumeSteps = (options: string[]): SidVolumeOption[] => {
+  if (!options.length) return [];
+  const offOption = options.find((option) => isOffOption(option));
+  const numericOptions = options
+    .map((option) => ({
+      option,
+      label: option.trim(),
+      numeric: parseNumericOption(option),
+      isOff: isOffOption(option),
+    }))
+    .filter((entry): entry is SidVolumeOption => entry.numeric !== null && !entry.isOff)
+    .sort((a, b) => (a.numeric ?? 0) - (b.numeric ?? 0));
+
+  const steps: SidVolumeOption[] = [];
+  if (offOption) {
+    steps.push({
+      option: offOption,
+      label: offOption.trim(),
+      numeric: null,
+      isOff: true,
+    });
+  }
+  steps.push(...numericOptions);
+  return steps;
 };
 
 export const isSidEnabledForName = (name: string, enablement: SidEnablement) => {

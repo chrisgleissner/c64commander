@@ -1,0 +1,4 @@
+testOutputDir: ../test-results/maestro
+excludeTags:
+  - subflow
+  - probe

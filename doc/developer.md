@@ -50,6 +50,30 @@ All common development tasks use `./local-build.sh`:
 ./local-build.sh --emulator       # Launch Android emulator
 ./local-build.sh --install        # Build and install APK to connected device
 ./local-build.sh --device R5CRC3ZY9XH --install  # Install to specific device
+./local-build.sh --smoke-android-emulator  # Run emulator smoke tests (mock target only)
+./local-build.sh --smoke-android-real      # Run mock + real target smoke tests
+./local-build.sh --smoke-android-real --c64u-host C64U
+./local-build.sh --smoke-android-real --c64u-host auto  # External mock for emulator
+```
+
+Read `doc/testing/maestro.md` before writing or editing Maestro flows.
+
+You can also run the Maestro flows directly from repo root:
+
+```bash
+maestro test .maestro
+```
+
+Maestro smoke evidence (screenshots + logs + meta) is written to:
+
+```
+test-results/evidence/maestro/<flow-name>/<deviceType>/
+```
+
+Raw Maestro runner output is written to:
+
+```
+test-results/maestro/
 ```
 
 ### Screenshots
@@ -69,7 +93,7 @@ Notes:
 
 ### Unit tests (Vitest)
 
-Location: `tests/unit/`, component tests in `src/**/*.test.ts`
+Location: `tests/unit/` and `src/**/*.{test,spec}.{ts,tsx}`
 
 Run:
 
@@ -84,7 +108,7 @@ Location: `playwright/*.spec.ts`
 Key concepts:
 
 - Strict UI monitoring: tests fail on console warnings/errors
-- Evidence folders: `test-results/evidence/<describe>--<test>/`
+- Evidence folders: `test-results/evidence/playwright/<testId>/<deviceId>/`
 - Numbered screenshots: `01-step.png`, `02-step.png`, etc.
 - Video recording: `video.webm` per test
 - Trace files: `trace.zip` for debugging
@@ -102,16 +126,50 @@ Evidence structure:
 ```
 test-results/
   evidence/
-    <describe-slug>--<test-slug>/
-      01-<step>.png
-      02-<step>.png
-      ...
-      video.webm
-      trace.zip
-      error-context.md  (only on failure)
+    playwright/
+      <testId>/
+        <deviceId>/
+          screenshots/
+            01-<step>.png
+            02-<step>.png
+          video.webm
+          trace.zip
+          error-context.md  (only on failure)
+          meta.json
 playwright-report/
   index.html
 ```
+
+Android emulator smoke evidence:
+
+```
+test-results/
+  maestro/                 # raw Maestro output (runner-owned)
+  evidence/
+    maestro/
+      <flow-name>/
+        <deviceType>/
+          screenshots/
+            01-<step>.png
+            02-<step>.png
+          video.mp4         # optional (only if recorded)
+          error-context.md
+          meta.json
+```
+
+Android emulator smoke tests are Maestro flows under `.maestro/` (read `doc/testing/maestro.md` before editing):
+
+```
+.maestro/
+  smoke-launch.yaml
+  smoke-file-picker.yaml
+  smoke-playback.yaml
+  subflows/
+    launch-and-wait.yaml
+    common-navigation.yaml
+```
+
+Each flow is a standalone smoke test; shared steps live in subflows.
 
 ### Android JVM + instrumentation tests
 
@@ -130,13 +188,13 @@ Validate that all test evidence folders have correct structure:
 
 ```bash
 ./local-build.sh --validate-evidence
+node scripts/validate-android-emulator-evidence.mjs
 ```
 
 Checks:
 
 - Every folder has at least one PNG
-- Every folder has exactly one video.webm
-- All files have valid signatures (PNG/WEBM/ZIP)
+- All files have valid signatures (PNG/MP4/WEBM/ZIP)
 - No zero-byte files
 
 ## CI workflow
@@ -227,17 +285,256 @@ Fixtures:
 
 ```
 src/
-  components/       # React components
-  hooks/            # React hooks
-  lib/              # Core logic
-  pages/            # Route pages
-  types/            # TypeScript types
+  components/       # React components (UI, disks, lists, item selection)
+  hooks/            # React hooks (TanStack Query + custom hooks)
+  lib/              # Core logic modules
+    c64api.ts       # C64U REST API client
+    config/         # Configuration utilities
+    disks/          # Disk management logic
+    hvsc/           # HVSC (High Voltage SID Collection) support
+    native/         # Capacitor native bridge interfaces
+    playback/       # File playback routing
+    sid/            # SID music utilities
+    sources/        # Song source abstractions
+  pages/            # Route pages (Home, Config, Play, Disks, Settings, Docs)
+  types/            # TypeScript type definitions
 
-playwright/         # E2E tests
-tests/              # Unit tests
-android/            # Android/Capacitor project
+playwright/         # E2E tests (Playwright)
+tests/              # Unit tests (Vitest)
+android/            # Android/Capacitor project + JVM tests
 doc/                # Documentation
-scripts/            # Build scripts
+scripts/            # Build and test scripts
+.maestro/           # Maestro smoke tests (Android emulator)
+```
+
+## Architecture diagrams
+
+### Overall app architecture
+
+```mermaid
+flowchart TB
+  subgraph UI["React UI Layer"]
+    Pages["Pages<br/>(Home, Config, Play, Disks, Settings, Docs)"]
+    Components["Components<br/>(TabBar, AppBar, QuickActionCard, etc.)"]
+  end
+
+  subgraph State["State Management"]
+    Query["TanStack Query<br/>(useQuery, useMutation)"]
+    LocalStorage["localStorage<br/>(settings, configs)"]
+  end
+
+  subgraph Lib["Core Libraries"]
+    API["c64api.ts<br/>(REST client)"]
+    Playback["playback/<br/>(routing, autostart)"]
+    HVSC["hvsc/<br/>(service, ingestion)"]
+    Config["config/<br/>(app settings, SID control)"]
+    Disks["disks/<br/>(mount, grouping)"]
+  end
+
+  subgraph Native["Native Bridges"]
+    Capacitor["Capacitor<br/>(web-to-native)"]
+    FTP["FtpClient<br/>(FTP operations)"]
+    FolderPicker["FolderPicker<br/>(file selection)"]
+    FeatureFlags["FeatureFlags<br/>(feature toggles)"]
+  end
+
+  subgraph Android["Android Layer"]
+    App["C64 Commander<br/>(MainActivity)"]
+    Plugins["Native Plugins<br/>(Kotlin/Java)"]
+  end
+
+  Pages --> Components
+  Components --> Query
+  Pages --> Query
+  Query --> API
+  Query --> Playback
+  Query --> HVSC
+  Query --> Config
+  Query --> Disks
+  API --> Capacitor
+  Playback --> Capacitor
+  HVSC --> Capacitor
+  Capacitor --> FTP
+  Capacitor --> FolderPicker
+  Capacitor --> FeatureFlags
+  FTP --> Plugins
+  FolderPicker --> Plugins
+  FeatureFlags --> Plugins
+  Plugins --> App
+```
+
+### C64 Ultimate interaction flow
+
+```mermaid
+sequenceDiagram
+  participant App as "C64 Commander App"
+  participant API as "c64api.ts"
+  participant HTTP as "CapacitorHttp"
+  participant C64U as "C64 Ultimate REST API"
+  participant FTP as "C64U FTP Server"
+
+  Note over App, C64U: Connection Discovery
+  App->>API: getDefaultBaseUrl() / resolveDeviceHostFromStorage()
+  API-->>App: baseUrl (http://c64u)
+
+  Note over App, C64U: Device Info Fetch
+  App->>API: getInfo()
+  API->>HTTP: GET /?J={"cmd":"info"}
+  HTTP->>C64U: HTTP Request
+  C64U-->>HTTP: JSON Response
+  HTTP-->>API: DeviceInfo
+  API-->>App: deviceInfo
+
+  Note over App, C64U: Configuration
+  App->>API: getCategories()
+  API->>HTTP: GET /?J={"cmd":"config","op":"list"}
+  HTTP->>C64U: HTTP Request
+  C64U-->>HTTP: JSON Response
+  HTTP-->>API: ConfigResponse
+  API-->>App: config categories
+
+  App->>API: updateConfig(category, item, value)
+  API->>HTTP: POST /?J={"cmd":"config","op":"set",...}
+  HTTP->>C64U: HTTP Request
+  C64U-->>HTTP: JSON Response
+  HTTP-->>API: status
+  API-->>App: success/error
+
+  Note over App, C64U: Drive Operations
+  App->>API: mountDrive(8, diskImage)
+  API->>HTTP: POST /?J={"cmd":"drive","op":"mount",...}
+  HTTP->>C64U: HTTP Request
+  C64U-->>HTTP: JSON Response
+  HTTP-->>API: status
+  API-->>App: success/error
+
+  Note over App, C64U: File Upload (FTP)
+  App->>FTP: connect(host, port, username, password)
+  FTP-->>App: connected
+  App->>FTP: uploadFile(remotePath, localContent)
+  FTP->>C64U: FTP STOR
+  C64U-->>FTP: success
+  FTP-->>App: upload complete
+
+  Note over App, C64U: File Playback
+  App->>API: playFile(fileType, filePath)
+  API->>HTTP: POST /?J={"cmd":"run",...}
+  HTTP->>C64U: HTTP Request
+  C64U-->>HTTP: JSON Response
+  HTTP-->>API: status
+  API-->>App: playback started
+```
+
+### Testing architecture
+
+```mermaid
+flowchart TB
+  subgraph Local["Local Development"]
+    LBuild["npm run cap:build"]
+    LTest["npm run test"]
+    LE2E["npm run test:e2e"]
+    LSmoke["local-build.sh --smoke-android-emulator"]
+  end
+
+  subgraph CI["GitHub Actions CI"]
+    CIBuild["Web Build (Vite)"]
+    CIUnit["Unit Tests (Vitest)"]
+    CIE2E["E2E Tests (Playwright - 8 shards)"]
+    CIScreenshots["Screenshot Tests"]
+    CIAndroidBuild["Android Build (Gradle)"]
+    CIAndroidTest["Android Tests (JUnit)"]
+    CICoverage["Coverage Merge & Upload"]
+  end
+
+  subgraph TestTypes["Test Types"]
+    Unit["Unit Tests<br/>(Vitest)"]
+    E2E["E2E Tests<br/>(Playwright)"]
+    Screenshots["Screenshot Tests<br/>(Playwright)"]
+    Android["Android Tests<br/>(JUnit)"]
+    Maestro["Maestro Smoke<br/>(Android Emulator)"]
+    Fuzz["Chaos Fuzz<br/>(Playwright)"]
+  end
+
+  subgraph Evidence["Test Evidence"]
+    Screenshots["PNG Screenshots"]
+    Videos["WebM/MP4 Videos"]
+    Traces["Playwright Traces"]
+    Coverage["Coverage Reports"]
+  end
+
+  LBuild --> Unit
+  LBuild --> E2E
+  LBuild --> Screenshots
+  LBuild --> Maestro
+
+  CIBuild --> CIUnit
+  CIBuild --> CIE2E
+  CIBuild --> CIScreenshots
+  CIBuild --> CIAndroidBuild
+  CIAndroidBuild --> CIAndroidTest
+
+  CIUnit --> Unit
+  CIE2E --> E2E
+  CIScreenshots --> Screenshots
+  CIAndroidTest --> Android
+
+  Unit --> Coverage
+  E2E --> Screenshots
+  E2E --> Videos
+  E2E --> Traces
+  Screenshots --> Evidence
+  Android --> Coverage
+```
+
+### Testing interactions with app
+
+```mermaid
+flowchart LR
+  subgraph TestFrameworks["Testing Frameworks"]
+    Vitest["Vitest"]
+    Playwright["Playwright"]
+    Maestro["Maestro"]
+    JUnit["JUnit"]
+  end
+
+  subgraph AppComponents["App Components Under Test"]
+    Hooks["React Hooks"]
+    API["c64api.ts"]
+    Pages["Pages"]
+    Components["Components"]
+  end
+
+  subgraph Mocking["Mock Layer"]
+    MockC64U["MockC64U<br/>(REST mock server)"]
+    MockFTP["MockFtpServer<br/>(FTP mock server)"]
+    MockHVSC["MockHVSCServer<br/>(HVSC mock server)"]
+  end
+
+  subgraph Fixtures["Test Fixtures"]
+    PlaywrightFixtures["playwright/fixtures/"]
+    HVSCFixtures["android/test/fixtures/hvsc/"]
+    FTPFixtures["playwright/fixtures/ftp-root/"]
+  end
+
+  Vitest --> Hooks
+  Vitest --> API
+  Vitest --> Components
+
+  Playwright --> Pages
+  Playwright --> Components
+  Playwright --> MockC64U
+  Playwright --> MockFTP
+  Playwright --> MockHVSC
+
+  Maestro --> App["Installed App"]
+  Maestro --> MockC64U
+
+  JUnit --> Plugins["Android Plugins"]
+  JUnit --> Fixtures
+
+  MockC64U --> PlaywrightFixtures
+  MockFTP --> FTPFixtures
+  MockHVSC --> HVSCFixtures
 ```
 
 ## Code conventions
@@ -321,8 +618,8 @@ kill <PID>     # Kill it
 Check for missing videos or corrupted files:
 
 ```bash
-find test-results/evidence -name "video.webm" | wc -l  # Should match test count
-find test-results/evidence -name "*.png" -size 0       # Should be empty
+find test-results/evidence/playwright -name "video.webm" | wc -l  # Should match test count
+find test-results/evidence/playwright -name "*.png" -size 0       # Should be empty
 ```
 
 ## Contributing

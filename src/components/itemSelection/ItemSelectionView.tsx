@@ -99,13 +99,20 @@ export const ItemSelectionView = ({
                   checked={isSelected}
                   onCheckedChange={() => canSelect && onToggleSelect(entry)}
                   disabled={!canSelect}
+                  aria-label={`Select ${entry.name}`}
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
                 </div>
               </div>
               {entry.type === 'dir' && (
-                <Button variant="outline" size="sm" className="shrink-0" onClick={() => onOpen(entry.path)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => onOpen(entry.path)}
+                  aria-label={`Open ${entry.name}`}
+                >
                   <FolderOpen className="h-4 w-4 mr-1" />
                   Open
                 </Button>

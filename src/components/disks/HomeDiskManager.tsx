@@ -14,6 +14,7 @@ import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { getC64API } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { reportUserError } from '@/lib/uiErrors';
 import { cn } from '@/lib/utils';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
 import { createDiskEntry, getDiskFolderPath, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
@@ -216,12 +217,12 @@ export const HomeDiskManager = () => {
   }, []);
 
   const showNoDiskWarning = useCallback(() => {
-    toast({
+    reportUserError({
+      operation: 'DISK_IMPORT',
       title: 'No disks found',
       description: 'Found no disk file.',
-      variant: 'destructive',
     });
-  }, []);
+  }, [reportUserError]);
 
   const toggleSelectAll = () => {
     setSelectedDiskIds(allSelected ? new Set() : new Set(allDiskIds));
@@ -285,10 +286,20 @@ export const HomeDiskManager = () => {
         demoMode: status.state === 'DEMO_ACTIVE',
         error: (error as Error).message,
       });
-      toast({
+      reportUserError({
+        operation: 'DISK_MOUNT',
         title: 'Mount failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: {
+          drive,
+          path: disk.path,
+          location: disk.location,
+          endpoint: `/v1/drives/${drive}:mount`,
+          baseUrl: api.getBaseUrl(),
+          deviceHost: api.getDeviceHost(),
+          demoMode: status.state === 'DEMO_ACTIVE',
+        },
       });
     }
   };
@@ -301,10 +312,12 @@ export const HomeDiskManager = () => {
       toast({ title: 'Disk ejected', description: `${buildDriveLabel(drive)} cleared` });
     } catch (error) {
       setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
-      toast({
+      reportUserError({
+        operation: 'DISK_EJECT',
         title: 'Eject failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { drive },
       });
     }
   };
@@ -332,10 +345,12 @@ export const HomeDiskManager = () => {
         return next;
       });
       setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
-      toast({
+      reportUserError({
+        operation: 'DRIVE_POWER',
         title: 'Drive power toggle failed',
         description: (error as Error).message,
-        variant: 'destructive',
+        error,
+        context: { drive, targetEnabled },
       });
     } finally {
       setDrivePowerPending((prev) => ({ ...prev, [drive]: false }));
@@ -611,22 +626,18 @@ export const HomeDiskManager = () => {
     } catch (error) {
       const err = error as Error;
       const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
-      addErrorLog('Add items failed', {
-        sourceId: source.id,
-        sourceType: source.type,
-        platform: getPlatform(),
-        error: {
-          name: err.name,
-          message: err.message,
-          stack: err.stack,
-        },
-        details: listingDetails,
-      });
       setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
-      toast({
+      reportUserError({
+        operation: 'DISK_IMPORT',
         title: 'Add items failed',
         description: err.message,
-        variant: 'destructive',
+        error: err,
+        context: {
+          sourceId: source.id,
+          sourceType: source.type,
+          platform: getPlatform(),
+          details: listingDetails,
+        },
       });
       return false;
     } finally {
@@ -649,7 +660,7 @@ export const HomeDiskManager = () => {
         addItemsOverlayActiveRef.current = false;
       }
     }
-  }, [addItemsSurface, browserOpen, diskLibrary, localSourcesById, showNoDiskWarning]);
+  }, [addItemsSurface, browserOpen, diskLibrary, localSourcesById, reportUserError, showNoDiskWarning]);
 
   const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
     const detailsDate = disk.modifiedAt || disk.importedAt;
@@ -871,7 +882,11 @@ export const HomeDiskManager = () => {
             items={buildDiskListItems(sortedDisks, {
               onMount: (entry) => {
                 if (!status.isConnected) {
-                  toast({ title: 'Offline', description: 'Connect to mount disks.', variant: 'destructive' });
+                  reportUserError({
+                    operation: 'DISK_MOUNT',
+                    title: 'Offline',
+                    description: 'Connect to mount disks.',
+                  });
                   return;
                 }
                 setActiveDisk(entry);

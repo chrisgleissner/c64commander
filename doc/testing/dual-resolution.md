@@ -74,13 +74,14 @@ Screenshots are organized under the canonical evidence structure:
 
 ```text
 test-results/evidence/
-  <testId>/
-    android-phone/
-      screenshots/
-        01-step.png
-    android-tablet/
-      screenshots/
-        01-step.png
+  playwright/
+    <testId>/
+      android-phone/
+        screenshots/
+          01-step.png
+      android-tablet/
+        screenshots/
+          01-step.png
 ```
 
 This allows visual comparison across devices without name collisions.

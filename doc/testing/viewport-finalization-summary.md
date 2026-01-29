@@ -46,7 +46,7 @@ Conclusive finalization of Playwright dual-resolution testing infrastructure wit
 
 **New file:** `playwright/evidenceConsolidation.ts`
 
-**Structure:** `test-results/evidence/<testId>/<deviceId>/`
+**Structure:** `test-results/evidence/playwright/<testId>/<deviceId>/`
 - `meta.json`: Test metadata (viewport, DPR, timestamps, status)
 - `screenshots/`: All test screenshots
 - `video.webm`: Test video

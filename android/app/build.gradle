@@ -55,6 +55,16 @@ def resolveAppVersionCode = { ->
 android {
     namespace "uk.gleissner.c64commander"
     compileSdk rootProject.ext.compileSdkVersion
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
     defaultConfig {
         applicationId "uk.gleissner.c64commander"
         minSdkVersion rootProject.ext.minSdkVersion

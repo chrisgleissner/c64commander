@@ -315,6 +315,9 @@ class MockC64UServer(private val state: MockC64UState) {
         "/v1/machine:menu_button",
       ).contains(path)
     ) {
+      if (path == "/v1/machine:reset" || path == "/v1/machine:reboot" || path == "/v1/machine:poweroff") {
+        state.resetKeyboardBuffer()
+      }
       return okResponse()
     }
 

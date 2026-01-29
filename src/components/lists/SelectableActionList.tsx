@@ -215,29 +215,43 @@ export const SelectableActionList = ({
   const [viewAllFilterText, setViewAllFilterText] = useState('');
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
   
-  const filteredItems = useMemo(() => {
-    if (!filterText.trim()) return items;
-    const lower = filterText.toLowerCase();
-    return items.filter(item => {
-      if (item.variant === 'header') return true; // Keep headers for now
-      const extra = item.filterText?.toLowerCase() ?? '';
-      return item.title.toLowerCase().includes(lower) || 
-             item.subtitle?.toLowerCase().includes(lower) ||
-             extra.includes(lower);
-    });
-  }, [items, filterText]);
+  const filterWithHeaders = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return items;
+    const lower = trimmed.toLowerCase();
+    const list: ActionListItem[] = [];
+    let pendingHeader: ActionListItem | null = null;
+    let hasMatchInSection = false;
 
-  const viewAllFilteredItems = useMemo(() => {
-    if (!viewAllFilterText.trim()) return items;
-    const lower = viewAllFilterText.toLowerCase();
-    return items.filter(item => {
-      if (item.variant === 'header') return true; // Keep headers for now
+    const matchesItem = (item: ActionListItem) => {
       const extra = item.filterText?.toLowerCase() ?? '';
-      return item.title.toLowerCase().includes(lower) || 
-             item.subtitle?.toLowerCase().includes(lower) ||
-             extra.includes(lower);
+      const subtitle = item.subtitle?.toLowerCase() ?? '';
+      return item.title.toLowerCase().includes(lower) || subtitle.includes(lower) || extra.includes(lower);
+    };
+
+    items.forEach((item) => {
+      if (item.variant === 'header') {
+        if (pendingHeader && hasMatchInSection) {
+          list.push(pendingHeader);
+        }
+        pendingHeader = item;
+        hasMatchInSection = false;
+        return;
+      }
+      if (!matchesItem(item)) return;
+      if (pendingHeader && !hasMatchInSection) {
+        list.push(pendingHeader);
+        hasMatchInSection = true;
+      }
+      list.push(item);
     });
-  }, [items, viewAllFilterText]);
+
+    return list;
+  };
+
+  const filteredItems = useMemo(() => filterWithHeaders(filterText), [items, filterText]);
+
+  const viewAllFilteredItems = useMemo(() => filterWithHeaders(viewAllFilterText), [items, viewAllFilterText]);
   
   const { visibleItems, hasMore } = useMemo(() => {
     const totalItems = filteredItems.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);

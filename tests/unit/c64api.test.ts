@@ -260,6 +260,16 @@ describe('c64api', () => {
     await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable');
   });
 
+  it('maps unknown host errors in SID uploads to DNS unreachable', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValue(new TypeError('Unknown host'));
+
+    const api = new C64API('http://c64u');
+    const payload = new Blob(['SID'], { type: 'application/octet-stream' });
+
+    await expect(api.playSidUpload(payload)).rejects.toThrow('Host unreachable (DNS)');
+  });
+
   it('maps timed out control requests to host unreachable', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.mocked(fetch);

@@ -1,3 +1,5 @@
+import type { HvscProgressEvent } from './hvscTypes';
+
 export type HvscFailureCategory =
   | 'network'
   | 'remote'
@@ -68,4 +70,119 @@ export const saveHvscStatusSummary = (summary: HvscStatusSummary) => {
 export const clearHvscStatusSummary = () => {
   if (typeof localStorage === 'undefined') return;
   localStorage.removeItem(STORAGE_KEY);
+};
+
+const extractionStages = new Set([
+  'archive_extraction',
+  'archive_validation',
+  'sid_enumeration',
+  'songlengths',
+  'sid_metadata_parsing',
+]);
+
+const resolveFailureCategory = (event: HvscProgressEvent, lastStage?: string | null): HvscFailureCategory => {
+  const details = `${event.errorType ?? ''} ${event.errorCause ?? ''}`.toLowerCase();
+  if (/timeout|network|socket|host|dns|connection|ssl|refused|reset/.test(details)) return 'network';
+  if (/disk|space|permission|storage|file|io|not found|readonly|denied|enospc|eacces/.test(details)) return 'storage';
+  if (lastStage === 'download') return 'download';
+  if (lastStage && extractionStages.has(lastStage)) return 'extraction';
+  return 'unknown';
+};
+
+export const applyHvscProgressEventToSummary = (
+  summary: HvscStatusSummary,
+  event: HvscProgressEvent,
+  lastStage?: string | null,
+) => {
+  const now = new Date().toISOString();
+  if (event.stage === 'download') {
+    return {
+      ...summary,
+      download: {
+        ...summary.download,
+        status: 'in-progress',
+        startedAt: summary.download.startedAt ?? now,
+        durationMs: event.elapsedTimeMs ?? summary.download.durationMs ?? null,
+        sizeBytes: event.totalBytes ?? event.downloadedBytes ?? summary.download.sizeBytes ?? null,
+        downloadedBytes: event.downloadedBytes ?? summary.download.downloadedBytes ?? null,
+        totalBytes: event.totalBytes ?? summary.download.totalBytes ?? null,
+        errorCategory: null,
+        errorMessage: null,
+      },
+    };
+  }
+
+  if (extractionStages.has(event.stage)) {
+    return {
+      ...summary,
+      extraction: {
+        ...summary.extraction,
+        status: 'in-progress',
+        startedAt: summary.extraction.startedAt ?? now,
+        durationMs: event.elapsedTimeMs ?? summary.extraction.durationMs ?? null,
+        filesExtracted: event.processedCount ?? summary.extraction.filesExtracted ?? null,
+        totalFiles: event.totalCount ?? summary.extraction.totalFiles ?? null,
+        errorCategory: null,
+        errorMessage: null,
+      },
+    };
+  }
+
+  if (event.stage === 'complete') {
+    return {
+      ...summary,
+      download: {
+        ...summary.download,
+        status: summary.download.status === 'success' ? summary.download.status : 'success',
+        finishedAt: summary.download.finishedAt ?? now,
+      },
+      extraction: {
+        ...summary.extraction,
+        status: summary.extraction.status === 'success' ? summary.extraction.status : 'success',
+        finishedAt: summary.extraction.finishedAt ?? now,
+      },
+      lastUpdatedAt: now,
+    };
+  }
+
+  if (event.stage === 'error') {
+    const category = resolveFailureCategory(event, lastStage ?? null);
+    const errorMessage = event.errorCause ?? event.message ?? null;
+    if (lastStage === 'download') {
+      return {
+        ...summary,
+        download: {
+          ...summary.download,
+          status: 'failure',
+          finishedAt: now,
+          errorCategory: category,
+          errorMessage,
+        },
+        lastUpdatedAt: now,
+      };
+    }
+    return {
+      ...summary,
+      extraction: {
+        ...summary.extraction,
+        status: 'failure',
+        finishedAt: now,
+        errorCategory: category,
+        errorMessage,
+      },
+      lastUpdatedAt: now,
+    };
+  }
+
+  return summary;
+};
+
+export const updateHvscStatusSummaryFromEvent = (
+  event: HvscProgressEvent,
+  lastStage?: string | null,
+) => {
+  const current = loadHvscStatusSummary();
+  const next = applyHvscProgressEventToSummary(current, event, lastStage);
+  saveHvscStatusSummary(next);
+  return next;
 };

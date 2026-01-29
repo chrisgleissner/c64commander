@@ -192,6 +192,51 @@ test.describe('UI coverage', () => {
     await snap(page, testInfo, 'disks-open');
   });
 
+  test('source indicator icons invert in dark mode', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_theme', 'system');
+      const playlist = {
+        items: [{ source: 'local', path: '/demo.sid', name: 'demo.sid' }],
+        currentIndex: -1,
+      };
+      localStorage.setItem('c64u_last_device_id', 'TEST-123');
+      localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(playlist));
+      localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(playlist));
+      localStorage.setItem('c64u_disk_library:TEST-123', JSON.stringify({
+        disks: [
+          {
+            id: 'local:/Disks/demo.d64',
+            name: 'demo.d64',
+            path: '/Disks/demo.d64',
+            location: 'local',
+            group: null,
+            importedAt: new Date().toISOString(),
+          },
+        ],
+      }));
+    });
+
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/play', { waitUntil: 'domcontentloaded' });
+    const playIcon = page.getByTestId('file-origin-icon').first();
+    await expect(playIcon).toBeVisible();
+    const lightFilter = await playIcon.evaluate((el) => getComputedStyle(el).filter);
+    await snap(page, testInfo, 'play-icons-light');
+
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect.poll(async () => playIcon.evaluate((el) => getComputedStyle(el).filter)).not.toBe(lightFilter);
+    const darkFilter = await playIcon.evaluate((el) => getComputedStyle(el).filter);
+    expect(darkFilter).not.toBe('none');
+    await snap(page, testInfo, 'play-icons-dark');
+
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+    const diskIcon = page.getByTestId('file-origin-icon').first();
+    await expect(diskIcon).toBeVisible();
+    const diskFilter = await diskIcon.evaluate((el) => getComputedStyle(el).filter);
+    expect(diskFilter).not.toBe('none');
+    await snap(page, testInfo, 'disk-icons-dark');
+  });
+
   test('home page shows resolved version', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const expectedVersion = resolveExpectedVersion() || '—';

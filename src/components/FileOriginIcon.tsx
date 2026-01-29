@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils';
+
 type FileOrigin = 'ultimate' | 'local';
 
 type FileOriginIconProps = {
@@ -19,6 +21,7 @@ export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps
     src={resolveIconSource(origin)}
     alt={label ?? resolveIconLabel(origin)}
     aria-label={label ?? resolveIconLabel(origin)}
-    className={className ?? 'h-4 w-4 shrink-0 opacity-70'}
+    data-testid="file-origin-icon"
+    className={cn('h-4 w-4 shrink-0 opacity-70 dark:invert dark:brightness-0', className)}
   />
 );

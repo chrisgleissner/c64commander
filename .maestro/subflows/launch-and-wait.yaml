@@ -1,0 +1,10 @@
+appId: uk.gleissner.c64commander
+tags:
+  - subflow
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: home

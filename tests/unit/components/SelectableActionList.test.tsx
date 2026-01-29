@@ -96,6 +96,52 @@ describe('SelectableActionList view-all wrapping', () => {
     expect(within(list).getByText('Bravo.sid')).toBeInTheDocument();
   });
 
+  it('hides headers when no items match and restores after clearing filter', () => {
+    const items: ActionListItem[] = [
+      {
+        id: 'header:/Music',
+        title: '/Music',
+        variant: 'header',
+        selected: false,
+        actionLabel: 'Play',
+      },
+      {
+        id: 'track-1',
+        title: 'Alpha.sid',
+        selected: false,
+        actionLabel: 'Play',
+        onAction: vi.fn(),
+      },
+    ];
+
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+        listTestId="list"
+        rowTestId="row"
+      />,
+    );
+
+    const filter = screen.getByTestId('list-filter-input');
+    fireEvent.change(filter, { target: { value: 'Zulu' } });
+
+    const list = screen.getByTestId('list');
+    expect(within(list).queryByTestId('row-header')).toBeNull();
+    expect(within(list).queryByText('Alpha.sid')).toBeNull();
+
+    const clearButton = screen.getByRole('button', { name: /clear filter/i });
+    fireEvent.click(clearButton);
+
+    expect(within(list).getByTestId('row-header')).toBeInTheDocument();
+    expect(within(list).getByText('Alpha.sid')).toBeInTheDocument();
+  });
+
   it('clears the filter input when clear button is clicked', () => {
     const items: ActionListItem[] = [
       {
