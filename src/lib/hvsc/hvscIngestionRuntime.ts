@@ -617,14 +617,23 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     updates.forEach((version) => plans.push({ type: 'update', version }));
 
     if (!plans.length) {
-      if (cache.baselineVersion) {
-        plans.push({ type: 'baseline', version: cache.baselineVersion });
-        cache.updateVersions
-          .filter((version) => version > cache.baselineVersion)
-          .forEach((version) => plans.push({ type: 'update', version }));
-      } else {
+      if (!cache.baselineVersion) {
         throw new Error('No cached HVSC archives available.');
       }
+      const installedBaselineVersion = current.installedBaselineVersion ?? 0;
+      if (cache.baselineVersion <= installedBaselineVersion) {
+        emitProgress({
+          stage: 'archive_discovery',
+          message: 'No new HVSC archives to ingest',
+          processedCount: 0,
+          totalCount: 0,
+        });
+        return current;
+      }
+      plans.push({ type: 'baseline', version: cache.baselineVersion });
+      cache.updateVersions
+        .filter((version) => version > cache.baselineVersion)
+        .forEach((version) => plans.push({ type: 'update', version }));
     }
 
     emitProgress({ stage: 'archive_discovery', message: `Discovered ${plans.length} cached archive(s)`, processedCount: 0, totalCount: plans.length });

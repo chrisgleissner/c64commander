@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
 import { loadAutomaticDemoModeEnabled, loadStartupDiscoveryWindowMs } from '@/lib/config/appSettings';
+import { isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
 
 vi.mock('@/lib/config/appSettings', () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
@@ -18,6 +19,7 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
   getSmokeConfig: vi.fn(() => null),
   isSmokeModeEnabled: vi.fn(() => false),
   isSmokeReadOnlyEnabled: vi.fn(() => true),
+  recordSmokeStatus: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/c64api', async () => {
@@ -51,6 +53,8 @@ describe('connectionManager', () => {
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(false);
+    vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
     startMockServer.mockClear();
     stopMockServer.mockClear();
     getActiveMockBaseUrl.mockClear();
@@ -135,6 +139,32 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
     expect(localStorage.getItem('c64u_device_host')).toBe('127.0.0.1:9999');
+  });
+
+  it('records smoke status transitions when enabled', async () => {
+    const { discoverConnection, initializeConnectionManager } = await import('@/lib/connection/connectionManager');
+    const { isSmokeModeEnabled, recordSmokeStatus } = await import('@/lib/smoke/smokeMode');
+
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.setItem('c64u_password', '');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(recordSmokeStatus).toHaveBeenCalledWith(expect.objectContaining({
+      state: 'REAL_CONNECTED',
+      mode: 'real',
+    }));
   });
 
   it('accepts healthy probe payload without product field', async () => {

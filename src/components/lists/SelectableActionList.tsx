@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from 'react';
+import { useCallback, useMemo, useState, useRef } from 'react';
 import { MoreVertical, Play, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -242,7 +242,7 @@ export const SelectableActionList = ({
   const [viewAllFilterText, setViewAllFilterText] = useState('');
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
   
-  const filterWithHeaders = (query: string) => {
+  const filterWithHeaders = useCallback((query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return items;
     const lower = trimmed.toLowerCase();
@@ -274,7 +274,7 @@ export const SelectableActionList = ({
     });
 
     return list;
-  };
+  }, [items]);
 
   const filteredItems = useMemo(() => filterWithHeaders(filterText), [items, filterText]);
 
