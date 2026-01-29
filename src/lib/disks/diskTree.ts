@@ -96,6 +96,23 @@ export const buildDiskTreeState = (disks: DiskEntry[], query: string): DiskTreeS
   const root = buildTree(disks);
   const matches = buildDiskMatches(disks, query);
 
+  const filterTree = (node: DiskTreeNode): DiskTreeNode | null => {
+    if (node.type === 'disk') {
+      if (!node.diskId) return null;
+      return matches[node.diskId]?.matches ? { ...node } : null;
+    }
+    const children = (node.children ?? [])
+      .map((child) => filterTree(child))
+      .filter((child): child is DiskTreeNode => Boolean(child));
+    if (node.id === 'root') {
+      return { ...node, children };
+    }
+    if (!children.length) return null;
+    return { ...node, children };
+  };
+
+  const filteredRoot = query.trim() ? filterTree(root) ?? { ...root, children: [] } : root;
+
   const hasMatch = (node: DiskTreeNode): boolean => {
     if (node.type === 'disk' && node.diskId) {
       return matches[node.diskId]?.matches ?? false;
@@ -104,5 +121,5 @@ export const buildDiskTreeState = (disks: DiskEntry[], query: string): DiskTreeS
     return node.children.some(hasMatch);
   };
 
-  return { root, matches, hasMatch };
+  return { root: filteredRoot, matches, hasMatch };
 };

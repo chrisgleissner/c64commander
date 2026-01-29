@@ -343,11 +343,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       if (isSmokeModeEnabled()) {
         console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
       }
-      if (snapshot.state !== 'DEMO_ACTIVE') {
-        await transitionToRealConnected(trigger);
-      } else {
+      if (snapshot.state === 'DEMO_ACTIVE') {
         addLog('info', 'Real device detected during demo mode', { trigger });
       }
+      await transitionToRealConnected(trigger);
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
       addLog('warn', 'Discovery probe failed', { trigger });

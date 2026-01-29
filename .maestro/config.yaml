@@ -2,3 +2,8 @@ testOutputDir: ../test-results/maestro
 excludeTags:
   - subflow
   - probe
+  - slow
+  - edge
+  - hvsc
+  - file-picker
+  - device

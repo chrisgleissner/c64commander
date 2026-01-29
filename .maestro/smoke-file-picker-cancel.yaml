@@ -3,6 +3,10 @@
 # Note: The file picker behavior varies by Android version and emulator state
 
 appId: uk.gleissner.c64commander
+tags:
+    - slow
+    - file-picker
+    - device
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
   TIMEOUT: ${TIMEOUT || "30000"}

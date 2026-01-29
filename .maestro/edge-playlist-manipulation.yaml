@@ -1,4 +1,7 @@
 appId: uk.gleissner.c64commander
+tags:
+    - edge
+    - slow
 env:
     SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
     TIMEOUT: ${TIMEOUT || "30000"}

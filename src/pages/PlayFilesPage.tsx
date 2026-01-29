@@ -306,7 +306,7 @@ export default function PlayFilesPage() {
   const isAndroid = getPlatform() === 'android';
 
   const { flags, isLoaded } = useFeatureFlags();
-  const hvscControlsEnabled = flags.hvsc_enabled;
+  const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
 
   const audioMixerItems = useMemo(() => extractAudioMixerItems(audioMixerCategory as Record<string, unknown> | undefined), [audioMixerCategory]);
   const sidVolumeItems = useMemo(
@@ -2473,13 +2473,6 @@ export default function PlayFilesPage() {
         { type: 'info', label: 'Size', value: formatBytes(item.sizeBytes) },
         { type: 'info', label: 'Date', value: formatDate(detailsDate) },
         { type: 'info', label: 'Source', value: sourceLabel },
-        { type: 'separator' },
-        {
-          type: 'action',
-          label: 'Remove from playlist',
-          onSelect: () => removePlaylistItemsById(new Set([item.id])),
-          destructive: true,
-        },
       ];
       items.push({
         id: item.id,
@@ -2498,9 +2491,6 @@ export default function PlayFilesPage() {
         actionLabel: 'Play',
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        secondaryActionLabel: 'Remove item',
-        onSecondaryAction: () => removePlaylistItemsById(new Set([item.id])),
-        secondaryActionAriaLabel: 'Remove item',
         disableActions: isPlaylistLoading,
       } as ActionListItem);
     });

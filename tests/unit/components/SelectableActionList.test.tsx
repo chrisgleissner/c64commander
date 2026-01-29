@@ -200,4 +200,32 @@ describe('SelectableActionList view-all wrapping', () => {
 
     expect(screen.getByTestId('filter-header')).toBeInTheDocument();
   });
+
+  it('renders icon-only row actions without an Actions label', () => {
+    const items: ActionListItem[] = [
+      {
+        id: 'track-1',
+        title: 'Track One',
+        selected: false,
+        actionLabel: 'Play',
+        onAction: vi.fn(),
+        menuItems: [{ type: 'action', label: 'Details', onSelect: vi.fn() }],
+      },
+    ];
+
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+      />,
+    );
+
+    expect(screen.queryByText('Actions')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Play Track One' })).toBeInTheDocument();
+  });
 });

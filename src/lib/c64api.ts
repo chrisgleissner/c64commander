@@ -664,6 +664,16 @@ export class C64API {
   async playSid(file: string, songNr?: number): Promise<{ errors: string[] }> {
     let path = `/v1/runners:sidplay?file=${encodeURIComponent(file)}`;
     if (songNr !== undefined) path += `&songnr=${songNr}`;
+    const baseUrl = this.getBaseUrl();
+    const headers = this.buildAuthHeaders();
+    addLog('debug', 'SID playback request', {
+      baseUrl,
+      deviceHost: this.deviceHost,
+      url: `${baseUrl}${path}`,
+      headerKeys: Object.keys(headers),
+      proxyHostHeader: headers['X-C64U-Host'] ?? null,
+      hasPasswordHeader: Boolean(headers['X-Password']),
+    });
     return this.request(path, { method: 'PUT', timeoutMs: PLAYBACK_REQUEST_TIMEOUT_MS });
   }
 

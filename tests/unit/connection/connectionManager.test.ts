@@ -231,6 +231,39 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
   });
 
+  it('switches from demo to real device on background probe success', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('@/lib/connection/connectionManager');
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.setItem('c64u_password', '');
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: ['offline'] }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    await discoverConnection('background');
+    await vi.runAllTimersAsync();
+
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
   it('does not auto-enable demo when automatic demo mode is disabled', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('@/lib/connection/connectionManager');

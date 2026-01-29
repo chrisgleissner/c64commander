@@ -1,5 +1,5 @@
 import { useMemo, useState, useRef } from 'react';
-import { MoreVertical, Search, X } from 'lucide-react';
+import { MoreVertical, Play, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -40,6 +40,7 @@ export type ActionListItem = {
   onAction?: () => void;
   onTitleClick?: () => void;
   actionAriaLabel?: string;
+  actionIcon?: React.ReactNode;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
   secondaryActionAriaLabel?: string;
@@ -96,13 +97,13 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
   return (
     <div
       className={cn(
-        'flex items-start gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
+        'flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
         item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
       data-testid={rowTestId}
       data-row-id={item.id}
     >
-      <div className="flex items-center gap-2 pt-0.5 shrink-0">
+      <div className="flex items-center gap-1 shrink-0">
         {item.showSelection !== false ? (
           <Checkbox
             checked={item.selected}
@@ -117,15 +118,14 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-xs"
+                size="icon"
+                className="h-9 w-9 min-h-[44px] min-w-[44px]"
                 aria-label="Item actions"
                 disabled={item.disableActions}
                 id={actionMenuTestId}
                 data-testid={actionMenuTestId}
               >
                 <MoreVertical className="h-4 w-4" />
-                <span className="ml-1">Actions</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
@@ -158,18 +158,18 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           </DropdownMenu>
         )}
       </div>
-      <div className="flex flex-1 items-start gap-2 min-w-0 max-w-full">
-        {item.icon ? <div className="pt-0.5">{item.icon}</div> : null}
+      <div className="flex flex-1 items-center gap-2 min-w-0 max-w-full">
+        {item.icon ? <div className="shrink-0">{item.icon}</div> : null}
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className="text-sm font-medium break-words whitespace-normal text-left hover:underline max-w-full"
+            className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
             onClick={item.onTitleClick}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span>{item.title}</span>
+            <span className="truncate">{item.title}</span>
             {item.titleSuffix ? (
-              <span className="ml-1 text-xs text-muted-foreground tabular-nums">{item.titleSuffix}</span>
+              <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
           </button>
           {item.subtitle ? (
@@ -189,14 +189,14 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
       </div>
       <div className="flex flex-col gap-1 shrink-0">
         <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 text-xs"
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 min-h-[44px] min-w-[44px]"
           onClick={item.onAction}
           disabled={item.isDimmed || item.disableActions}
           aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
         >
-          {item.actionLabel}
+          {item.actionIcon ?? <Play className="h-4 w-4" />}
         </Button>
         {item.secondaryActionLabel && item.onSecondaryAction ? (
           <Button

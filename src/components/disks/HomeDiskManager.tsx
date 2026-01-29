@@ -734,6 +734,7 @@ export const HomeDiskManager = () => {
           menuItems: buildDiskMenuItems(disk, options?.disableActions),
           disableActions: options?.disableActions,
           actionLabel: 'Mount',
+          actionIcon: <HardDrive className="h-4 w-4" aria-hidden="true" />,
           onAction: () => options?.onMount?.(disk),
           onTitleClick: () => options?.onMount?.(disk),
           actionAriaLabel: `Mount ${disk.name}`,
