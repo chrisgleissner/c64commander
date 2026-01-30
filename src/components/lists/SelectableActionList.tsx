@@ -173,17 +173,14 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className={cn(
-              'text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1',
-              item.titleClassName ?? 'truncate',
-            )}
+            className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
             onClick={(event) => {
               event.stopPropagation();
               item.onTitleClick?.();
             }}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span className={item.titleClassName ?? 'truncate'}>{item.title}</span>
+            <span className={cn('min-w-0', item.titleClassName ?? 'truncate')}>{item.title}</span>
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}

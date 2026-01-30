@@ -42,7 +42,6 @@ test.describe('Deterministic Connectivity Simulation', () => {
     demoServer = await createMockC64Server({});
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
     server.setReachable(false);
-    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
@@ -108,7 +107,6 @@ test.describe('Deterministic Connectivity Simulation', () => {
     demoServer = await createMockC64Server({});
     server.setReachable(false);
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
-    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
@@ -138,7 +136,6 @@ test.describe('Deterministic Connectivity Simulation', () => {
     demoServer = await createMockC64Server({});
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
     server.setReachable(false);
-    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
@@ -169,7 +166,6 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server = await createMockC64Server({});
     demoServer = await createMockC64Server({});
     server.setReachable(false);
-    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
