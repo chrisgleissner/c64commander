@@ -24,7 +24,7 @@ vi.mock('@/hooks/useC64Connection', () => ({
   useC64Drives: () => ({
     data: { drives: [] },
   }),
-  useC64Category: (category: string) => {
+  useC64ConfigItems: (category: string) => {
     if (category === 'SID Sockets Configuration') {
       return { data: sidSocketsPayload };
     }

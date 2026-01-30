@@ -2,7 +2,7 @@
 
 ## 1. Purpose and Scope
 
-This document defines the **Tracing** system for the C64 Commander Capacitor-based application (Web, Android, iOS).
+This document defines the Tracing system for the C64 Commander Capacitor-based application (Web, Android, iOS).
 
 Tracing provides a structured, append-only, machine-readable record of:
 
@@ -11,38 +11,39 @@ Tracing provides a structured, append-only, machine-readable record of:
 - Backend target selection and fallback decisions
 - Causality, ordering, and outcomes required for debugging and automated verification
 
-This specification is the **single source of truth** for implementation, testing, and diagnostics.
+This specification is the single source of truth for implementation, testing, and diagnostics.
 
-Tracing is **not** a replacement for logs. Logs remain message-oriented and human-readable. Traces are structured and machine-oriented.
+Tracing is not a replacement for logs. Logs remain message-oriented and human-readable. Traces are structured and machine-oriented.
 
 ---
 
 ## 2. Design Principles
 
-1. **Always-on, rolling session**
+1. Always-on, rolling session
    - One in-memory trace session per app process
-   - Rolling retention window of 20 minutes
-   - Time-based eviction only
+   - Retention limited by both time and size
+   - Deterministic eviction rules
 
-2. **Zero-noise integration**
+2. Zero-noise integration
    - No explicit lifecycle calls in business logic
    - No tracing-specific control flow
    - No per-line or per-call instrumentation
    - Tracing must never reduce code readability
 
-3. **Semantic focus**
+3. Semantic focus
    - Only meaningful actions are traced
    - Low-level UI events and rendering noise are excluded
 
-4. **Strict causality**
+4. Strict causality
    - Every backend interaction is causally linked to exactly one action
    - Correlation is explicit and mandatory
 
-5. **Deterministic testability**
+5. Deterministic testability
    - Traces are designed for semantic assertions
    - Byte-for-byte comparison is explicitly out of scope
+   - Timestamps, relative times, hostnames, ports, and IPs are non-semantic and MUST be normalized in trace comparisons
 
-6. **Safety by construction**
+6. Safety by construction
    - Credentials are redacted at capture time
    - Sensitive data never enters the trace buffer
 
@@ -50,20 +51,23 @@ Tracing is **not** a replacement for logs. Logs remain message-oriented and huma
 
 ## 3. Terminology
 
-- **Trace Session**
-  - The rolling, in-memory collection of trace events
+- Trace Session  
+  The rolling, in-memory collection of trace events.
 
-- **Trace Event**
-  - A single structured record describing one meaningful occurrence
+- Trace Event  
+  A single structured record describing one meaningful occurrence.
 
-- **Action Trace**
-  - A root semantic trace representing a logical operation
+- Action Trace  
+  A root semantic trace representing a logical operation.
 
-- **Correlation ID**
-  - A UUID linking an action trace to all downstream effects
+- Event ID  
+  A deterministic identifier uniquely identifying a single trace event.
 
-- **Origin**
-  - One of `user`, `automatic`, or `system`
+- Correlation ID  
+  A deterministic identifier linking one logical action to all downstream events.
+
+- Origin  
+  One of user, automatic, or system.
 
 ---
 
@@ -71,124 +75,159 @@ Tracing is **not** a replacement for logs. Logs remain message-oriented and huma
 
 ### 4.1 Creation
 
-- Created automatically at app startup
+- Created automatically at app startup.
 
 ### 4.2 Retention
 
-- Maximum retention window: 20 minutes
-- Retention is time-based
+A trace session retains events subject to both limits:
 
-### 4.3 Clearing
+- Maximum wall-clock window: 30 minutes
+- Maximum event count: 100,000 trace events
 
-- User-triggered via **Settings → Diagnostics → Traces → Clear Traces**
-- Clears all retained events without restarting the session
+The effective retention is the smaller of the two.
 
-### 4.4 Programmatic Clearing
+Eviction is deterministic and FIFO based on event age.
+
+### 4.3 Clearing on Restart
+
+- All traces are cleared automatically on app restart.
+- Trace sessions do not persist across process restarts.
+
+### 4.4 Manual Clearing
+
+- User-triggered via Settings → Diagnostics → Traces → Clear Traces
+- Clears all retained events without restarting the app or trace session.
+
+### 4.5 Programmatic Clearing
 
 - Exposed to Playwright and test tooling
-- Clears the rolling buffer without restarting the app
+- Clears the rolling buffer without restarting the app.
 
 ---
 
-## 5. Event Envelope
+## 5. Identifier Model
+
+### 5.1 Event IDs
+
+- Field: id
+- Namespace: EVT-
+- Format: EVT-00000
+
+Semantics:
+
+- Uniquely identifies a single trace event
+- Monotonic and strictly increasing
+- Scoped to one trace session
+- Never reused
+
+Range:
+
+- EVT-00000 through EVT-99999
+
+Reset Rule:
+
+- Reset to EVT-00000 at test start via a test-only API.
+
+---
+
+### 5.2 Correlation IDs
+
+- Field: correlationId
+- Namespace: COR-
+- Format: COR-00000
+
+Semantics:
+
+- Identifies exactly one logical Action Trace
+- All events belonging to that action share the same correlationId
+- One correlation per action
+- No reuse
+
+Range:
+
+- COR-00000 through COR-99999
+
+Reset Rule:
+
+- Reset to COR-00000 at test start via a test-only API.
+
+---
+
+### 5.3 Allocation Rules (Common)
+
+- Deterministic
+- Sequential
+- Zero-padded to fixed width (5 digits)
+- No UUIDs, randomness, hashes, or timestamps
+- Allocation performed by a single in-process ID provider
+
+---
+
+### 5.4 Stability Guarantees
+
+- Same test + same code + same inputs produce identical IDs
+- IDs must match exactly in golden trace comparison
+- IDs are designed for grepability and diff stability
+
+---
+
+### 5.5 Explicit Non-Namespaces
+
+The following are explicitly forbidden:
+
+- Per-thread namespaces
+- Per-component namespaces
+- Per-origin namespaces
+- ID reuse across sessions
+- Compression or shortening at export time
+
+---
+
+## 6. Event Envelope
 
 All trace events share a common envelope:
 
-```json
 {
-  "id": "uuid",
+  "id": "EVT-00042",
   "timestamp": "ISO-8601",
   "relativeMs": 123,
   "type": "event-type",
   "origin": "user | automatic | system",
-  "correlationId": "uuid",
+  "correlationId": "COR-00007",
   "data": {}
 }
-```
 
-- `timestamp` is absolute and diagnostic
-- `relativeMs` is milliseconds since session start and is the primary ordering key for tests
+- timestamp is absolute and diagnostic
+- relativeMs is milliseconds since session start and is the primary ordering key for tests
 
 ---
 
-## 6. Action Tracing Model
+## 7. Action Tracing Model
 
-### 6.1 Action Traces
+### 7.1 Action Traces
 
-An **Action Trace** represents a single logical operation, for example:
-
-- Play, pause, stop
-- Playlist mutation
-- HVSC installation
-- Device reset
-- Background system tasks
+An Action Trace represents one logical operation.
 
 Each Action Trace:
 
-- Creates a new `correlationId`
+- Allocates exactly one new correlationId
 - Has a clear start and end
-- Captures contextual metadata automatically
-- Owns all child traces (REST, FTP, scoped sub-actions)
+- Owns all child events
+- Is never nested
 
-Nested Action Traces are not permitted.
-
-Sequential actions produce sequential correlations.
+Sequential actions produce sequential correlation IDs.
 
 ---
 
-### 6.2 Action Trace Origins
+### 7.2 Action Trace Origins
 
-Each Action Trace declares an **origin** describing why the action started.
+Each Action Trace declares an origin:
 
-Origin is required and MUST be one of:
+- user
+- automatic
+- system
 
-- `user` – initiated by explicit user interaction
-- `automatic` – initiated as a direct consequence of prior state or action
-- `system` – initiated independently of any specific user action
-
-Origin is descriptive only and does not alter causality or ownership rules.
-
----
-
-## 7. Zero-Noise Action Tracing API
-
-### 7.1 Public API
-
-```ts
-useActionTrace(componentName?: string): (fn: Function) => Function
-```
-
-Example:
-
-```ts
-const trace = useActionTrace('PlayFilesPage');
-
-const handlePlay = trace(async () => {
-  await playItem(playlist[currentIndex]);
-});
-```
-
-Characteristics:
-
-- No string identifiers required
-- No manual start or end calls
-- No explicit error handling for tracing
-- No additional nesting or indentation
-
-### 7.2 Action Name Inference
-
-Action name resolution order:
-
-1. Explicit component name passed to `useActionTrace`
-2. Wrapped function variable name
-3. React component display name
-4. Fallback: `anonymousAction`
-
-Example:
-
-```
-PlayFilesPage.handlePlay
-```
+Origin is descriptive only and does not alter causality.
 
 ---
 
@@ -427,6 +466,12 @@ Tests assert:
 - Correct targets
 - Correct payload semantics
 
+ID-related notes:
+
+- Tests MUST assert exact EVT-* and COR-* identifiers
+- ID reset MUST occur before each test via test-only API
+- Golden trace normalization MUST NOT ignore IDs
+
 ### 18.3 Strict Mode
 
 - Optional per-test strictness
@@ -598,6 +643,11 @@ The following values are ignored or normalized:
 - `relativeMs` (ordering retained; exact values ignored)
 - IP addresses and ports inside REST/FTP URLs
 - Any backend host identifiers that differ across runs
+- `durationMs` on REST responses
+
+The following values MUST match exactly:
+
+- `id` and `correlationId` (deterministic numeric counters)
 
 Meta normalization (for `meta.json`):
 
@@ -645,6 +695,7 @@ All other fields, including event type order, `origin`, `correlationId` shape, t
 
 - Re-run step 1 after the code change.
 - Commit the updated golden traces alongside the code change.
+- Golden traces under `test-results/traces/golden/**` MUST be committed and MUST NOT be gitignored.
 
 ### 19.5 Failure Modes and Diagnosis
 

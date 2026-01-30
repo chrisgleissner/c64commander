@@ -15,7 +15,7 @@ import {
   Download,
   FolderOpen
 } from 'lucide-react';
-import { useC64Category, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { AppBar } from '@/components/AppBar';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
@@ -33,14 +33,23 @@ import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { buildSidStatusEntries } from '@/lib/config/sidStatus';
+import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from '@/lib/config/configItems';
 import { useActionTrace } from '@/hooks/useActionTrace';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
-  const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
-  const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
+  const { data: sidSocketsCategory } = useC64ConfigItems(
+    'SID Sockets Configuration',
+    SID_SOCKETS_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
+  const { data: sidAddressingCategory } = useC64ConfigItems(
+    'SID Addressing',
+    SID_ADDRESSING_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
   const controls = useC64MachineControl();
   const {
     appConfigs,

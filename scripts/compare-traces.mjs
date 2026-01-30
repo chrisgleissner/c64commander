@@ -7,8 +7,6 @@ const goldenRoot = path.resolve(process.env.TRACE_GOLDEN_DIR || path.join(proces
 
 const errors = [];
 
-const isUuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
 const normalizeUrl = (value) => {
   if (!value || typeof value !== 'string') return value;
   try {
@@ -32,27 +30,53 @@ const normalizeHeaders = (headers) => {
   return normalized;
 };
 
+const normalizeHostLike = (value) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (!trimmed) return value;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(trimmed)) return '***';
+  if (/^[a-z0-9.-]+:\d+$/i.test(trimmed)) return '***';
+  if (/^[a-z0-9.-]+$/i.test(trimmed) && trimmed.includes('.')) return '***';
+  return value;
+};
+
+const normalizeDataFields = (value) => {
+  if (Array.isArray(value)) return value.map((entry) => normalizeDataFields(entry));
+  if (value && typeof value === 'object') {
+    const normalized = {};
+    Object.entries(value).forEach(([key, entry]) => {
+      if (/host|hostname|ip|address|port/i.test(key)) {
+        normalized[key] = normalizeHostLike(entry);
+        return;
+      }
+      normalized[key] = normalizeDataFields(entry);
+    });
+    return normalized;
+  }
+  return normalizeHostLike(value);
+};
+
 const normalizeTrace = (events) => {
-  const correlationMap = new Map();
-  let corrIndex = 0;
+  let expectedId = 1;
   return events.map((event) => {
     const normalized = { ...event };
-    if (!isUuid(normalized.correlationId)) {
+    if (typeof normalized.id !== 'number') {
+      errors.push(`Invalid trace id: ${normalized.id}`);
+    } else if (normalized.id !== expectedId) {
+      errors.push(`Unexpected trace id ${normalized.id}; expected ${expectedId}`);
+    }
+    expectedId += 1;
+    if (typeof normalized.correlationId !== 'number') {
       errors.push(`Invalid correlationId: ${normalized.correlationId}`);
     }
-    if (!correlationMap.has(normalized.correlationId)) {
-      corrIndex += 1;
-      correlationMap.set(normalized.correlationId, `corr-${corrIndex}`);
-    }
-    normalized.correlationId = correlationMap.get(normalized.correlationId);
-    delete normalized.id;
     delete normalized.timestamp;
     normalized.relativeMs = 0;
     if (normalized.data && typeof normalized.data === 'object') {
-      const data = { ...normalized.data };
+      const data = normalizeDataFields({ ...normalized.data });
       if (typeof data.url === 'string') data.url = normalizeUrl(data.url);
       if (typeof data.normalizedUrl === 'string') data.normalizedUrl = normalizeUrl(data.normalizedUrl);
       if (data.headers) data.headers = normalizeHeaders(data.headers);
+      if ('durationMs' in data) delete data.durationMs;
       normalized.data = data;
     }
     return normalized;

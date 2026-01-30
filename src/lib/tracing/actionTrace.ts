@@ -6,10 +6,7 @@ import {
   recordActionStart,
   recordTraceError,
 } from '@/lib/tracing/traceSession';
-
-const buildId = () =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()) ||
-  `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+import { nextCorrelationId } from '@/lib/tracing/traceIds';
 
 let activeAction: TraceActionContext | null = null;
 
@@ -44,7 +41,7 @@ export const runWithImplicitAction = async <T>(
     return await fn(activeAction);
   }
   const context: TraceActionContext = {
-    correlationId: buildId(),
+    correlationId: nextCorrelationId(),
     origin: 'system',
     name,
     componentName: null,
@@ -57,7 +54,7 @@ export const createActionContext = (
   origin: TraceOrigin,
   componentName?: string | null,
 ): TraceActionContext => ({
-  correlationId: buildId(),
+  correlationId: nextCorrelationId(),
   origin,
   name,
   componentName: componentName ?? null,

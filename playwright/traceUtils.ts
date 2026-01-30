@@ -3,12 +3,12 @@ import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 
 type TraceEvent = {
-  id: string;
+  id: number;
   timestamp: string;
   relativeMs: number;
   type: string;
   origin: string;
-  correlationId: string;
+  correlationId: number;
   data: Record<string, unknown>;
 };
 
@@ -126,8 +126,19 @@ const getEvidenceDir = (testInfo: TestInfo) => {
 
 export const clearTraces = async (page: Page) => {
   await page.evaluate(() => {
-    const tracing = (window as Window & { __c64uTracing?: { clearTraces?: () => void } }).__c64uTracing;
+    const tracing = (window as Window & {
+      __c64uTracing?: {
+        clearTraces?: () => void;
+        resetTraceIds?: (eventStart?: number, correlationStart?: number) => void;
+        resetTraceSession?: (eventStart?: number, correlationStart?: number) => void;
+      }
+    }).__c64uTracing;
+    if (tracing?.resetTraceSession) {
+      tracing.resetTraceSession(1, 1);
+      return;
+    }
     tracing?.clearTraces?.();
+    tracing?.resetTraceIds?.(1, 1);
   });
 };
 

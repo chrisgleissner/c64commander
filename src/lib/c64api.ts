@@ -578,6 +578,30 @@ export class C64API {
     return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`);
   }
 
+  async getConfigItems(category: string, items: string[]): Promise<ConfigResponse> {
+    const responses = await Promise.allSettled(
+      items.map((item) => this.getConfigItem(category, item)),
+    );
+    const mergedItems: Record<string, unknown> = {};
+    responses.forEach((result) => {
+      if (result.status !== 'fulfilled') return;
+      const payload = result.value as Record<string, any>;
+      const categoryBlock = payload?.[category] ?? payload;
+      const itemsBlock = categoryBlock?.items ?? categoryBlock;
+      if (!itemsBlock || typeof itemsBlock !== 'object') return;
+      Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
+        if (name === 'errors') return;
+        mergedItems[name] = config;
+      });
+    });
+    return {
+      [category]: {
+        items: mergedItems,
+      },
+      errors: [],
+    } as ConfigResponse;
+  }
+
   async setConfigValue(category: string, item: string, value: string | number): Promise<ConfigResponse> {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);

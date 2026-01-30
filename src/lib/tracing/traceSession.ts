@@ -11,17 +11,14 @@ import type {
 } from '@/lib/tracing/types';
 import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
+import { nextTraceEventId, resetTraceIds } from '@/lib/tracing/traceIds';
 
 const RETENTION_WINDOW_MS = 20 * 60 * 1000;
 
-const buildId = () =>
-  (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()) ||
-  `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-
-const sessionStartMs = Date.now();
+let sessionStartMs = Date.now();
 let events: TraceEvent[] = [];
-const decisionByCorrelation = new Set<string>();
-const errorOnce = new WeakSet<Error>();
+const decisionByCorrelation = new Set<number>();
+let errorOnce = new WeakSet<Error>();
 let lastExport: { reason: string; timestamp: string; data: Uint8Array } | null = null;
 
 const evictExpired = (nowMs: number) => {
@@ -35,13 +32,13 @@ const evictExpired = (nowMs: number) => {
 const appendEvent = <T extends Record<string, unknown>>(
   type: TraceEventType,
   origin: TraceOrigin,
-  correlationId: string,
+  correlationId: number,
   data: T,
 ) => {
   const nowMs = Date.now();
   evictExpired(nowMs);
   const event: TraceEvent<T> = {
-    id: buildId(),
+    id: nextTraceEventId(),
     timestamp: new Date(nowMs).toISOString(),
     relativeMs: nowMs - sessionStartMs,
     type,
@@ -55,7 +52,7 @@ const appendEvent = <T extends Record<string, unknown>>(
   }
 };
 
-const emitBackendDecision = (origin: TraceOrigin, correlationId: string, target: BackendTarget, reason: BackendDecisionReason) => {
+const emitBackendDecision = (origin: TraceOrigin, correlationId: number, target: BackendTarget, reason: BackendDecisionReason) => {
   if (decisionByCorrelation.has(correlationId)) return;
   decisionByCorrelation.add(correlationId);
   appendEvent('backend-decision', origin, correlationId, {
@@ -69,6 +66,18 @@ export const getTraceEvents = () => [...events];
 export const clearTraceEvents = () => {
   events = [];
   decisionByCorrelation.clear();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('c64u-traces-updated'));
+  }
+};
+
+export const resetTraceSession = (eventStart = 1, correlationStart = 1) => {
+  events = [];
+  decisionByCorrelation.clear();
+  errorOnce = new WeakSet<Error>();
+  lastExport = null;
+  sessionStartMs = Date.now();
+  resetTraceIds(eventStart, correlationStart);
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('c64u-traces-updated'));
   }

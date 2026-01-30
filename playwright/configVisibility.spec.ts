@@ -84,7 +84,12 @@ test.describe('Config visibility across modes', () => {
     const checkbox = page.getByLabel('HDMI Scan lines checkbox');
     await checkbox.click();
 
-    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/configs');
+    const configItemBase = '/v1/configs/U64%20Specific%20Settings';
+    const { requestEvent } = await expectRestTraceSequence(
+      page,
+      testInfo,
+      new RegExp(`${configItemBase}/(System%20Mode|HDMI%20Scan%20lines)`),
+    );
     expect((requestEvent.data as { target?: string }).target).toBe('internal-mock');
 
     await expect.poll(() => demoServer.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');

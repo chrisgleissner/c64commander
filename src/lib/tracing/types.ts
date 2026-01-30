@@ -12,12 +12,12 @@ export type TraceEventType =
   | 'error';
 
 export type TraceEvent<T = Record<string, unknown>> = {
-  id: string;
+  id: number;
   timestamp: string;
   relativeMs: number;
   type: TraceEventType;
   origin: TraceOrigin;
-  correlationId: string;
+  correlationId: number;
   data: T;
 };
 
@@ -26,7 +26,7 @@ export type BackendTarget = 'internal-mock' | 'external-mock' | 'real-device';
 export type BackendDecisionReason = 'reachable' | 'fallback' | 'demo-mode' | 'test-mode';
 
 export type TraceActionContext = {
-  correlationId: string;
+  correlationId: number;
   origin: TraceOrigin;
   name: string;
   componentName?: string | null;

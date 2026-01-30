@@ -82,7 +82,7 @@ test.describe('Audio Mixer volumes', () => {
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).toBe(initialState['Vol UltiSid 2'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe(initialState['Vol Socket 1'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe(initialState['Vol Socket 2'].value);
-    await expectRestTraceSequence(page, testInfo, '/v1/configs/Audio%20Mixer');
+    await expectRestTraceSequence(page, testInfo, /\/v1\/configs\/Audio%20Mixer\/Vol%20UltiSid%201/);
     await snap(page, testInfo, 'updates-sent');
   });
 

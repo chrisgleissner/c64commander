@@ -131,6 +131,19 @@ export function useC64Category(category: string, enabled = true) {
   });
 }
 
+export function useC64ConfigItems(category: string, items: string[], enabled = true) {
+  const itemKey = items.join('|');
+  return useQuery({
+    queryKey: ['c64-config-items', category, itemKey],
+    queryFn: async () => {
+      const api = getC64API();
+      return api.getConfigItems(category, items);
+    },
+    enabled: enabled && !!category && items.length > 0,
+    staleTime: 30000,
+  });
+}
+
 export function useC64AllConfig() {
   const { data: categories } = useC64Categories();
   

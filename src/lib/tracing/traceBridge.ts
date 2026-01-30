@@ -1,9 +1,12 @@
-import { clearTraceEvents, exportTraceZip, getTraceEvents } from '@/lib/tracing/traceSession';
+import { clearTraceEvents, exportTraceZip, getTraceEvents, resetTraceSession } from '@/lib/tracing/traceSession';
+import { resetTraceIds } from '@/lib/tracing/traceIds';
 
 export type TraceBridge = {
   clearTraces: () => void;
   getTraces: () => ReturnType<typeof getTraceEvents>;
   exportTraces: () => Uint8Array;
+  resetTraceIds: (eventStart?: number, correlationStart?: number) => void;
+  resetTraceSession: (eventStart?: number, correlationStart?: number) => void;
 };
 
 declare global {
@@ -18,5 +21,7 @@ export const registerTraceBridge = () => {
     clearTraces: () => clearTraceEvents(),
     getTraces: () => getTraceEvents(),
     exportTraces: () => exportTraceZip(),
+    resetTraceIds: (eventStart = 1, correlationStart = 1) => resetTraceIds(eventStart, correlationStart),
+    resetTraceSession: (eventStart = 1, correlationStart = 1) => resetTraceSession(eventStart, correlationStart),
   };
 };

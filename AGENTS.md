@@ -78,6 +78,15 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - Keep wording short.
 - Describe only the current state of documents when changing them.
 
+## Golden Trace Stewardship
+
+When modifying Playwright tests, REST routing, or tracing logic:
+
+1. Detect changes that affect trace semantics (order, payloads, endpoints, or normalization).
+2. If trace semantics change, re-run golden trace recording locally.
+3. Commit updated golden traces under test-results/traces/golden.
+4. Never weaken trace assertions to make tests pass; fix the root cause instead.
+
 ## Fast path (before a PR)
 
 ### Install dependencies
