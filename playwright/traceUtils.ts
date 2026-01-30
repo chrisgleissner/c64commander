@@ -155,24 +155,11 @@ export const getTraces = async (page: Page): Promise<TraceEvent[]> => {
   });
 };
 
-export const exportTracesZip = async (page: Page): Promise<Uint8Array | null> => {
-  const data = await page.evaluate(() => {
-    const tracing = (window as Window & { __c64uTracing?: { exportTraces?: () => Uint8Array } }).__c64uTracing;
-    const payload = tracing?.exportTraces?.();
-    return payload ? Array.from(payload) : null;
-  });
-  return data ? Uint8Array.from(data) : null;
-};
-
 export const saveTracesFromPage = async (page: Page, testInfo: TestInfo, tracesOverride?: TraceEvent[]) => {
   const evidenceDir = getEvidenceDir(testInfo);
   await fs.mkdir(evidenceDir, { recursive: true });
   const traces = tracesOverride ?? await getTraces(page);
   await fs.writeFile(path.join(evidenceDir, 'trace.json'), JSON.stringify(traces, null, 2), 'utf8');
-  const zip = await exportTracesZip(page);
-  if (zip) {
-    await fs.writeFile(path.join(evidenceDir, 'trace-app.zip'), Buffer.from(zip));
-  }
 
   if (process.env.RECORD_TRACES === '1') {
     const outputDir = process.env.TRACE_OUTPUT_DIR || path.resolve(process.cwd(), 'test-results', 'traces', 'golden');

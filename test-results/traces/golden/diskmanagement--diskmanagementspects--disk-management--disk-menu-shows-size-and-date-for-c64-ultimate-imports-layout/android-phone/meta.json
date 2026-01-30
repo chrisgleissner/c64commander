@@ -1,0 +1,15 @@
+{
+  "testId": "diskmanagement--diskmanagementspects--disk-management--disk-menu-shows-size-and-date-for-c64-ultimate-imports-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:22.574Z",
+  "testTitle": "disk menu shows size and date for C64 Ultimate imports @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/diskManagement.spec.ts",
+  "status": "passed"
+}

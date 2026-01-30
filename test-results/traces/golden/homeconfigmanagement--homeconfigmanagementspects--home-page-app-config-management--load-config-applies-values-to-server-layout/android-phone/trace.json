@@ -1,0 +1,146 @@
+[
+  {
+    "id": "EVT-0000",
+    "timestamp": "2026-01-30T23:30:26.363Z",
+    "relativeMs": 71,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "name": "HomePage.anonymousAction",
+      "component": "HomePage",
+      "context": {
+        "ui": {
+          "route": "/",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": "TEST-123",
+          "connectionState": "REAL_CONNECTED"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0001",
+    "timestamp": "2026-01-30T23:30:26.370Z",
+    "relativeMs": 78,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "name": "rest.post",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": "TEST-123",
+          "connectionState": "REAL_CONNECTED"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0002",
+    "timestamp": "2026-01-30T23:30:26.370Z",
+    "relativeMs": 78,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-01-30T23:30:26.370Z",
+    "relativeMs": 78,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "method": "POST",
+      "url": "http://127.0.0.1:36765/v1/configs",
+      "normalizedUrl": "/v1/configs",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:36765"
+      },
+      "body": {
+        "U64 Specific Settings": {
+          "System Mode": "PAL",
+          "HDMI Scan lines": "Enabled"
+        }
+      },
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-01-30T23:30:26.385Z",
+    "relativeMs": 93,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": 200,
+      "body": {
+        "errors": []
+      },
+      "durationMs": 12,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0005",
+    "timestamp": "2026-01-30T23:30:26.385Z",
+    "relativeMs": 93,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0006",
+    "timestamp": "2026-01-30T23:30:26.386Z",
+    "relativeMs": 94,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  }
+]

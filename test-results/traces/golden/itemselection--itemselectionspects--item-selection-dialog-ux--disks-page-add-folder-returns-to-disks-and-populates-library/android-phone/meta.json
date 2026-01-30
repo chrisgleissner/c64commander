@@ -1,0 +1,15 @@
+{
+  "testId": "itemselection--itemselectionspects--item-selection-dialog-ux--disks-page-add-folder-returns-to-disks-and-populates-library",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:57.240Z",
+  "testTitle": "Disks page: Add folder returns to Disks and populates library",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/itemSelection.spec.ts",
+  "status": "passed"
+}

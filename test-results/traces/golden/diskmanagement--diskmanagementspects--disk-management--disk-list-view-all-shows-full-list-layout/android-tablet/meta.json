@@ -1,0 +1,15 @@
+{
+  "testId": "diskmanagement--diskmanagementspects--disk-management--disk-list-view-all-shows-full-list-layout",
+  "deviceId": "android-tablet",
+  "viewport": {
+    "width": 800,
+    "height": 1280
+  },
+  "deviceScaleFactor": 2,
+  "isMobile": true,
+  "playwrightProject": "android-tablet",
+  "timestamp": "2026-01-30T23:34:17.528Z",
+  "testTitle": "disk list view all shows full list @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/diskManagement.spec.ts",
+  "status": "passed"
+}

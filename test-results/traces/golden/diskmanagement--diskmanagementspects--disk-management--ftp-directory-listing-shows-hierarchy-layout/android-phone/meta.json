@@ -1,0 +1,15 @@
+{
+  "testId": "diskmanagement--diskmanagementspects--disk-management--ftp-directory-listing-shows-hierarchy-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:57.190Z",
+  "testTitle": "FTP directory listing shows hierarchy @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/diskManagement.spec.ts",
+  "status": "passed"
+}

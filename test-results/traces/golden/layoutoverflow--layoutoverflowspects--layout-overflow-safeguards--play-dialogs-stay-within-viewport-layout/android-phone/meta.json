@@ -1,0 +1,15 @@
+{
+  "testId": "layoutoverflow--layoutoverflowspects--layout-overflow-safeguards--play-dialogs-stay-within-viewport-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 360,
+    "height": 740
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:00.318Z",
+  "testTitle": "play dialogs stay within viewport @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/layoutOverflow.spec.ts",
+  "status": "passed"
+}

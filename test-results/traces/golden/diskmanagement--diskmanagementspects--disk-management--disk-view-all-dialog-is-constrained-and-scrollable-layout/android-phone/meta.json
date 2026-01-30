@@ -1,0 +1,15 @@
+{
+  "testId": "diskmanagement--diskmanagementspects--disk-management--disk-view-all-dialog-is-constrained-and-scrollable-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 360,
+    "height": 740
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:47.548Z",
+  "testTitle": "disk view-all dialog is constrained and scrollable @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/diskManagement.spec.ts",
+  "status": "passed"
+}

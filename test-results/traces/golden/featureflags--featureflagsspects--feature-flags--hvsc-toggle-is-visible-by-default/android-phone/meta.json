@@ -1,0 +1,15 @@
+{
+  "testId": "featureflags--featureflagsspects--feature-flags--hvsc-toggle-is-visible-by-default",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:58.611Z",
+  "testTitle": "hvsc toggle is visible by default",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/featureFlags.spec.ts",
+  "status": "passed"
+}

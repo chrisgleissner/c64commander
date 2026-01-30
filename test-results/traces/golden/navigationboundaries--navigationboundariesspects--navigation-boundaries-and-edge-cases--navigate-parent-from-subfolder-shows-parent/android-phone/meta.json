@@ -1,0 +1,15 @@
+{
+  "testId": "navigationboundaries--navigationboundariesspects--navigation-boundaries-and-edge-cases--navigate-parent-from-subfolder-shows-parent",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:04.268Z",
+  "testTitle": "navigate parent from subfolder shows parent",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/navigationBoundaries.spec.ts",
+  "status": "passed"
+}

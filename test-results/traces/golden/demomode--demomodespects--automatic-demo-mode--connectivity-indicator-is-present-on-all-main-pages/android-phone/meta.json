@@ -1,0 +1,15 @@
+{
+  "testId": "demomode--demomodespects--automatic-demo-mode--connectivity-indicator-is-present-on-all-main-pages",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:46.606Z",
+  "testTitle": "connectivity indicator is present on all main pages",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/demoMode.spec.ts",
+  "status": "passed"
+}

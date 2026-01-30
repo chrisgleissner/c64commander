@@ -1,0 +1,15 @@
+{
+  "testId": "playback--playbackspects--playback-file-browser--rapid-playstopplay-sequences-remain-stable",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:33:05.371Z",
+  "testTitle": "rapid play/stop/play sequences remain stable",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playback.spec.ts",
+  "status": "passed"
+}

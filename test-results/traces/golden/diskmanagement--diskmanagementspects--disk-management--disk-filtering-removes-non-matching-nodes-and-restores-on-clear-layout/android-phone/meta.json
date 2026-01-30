@@ -1,0 +1,15 @@
+{
+  "testId": "diskmanagement--diskmanagementspects--disk-management--disk-filtering-removes-non-matching-nodes-and-restores-on-clear-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:10.101Z",
+  "testTitle": "disk filtering removes non-matching nodes and restores on clear @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/diskManagement.spec.ts",
+  "status": "passed"
+}

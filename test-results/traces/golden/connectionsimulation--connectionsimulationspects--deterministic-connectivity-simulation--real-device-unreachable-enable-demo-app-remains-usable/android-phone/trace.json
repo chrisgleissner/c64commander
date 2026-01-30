@@ -1,0 +1,422 @@
+[
+  {
+    "id": "EVT-0000",
+    "timestamp": "2026-01-30T23:29:29.127Z",
+    "relativeMs": 115,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "UNKNOWN"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0001",
+    "timestamp": "2026-01-30T23:29:29.127Z",
+    "relativeMs": 115,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0002",
+    "timestamp": "2026-01-30T23:29:29.127Z",
+    "relativeMs": 115,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:36117/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:36117"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-01-30T23:29:29.193Z",
+    "relativeMs": 181,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 51,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-01-30T23:29:29.193Z",
+    "relativeMs": 181,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0005",
+    "timestamp": "2026-01-30T23:29:29.193Z",
+    "relativeMs": 181,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0006",
+    "timestamp": "2026-01-30T23:29:29.193Z",
+    "relativeMs": 181,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0007",
+    "timestamp": "2026-01-30T23:29:29.193Z",
+    "relativeMs": 181,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-01-30T23:29:29.193Z",
+    "relativeMs": 181,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:36117/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:36117"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0009",
+    "timestamp": "2026-01-30T23:29:29.208Z",
+    "relativeMs": 196,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 78,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-01-30T23:29:29.208Z",
+    "relativeMs": 196,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-01-30T23:29:29.209Z",
+    "relativeMs": 197,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-01-30T23:29:29.666Z",
+    "relativeMs": 654,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-01-30T23:29:29.666Z",
+    "relativeMs": 654,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-01-30T23:29:29.666Z",
+    "relativeMs": 654,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:36117/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:36117"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0015",
+    "timestamp": "2026-01-30T23:29:29.679Z",
+    "relativeMs": 667,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 18,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0016",
+    "timestamp": "2026-01-30T23:29:29.679Z",
+    "relativeMs": 667,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0017",
+    "timestamp": "2026-01-30T23:29:29.680Z",
+    "relativeMs": 668,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-01-30T23:29:30.165Z",
+    "relativeMs": 1153,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DEMO_ACTIVE"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0019",
+    "timestamp": "2026-01-30T23:29:30.165Z",
+    "relativeMs": 1153,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "selectedTarget": "internal-mock",
+      "reason": "demo-mode"
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-01-30T23:29:30.165Z",
+    "relativeMs": 1153,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:40173/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:40173"
+      },
+      "body": null,
+      "target": "internal-mock"
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-01-30T23:29:30.243Z",
+    "relativeMs": 1231,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": 200,
+      "body": {
+        "product": "C64 Ultimate",
+        "firmware_version": "3.12.0",
+        "fpga_version": "1.0.0",
+        "core_version": "1.0.0",
+        "hostname": "c64u",
+        "unique_id": "TEST-123",
+        "errors": []
+      },
+      "durationMs": 81,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0022",
+    "timestamp": "2026-01-30T23:29:30.243Z",
+    "relativeMs": 1231,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  }
+]

@@ -1,0 +1,15 @@
+{
+  "testId": "screenshots--screenshotsspects--app-screenshots--capture-app-page-screenshots",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 360,
+    "height": 800
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:11.497Z",
+  "testTitle": "capture app page screenshots",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/screenshots.spec.ts",
+  "status": "passed"
+}

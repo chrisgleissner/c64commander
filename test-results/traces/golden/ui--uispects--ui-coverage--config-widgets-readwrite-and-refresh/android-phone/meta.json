@@ -1,0 +1,15 @@
+{
+  "testId": "ui--uispects--ui-coverage--config-widgets-readwrite-and-refresh",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:47.807Z",
+  "testTitle": "config widgets read/write and refresh",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/ui.spec.ts",
+  "status": "passed"
+}

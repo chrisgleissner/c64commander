@@ -1,0 +1,15 @@
+{
+  "testId": "audiomixer--audiomixerspects--audio-mixer-volumes--editing-while-solo-active-restores-other-volumes",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:33.467Z",
+  "testTitle": "editing while solo active restores other volumes",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/audioMixer.spec.ts",
+  "status": "passed"
+}

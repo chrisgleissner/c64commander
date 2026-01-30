@@ -1,0 +1,15 @@
+{
+  "testId": "playback--playbackspects--playback-file-browser--mute-button-toggles-and-slider-does-not-unmute",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:33:17.951Z",
+  "testTitle": "mute button toggles and slider does not unmute",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playback.spec.ts",
+  "status": "passed"
+}

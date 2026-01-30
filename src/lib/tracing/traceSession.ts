@@ -14,20 +14,55 @@ import { getPlatform } from '@/lib/native/platform';
 import { nextTraceEventId, resetTraceIds } from '@/lib/tracing/traceIds';
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
-const MAX_EVENT_COUNT = 100_000;
+const MAX_EVENT_COUNT = 10_000;
+const MAX_STORAGE_BYTES = 50 * 1024 * 1024;
 
 let sessionStartMs = Date.now();
 let events: TraceEvent[] = [];
+let eventSizes: number[] = [];
+let totalBytes = 0;
 const decisionByCorrelation = new Set<string>();
 let errorOnce = new WeakSet<Error>();
 let lastExport: { reason: string; timestamp: string; data: Uint8Array } | null = null;
 
+const estimateEventSize = (event: TraceEvent) => {
+  try {
+    const json = JSON.stringify(event);
+    if (typeof TextEncoder !== 'undefined') {
+      return new TextEncoder().encode(json).length;
+    }
+    return json.length;
+  } catch {
+    return 0;
+  }
+};
+
+const dropOldest = () => {
+  if (!events.length) return;
+  events.shift();
+  const size = eventSizes.shift() ?? 0;
+  totalBytes = Math.max(0, totalBytes - size);
+};
+
 const evictExpired = (nowMs: number) => {
   const threshold = nowMs - RETENTION_WINDOW_MS;
-  events = events.filter((event) => {
-    const eventMs = Date.parse(event.timestamp);
-    return Number.isNaN(eventMs) || eventMs >= threshold;
-  });
+  while (events.length > 0) {
+    const oldest = events[0];
+    const eventMs = Date.parse(oldest.timestamp);
+    if (Number.isNaN(eventMs) || eventMs >= threshold) {
+      break;
+    }
+    dropOldest();
+  }
+};
+
+const enforceLimits = () => {
+  while (events.length > MAX_EVENT_COUNT) {
+    dropOldest();
+  }
+  while (totalBytes > MAX_STORAGE_BYTES) {
+    dropOldest();
+  }
 };
 
 const appendEvent = <T extends Record<string, unknown>>(
@@ -47,10 +82,11 @@ const appendEvent = <T extends Record<string, unknown>>(
     correlationId,
     data,
   };
-  events = [...events, event];
-  if (events.length > MAX_EVENT_COUNT) {
-    events = events.slice(events.length - MAX_EVENT_COUNT);
-  }
+  events.push(event);
+  const size = estimateEventSize(event);
+  eventSizes.push(size);
+  totalBytes += size;
+  enforceLimits();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('c64u-traces-updated'));
   }
@@ -69,6 +105,8 @@ export const getTraceEvents = () => [...events];
 
 export const clearTraceEvents = () => {
   events = [];
+  eventSizes = [];
+  totalBytes = 0;
   decisionByCorrelation.clear();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('c64u-traces-updated'));
@@ -77,6 +115,8 @@ export const clearTraceEvents = () => {
 
 export const resetTraceSession = (eventStart = 0, correlationStart = 0) => {
   events = [];
+  eventSizes = [];
+  totalBytes = 0;
   decisionByCorrelation.clear();
   errorOnce = new WeakSet<Error>();
   lastExport = null;
@@ -213,4 +253,5 @@ export const getLastTraceExport = () => lastExport;
 export const TRACE_SESSION = {
   RETENTION_WINDOW_MS,
   MAX_EVENT_COUNT,
+  MAX_STORAGE_BYTES,
 };

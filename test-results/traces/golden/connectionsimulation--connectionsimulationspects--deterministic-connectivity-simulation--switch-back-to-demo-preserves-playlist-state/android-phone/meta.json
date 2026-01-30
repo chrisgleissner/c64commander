@@ -1,0 +1,15 @@
+{
+  "testId": "connectionsimulation--connectionsimulationspects--deterministic-connectivity-simulation--switch-back-to-demo-preserves-playlist-state",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:54.177Z",
+  "testTitle": "switch back to demo preserves playlist state",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/connectionSimulation.spec.ts",
+  "status": "passed"
+}

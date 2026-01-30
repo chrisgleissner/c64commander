@@ -1,0 +1,15 @@
+{
+  "testId": "settingsconnection--settingsconnectionspects--settings-connection-management--select-dark-theme-applies-theme-class",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:09.198Z",
+  "testTitle": "select dark theme applies theme class",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/settingsConnection.spec.ts",
+  "status": "passed"
+}

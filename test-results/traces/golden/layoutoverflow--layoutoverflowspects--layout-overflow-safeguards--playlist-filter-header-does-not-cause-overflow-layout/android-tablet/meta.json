@@ -1,0 +1,15 @@
+{
+  "testId": "layoutoverflow--layoutoverflowspects--layout-overflow-safeguards--playlist-filter-header-does-not-cause-overflow-layout",
+  "deviceId": "android-tablet",
+  "viewport": {
+    "width": 360,
+    "height": 740
+  },
+  "deviceScaleFactor": 2,
+  "isMobile": true,
+  "playwrightProject": "android-tablet",
+  "timestamp": "2026-01-30T23:33:54.324Z",
+  "testTitle": "playlist filter header does not cause overflow @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/layoutOverflow.spec.ts",
+  "status": "passed"
+}

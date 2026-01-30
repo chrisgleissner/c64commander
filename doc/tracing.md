@@ -82,7 +82,8 @@ Tracing is not a replacement for logs. Logs remain message-oriented and human-re
 A trace session retains events subject to both limits:
 
 - Maximum wall-clock window: 30 minutes
-- Maximum event count: 100,000 trace events
+- Maximum event count: 10,000 trace events
+- Maximum storage (estimated): 50 MiB
 
 The effective retention is the smaller of the two.
 
@@ -111,7 +112,7 @@ Eviction is deterministic and FIFO based on event age.
 
 - Field: id
 - Namespace: EVT-
-- Format: EVT-00000
+- Format: EVT-0000
 
 Semantics:
 
@@ -122,11 +123,11 @@ Semantics:
 
 Range:
 
-- EVT-00000 through EVT-99999
+- EVT-0000 through EVT-9999
 
 Reset Rule:
 
-- Reset to EVT-00000 at test start via a test-only API.
+- Reset to EVT-0000 at test start via a test-only API.
 
 ---
 
@@ -134,7 +135,7 @@ Reset Rule:
 
 - Field: correlationId
 - Namespace: COR-
-- Format: COR-00000
+- Format: COR-0000
 
 Semantics:
 
@@ -145,11 +146,11 @@ Semantics:
 
 Range:
 
-- COR-00000 through COR-99999
+- COR-0000 through COR-9999
 
 Reset Rule:
 
-- Reset to COR-00000 at test start via a test-only API.
+- Reset to COR-0000 at test start via a test-only API.
 
 ---
 
@@ -157,7 +158,7 @@ Reset Rule:
 
 - Deterministic
 - Sequential
-- Zero-padded to fixed width (5 digits)
+- Zero-padded to fixed width (4 digits)
 - No UUIDs, randomness, hashes, or timestamps
 - Allocation performed by a single in-process ID provider
 

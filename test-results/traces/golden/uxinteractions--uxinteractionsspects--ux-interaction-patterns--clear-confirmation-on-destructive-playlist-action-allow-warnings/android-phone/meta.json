@@ -1,0 +1,15 @@
+{
+  "testId": "uxinteractions--uxinteractionsspects--ux-interaction-patterns--clear-confirmation-on-destructive-playlist-action-allow-warnings",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:33:50.668Z",
+  "testTitle": "clear confirmation on destructive playlist action @allow-warnings",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/uxInteractions.spec.ts",
+  "status": "passed"
+}

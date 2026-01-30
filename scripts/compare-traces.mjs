@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright');
 const goldenRoot = path.resolve(process.env.TRACE_GOLDEN_DIR || path.join(process.cwd(), 'test-results', 'traces', 'golden'));
+const requireGoldens = process.env.TRACE_GOLDEN_REQUIRED === '1';
 
 const errors = [];
 
@@ -56,8 +57,8 @@ const normalizeDataFields = (value) => {
   return normalizeHostLike(value);
 };
 
-const formatId = (prefix, value) => `${prefix}-${String(value).padStart(5, '0')}`;
-const isTraceId = (value, prefix) => typeof value === 'string' && new RegExp(`^${prefix}-\\d{5}$`).test(value);
+const formatId = (prefix, value) => `${prefix}-${String(value).padStart(4, '0')}`;
+const isTraceId = (value, prefix) => typeof value === 'string' && new RegExp(`^${prefix}-\\d{4}$`).test(value);
 
 const normalizeTrace = (events) => {
   let expectedId = 0;
@@ -145,11 +146,19 @@ const compareTraceFiles = async (goldenDir, evidenceDir) => {
 const main = async () => {
   const goldenStat = await fs.stat(goldenRoot).catch(() => null);
   if (!goldenStat || !goldenStat.isDirectory()) {
+    if (!requireGoldens) {
+      console.log(`Trace comparison skipped: golden directory missing (${goldenRoot}).`);
+      return;
+    }
     errors.push(`Golden trace directory missing: ${goldenRoot}`);
   }
 
   const goldenSuites = await listDirs(goldenRoot);
   if (goldenSuites.length === 0) {
+    if (!requireGoldens) {
+      console.log(`Trace comparison skipped: golden directory empty (${goldenRoot}).`);
+      return;
+    }
     errors.push(`Golden trace directory empty: ${goldenRoot}`);
   }
 

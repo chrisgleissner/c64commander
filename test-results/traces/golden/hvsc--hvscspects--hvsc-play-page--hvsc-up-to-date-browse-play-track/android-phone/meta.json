@@ -1,0 +1,15 @@
+{
+  "testId": "hvsc--hvscspects--hvsc-play-page--hvsc-up-to-date-browse-play-track",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:48.738Z",
+  "testTitle": "HVSC up-to-date -> browse -> play track",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/hvsc.spec.ts",
+  "status": "passed"
+}

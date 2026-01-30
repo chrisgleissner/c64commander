@@ -1,0 +1,15 @@
+{
+  "testId": "solo--solospects--config-page-sid-solo-routing--solo-switch-toggles-active-sid-instantly",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:33.607Z",
+  "testTitle": "solo switch toggles active SID instantly",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/solo.spec.ts",
+  "status": "passed"
+}

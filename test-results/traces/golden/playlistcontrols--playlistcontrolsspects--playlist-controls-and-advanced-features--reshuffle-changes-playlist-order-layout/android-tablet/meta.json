@@ -1,0 +1,15 @@
+{
+  "testId": "playlistcontrols--playlistcontrolsspects--playlist-controls-and-advanced-features--reshuffle-changes-playlist-order-layout",
+  "deviceId": "android-tablet",
+  "viewport": {
+    "width": 800,
+    "height": 1280
+  },
+  "deviceScaleFactor": 2,
+  "isMobile": true,
+  "playwrightProject": "android-tablet",
+  "timestamp": "2026-01-30T23:34:25.663Z",
+  "testTitle": "reshuffle changes playlist order @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playlistControls.spec.ts",
+  "status": "passed"
+}

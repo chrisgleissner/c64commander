@@ -1,0 +1,15 @@
+{
+  "testId": "demomode--demomodespects--automatic-demo-mode--legacy-base-url-migrates-to-device-host-on-startup",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:50.988Z",
+  "testTitle": "legacy base URL migrates to device host on startup",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/demoMode.spec.ts",
+  "status": "passed"
+}

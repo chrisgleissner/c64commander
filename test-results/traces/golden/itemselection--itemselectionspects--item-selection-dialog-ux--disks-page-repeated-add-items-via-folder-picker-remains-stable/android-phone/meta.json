@@ -1,0 +1,15 @@
+{
+  "testId": "itemselection--itemselectionspects--item-selection-dialog-ux--disks-page-repeated-add-items-via-folder-picker-remains-stable",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:10.991Z",
+  "testTitle": "Disks page: repeated add items via folder picker remains stable",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/itemSelection.spec.ts",
+  "status": "passed"
+}

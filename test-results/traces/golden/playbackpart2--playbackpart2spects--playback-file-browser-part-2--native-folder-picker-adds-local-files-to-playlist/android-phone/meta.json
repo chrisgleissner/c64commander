@@ -1,0 +1,15 @@
+{
+  "testId": "playbackpart2--playbackpart2spects--playback-file-browser-part-2--native-folder-picker-adds-local-files-to-playlist",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:01.858Z",
+  "testTitle": "native folder picker adds local files to playlist",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playback.part2.spec.ts",
+  "status": "passed"
+}

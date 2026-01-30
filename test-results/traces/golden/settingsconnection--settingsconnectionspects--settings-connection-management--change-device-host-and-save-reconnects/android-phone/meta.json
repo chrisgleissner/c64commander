@@ -1,0 +1,15 @@
+{
+  "testId": "settingsconnection--settingsconnectionspects--settings-connection-management--change-device-host-and-save-reconnects",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:51.379Z",
+  "testTitle": "change device host and save reconnects",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/settingsConnection.spec.ts",
+  "status": "passed"
+}

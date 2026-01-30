@@ -1,0 +1,15 @@
+{
+  "testId": "diskmanagement--diskmanagementspects--disk-management--mount-failure-surfaces-error-and-does-not-mark-drive-mounted-layout",
+  "deviceId": "android-tablet",
+  "viewport": {
+    "width": 800,
+    "height": 1280
+  },
+  "deviceScaleFactor": 2,
+  "isMobile": true,
+  "playwrightProject": "android-tablet",
+  "timestamp": "2026-01-30T23:34:00.621Z",
+  "testTitle": "mount failure surfaces error and does not mark drive mounted @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/diskManagement.spec.ts",
+  "status": "passed"
+}

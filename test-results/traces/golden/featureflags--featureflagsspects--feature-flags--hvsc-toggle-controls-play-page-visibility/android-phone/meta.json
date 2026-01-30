@@ -1,0 +1,15 @@
+{
+  "testId": "featureflags--featureflagsspects--feature-flags--hvsc-toggle-controls-play-page-visibility",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:01.992Z",
+  "testTitle": "hvsc toggle controls play page visibility",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/featureFlags.spec.ts",
+  "status": "passed"
+}

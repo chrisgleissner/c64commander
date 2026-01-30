@@ -1,0 +1,15 @@
+{
+  "testId": "solo--solospects--config-page-sid-solo-routing--config-labels-stay-horizontal-at-narrow-widths",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 360,
+    "height": 780
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:43.334Z",
+  "testTitle": "config labels stay horizontal at narrow widths",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/solo.spec.ts",
+  "status": "passed"
+}

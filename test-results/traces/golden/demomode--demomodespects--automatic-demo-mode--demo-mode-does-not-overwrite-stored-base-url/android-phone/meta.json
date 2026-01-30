@@ -1,0 +1,15 @@
+{
+  "testId": "demomode--demomodespects--automatic-demo-mode--demo-mode-does-not-overwrite-stored-base-url",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:02.171Z",
+  "testTitle": "demo mode does not overwrite stored base URL",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/demoMode.spec.ts",
+  "status": "passed"
+}

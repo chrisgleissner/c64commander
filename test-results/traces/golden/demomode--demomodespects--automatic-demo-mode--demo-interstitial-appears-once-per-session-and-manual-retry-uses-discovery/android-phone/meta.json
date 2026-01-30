@@ -1,0 +1,15 @@
+{
+  "testId": "demomode--demomodespects--automatic-demo-mode--demo-interstitial-appears-once-per-session-and-manual-retry-uses-discovery",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:55.171Z",
+  "testTitle": "demo interstitial appears once per session and manual retry uses discovery",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/demoMode.spec.ts",
+  "status": "passed"
+}

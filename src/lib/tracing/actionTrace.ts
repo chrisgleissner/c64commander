@@ -17,10 +17,7 @@ export const resetActionTrace = () => {
 };
 
 export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
-  if (activeAction) {
-    return await fn();
-  }
-
+  const previous = activeAction;
   activeAction = context;
   recordActionStart(context);
   try {
@@ -33,7 +30,7 @@ export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () 
     recordActionEnd(context, err);
     throw error;
   } finally {
-    activeAction = null;
+    activeAction = previous;
   }
 };
 

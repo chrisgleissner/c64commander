@@ -28,6 +28,7 @@ dist-ssr/
 coverage/
 playwright-report/
 test-results/
+!test-results/
 !test-results/traces/
 !test-results/traces/golden/
 !test-results/traces/golden/**

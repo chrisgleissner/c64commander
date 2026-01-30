@@ -1,0 +1,15 @@
+{
+  "testId": "playlistcontrols--playlistcontrolsspects--playlist-controls-and-advanced-features--playlist-filter-not-yet-implemented-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:34.934Z",
+  "testTitle": "playlist filter not yet implemented @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playlistControls.spec.ts",
+  "status": "passed"
+}

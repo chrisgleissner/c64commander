@@ -1,0 +1,15 @@
+{
+  "testId": "connectionsimulation--connectionsimulationspects--deterministic-connectivity-simulation--disable-demo-connect-to-real-core-operations-succeed",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:29:49.772Z",
+  "testTitle": "disable demo → connect to real → core operations succeed",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/connectionSimulation.spec.ts",
+  "status": "passed"
+}

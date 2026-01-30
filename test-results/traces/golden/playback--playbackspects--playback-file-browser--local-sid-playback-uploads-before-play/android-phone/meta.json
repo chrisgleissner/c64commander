@@ -1,0 +1,15 @@
+{
+  "testId": "playback--playbackspects--playback-file-browser--local-sid-playback-uploads-before-play",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:31:52.619Z",
+  "testTitle": "local SID playback uploads before play",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playback.spec.ts",
+  "status": "passed"
+}

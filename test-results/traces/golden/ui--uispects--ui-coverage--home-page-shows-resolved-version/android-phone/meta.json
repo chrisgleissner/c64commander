@@ -1,0 +1,15 @@
+{
+  "testId": "ui--uispects--ui-coverage--home-page-shows-resolved-version",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:54.929Z",
+  "testTitle": "home page shows resolved version",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/ui.spec.ts",
+  "status": "passed"
+}

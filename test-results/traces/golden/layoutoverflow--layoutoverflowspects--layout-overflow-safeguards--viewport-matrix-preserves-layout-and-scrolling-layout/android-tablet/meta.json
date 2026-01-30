@@ -1,0 +1,15 @@
+{
+  "testId": "layoutoverflow--layoutoverflowspects--layout-overflow-safeguards--viewport-matrix-preserves-layout-and-scrolling-layout",
+  "deviceId": "android-tablet",
+  "viewport": {
+    "width": 844,
+    "height": 390
+  },
+  "deviceScaleFactor": 2,
+  "isMobile": true,
+  "playwrightProject": "android-tablet",
+  "timestamp": "2026-01-30T23:34:42.611Z",
+  "testTitle": "viewport matrix preserves layout and scrolling @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/layoutOverflow.spec.ts",
+  "status": "passed"
+}

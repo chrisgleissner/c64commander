@@ -1,0 +1,15 @@
+{
+  "testId": "ftpperformance--ftpperformancespects--ftp-performance--ftp-navigation-shows-delayed-loading-indicator-on-slow-requests",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:14.898Z",
+  "testTitle": "FTP navigation shows delayed loading indicator on slow requests",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/ftpPerformance.spec.ts",
+  "status": "passed"
+}

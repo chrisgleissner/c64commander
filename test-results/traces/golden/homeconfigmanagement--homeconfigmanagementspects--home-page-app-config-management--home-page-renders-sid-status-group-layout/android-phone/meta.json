@@ -1,0 +1,15 @@
+{
+  "testId": "homeconfigmanagement--homeconfigmanagementspects--home-page-app-config-management--home-page-renders-sid-status-group-layout",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:30:38.532Z",
+  "testTitle": "home page renders SID status group @layout",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/homeConfigManagement.spec.ts",
+  "status": "passed"
+}

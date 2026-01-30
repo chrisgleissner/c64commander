@@ -427,19 +427,23 @@ export class C64API {
             timeoutPromiseId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
           })
           : null;
-        const response = timeoutPromise
-          ? await Promise.race([responsePromise, timeoutPromise])
-          : await responsePromise;
-        if (timeoutId) clearTimeout(timeoutId);
-        if (outerSignal && controller) {
-          outerSignal.removeEventListener('abort', abortFromOuter);
+        let response: Response;
+        try {
+          response = timeoutPromise
+            ? await Promise.race([responsePromise, timeoutPromise])
+            : await responsePromise;
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (outerSignal && controller) {
+            outerSignal.removeEventListener('abort', abortFromOuter);
+          }
+          if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
         }
-        if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
 
         status = response.status;
         const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
-        const responseBody = await readResponseBody(response);
         if (!response.ok) {
+          const responseBody = await readResponseBody(response);
           const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
           recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: err });
           recordTraceError(action, err);
@@ -447,10 +451,11 @@ export class C64API {
           throw err;
         }
 
-        recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: null });
+        const parsedBody = await this.parseResponseJson<T>(response);
+        recordRestResponse(action, { status: response.status, body: parsedBody, durationMs, error: null });
         responseRecorded = true;
 
-        return responseBody ?? this.parseResponseJson<T>(response);
+        return parsedBody;
       } catch (error) {
         const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
         const rawMessage = (error as Error).message || 'Request failed';
@@ -571,12 +576,12 @@ export class C64API {
 
       const controller = timeoutMs ? new AbortController() : null;
       const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+      let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
       try {
         const responsePromise = fetch(url, {
           ...options,
           ...(controller ? { signal: controller.signal } : {}),
         });
-        let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
         const timeoutPromise = timeoutMs
           ? new Promise<never>((_, reject) => {
             timeoutPromiseId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
@@ -585,7 +590,6 @@ export class C64API {
         const response = timeoutPromise
           ? await Promise.race([responsePromise, timeoutPromise])
           : await responsePromise;
-        if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
         const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
         const responseBody = await readResponseBody(response);
         recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: null });
@@ -602,6 +606,7 @@ export class C64API {
         }
         throw error;
       } finally {
+        if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
         if (timeoutId) clearTimeout(timeoutId);
       }
     }));

@@ -1,0 +1,15 @@
+{
+  "testId": "playback--playbackspects--playback-file-browser--playlist-view-all-dialog-is-constrained-and-scrollable",
+  "deviceId": "android-phone",
+  "viewport": {
+    "width": 393,
+    "height": 727
+  },
+  "deviceScaleFactor": 2.75,
+  "isMobile": true,
+  "playwrightProject": "android-phone",
+  "timestamp": "2026-01-30T23:32:14.031Z",
+  "testTitle": "playlist view-all dialog is constrained and scrollable",
+  "testFile": "/home/chris/dev/c64/c64commander/playwright/playback.spec.ts",
+  "status": "passed"
+}
