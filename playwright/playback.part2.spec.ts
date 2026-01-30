@@ -160,7 +160,7 @@ test.describe('Playback file browser (part 2)', () => {
 
     const list = page.getByTestId('playlist-list');
     await expect(list).toContainText('demo.sid');
-    await expect(list).toContainText('(0:30)');
+    await expect(list).toContainText('0:30');
     await snap(page, testInfo, 'songlengths-loaded');
   });
 
@@ -177,7 +177,7 @@ test.describe('Playback file browser (part 2)', () => {
 
     const list = page.getByTestId('playlist-list');
     await expect(list).toContainText('demo.sid');
-    await expect(list).toContainText('(0:25)');
+    await expect(list).toContainText('0:25');
     await snap(page, testInfo, 'songlengths-txt-loaded');
   });
 

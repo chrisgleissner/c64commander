@@ -119,6 +119,31 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'play-requested');
   });
 
+  test('playback state persists across navigation', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 8000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
+
+    const elapsed = page.getByTestId('playback-elapsed');
+    await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(0);
+    const firstElapsed = parseTimeLabel(await elapsed.textContent()) ?? 0;
+    const initialSidplayCount = server.sidplayRequests.length;
+
+    await page.getByRole('button', { name: 'Disks', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Disks', level: 1 })).toBeVisible();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
+
+    await expect(page.getByTestId('playlist-play')).toContainText('Stop');
+    await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(firstElapsed);
+    expect(server.sidplayRequests.length).toBe(initialSidplayCount);
+    await snap(page, testInfo, 'playback-persisted');
+  });
+
   test('playback failure does not clear playlist across navigation', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected playback failure warnings for unreachable device.');
     await seedPlaylistStorage(page, [
@@ -177,6 +202,39 @@ test.describe('Playback file browser', () => {
 
     await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
     await snap(page, testInfo, 'volume-update');
+  });
+
+  test('mute only affects enabled SID chips', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await server.close();
+    server = await createMockC64Server({
+      ...uiFixtures.configState,
+      'SID Sockets Configuration': {
+        'SID Socket 1': 'Enabled',
+        'SID Socket 2': 'Disabled',
+      },
+      'SID Addressing': {
+        'UltiSID 1 Address': '$D400',
+        'UltiSID 2 Address': 'Unmapped',
+      },
+      'Audio Mixer': {
+        'Vol UltiSid 1': { value: '+2 dB', options: uiFixtures.configState['Audio Mixer']['Vol UltiSid 1'].options },
+        'Vol UltiSid 2': { value: '+1 dB', options: uiFixtures.configState['Audio Mixer']['Vol UltiSid 2'].options },
+        'Vol Socket 1': { value: ' 0 dB', options: uiFixtures.configState['Audio Mixer']['Vol Socket 1'].options },
+        'Vol Socket 2': { value: '-6 dB', options: uiFixtures.configState['Audio Mixer']['Vol Socket 2'].options },
+      },
+    });
+    await seedUiMocks(page, server.baseUrl);
+
+    await page.goto('/play');
+    await page.getByTestId('volume-mute').click();
+    await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
+
+    const mixer = server.getState()['Audio Mixer'];
+    expect(mixer['Vol Socket 1'].value).toBe('OFF');
+    expect(mixer['Vol UltiSid 1'].value).toBe('OFF');
+    expect(mixer['Vol Socket 2'].value).toBe('-6 dB');
+    expect(mixer['Vol UltiSid 2'].value).toBe('+1 dB');
+    await snap(page, testInfo, 'volume-mute-enabled-only');
   });
 
   test('local SID playback uploads before play', async ({ page }: { page: Page }, testInfo: TestInfo) => {

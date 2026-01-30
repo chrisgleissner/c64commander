@@ -26,6 +26,7 @@ export type ActionListItem = {
   id: string;
   title: string;
   titleSuffix?: string | null;
+  titleClassName?: string | null;
   subtitle?: string | null;
   filterText?: string | null;
   meta?: React.ReactNode;
@@ -39,6 +40,7 @@ export type ActionListItem = {
   actionLabel: string;
   onAction?: () => void;
   onTitleClick?: () => void;
+  onRowClick?: () => void;
   actionAriaLabel?: string;
   actionIcon?: React.ReactNode;
   secondaryActionLabel?: string;
@@ -100,6 +102,12 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         'flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
         item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
       )}
+      onClick={(event) => {
+        if (!item.onRowClick) return;
+        if (item.isDimmed || item.disableActions) return;
+        if (event.defaultPrevented) return;
+        item.onRowClick();
+      }}
       data-testid={rowTestId}
       data-row-id={item.id}
     >
@@ -108,6 +116,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           <Checkbox
             checked={item.selected}
             onCheckedChange={(value) => item.onSelectToggle?.(Boolean(value))}
+            onClick={(event) => event.stopPropagation()}
             aria-label={`Select ${item.title}`}
             id={selectionTestId}
             data-testid={selectionTestId}
@@ -122,6 +131,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
                 className="h-9 w-9 min-h-[44px] min-w-[44px]"
                 aria-label="Item actions"
                 disabled={item.disableActions}
+                onClick={(event) => event.stopPropagation()}
                 id={actionMenuTestId}
                 data-testid={actionMenuTestId}
               >
@@ -163,11 +173,17 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
         <div className="min-w-0 w-full">
           <button
             type="button"
-            className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
-            onClick={item.onTitleClick}
+            className={cn(
+              'text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1',
+              item.titleClassName ?? 'truncate',
+            )}
+            onClick={(event) => {
+              event.stopPropagation();
+              item.onTitleClick?.();
+            }}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span className="truncate">{item.title}</span>
+            <span className={item.titleClassName ?? 'truncate'}>{item.title}</span>
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
@@ -192,7 +208,10 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           variant="ghost"
           size="icon"
           className="h-9 w-9 min-h-[44px] min-w-[44px]"
-          onClick={item.onAction}
+          onClick={(event) => {
+            event.stopPropagation();
+            item.onAction?.();
+          }}
           disabled={item.isDimmed || item.disableActions}
           aria-label={item.actionAriaLabel || `${item.actionLabel} ${item.title}`}
         >
@@ -203,7 +222,10 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             variant="outline"
             size="sm"
             className="h-7 px-2 text-xs text-destructive hover:text-destructive"
-            onClick={item.onSecondaryAction}
+            onClick={(event) => {
+              event.stopPropagation();
+              item.onSecondaryAction?.();
+            }}
             disabled={item.isDimmed || item.disableActions}
             aria-label={item.secondaryActionAriaLabel || `${item.secondaryActionLabel} ${item.title}`}
           >

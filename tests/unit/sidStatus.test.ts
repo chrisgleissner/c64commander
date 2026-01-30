@@ -12,8 +12,8 @@ describe('sid status mapping', () => {
     };
     const entries = buildSidStatusEntries(enablement);
     expect(entries.map((entry) => entry.label)).toEqual([
-      'Socket 1',
-      'Socket 2',
+      'SID Socket 1',
+      'SID Socket 2',
       'UltiSID 1',
       'UltiSID 2',
     ]);

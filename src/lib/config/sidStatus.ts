@@ -8,10 +8,10 @@ export type SidStatusEntry = {
 };
 
 const SID_STATUS_ORDER: Array<Omit<SidStatusEntry, 'enabled'>> = [
-  { key: 'socket1', label: 'Socket 1', shortLabel: 'S1' },
-  { key: 'socket2', label: 'Socket 2', shortLabel: 'S2' },
-  { key: 'ultiSid1', label: 'UltiSID 1', shortLabel: 'U1' },
-  { key: 'ultiSid2', label: 'UltiSID 2', shortLabel: 'U2' },
+  { key: 'socket1', label: 'SID Socket 1', shortLabel: 'SID Socket 1' },
+  { key: 'socket2', label: 'SID Socket 2', shortLabel: 'SID Socket 2' },
+  { key: 'ultiSid1', label: 'UltiSID 1', shortLabel: 'UltiSID 1' },
+  { key: 'ultiSid2', label: 'UltiSID 2', shortLabel: 'UltiSID 2' },
 ];
 
 export const buildSidStatusEntries = (enablement: SidEnablement): SidStatusEntry[] =>

@@ -344,13 +344,6 @@ export class C64API {
     }
   }
 
-  private async buildMultipartPayload(form: FormData): Promise<{ contentType: string; body: Uint8Array }> {
-    const response = new Response(form);
-    const contentType = response.headers.get('content-type') ?? 'multipart/form-data';
-    const buffer = await response.arrayBuffer();
-    return { contentType, body: new Uint8Array(buffer) };
-  }
-
   private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
     const body = options.body;
     const shouldUseWebFetch =
@@ -700,42 +693,6 @@ export class C64API {
     const method = 'POST';
     let response: Response;
     try {
-      if (isNativePlatform()) {
-        try {
-          const { contentType, body } = await this.buildMultipartPayload(form);
-          const nativeResponse = await CapacitorHttp.request({
-            url: url.toString(),
-            method,
-            headers: {
-              ...headers,
-              'Content-Type': contentType,
-            },
-            data: body,
-          });
-          status = nativeResponse.status;
-          if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
-            throw new Error(`HTTP ${nativeResponse.status}`);
-          }
-
-          const responseHeaders = new Headers();
-          if (nativeResponse.headers) {
-            Object.entries(nativeResponse.headers).forEach(([key, value]) => {
-              if (typeof value === 'string') responseHeaders.set(key, value);
-            });
-          }
-          const bodyText = typeof nativeResponse.data === 'string'
-            ? nativeResponse.data
-            : JSON.stringify(nativeResponse.data ?? { errors: [] });
-          response = new Response(bodyText, { status: nativeResponse.status, headers: responseHeaders });
-          return this.parseResponseJson(response);
-        } catch (error) {
-          const rawMessage = (error as Error).message || 'Request failed';
-          if (isNetworkFailureMessage(rawMessage)) {
-            throw new Error(resolveHostErrorMessage(rawMessage));
-          }
-          throw error;
-        }
-      }
       response = await this.fetchWithTimeout(
         url.toString(),
         {

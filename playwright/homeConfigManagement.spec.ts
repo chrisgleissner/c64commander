@@ -275,9 +275,9 @@ test.describe('Home page app config management', () => {
     await expect(sidGroup).toBeVisible();
     await expect(sidGroup.getByTestId('sid-status-label')).toHaveText('SID');
     await expect(sidGroup.locator('[data-testid="sid-status-dot"]')).toHaveCount(0);
-    await expect(sidGroup).toContainText('Socket 1');
+    await expect(sidGroup).toContainText('SID Socket 1');
     await expect(sidGroup).toContainText('ON');
-    await expect(sidGroup).toContainText('Socket 2');
+    await expect(sidGroup).toContainText('SID Socket 2');
     await expect(sidGroup).toContainText('OFF');
     await expect(sidGroup).toContainText('UltiSID 1');
     await expect(sidGroup).toContainText('—');

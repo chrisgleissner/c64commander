@@ -52,6 +52,13 @@ test.describe('HVSC Play page', () => {
         localStorage.setItem(`c64u_initial_snapshot:${baseUrlArg}`, JSON.stringify(snapshot));
         sessionStorage.setItem(`c64u_initial_snapshot_session:${baseUrlArg}`, '1');
         localStorage.setItem('c64u_hvsc_base_url', hvscUrl);
+
+        const routingWindow = window as Window & { __c64uExpectedBaseUrl?: string; __c64uAllowedBaseUrls?: string[] };
+        routingWindow.__c64uExpectedBaseUrl = baseUrlArg;
+        const allowed = new Set<string>();
+        if (baseUrlArg) allowed.add(baseUrlArg);
+        if (hvscUrl) allowed.add(hvscUrl);
+        routingWindow.__c64uAllowedBaseUrls = Array.from(allowed);
       },
       { baseUrlArg: baseUrl, hvscUrl: hvscBaseUrl, snapshot: uiFixtures.initialSnapshot },
     );
@@ -483,6 +490,13 @@ test.describe('HVSC Play page', () => {
         const host = c64BaseUrl.replace(/^https?:\/\//, '');
         localStorage.setItem('c64u_device_host', host);
         localStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
+
+        const routingWindow = window as Window & { __c64uExpectedBaseUrl?: string; __c64uAllowedBaseUrls?: string[] };
+        routingWindow.__c64uExpectedBaseUrl = c64BaseUrl;
+        const allowed = new Set<string>();
+        if (c64BaseUrl) allowed.add(c64BaseUrl);
+        if (baseUrl) allowed.add(baseUrl);
+        routingWindow.__c64uAllowedBaseUrls = Array.from(allowed);
       },
       {
         baseUrl: hvscServer.baseUrl,
@@ -610,7 +624,14 @@ test.describe('HVSC Play page', () => {
 
     await page.reload();
     await expect(page.getByTestId('playlist-list').getByText('10_Orbyte.sid', { exact: true })).toBeVisible();
-    await page.getByTestId('playlist-play').click();
+
+    const playButton = page.getByTestId('playlist-play');
+    const playLabel = (await playButton.textContent()) ?? '';
+    if (/stop/i.test(playLabel)) {
+      await playButton.click();
+      await expect(playButton).toContainText('Play');
+    }
+    await playButton.click();
 
     await expect.poll(() => c64Server.sidplayRequests.length).toBeGreaterThan(initialRequests);
     await snap(page, testInfo, 'playlist-restored');

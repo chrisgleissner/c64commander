@@ -156,6 +156,26 @@ export default function HomePage() {
     [sidAddressingCategory, sidSocketsCategory],
   );
   const sidStatusEntries = useMemo(() => buildSidStatusEntries(sidEnablement), [sidEnablement]);
+  const sidStatusMap = useMemo(
+    () => new Map(sidStatusEntries.map((entry) => [entry.key, entry])),
+    [sidStatusEntries],
+  );
+
+  const renderSidStatus = (key: keyof typeof sidEnablement) => {
+    const entry = sidStatusMap.get(key);
+    if (!entry) return null;
+    const enabled = entry.enabled;
+    const statusLabel = enabled === undefined ? '—' : enabled ? 'ON' : 'OFF';
+    const statusClass = enabled === true
+      ? 'text-success'
+      : 'text-muted-foreground';
+    return (
+      <div key={entry.key} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
+        <span className="text-xs font-medium text-foreground">{entry.label}</span>
+        <span className={`text-xs font-semibold ${statusClass}`}>{statusLabel}</span>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen pb-24">
@@ -333,24 +353,19 @@ export default function HomePage() {
                 </span>
               </div>
             </button>
-            <div
-              className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left"
-              data-testid="home-sid-status"
-            >
-              <p className="text-xs font-semibold text-muted-foreground" data-testid="sid-status-label">SID</p>
-              {sidStatusEntries.map((entry) => {
-                const enabled = entry.enabled;
-                const statusLabel = enabled === undefined ? '—' : enabled ? 'ON' : 'OFF';
-                const statusClass = enabled === true
-                  ? 'text-success'
-                  : 'text-muted-foreground';
-                return (
-                  <div key={entry.key} className="flex items-center gap-2 min-w-0">
-                    <span className="font-medium shrink-0">{entry.label}:</span>
-                    <span className={`${statusClass} shrink-0`}>{statusLabel}</span>
-                  </div>
-                );
-              })}
+            <div className="space-y-2" data-testid="home-sid-status">
+              <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                <span>SID</span>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {renderSidStatus('socket1')}
+                  {renderSidStatus('socket2')}
+                  {renderSidStatus('ultiSid1')}
+                  {renderSidStatus('ultiSid2')}
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

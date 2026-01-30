@@ -53,6 +53,26 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
       } catch (error) {
         console.warn('Unable to clear showDirectoryPicker', error);
       }
+      const routingWindow = window as Window & { __c64uExpectedBaseUrl?: string; __c64uAllowedBaseUrls?: string[] };
+      routingWindow.__c64uExpectedBaseUrl = baseUrlArg;
+      const allowedBaseUrls = new Set<string>();
+      if (Array.isArray(routingWindow.__c64uAllowedBaseUrls)) {
+        routingWindow.__c64uAllowedBaseUrls.forEach((url) => {
+          if (url) allowedBaseUrls.add(url);
+        });
+      }
+      if (baseUrlArg) {
+        allowedBaseUrls.add(baseUrlArg);
+      }
+      try {
+        const ftpBridgeUrl = localStorage.getItem('c64u_ftp_bridge_url');
+        if (ftpBridgeUrl) {
+          allowedBaseUrls.add(ftpBridgeUrl);
+        }
+      } catch {
+        // ignore storage access failures
+      }
+      routingWindow.__c64uAllowedBaseUrls = Array.from(allowedBaseUrls);
       const host = baseUrlArg?.replace(/^https?:\/\//, '');
       try {
         if (!localStorage.getItem('c64u_password')) {
