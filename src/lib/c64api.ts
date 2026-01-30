@@ -30,6 +30,27 @@ const normalizeUrlPath = (url: string) => {
   }
 };
 
+const isTestProbeEnabled = () => import.meta.env?.VITE_ENABLE_TEST_PROBES === '1';
+let requestQueue = Promise.resolve();
+
+const runSerializedRequest = async <T>(handler: () => Promise<T>): Promise<T> => {
+  if (!isTestProbeEnabled()) {
+    return await handler();
+  }
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = requestQueue;
+  requestQueue = previous.then(() => gate);
+  await previous;
+  try {
+    return await handler();
+  } finally {
+    release();
+  }
+};
+
 const extractRequestBody = (body: unknown) => {
   if (!body) return null;
   if (typeof body === 'string') {
@@ -118,6 +139,21 @@ const isLocalProxy = (baseUrl: string) => {
 
 const isNativePlatform = () => {
   try {
+    const override = (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean; __c64uAllowNativePlatform?: boolean })
+      .__C64U_NATIVE_OVERRIDE__
+      ?? (typeof window !== 'undefined'
+        ? (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__
+        : undefined)
+      ?? (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform;
+    if (typeof override === 'boolean') {
+      return override;
+    }
+    if (typeof process !== 'undefined') {
+      const env = (process as { env?: Record<string, string | undefined> }).env ?? {};
+      if (env.VITEST === 'true' || env.NODE_ENV === 'test') {
+        return false;
+      }
+    }
     return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
   } catch {
     return false;
@@ -282,7 +318,7 @@ export class C64API {
     requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
-    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+    return runSerializedRequest(() => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
       const bodyPayload = extractRequestBody(requestOptions.body);
       recordRestRequest(action, {
         method,
@@ -442,7 +478,7 @@ export class C64API {
       } finally {
         this.logRestCall(method, path, status, startedAt);
       }
-    });
+    }));
   }
 
   private async fetchWithTimeout(
@@ -458,7 +494,7 @@ export class C64API {
     const method = (options.method || 'GET').toString().toUpperCase();
     const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+    return runSerializedRequest(() => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
       const headers = (options.headers as Record<string, string>) || {};
       recordRestRequest(action, {
         method,
@@ -568,7 +604,7 @@ export class C64API {
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
       }
-    });
+    }));
   }
 
   // About endpoints

@@ -49,6 +49,7 @@ describe('connectionManager', () => {
     localStorage.clear();
     sessionStorage.clear();
     vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
@@ -125,12 +126,13 @@ describe('connectionManager', () => {
     localStorage.removeItem('c64u_device_host');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
-    ));
+    );
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -150,12 +152,13 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
-    ));
+    );
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -172,12 +175,13 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
-    ));
+    );
 
     await expect(probeOnce()).resolves.toBe(true);
   });
@@ -187,7 +191,8 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn((_: RequestInfo, init?: RequestInit) => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((_: RequestInfo, init?: RequestInit) => {
       const signal = init?.signal as AbortSignal | undefined;
       return new Promise<Response>((resolve, reject) => {
         if (signal?.aborted) {
@@ -202,7 +207,7 @@ describe('connectionManager', () => {
           }));
         }, 200);
       });
-    }));
+    });
 
     const resultPromise = probeOnce({ timeoutMs: 50 });
     await vi.advanceTimersByTimeAsync(60);
@@ -216,12 +221,13 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
-    ));
+    );
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -240,7 +246,8 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn(() =>
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(() =>
       new Promise<Response>((resolve) => {
         setTimeout(() => {
           resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
@@ -249,7 +256,7 @@ describe('connectionManager', () => {
           }));
         }, 500);
       }),
-    ));
+    );
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -270,7 +277,8 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    const fetchMock = vi.fn()
+    const fetchStub = vi.mocked(fetch);
+    fetchStub
       .mockResolvedValueOnce(new Response(JSON.stringify({ errors: ['offline'] }), {
         status: 500,
         headers: { 'content-type': 'application/json' },
@@ -279,8 +287,6 @@ describe('connectionManager', () => {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }));
-
-    vi.stubGlobal('fetch', fetchMock);
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -304,12 +310,13 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: ['Device unreachable'] }), {
         status: 503,
         headers: { 'content-type': 'application/json' },
       }),
-    ));
+    );
 
     await initializeConnectionManager();
     void discoverConnection('startup');
@@ -330,12 +337,13 @@ describe('connectionManager', () => {
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
     localStorage.setItem('c64u_password', '');
 
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: ['Device unreachable'] }), {
         status: 503,
         headers: { 'content-type': 'application/json' },
       }),
-    ));
+    );
 
     await initializeConnectionManager();
     void discoverConnection('startup');

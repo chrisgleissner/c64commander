@@ -62,10 +62,12 @@ describe('c64api', () => {
     fuzzSafeMock.mockReturnValue(true);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
+    (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     vi.stubGlobal('fetch', vi.fn());
     resetConfigWriteThrottle();
     saveConfigWriteIntervalMs(0);
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
   });
 
   it('adds auth headers for password', async () => {
@@ -157,6 +159,8 @@ describe('c64api', () => {
   });
 
   it('uses CapacitorHttp on native platforms', async () => {
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
@@ -195,6 +199,8 @@ describe('c64api', () => {
   });
 
   it('handles CapacitorHttp non-string payloads', async () => {
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
@@ -223,6 +229,8 @@ describe('c64api', () => {
   });
 
   it('throws for native http errors', async () => {
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
@@ -406,6 +414,8 @@ describe('c64api', () => {
   });
 
   it('uses CapacitorHttp for binary uploads on native platforms', async () => {
+    (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
+    (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };

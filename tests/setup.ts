@@ -1,5 +1,11 @@
 import "@testing-library/jest-dom";
 
+// Default to non-native platform in unit tests unless explicitly overridden.
+(globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
+if (typeof window !== "undefined") {
+  (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
+}
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({

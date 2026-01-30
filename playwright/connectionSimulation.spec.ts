@@ -141,6 +141,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+      (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery = true;
       localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '250');

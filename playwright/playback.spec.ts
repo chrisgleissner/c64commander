@@ -243,7 +243,18 @@ test.describe('Playback file browser', () => {
     });
     await seedUiMocks(page, server.baseUrl);
 
+    const initialResponses = [
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%201')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%202')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%201')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%202')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%201%20Address')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%202%20Address')),
+    ];
     await page.goto('/play');
+    await Promise.all(initialResponses);
     await page.getByTestId('volume-mute').click();
     await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
 
