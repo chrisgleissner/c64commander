@@ -9,6 +9,13 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const seedRoutingExpectations = async (page: Page, realBaseUrl: string) => {
+  await page.addInitScript(({ realBaseUrl: realArg }: { realBaseUrl: string }) => {
+    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = realArg;
+    (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [realArg];
+  }, { realBaseUrl });
+};
+
 test.describe('Automatic Demo Mode', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -25,6 +32,7 @@ test.describe('Automatic Demo Mode', () => {
   test('connectivity indicator is present on all main pages', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl);
     await seedUiMocks(page, server.baseUrl);
 
     const routes = ['/', '/play', '/disks', '/config', '/settings', '/docs'];
@@ -41,6 +49,7 @@ test.describe('Automatic Demo Mode', () => {
   test('real connection shows green C64U indicator', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl);
     await seedUiMocks(page, server.baseUrl);
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -56,6 +65,7 @@ test.describe('Automatic Demo Mode', () => {
   test('legacy base URL migrates to device host on startup', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl);
     await seedUiMocks(page, server.baseUrl);
 
     await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
@@ -83,6 +93,8 @@ test.describe('Automatic Demo Mode', () => {
     server = await createMockC64Server({});
 
     await page.addInitScript(() => {
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://127.0.0.1:1';
+      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = ['http://127.0.0.1:1'];
       localStorage.setItem('c64u_startup_discovery_window_ms', '600');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '5000');
@@ -114,6 +126,7 @@ test.describe('Automatic Demo Mode', () => {
   test('settings-triggered rediscovery uses updated password for probes', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl);
     await seedUiMocks(page, server.baseUrl);
 
     const seenPasswords: string[] = [];
@@ -142,6 +155,8 @@ test.describe('Automatic Demo Mode', () => {
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
     await page.addInitScript(() => {
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://192.168.1.13';
+      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = ['http://192.168.1.13'];
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '192.168.1.13');
@@ -164,6 +179,7 @@ test.describe('Automatic Demo Mode', () => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
     server = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl);
 
     await page.addInitScript(() => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '3000');

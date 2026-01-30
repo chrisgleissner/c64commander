@@ -57,6 +57,7 @@ type StrictUiTracker = {
   toastIssues: string[];
   horizontalOverflows: string[];
   requestLog: Array<{ method: string; url: string; resourceType: string }>
+  routingIssues: string[];
   detach: () => void;
 };
 
@@ -193,6 +194,7 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     toastIssues: [],
     horizontalOverflows: [],
     requestLog: [],
+    routingIssues: [],
     detach: () => {},
   };
 
@@ -340,6 +342,32 @@ export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
   if (!tracker) return;
   if (testInfo.annotations.some((annotation) => annotation.type === 'allow-warnings')) return;
 
+  const routingConfig = await page.evaluate(() => {
+    const win = window as Window & {
+      __c64uExpectedBaseUrl?: string;
+      __c64uAllowedBaseUrls?: string[];
+      __c64uMockServerBaseUrl?: string;
+    };
+    return {
+      expectedBaseUrl: win.__c64uExpectedBaseUrl ?? null,
+      allowedBaseUrls: Array.isArray(win.__c64uAllowedBaseUrls) ? win.__c64uAllowedBaseUrls : null,
+      demoBaseUrl: win.__c64uMockServerBaseUrl ?? null,
+    };
+  });
+  const allowedBaseUrls = routingConfig.allowedBaseUrls
+    ?? (routingConfig.expectedBaseUrl ? [routingConfig.expectedBaseUrl] : []);
+
+  if (allowedBaseUrls.length) {
+    tracker.requestLog.forEach((entry) => {
+      const isAllowed = allowedBaseUrls.some((baseUrl) => entry.url.startsWith(baseUrl));
+      if (!isAllowed) {
+        tracker.routingIssues.push(`request routed to unexpected backend: ${entry.method} ${entry.url}`);
+      }
+    });
+  } else if (tracker.requestLog.length) {
+    tracker.routingIssues.push('routing expectations not configured for backend requests');
+  }
+
   // Check for horizontal overflow before other checks
   // Note: We don't call enforceVisualBoundaries here because it throws immediately.
   // Instead, we use checkHorizontalOverflow which accumulates issues and reports them all.
@@ -359,6 +387,7 @@ export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
     ...tracker.pageErrors.map((message) => `page error: ${message}`),
     ...tracker.toastIssues.map((message) => `ui issue: ${message}`),
     ...tracker.horizontalOverflows.map((message) => `horizontal overflow: ${message}`),
+    ...tracker.routingIssues.map((message) => `routing issue: ${message}`),
   ];
 
   tracker.detach();

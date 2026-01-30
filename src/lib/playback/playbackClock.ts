@@ -33,6 +33,11 @@ export class PlaybackClock {
     this.startedAt = null;
   }
 
+  hydrate(baseMs: number, startedAt: number | null) {
+    this.baseMs = Math.max(0, baseMs);
+    this.startedAt = startedAt;
+  }
+
   current(now: number): number {
     if (this.startedAt === null) return this.baseMs;
     return this.baseMs + Math.max(0, now - this.startedAt);

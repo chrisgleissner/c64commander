@@ -86,6 +86,17 @@ export const seedFtpConfig = async (
       if (password !== undefined) {
         localStorage.setItem('c64u_password', password);
       }
+      const routingWindow = window as Window & { __c64uAllowedBaseUrls?: string[] };
+      const allowed = new Set<string>();
+      if (Array.isArray(routingWindow.__c64uAllowedBaseUrls)) {
+        routingWindow.__c64uAllowedBaseUrls.forEach((url) => {
+          if (url) allowed.add(url);
+        });
+      }
+      if (bridgeUrl) {
+        allowed.add(bridgeUrl);
+      }
+      routingWindow.__c64uAllowedBaseUrls = Array.from(allowed);
     },
     options,
   );

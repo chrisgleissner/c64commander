@@ -149,6 +149,8 @@ test.describe('App screenshots', () => {
       localStorage.setItem('c64u_device_host', 'demo.invalid');
       localStorage.setItem('c64u_password', '');
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = baseUrl;
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = baseUrl;
+      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [baseUrl, 'http://demo.invalid'];
     }, { baseUrl: server.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });

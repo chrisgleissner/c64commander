@@ -117,6 +117,18 @@ type StoredPlaylistState = {
   currentIndex?: number;
 };
 
+type StoredPlaybackSession = {
+  playlistKey: string;
+  currentItemId: string | null;
+  currentIndex: number;
+  isPlaying: boolean;
+  isPaused: boolean;
+  elapsedMs: number;
+  playedMs: number;
+  durationMs?: number;
+  updatedAt: string;
+};
+
 type AudioMixerItem = {
   name: string;
   value: string | number;
@@ -127,6 +139,7 @@ const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'
 const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
 const LAST_DEVICE_ID_KEY = 'c64u_last_device_id';
 const PLAYLIST_STORAGE_PREFIX = 'c64u_playlist:v1:';
+const PLAYBACK_SESSION_KEY = 'c64u_playback_session:v1';
 const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
 const DURATION_MIN_SECONDS = 1;
 const DURATION_MAX_SECONDS = 3600;
@@ -367,6 +380,7 @@ export default function PlayFilesPage() {
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const reshuffleTimerRef = useRef<number | null>(null);
+  const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -452,22 +466,6 @@ export default function PlayFilesPage() {
     }
     return defaultVolumeIndex;
   }, [defaultVolumeIndex, volumeSteps]);
-
-  const buildSidVolumeSnapshot = useCallback((items: AudioMixerItem[]) => {
-    const snapshot: Record<string, string | number> = {};
-    items.forEach((item) => {
-      snapshot[item.name] = item.value;
-    });
-    return snapshot;
-  }, []);
-
-  const buildSidMuteUpdates = useCallback((items: AudioMixerItem[]) => {
-    const updates: Record<string, string | number> = {};
-    items.forEach((item) => {
-      updates[item.name] = resolveAudioMixerMuteValue(item.options);
-    });
-    return updates;
-  }, []);
 
   const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -737,6 +735,55 @@ export default function PlayFilesPage() {
 
   const resolvedDeviceId = deviceInfoId || lastKnownDeviceId || 'default';
   const playlistStorageKey = useMemo(() => buildPlaylistStorageKey(resolvedDeviceId), [resolvedDeviceId]);
+
+  useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem(PLAYBACK_SESSION_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as StoredPlaybackSession;
+      if (!parsed || typeof parsed !== 'object') return;
+      pendingPlaybackRestoreRef.current = parsed;
+    } catch {
+      // Ignore invalid session payloads.
+    }
+  }, []);
+
+  useEffect(() => {
+    const pending = pendingPlaybackRestoreRef.current;
+    if (!pending) return;
+    if (!playlist.length) return;
+    if (pending.playlistKey !== playlistStorageKey) {
+      pendingPlaybackRestoreRef.current = null;
+      return;
+    }
+    const matchedIndex = pending.currentItemId
+      ? playlist.findIndex((item) => item.id === pending.currentItemId)
+      : pending.currentIndex;
+    if (matchedIndex < 0 || matchedIndex >= playlist.length) {
+      pendingPlaybackRestoreRef.current = null;
+      return;
+    }
+    setCurrentIndex(matchedIndex);
+    setElapsedMs(Math.max(0, pending.elapsedMs));
+    setPlayedMs(Math.max(0, pending.playedMs));
+    setDurationMs(pending.durationMs);
+    setIsPlaying(pending.isPlaying);
+    setIsPaused(pending.isPaused);
+    const restoredItem = playlist[matchedIndex];
+    if (restoredItem && isSongCategory(restoredItem.category)) {
+      setCurrentSubsongCount(restoredItem.subsongCount ?? null);
+    }
+    const now = Date.now();
+    if (pending.isPlaying && !pending.isPaused) {
+      trackStartedAtRef.current = now - Math.max(0, pending.elapsedMs);
+      playedClockRef.current.hydrate(Math.max(0, pending.playedMs), now);
+    } else {
+      trackStartedAtRef.current = null;
+      playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
+    }
+    pendingPlaybackRestoreRef.current = null;
+  }, [playlist, playlistStorageKey]);
 
   const handleAutoConfirmStart = useCallback(() => {
     setAddItemsSurface('page');
@@ -1759,6 +1806,31 @@ export default function PlayFilesPage() {
     }
   }, [currentIndex, playlist, playlistStorageKey]);
 
+  useEffect(() => {
+    if (typeof sessionStorage === 'undefined') return;
+    if (!isPlaying && !isPaused) {
+      sessionStorage.removeItem(PLAYBACK_SESSION_KEY);
+      return;
+    }
+    const currentItemId = playlist[currentIndex]?.id ?? null;
+    const payload: StoredPlaybackSession = {
+      playlistKey: playlistStorageKey,
+      currentItemId,
+      currentIndex,
+      isPlaying,
+      isPaused,
+      elapsedMs,
+      playedMs,
+      durationMs,
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify(payload));
+    } catch {
+      // Ignore storage failures.
+    }
+  }, [currentIndex, durationMs, elapsedMs, isPaused, isPlaying, playedMs, playlist, playlistStorageKey]);
+
   const startPlaylist = useCallback(async (items: PlaylistItem[], startIndex = 0) => {
     if (!items.length) return;
     playedClockRef.current.reset();
@@ -1860,7 +1932,7 @@ export default function PlayFilesPage() {
     const api = getC64API();
     try {
       if (isPaused) {
-        const resumeItems = await resolveSidVolumeItems();
+        const resumeItems = await resolveEnabledSidVolumeItems();
         const resumeSnapshot = pauseMuteSnapshotRef.current;
         const wasMuted = resumeSnapshot && resumeItems.length
           ? resumeItems.every((item) => resumeSnapshot[item.name] === resolveAudioMixerMuteValue(item.options))
@@ -1877,13 +1949,13 @@ export default function PlayFilesPage() {
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
       } else {
-        const pauseItems = await resolveSidVolumeItems();
+        const pauseItems = await resolveEnabledSidVolumeItems();
         if (pauseItems.length) {
-          pauseMuteSnapshotRef.current = buildSidVolumeSnapshot(pauseItems);
+          pauseMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(pauseItems, sidEnablement);
         }
         await withTimeout(api.machinePause(), 3000, 'Pause');
         if (pauseItems.length) {
-          await applyAudioMixerUpdates(buildSidMuteUpdates(pauseItems), 'Pause');
+          await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(pauseItems, sidEnablement), 'Pause');
           setVolumeMuted(true);
         }
         const now = Date.now();
@@ -1903,7 +1975,7 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }, [applyAudioMixerUpdates, buildSidMuteUpdates, buildSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveSidVolumeItems, withTimeout]);
+  }, [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, buildEnabledSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, withTimeout]);
 
   const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
     if (!volumeSteps.length || !sidVolumeItems.length) return;
@@ -2460,11 +2532,6 @@ export default function PlayFilesPage() {
       }
       const playlistIndex = playlist.findIndex((entry) => entry.id === item.id);
       const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
-      const sourceLabel = item.request.source === 'ultimate'
-        ? 'C64 Ultimate'
-        : item.request.source === 'hvsc'
-          ? 'HVSC Library'
-          : 'This device';
       const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
       const menuItems: ActionListMenuItem[] = [
         { type: 'label', label: 'Details' },
@@ -2472,25 +2539,31 @@ export default function PlayFilesPage() {
         { type: 'info', label: 'Duration', value: durationLabel },
         { type: 'info', label: 'Size', value: formatBytes(item.sizeBytes) },
         { type: 'info', label: 'Date', value: formatDate(detailsDate) },
-        { type: 'info', label: 'Source', value: sourceLabel },
+        { type: 'info', label: 'Source', value: item.request.source === 'ultimate' ? 'C64 Ultimate' : 'This device' },
       ];
       items.push({
         id: item.id,
         title: item.label,
-        icon: (
-          <FileOriginIcon
-            origin={item.request.source === 'ultimate' ? 'ultimate' : 'local'}
-            label={item.request.source === 'hvsc' ? 'HVSC library file' : undefined}
-            className="h-4 w-4 shrink-0 opacity-60"
-          />
+        titleClassName: 'line-clamp-2 whitespace-normal break-words block',
+        meta: (
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <FileOriginIcon
+              origin={item.request.source === 'ultimate' ? 'ultimate' : 'local'}
+              label={item.request.source === 'hvsc' ? 'HVSC library file' : undefined}
+              className="h-3.5 w-3.5 shrink-0 opacity-60"
+            />
+            <span>{formatPlayCategory(item.category)}</span>
+            <span>•</span>
+            <span>{durationLabel}</span>
+          </div>
         ),
-        titleSuffix: isSongCategory(item.category) && durationLabel !== '—' ? `(${durationLabel})` : null,
         selected: selectedPlaylistIds.has(item.id),
         onSelectToggle: (selected) => handlePlaylistSelect(item, selected),
         menuItems,
         actionLabel: 'Play',
         onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
+        onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
         disableActions: isPlaylistLoading,
       } as ActionListItem);
     });
