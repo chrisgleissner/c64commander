@@ -14,6 +14,77 @@ import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 
+const ensureWindow = () => {
+  if (typeof window !== 'undefined') return;
+  const target = new EventTarget();
+  const windowMock = {
+    addEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) =>
+      target.addEventListener(type, listener, options),
+    removeEventListener: (type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) =>
+      target.removeEventListener(type, listener, options),
+    dispatchEvent: (event: Event) => target.dispatchEvent(event),
+    location: { origin: 'http://localhost' },
+    setTimeout: globalThis.setTimeout.bind(globalThis),
+    clearTimeout: globalThis.clearTimeout.bind(globalThis),
+  };
+  Object.defineProperty(globalThis, 'window', {
+    value: windowMock,
+    configurable: true,
+  });
+  if (typeof (globalThis as { CustomEvent?: typeof CustomEvent }).CustomEvent === 'undefined') {
+    class CustomEventShim<T = any> extends Event {
+      detail?: T;
+      constructor(type: string, params?: CustomEventInit<T>) {
+        super(type, params);
+        this.detail = params?.detail;
+      }
+    }
+    Object.defineProperty(globalThis, 'CustomEvent', {
+      value: CustomEventShim,
+      configurable: true,
+    });
+  }
+};
+
+const ensureLocalStorage = () => {
+  if (typeof localStorage !== 'undefined') return;
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: storage,
+    configurable: true,
+  });
+};
+
+ensureWindow();
+ensureLocalStorage();
+
+const setFetchMock = () => {
+  const fetchMock = vi.fn();
+  Object.defineProperty(globalThis, 'fetch', {
+    value: fetchMock,
+    configurable: true,
+  });
+  return fetchMock;
+};
+
+const getFetchMock = () => globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
@@ -40,13 +111,13 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
 
-const addErrorLogMock = vi.mocked(addErrorLog);
-const addLogMock = vi.mocked(addLog);
-const capacitorRequestMock = vi.mocked(CapacitorHttp.request);
-const fuzzEnabledMock = vi.mocked(isFuzzModeEnabled);
-const fuzzSafeMock = vi.mocked(isFuzzSafeBaseUrl);
-const smokeEnabledMock = vi.mocked(isSmokeModeEnabled);
-const smokeReadOnlyMock = vi.mocked(isSmokeReadOnlyEnabled);
+const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
+const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
+const capacitorRequestMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
+const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
+const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
+const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
+const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
 
 describe('c64api', () => {
   beforeEach(() => {
@@ -64,14 +135,14 @@ describe('c64api', () => {
     smokeReadOnlyMock.mockReturnValue(true);
     (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
-    vi.stubGlobal('fetch', vi.fn());
+    setFetchMock();
     resetConfigWriteThrottle();
     saveConfigWriteIntervalMs(0);
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
   });
 
   it('adds auth headers for password', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
@@ -88,7 +159,7 @@ describe('c64api', () => {
   });
 
   it('handles non-json responses gracefully', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
       new Response('not-json', { status: 200, headers: { 'content-type': 'text/plain' } }),
     );
@@ -104,7 +175,7 @@ describe('c64api', () => {
   });
 
   it('logs and throws on http errors', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
       new Response('fail', { status: 500, statusText: 'Server Error' }),
     );
@@ -120,7 +191,7 @@ describe('c64api', () => {
   });
 
   it('blocks requests in fuzz mode for non-local base urls', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fuzzEnabledMock.mockReturnValue(true);
     fuzzSafeMock.mockReturnValue(false);
 
@@ -132,7 +203,7 @@ describe('c64api', () => {
   });
 
   it('allows requests in fuzz mode for safe base urls', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
@@ -148,7 +219,7 @@ describe('c64api', () => {
   });
 
   it('blocks mutating requests in smoke read-only mode', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     smokeEnabledMock.mockReturnValue(true);
     smokeReadOnlyMock.mockReturnValue(true);
 
@@ -217,7 +288,7 @@ describe('c64api', () => {
   });
 
   it('logs parse failures for invalid json responses', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
       new Response('bad-json', { status: 200, headers: { 'content-type': 'application/json' } }),
     );
@@ -268,7 +339,7 @@ describe('c64api', () => {
   });
 
   it('uploads cartridge files and handles upload failures', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
@@ -287,7 +358,7 @@ describe('c64api', () => {
   });
 
   it('maps failed fetch in SID uploads to host unreachable', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 
     const api = new C64API('http://c64u');
@@ -297,7 +368,7 @@ describe('c64api', () => {
   });
 
   it('maps unknown host errors in SID uploads to DNS unreachable', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockRejectedValue(new TypeError('Unknown host'));
 
     const api = new C64API('http://c64u');
@@ -307,7 +378,7 @@ describe('c64api', () => {
   });
 
   it('maps timed out control requests to host unreachable', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock.mockRejectedValueOnce(new Error('Request timed out'));
 
     const api = new C64API('http://c64u');
@@ -315,7 +386,7 @@ describe('c64api', () => {
   });
 
   it('builds request urls for config writes and machine actions', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     const okResponse = () =>
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
@@ -343,7 +414,7 @@ describe('c64api', () => {
   });
 
   it('covers reads, writes, and drive endpoints', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     fetchMock
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ data: btoa('ABC') }), {
@@ -385,7 +456,7 @@ describe('c64api', () => {
   });
 
   it('uploads drives and runner files with auth headers', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     const okResponse = () =>
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
@@ -433,11 +504,11 @@ describe('c64api', () => {
       method: 'POST',
       url: 'http://c64u/v1/drives/a:mount',
     }));
-    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+    expect(getFetchMock()).not.toHaveBeenCalled();
   });
 
   it('covers runner and drive request helpers', async () => {
-    const fetchMock = vi.mocked(fetch);
+    const fetchMock = getFetchMock();
     const okResponse = () =>
       new Response(JSON.stringify({ errors: [] }), {
         status: 200,
