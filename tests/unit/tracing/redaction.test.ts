@@ -19,7 +19,7 @@ describe('redaction', () => {
 
     expect(redacted.Authorization).toBe(REDACTION.REDACTED);
     expect(redacted['X-Password']).toBe(REDACTION.REDACTED);
-    expect(redacted['X-Token']).toEqual([REDACTION.REDACTED, REDACTION.REDACTED]);
+    expect(redacted['X-Token']).toBe(REDACTION.REDACTED);
     expect(redacted['Content-Type']).toBe('application/json');
     expect(redacted['X-Path']).toBe('REDACTED_URI');
   });
