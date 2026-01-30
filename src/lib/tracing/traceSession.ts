@@ -13,11 +13,12 @@ import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
 import { nextTraceEventId, resetTraceIds } from '@/lib/tracing/traceIds';
 
-const RETENTION_WINDOW_MS = 20 * 60 * 1000;
+const RETENTION_WINDOW_MS = 30 * 60 * 1000;
+const MAX_EVENT_COUNT = 100_000;
 
 let sessionStartMs = Date.now();
 let events: TraceEvent[] = [];
-const decisionByCorrelation = new Set<number>();
+const decisionByCorrelation = new Set<string>();
 let errorOnce = new WeakSet<Error>();
 let lastExport: { reason: string; timestamp: string; data: Uint8Array } | null = null;
 
@@ -32,7 +33,7 @@ const evictExpired = (nowMs: number) => {
 const appendEvent = <T extends Record<string, unknown>>(
   type: TraceEventType,
   origin: TraceOrigin,
-  correlationId: number,
+  correlationId: string,
   data: T,
 ) => {
   const nowMs = Date.now();
@@ -47,12 +48,15 @@ const appendEvent = <T extends Record<string, unknown>>(
     data,
   };
   events = [...events, event];
+  if (events.length > MAX_EVENT_COUNT) {
+    events = events.slice(events.length - MAX_EVENT_COUNT);
+  }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('c64u-traces-updated'));
   }
 };
 
-const emitBackendDecision = (origin: TraceOrigin, correlationId: number, target: BackendTarget, reason: BackendDecisionReason) => {
+const emitBackendDecision = (origin: TraceOrigin, correlationId: string, target: BackendTarget, reason: BackendDecisionReason) => {
   if (decisionByCorrelation.has(correlationId)) return;
   decisionByCorrelation.add(correlationId);
   appendEvent('backend-decision', origin, correlationId, {
@@ -71,7 +75,7 @@ export const clearTraceEvents = () => {
   }
 };
 
-export const resetTraceSession = (eventStart = 1, correlationStart = 1) => {
+export const resetTraceSession = (eventStart = 0, correlationStart = 0) => {
   events = [];
   decisionByCorrelation.clear();
   errorOnce = new WeakSet<Error>();
@@ -135,12 +139,14 @@ export const recordRestResponse = (action: TraceActionContext, payload: {
   body: unknown;
   durationMs: number;
   error: Error | null;
+  errorMessage?: string | null;
 }) => {
+  const errorMessage = payload.errorMessage ?? (payload.error ? payload.error.message : null);
   appendEvent('rest-response', action.origin, action.correlationId, {
     status: payload.status,
     body: redactPayload(payload.body ?? null),
     durationMs: payload.durationMs,
-    error: payload.error ? redactErrorMessage(payload.error.message) : null,
+    error: errorMessage ? redactErrorMessage(errorMessage) : null,
   });
 };
 
@@ -206,4 +212,5 @@ export const getLastTraceExport = () => lastExport;
 
 export const TRACE_SESSION = {
   RETENTION_WINDOW_MS,
+  MAX_EVENT_COUNT,
 };

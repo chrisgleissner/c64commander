@@ -1,3 +1,4 @@
+import { resetActionTrace } from '@/lib/tracing/actionTrace';
 import { clearTraceEvents, exportTraceZip, getTraceEvents, resetTraceSession } from '@/lib/tracing/traceSession';
 import { resetTraceIds } from '@/lib/tracing/traceIds';
 
@@ -18,10 +19,16 @@ declare global {
 export const registerTraceBridge = () => {
   if (typeof window === 'undefined') return;
   window.__c64uTracing = {
-    clearTraces: () => clearTraceEvents(),
+    clearTraces: () => {
+      resetActionTrace();
+      clearTraceEvents();
+    },
     getTraces: () => getTraceEvents(),
     exportTraces: () => exportTraceZip(),
-    resetTraceIds: (eventStart = 1, correlationStart = 1) => resetTraceIds(eventStart, correlationStart),
-    resetTraceSession: (eventStart = 1, correlationStart = 1) => resetTraceSession(eventStart, correlationStart),
+    resetTraceIds: (eventStart = 0, correlationStart = 0) => resetTraceIds(eventStart, correlationStart),
+    resetTraceSession: (eventStart = 0, correlationStart = 0) => {
+      resetActionTrace();
+      resetTraceSession(eventStart, correlationStart);
+    },
   };
 };

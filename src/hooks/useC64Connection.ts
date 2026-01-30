@@ -39,9 +39,9 @@ export function useC64Connection() {
 
   const { data: deviceInfo, error, isLoading, refetch } = useQuery({
     queryKey: ['c64-info', baseUrl],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const api = getC64API();
-      return api.getInfo();
+      return api.getInfo({ timeoutMs: 3000, signal });
     },
     enabled: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
     retry: 1,

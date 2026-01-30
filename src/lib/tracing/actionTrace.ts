@@ -12,6 +12,10 @@ let activeAction: TraceActionContext | null = null;
 
 export const getActiveAction = () => activeAction;
 
+export const resetActionTrace = () => {
+  activeAction = null;
+};
+
 export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
   if (activeAction) {
     return await fn();
@@ -33,20 +37,31 @@ export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () 
   }
 };
 
+const runWithDetachedActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
+  recordActionStart(context);
+  try {
+    const result = await fn();
+    recordActionEnd(context, null);
+    return result;
+  } catch (error) {
+    const err = error as Error;
+    recordTraceError(context, err);
+    recordActionEnd(context, err);
+    throw error;
+  }
+};
+
 export const runWithImplicitAction = async <T>(
   name: string,
   fn: (context: TraceActionContext) => Promise<T> | T,
 ): Promise<T> => {
-  if (activeAction) {
-    return await fn(activeAction);
-  }
   const context: TraceActionContext = {
     correlationId: nextCorrelationId(),
     origin: 'system',
     name,
     componentName: null,
   };
-  return runWithActionTrace(context, () => fn(context));
+  return runWithDetachedActionTrace(context, () => fn(context));
 };
 
 export const createActionContext = (

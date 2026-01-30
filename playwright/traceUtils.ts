@@ -3,12 +3,12 @@ import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 
 type TraceEvent = {
-  id: number;
+  id: string;
   timestamp: string;
   relativeMs: number;
   type: string;
   origin: string;
-  correlationId: number;
+  correlationId: string;
   data: Record<string, unknown>;
 };
 
@@ -68,10 +68,13 @@ const generateTestId = (testInfo: TestInfo): string => {
 const isAnnotationPresent = (testInfo: TestInfo, type: string) =>
   testInfo.annotations.some((annotation: TestInfo['annotations'][number]) => annotation.type === type);
 
-const getTraceAssertionConfig = (testInfo: TestInfo): TraceAssertionConfig => {
+export const getTraceAssertionConfig = (testInfo: TestInfo): TraceAssertionConfig => {
   const defaultEnabled = process.env.TRACE_ASSERTIONS_DEFAULT === '1';
   const optedIn = isAnnotationPresent(testInfo, TRACE_ASSERT_ANNOTATION);
   const optedOut = isAnnotationPresent(testInfo, TRACE_ASSERT_OFF_ANNOTATION);
+  if (optedIn && optedOut) {
+    throw new Error(`Trace assertions cannot be both enabled and disabled for "${testInfo.title}".`);
+  }
   const strictOverride = isAnnotationPresent(testInfo, TRACE_NON_STRICT_ANNOTATION)
     ? false
     : isAnnotationPresent(testInfo, TRACE_STRICT_ANNOTATION)
@@ -79,7 +82,7 @@ const getTraceAssertionConfig = (testInfo: TestInfo): TraceAssertionConfig => {
       : undefined;
   const strictEnv = process.env.TRACE_STRICT === '1';
   return {
-    enabled: optedIn || (defaultEnabled && !optedOut),
+    enabled: optedOut ? false : optedIn || defaultEnabled,
     strict: strictOverride ?? strictEnv,
     defaultEnabled,
   };
@@ -132,13 +135,16 @@ export const clearTraces = async (page: Page) => {
         resetTraceIds?: (eventStart?: number, correlationStart?: number) => void;
         resetTraceSession?: (eventStart?: number, correlationStart?: number) => void;
       }
+      __pwTraceReset?: () => void;
     }).__c64uTracing;
     if (tracing?.resetTraceSession) {
-      tracing.resetTraceSession(1, 1);
+      tracing.resetTraceSession(0, 0);
+      (window as Window & { __pwTraceReset?: () => void }).__pwTraceReset?.();
       return;
     }
     tracing?.clearTraces?.();
-    tracing?.resetTraceIds?.(1, 1);
+    tracing?.resetTraceIds?.(0, 0);
+    (window as Window & { __pwTraceReset?: () => void }).__pwTraceReset?.();
   });
 };
 
@@ -158,10 +164,10 @@ export const exportTracesZip = async (page: Page): Promise<Uint8Array | null> =>
   return data ? Uint8Array.from(data) : null;
 };
 
-export const saveTracesFromPage = async (page: Page, testInfo: TestInfo) => {
+export const saveTracesFromPage = async (page: Page, testInfo: TestInfo, tracesOverride?: TraceEvent[]) => {
   const evidenceDir = getEvidenceDir(testInfo);
   await fs.mkdir(evidenceDir, { recursive: true });
-  const traces = await getTraces(page);
+  const traces = tracesOverride ?? await getTraces(page);
   await fs.writeFile(path.join(evidenceDir, 'trace.json'), JSON.stringify(traces, null, 2), 'utf8');
   const zip = await exportTracesZip(page);
   if (zip) {

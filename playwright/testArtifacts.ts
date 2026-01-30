@@ -2,7 +2,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
-import { saveTracesFromPage } from './traceUtils';
+import { getTraceAssertionConfig, getTraces, saveTracesFromPage } from './traceUtils';
 import { createEvidenceMetadata } from './evidenceConsolidation';
 
 const sanitizeLabel = (label: string) =>
@@ -59,6 +59,7 @@ type StrictUiTracker = {
   horizontalOverflows: string[];
   requestLog: Array<{ method: string; url: string; resourceType: string }>
   routingIssues: string[];
+  traceResetAt?: number;
   detach: () => void;
 };
 
@@ -130,18 +131,50 @@ const writeErrorContext = async (testInfo: TestInfo, evidenceDir: string) => {
   await fs.writeFile(path.join(evidenceDir, 'error-context.md'), payload, 'utf8');
 };
 
+const hasPendingRestRequests = (traces: Awaited<ReturnType<typeof getTraces>>) => {
+  const byCorrelation = new Map<string, Array<{ event: (typeof traces)[number]; index: number }>>();
+  traces.forEach((event, index) => {
+    const list = byCorrelation.get(event.correlationId) ?? [];
+    list.push({ event, index });
+    byCorrelation.set(event.correlationId, list);
+  });
+
+  const findIndex = (
+    events: Array<{ event: (typeof traces)[number]; index: number }>,
+    type: string,
+    after?: number,
+  ) => {
+    const filtered = events.filter((entry) => entry.event.type === type && (after === undefined || entry.index > after));
+    return filtered.length ? filtered[0].index : null;
+  };
+
+  return traces.some((event, index) => {
+    if (event.type !== 'rest-request') return false;
+    const related = byCorrelation.get(event.correlationId) ?? [];
+    const responseIndex = findIndex(related, 'rest-response', index);
+    return responseIndex === null;
+  });
+};
+
+const waitForTraceStability = async (page: Page, attempts = 3, delayMs = 50) => {
+  let traces = await getTraces(page);
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    await page.waitForTimeout(delayMs);
+    const next = await getTraces(page);
+    if (next.length === traces.length) {
+      return next;
+    }
+    traces = next;
+  }
+  return traces;
+};
+
 export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
   const evidenceDir = getEvidenceDir(testInfo);
   await fs.mkdir(evidenceDir, { recursive: true });
 
   const tracker = getTracker(testInfo);
-  if (tracker?.requestLog?.length) {
-    await fs.writeFile(
-      path.join(evidenceDir, 'request-routing.json'),
-      JSON.stringify(tracker.requestLog, null, 2),
-      'utf8',
-    );
-  }
+  let requestLogSnapshot: StrictUiTracker['requestLog'] = tracker?.requestLog ? [...tracker.requestLog] : [];
 
   if (getStepCount(testInfo) === 0 && !page.isClosed()) {
     await attachStepScreenshot(page, testInfo, 'final-state');
@@ -152,9 +185,115 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
   const viewport = page.viewportSize ? page.viewportSize() : null;
   await createEvidenceMetadata(testInfo, viewport);
 
+  let traces: Awaited<ReturnType<typeof getTraces>> = [];
   if (!page.isClosed()) {
-    await saveTracesFromPage(page, testInfo).catch(() => {});
+    traces = await waitForTraceStability(page);
+    if (hasPendingRestRequests(traces)) {
+      traces = await waitForTraceStability(page, 12, 250);
+    }
+    if (tracker?.requestLog) {
+      requestLogSnapshot = [...tracker.requestLog];
+    }
+    await saveTracesFromPage(page, testInfo, traces).catch(() => {});
   }
+
+  if (requestLogSnapshot.length) {
+    await fs.writeFile(
+      path.join(evidenceDir, 'request-routing.json'),
+      JSON.stringify(requestLogSnapshot, null, 2),
+      'utf8',
+    );
+  }
+
+  const traceConfig = getTraceAssertionConfig(testInfo);
+  if (traceConfig.enabled && !page.isClosed()) {
+    const tracker = getTracker(testInfo);
+    if (!tracker) {
+      throw new Error('Trace assertions enabled but strict UI monitoring was not started.');
+    }
+    const requestLog = requestLogSnapshot;
+    const normalizeUrl = (value: string) => {
+      try {
+        const parsed = new URL(value);
+        return `${parsed.pathname}${parsed.search}`;
+      } catch {
+        return value.replace(/https?:\/\/[^/]+/i, '');
+      }
+    };
+    const requestCounts = new Map<string, number>();
+    let ftpRequestCount = 0;
+    requestLog.forEach((entry) => {
+      const normalized = normalizeUrl(entry.url);
+      if (normalized.includes('/v1/ftp/list')) {
+        ftpRequestCount += 1;
+      }
+      const key = `${entry.method.toUpperCase()} ${normalized}`;
+      requestCounts.set(key, (requestCounts.get(key) ?? 0) + 1);
+    });
+
+    const traceCounts = new Map<string, number>();
+    traces
+      .filter((event) => event.type === 'rest-request')
+      .forEach((event) => {
+        const data = event.data as { method?: string; normalizedUrl?: string; url?: string };
+        const method = typeof data.method === 'string' ? data.method.toUpperCase() : 'GET';
+        const url = typeof data.normalizedUrl === 'string'
+          ? data.normalizedUrl
+          : typeof data.url === 'string'
+            ? normalizeUrl(data.url)
+            : '';
+        const key = `${method} ${url}`;
+        traceCounts.set(key, (traceCounts.get(key) ?? 0) + 1);
+      });
+
+    const missing: string[] = [];
+    requestCounts.forEach((count, key) => {
+      const traced = traceCounts.get(key) ?? 0;
+      if (traced === 0) {
+        missing.push(`${key} (requests=${count}, traces=${traced})`);
+      }
+    });
+    if (ftpRequestCount > 0) {
+      const ftpTraceCount = traces.filter((event) => event.type === 'ftp-operation').length;
+      if (ftpTraceCount === 0) {
+        missing.push(`FTP list operations (requests=${ftpRequestCount}, traces=${ftpTraceCount})`);
+      }
+    }
+    if (missing.length) {
+      throw new Error(`Trace coverage missing for REST requests:\n${missing.join('\n')}`);
+    }
+
+    const eventsByCorrelation = new Map<string, Array<{ event: (typeof traces)[number]; index: number }>>();
+    traces.forEach((event, index) => {
+      const list = eventsByCorrelation.get(event.correlationId) ?? [];
+      list.push({ event, index });
+      eventsByCorrelation.set(event.correlationId, list);
+    });
+
+    const findIndex = (events: Array<{ event: (typeof traces)[number]; index: number }>, type: string, after?: number) => {
+      const filtered = events.filter((entry) => entry.event.type === type && (after === undefined || entry.index > after));
+      return filtered.length ? filtered[0].index : null;
+    };
+
+    traces.forEach((event, index) => {
+      if (event.type !== 'rest-request' && event.type !== 'ftp-operation') return;
+      const related = eventsByCorrelation.get(event.correlationId) ?? [];
+      const startIndex = findIndex(related, 'action-start');
+      const decisionIndex = findIndex(related, 'backend-decision');
+      const endIndex = findIndex(related, 'action-end', index);
+      if (startIndex === null || decisionIndex === null || endIndex === null) {
+        throw new Error(`Trace sequence incomplete for correlation ${event.correlationId}.`);
+      }
+      if (event.type === 'rest-request') {
+        const responseIndex = findIndex(related, 'rest-response', index);
+        if (responseIndex === null) {
+          throw new Error(`Missing rest-response for correlation ${event.correlationId}.`);
+        }
+      }
+    });
+  }
+
+  
 
   const tracePath = testInfo.outputPath('trace.zip');
   await copyIfExists(tracePath, path.join(evidenceDir, 'trace.zip'));
@@ -201,12 +340,26 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     horizontalOverflows: [],
     requestLog: [],
     routingIssues: [],
+    traceResetAt: undefined,
     detach: () => {},
   };
 
-  const recordRequest = (request: { method: () => string; url: () => string; resourceType: () => string }) => {
+  const recordRequest = (request: {
+    method: () => string;
+    url: () => string;
+    resourceType: () => string;
+    isNavigationRequest?: () => boolean;
+    frame?: () => { url: () => string } | null;
+  }) => {
+    const isNavigation = typeof request.isNavigationRequest === 'function' && request.isNavigationRequest();
+    const isMainFrame = typeof request.frame === 'function' && request.frame() === page.mainFrame();
+    if (isNavigation && isMainFrame) {
+      tracker.requestLog = [];
+      tracker.traceResetAt = Date.now();
+    }
     const url = request.url();
     if (!url.includes('/v1/')) return;
+    if (request.method().toUpperCase() === 'OPTIONS') return;
     tracker.requestLog.push({
       method: request.method(),
       url,
@@ -215,6 +368,21 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
   };
 
   page.on('request', recordRequest);
+
+  page.on('framenavigated', (frame) => {
+    if (frame !== page.mainFrame()) return;
+    tracker.requestLog = [];
+    tracker.traceResetAt = Date.now();
+  });
+
+  try {
+    await page.exposeFunction('__pwTraceReset', () => {
+      tracker.requestLog = [];
+      tracker.traceResetAt = Date.now();
+    });
+  } catch {
+    // Ignore if already registered for this page.
+  }
 
   await page.exposeFunction('__pwRecordToastIssue', (issue: ToastIssue) => {
     const message = `${issue.type}: ${issue.message}`.trim();

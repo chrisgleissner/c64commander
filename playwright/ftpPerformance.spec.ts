@@ -5,6 +5,7 @@ import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { enableTraceAssertions } from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 test.describe('FTP performance', () => {
@@ -33,6 +34,7 @@ test.describe('FTP performance', () => {
   });
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
     await seedFtpConfig(page, {

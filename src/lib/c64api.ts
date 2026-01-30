@@ -238,12 +238,11 @@ export class C64API {
 
   private async parseResponseJson<T>(response: Response): Promise<T> {
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-    const text = await response.text();
-    if (!text || !contentType.includes('application/json')) {
+    if (!contentType.includes('application/json')) {
       return { errors: [] } as T;
     }
     try {
-      return JSON.parse(text) as T;
+      return await response.clone().json() as T;
     } catch (error) {
       addErrorLog('C64 API parse failed', { error: (error as Error).message });
       return { errors: [] } as T;
@@ -265,7 +264,7 @@ export class C64API {
 
   private async request<T>(
     path: string,
-    options: (RequestInit & { timeoutMs?: number }) = {}
+    options: (RequestInit & { timeoutMs?: number; __c64uTraceSuppressed?: boolean }) = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -279,7 +278,8 @@ export class C64API {
     const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
     let status: number | 'error' = 'error';
     const timeoutMs = options.timeoutMs;
-    const requestOptions = { ...options };
+    const requestOptions = { ...options } as RequestInit & { timeoutMs?: number; __c64uTraceSuppressed?: boolean };
+    requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
     return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
@@ -368,12 +368,22 @@ export class C64API {
           return nativeResponse.data as T;
         }
 
+        const outerSignal = requestOptions.signal;
         const controller = timeoutMs ? new AbortController() : null;
+        const abortFromOuter = () => controller?.abort();
+        if (outerSignal && controller) {
+          if (outerSignal.aborted) {
+            controller.abort();
+          } else {
+            outerSignal.addEventListener('abort', abortFromOuter, { once: true });
+          }
+        }
         const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+        const signal = controller ? controller.signal : outerSignal;
         const responsePromise = fetch(url, {
           ...requestOptions,
           headers,
-          ...(controller ? { signal: controller.signal } : {}),
+          ...(signal ? { signal } : {}),
         });
         let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
         const timeoutPromise = timeoutMs
@@ -385,6 +395,9 @@ export class C64API {
           ? await Promise.race([responsePromise, timeoutPromise])
           : await responsePromise;
         if (timeoutId) clearTimeout(timeoutId);
+        if (outerSignal && controller) {
+          outerSignal.removeEventListener('abort', abortFromOuter);
+        }
         if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
 
         status = response.status;
@@ -401,7 +414,7 @@ export class C64API {
         recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: null });
         responseRecorded = true;
 
-        return this.parseResponseJson<T>(response);
+        return responseBody ?? this.parseResponseJson<T>(response);
       } catch (error) {
         const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
         const rawMessage = (error as Error).message || 'Request failed';
@@ -432,7 +445,12 @@ export class C64API {
     });
   }
 
-  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit & { __c64uTraceSuppressed?: boolean },
+    timeoutMs?: number,
+  ): Promise<Response> {
+    options.__c64uTraceSuppressed = true;
     const body = options.body;
     const shouldUseWebFetch =
       isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
@@ -558,8 +576,8 @@ export class C64API {
     return this.request('/v1/version');
   }
 
-  async getInfo(): Promise<DeviceInfo> {
-    return this.request('/v1/info');
+  async getInfo(options: (RequestInit & { timeoutMs?: number }) = {}): Promise<DeviceInfo> {
+    return this.request('/v1/info', options);
   }
 
   // Config endpoints

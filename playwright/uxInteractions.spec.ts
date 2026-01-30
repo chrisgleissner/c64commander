@@ -13,6 +13,7 @@ import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { enableTraceAssertions } from './traceUtils';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { getSourceSelectionButton } from './sourceSelection';
@@ -22,6 +23,7 @@ test.describe('UX Interaction Patterns', () => {
 
   test.beforeEach(async ({ page }, testInfo: TestInfo) => {
     server = await createMockC64Server({});
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     await seedUiMocks(page, server.baseUrl);
     await page.waitForLoadState('networkidle');

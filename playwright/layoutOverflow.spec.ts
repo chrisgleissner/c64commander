@@ -4,6 +4,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { disableTraceAssertions } from './traceUtils';
 import { saveCoverageFromPage } from './withCoverage';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
@@ -83,6 +84,7 @@ test.describe('Layout overflow safeguards', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
   test.beforeEach(async ({ page }, testInfo) => {
+    disableTraceAssertions(testInfo, 'Layout-only coverage; trace assertions disabled.');
     enforceDeviceTestMapping(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server();

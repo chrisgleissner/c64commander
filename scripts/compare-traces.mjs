@@ -56,17 +56,21 @@ const normalizeDataFields = (value) => {
   return normalizeHostLike(value);
 };
 
+const formatId = (prefix, value) => `${prefix}-${String(value).padStart(5, '0')}`;
+const isTraceId = (value, prefix) => typeof value === 'string' && new RegExp(`^${prefix}-\\d{5}$`).test(value);
+
 const normalizeTrace = (events) => {
-  let expectedId = 1;
+  let expectedId = 0;
   return events.map((event) => {
     const normalized = { ...event };
-    if (typeof normalized.id !== 'number') {
+    const expected = formatId('EVT', expectedId);
+    if (!isTraceId(normalized.id, 'EVT')) {
       errors.push(`Invalid trace id: ${normalized.id}`);
-    } else if (normalized.id !== expectedId) {
-      errors.push(`Unexpected trace id ${normalized.id}; expected ${expectedId}`);
+    } else if (normalized.id !== expected) {
+      errors.push(`Unexpected trace id ${normalized.id}; expected ${expected}`);
     }
     expectedId += 1;
-    if (typeof normalized.correlationId !== 'number') {
+    if (!isTraceId(normalized.correlationId, 'COR')) {
       errors.push(`Invalid correlationId: ${normalized.correlationId}`);
     }
     delete normalized.timestamp;

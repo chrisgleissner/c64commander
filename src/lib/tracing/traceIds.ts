@@ -1,22 +1,26 @@
-let eventCounter = 0;
-let correlationCounter = 0;
+let eventCounter = -1;
+let correlationCounter = -1;
+
+const formatTraceId = (prefix: 'EVT' | 'COR', value: number) => `${prefix}-${String(value).padStart(5, '0')}`;
 
 export const nextTraceEventId = () => {
   eventCounter += 1;
-  return eventCounter;
+  return formatTraceId('EVT', eventCounter);
 };
 
 export const nextCorrelationId = () => {
   correlationCounter += 1;
-  return correlationCounter;
+  return formatTraceId('COR', correlationCounter);
 };
 
-export const resetTraceIds = (eventStart = 1, correlationStart = 1) => {
-  eventCounter = Math.max(0, Math.floor(eventStart) - 1);
-  correlationCounter = Math.max(0, Math.floor(correlationStart) - 1);
+export const resetTraceIds = (eventStart = 0, correlationStart = 0) => {
+  const eventBase = Math.max(0, Math.floor(eventStart));
+  const correlationBase = Math.max(0, Math.floor(correlationStart));
+  eventCounter = eventBase - 1;
+  correlationCounter = correlationBase - 1;
 };
 
 export const getTraceIdSnapshot = () => ({
-  nextEventId: eventCounter + 1,
-  nextCorrelationId: correlationCounter + 1,
+  nextEventId: formatTraceId('EVT', eventCounter + 1),
+  nextCorrelationId: formatTraceId('COR', correlationCounter + 1),
 });
