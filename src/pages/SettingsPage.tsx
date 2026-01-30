@@ -43,9 +43,12 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
+import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
+import { downloadTraceZip } from '@/lib/tracing/traceExport';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
+import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
 import {
   clampConfigWriteIntervalMs,
@@ -80,6 +83,7 @@ export default function SettingsPage() {
   const { isDeveloperModeEnabled, enableDeveloperMode } = useDeveloperMode();
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
+  const trace = useActionTrace('SettingsPage');
 
   const setHvscEnabledAndPersist = (enabled: boolean) => {
     void setHvscEnabled(enabled);
@@ -101,9 +105,10 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs'>('errors');
+  const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs' | 'traces'>('errors');
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
+  const [traceEvents, setTraceEvents] = useState(getTraceEvents());
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
@@ -145,6 +150,14 @@ export default function SettingsPage() {
     };
     window.addEventListener('c64u-logs-updated', handler);
     return () => window.removeEventListener('c64u-logs-updated', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => {
+      setTraceEvents(getTraceEvents());
+    };
+    window.addEventListener('c64u-traces-updated', handler);
+    return () => window.removeEventListener('c64u-traces-updated', handler);
   }, []);
 
   useEffect(() => {
@@ -227,7 +240,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleShareActive = async () => {
+  const handleShareActive = trace(async function handleShareActive() {
     const content = activePayload || 'No entries recorded.';
     try {
       if (navigator.share) {
@@ -252,16 +265,30 @@ export default function SettingsPage() {
         error,
       });
     }
-  };
+  });
 
-  const handleShareViaEmail = () => {
+  const handleShareViaEmail = trace(function handleShareViaEmail() {
     const address = ['apps', 'gleissner.uk'].join('@');
     const subject = encodeURIComponent('C64 Commander diagnostics');
     const body = encodeURIComponent(activePayload || 'No entries recorded.');
     window.location.href = `mailto:${address}?subject=${subject}&body=${body}`;
-  };
+  });
 
-  const handleSaveConnection = async () => {
+  const handleExportTraces = trace(function handleExportTraces() {
+    try {
+      downloadTraceZip();
+      toast({ title: 'Trace export ready' });
+    } catch (error) {
+      reportUserError({
+        operation: 'TRACE_EXPORT',
+        title: 'Error',
+        description: (error as Error).message,
+        error,
+      });
+    }
+  });
+
+  const handleSaveConnection = trace(async function handleSaveConnection() {
     setIsSaving(true);
     try {
       updateConfig(deviceHostInput || C64_DEFAULTS.DEFAULT_DEVICE_HOST, passwordInput || undefined);
@@ -277,7 +304,7 @@ export default function SettingsPage() {
     } finally {
       setIsSaving(false);
     }
-  };
+  });
 
   const handleDeveloperTap = () => {
     if (isDeveloperModeEnabled) return;
@@ -858,12 +885,13 @@ export default function SettingsPage() {
           </DialogHeader>
           <Tabs
             value={diagnosticsTab}
-            onValueChange={(value) => setDiagnosticsTab(value as 'errors' | 'logs')}
+            onValueChange={(value) => setDiagnosticsTab(value as 'errors' | 'logs' | 'traces')}
             className="space-y-3"
           >
-            <TabsList className="grid grid-cols-2 w-full">
+            <TabsList className="grid grid-cols-3 w-full">
               <TabsTrigger value="errors">Errors</TabsTrigger>
               <TabsTrigger value="logs">All logs</TabsTrigger>
+              <TabsTrigger value="traces">Traces</TabsTrigger>
             </TabsList>
             <TabsContent value="errors" className="space-y-2 max-h-[55vh] overflow-auto pr-2">
               {errorLogs.length === 0 ? (
@@ -898,6 +926,39 @@ export default function SettingsPage() {
                       </pre>
                     )}
                   </div>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="traces" className="space-y-3 max-h-[55vh] overflow-auto pr-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    clearTraceEvents();
+                    toast({ title: 'Traces cleared' });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear traces
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleExportTraces}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Export traces
+                </Button>
+              </div>
+              {traceEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No traces recorded.</p>
+              ) : (
+                traceEvents.map((entry, index) => (
+                  <details key={entry.id} className="rounded-lg border border-border p-3">
+                    <summary className="cursor-pointer text-sm font-medium">
+                      {index + 1}. {entry.type} · {entry.origin}
+                    </summary>
+                    <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                      {JSON.stringify(entry, null, 2)}
+                    </pre>
+                  </details>
                 ))
               )}
             </TabsContent>

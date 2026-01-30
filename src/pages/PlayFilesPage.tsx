@@ -14,6 +14,7 @@ import { useC64Category, useC64Connection, useC64UpdateConfigBatch } from '@/hoo
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
+import { useActionTrace } from '@/hooks/useActionTrace';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
@@ -317,6 +318,7 @@ export default function PlayFilesPage() {
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const isAndroid = getPlatform() === 'android';
+  const trace = useActionTrace('PlayFilesPage');
 
   const { flags, isLoaded } = useFeatureFlags();
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
@@ -1865,7 +1867,7 @@ export default function PlayFilesPage() {
     }
   }, [applySonglengthsToItems, playItem, reportUserError]);
 
-  const handlePlay = useCallback(async () => {
+  const handlePlay = useCallback(trace(async function handlePlay() {
     if (!playlist.length) return;
     try {
       if (currentIndex < 0) {
@@ -1884,9 +1886,9 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }, [currentIndex, playItem, playlist, reportUserError, startPlaylist]);
+  }), [currentIndex, playItem, playlist, reportUserError, startPlaylist, trace]);
 
-  const handleStop = useCallback(async () => {
+  const handleStop = useCallback(trace(async function handleStop() {
     if (!isPlaying && !isPaused) return;
     const currentItem = playlist[currentIndex];
     const shouldReboot = currentItem?.category === 'disk';
@@ -1925,9 +1927,9 @@ export default function PlayFilesPage() {
     setDurationMs(undefined);
     setCurrentSubsongCount(null);
     trackStartedAtRef.current = null;
-  }, [currentIndex, isPaused, isPlaying, playlist, reportUserError, withTimeout]);
+  }), [currentIndex, isPaused, isPlaying, playlist, reportUserError, withTimeout, trace]);
 
-  const handlePauseResume = useCallback(async () => {
+  const handlePauseResume = useCallback(trace(async function handlePauseResume() {
     if (!isPlaying) return;
     const api = getC64API();
     try {
@@ -1975,7 +1977,7 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }, [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, buildEnabledSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, withTimeout]);
+  }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, buildEnabledSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, withTimeout, trace]);
 
   const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
     if (!volumeSteps.length || !sidVolumeItems.length) return;

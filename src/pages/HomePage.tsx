@@ -33,6 +33,7 @@ import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { buildSidStatusEntries } from '@/lib/config/sidStatus';
+import { useActionTrace } from '@/hooks/useActionTrace';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -52,6 +53,7 @@ export default function HomePage() {
     renameAppConfig,
     deleteAppConfig,
   } = useAppConfigState();
+  const trace = useActionTrace('HomePage');
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -79,7 +81,7 @@ export default function HomePage() {
     }
   };
 
-  const handleAction = async (action: () => Promise<unknown>, successMessage: string) => {
+  const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
       await action();
       toast({ title: successMessage });
@@ -92,9 +94,9 @@ export default function HomePage() {
         context: { action: successMessage },
       });
     }
-  };
+  });
 
-  const handleSaveToApp = async () => {
+  const handleSaveToApp = trace(async function handleSaveToApp() {
     const trimmed = saveName.trim();
     if (!trimmed) {
       toast({ title: 'Name required', description: 'Enter a config name first.' });
@@ -119,9 +121,9 @@ export default function HomePage() {
         context: { name: trimmed },
       });
     }
-  };
+  });
 
-  const handleLoadFromApp = async (configId: string) => {
+  const handleLoadFromApp = trace(async function handleLoadFromApp(configId: string) {
     const entry = appConfigs.find((config) => config.id === configId);
     if (!entry) return;
     setApplyingConfigId(configId);
@@ -140,7 +142,7 @@ export default function HomePage() {
     } finally {
       setApplyingConfigId(null);
     }
-  };
+  });
 
   const resolveDrive = (key: 'a' | 'b') =>
     drivesData?.drives?.find((entry) => entry[key])?.[key];

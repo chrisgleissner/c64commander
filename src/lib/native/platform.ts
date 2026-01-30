@@ -9,5 +9,8 @@ export const getPlatform = () => {
     const override = (window as PlatformOverrideWindow).__c64uPlatformOverride;
     if (override) return override;
   }
-  return Capacitor.getPlatform();
+  if (typeof (Capacitor as { getPlatform?: () => string }).getPlatform === 'function') {
+    return Capacitor.getPlatform();
+  }
+  return 'web';
 };

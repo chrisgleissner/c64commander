@@ -36,6 +36,9 @@ C64U_TARGET="mock"
 C64U_HOST="C64U"
 C64U_TARGET_SET=false
 C64U_HOST_SET=false
+RECORD_TRACES=false
+TRACE_OUTPUT_DIR=""
+TRACE_SUITE=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -63,6 +66,9 @@ Options:
   --test-e2e-ci         Run full CI mirror (screenshots + e2e + validation)
   --validate-evidence   Validate Playwright evidence structure
   --coverage            Run unit + e2e coverage (slower)
+  --record-traces       Record golden traces during Playwright runs
+  --trace-output-dir <path> Output directory for golden traces (default: test-results/traces/golden)
+  --trace-suite <name>  Optional suite name to scope trace recording
   --android-tests       Run Android instrumentation tests (requires a device/emulator)
   --skip-android-tests  Skip Android instrumentation tests
   --skip-android-coverage Skip Android Jacoco coverage check
@@ -97,6 +103,7 @@ Examples:
   ./local-build.sh --emulator
   ./local-build.sh --screenshots
   ./local-build.sh --screenshots-only
+  ./local-build.sh --test-e2e --record-traces --trace-suite playback
 
 Notes:
   --screenshots       Runs full build/tests by default, then captures screenshots.
@@ -196,6 +203,18 @@ while [[ $# -gt 0 ]]; do
     --android-tests)
       RUN_ANDROID_TESTS=true
       shift
+      ;;
+    --record-traces)
+      RECORD_TRACES=true
+      shift
+      ;;
+    --trace-output-dir)
+      TRACE_OUTPUT_DIR="$2"
+      shift 2
+      ;;
+    --trace-suite)
+      TRACE_SUITE="$2"
+      shift 2
       ;;
     --skip-android-tests)
       RUN_ANDROID_TESTS=false
@@ -398,6 +417,16 @@ if [[ -n "${VITE_APP_VERSION:-}" && -z "${VERSION_NAME:-}" ]]; then
 fi
 if [[ -z "$APK_DEFAULT" ]]; then
   APK_DEFAULT="$ROOT_DIR/android/app/build/outputs/apk/debug/c64commander-${VITE_APP_VERSION:-unknown}-debug.apk"
+fi
+
+if [[ "$RECORD_TRACES" == "true" ]]; then
+  export RECORD_TRACES=1
+  if [[ -n "$TRACE_OUTPUT_DIR" ]]; then
+    export TRACE_OUTPUT_DIR
+  fi
+  if [[ -n "$TRACE_SUITE" ]]; then
+    export TRACE_SUITE
+  fi
 fi
 
 if [[ "$RUN_INSTALL" == "true" ]]; then

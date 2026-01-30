@@ -25,6 +25,7 @@ import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
+import { TraceContextBridge } from '@/components/TraceContextBridge';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,7 @@ const AppRoutes = () => (
     <GlobalErrorListener />
     <RouteRefresher />
     <DebugStartupLogger />
+    <TraceContextBridge />
     <ConnectionController />
     <DemoModeInterstitial />
     <Routes>

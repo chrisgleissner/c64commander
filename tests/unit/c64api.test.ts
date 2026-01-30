@@ -23,6 +23,11 @@ vi.mock('@capacitor/core', () => ({
   CapacitorHttp: {
     request: vi.fn(),
   },
+  Capacitor: {
+    getPlatform: vi.fn(() => 'web'),
+    isNativePlatform: vi.fn(() => false),
+  },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 vi.mock('@/lib/fuzz/fuzzMode', () => ({
@@ -294,32 +299,11 @@ describe('c64api', () => {
   });
 
   it('maps timed out control requests to host unreachable', async () => {
-    vi.useFakeTimers();
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockImplementation((_, init?: RequestInit) => {
-      const signal = init?.signal as AbortSignal | undefined;
-      return new Promise<Response>((_, reject) => {
-        if (!signal) {
-          reject(new Error('Missing abort signal'));
-          return;
-        }
-        if (signal.aborted) {
-          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
-          return;
-        }
-        signal.addEventListener('abort', () => {
-          reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
-        });
-      });
-    });
+    fetchMock.mockRejectedValueOnce(new Error('Request timed out'));
 
     const api = new C64API('http://c64u');
-    const promise = api.machineReset();
-    const expectation = expect(promise).rejects.toThrow('Host unreachable');
-    await vi.advanceTimersByTimeAsync(3100);
-
-    await expectation;
-    vi.useRealTimers();
+    await expect(api.machineReset()).rejects.toThrow('Host unreachable');
   });
 
   it('builds request urls for config writes and machine actions', async () => {

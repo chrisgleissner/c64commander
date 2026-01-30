@@ -2,6 +2,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
+import { saveTracesFromPage } from './traceUtils';
 import { createEvidenceMetadata } from './evidenceConsolidation';
 
 const sanitizeLabel = (label: string) =>
@@ -148,6 +149,13 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
 
   await writeErrorContext(testInfo, evidenceDir);
 
+  const viewport = page.viewportSize ? page.viewportSize() : null;
+  await createEvidenceMetadata(testInfo, viewport);
+
+  if (!page.isClosed()) {
+    await saveTracesFromPage(page, testInfo).catch(() => {});
+  }
+
   const tracePath = testInfo.outputPath('trace.zip');
   await copyIfExists(tracePath, path.join(evidenceDir, 'trace.zip'));
 
@@ -168,9 +176,7 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
   const videoPath = testInfo.outputPath('video.webm');
   await copyIfExists(videoPath, expectedVideo);
 
-  // Create evidence metadata in canonical structure (now created directly, no consolidation needed)
-  const viewport = page.viewportSize ? page.viewportSize() : null;
-  await createEvidenceMetadata(testInfo, viewport);
+  // Evidence metadata already captured above.
 };
 
 export const allowWarnings = (testInfo: TestInfo, reason?: string) => {

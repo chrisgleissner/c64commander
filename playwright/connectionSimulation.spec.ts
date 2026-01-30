@@ -4,6 +4,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
+import { assertTraceOrder, clearTraces, findTraceEvent, getTraces } from './traceUtils';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -183,6 +184,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Automatic Demo Mode').uncheck();
+    await clearTraces(page);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
     const realIndicator = page.getByTestId('connectivity-indicator');
@@ -190,6 +192,18 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/drives'))).toBe(true);
+
+    const traces = await getTraces(page);
+    const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
+      (event.data as { normalizedUrl?: string }).normalizedUrl?.startsWith('/v1/drives')
+    );
+    expect(requestEvent).toBeTruthy();
+    if (requestEvent) {
+      const related = traces.filter((event) => event.correlationId === requestEvent.correlationId);
+      assertTraceOrder(related, ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end']);
+      const decisionEvent = findTraceEvent(related, 'backend-decision');
+      expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
+    }
 
     await snap(page, testInfo, 'real-connected-operations');
   });

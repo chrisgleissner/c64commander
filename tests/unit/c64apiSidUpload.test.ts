@@ -6,6 +6,11 @@ vi.mock('@capacitor/core', () => ({
   CapacitorHttp: {
     request: vi.fn(),
   },
+  Capacitor: {
+    getPlatform: vi.fn(() => 'web'),
+    isNativePlatform: vi.fn(() => false),
+  },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 describe('C64API playSidUpload', () => {

@@ -5,7 +5,9 @@ const platformState = { value: 'web' };
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     getPlatform: () => platformState.value,
+    isNativePlatform: () => false,
   },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 const pickDirectoryMock = vi.fn();
