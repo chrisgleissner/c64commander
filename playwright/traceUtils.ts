@@ -170,12 +170,6 @@ export const saveTracesFromPage = async (page: Page, testInfo: TestInfo, tracesO
     const goldenDir = path.join(suiteDir, relative);
     await fs.mkdir(goldenDir, { recursive: true });
     await fs.writeFile(path.join(goldenDir, 'trace.json'), JSON.stringify(traces, null, 2), 'utf8');
-    const metaSource = path.join(evidenceDir, 'meta.json');
-    try {
-      await fs.copyFile(metaSource, path.join(goldenDir, 'meta.json'));
-    } catch {
-      // meta.json will be generated later in finalizeEvidence; skip if missing.
-    }
   }
 };
 

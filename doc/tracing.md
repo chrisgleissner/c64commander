@@ -631,7 +631,7 @@ Each `test-results/evidence/playwright/<testId>/<deviceId>` folder contains:
 | Concept            | Scope        | Ownership   | Included in Golden Comparison | Purpose |
 |--------------------|--------------|-------------|-------------------------------|---------|
 | trace.json         | Per test     | Tracing     | Yes                           | Semantic, causal record of app behavior |
-| meta.json          | Per test     | Playwright  | Yes (normalized)              | Test identity, project, device, and outcome |
+| meta.json          | Per test     | Playwright  | No                            | Test identity, project, device, and outcome |
 | app-metadata.json  | Per export   | Tracing     | No                            | App, build, platform, and device context |
 
 ### 19.3 Trace Comparison Normalization
@@ -650,12 +650,7 @@ The following values MUST match exactly:
 
 - `id` and `correlationId` (deterministic numeric counters)
 
-Meta normalization (for `meta.json`):
-
-- Ignore `timestamp`
-- Ignore `status`
-
-All other fields, including event type order, `origin`, `correlationId` shape, targets, and semantic payloads, MUST match.
+Meta normalization for `meta.json` is not used in golden trace comparison.
 
 ### 19.4 Developer Workflow (Step-by-Step)
 
@@ -678,7 +673,6 @@ All other fields, including event type order, `origin`, `correlationId` shape, t
   - `test-results/evidence/playwright/<testId>/<deviceId>/meta.json`
 - Golden traces:
   - `test-results/traces/golden/<suite>/<testId>/<deviceId>/trace.json`
-  - `test-results/traces/golden/<suite>/<testId>/<deviceId>/meta.json`
 
 1. **Validate against goldens**
 
