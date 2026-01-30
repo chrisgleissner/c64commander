@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
@@ -208,6 +209,7 @@ test.describe('Playlist controls and advanced features', () => {
   });
 
   test('song selector appears for multi-song SID and triggers playback @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
@@ -215,6 +217,7 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'playlist-ready');
 
     const playCountBefore = server.sidplayRequests.length;
+    await clearTraces(page);
     await page
       .getByTestId('playlist-item')
       .filter({ hasText: 'multi.sid' })
@@ -222,6 +225,8 @@ test.describe('Playlist controls and advanced features', () => {
       .click();
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(playCountBefore);
     await snap(page, testInfo, 'multi-song-playing');
+
+    await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
 
     const songButton = page.getByRole('button', { name: /Song 1\/3/ });
     await expect(songButton).toBeVisible();

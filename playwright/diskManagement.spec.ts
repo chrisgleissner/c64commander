@@ -9,7 +9,7 @@ import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
-import { assertTraceOrder, clearTraces, findTraceEvent, getTraces } from './traceUtils';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -228,6 +228,7 @@ test.describe('Disk management', () => {
   });
 
   test('drive power toggle button updates state and issues request @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     const requests: Array<{ method: string; url: string }> = [];
     page.on('request', (request: Request) => {
       try {
@@ -264,16 +265,8 @@ test.describe('Disk management', () => {
     const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith('/v1/drives/a:off'));
     expect(lastRequest).toBeTruthy();
 
-    const traces = await getTraces(page);
-    const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
-      (event.data as { normalizedUrl?: string }).normalizedUrl === '/v1/drives/a:off'
-    );
-    expect(requestEvent).toBeTruthy();
-    if (requestEvent) {
-      const related = traces.filter((event) => event.correlationId === requestEvent.correlationId);
-      assertTraceOrder(related, ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end']);
-      expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
-    }
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/drives/a:off');
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
   });
 
   test('importing C64U folders preserves hierarchy and paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {

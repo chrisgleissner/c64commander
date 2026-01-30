@@ -4,14 +4,14 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
-import { assertTraceOrder, clearTraces, findTraceEvent, getTraces } from './traceUtils';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string, demoBaseUrl?: string | null) => {
-  await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }) => {
+  await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }: { realBaseUrl: string; demoBaseUrl: string | null }) => {
     (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = realArg;
     (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = demoArg
       ? [realArg, demoArg]
@@ -161,6 +161,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
   });
 
   test('disable demo → connect to real → core operations succeed', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -193,17 +194,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/drives'))).toBe(true);
 
-    const traces = await getTraces(page);
-    const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
-      (event.data as { normalizedUrl?: string }).normalizedUrl?.startsWith('/v1/drives')
-    );
-    expect(requestEvent).toBeTruthy();
-    if (requestEvent) {
-      const related = traces.filter((event) => event.correlationId === requestEvent.correlationId);
-      assertTraceOrder(related, ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end']);
-      const decisionEvent = findTraceEvent(related, 'backend-decision');
-      expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
-    }
+    const { related } = await expectRestTraceSequence(page, testInfo, '/v1/drives');
+    const decisionEvent = related.find((event) => event.type === 'backend-decision');
+    expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
 
     await snap(page, testInfo, 'real-connected-operations');
   });

@@ -8,6 +8,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const waitForRequests = async (predicate: () => boolean) => {
@@ -214,9 +215,11 @@ test.describe('Playback file browser (part 2)', () => {
   });
 
   test('playlist menu shows size and date for C64 Ultimate items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.goto('/play');
     await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
+    await clearTraces(page);
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Demos');
@@ -224,6 +227,11 @@ test.describe('Playback file browser (part 2)', () => {
     await selectEntryCheckbox(dialog, 'Part 1.d64');
     await page.getByRole('button', { name: 'Add to playlist' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
+
+    await expectFtpTraceSequence(page, testInfo, (event) => {
+      const data = event.data as { operation?: string; path?: string };
+      return data.operation === 'list' && (data.path ?? '').includes('/Usb0');
+    });
 
     const row = page.getByTestId('playlist-item').filter({ hasText: 'Part 1.d64' }).first();
     await row.getByRole('button', { name: 'Item actions' }).click();

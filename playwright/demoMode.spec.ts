@@ -3,6 +3,7 @@ import type { Page, Route, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 import { saveCoverageFromPage } from './withCoverage';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -176,6 +177,7 @@ test.describe('Automatic Demo Mode', () => {
   });
 
   test('save & connect exits demo mode when base URL is valid', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
     server = await createMockC64Server({});
@@ -195,6 +197,7 @@ test.describe('Automatic Demo Mode', () => {
     const urlInput = page.locator('#deviceHost');
     const host = new URL(server.baseUrl).host;
     await urlInput.fill(host);
+    await clearTraces(page);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
     const indicator = page.getByTestId('connectivity-indicator');
@@ -202,6 +205,7 @@ test.describe('Automatic Demo Mode', () => {
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
     const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
     expect(stored).toBe(new URL(server.baseUrl).host);
+    await expectRestTraceSequence(page, testInfo, '/v1/info');
     await snap(page, testInfo, 'demo-exit-connected');
   });
 });

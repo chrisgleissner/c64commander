@@ -70,6 +70,20 @@ const readTraceJson = async (dir) => {
   return JSON.parse(raw);
 };
 
+const readMetaJson = async (dir) => {
+  const filePath = path.join(dir, 'meta.json');
+  const raw = await fs.readFile(filePath, 'utf8');
+  return JSON.parse(raw);
+};
+
+const normalizeMeta = (meta) => {
+  if (!meta || typeof meta !== 'object') return meta;
+  const normalized = { ...meta };
+  delete normalized.timestamp;
+  delete normalized.status;
+  return normalized;
+};
+
 const compareTraceFiles = async (goldenDir, evidenceDir) => {
   const goldenTrace = await readTraceJson(goldenDir);
   const evidenceTrace = await readTraceJson(evidenceDir);
@@ -82,6 +96,21 @@ const compareTraceFiles = async (goldenDir, evidenceDir) => {
 
   if (goldenString !== evidenceString) {
     errors.push(`Trace mismatch for ${path.relative(goldenRoot, goldenDir)}`);
+  }
+
+  const goldenMeta = await readMetaJson(goldenDir).catch(() => null);
+  const evidenceMeta = await readMetaJson(evidenceDir).catch(() => null);
+  if (!goldenMeta || !evidenceMeta) {
+    errors.push(`meta.json missing for ${path.relative(goldenRoot, goldenDir)}`);
+    return;
+  }
+
+  const normalizedGoldenMeta = normalizeMeta(goldenMeta);
+  const normalizedEvidenceMeta = normalizeMeta(evidenceMeta);
+  const metaGoldenString = JSON.stringify(normalizedGoldenMeta, null, 2);
+  const metaEvidenceString = JSON.stringify(normalizedEvidenceMeta, null, 2);
+  if (metaGoldenString !== metaEvidenceString) {
+    errors.push(`Meta mismatch for ${path.relative(goldenRoot, goldenDir)}`);
   }
 };
 

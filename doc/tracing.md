@@ -432,6 +432,113 @@ Tests assert:
 - Optional per-test strictness
 - Global override supported
 
+### 18.4 Trace Assertion Opt-In Model
+
+Trace assertions are **explicit opt-in** by default. Tests must call the Playwright helper to enable them:
+
+```ts
+enableTraceAssertions(testInfo);
+```
+
+Optional per-test strictness:
+
+```ts
+enableTraceAssertions(testInfo, { strict: true });
+```
+
+Opt-out (only needed when a global default is enabled):
+
+```ts
+disableTraceAssertions(testInfo, 'Reason for excluding this test');
+```
+
+**Configuration sources and precedence:**
+
+1. **Per-test annotation** via `enableTraceAssertions()` / `disableTraceAssertions()` (highest precedence)
+2. **Environment defaults**
+   - `TRACE_ASSERTIONS_DEFAULT=1` → treat all tests as trace-enabled unless explicitly opted out
+   - `TRACE_STRICT=1` → strict ordering enabled unless explicitly disabled per-test
+
+**Enforcement:**
+
+All trace assertion helpers call the opt-in guard. If a test is not opted in, helpers throw with a message describing how to enable tracing. This prevents silent partial coverage.
+
+### 18.5 Trace Assertion Helpers
+
+Canonical helpers live in [playwright/traceUtils.ts](playwright/traceUtils.ts) and are the only supported API for trace assertions:
+
+- `clearTraces(page)`
+  - Clears the in-memory trace buffer in the running app.
+
+- `getTraces(page)`
+  - Returns the current trace events as JSON.
+
+- `assertRestTraceSequence(testInfo, events, matcher, expectedTypes?)`
+  - Asserts a REST request exists and is ordered correctly within its `correlationId`.
+  - Defaults to: `action-start → backend-decision → rest-request → rest-response → action-end`.
+
+- `expectRestTraceSequence(page, testInfo, matcher, expectedTypes?)`
+  - Polls until the REST trace sequence exists, then returns the matched events.
+
+- `assertFtpTraceSequence(testInfo, events, predicate?, expectedTypes?)`
+  - Asserts an FTP operation exists and is ordered correctly within its `correlationId`.
+  - Defaults to: `action-start → backend-decision → ftp-operation → action-end`.
+
+- `expectFtpTraceSequence(page, testInfo, predicate?, expectedTypes?)`
+  - Polls until the FTP trace sequence exists, then returns the matched events.
+
+- `assertTraceOrder(testInfo, events, expectedTypes?)`
+  - Asserts ordering within a single correlation. Strict mode requires exact sequence.
+
+- `findTraceEvent(events, type, predicate?)`
+  - Convenience locator for a single event.
+
+- `findRestRequest(events, matcher)` / `findFtpOperation(events, predicate?)`
+  - Convenience helpers for event lookup.
+
+**What helpers assert by default:**
+
+- Event ordering within the same `correlationId`
+- Presence of required semantic events
+- Backend target/decision can be asserted by the test (when stable)
+
+**What helpers do not assert:**
+
+- Absolute timestamps
+- Durations
+- Byte-for-byte equality of payloads
+
+**Correlation boundaries:**
+
+All ordering assertions are scoped to a single `correlationId`. Tests must never mix events from multiple actions.
+
+### 18.6 Scaling Strategy to 50% Coverage
+
+Selection criteria:
+
+- Prefer tests that already trigger REST/FTP calls (e.g., config changes, disk mounts, playback actions).
+- Prefer tests with deterministic backend behavior (mock server, stable routes).
+
+Order of migration:
+
+1. Playback + disk management flows
+2. Settings flows that call `/v1/info` or `/v1/configs`
+3. FTP-based selection flows (list/open)
+4. Demo-mode transitions that hit discovery or config endpoints
+
+Patterns to avoid (brittle):
+
+- Asserting full trace equality inside test code
+- Asserting absolute timestamps or durations
+- Asserting every event in high-volume sequences (e.g., rapid sliders)
+- Coupling trace assertions to UI-only flows with no backend side effects
+
+Rules for when **not** to add trace assertions:
+
+- Visual-only or layout-only tests
+- Coverage-only or probe-only tests
+- Empty placeholder specs
+
 ---
 
 ## 19. Golden Trace Recording
@@ -444,12 +551,18 @@ Golden traces capture a deterministic, reviewable baseline of expected traces fo
 
 #### Execution
 
-`local-build.sh` SHOULD expose a trace recording mode:
+`local-build.sh` exposes a trace recording mode:
 
-- Suggested flag: `--record-traces`
+- `--record-traces`
 - Optional overrides:
   - `--trace-output-dir <path>` (default: `test-results/traces/golden`)
   - `--trace-suite <name>` (scope recording to a Playwright project or test tag)
+
+Equivalent environment variables:
+
+- `RECORD_TRACES=1`
+- `TRACE_OUTPUT_DIR=<path>`
+- `TRACE_SUITE=<name>`
 
 When enabled, Playwright runs in trace-recording mode and exports:
 
@@ -460,16 +573,19 @@ Recording mode MUST NOT alter application behavior or timing.
 
 #### Files
 
-Each `test-results/evidence/playwright$/testId` folder needs to contain a `trace.json` file and its existing `meta.json`.
+Each `test-results/evidence/playwright/<testId>/<deviceId>` folder contains:
 
-`meta.json` already provides test name, project, timestamp, and file path context. Trace recording MUST reuse this file instead of generating a second manifest.
+- `trace.json`
+- `meta.json`
+
+`meta.json` provides test name, project, timestamp, and file path context. Trace recording MUST reuse this file instead of generating a second manifest.
 
 `app-metadata.json` is not part of Playwright evidence. If present in exported archives, it is ignored for golden trace comparison.
 
 | Concept            | Scope        | Ownership   | Included in Golden Comparison | Purpose |
 |--------------------|--------------|-------------|-------------------------------|---------|
 | trace.json         | Per test     | Tracing     | Yes                           | Semantic, causal record of app behavior |
-| meta.json          | Per test     | Playwright  | Yes                           | Test identity, project, device, and outcome |
+| meta.json          | Per test     | Playwright  | Yes (normalized)              | Test identity, project, device, and outcome |
 | app-metadata.json  | Per export   | Tracing     | No                            | App, build, platform, and device context |
 
 ### 19.3 Trace Comparison Normalization
@@ -483,7 +599,59 @@ The following values are ignored or normalized:
 - IP addresses and ports inside REST/FTP URLs
 - Any backend host identifiers that differ across runs
 
+Meta normalization (for `meta.json`):
+
+- Ignore `timestamp`
+- Ignore `status`
+
 All other fields, including event type order, `origin`, `correlationId` shape, targets, and semantic payloads, MUST match.
+
+### 19.4 Developer Workflow (Step-by-Step)
+
+1. **Record golden traces locally**
+
+  ```bash
+  ./local-build.sh --test-e2e --record-traces --trace-suite tracing
+  ```
+
+  Or use direct env variables:
+
+  ```bash
+  RECORD_TRACES=1 TRACE_SUITE=tracing npm run test:e2e
+  ```
+
+1. **Review generated files**
+
+- Evidence (always written):
+  - `test-results/evidence/playwright/<testId>/<deviceId>/trace.json`
+  - `test-results/evidence/playwright/<testId>/<deviceId>/meta.json`
+- Golden traces:
+  - `test-results/traces/golden/<suite>/<testId>/<deviceId>/trace.json`
+  - `test-results/traces/golden/<suite>/<testId>/<deviceId>/meta.json`
+
+1. **Validate against goldens**
+
+  ```bash
+  npm run validate:traces
+  ```
+
+  You can override the golden directory:
+
+  ```bash
+  TRACE_GOLDEN_DIR=/path/to/golden npm run validate:traces
+  ```
+
+1. **Update goldens when behavior changes intentionally**
+
+- Re-run step 1 after the code change.
+- Commit the updated golden traces alongside the code change.
+
+### 19.5 Failure Modes and Diagnosis
+
+- **Missing trace.json**: The app did not expose tracing or the test ended before capture. Ensure `finalizeEvidence()` runs.
+- **Trace mismatch**: Compare normalized `trace.json` between golden and evidence; check for changed action ordering or payload semantics.
+- **Meta mismatch**: Confirm test name, device config, or routing expectations haven’t changed.
+- **Unexpected target**: Validate routing setup via `seedUiMocks()` or routing annotations and ensure mocks are reachable.
 
 ---
 

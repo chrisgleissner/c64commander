@@ -7,7 +7,7 @@ import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
-import { assertTraceOrder, clearTraces, findTraceEvent, getTraces } from './traceUtils';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence, findTraceEvent } from './traceUtils';
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
@@ -103,6 +103,7 @@ test.describe('Playback file browser', () => {
   });
 
   test('playback sends runner request to real device mock', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
     ]);
@@ -120,25 +121,8 @@ test.describe('Playback file browser', () => {
       .find((req) => req.url.startsWith('/v1/runners:sidplay'));
     expect(lastRequest?.method).toBe('PUT');
 
-    await expect.poll(async () => {
-      const traces = await getTraces(page);
-      const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
-        ((event.data as { normalizedUrl?: string }).normalizedUrl ?? '').startsWith('/v1/runners:sidplay')
-      );
-      if (!requestEvent?.correlationId) return false;
-      const related = traces.filter((event) => event.correlationId === requestEvent.correlationId);
-      return related.some((event) => event.type === 'rest-response') && related.some((event) => event.type === 'action-end');
-    }).toBe(true);
-
-    const traces = await getTraces(page);
-    const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
-      ((event.data as { normalizedUrl?: string }).normalizedUrl ?? '').startsWith('/v1/runners:sidplay')
-    );
-    expect(requestEvent).toBeTruthy();
-    const correlationId = requestEvent?.correlationId ?? '';
-    const related = traces.filter((event) => event.correlationId === correlationId);
-    assertTraceOrder(related, ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end']);
-    expect((requestEvent?.data as { target?: string }).target).toBe('external-mock');
+    const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
     const decisionEvent = findTraceEvent(related, 'backend-decision');
     expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
     await snap(page, testInfo, 'play-requested');
@@ -192,6 +176,7 @@ test.describe('Playback file browser', () => {
   });
 
   test('pause then stop never hangs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
     ]);
@@ -212,23 +197,13 @@ test.describe('Playback file browser', () => {
 
     await expect(page.getByTestId('playlist-play')).toContainText('Play');
 
-    const traces = await getTraces(page);
-    const pauseRequest = findTraceEvent(traces, 'rest-request', (event) =>
-      (event.data as { normalizedUrl?: string }).normalizedUrl === '/v1/machine:pause'
-    );
-    const resetRequest = findTraceEvent(traces, 'rest-request', (event) =>
-      (event.data as { normalizedUrl?: string }).normalizedUrl === '/v1/machine:reset'
-    );
-    expect(pauseRequest).toBeTruthy();
-    expect(resetRequest).toBeTruthy();
-    if (pauseRequest) {
-      const related = traces.filter((event) => event.correlationId === pauseRequest.correlationId);
-      assertTraceOrder(related, ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end']);
-    }
+    await expectRestTraceSequence(page, testInfo, '/v1/machine:pause');
+    await expectRestTraceSequence(page, testInfo, '/v1/machine:reset');
     await snap(page, testInfo, 'pause-stop-complete');
   });
 
   test('volume slider updates during playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
     ]);
@@ -243,25 +218,7 @@ test.describe('Playback file browser', () => {
     await slider.press('ArrowRight');
 
     await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
-    await expect.poll(async () => {
-      const traces = await getTraces(page);
-      const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
-        (event.data as { normalizedUrl?: string }).normalizedUrl === '/v1/configs'
-      );
-      if (!requestEvent?.correlationId) return false;
-      const related = traces.filter((event) => event.correlationId === requestEvent.correlationId);
-      return related.some((event) => event.type === 'rest-response') && related.some((event) => event.type === 'action-end');
-    }).toBe(true);
-
-    const traces = await getTraces(page);
-    const requestEvent = findTraceEvent(traces, 'rest-request', (event) =>
-      (event.data as { normalizedUrl?: string }).normalizedUrl === '/v1/configs'
-    );
-    expect(requestEvent).toBeTruthy();
-    if (requestEvent) {
-      const related = traces.filter((event) => event.correlationId === requestEvent.correlationId);
-      assertTraceOrder(related, ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end']);
-    }
+    await expectRestTraceSequence(page, testInfo, '/v1/configs');
     await snap(page, testInfo, 'volume-update');
   });
 
