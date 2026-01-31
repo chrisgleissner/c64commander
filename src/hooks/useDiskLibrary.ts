@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addErrorLog } from '@/lib/logging';
 import { buildDiskId, createDiskEntry, getDiskName, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { loadDiskLibrary, saveDiskLibrary } from '@/lib/disks/diskStore';
@@ -21,16 +21,30 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
   const [disks, setDisks] = useState<DiskEntry[]>([]);
   const [runtimeFiles, setRuntimeFiles] = useState<Record<string, File>>({});
   const [filter, setFilter] = useState('');
+  const lastUniqueIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!uniqueId) return;
+    if (!uniqueId) {
+      lastUniqueIdRef.current = null;
+      return;
+    }
     const state = loadDiskLibrary(uniqueId);
     const normalized = (state.disks || []).map((disk) => ({
       ...disk,
       importedAt: disk.importedAt || new Date().toISOString(),
       importOrder: disk.importOrder ?? null,
     }));
-    setDisks(normalized);
+    setDisks((prev) => {
+      if (!prev.length) return normalized;
+      if (lastUniqueIdRef.current && lastUniqueIdRef.current === uniqueId) return normalized;
+      const existingIds = new Set(normalized.map((disk) => disk.id));
+      const merged = [...normalized];
+      prev.forEach((disk) => {
+        if (!existingIds.has(disk.id)) merged.push(disk);
+      });
+      return merged;
+    });
+    lastUniqueIdRef.current = uniqueId;
   }, [uniqueId]);
 
   useEffect(() => {

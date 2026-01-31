@@ -174,6 +174,10 @@ export const recordRestRequest = (action: TraceActionContext, payload: {
   });
 };
 
+export const recordDeviceGuard = (action: TraceActionContext, payload: Record<string, unknown>) => {
+  appendEvent('device-guard', action.origin, action.correlationId, payload);
+};
+
 export const recordRestResponse = (action: TraceActionContext, payload: {
   status: number | null;
   body: unknown;
