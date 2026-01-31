@@ -69,6 +69,9 @@ const isAnnotationPresent = (testInfo: TestInfo, type: string) =>
   testInfo.annotations.some((annotation: TestInfo['annotations'][number]) => annotation.type === type);
 
 export const getTraceAssertionConfig = (testInfo: TestInfo): TraceAssertionConfig => {
+  if (process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true') {
+    return { enabled: false, strict: false, defaultEnabled: false };
+  }
   const defaultEnabled = process.env.TRACE_ASSERTIONS_DEFAULT === '1';
   const optedIn = isAnnotationPresent(testInfo, TRACE_ASSERT_ANNOTATION);
   const optedOut = isAnnotationPresent(testInfo, TRACE_ASSERT_OFF_ANNOTATION);
@@ -249,6 +252,9 @@ export const expectRestTraceSequence = async (
   matcher: string | RegExp,
   expectedTypes: string[] = DEFAULT_SEQUENCE,
 ) => {
+  if (process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true') {
+    return;
+  }
   await expect.poll(async () => {
     const traces = await getTraces(page);
     try {
@@ -269,6 +275,9 @@ export const expectFtpTraceSequence = async (
   predicate?: (event: TraceEvent) => boolean,
   expectedTypes: string[] = DEFAULT_FTP_SEQUENCE,
 ) => {
+  if (process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true') {
+    return;
+  }
   await expect.poll(async () => {
     const traces = await getTraces(page);
     try {

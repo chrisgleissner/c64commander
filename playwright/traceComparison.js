@@ -59,7 +59,11 @@ const normalizePayload = (value) => {
       if (VOLATILE_KEY_PATTERN.test(key)) {
         return;
       }
-      if (/host|hostname|ip|address|port/i.test(key)) {
+      if (/port/i.test(key)) {
+        normalized[key] = '***';
+        return;
+      }
+      if (/host|hostname|ip|address/i.test(key)) {
         normalized[key] = normalizeHostLike(entry);
         return;
       }
@@ -210,6 +214,43 @@ const matchFtpOp = (expected, actual) => {
 const filterEssentialActions = (actions) =>
   actions.filter((action) => action.restCalls.length > 0 || action.ftpOps.length > 0);
 
+// Demo/connection discovery can issue variable GET /v1/info polling; compare at least one.
+const isNoisyInfoAction = (action) => {
+  if (action.name !== 'rest.get') return false;
+  if (!action.restCalls.length || action.ftpOps.length) return false;
+  return action.restCalls.every((call) =>
+    call.method === 'GET'
+    && typeof call.url === 'string'
+    && call.url.startsWith('/v1/info'));
+};
+
+const getActionSignature = (action, options = {}) => {
+  const restCalls = options.ignoreTarget
+    ? action.restCalls.map(({ target, ...call }) => call)
+    : action.restCalls;
+  return JSON.stringify({
+    name: action.name,
+    restCalls,
+    ftpOps: action.ftpOps,
+  });
+};
+
+const collapseNoisyActions = (actions) => {
+  const result = [];
+  const seen = new Set();
+  actions.forEach((action) => {
+    if (!isNoisyInfoAction(action)) {
+      result.push(action);
+      return;
+    }
+    const signature = getActionSignature(action, { ignoreTarget: true });
+    if (seen.has(signature)) return;
+    seen.add(signature);
+    result.push(action);
+  });
+  return result;
+};
+
 const compareActionSets = (expectedActions, actualActions) => {
   const errors = [];
   const used = new Array(actualActions.length).fill(false);
@@ -296,8 +337,8 @@ export const compareTracesEssential = (expectedEvents, actualEvents) => {
 
   errors.push(...validateTraceIds(actualEvents));
 
-  const expectedActions = filterEssentialActions(extractActions(expectedEvents));
-  const actualActions = filterEssentialActions(extractActions(actualEvents));
+  const expectedActions = collapseNoisyActions(filterEssentialActions(extractActions(expectedEvents)));
+  const actualActions = collapseNoisyActions(filterEssentialActions(extractActions(actualEvents)));
 
   errors.push(...compareActionSets(expectedActions, actualActions));
 

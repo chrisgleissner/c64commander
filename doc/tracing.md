@@ -654,6 +654,7 @@ Normalization rules (applied before comparison):
 - Normalize URLs by stripping host/port.
 - Normalize host/IP/port fields in any nested data.
 - Ignore host headers (e.g., `Host`, `X-C64U-Host`).
+- Collapse duplicate `GET /v1/info` actions (discovery polling), ignoring backend target differences.
 
 What must match:
 

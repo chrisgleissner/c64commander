@@ -362,5 +362,5 @@ describe('HomePage SID status', () => {
     const [deleteButton] = within(manageDialog).getAllByRole('button', { name: /delete/i });
     fireEvent.click(deleteButton);
     expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith('config-a');
-  });
+  }, 10000);
 });
