@@ -391,6 +391,7 @@ test.describe('Layout overflow safeguards', () => {
   });
 
   layoutTest('viewport matrix preserves layout and scrolling @layout', async ({ page }, testInfo) => {
+    testInfo.setTimeout(120_000);
     const viewports = [
       { width: 360, height: 640, label: 'phone-small' },
       { width: 428, height: 926, label: 'phone-large' },

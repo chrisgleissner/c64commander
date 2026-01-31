@@ -47,7 +47,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '1000');
       localStorage.setItem('c64u_device_host', hostArg);
@@ -85,7 +85,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');
@@ -312,6 +312,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const realIndicator = page.getByTestId('connectivity-indicator');
     await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
 
+    await clearTraces(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     const realRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
     if (await realRow.isVisible().catch(() => false)) {
@@ -341,7 +342,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const demoHost = new URL(demoServer.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');

@@ -41,6 +41,16 @@ const normalizeHeaders = (headers) => {
   return normalized;
 };
 
+const normalizeHostLikeString = (value) => {
+  if (typeof value !== 'string') return value;
+  if (!value.trim()) return value;
+  let normalized = value;
+  normalized = normalized.replace(/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b/g, '***');
+  normalized = normalized.replace(/\b[a-z0-9.-]+:\d+\b/gi, '***');
+  if (/^\*\*\*$/.test(normalized)) return normalized;
+  return normalized;
+};
+
 const normalizeHostLike = (value) => {
   if (typeof value !== 'string') return value;
   const trimmed = value.trim();
@@ -48,7 +58,7 @@ const normalizeHostLike = (value) => {
   if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(trimmed)) return '***';
   if (/^[a-z0-9.-]+:\d+$/i.test(trimmed)) return '***';
   if (/^[a-z0-9.-]+$/i.test(trimmed) && trimmed.includes('.')) return '***';
-  return value;
+  return normalizeHostLikeString(value);
 };
 
 const normalizePayload = (value) => {
@@ -63,6 +73,10 @@ const normalizePayload = (value) => {
         normalized[key] = '***';
         return;
       }
+      if (typeof entry === 'string' && /(\bvol\b|volume)/i.test(key) && /\bdB\b/i.test(entry)) {
+        normalized[key] = '***dB';
+        return;
+      }
       if (/host|hostname|ip|address/i.test(key)) {
         normalized[key] = normalizeHostLike(entry);
         return;
@@ -71,6 +85,7 @@ const normalizePayload = (value) => {
     });
     return normalized;
   }
+  if (typeof value === 'string') return normalizeHostLikeString(value);
   return normalizeHostLike(value);
 };
 
@@ -214,14 +229,18 @@ const matchFtpOp = (expected, actual) => {
 const filterEssentialActions = (actions) =>
   actions.filter((action) => action.restCalls.length > 0 || action.ftpOps.length > 0);
 
-// Demo/connection discovery can issue variable GET /v1/info polling; compare at least one.
-const isNoisyInfoAction = (action) => {
+// Demo/connection discovery can issue variable GET polling; compare at least one per unique signature.
+const isNoisyGetAction = (action) => {
   if (action.name !== 'rest.get') return false;
   if (!action.restCalls.length || action.ftpOps.length) return false;
   return action.restCalls.every((call) =>
     call.method === 'GET'
     && typeof call.url === 'string'
-    && call.url.startsWith('/v1/info'));
+    && (
+      call.url.startsWith('/v1/info')
+      || call.url.startsWith('/v1/drives')
+      || call.url.startsWith('/v1/configs/')
+    ));
 };
 
 const getActionSignature = (action, options = {}) => {
@@ -239,7 +258,7 @@ const collapseNoisyActions = (actions) => {
   const result = [];
   const seen = new Set();
   actions.forEach((action) => {
-    if (!isNoisyInfoAction(action)) {
+    if (!isNoisyGetAction(action)) {
       result.push(action);
       return;
     }

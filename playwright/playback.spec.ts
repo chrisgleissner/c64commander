@@ -162,6 +162,18 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/info')));
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/Audio%20Mixer')).length >= 4
+    );
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration')).length >= 2
+    );
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Addressing')).length >= 2
+    );
+
+    await clearTraces(page);
     server.setFaultMode('refused');
     await page.getByTestId('playlist-play').click();
     await expect(page.getByText('Playback failed', { exact: true })).toBeVisible();

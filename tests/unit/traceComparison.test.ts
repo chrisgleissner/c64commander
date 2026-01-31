@@ -199,4 +199,144 @@ describe('compareTracesEssential', () => {
     const errors = compareTracesEssential(expected, actual);
     expect(errors).toEqual([]);
   });
+
+  it('collapses duplicate GET /v1/drives and /v1/configs actions', () => {
+    const expected = [
+      ...buildRestTrace({
+        ids: ['EVT-0200', 'EVT-0201', 'EVT-0202', 'EVT-0203'],
+        correlationId: 'COR-0200',
+        actionName: 'rest.get',
+        method: 'GET',
+        url: 'http://127.0.0.1:1234/v1/drives',
+        status: 503,
+        target: 'real-device',
+      }),
+      ...buildRestTrace({
+        ids: ['EVT-0204', 'EVT-0205', 'EVT-0206', 'EVT-0207'],
+        correlationId: 'COR-0201',
+        actionName: 'rest.get',
+        method: 'GET',
+        url: 'http://127.0.0.1:5678/v1/drives',
+        status: 503,
+        target: 'external-mock',
+      }),
+      ...buildRestTrace({
+        ids: ['EVT-0208', 'EVT-0209', 'EVT-0210', 'EVT-0211'],
+        correlationId: 'COR-0202',
+        actionName: 'rest.get',
+        method: 'GET',
+        url: 'http://127.0.0.1:1111/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201',
+        status: 200,
+      }),
+      ...buildRestTrace({
+        ids: ['EVT-0212', 'EVT-0213', 'EVT-0214', 'EVT-0215'],
+        correlationId: 'COR-0203',
+        actionName: 'rest.get',
+        method: 'GET',
+        url: 'http://127.0.0.1:2222/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201',
+        status: 200,
+      }),
+    ];
+
+    const actual = [
+      ...buildRestTrace({
+        ids: ['EVT-0216', 'EVT-0217', 'EVT-0218', 'EVT-0219'],
+        correlationId: 'COR-0200',
+        actionName: 'rest.get',
+        method: 'GET',
+        url: 'http://127.0.0.1:9999/v1/drives',
+        status: 503,
+      }),
+      ...buildRestTrace({
+        ids: ['EVT-0220', 'EVT-0221', 'EVT-0222', 'EVT-0223'],
+        correlationId: 'COR-0202',
+        actionName: 'rest.get',
+        method: 'GET',
+        url: 'http://127.0.0.1:3333/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201',
+        status: 200,
+      }),
+    ];
+
+    const errors = compareTracesEssential(expected, actual);
+    expect(errors).toEqual([]);
+  });
+
+  it('normalizes host-like substrings in error messages', () => {
+    const expected = [
+      makeEvent({
+        id: 'EVT-0300',
+        type: 'action-start',
+        correlationId: 'COR-0300',
+        data: { name: 'ftp.list' },
+      }),
+      makeEvent({
+        id: 'EVT-0301',
+        type: 'ftp-operation',
+        correlationId: 'COR-0300',
+        data: {
+          operation: 'list',
+          path: '/',
+          result: 'failure',
+          error: 'connect ECONNREFUSED 127.0.0.1:1111 (control socket)',
+        },
+      }),
+    ];
+
+    const actual = [
+      makeEvent({
+        id: 'EVT-0302',
+        type: 'action-start',
+        correlationId: 'COR-0300',
+        data: { name: 'ftp.list' },
+      }),
+      makeEvent({
+        id: 'EVT-0303',
+        type: 'ftp-operation',
+        correlationId: 'COR-0300',
+        data: {
+          operation: 'list',
+          path: '/',
+          result: 'failure',
+          error: 'connect ECONNREFUSED 127.0.0.1:9999 (control socket)',
+        },
+      }),
+    ];
+
+    const errors = compareTracesEssential(expected, actual);
+    expect(errors).toEqual([]);
+  });
+
+  it('normalizes volume dB values in config payloads', () => {
+    const expected = buildRestTrace({
+      ids: ['EVT-0400', 'EVT-0401', 'EVT-0402', 'EVT-0403'],
+      correlationId: 'COR-0400',
+      actionName: 'rest.post',
+      method: 'POST',
+      url: 'http://127.0.0.1:5555/v1/configs',
+      status: 200,
+      requestBody: {
+        'Audio Mixer': {
+          'Vol UltiSid 1': '+4 dB',
+          'Vol Socket 1': '+4 dB',
+        },
+      },
+    });
+    const actual = buildRestTrace({
+      ids: ['EVT-0404', 'EVT-0405', 'EVT-0406', 'EVT-0407'],
+      correlationId: 'COR-0400',
+      actionName: 'rest.post',
+      method: 'POST',
+      url: 'http://127.0.0.1:6666/v1/configs',
+      status: 200,
+      requestBody: {
+        'Audio Mixer': {
+          'Vol UltiSid 1': '+3 dB',
+          'Vol Socket 1': '+3 dB',
+        },
+      },
+    });
+
+    const errors = compareTracesEssential(expected, actual);
+    expect(errors).toEqual([]);
+  });
 });

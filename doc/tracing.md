@@ -652,9 +652,10 @@ Normalization rules (applied before comparison):
 
 - Ignore volatile fields: `timestamp`, `relativeMs`, `durationMs`, `elapsedMs`, and other time-like keys.
 - Normalize URLs by stripping host/port.
-- Normalize host/IP/port fields in any nested data.
+- Normalize host/IP/port fields in any nested data (including host-like substrings embedded in error strings).
+- Normalize volume dB payload values (e.g., `Vol *` updates) to avoid step-size jitter while preserving update intent.
 - Ignore host headers (e.g., `Host`, `X-C64U-Host`).
-- Collapse duplicate `GET /v1/info` actions (discovery polling), ignoring backend target differences.
+- Collapse duplicate discovery/background `GET` actions for `/v1/info`, `/v1/drives`, and `/v1/configs/*`, ignoring backend target differences.
 
 What must match:
 

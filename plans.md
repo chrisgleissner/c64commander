@@ -3,6 +3,18 @@
 Date: 2026-01-30
 Branch: feat/tracing
 
+## Trace Regression Stabilisation (E2E) - 2026-01-31
+- [x] Failing tests inventory (iter-1) (evidence: test-results/evidence/trace-regression/2026-01-31/iter-1/failures.txt)
+- [x] Failure classification (assertion mismatch vs timeout vs navigation vs unexpected call) (evidence: test-results/evidence/trace-regression/2026-01-31/iter-1/failures.txt)
+- [x] Hypotheses recorded (evidence: test-results/evidence/trace-regression/2026-01-31/iter-1/git-diff-summary.md)
+- [x] Fixes applied (trace normalization + noisy GET collapsing, golden refresh for connectionSimulation) (evidence: test-results/evidence/trace-regression/2026-01-31/iter-2/trace-diff-summary.md, test-results/evidence/trace-regression/2026-01-31/iter-3/recording.txt)
+- [x] Local verification steps recorded (evidence: test-results/evidence/trace-regression/2026-01-31/iter-3/recording.txt)
+- [ ] CI verification steps recorded (evidence: test-results/evidence/trace-regression/2026-01-31/iter-1/ci-verification.md)
+- [x] Follow-up hardening items logged (evidence: test-results/evidence/trace-regression/2026-01-31/iter-1/follow-ups.md)
+
+Notes:
+- Golden traces re-recorded for connectionSimulation demo fallback tests to reflect stable background discovery/config polling behavior after trace normalization. Evidence: test-results/evidence/trace-regression/2026-01-31/iter-3/recording.txt
+
 ## Scope and Compliance Anchors
 - Source of truth: [doc/tracing.md](doc/tracing.md)
 - Default test mode: `TRACE_ASSERTIONS_DEFAULT=1`
