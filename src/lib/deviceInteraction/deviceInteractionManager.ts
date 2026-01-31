@@ -106,6 +106,8 @@ const updateConfig = () => {
   restCache.clear();
   restCooldownUntil.clear();
   ftpCooldownUntil.clear();
+  restInflight.clear();
+  ftpInflight.clear();
   restErrorStreak = 0;
   restBackoffUntilMs = 0;
   restCircuitUntilMs = 0;
@@ -114,6 +116,22 @@ const updateConfig = () => {
   ftpCircuitUntilMs = 0;
   setCircuitOpenUntil(null);
   addLog('info', 'Device safety config updated', { mode: config.mode, config });
+};
+
+export const resetInteractionState = (reason: string) => {
+  restCache.clear();
+  restCooldownUntil.clear();
+  restInflight.clear();
+  ftpCooldownUntil.clear();
+  ftpInflight.clear();
+  restErrorStreak = 0;
+  restBackoffUntilMs = 0;
+  restCircuitUntilMs = 0;
+  ftpErrorStreak = 0;
+  ftpBackoffUntilMs = 0;
+  ftpCircuitUntilMs = 0;
+  setCircuitOpenUntil(null);
+  addLog('info', 'Device interaction state reset', { reason });
 };
 
 subscribeDeviceSafetyUpdates(updateConfig);
@@ -314,7 +332,7 @@ export const withRestInteraction = async <T>(
     markDeviceRequestStart();
     try {
       const result = await handler();
-      if (policy.key && policy.cacheMs > 0) {
+      if (policy.key && policy.cacheMs > 0 && !meta.bypassCache) {
         restCache.set(policy.key, { value: result, expiresAt: Date.now() + policy.cacheMs });
       }
       resetRestFailure();

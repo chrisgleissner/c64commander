@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listChildrenMock = vi.fn();
 let platform = 'android';
+let nativePlatform = true;
 
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
@@ -11,6 +12,7 @@ vi.mock('@/lib/native/folderPicker', () => ({
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: () => platform,
+  isNativePlatform: () => nativePlatform,
 }));
 
 import { createLocalSourceLocation } from '@/lib/sourceNavigation/localSourceAdapter';
@@ -58,6 +60,7 @@ describe('localSourceAdapter', () => {
   beforeEach(() => {
     listChildrenMock.mockReset();
     platform = 'android';
+    nativePlatform = true;
   });
 
   it('uses SAF listChildren without touching entries', async () => {
@@ -174,6 +177,7 @@ describe('localSourceAdapter', () => {
 
   it('lists entries from local file list on non-Android platforms', async () => {
     platform = 'web';
+    nativePlatform = false;
     const source = buildWebSource();
 
     const location = createLocalSourceLocation(source);
@@ -197,6 +201,7 @@ describe('localSourceAdapter', () => {
 
   it('filters recursive file listings by prefix', async () => {
     platform = 'web';
+    nativePlatform = false;
     const source = buildWebSource();
 
     const location = createLocalSourceLocation(source);
@@ -210,6 +215,7 @@ describe('localSourceAdapter', () => {
 
   it('marks sources unavailable when reselect is required', () => {
     platform = 'web';
+    nativePlatform = false;
     const source = buildWebSource({ requiresReselect: true });
 
     const location = createLocalSourceLocation(source);

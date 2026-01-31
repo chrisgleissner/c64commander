@@ -16,6 +16,7 @@ vi.mock('@/lib/tracing/redaction', () => ({
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: () => 'web',
+  isNativePlatform: () => false,
 }));
 
 import {

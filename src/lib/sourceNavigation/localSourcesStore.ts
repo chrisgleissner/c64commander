@@ -1,5 +1,5 @@
 import { FolderPicker } from '@/lib/native/folderPicker';
-import { getPlatform } from '@/lib/native/platform';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { addLog } from '@/lib/logging';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeSourcePath } from './paths';
@@ -140,7 +140,7 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
 };
 
 export const createLocalSourceFromPicker = async (input: HTMLInputElement | null): Promise<LocalSourceBuildResult | null> => {
-  if (getPlatform() === 'android') {
+  if (getPlatform() === 'android' && isNativePlatform()) {
     addLog('debug', 'SAF picker invoked', { platform: 'android' });
     let result: Awaited<ReturnType<typeof FolderPicker.pickDirectory>>;
     try {

@@ -60,7 +60,7 @@ import {
   filterEnabledSidVolumeItems,
 } from '@/lib/config/sidVolumeControl';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { getPlatform } from '@/lib/native/platform';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import {
   addHvscProgressListener,
@@ -334,7 +334,7 @@ export default function PlayFilesPage() {
   const addItemsOverlayActiveRef = useRef(false);
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const { limit: listPreviewLimit } = useListPreviewLimit();
-  const isAndroid = getPlatform() === 'android';
+  const isAndroid = getPlatform() === 'android' && isNativePlatform();
   const trace = useActionTrace('PlayFilesPage');
 
   const { flags, isLoaded } = useFeatureFlags();

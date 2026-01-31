@@ -16,6 +16,7 @@ import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
 import { addLog } from '@/lib/logging';
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
+import { resetInteractionState } from '@/lib/deviceInteraction/deviceInteractionManager';
 import { updateDeviceConnectionState } from '@/lib/deviceInteraction/deviceStateStore';
 
 export type ConnectionState = 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
@@ -218,6 +219,7 @@ const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger 
 const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
+  resetInteractionState('transition-real-connected');
   transitionTo('REAL_CONNECTED', trigger);
   logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
   await stopDemoServer();
@@ -228,6 +230,7 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
+  resetInteractionState('transition-offline');
   transitionTo('OFFLINE_NO_DEMO', trigger);
   logDiscoveryDecision('OFFLINE_NO_DEMO', trigger, { mode: 'offline' });
   await stopDemoServer();
@@ -240,6 +243,7 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
+  resetInteractionState('transition-demo-active');
   transitionTo('DEMO_ACTIVE', trigger);
   logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 

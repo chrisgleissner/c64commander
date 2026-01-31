@@ -24,6 +24,7 @@ vi.mock('@capacitor/core', () => ({
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: vi.fn(() => 'web'),
+  isNativePlatform: vi.fn(() => false),
 }));
 
 import { FolderPicker } from '@/lib/native/folderPicker';

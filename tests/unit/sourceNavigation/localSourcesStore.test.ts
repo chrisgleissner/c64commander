@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const platformState = { value: 'web' };
+const platformState = { value: 'web', native: false };
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     getPlatform: () => platformState.value,
-    isNativePlatform: () => false,
+    isNativePlatform: () => platformState.native,
   },
   registerPlugin: vi.fn(() => ({})),
 }));
@@ -45,6 +45,7 @@ describe('localSourcesStore', () => {
     localStorage.clear();
     pickDirectoryMock.mockReset();
     platformState.value = 'web';
+    platformState.native = false;
   });
 
   it('creates a local source from file list and tracks runtime files', () => {
@@ -89,6 +90,7 @@ describe('localSourcesStore', () => {
 
   it('uses native folder picker on android', async () => {
     platformState.value = 'android';
+    platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
       treeUri: 'content://tree/primary%3AMusic',
       rootName: 'Phone',
@@ -103,6 +105,7 @@ describe('localSourcesStore', () => {
 
   it('rejects picker payloads with file listings on android', async () => {
     platformState.value = 'android';
+    platformState.native = true;
     pickDirectoryMock.mockResolvedValue({
       treeUri: 'content://tree/primary%3AMusic',
       rootName: 'Phone',

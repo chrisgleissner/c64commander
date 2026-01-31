@@ -107,6 +107,7 @@ vi.mock('@/lib/logging', () => ({
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: () => 'android',
+  isNativePlatform: () => true,
 }));
 
 vi.mock('@/lib/native/folderPicker', () => ({

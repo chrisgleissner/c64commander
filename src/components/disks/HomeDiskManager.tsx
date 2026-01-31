@@ -28,7 +28,7 @@ import { getLocalSourceListingMode, requireLocalSourceEntries } from '@/lib/sour
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
-import { getPlatform } from '@/lib/native/platform';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
@@ -119,7 +119,7 @@ export const HomeDiskManager = () => {
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const { limit: listPreviewLimit } = useListPreviewLimit();
-  const isAndroid = getPlatform() === 'android';
+  const isAndroid = getPlatform() === 'android' && isNativePlatform();
 
   const api = getC64API();
   const queryClient = useQueryClient();
