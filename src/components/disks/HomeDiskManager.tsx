@@ -240,9 +240,17 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const handleLocalSourceInput = (files: FileList | null) => {
+  const handleLocalSourceInput = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    addSourceFromFiles(files);
+    const source = addSourceFromFiles(files);
+    if (!source || !browserOpen) return;
+    const location = createLocalSourceLocation(source);
+    const success = await handleAddDiskSelections(location, [
+      { type: 'dir', name: location.name, path: location.rootPath },
+    ]);
+    if (success) {
+      setBrowserOpen(false);
+    }
   };
 
   const allDiskIds = useMemo(() => diskLibrary.disks.map((disk) => disk.id), [diskLibrary.disks]);
@@ -436,6 +444,7 @@ export const HomeDiskManager = () => {
   };
 
   const handleAddDiskSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
+    if (isAddingItems) return false;
     try {
       const startedAt = Date.now();
       addItemsStartedAtRef.current = startedAt;
@@ -660,7 +669,7 @@ export const HomeDiskManager = () => {
         addItemsOverlayActiveRef.current = false;
       }
     }
-  }, [addItemsSurface, browserOpen, diskLibrary, localSourcesById, reportUserError, showNoDiskWarning]);
+  }, [addItemsSurface, browserOpen, diskLibrary, isAddingItems, localSourcesById, reportUserError, showNoDiskWarning]);
 
   const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
     const detailsDate = disk.modifiedAt || disk.importedAt;
@@ -921,7 +930,7 @@ export const HomeDiskManager = () => {
         multiple
         className="hidden"
           onChange={(event) => {
-            handleLocalSourceInput(event.target.files);
+            void handleLocalSourceInput(event.target.files);
             event.currentTarget.value = '';
           }}
       />
