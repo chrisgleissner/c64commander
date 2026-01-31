@@ -900,8 +900,8 @@ export default function PlayFilesPage() {
     return map;
   }, [localSources]);
 
-  const handleLocalSourceInput = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleLocalSourceInput = useCallback((files: FileList | File[] | null) => {
+    if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
     addSourceFromFiles(files);
   }, [addSourceFromFiles]);
 
@@ -2994,7 +2994,8 @@ export default function PlayFilesPage() {
           multiple
           className="hidden"
           onChange={(event) => {
-            handleLocalSourceInput(event.target.files);
+            const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
+            handleLocalSourceInput(selected.length ? selected : null);
             event.currentTarget.value = '';
           }}
         />

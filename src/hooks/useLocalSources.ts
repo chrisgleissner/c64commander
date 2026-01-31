@@ -37,7 +37,8 @@ export const useLocalSources = (): UseLocalSourcesState => {
   }, [persist, sources]);
 
   const addSourceFromFiles = useCallback((files: FileList | File[], label?: string) => {
-    if (!files || (Array.isArray(files) && files.length === 0)) return null;
+    if (!files) return null;
+    if ((Array.isArray(files) ? files.length : files.length) === 0) return null;
     const result = createLocalSourceFromFileList(files, label);
     setLocalSourceRuntimeFiles(result.source.id, result.runtimeFiles);
     persist([result.source, ...sources]);

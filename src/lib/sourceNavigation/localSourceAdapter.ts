@@ -173,6 +173,8 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
         type: 'file' as const,
         name: entry.name,
         path: toSourceEntryPath(entry.relativePath),
+        sizeBytes: entry.sizeBytes ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
       }))
       .filter((entry) => entry.path.startsWith(prefix) || entry.path === normalized);
   };

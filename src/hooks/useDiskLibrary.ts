@@ -36,7 +36,6 @@ export const useDiskLibrary = (uniqueId: string | null): DiskLibrary => {
     }));
     setDisks((prev) => {
       if (!prev.length) return normalized;
-      if (lastUniqueIdRef.current && lastUniqueIdRef.current === uniqueId) return normalized;
       const existingIds = new Set(normalized.map((disk) => disk.id));
       const merged = [...normalized];
       prev.forEach((disk) => {

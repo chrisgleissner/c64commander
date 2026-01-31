@@ -208,8 +208,20 @@ describe('localSourceAdapter', () => {
     const files = await location.listFilesRecursive('/music');
 
     expect(files).toEqual([
-      { type: 'file', name: 'song.sid', path: '/music/song.sid' },
-      { type: 'file', name: 'readme.txt', path: '/music/docs/readme.txt' },
+      {
+        type: 'file',
+        name: 'song.sid',
+        path: '/music/song.sid',
+        sizeBytes: 123,
+        modifiedAt: '2026-01-02T00:00:00.000Z',
+      },
+      {
+        type: 'file',
+        name: 'readme.txt',
+        path: '/music/docs/readme.txt',
+        sizeBytes: 45,
+        modifiedAt: '2026-01-03T00:00:00.000Z',
+      },
     ]);
   });
 
