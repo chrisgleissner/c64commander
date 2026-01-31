@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-30T23:34:47.686Z",
-    "relativeMs": 68,
+    "timestamp": "2026-01-31T14:54:08.556Z",
+    "relativeMs": 57,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,8 +35,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-30T23:34:47.687Z",
-    "relativeMs": 69,
+    "timestamp": "2026-01-31T14:54:08.556Z",
+    "relativeMs": 57,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -47,17 +47,17 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-01-30T23:34:47.687Z",
-    "relativeMs": 69,
+    "timestamp": "2026-01-31T14:54:08.556Z",
+    "relativeMs": 57,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:45501/v1/runners:sidplay",
+      "url": "http://127.0.0.1:42401/v1/runners:sidplay",
       "normalizedUrl": "/v1/runners:sidplay",
       "headers": {
-        "X-C64U-Host": "127.0.0.1:45501"
+        "X-C64U-Host": "127.0.0.1:42401"
       },
       "body": null,
       "target": "external-mock"
@@ -65,8 +65,8 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-01-30T23:34:47.698Z",
-    "relativeMs": 80,
+    "timestamp": "2026-01-31T14:54:08.564Z",
+    "relativeMs": 65,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -75,14 +75,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 11,
+      "durationMs": 7,
       "error": null
     }
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-01-30T23:34:47.698Z",
-    "relativeMs": 80,
+    "timestamp": "2026-01-31T14:54:08.564Z",
+    "relativeMs": 65,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -93,8 +93,8 @@
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-01-30T23:34:48.918Z",
-    "relativeMs": 1300,
+    "timestamp": "2026-01-31T14:54:09.525Z",
+    "relativeMs": 1026,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -127,8 +127,8 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-01-30T23:34:48.918Z",
-    "relativeMs": 1300,
+    "timestamp": "2026-01-31T14:54:09.525Z",
+    "relativeMs": 1026,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -139,17 +139,17 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-01-30T23:34:48.918Z",
-    "relativeMs": 1300,
+    "timestamp": "2026-01-31T14:54:09.525Z",
+    "relativeMs": 1026,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:45501/v1/runners:sidplay?songnr=2",
+      "url": "http://127.0.0.1:42401/v1/runners:sidplay?songnr=2",
       "normalizedUrl": "/v1/runners:sidplay?songnr=2",
       "headers": {
-        "X-C64U-Host": "127.0.0.1:45501"
+        "X-C64U-Host": "127.0.0.1:42401"
       },
       "body": null,
       "target": "external-mock"
@@ -157,8 +157,8 @@
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-01-30T23:34:48.928Z",
-    "relativeMs": 1310,
+    "timestamp": "2026-01-31T14:54:09.535Z",
+    "relativeMs": 1036,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -167,14 +167,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 7,
+      "durationMs": 9,
       "error": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-01-30T23:34:48.928Z",
-    "relativeMs": 1310,
+    "timestamp": "2026-01-31T14:54:09.535Z",
+    "relativeMs": 1036,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",

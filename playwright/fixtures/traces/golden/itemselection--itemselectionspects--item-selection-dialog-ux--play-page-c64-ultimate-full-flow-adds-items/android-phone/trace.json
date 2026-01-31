@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-30T23:30:28.904Z",
-    "relativeMs": 58,
+    "timestamp": "2026-01-31T14:50:17.056Z",
+    "relativeMs": 47,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,8 +35,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-30T23:30:28.912Z",
-    "relativeMs": 66,
+    "timestamp": "2026-01-31T14:50:17.065Z",
+    "relativeMs": 56,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -69,8 +69,8 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-01-30T23:30:28.913Z",
-    "relativeMs": 67,
+    "timestamp": "2026-01-31T14:50:17.066Z",
+    "relativeMs": 57,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -81,21 +81,21 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-01-30T23:30:28.913Z",
-    "relativeMs": 67,
+    "timestamp": "2026-01-31T14:50:17.066Z",
+    "relativeMs": 57,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:34615/v1/ftp/list",
+      "url": "http://127.0.0.1:38487/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 42819,
+        "port": 43537,
         "password": "***",
         "path": "/"
       },
@@ -104,8 +104,8 @@
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-01-30T23:30:29.022Z",
-    "relativeMs": 176,
+    "timestamp": "2026-01-31T14:50:17.184Z",
+    "relativeMs": 175,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -127,14 +127,14 @@
           }
         ]
       },
-      "durationMs": 108,
+      "durationMs": 118,
       "error": null
     }
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-01-30T23:30:29.022Z",
-    "relativeMs": 176,
+    "timestamp": "2026-01-31T14:50:17.184Z",
+    "relativeMs": 175,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -145,8 +145,8 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-01-30T23:30:29.022Z",
-    "relativeMs": 176,
+    "timestamp": "2026-01-31T14:50:17.184Z",
+    "relativeMs": 175,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -157,8 +157,8 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-01-30T23:30:29.022Z",
-    "relativeMs": 176,
+    "timestamp": "2026-01-31T14:50:17.184Z",
+    "relativeMs": 175,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -172,8 +172,8 @@
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-01-30T23:30:29.022Z",
-    "relativeMs": 176,
+    "timestamp": "2026-01-31T14:50:17.184Z",
+    "relativeMs": 175,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -184,8 +184,8 @@
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-01-30T23:30:29.499Z",
-    "relativeMs": 653,
+    "timestamp": "2026-01-31T14:50:17.803Z",
+    "relativeMs": 794,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -218,8 +218,8 @@
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-01-30T23:30:29.502Z",
-    "relativeMs": 656,
+    "timestamp": "2026-01-31T14:50:17.805Z",
+    "relativeMs": 796,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -252,8 +252,8 @@
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-01-30T23:30:29.502Z",
-    "relativeMs": 656,
+    "timestamp": "2026-01-31T14:50:17.805Z",
+    "relativeMs": 796,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -264,21 +264,21 @@
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-01-30T23:30:29.502Z",
-    "relativeMs": 656,
+    "timestamp": "2026-01-31T14:50:17.805Z",
+    "relativeMs": 796,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:34615/v1/ftp/list",
+      "url": "http://127.0.0.1:38487/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 42819,
+        "port": 43537,
         "password": "***",
         "path": "/Usb0"
       },
@@ -287,8 +287,8 @@
   },
   {
     "id": "EVT-0013",
-    "timestamp": "2026-01-30T23:30:29.630Z",
-    "relativeMs": 784,
+    "timestamp": "2026-01-31T14:50:17.917Z",
+    "relativeMs": 908,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -316,14 +316,14 @@
           }
         ]
       },
-      "durationMs": 127,
+      "durationMs": 109,
       "error": null
     }
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-01-30T23:30:29.630Z",
-    "relativeMs": 784,
+    "timestamp": "2026-01-31T14:50:17.917Z",
+    "relativeMs": 908,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -334,8 +334,8 @@
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-01-30T23:30:29.630Z",
-    "relativeMs": 784,
+    "timestamp": "2026-01-31T14:50:17.917Z",
+    "relativeMs": 908,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -346,8 +346,8 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-01-30T23:30:29.630Z",
-    "relativeMs": 784,
+    "timestamp": "2026-01-31T14:50:17.917Z",
+    "relativeMs": 908,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -361,8 +361,8 @@
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-01-30T23:30:29.630Z",
-    "relativeMs": 784,
+    "timestamp": "2026-01-31T14:50:17.917Z",
+    "relativeMs": 908,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -373,8 +373,8 @@
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-01-30T23:30:30.959Z",
-    "relativeMs": 2113,
+    "timestamp": "2026-01-31T14:50:18.829Z",
+    "relativeMs": 1820,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -407,8 +407,8 @@
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-01-30T23:30:30.959Z",
-    "relativeMs": 2113,
+    "timestamp": "2026-01-31T14:50:18.830Z",
+    "relativeMs": 1821,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -441,8 +441,8 @@
   },
   {
     "id": "EVT-0020",
-    "timestamp": "2026-01-30T23:30:30.959Z",
-    "relativeMs": 2113,
+    "timestamp": "2026-01-31T14:50:18.830Z",
+    "relativeMs": 1821,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -453,21 +453,21 @@
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-01-30T23:30:30.959Z",
-    "relativeMs": 2113,
+    "timestamp": "2026-01-31T14:50:18.830Z",
+    "relativeMs": 1821,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:34615/v1/ftp/list",
+      "url": "http://127.0.0.1:38487/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 42819,
+        "port": 43537,
         "password": "***",
         "path": "/Usb0/Demos"
       },
@@ -476,8 +476,8 @@
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-01-30T23:30:31.060Z",
-    "relativeMs": 2214,
+    "timestamp": "2026-01-31T14:50:18.924Z",
+    "relativeMs": 1915,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -499,14 +499,14 @@
           }
         ]
       },
-      "durationMs": 99,
+      "durationMs": 94,
       "error": null
     }
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-01-30T23:30:31.060Z",
-    "relativeMs": 2214,
+    "timestamp": "2026-01-31T14:50:18.925Z",
+    "relativeMs": 1916,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -517,8 +517,8 @@
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-01-30T23:30:31.060Z",
-    "relativeMs": 2214,
+    "timestamp": "2026-01-31T14:50:18.925Z",
+    "relativeMs": 1916,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -529,8 +529,8 @@
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-01-30T23:30:31.060Z",
-    "relativeMs": 2214,
+    "timestamp": "2026-01-31T14:50:18.925Z",
+    "relativeMs": 1916,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -544,8 +544,8 @@
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-01-30T23:30:31.060Z",
-    "relativeMs": 2214,
+    "timestamp": "2026-01-31T14:50:18.925Z",
+    "relativeMs": 1916,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -556,8 +556,8 @@
   },
   {
     "id": "EVT-0027",
-    "timestamp": "2026-01-30T23:30:31.067Z",
-    "relativeMs": 2221,
+    "timestamp": "2026-01-31T14:50:18.931Z",
+    "relativeMs": 1922,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -590,8 +590,8 @@
   },
   {
     "id": "EVT-0028",
-    "timestamp": "2026-01-30T23:30:31.067Z",
-    "relativeMs": 2221,
+    "timestamp": "2026-01-31T14:50:18.931Z",
+    "relativeMs": 1922,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -624,8 +624,8 @@
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-01-30T23:30:31.067Z",
-    "relativeMs": 2221,
+    "timestamp": "2026-01-31T14:50:18.931Z",
+    "relativeMs": 1922,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -658,8 +658,8 @@
   },
   {
     "id": "EVT-0030",
-    "timestamp": "2026-01-30T23:30:31.067Z",
-    "relativeMs": 2221,
+    "timestamp": "2026-01-31T14:50:18.931Z",
+    "relativeMs": 1922,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -670,21 +670,21 @@
   },
   {
     "id": "EVT-0031",
-    "timestamp": "2026-01-30T23:30:31.067Z",
-    "relativeMs": 2221,
+    "timestamp": "2026-01-31T14:50:18.931Z",
+    "relativeMs": 1922,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:34615/v1/ftp/list",
+      "url": "http://127.0.0.1:38487/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 42819,
+        "port": 43537,
         "password": "***",
         "path": "/Usb0/Demos/Krestage 3"
       },
@@ -693,8 +693,8 @@
   },
   {
     "id": "EVT-0032",
-    "timestamp": "2026-01-30T23:30:31.068Z",
-    "relativeMs": 2222,
+    "timestamp": "2026-01-31T14:50:18.932Z",
+    "relativeMs": 1923,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -727,8 +727,8 @@
   },
   {
     "id": "EVT-0033",
-    "timestamp": "2026-01-30T23:30:31.068Z",
-    "relativeMs": 2222,
+    "timestamp": "2026-01-31T14:50:18.932Z",
+    "relativeMs": 1923,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -739,21 +739,21 @@
   },
   {
     "id": "EVT-0034",
-    "timestamp": "2026-01-30T23:30:31.068Z",
-    "relativeMs": 2222,
+    "timestamp": "2026-01-31T14:50:18.932Z",
+    "relativeMs": 1923,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:34615/v1/ftp/list",
+      "url": "http://127.0.0.1:38487/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 42819,
+        "port": 43537,
         "password": "***",
         "path": "/Usb0/Demos/Scroller Showcase"
       },
@@ -762,8 +762,88 @@
   },
   {
     "id": "EVT-0035",
-    "timestamp": "2026-01-30T23:30:31.177Z",
-    "relativeMs": 2331,
+    "timestamp": "2026-01-31T14:50:19.037Z",
+    "relativeMs": 2028,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": 200,
+      "body": {
+        "entries": [
+          {
+            "name": "Part 1.d64",
+            "path": "/Usb0/Demos/Krestage 3/Part 1.d64",
+            "type": "file",
+            "size": 23
+          },
+          {
+            "name": "Part 2.d64",
+            "path": "/Usb0/Demos/Krestage 3/Part 2.d64",
+            "type": "file",
+            "size": 23
+          }
+        ]
+      },
+      "durationMs": 101,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0036",
+    "timestamp": "2026-01-31T14:50:19.037Z",
+    "relativeMs": 2028,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0037",
+    "timestamp": "2026-01-31T14:50:19.038Z",
+    "relativeMs": 2029,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0038",
+    "timestamp": "2026-01-31T14:50:19.038Z",
+    "relativeMs": 2029,
+    "type": "ftp-operation",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "operation": "list",
+      "path": "/Usb0/Demos/Krestage 3",
+      "result": "success",
+      "error": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0039",
+    "timestamp": "2026-01-31T14:50:19.038Z",
+    "relativeMs": 2029,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0040",
+    "timestamp": "2026-01-31T14:50:19.039Z",
+    "relativeMs": 2030,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -917,14 +997,14 @@
           }
         ]
       },
-      "durationMs": 107,
+      "durationMs": 106,
       "error": null
     }
   },
   {
-    "id": "EVT-0036",
-    "timestamp": "2026-01-30T23:30:31.177Z",
-    "relativeMs": 2331,
+    "id": "EVT-0041",
+    "timestamp": "2026-01-31T14:50:19.039Z",
+    "relativeMs": 2030,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -934,9 +1014,9 @@
     }
   },
   {
-    "id": "EVT-0037",
-    "timestamp": "2026-01-30T23:30:31.178Z",
-    "relativeMs": 2332,
+    "id": "EVT-0042",
+    "timestamp": "2026-01-31T14:50:19.039Z",
+    "relativeMs": 2030,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -946,9 +1026,9 @@
     }
   },
   {
-    "id": "EVT-0038",
-    "timestamp": "2026-01-30T23:30:31.178Z",
-    "relativeMs": 2332,
+    "id": "EVT-0043",
+    "timestamp": "2026-01-31T14:50:19.039Z",
+    "relativeMs": 2030,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -961,92 +1041,12 @@
     }
   },
   {
-    "id": "EVT-0039",
-    "timestamp": "2026-01-30T23:30:31.178Z",
-    "relativeMs": 2332,
+    "id": "EVT-0044",
+    "timestamp": "2026-01-31T14:50:19.039Z",
+    "relativeMs": 2030,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0007",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0040",
-    "timestamp": "2026-01-30T23:30:31.180Z",
-    "relativeMs": 2334,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0008",
-    "data": {
-      "status": 200,
-      "body": {
-        "entries": [
-          {
-            "name": "Part 1.d64",
-            "path": "/Usb0/Demos/Krestage 3/Part 1.d64",
-            "type": "file",
-            "size": 23
-          },
-          {
-            "name": "Part 2.d64",
-            "path": "/Usb0/Demos/Krestage 3/Part 2.d64",
-            "type": "file",
-            "size": 23
-          }
-        ]
-      },
-      "durationMs": 110,
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0041",
-    "timestamp": "2026-01-30T23:30:31.180Z",
-    "relativeMs": 2334,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0008",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0042",
-    "timestamp": "2026-01-30T23:30:31.180Z",
-    "relativeMs": 2334,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0006",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode"
-    }
-  },
-  {
-    "id": "EVT-0043",
-    "timestamp": "2026-01-30T23:30:31.180Z",
-    "relativeMs": 2334,
-    "type": "ftp-operation",
-    "origin": "system",
-    "correlationId": "COR-0006",
-    "data": {
-      "operation": "list",
-      "path": "/Usb0/Demos/Krestage 3",
-      "result": "success",
-      "error": null,
-      "target": "external-mock"
-    }
-  },
-  {
-    "id": "EVT-0044",
-    "timestamp": "2026-01-30T23:30:31.180Z",
-    "relativeMs": 2334,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0006",
     "data": {
       "status": "success",
       "error": null

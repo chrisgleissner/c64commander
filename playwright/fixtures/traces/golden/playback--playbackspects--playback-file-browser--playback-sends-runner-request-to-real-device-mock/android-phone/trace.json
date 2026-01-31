@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-30T23:31:31.429Z",
-    "relativeMs": 62,
+    "timestamp": "2026-01-31T14:51:15.357Z",
+    "relativeMs": 53,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0000",
@@ -35,8 +35,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-30T23:31:31.435Z",
-    "relativeMs": 68,
+    "timestamp": "2026-01-31T14:51:15.366Z",
+    "relativeMs": 62,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -69,8 +69,8 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-01-30T23:31:31.435Z",
-    "relativeMs": 68,
+    "timestamp": "2026-01-31T14:51:15.366Z",
+    "relativeMs": 62,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -81,18 +81,18 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-01-30T23:31:31.435Z",
-    "relativeMs": 68,
+    "timestamp": "2026-01-31T14:51:15.366Z",
+    "relativeMs": 62,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:38729/v1/runners:sidplay?file=%2FUsb0%2FDemos%2FTrack_0001.sid",
+      "url": "http://127.0.0.1:32783/v1/runners:sidplay?file=%2FUsb0%2FDemos%2FTrack_0001.sid",
       "normalizedUrl": "/v1/runners:sidplay?file=%2FUsb0%2FDemos%2FTrack_0001.sid",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38729"
+        "X-C64U-Host": "127.0.0.1:32783"
       },
       "body": null,
       "target": "external-mock"
@@ -100,8 +100,8 @@
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-01-30T23:31:31.453Z",
-    "relativeMs": 86,
+    "timestamp": "2026-01-31T14:51:15.387Z",
+    "relativeMs": 83,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -110,14 +110,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 21,
+      "durationMs": 23,
       "error": null
     }
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-01-30T23:31:31.453Z",
-    "relativeMs": 86,
+    "timestamp": "2026-01-31T14:51:15.387Z",
+    "relativeMs": 83,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -128,8 +128,8 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-01-30T23:31:31.453Z",
-    "relativeMs": 86,
+    "timestamp": "2026-01-31T14:51:15.387Z",
+    "relativeMs": 83,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0000",

@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-30T23:31:45.116Z",
-    "relativeMs": 42,
+    "timestamp": "2026-01-31T14:51:26.522Z",
+    "relativeMs": 56,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,8 +35,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-30T23:31:45.116Z",
-    "relativeMs": 42,
+    "timestamp": "2026-01-31T14:51:26.522Z",
+    "relativeMs": 56,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -47,18 +47,18 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-01-30T23:31:45.116Z",
-    "relativeMs": 42,
+    "timestamp": "2026-01-31T14:51:26.522Z",
+    "relativeMs": 56,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:38235/v1/configs",
+      "url": "http://127.0.0.1:38371/v1/configs",
       "normalizedUrl": "/v1/configs",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38235"
+        "X-C64U-Host": "127.0.0.1:38371"
       },
       "body": {
         "Audio Mixer": {
@@ -73,8 +73,8 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-01-30T23:31:45.140Z",
-    "relativeMs": 66,
+    "timestamp": "2026-01-31T14:51:26.549Z",
+    "relativeMs": 83,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -83,14 +83,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 24,
+      "durationMs": 22,
       "error": null
     }
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-01-30T23:31:45.140Z",
-    "relativeMs": 66,
+    "timestamp": "2026-01-31T14:51:26.550Z",
+    "relativeMs": 84,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -101,8 +101,8 @@
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-01-30T23:31:45.616Z",
-    "relativeMs": 542,
+    "timestamp": "2026-01-31T14:51:27.023Z",
+    "relativeMs": 557,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -135,8 +135,8 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-01-30T23:31:45.616Z",
-    "relativeMs": 542,
+    "timestamp": "2026-01-31T14:51:27.023Z",
+    "relativeMs": 557,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -147,18 +147,18 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-01-30T23:31:45.616Z",
-    "relativeMs": 542,
+    "timestamp": "2026-01-31T14:51:27.023Z",
+    "relativeMs": 557,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:38235/v1/configs",
+      "url": "http://127.0.0.1:38371/v1/configs",
       "normalizedUrl": "/v1/configs",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38235"
+        "X-C64U-Host": "127.0.0.1:38371"
       },
       "body": {
         "Audio Mixer": {
@@ -173,8 +173,8 @@
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-01-30T23:31:45.625Z",
-    "relativeMs": 551,
+    "timestamp": "2026-01-31T14:51:27.059Z",
+    "relativeMs": 593,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -183,14 +183,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 6,
+      "durationMs": 36,
       "error": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-01-30T23:31:45.625Z",
-    "relativeMs": 551,
+    "timestamp": "2026-01-31T14:51:27.060Z",
+    "relativeMs": 594,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",

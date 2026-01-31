@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-30T23:32:58.736Z",
-    "relativeMs": 144,
+    "timestamp": "2026-01-31T14:52:32.805Z",
+    "relativeMs": 132,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,8 +35,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-30T23:32:58.736Z",
-    "relativeMs": 144,
+    "timestamp": "2026-01-31T14:52:32.805Z",
+    "relativeMs": 132,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -47,18 +47,18 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-01-30T23:32:58.736Z",
-    "relativeMs": 144,
+    "timestamp": "2026-01-31T14:52:32.805Z",
+    "relativeMs": 132,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -66,8 +66,8 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-01-30T23:32:58.797Z",
-    "relativeMs": 205,
+    "timestamp": "2026-01-31T14:52:32.846Z",
+    "relativeMs": 173,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -82,14 +82,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 39,
+      "durationMs": 30,
       "error": null
     }
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-01-30T23:32:58.797Z",
-    "relativeMs": 205,
+    "timestamp": "2026-01-31T14:52:32.847Z",
+    "relativeMs": 174,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -100,8 +100,8 @@
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-01-30T23:32:58.797Z",
-    "relativeMs": 205,
+    "timestamp": "2026-01-31T14:52:32.847Z",
+    "relativeMs": 174,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -134,8 +134,8 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-01-30T23:32:58.797Z",
-    "relativeMs": 205,
+    "timestamp": "2026-01-31T14:52:32.847Z",
+    "relativeMs": 174,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -146,18 +146,18 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-01-30T23:32:58.797Z",
-    "relativeMs": 205,
+    "timestamp": "2026-01-31T14:52:32.847Z",
+    "relativeMs": 174,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -165,8 +165,8 @@
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-01-30T23:32:58.839Z",
-    "relativeMs": 247,
+    "timestamp": "2026-01-31T14:52:32.860Z",
+    "relativeMs": 187,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -181,14 +181,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 98,
+      "durationMs": 49,
       "error": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-01-30T23:32:58.839Z",
-    "relativeMs": 247,
+    "timestamp": "2026-01-31T14:52:32.860Z",
+    "relativeMs": 187,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -199,8 +199,8 @@
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-01-30T23:32:58.840Z",
-    "relativeMs": 248,
+    "timestamp": "2026-01-31T14:52:32.860Z",
+    "relativeMs": 187,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -233,8 +233,8 @@
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-01-30T23:32:58.840Z",
-    "relativeMs": 248,
+    "timestamp": "2026-01-31T14:52:32.860Z",
+    "relativeMs": 187,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -245,18 +245,18 @@
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-01-30T23:32:58.840Z",
-    "relativeMs": 248,
+    "timestamp": "2026-01-31T14:52:32.860Z",
+    "relativeMs": 187,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
+      "url": "http://127.0.0.1:46569/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
       "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -264,8 +264,8 @@
   },
   {
     "id": "EVT-0013",
-    "timestamp": "2026-01-30T23:32:58.861Z",
-    "relativeMs": 269,
+    "timestamp": "2026-01-31T14:52:32.888Z",
+    "relativeMs": 215,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -314,14 +314,14 @@
         },
         "errors": []
       },
-      "durationMs": 116,
+      "durationMs": 75,
       "error": null
     }
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-01-30T23:32:58.861Z",
-    "relativeMs": 269,
+    "timestamp": "2026-01-31T14:52:32.888Z",
+    "relativeMs": 215,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -332,8 +332,8 @@
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-01-30T23:32:58.861Z",
-    "relativeMs": 269,
+    "timestamp": "2026-01-31T14:52:32.888Z",
+    "relativeMs": 215,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -366,8 +366,8 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-01-30T23:32:58.861Z",
-    "relativeMs": 269,
+    "timestamp": "2026-01-31T14:52:32.888Z",
+    "relativeMs": 215,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -378,18 +378,18 @@
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-01-30T23:32:58.861Z",
-    "relativeMs": 269,
+    "timestamp": "2026-01-31T14:52:32.888Z",
+    "relativeMs": 215,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
+      "url": "http://127.0.0.1:46569/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
       "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -397,8 +397,8 @@
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-01-30T23:32:58.888Z",
-    "relativeMs": 296,
+    "timestamp": "2026-01-31T14:52:32.904Z",
+    "relativeMs": 231,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -447,14 +447,14 @@
         },
         "errors": []
       },
-      "durationMs": 144,
+      "durationMs": 91,
       "error": null
     }
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-01-30T23:32:58.888Z",
-    "relativeMs": 296,
+    "timestamp": "2026-01-31T14:52:32.904Z",
+    "relativeMs": 231,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -465,8 +465,8 @@
   },
   {
     "id": "EVT-0020",
-    "timestamp": "2026-01-30T23:32:58.888Z",
-    "relativeMs": 296,
+    "timestamp": "2026-01-31T14:52:32.904Z",
+    "relativeMs": 231,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -499,8 +499,8 @@
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-01-30T23:32:58.888Z",
-    "relativeMs": 296,
+    "timestamp": "2026-01-31T14:52:32.904Z",
+    "relativeMs": 231,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -511,18 +511,18 @@
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-01-30T23:32:58.889Z",
-    "relativeMs": 297,
+    "timestamp": "2026-01-31T14:52:32.904Z",
+    "relativeMs": 231,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/Audio%20Mixer/Vol%20Socket%201",
+      "url": "http://127.0.0.1:46569/v1/configs/Audio%20Mixer/Vol%20Socket%201",
       "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -530,8 +530,8 @@
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-01-30T23:32:58.897Z",
-    "relativeMs": 305,
+    "timestamp": "2026-01-31T14:52:32.908Z",
+    "relativeMs": 235,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -580,14 +580,14 @@
         },
         "errors": []
       },
-      "durationMs": 152,
+      "durationMs": 96,
       "error": null
     }
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-01-30T23:32:58.897Z",
-    "relativeMs": 305,
+    "timestamp": "2026-01-31T14:52:32.908Z",
+    "relativeMs": 235,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -598,8 +598,8 @@
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-01-30T23:32:58.897Z",
-    "relativeMs": 305,
+    "timestamp": "2026-01-31T14:52:32.908Z",
+    "relativeMs": 235,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -632,8 +632,8 @@
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-01-30T23:32:58.897Z",
-    "relativeMs": 305,
+    "timestamp": "2026-01-31T14:52:32.908Z",
+    "relativeMs": 235,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -644,18 +644,18 @@
   },
   {
     "id": "EVT-0027",
-    "timestamp": "2026-01-30T23:32:58.897Z",
-    "relativeMs": 305,
+    "timestamp": "2026-01-31T14:52:32.908Z",
+    "relativeMs": 235,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/Audio%20Mixer/Vol%20Socket%202",
+      "url": "http://127.0.0.1:46569/v1/configs/Audio%20Mixer/Vol%20Socket%202",
       "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -663,8 +663,8 @@
   },
   {
     "id": "EVT-0028",
-    "timestamp": "2026-01-30T23:32:58.904Z",
-    "relativeMs": 312,
+    "timestamp": "2026-01-31T14:52:32.913Z",
+    "relativeMs": 240,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -713,14 +713,14 @@
         },
         "errors": []
       },
-      "durationMs": 160,
+      "durationMs": 101,
       "error": null
     }
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-01-30T23:32:58.904Z",
-    "relativeMs": 312,
+    "timestamp": "2026-01-31T14:52:32.913Z",
+    "relativeMs": 240,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -731,8 +731,8 @@
   },
   {
     "id": "EVT-0030",
-    "timestamp": "2026-01-30T23:32:58.904Z",
-    "relativeMs": 312,
+    "timestamp": "2026-01-31T14:52:32.913Z",
+    "relativeMs": 240,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -765,8 +765,8 @@
   },
   {
     "id": "EVT-0031",
-    "timestamp": "2026-01-30T23:32:58.904Z",
-    "relativeMs": 312,
+    "timestamp": "2026-01-31T14:52:32.913Z",
+    "relativeMs": 240,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -777,18 +777,18 @@
   },
   {
     "id": "EVT-0032",
-    "timestamp": "2026-01-30T23:32:58.904Z",
-    "relativeMs": 312,
+    "timestamp": "2026-01-31T14:52:32.913Z",
+    "relativeMs": 240,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201",
+      "url": "http://127.0.0.1:46569/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201",
       "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -796,8 +796,8 @@
   },
   {
     "id": "EVT-0033",
-    "timestamp": "2026-01-30T23:32:58.914Z",
-    "relativeMs": 322,
+    "timestamp": "2026-01-31T14:52:32.921Z",
+    "relativeMs": 248,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -814,14 +814,14 @@
         },
         "errors": []
       },
-      "durationMs": 170,
+      "durationMs": 108,
       "error": null
     }
   },
   {
     "id": "EVT-0034",
-    "timestamp": "2026-01-30T23:32:58.914Z",
-    "relativeMs": 322,
+    "timestamp": "2026-01-31T14:52:32.921Z",
+    "relativeMs": 248,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -832,8 +832,8 @@
   },
   {
     "id": "EVT-0035",
-    "timestamp": "2026-01-30T23:32:58.914Z",
-    "relativeMs": 322,
+    "timestamp": "2026-01-31T14:52:32.921Z",
+    "relativeMs": 248,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -866,8 +866,8 @@
   },
   {
     "id": "EVT-0036",
-    "timestamp": "2026-01-30T23:32:58.914Z",
-    "relativeMs": 322,
+    "timestamp": "2026-01-31T14:52:32.921Z",
+    "relativeMs": 248,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -878,18 +878,18 @@
   },
   {
     "id": "EVT-0037",
-    "timestamp": "2026-01-30T23:32:58.914Z",
-    "relativeMs": 322,
+    "timestamp": "2026-01-31T14:52:32.921Z",
+    "relativeMs": 248,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202",
+      "url": "http://127.0.0.1:46569/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202",
       "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -897,8 +897,8 @@
   },
   {
     "id": "EVT-0038",
-    "timestamp": "2026-01-30T23:32:58.922Z",
-    "relativeMs": 330,
+    "timestamp": "2026-01-31T14:52:32.926Z",
+    "relativeMs": 253,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -915,14 +915,14 @@
         },
         "errors": []
       },
-      "durationMs": 177,
+      "durationMs": 114,
       "error": null
     }
   },
   {
     "id": "EVT-0039",
-    "timestamp": "2026-01-30T23:32:58.922Z",
-    "relativeMs": 330,
+    "timestamp": "2026-01-31T14:52:32.926Z",
+    "relativeMs": 253,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -933,8 +933,8 @@
   },
   {
     "id": "EVT-0040",
-    "timestamp": "2026-01-30T23:32:58.922Z",
-    "relativeMs": 330,
+    "timestamp": "2026-01-31T14:52:32.926Z",
+    "relativeMs": 253,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -967,8 +967,8 @@
   },
   {
     "id": "EVT-0041",
-    "timestamp": "2026-01-30T23:32:58.922Z",
-    "relativeMs": 330,
+    "timestamp": "2026-01-31T14:52:32.926Z",
+    "relativeMs": 253,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -979,18 +979,18 @@
   },
   {
     "id": "EVT-0042",
-    "timestamp": "2026-01-30T23:32:58.922Z",
-    "relativeMs": 330,
+    "timestamp": "2026-01-31T14:52:32.926Z",
+    "relativeMs": 253,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/SID%20Addressing/UltiSID%201%20Address",
+      "url": "http://127.0.0.1:46569/v1/configs/SID%20Addressing/UltiSID%201%20Address",
       "normalizedUrl": "/v1/configs/SID%20Addressing/UltiSID%201%20Address",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -998,8 +998,8 @@
   },
   {
     "id": "EVT-0043",
-    "timestamp": "2026-01-30T23:32:58.929Z",
-    "relativeMs": 337,
+    "timestamp": "2026-01-31T14:52:32.933Z",
+    "relativeMs": 260,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -1016,14 +1016,14 @@
         },
         "errors": []
       },
-      "durationMs": 185,
+      "durationMs": 121,
       "error": null
     }
   },
   {
     "id": "EVT-0044",
-    "timestamp": "2026-01-30T23:32:58.929Z",
-    "relativeMs": 337,
+    "timestamp": "2026-01-31T14:52:32.934Z",
+    "relativeMs": 261,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -1034,8 +1034,8 @@
   },
   {
     "id": "EVT-0045",
-    "timestamp": "2026-01-30T23:32:58.929Z",
-    "relativeMs": 337,
+    "timestamp": "2026-01-31T14:52:32.934Z",
+    "relativeMs": 261,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -1068,8 +1068,8 @@
   },
   {
     "id": "EVT-0046",
-    "timestamp": "2026-01-30T23:32:58.929Z",
-    "relativeMs": 337,
+    "timestamp": "2026-01-31T14:52:32.934Z",
+    "relativeMs": 261,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -1080,18 +1080,18 @@
   },
   {
     "id": "EVT-0047",
-    "timestamp": "2026-01-30T23:32:58.929Z",
-    "relativeMs": 337,
+    "timestamp": "2026-01-31T14:52:32.934Z",
+    "relativeMs": 261,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/configs/SID%20Addressing/UltiSID%202%20Address",
+      "url": "http://127.0.0.1:46569/v1/configs/SID%20Addressing/UltiSID%202%20Address",
       "normalizedUrl": "/v1/configs/SID%20Addressing/UltiSID%202%20Address",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1099,8 +1099,8 @@
   },
   {
     "id": "EVT-0048",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -1117,14 +1117,14 @@
         },
         "errors": []
       },
-      "durationMs": 189,
+      "durationMs": 127,
       "error": null
     }
   },
   {
     "id": "EVT-0049",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -1135,8 +1135,8 @@
   },
   {
     "id": "EVT-0050",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1169,8 +1169,8 @@
   },
   {
     "id": "EVT-0051",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1181,18 +1181,18 @@
   },
   {
     "id": "EVT-0052",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0010",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1200,22 +1200,22 @@
   },
   {
     "id": "EVT-0053",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0010",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 87,
+      "durationMs": 73,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0054",
-    "timestamp": "2026-01-30T23:32:58.934Z",
-    "relativeMs": 342,
+    "timestamp": "2026-01-31T14:52:32.940Z",
+    "relativeMs": 267,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1226,8 +1226,8 @@
   },
   {
     "id": "EVT-0055",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1238,8 +1238,8 @@
   },
   {
     "id": "EVT-0056",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1250,8 +1250,8 @@
   },
   {
     "id": "EVT-0057",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -1284,8 +1284,8 @@
   },
   {
     "id": "EVT-0058",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -1296,18 +1296,18 @@
   },
   {
     "id": "EVT-0059",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0011",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1315,22 +1315,22 @@
   },
   {
     "id": "EVT-0060",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0011",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 82,
+      "durationMs": 70,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0061",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -1341,8 +1341,8 @@
   },
   {
     "id": "EVT-0062",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -1353,8 +1353,8 @@
   },
   {
     "id": "EVT-0063",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -1365,8 +1365,8 @@
   },
   {
     "id": "EVT-0064",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -1399,8 +1399,8 @@
   },
   {
     "id": "EVT-0065",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -1411,18 +1411,18 @@
   },
   {
     "id": "EVT-0066",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.941Z",
+    "relativeMs": 268,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0012",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1430,22 +1430,22 @@
   },
   {
     "id": "EVT-0067",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0012",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 82,
+      "durationMs": 70,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0068",
-    "timestamp": "2026-01-30T23:32:58.935Z",
-    "relativeMs": 343,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -1456,8 +1456,8 @@
   },
   {
     "id": "EVT-0069",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -1468,8 +1468,8 @@
   },
   {
     "id": "EVT-0070",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -1480,8 +1480,8 @@
   },
   {
     "id": "EVT-0071",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1514,8 +1514,8 @@
   },
   {
     "id": "EVT-0072",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1526,18 +1526,18 @@
   },
   {
     "id": "EVT-0073",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1545,22 +1545,22 @@
   },
   {
     "id": "EVT-0074",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 82,
+      "durationMs": 70,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0075",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1571,8 +1571,8 @@
   },
   {
     "id": "EVT-0076",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1583,8 +1583,8 @@
   },
   {
     "id": "EVT-0077",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0013",
@@ -1595,8 +1595,8 @@
   },
   {
     "id": "EVT-0078",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1629,8 +1629,8 @@
   },
   {
     "id": "EVT-0079",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1641,18 +1641,18 @@
   },
   {
     "id": "EVT-0080",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0014",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1660,22 +1660,22 @@
   },
   {
     "id": "EVT-0081",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0014",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 83,
+      "durationMs": 70,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0082",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1686,8 +1686,8 @@
   },
   {
     "id": "EVT-0083",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1698,8 +1698,8 @@
   },
   {
     "id": "EVT-0084",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1710,8 +1710,8 @@
   },
   {
     "id": "EVT-0085",
-    "timestamp": "2026-01-30T23:32:58.936Z",
-    "relativeMs": 344,
+    "timestamp": "2026-01-31T14:52:32.942Z",
+    "relativeMs": 269,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1744,8 +1744,8 @@
   },
   {
     "id": "EVT-0086",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1756,18 +1756,18 @@
   },
   {
     "id": "EVT-0087",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1775,22 +1775,22 @@
   },
   {
     "id": "EVT-0088",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 83,
+      "durationMs": 70,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0089",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1801,8 +1801,8 @@
   },
   {
     "id": "EVT-0090",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1813,8 +1813,8 @@
   },
   {
     "id": "EVT-0091",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0015",
@@ -1825,8 +1825,8 @@
   },
   {
     "id": "EVT-0092",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1859,8 +1859,8 @@
   },
   {
     "id": "EVT-0093",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1871,18 +1871,18 @@
   },
   {
     "id": "EVT-0094",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -1890,22 +1890,22 @@
   },
   {
     "id": "EVT-0095",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 83,
+      "durationMs": 71,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0096",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1916,8 +1916,8 @@
   },
   {
     "id": "EVT-0097",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1928,8 +1928,8 @@
   },
   {
     "id": "EVT-0098",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1940,8 +1940,8 @@
   },
   {
     "id": "EVT-0099",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1974,8 +1974,8 @@
   },
   {
     "id": "EVT-0100",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1986,18 +1986,18 @@
   },
   {
     "id": "EVT-0101",
-    "timestamp": "2026-01-30T23:32:58.937Z",
-    "relativeMs": 345,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -2005,22 +2005,22 @@
   },
   {
     "id": "EVT-0102",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.943Z",
+    "relativeMs": 270,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 83,
+      "durationMs": 71,
       "error": "signal is aborted without reason"
     }
   },
   {
     "id": "EVT-0103",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.944Z",
+    "relativeMs": 271,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -2031,8 +2031,8 @@
   },
   {
     "id": "EVT-0104",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.944Z",
+    "relativeMs": 271,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -2043,8 +2043,8 @@
   },
   {
     "id": "EVT-0105",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.944Z",
+    "relativeMs": 271,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -2055,8 +2055,8 @@
   },
   {
     "id": "EVT-0106",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.944Z",
+    "relativeMs": 271,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -2089,8 +2089,8 @@
   },
   {
     "id": "EVT-0107",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.944Z",
+    "relativeMs": 271,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -2101,18 +2101,18 @@
   },
   {
     "id": "EVT-0108",
-    "timestamp": "2026-01-30T23:32:58.938Z",
-    "relativeMs": 346,
+    "timestamp": "2026-01-31T14:52:32.944Z",
+    "relativeMs": 271,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0018",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:39147/v1/info",
+      "url": "http://127.0.0.1:46569/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:39147"
+        "X-C64U-Host": "127.0.0.1:46569"
       },
       "body": null,
       "target": "external-mock"
@@ -2120,8 +2120,8 @@
   },
   {
     "id": "EVT-0109",
-    "timestamp": "2026-01-30T23:32:59.013Z",
-    "relativeMs": 421,
+    "timestamp": "2026-01-31T14:52:33.004Z",
+    "relativeMs": 331,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -2136,14 +2136,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 156,
+      "durationMs": 130,
       "error": null
     }
   },
   {
     "id": "EVT-0110",
-    "timestamp": "2026-01-30T23:32:59.013Z",
-    "relativeMs": 421,
+    "timestamp": "2026-01-31T14:52:33.004Z",
+    "relativeMs": 331,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -2154,8 +2154,8 @@
   },
   {
     "id": "EVT-0111",
-    "timestamp": "2026-01-30T23:32:59.524Z",
-    "relativeMs": 932,
+    "timestamp": "2026-01-31T14:52:33.578Z",
+    "relativeMs": 905,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -2188,8 +2188,8 @@
   },
   {
     "id": "EVT-0112",
-    "timestamp": "2026-01-30T23:32:59.536Z",
-    "relativeMs": 944,
+    "timestamp": "2026-01-31T14:52:33.593Z",
+    "relativeMs": 920,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -2222,8 +2222,8 @@
   },
   {
     "id": "EVT-0113",
-    "timestamp": "2026-01-30T23:32:59.536Z",
-    "relativeMs": 944,
+    "timestamp": "2026-01-31T14:52:33.594Z",
+    "relativeMs": 921,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -2234,21 +2234,21 @@
   },
   {
     "id": "EVT-0114",
-    "timestamp": "2026-01-30T23:32:59.536Z",
-    "relativeMs": 944,
+    "timestamp": "2026-01-31T14:52:33.594Z",
+    "relativeMs": 921,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:35609/v1/ftp/list",
+      "url": "http://127.0.0.1:41139/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 40215,
+        "port": 44033,
         "password": "***",
         "path": "/"
       },
@@ -2257,7 +2257,7 @@
   },
   {
     "id": "EVT-0115",
-    "timestamp": "2026-01-30T23:32:59.948Z",
+    "timestamp": "2026-01-31T14:52:34.029Z",
     "relativeMs": 1356,
     "type": "rest-response",
     "origin": "system",
@@ -2280,13 +2280,13 @@
           }
         ]
       },
-      "durationMs": 412,
+      "durationMs": 435,
       "error": null
     }
   },
   {
     "id": "EVT-0116",
-    "timestamp": "2026-01-30T23:32:59.948Z",
+    "timestamp": "2026-01-31T14:52:34.029Z",
     "relativeMs": 1356,
     "type": "action-end",
     "origin": "system",
@@ -2298,8 +2298,8 @@
   },
   {
     "id": "EVT-0117",
-    "timestamp": "2026-01-30T23:32:59.949Z",
-    "relativeMs": 1357,
+    "timestamp": "2026-01-31T14:52:34.029Z",
+    "relativeMs": 1356,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -2310,8 +2310,8 @@
   },
   {
     "id": "EVT-0118",
-    "timestamp": "2026-01-30T23:32:59.949Z",
-    "relativeMs": 1357,
+    "timestamp": "2026-01-31T14:52:34.029Z",
+    "relativeMs": 1356,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -2325,8 +2325,8 @@
   },
   {
     "id": "EVT-0119",
-    "timestamp": "2026-01-30T23:32:59.949Z",
-    "relativeMs": 1357,
+    "timestamp": "2026-01-31T14:52:34.029Z",
+    "relativeMs": 1356,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -2337,8 +2337,8 @@
   },
   {
     "id": "EVT-0120",
-    "timestamp": "2026-01-30T23:33:00.622Z",
-    "relativeMs": 2030,
+    "timestamp": "2026-01-31T14:52:35.003Z",
+    "relativeMs": 2330,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -2371,8 +2371,8 @@
   },
   {
     "id": "EVT-0121",
-    "timestamp": "2026-01-30T23:33:00.624Z",
-    "relativeMs": 2032,
+    "timestamp": "2026-01-31T14:52:35.007Z",
+    "relativeMs": 2334,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -2405,8 +2405,8 @@
   },
   {
     "id": "EVT-0122",
-    "timestamp": "2026-01-30T23:33:00.624Z",
-    "relativeMs": 2032,
+    "timestamp": "2026-01-31T14:52:35.007Z",
+    "relativeMs": 2334,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -2417,21 +2417,21 @@
   },
   {
     "id": "EVT-0123",
-    "timestamp": "2026-01-30T23:33:00.624Z",
-    "relativeMs": 2032,
+    "timestamp": "2026-01-31T14:52:35.007Z",
+    "relativeMs": 2334,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:35609/v1/ftp/list",
+      "url": "http://127.0.0.1:41139/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 40215,
+        "port": 44033,
         "password": "***",
         "path": "/Usb0"
       },
@@ -2440,8 +2440,8 @@
   },
   {
     "id": "EVT-0124",
-    "timestamp": "2026-01-30T23:33:01.027Z",
-    "relativeMs": 2435,
+    "timestamp": "2026-01-31T14:52:35.407Z",
+    "relativeMs": 2734,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -2469,14 +2469,14 @@
           }
         ]
       },
-      "durationMs": 402,
+      "durationMs": 400,
       "error": null
     }
   },
   {
     "id": "EVT-0125",
-    "timestamp": "2026-01-30T23:33:01.027Z",
-    "relativeMs": 2435,
+    "timestamp": "2026-01-31T14:52:35.407Z",
+    "relativeMs": 2734,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -2487,8 +2487,8 @@
   },
   {
     "id": "EVT-0126",
-    "timestamp": "2026-01-30T23:33:01.027Z",
-    "relativeMs": 2435,
+    "timestamp": "2026-01-31T14:52:35.407Z",
+    "relativeMs": 2734,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -2499,8 +2499,8 @@
   },
   {
     "id": "EVT-0127",
-    "timestamp": "2026-01-30T23:33:01.027Z",
-    "relativeMs": 2435,
+    "timestamp": "2026-01-31T14:52:35.407Z",
+    "relativeMs": 2734,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -2514,8 +2514,8 @@
   },
   {
     "id": "EVT-0128",
-    "timestamp": "2026-01-30T23:33:01.027Z",
-    "relativeMs": 2435,
+    "timestamp": "2026-01-31T14:52:35.407Z",
+    "relativeMs": 2734,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -2526,8 +2526,8 @@
   },
   {
     "id": "EVT-0129",
-    "timestamp": "2026-01-30T23:33:01.475Z",
-    "relativeMs": 2883,
+    "timestamp": "2026-01-31T14:52:35.847Z",
+    "relativeMs": 3174,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -2560,8 +2560,8 @@
   },
   {
     "id": "EVT-0130",
-    "timestamp": "2026-01-30T23:33:01.476Z",
-    "relativeMs": 2884,
+    "timestamp": "2026-01-31T14:52:35.848Z",
+    "relativeMs": 3175,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -2594,8 +2594,8 @@
   },
   {
     "id": "EVT-0131",
-    "timestamp": "2026-01-30T23:33:01.476Z",
-    "relativeMs": 2884,
+    "timestamp": "2026-01-31T14:52:35.848Z",
+    "relativeMs": 3175,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -2606,21 +2606,21 @@
   },
   {
     "id": "EVT-0132",
-    "timestamp": "2026-01-30T23:33:01.476Z",
-    "relativeMs": 2884,
+    "timestamp": "2026-01-31T14:52:35.848Z",
+    "relativeMs": 3175,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:35609/v1/ftp/list",
+      "url": "http://127.0.0.1:41139/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 40215,
+        "port": 44033,
         "password": "***",
         "path": "/Usb0/Games"
       },
@@ -2629,8 +2629,8 @@
   },
   {
     "id": "EVT-0133",
-    "timestamp": "2026-01-30T23:33:01.886Z",
-    "relativeMs": 3294,
+    "timestamp": "2026-01-31T14:52:36.242Z",
+    "relativeMs": 3569,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -2658,14 +2658,14 @@
           }
         ]
       },
-      "durationMs": 409,
+      "durationMs": 393,
       "error": null
     }
   },
   {
     "id": "EVT-0134",
-    "timestamp": "2026-01-30T23:33:01.886Z",
-    "relativeMs": 3294,
+    "timestamp": "2026-01-31T14:52:36.242Z",
+    "relativeMs": 3569,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -2676,8 +2676,8 @@
   },
   {
     "id": "EVT-0135",
-    "timestamp": "2026-01-30T23:33:01.886Z",
-    "relativeMs": 3294,
+    "timestamp": "2026-01-31T14:52:36.242Z",
+    "relativeMs": 3569,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -2688,8 +2688,8 @@
   },
   {
     "id": "EVT-0136",
-    "timestamp": "2026-01-30T23:33:01.886Z",
-    "relativeMs": 3294,
+    "timestamp": "2026-01-31T14:52:36.242Z",
+    "relativeMs": 3569,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -2703,8 +2703,8 @@
   },
   {
     "id": "EVT-0137",
-    "timestamp": "2026-01-30T23:33:01.886Z",
-    "relativeMs": 3294,
+    "timestamp": "2026-01-31T14:52:36.242Z",
+    "relativeMs": 3569,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -2715,8 +2715,8 @@
   },
   {
     "id": "EVT-0138",
-    "timestamp": "2026-01-30T23:33:02.310Z",
-    "relativeMs": 3718,
+    "timestamp": "2026-01-31T14:52:36.686Z",
+    "relativeMs": 4013,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2749,8 +2749,8 @@
   },
   {
     "id": "EVT-0139",
-    "timestamp": "2026-01-30T23:33:02.311Z",
-    "relativeMs": 3719,
+    "timestamp": "2026-01-31T14:52:36.689Z",
+    "relativeMs": 4016,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2783,8 +2783,8 @@
   },
   {
     "id": "EVT-0140",
-    "timestamp": "2026-01-30T23:33:02.311Z",
-    "relativeMs": 3719,
+    "timestamp": "2026-01-31T14:52:36.689Z",
+    "relativeMs": 4016,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2795,21 +2795,21 @@
   },
   {
     "id": "EVT-0141",
-    "timestamp": "2026-01-30T23:33:02.311Z",
-    "relativeMs": 3719,
+    "timestamp": "2026-01-31T14:52:36.689Z",
+    "relativeMs": 4016,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0026",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:35609/v1/ftp/list",
+      "url": "http://127.0.0.1:41139/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 40215,
+        "port": 44033,
         "password": "***",
         "path": "/Usb0/Games/Turrican II"
       },
@@ -2818,8 +2818,8 @@
   },
   {
     "id": "EVT-0142",
-    "timestamp": "2026-01-30T23:33:02.712Z",
-    "relativeMs": 4120,
+    "timestamp": "2026-01-31T14:52:37.093Z",
+    "relativeMs": 4420,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2847,14 +2847,14 @@
           }
         ]
       },
-      "durationMs": 401,
+      "durationMs": 403,
       "error": null
     }
   },
   {
     "id": "EVT-0143",
-    "timestamp": "2026-01-30T23:33:02.712Z",
-    "relativeMs": 4120,
+    "timestamp": "2026-01-31T14:52:37.093Z",
+    "relativeMs": 4420,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2865,8 +2865,8 @@
   },
   {
     "id": "EVT-0144",
-    "timestamp": "2026-01-30T23:33:02.713Z",
-    "relativeMs": 4121,
+    "timestamp": "2026-01-31T14:52:37.093Z",
+    "relativeMs": 4420,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2877,8 +2877,8 @@
   },
   {
     "id": "EVT-0145",
-    "timestamp": "2026-01-30T23:33:02.713Z",
-    "relativeMs": 4121,
+    "timestamp": "2026-01-31T14:52:37.093Z",
+    "relativeMs": 4420,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2892,8 +2892,8 @@
   },
   {
     "id": "EVT-0146",
-    "timestamp": "2026-01-30T23:33:02.713Z",
-    "relativeMs": 4121,
+    "timestamp": "2026-01-31T14:52:37.093Z",
+    "relativeMs": 4420,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2904,8 +2904,8 @@
   },
   {
     "id": "EVT-0147",
-    "timestamp": "2026-01-30T23:33:03.193Z",
-    "relativeMs": 4601,
+    "timestamp": "2026-01-31T14:52:37.590Z",
+    "relativeMs": 4917,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -2938,8 +2938,8 @@
   },
   {
     "id": "EVT-0148",
-    "timestamp": "2026-01-30T23:33:03.193Z",
-    "relativeMs": 4601,
+    "timestamp": "2026-01-31T14:52:37.590Z",
+    "relativeMs": 4917,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -2972,8 +2972,8 @@
   },
   {
     "id": "EVT-0149",
-    "timestamp": "2026-01-30T23:33:03.193Z",
-    "relativeMs": 4601,
+    "timestamp": "2026-01-31T14:52:37.591Z",
+    "relativeMs": 4918,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -2984,21 +2984,21 @@
   },
   {
     "id": "EVT-0150",
-    "timestamp": "2026-01-30T23:33:03.193Z",
-    "relativeMs": 4601,
+    "timestamp": "2026-01-31T14:52:37.591Z",
+    "relativeMs": 4918,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0028",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:35609/v1/ftp/list",
+      "url": "http://127.0.0.1:41139/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 40215,
+        "port": 44033,
         "password": "***",
         "path": "/Usb0/Games/Turrican II/"
       },
@@ -3007,8 +3007,8 @@
   },
   {
     "id": "EVT-0151",
-    "timestamp": "2026-01-30T23:33:03.614Z",
-    "relativeMs": 5022,
+    "timestamp": "2026-01-31T14:52:38.062Z",
+    "relativeMs": 5389,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -3036,14 +3036,14 @@
           }
         ]
       },
-      "durationMs": 420,
+      "durationMs": 471,
       "error": null
     }
   },
   {
     "id": "EVT-0152",
-    "timestamp": "2026-01-30T23:33:03.614Z",
-    "relativeMs": 5022,
+    "timestamp": "2026-01-31T14:52:38.063Z",
+    "relativeMs": 5390,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -3054,8 +3054,8 @@
   },
   {
     "id": "EVT-0153",
-    "timestamp": "2026-01-30T23:33:03.615Z",
-    "relativeMs": 5023,
+    "timestamp": "2026-01-31T14:52:38.063Z",
+    "relativeMs": 5390,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -3066,8 +3066,8 @@
   },
   {
     "id": "EVT-0154",
-    "timestamp": "2026-01-30T23:33:03.615Z",
-    "relativeMs": 5023,
+    "timestamp": "2026-01-31T14:52:38.063Z",
+    "relativeMs": 5390,
     "type": "ftp-operation",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -3081,8 +3081,8 @@
   },
   {
     "id": "EVT-0155",
-    "timestamp": "2026-01-30T23:33:03.615Z",
-    "relativeMs": 5023,
+    "timestamp": "2026-01-31T14:52:38.063Z",
+    "relativeMs": 5390,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0027",
