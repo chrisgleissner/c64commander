@@ -7,7 +7,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      module: path.resolve(__dirname, "./src/lib/polyfills/module.ts"),
     },
   },
   test: {
@@ -36,8 +35,5 @@ export default defineConfig({
         lines: 10,
       },
     },
-  },
-  resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
   },
 });

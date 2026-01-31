@@ -15,6 +15,16 @@ import {
   saveStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
 const {
   mockUpdateConfig,
   mockRefetch,
