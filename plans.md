@@ -7,7 +7,7 @@ Branch: feat/tracing
 - Source of truth: [doc/tracing.md](doc/tracing.md)
 - Default test mode: `TRACE_ASSERTIONS_DEFAULT=1`
 - Evidence root: `test-results/evidence/playwright/<testId>/<deviceId>/`
-- Golden root: `test-results/traces/golden/<suite>/<testId>/<deviceId>/`
+- Golden root: `playwright/fixtures/traces/golden/<suite>/<testId>/<deviceId>/`
 
 ## Coverage Tracker (Playwright Specs)
 | Spec | Classification | Justification |
@@ -81,7 +81,7 @@ Branch: feat/tracing
 - [ ] npm run test:e2e
 - [ ] npm run test:e2e:ci
 - [ ] RECORD_TRACES=1 npm run test:e2e:ci
-- [ ] ./local-build.sh
+- [ ] ./build
 ### Verification
 - [ ] No failures in command output
 
@@ -99,3 +99,93 @@ Branch: feat/tracing
 - [ ] All phases ticked
 - [ ] All required commands green
 - [ ] Coverage tracker fully compliant
+
+# Coverage Improvement Plan – ≥92% (Playwright + Unit)
+
+Date: 2026-01-30
+Branch: feat/tracing
+
+## Coverage baseline snapshot
+- Overall (statement % from coverage/coverage-final.json): 89.01%
+- Unit (statement % from coverage/coverage-final.json): 89.01%
+- Playwright: Not available in current artifacts (will capture after next `npm run test:e2e:ci` run).
+
+## Lowest-coverage modules (prioritized)
+1. src/hooks/useConnectionState.ts (50.00%)
+2. src/lib/native/platform.ts (66.67%)
+3. src/components/itemSelection/ItemSelectionDialog.tsx (70.56%)
+4. src/lib/media-index/localStorageMediaIndex.ts (70.97%)
+5. src/lib/sourceNavigation/localSourceAdapter.ts (71.78%)
+6. src/lib/hvsc/hvscArchiveExtraction.ts (74.24%)
+7. src/lib/config/featureFlags.ts (78.10%)
+8. src/lib/disks/diskMount.ts (79.25%)
+9. src/lib/sources/localArchiveIngestion.ts (82.14%)
+10. src/lib/connection/connectionManager.ts (82.51%)
+
+## Strategy and expected impact
+- src/hooks/useConnectionState.ts
+	- Why low: hook branches for transitions and retries are untested.
+	- Approach: unit tests with mocked dependencies to cover branch transitions and error paths.
+	- Estimated impact: +0.2–0.4% overall.
+- src/lib/native/platform.ts
+	- Why low: platform detection branches not exercised.
+	- Approach: unit tests for environment branching (web, native, android).
+	- Estimated impact: +0.1–0.2% overall.
+- src/components/itemSelection/ItemSelectionDialog.tsx
+	- Why low: multiple UI branches (confirm, cancel, selection toggles, edge states) not covered.
+	- Approach: extend Playwright UI coverage in existing specs to cover dialog flows and error/empty states.
+	- Estimated impact: +0.3–0.5% overall.
+- src/lib/media-index/localStorageMediaIndex.ts
+	- Why low: localStorage fallbacks and error handling not covered.
+	- Approach: unit tests with in-memory storage simulation, cover read/write failure paths.
+	- Estimated impact: +0.2–0.3% overall.
+- src/lib/sourceNavigation/localSourceAdapter.ts
+	- Why low: branchy routing logic and error handling not exercised.
+	- Approach: unit tests for branching logic; Playwright for integration-only branches.
+	- Estimated impact: +0.3–0.5% overall.
+- src/lib/hvsc/hvscArchiveExtraction.ts
+	- Why low: extraction error and edge paths untested.
+	- Approach: unit tests for success + failure paths using fixtures.
+	- Estimated impact: +0.2–0.4% overall.
+- src/lib/config/featureFlags.ts
+	- Why low: defaulting and override branches untested.
+	- Approach: unit tests covering defaults and overrides.
+	- Estimated impact: +0.1–0.2% overall.
+- src/lib/disks/diskMount.ts
+	- Why low: error handling and retry branches not exercised.
+	- Approach: unit tests for error paths with mocked API.
+	- Estimated impact: +0.1–0.2% overall.
+- src/lib/sources/localArchiveIngestion.ts
+	- Why low: error and boundary cases untested.
+	- Approach: unit tests for boundary handling.
+	- Estimated impact: +0.1–0.2% overall.
+- src/lib/connection/connectionManager.ts
+	- Why low: connection state transitions and failures untested.
+	- Approach: unit tests for state transitions and retries.
+	- Estimated impact: +0.2–0.4% overall.
+
+## Coverage gap categorization
+- Unit-test candidates: src/hooks/useConnectionState.ts, src/lib/native/platform.ts, src/lib/media-index/localStorageMediaIndex.ts, src/lib/sourceNavigation/localSourceAdapter.ts, src/lib/hvsc/hvscArchiveExtraction.ts, src/lib/config/featureFlags.ts, src/lib/disks/diskMount.ts, src/lib/sources/localArchiveIngestion.ts, src/lib/connection/connectionManager.ts
+- Playwright candidates: src/components/itemSelection/ItemSelectionDialog.tsx (UI behaviors, empty/error states)
+- Edge/error paths: localStorage failures, connection retries, extraction failures, disk mount errors
+
+## Task checklist
+- [ ] Add unit tests for `useConnectionState` transitions and error paths
+- [ ] Add unit tests for `platform` detection branches
+- [ ] Add unit tests for `localStorageMediaIndex` error handling
+- [ ] Add unit tests for `localSourceAdapter` branching
+- [ ] Add unit tests for `hvscArchiveExtraction` success and failure
+- [ ] Add unit tests for `featureFlags` defaults/overrides
+- [ ] Add unit tests for `diskMount` error handling
+- [ ] Add unit tests for `localArchiveIngestion` boundary paths
+- [ ] Add unit tests for `connectionManager` retry/transition logic
+- [ ] Extend existing Playwright spec(s) to cover Item Selection dialog empty/error flows
+- [ ] Re-run unit coverage and record deltas
+- [ ] Re-run Playwright coverage (if available) and record deltas
+- [ ] Validate total coverage ≥92%
+- [ ] Run CI-equivalent suite locally (lint, test, build, e2e)
+
+## Final validation gate
+- [ ] Coverage ≥92% overall
+- [ ] All tests pass locally (unit + Playwright)
+- [ ] CI green with unchanged thresholds

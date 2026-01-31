@@ -104,7 +104,7 @@ Paste `fuzz-issue-summary.md` first, then attach `fuzz-issue-report.json` for st
 
 Use the same seed and platform, then re-run:
 
-- Local: `./local-build.sh --fuzz --fuzz-seed <seed>`
+- Local: `./build --fuzz --fuzz-seed <seed>`
 - Script: `node scripts/run-fuzz.mjs --fuzz-seed <seed>`
 
 If no seed is provided, the runner uses the current epoch milliseconds. Each shard uses baseSeed + shardIndex.

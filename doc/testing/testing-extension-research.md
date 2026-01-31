@@ -80,7 +80,7 @@ The following test extensions are **web-executable, deterministic, and CI-friend
 
 A **manual-but-automated** test mode designed for local execution only. It validates Android-native discovery behavior and real C64U reachability without modifying state.
 
-- **Invocation concept**: a new local-build.sh flag (research-only; not implemented here).
+- **Invocation concept**: a new build flag (research-only; not implemented here).
 - **Runtime target**: real Android device via USB and a real C64U reachable on LAN at hostname C64U.
 - **High-level flow**:
   1. Ensure the app is built and installed on the device.
@@ -191,7 +191,7 @@ The real-device research mode must enforce strict read-only behavior.
   - Evidence collection via existing Playwright artifacts.
 
 - **Manual-but-automated (local only)**
-  - New local-build.sh flag (research proposal only).
+  - New build flag (research proposal only).
   - Runs on real Android device and real C64U on LAN.
   - Read-only validation only; no permissions that require manual acceptance.
   - Output: structured report and minimal evidence (screens, logs, request list).

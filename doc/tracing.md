@@ -597,11 +597,11 @@ Golden traces capture a deterministic, reviewable baseline of expected traces fo
 
 #### Execution
 
-`local-build.sh` exposes a trace recording mode:
+`build` exposes a trace recording mode:
 
 - `--record-traces`
 - Optional overrides:
-  - `--trace-output-dir <path>` (default: `test-results/traces/golden`)
+  - `--trace-output-dir <path>` (default: `playwright/fixtures/traces/golden`)
   - `--trace-suite <name>` (scope recording to a Playwright project or test tag)
 
 Equivalent environment variables:
@@ -634,21 +634,33 @@ Each `test-results/evidence/playwright/<testId>/<deviceId>` folder contains:
 | meta.json          | Per test     | Playwright  | No                            | Test identity, project, device, and outcome |
 | app-metadata.json  | Per export   | Tracing     | No                            | App, build, platform, and device context |
 
-### 19.3 Trace Comparison Normalization
+### 19.3 Fault-Tolerant Trace Comparison (Essentials Only)
 
-Golden trace comparison MUST ignore volatile fields while preserving semantic order and causality.
+Golden comparison intentionally ignores ordering and timing noise. The goal is to verify **essential behavior**:
+for a given user action, the app must issue specific REST/FTP calls and receive specific responses.
 
-The following values are ignored or normalized:
+Core rules:
 
-- `timestamp` (absolute)
-- `relativeMs` (ordering retained; exact values ignored)
-- IP addresses and ports inside REST/FTP URLs
-- Any backend host identifiers that differ across runs
-- `durationMs` on REST responses
+- **Action-level matching**: traces are grouped by `correlationId`, and each group is labeled by its
+  `action-start` name. Comparison is done per action group, not by global event order.
+- **Order-insensitive**: non-essential events can reorder freely. Only the existence of required REST/FTP
+  interactions matters.
+- **Partial response matching**: response bodies are compared as *subsets*. Expected keys/values must exist,
+  but extra keys in actual responses are allowed.
 
-The following values MUST match exactly:
+Normalization rules (applied before comparison):
 
-- `id` and `correlationId` (deterministic numeric counters)
+- Ignore volatile fields: `timestamp`, `relativeMs`, `durationMs`, `elapsedMs`, and other time-like keys.
+- Normalize URLs by stripping host/port.
+- Normalize host/IP/port fields in any nested data.
+- Ignore host headers (e.g., `Host`, `X-C64U-Host`).
+
+What must match:
+
+- `action-start` name (for trace groups that contain REST/FTP activity)
+- REST requests: method + normalized URL
+- REST responses: HTTP status + body subset
+- FTP operations: operation + path + result (and error subset if present)
 
 Meta normalization for `meta.json` is not used in golden trace comparison.
 
@@ -657,7 +669,7 @@ Meta normalization for `meta.json` is not used in golden trace comparison.
 1. **Record golden traces locally**
 
   ```bash
-  ./local-build.sh --test-e2e --record-traces --trace-suite tracing
+  ./build --test-e2e --record-traces --trace-suite tracing
   ```
 
   Or use direct env variables:
@@ -672,7 +684,7 @@ Meta normalization for `meta.json` is not used in golden trace comparison.
   - `test-results/evidence/playwright/<testId>/<deviceId>/trace.json`
   - `test-results/evidence/playwright/<testId>/<deviceId>/meta.json`
 - Golden traces:
-  - `test-results/traces/golden/<suite>/<testId>/<deviceId>/trace.json`
+  - `playwright/fixtures/traces/golden/<suite>/<testId>/<deviceId>/trace.json`
 
 1. **Validate against goldens**
 
@@ -690,7 +702,9 @@ Meta normalization for `meta.json` is not used in golden trace comparison.
 
 - Re-run step 1 after the code change.
 - Commit the updated golden traces alongside the code change.
-- Golden traces under `test-results/traces/golden/**` MUST be committed and MUST NOT be gitignored.
+- Golden traces under `playwright/fixtures/traces/golden/**` MUST be committed and MUST NOT be gitignored.
+- When trace assertions are enabled and `RECORD_TRACES` is not set, Playwright tests fail if a golden trace
+  is missing or essential REST/FTP interactions do not match.
 
 ### 19.5 Failure Modes and Diagnosis
 

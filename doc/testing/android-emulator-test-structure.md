@@ -24,7 +24,7 @@
 ### Scripts and tooling
 - Android emulator smoke entrypoint: [scripts/smoke-android-emulator.sh](../../scripts/smoke-android-emulator.sh)
 - Maestro flows: [.maestro/](../../.maestro)
-- Build orchestration: [local-build.sh](../../local-build.sh)
+- Build orchestration: [build](../../build)
 
 ## Assessment: consistency and tradeoffs
 

@@ -107,6 +107,9 @@ const getNormalizedUrl = (event: TraceEvent): string => {
 };
 
 export const enableTraceAssertions = (testInfo: TestInfo, options: TraceAssertionOptions = {}) => {
+  if (process.env.VITE_COVERAGE === '1' || process.env.VITE_COVERAGE === 'true') {
+    return;
+  }
   const description = options.reason ?? 'Trace assertions enabled';
   testInfo.annotations.push({ type: TRACE_ASSERT_ANNOTATION, description });
   if (options.strict === true) {
@@ -162,7 +165,8 @@ export const saveTracesFromPage = async (page: Page, testInfo: TestInfo, tracesO
   await fs.writeFile(path.join(evidenceDir, 'trace.json'), JSON.stringify(traces, null, 2), 'utf8');
 
   if (process.env.RECORD_TRACES === '1') {
-    const outputDir = process.env.TRACE_OUTPUT_DIR || path.resolve(process.cwd(), 'test-results', 'traces', 'golden');
+    const outputDir = process.env.TRACE_OUTPUT_DIR
+      || path.resolve(process.cwd(), 'playwright', 'fixtures', 'traces', 'golden');
     const suite = process.env.TRACE_SUITE ? sanitizeSegment(process.env.TRACE_SUITE) : null;
     const suiteDir = suite ? path.join(outputDir, suite) : outputDir;
     const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright');

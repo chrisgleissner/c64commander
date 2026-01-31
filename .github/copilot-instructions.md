@@ -11,7 +11,7 @@
 4. **Before declaring work complete**:
     - Ensure relevant docs are updated (`README.md`, `doc/`, `docs/`).
     - Run tests and build steps that apply to your change set.
-    - Always run a full build (use `./local-build.sh` when available) and fix any errors before saying work is done.
+    - Always run a full build (use `./build` when available) and fix any errors before saying work is done.
 
 ## Quick discovery
 
@@ -74,7 +74,7 @@ npm run build
 
 ```bash
 npm run cap:build
-./local-build.sh --install
+./build --install
 ```
 
 ## Release tag APKs

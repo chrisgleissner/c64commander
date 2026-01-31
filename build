@@ -67,7 +67,7 @@ Options:
   --validate-evidence   Validate Playwright evidence structure
   --coverage            Run unit + e2e coverage (slower)
   --record-traces       Record golden traces during Playwright runs
-  --trace-output-dir <path> Output directory for golden traces (default: test-results/traces/golden)
+  --trace-output-dir <path> Output directory for golden traces (default: playwright/fixtures/traces/golden)
   --trace-suite <name>  Optional suite name to scope trace recording
   --android-tests       Run Android instrumentation tests (requires a device/emulator)
   --skip-android-tests  Skip Android instrumentation tests

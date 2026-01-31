@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import type { SourceEntry } from '@/lib/sourceNavigation/types';
@@ -24,6 +24,9 @@ const buildSource = (id: string, name: string, type: 'ultimate' | 'local') => ({
 });
 
 describe('ItemSelectionDialog source picker', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
   it('renders only add file/folder buttons for each source group', () => {
     vi.mocked(useSourceNavigator).mockReturnValue({
       path: '/',
@@ -159,5 +162,90 @@ describe('ItemSelectionDialog source picker', () => {
       operation: 'ITEM_SELECTION',
       title: 'Add items failed',
     }));
+  });
+
+  it('reports add local source failures', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const sourceGroups: SourceGroup[] = [
+      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+    ];
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={vi.fn().mockRejectedValue(new Error('Picker failed'))}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'LOCAL_FOLDER_PICK',
+        title: 'Unable to add folder',
+      }));
+    });
+  });
+
+  it('auto-confirms newly added local source', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const onOpenChange = vi.fn();
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    const onAutoConfirmStart = vi.fn();
+    const sourceGroups: SourceGroup[] = [
+      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+    ];
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={onOpenChange}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={vi.fn().mockResolvedValue('local-1')}
+        onConfirm={onConfirm}
+        autoConfirmLocalSource
+        onAutoConfirmStart={onAutoConfirmStart}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+
+    await waitFor(() => {
+      expect(onAutoConfirmStart).toHaveBeenCalled();
+      expect(onConfirm).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'local-1' }),
+        [expect.objectContaining({ type: 'dir', path: '/' })],
+      );
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
   });
 });

@@ -24,8 +24,8 @@ Use the entrypoint script (preferred):
 Or via the local build helper:
 
 ```bash
-./local-build.sh --smoke-android-emulator
-./local-build.sh --smoke-android-emulator --c64u-target real --c64u-host C64U
+./build --smoke-android-emulator
+./build --smoke-android-emulator --c64u-target real --c64u-host C64U
 ```
 
 ## Evidence layout

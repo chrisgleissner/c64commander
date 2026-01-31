@@ -84,7 +84,7 @@ When modifying Playwright tests, REST routing, or tracing logic:
 
 1. Detect changes that affect trace semantics (order, payloads, endpoints, or normalization).
 2. If trace semantics change, re-run golden trace recording locally.
-3. Commit updated golden traces under test-results/traces/golden.
+3. Commit updated golden traces under playwright/fixtures/traces/golden.
 4. Never weaken trace assertions to make tests pass; fix the root cause instead.
 
 ## Fast path (before a PR)
@@ -112,7 +112,7 @@ npm run cap:build
 ### Full local helper (if applicable)
 
 ```bash
-./local-build.sh --install
+./build --install
 ```
 
 ## What to optimize for

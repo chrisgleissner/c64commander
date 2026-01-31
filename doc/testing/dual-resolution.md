@@ -48,14 +48,14 @@ PLAYWRIGHT_DEVICES=phone,tablet npx playwright test
 PLAYWRIGHT_DEVICES=all npx playwright test
 ```
 
-### CLI Flag (local-build.sh)
+### CLI Flag (build)
 
 ```bash
 # Run E2E tests on tablet only
-./local-build.sh --test-e2e --devices tablet
+./build --test-e2e --devices tablet
 
 # Run full CI mirror on both devices
-./local-build.sh --test-e2e-ci --devices phone,tablet
+./build --test-e2e-ci --devices phone,tablet
 ```
 
 ## No-Clipping Invariant

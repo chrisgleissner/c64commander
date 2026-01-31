@@ -3,6 +3,11 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
 import { getTraceAssertionConfig, getTraces, saveTracesFromPage } from './traceUtils';
+import {
+  compareTraceFiles,
+  formatTraceErrors,
+  resolveGoldenDirForEvidence,
+} from './traceComparison.js';
 import { createEvidenceMetadata } from './evidenceConsolidation';
 
 const sanitizeLabel = (label: string) =>
@@ -291,6 +296,20 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
         }
       }
     });
+
+    if (process.env.RECORD_TRACES !== '1') {
+      const goldenDir = resolveGoldenDirForEvidence(evidenceDir);
+      try {
+        const traceErrors = await compareTraceFiles(goldenDir, evidenceDir);
+        if (traceErrors.length) {
+          const relativeGolden = path.relative(process.cwd(), goldenDir);
+          throw new Error(formatTraceErrors(traceErrors, relativeGolden));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Trace comparison failed: ${message}`);
+      }
+    }
   }
 
   
