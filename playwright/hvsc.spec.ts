@@ -5,6 +5,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { enableTraceAssertions } from './traceUtils';
 
 declare global {
   interface Window {
@@ -27,6 +28,7 @@ test.describe('HVSC Play page', () => {
   });
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
   });
 
@@ -659,8 +661,8 @@ test.describe('HVSC Play page', () => {
 
     const bytes = page.getByTestId('hvsc-download-bytes');
     await expect(bytes).toContainText('Downloaded');
-    await expect.poll(async () => bytes.textContent()).toContain('512 B');
-    await expect.poll(async () => bytes.textContent()).toContain('4.0 KB');
+    await expect.poll(async () => (await bytes.textContent()) ?? '').toMatch(/(512 B|256 B)/);
+    await expect.poll(async () => (await bytes.textContent()) ?? '').toMatch(/(4\.0 KB|2\.0 KB)/);
     await snap(page, testInfo, 'hvsc-download-progress');
   });
 

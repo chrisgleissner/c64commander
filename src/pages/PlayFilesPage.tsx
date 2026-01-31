@@ -10,10 +10,11 @@ import { SelectableActionList, type ActionListItem, type ActionListMenuItem } fr
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
-import { useC64Category, useC64Connection, useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
+import { useActionTrace } from '@/hooks/useActionTrace';
 import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
@@ -44,6 +45,11 @@ import {
 } from '@/lib/sid/songlengthsDiscovery';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import { mergeAudioMixerOptions } from '@/lib/config/audioMixer';
+import {
+  AUDIO_MIXER_VOLUME_ITEMS,
+  SID_ADDRESSING_ITEMS,
+  SID_SOCKETS_ITEMS,
+} from '@/lib/config/configItems';
 import {
   buildEnabledSidMuteUpdates,
   buildEnabledSidUnmuteUpdates,
@@ -277,9 +283,21 @@ export default function PlayFilesPage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
-  const { data: audioMixerCategory } = useC64Category('Audio Mixer', status.isConnected || status.isConnecting);
-  const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
-  const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
+  const { data: audioMixerCategory } = useC64ConfigItems(
+    'Audio Mixer',
+    AUDIO_MIXER_VOLUME_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
+  const { data: sidSocketsCategory } = useC64ConfigItems(
+    'SID Sockets Configuration',
+    SID_SOCKETS_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
+  const { data: sidAddressingCategory } = useC64ConfigItems(
+    'SID Addressing',
+    SID_ADDRESSING_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
   const deviceInfoId = status.deviceInfo?.unique_id ?? null;
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -317,6 +335,7 @@ export default function PlayFilesPage() {
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const { limit: listPreviewLimit } = useListPreviewLimit();
   const isAndroid = getPlatform() === 'android';
+  const trace = useActionTrace('PlayFilesPage');
 
   const { flags, isLoaded } = useFeatureFlags();
   const hvscControlsEnabled = isLoaded && flags.hvsc_enabled;
@@ -381,6 +400,7 @@ export default function PlayFilesPage() {
   const volumeUpdateSeqRef = useRef(0);
   const reshuffleTimerRef = useRef<number | null>(null);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
+  const hasHydratedPlaylistRef = useRef(false);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -504,7 +524,7 @@ export default function PlayFilesPage() {
   const resolveSidVolumeItems = useCallback(async (forceRefresh = false) => {
     if (sidVolumeItems.length && !forceRefresh) return sidVolumeItems;
     try {
-      const data = await getC64API().getCategory('Audio Mixer');
+      const data = await getC64API().getConfigItems('Audio Mixer', AUDIO_MIXER_VOLUME_ITEMS);
       return extractAudioMixerItems(data as Record<string, unknown>).filter((item) => isSidVolumeName(item.name));
     } catch (error) {
       addErrorLog('Audio mixer lookup failed', { error: (error as Error).message });
@@ -1775,11 +1795,14 @@ export default function PlayFilesPage() {
       setCurrentIndex(restored.index);
     } catch {
       // Ignore invalid stored playlists.
+    } finally {
+      hasHydratedPlaylistRef.current = true;
     }
   }, [hydrateStoredPlaylist, playlistStorageKey, resolvedDeviceId]);
 
   useEffect(() => {
     if (typeof localStorage === 'undefined') return;
+    if (!hasHydratedPlaylistRef.current) return;
     const stored: StoredPlaylistState = {
       items: playlist.map((item) => ({
         source: item.request.source,
@@ -1865,7 +1888,7 @@ export default function PlayFilesPage() {
     }
   }, [applySonglengthsToItems, playItem, reportUserError]);
 
-  const handlePlay = useCallback(async () => {
+  const handlePlay = useCallback(trace(async function handlePlay() {
     if (!playlist.length) return;
     try {
       if (currentIndex < 0) {
@@ -1884,9 +1907,9 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }, [currentIndex, playItem, playlist, reportUserError, startPlaylist]);
+  }), [currentIndex, playItem, playlist, reportUserError, startPlaylist, trace]);
 
-  const handleStop = useCallback(async () => {
+  const handleStop = useCallback(trace(async function handleStop() {
     if (!isPlaying && !isPaused) return;
     const currentItem = playlist[currentIndex];
     const shouldReboot = currentItem?.category === 'disk';
@@ -1925,9 +1948,9 @@ export default function PlayFilesPage() {
     setDurationMs(undefined);
     setCurrentSubsongCount(null);
     trackStartedAtRef.current = null;
-  }, [currentIndex, isPaused, isPlaying, playlist, reportUserError, withTimeout]);
+  }), [currentIndex, isPaused, isPlaying, playlist, reportUserError, withTimeout, trace]);
 
-  const handlePauseResume = useCallback(async () => {
+  const handlePauseResume = useCallback(trace(async function handlePauseResume() {
     if (!isPlaying) return;
     const api = getC64API();
     try {
@@ -1975,7 +1998,7 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }, [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, buildEnabledSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, withTimeout]);
+  }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, buildEnabledSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, withTimeout, trace]);
 
   const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
     if (!volumeSteps.length || !sidVolumeItems.length) return;

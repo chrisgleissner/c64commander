@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest';
-import { applyHvscProgressEventToSummary, getDefaultHvscStatusSummary } from '@/lib/hvsc/hvscStatusStore';
+import { beforeEach, describe, expect, it } from 'vitest';
+import {
+  applyHvscProgressEventToSummary,
+  getDefaultHvscStatusSummary,
+  updateHvscStatusSummaryFromEvent,
+} from '@/lib/hvsc/hvscStatusStore';
 
 describe('hvsc status summary updates', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
   it('tracks incremental download progress', () => {
     const initial = getDefaultHvscStatusSummary();
     const summary = applyHvscProgressEventToSummary(initial, {
@@ -34,5 +41,46 @@ describe('hvsc status summary updates', () => {
     });
     expect(done.extraction.status).toBe('success');
     expect(done.download.status).toBe('success');
+  });
+
+  it('classifies download failures and stores error details', () => {
+    const initial = getDefaultHvscStatusSummary();
+    const summary = applyHvscProgressEventToSummary(initial, {
+      ingestionId: 'test',
+      stage: 'error',
+      message: 'Request failed',
+      errorCause: 'Connection refused',
+    }, 'download');
+
+    expect(summary.download.status).toBe('failure');
+    expect(summary.download.errorCategory).toBe('network');
+    expect(summary.download.errorMessage).toBe('Connection refused');
+  });
+
+  it('classifies extraction failures based on last stage', () => {
+    const initial = getDefaultHvscStatusSummary();
+    const summary = applyHvscProgressEventToSummary(initial, {
+      ingestionId: 'test',
+      stage: 'error',
+      message: 'Disk full',
+      errorCause: 'ENOSPC',
+    }, 'archive_extraction');
+
+    expect(summary.extraction.status).toBe('failure');
+    expect(summary.extraction.errorCategory).toBe('storage');
+  });
+
+  it('persists status updates to storage', () => {
+    const result = updateHvscStatusSummaryFromEvent({
+      ingestionId: 'test',
+      stage: 'download',
+      message: 'Downloading',
+      downloadedBytes: 10,
+      totalBytes: 20,
+    });
+
+    const stored = JSON.parse(localStorage.getItem('c64u_hvsc_status:v1') ?? '{}');
+    expect(stored.download?.downloadedBytes).toBe(10);
+    expect(result.download.downloadedBytes).toBe(10);
   });
 });

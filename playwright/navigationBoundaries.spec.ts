@@ -6,6 +6,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -197,6 +198,7 @@ test.describe('Navigation boundaries and edge cases', () => {
   });
 
   test('disk rotate previous mounts previous disk in group', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.addInitScript(() => {
       localStorage.setItem('c64u_disk_library:TEST-123', JSON.stringify({
         disks: [
@@ -229,12 +231,15 @@ test.describe('Navigation boundaries and edge cases', () => {
     await disk2Row.getByRole('button', { name: /Mount/i }).click();
     await snap(page, testInfo, 'mount-dialog-open');
 
+    await clearTraces(page);
     await page.getByRole('dialog').getByRole('button', { name: /Drive A/i }).click();
     await snap(page, testInfo, 'disk2-mounted');
 
     await expect.poll(() =>
       server.requests.some(req => req.url.includes('Disk%202.d64') && req.url.includes('/v1/drives/a:mount'))
     ).toBe(true);
+
+    await expectRestTraceSequence(page, testInfo, '/v1/drives/a:mount');
 
     const prevButton = page.getByRole('button', { name: /Prev|Previous/i }).first();
     

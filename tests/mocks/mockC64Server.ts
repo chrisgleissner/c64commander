@@ -105,6 +105,7 @@ export async function createMockC64Server(
   let reachable = true;
   let faultMode: FaultMode = 'none';
   let latencyMs: number | null = null;
+  let responseQueue = Promise.resolve();
   
   // Use YAML as source of truth if no initial state provided
   const yamlState = Object.keys(initial).length === 0 ? await buildStateFromYaml() : {};
@@ -136,14 +137,19 @@ export async function createMockC64Server(
       }
       const timeoutDelayMs = Math.max(latencyMs ?? 0, 1500);
       const delayMs = faultMode === 'timeout' ? timeoutDelayMs : faultMode === 'slow' ? latencyMs ?? 300 : latencyMs ?? 0;
-      if (delayMs > 0) {
-        setTimeout(() => {
-          if (res.writableEnded) return;
-          handler();
-        }, delayMs);
-      } else {
-        handler();
-      }
+      responseQueue = responseQueue.then(() => new Promise<void>((resolve) => {
+        const run = () => {
+          if (!res.writableEnded) {
+            handler();
+          }
+          resolve();
+        };
+        if (delayMs > 0) {
+          setTimeout(run, delayMs);
+        } else {
+          run();
+        }
+      }));
     };
 
     const sendJson = (status: number, body: any) => {

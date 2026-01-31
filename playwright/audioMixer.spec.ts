@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowVisualOverflow } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const getSlider = (page: Page, id: string) => page.getByTestId(`audio-mixer-slider-${id}`);
 const getValue = (page: Page, id: string) => page.getByTestId(`audio-mixer-value-${id}`);
@@ -41,6 +42,7 @@ test.describe('Audio Mixer volumes', () => {
   });
 
   test('changing one volume does not change other sliders', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     const initialState = server.getState()['Audio Mixer'];
     const requests: Array<{ method: string; url: string }> = [];
     await page.route('**/v1/configs**', async (route: any) => {
@@ -62,6 +64,7 @@ test.describe('Audio Mixer volumes', () => {
     const slider = getSlider(page, 'vol-ultisid-1');
     const sliderBox = await slider.boundingBox();
     if (sliderBox) {
+      await clearTraces(page);
       await slider.click({ position: { x: sliderBox.width * 0.8, y: sliderBox.height / 2 } });
     }
 
@@ -79,6 +82,7 @@ test.describe('Audio Mixer volumes', () => {
     await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2'].value).toBe(initialState['Vol UltiSid 2'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1'].value).toBe(initialState['Vol Socket 1'].value);
     await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 2'].value).toBe(initialState['Vol Socket 2'].value);
+    await expectRestTraceSequence(page, testInfo, /\/v1\/configs\/Audio%20Mixer\/Vol%20UltiSid%201/);
     await snap(page, testInfo, 'updates-sent');
   });
 

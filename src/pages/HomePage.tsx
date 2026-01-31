@@ -15,7 +15,7 @@ import {
   Download,
   FolderOpen
 } from 'lucide-react';
-import { useC64Category, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { AppBar } from '@/components/AppBar';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
@@ -33,13 +33,23 @@ import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { buildSidStatusEntries } from '@/lib/config/sidStatus';
+import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from '@/lib/config/configItems';
+import { useActionTrace } from '@/hooks/useActionTrace';
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
-  const { data: sidSocketsCategory } = useC64Category('SID Sockets Configuration', status.isConnected || status.isConnecting);
-  const { data: sidAddressingCategory } = useC64Category('SID Addressing', status.isConnected || status.isConnecting);
+  const { data: sidSocketsCategory } = useC64ConfigItems(
+    'SID Sockets Configuration',
+    SID_SOCKETS_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
+  const { data: sidAddressingCategory } = useC64ConfigItems(
+    'SID Addressing',
+    SID_ADDRESSING_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
   const controls = useC64MachineControl();
   const {
     appConfigs,
@@ -52,6 +62,7 @@ export default function HomePage() {
     renameAppConfig,
     deleteAppConfig,
   } = useAppConfigState();
+  const trace = useActionTrace('HomePage');
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
@@ -79,7 +90,7 @@ export default function HomePage() {
     }
   };
 
-  const handleAction = async (action: () => Promise<unknown>, successMessage: string) => {
+  const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
       await action();
       toast({ title: successMessage });
@@ -92,9 +103,9 @@ export default function HomePage() {
         context: { action: successMessage },
       });
     }
-  };
+  });
 
-  const handleSaveToApp = async () => {
+  const handleSaveToApp = trace(async function handleSaveToApp() {
     const trimmed = saveName.trim();
     if (!trimmed) {
       toast({ title: 'Name required', description: 'Enter a config name first.' });
@@ -119,9 +130,9 @@ export default function HomePage() {
         context: { name: trimmed },
       });
     }
-  };
+  });
 
-  const handleLoadFromApp = async (configId: string) => {
+  const handleLoadFromApp = trace(async function handleLoadFromApp(configId: string) {
     const entry = appConfigs.find((config) => config.id === configId);
     if (!entry) return;
     setApplyingConfigId(configId);
@@ -140,7 +151,7 @@ export default function HomePage() {
     } finally {
       setApplyingConfigId(null);
     }
-  };
+  });
 
   const resolveDrive = (key: 'a' | 'b') =>
     drivesData?.drives?.find((entry) => entry[key])?.[key];

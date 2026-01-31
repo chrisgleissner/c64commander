@@ -3,6 +3,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 import { saveCoverageFromPage } from './withCoverage';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -25,6 +26,7 @@ test.describe('Config visibility across modes', () => {
   });
 
   test('config categories and values render in demo mode', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -73,12 +75,22 @@ test.describe('Config visibility across modes', () => {
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
     await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
 
+    await clearTraces(page);
+
     const selectTrigger = page.getByLabel('System Mode select');
     await selectTrigger.click();
     await page.getByRole('option', { name: /^NTSC$/ }).click();
 
     const checkbox = page.getByLabel('HDMI Scan lines checkbox');
     await checkbox.click();
+
+    const configItemBase = '/v1/configs/U64%20Specific%20Settings';
+    const { requestEvent } = await expectRestTraceSequence(
+      page,
+      testInfo,
+      new RegExp(`${configItemBase}/(System%20Mode|HDMI%20Scan%20lines)`),
+    );
+    expect((requestEvent.data as { target?: string }).target).toBe('internal-mock');
 
     await expect.poll(() => demoServer.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');
     await expect.poll(() => demoServer.getState()['U64 Specific Settings']['HDMI Scan lines'].value).toBe('Disabled');

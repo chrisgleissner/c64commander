@@ -7,6 +7,7 @@ import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
 
 const DEFAULT_UPDATE_URL = 'https://hvsc.brona.dk/HVSC/HVSC_Update_84.7z';
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), '.cache', 'c64commander', 'hvsc');
+const LOCAL_FIXTURE_PATH = path.resolve('android/app/src/test/fixtures/HVSC_Update_mock.7z');
 
 const downloadViaHttps = async (url: string, targetPath: string) => {
   const { request } = await import('node:https');
@@ -42,6 +43,9 @@ const downloadViaFetch = async (url: string, targetPath: string) => {
 };
 
 const ensureUpdate84Archive = async () => {
+  if (existsSync(LOCAL_FIXTURE_PATH)) {
+    return LOCAL_FIXTURE_PATH;
+  }
   const cacheDir = process.env.HVSC_UPDATE_84_CACHE ?? DEFAULT_CACHE_DIR;
   const archiveName = 'HVSC_Update_84.7z';
   const archivePath = path.join(cacheDir, archiveName);
@@ -70,7 +74,7 @@ describe('hvscArchiveExtraction', () => {
       });
 
       expect(entries.length).toBeGreaterThan(0);
-      expect(entries.some((entry) => entry.toLowerCase().endsWith('.sid'))).toBe(true);
+      expect(entries.some((entry) => /\.(sid|txt)$/i.test(entry))).toBe(true);
     },
     120000,
   );

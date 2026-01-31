@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -200,6 +201,7 @@ test.describe('Item Selection Dialog UX', () => {
   });
 
   test('Play page: C64 Ultimate full flow adds items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
 
@@ -209,6 +211,7 @@ test.describe('Item Selection Dialog UX', () => {
 
     // Select C64 Ultimate source
     const dialog = page.getByRole('dialog');
+    await clearTraces(page);
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'c64u-selected');
@@ -218,6 +221,11 @@ test.describe('Item Selection Dialog UX', () => {
     await openRemoteFolder(dialog, 'Usb0');
     await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'usb2-opened');
+
+    await expectFtpTraceSequence(page, testInfo, (event) => {
+      const data = event.data as { operation?: string; path?: string };
+      return data.operation === 'list' && (data.path ?? '').includes('/Usb0');
+    });
 
     // Select a folder (row with Open action)
     const firstCheckbox = page

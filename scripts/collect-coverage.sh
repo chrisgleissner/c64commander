@@ -19,7 +19,8 @@ VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
 
 # 4. Run E2E tests (which will collect coverage via Istanbul instrumentation)
 echo "==> Running E2E tests with coverage..."
-VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 PLAYWRIGHT_SKIP_BUILD=1 npm run test:e2e
+VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 TRACE_ASSERTIONS_DEFAULT=0 PLAYWRIGHT_SKIP_BUILD=1 \
+  npx playwright test --grep-invert @screenshots
 
 # 5. Generate E2E coverage report
 echo "==> Generating E2E coverage report..."

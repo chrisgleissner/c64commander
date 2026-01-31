@@ -7,6 +7,7 @@ import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence, findTraceEvent } from './traceUtils';
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
@@ -102,12 +103,15 @@ test.describe('Playback file browser', () => {
   });
 
   test('playback sends runner request to real device mock', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
     ]);
 
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
+
+    await clearTraces(page);
 
     await page.getByTestId('playlist-play').click();
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
@@ -116,6 +120,11 @@ test.describe('Playback file browser', () => {
       .reverse()
       .find((req) => req.url.startsWith('/v1/runners:sidplay'));
     expect(lastRequest?.method).toBe('PUT');
+
+    const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
+    const decisionEvent = findTraceEvent(related, 'backend-decision');
+    expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
     await snap(page, testInfo, 'play-requested');
   });
 
@@ -153,6 +162,18 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/info')));
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/Audio%20Mixer')).length >= 4
+    );
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration')).length >= 2
+    );
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Addressing')).length >= 2
+    );
+
+    await clearTraces(page);
     server.setFaultMode('refused');
     await page.getByTestId('playlist-play').click();
     await expect(page.getByText('Playback failed', { exact: true })).toBeVisible();
@@ -167,12 +188,15 @@ test.describe('Playback file browser', () => {
   });
 
   test('pause then stop never hangs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
     ]);
 
     await page.goto('/play');
     await snap(page, testInfo, 'pause-stop-open');
+
+    await clearTraces(page);
 
     await page.getByTestId('playlist-play').click();
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
@@ -184,10 +208,14 @@ test.describe('Playback file browser', () => {
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/machine:reset')));
 
     await expect(page.getByTestId('playlist-play')).toContainText('Play');
+
+    await expectRestTraceSequence(page, testInfo, '/v1/machine:pause');
+    await expectRestTraceSequence(page, testInfo, '/v1/machine:reset');
     await snap(page, testInfo, 'pause-stop-complete');
   });
 
   test('volume slider updates during playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
     ]);
@@ -198,9 +226,11 @@ test.describe('Playback file browser', () => {
 
     const slider = page.getByTestId('volume-slider').getByRole('slider');
     await slider.focus();
+    await clearTraces(page);
     await slider.press('ArrowRight');
 
     await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
+    await expectRestTraceSequence(page, testInfo, '/v1/configs');
     await snap(page, testInfo, 'volume-update');
   });
 
@@ -225,7 +255,18 @@ test.describe('Playback file browser', () => {
     });
     await seedUiMocks(page, server.baseUrl);
 
+    const initialResponses = [
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%201')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%202')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%201')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%202')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%201%20Address')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%202%20Address')),
+    ];
     await page.goto('/play');
+    await Promise.all(initialResponses);
     await page.getByTestId('volume-mute').click();
     await waitForRequests(() => server.requests.some((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')));
 

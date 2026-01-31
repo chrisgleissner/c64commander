@@ -13,7 +13,7 @@
 - **Web E2E**: Playwright against Vite preview (`npm run test:e2e` / `npm run screenshots`), with mobile device emulation (“android-phone”, “android-tablet”) but still web-only (see playwright.config.ts).
 - **Playwright evidence**: traces, videos, screenshots, and metadata are collected and validated (playwright/testArtifacts.ts, scripts/validate-playwright-evidence.mjs).
 - **Playwright fuzz**: nightly chaos fuzz in web-only mode with `VITE_FUZZ_MODE=1` (see .github/workflows/fuzz-chaos.yaml, scripts/run-fuzz.mjs, src/lib/fuzz/fuzzMode.ts).
-- **Android tests**: Gradle JVM unit tests + JaCoCo coverage (`./gradlew testDebugUnitTest`) in CI (see .github/workflows/android-apk.yaml). No Android instrumentation tests are executed in CI. local-build.sh supports `--android-tests` for connected devices/emulators.
+- **Android tests**: Gradle JVM unit tests + JaCoCo coverage (`./gradlew testDebugUnitTest`) in CI (see .github/workflows/android-apk.yaml). No Android instrumentation tests are executed in CI. build supports `--android-tests` for connected devices/emulators.
 - **Mocking strategy**:
   - Web E2E uses Node-based mock servers (`tests/mocks/mockC64Server.ts`) and injects configuration via localStorage (`playwright/demoMode.spec.ts`, `playwright/connectionSimulation.spec.ts`, `playwright/uiMocks.ts`).
   - Demo-mode mock server for native is via `MockC64U` Capacitor plugin (android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt), but this is not exercised in Playwright.
@@ -27,8 +27,8 @@
 - `npm run test:e2e:ci` (E2E + screenshots + evidence validation)
 - `npm run screenshots` (Playwright screenshots)
 - `npm run cap:build` (web build + Capacitor sync)
-- `./local-build.sh --test-e2e` (local E2E flow)
-- `./local-build.sh --android-tests` (connected Android instrumentation tests; requires device/emulator)
+- `./build --test-e2e` (local E2E flow)
+- `./build --android-tests` (connected Android instrumentation tests; requires device/emulator)
 - `./scripts/android-emulator.sh` (provisions and starts Android emulator)
 - `./scripts/smoke-android-emulator.sh` (Android emulator smoke runner entrypoint)
 - `npm run proxy` (local C64U proxy server)
@@ -41,7 +41,7 @@
   - CI runs Playwright in web mode and Android JVM unit tests only. **No Android emulator** or UI tests executed.
 - .github/workflows/fuzz-chaos.yaml
   - Nightly Playwright chaos fuzz for web using `VITE_FUZZ_MODE`.
-- local-build.sh
+- build
   - Provides local-only hooks for Android instrumentation tests and emulator startup, but not used in CI.
 - scripts/android-emulator.sh
   - End-to-end emulator setup script (not wired into CI).
@@ -71,7 +71,7 @@
 - **Platform mismatch**: Playwright runs a Vite preview web build on localhost. Real device discovery in native uses `CapacitorHttp`, while Playwright uses `fetch` (src/lib/connection/connectionManager.ts, src/lib/c64api.ts). Any Android-specific DNS, routing, or permission issues are invisible to web tests.
 - **Mock-only discovery path**: E2E tests use Node mock servers and localStorage seeding to drive discovery (playwright/demoMode.spec.ts, playwright/connectionSimulation.spec.ts, tests/mocks/mockC64Server.ts). This ensures deterministic outcomes but does not validate real-device discovery semantics or fallback decision logic under real network conditions.
 - **Demo-mode bias in tests**: Many E2E tests shorten the startup discovery window and enable automatic demo mode. This can mask scenarios where a real device becomes reachable slightly later, causing false “demo fallback” behavior to go undetected (src/lib/config/appSettings.ts, playwright/connectionSimulation.spec.ts).
-- **No Android runtime validation**: CI does not run an emulator or connected device tests. Even locally, instrumentation tests are optional and require manual setup (local-build.sh, scripts/android-emulator.sh). As a result, background/foreground lifecycle and Android network stack behavior are untested.
+- **No Android runtime validation**: CI does not run an emulator or connected device tests. Even locally, instrumentation tests are optional and require manual setup (build, scripts/android-emulator.sh). As a result, background/foreground lifecycle and Android network stack behavior are untested.
 - **Observability gap for native issues**: Playwright collects traces/screenshots/videos for the web context (playwright/testArtifacts.ts), but there is no Android logcat capture, native plugin logging, or Capacitor bridge telemetry attached to CI artifacts.
 - **No LAN environment control**: Tests execute on localhost with mock servers, not on a realistic LAN. Device discovery behavior (e.g., DNS for `c64u`, local hostname resolution, or mDNS) is not validated.
 

@@ -16,6 +16,10 @@ vi.mock('@capacitor/core', () => ({
     readFile: pickerMocks.readFile,
     readFileFromTree: pickerMocks.readFileFromTree,
   }),
+  Capacitor: {
+    getPlatform: vi.fn(() => 'web'),
+    isNativePlatform: vi.fn(() => false),
+  },
 }));
 
 vi.mock('@/lib/native/platform', () => ({

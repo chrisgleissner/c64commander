@@ -10,6 +10,9 @@ on:
 permissions:
   contents: write
 
+env:
+  CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   web-unit:
     name: Web | Unit tests (coverage)
@@ -20,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -64,6 +69,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -136,6 +143,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -179,6 +188,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -281,6 +292,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -361,8 +374,17 @@ jobs:
           COVERAGE_MIN: "80"
         run: node scripts/check-coverage-threshold.mjs
 
+      - name: Enforce coverage paths
+        env:
+          MIN_SRC_FILES: "50"
+          MIN_SRC_LINES: "2000"
+        run: node scripts/check-lcov-paths.mjs
+
       - name: Upload web coverage to Codecov
         uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SHA: ${{ env.CI_SHA }}
+          CC_SHA: ${{ env.CI_SHA }}
         with:
           files: ./coverage/lcov-merged.info
           flags: unittests,e2etests
@@ -386,6 +408,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -517,6 +541,9 @@ jobs:
       - name: Upload Android coverage to Codecov
         if: always()
         uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SHA: ${{ env.CI_SHA }}
+          CC_SHA: ${{ env.CI_SHA }}
         with:
           files: ${{ steps.normalize_android_coverage.outputs.report }}
           flags: android
@@ -533,6 +560,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -669,6 +698,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
 
       - name: Resolve app version
         run: |

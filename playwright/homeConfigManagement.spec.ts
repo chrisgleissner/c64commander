@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowWarnings } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -110,7 +111,7 @@ test.describe('Home page app config management', () => {
   test('save config with duplicate name shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for duplicate config name.');
     
-    await page.addInitScript(({ baseUrl }) => {
+    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'existing-id',
         name: 'Existing Config',
@@ -146,7 +147,8 @@ test.describe('Home page app config management', () => {
   });
 
   test('load config applies values to server @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.addInitScript(({ baseUrl }) => {
+    enableTraceAssertions(testInfo);
+    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'test-config-id',
         name: 'Test Load Config',
@@ -169,6 +171,7 @@ test.describe('Home page app config management', () => {
     await openLoadDialog(page);
     await snap(page, testInfo, 'load-dialog-open');
 
+    await clearTraces(page);
     await page.getByRole('dialog').getByText('Test Load Config').click();
     await snap(page, testInfo, 'config-selected');
 
@@ -179,11 +182,14 @@ test.describe('Home page app config management', () => {
       server.requests.some(req => req.url.includes('/v1/configs') && req.method === 'POST')
     ).toBe(true);
 
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/configs');
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
+
     await snap(page, testInfo, 'config-applied');
   });
 
   test('rename config updates localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.addInitScript(({ baseUrl }) => {
+    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'rename-config-id',
         name: 'Old Name',
@@ -223,7 +229,7 @@ test.describe('Home page app config management', () => {
   });
 
   test('delete config removes from localStorage @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.addInitScript(({ baseUrl }) => {
+    await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'delete-config-id',
         name: 'Config to Delete',

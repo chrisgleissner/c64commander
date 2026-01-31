@@ -12,7 +12,7 @@ import {
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
-import { getActiveBaseUrl, updateHasChanges } from '@/lib/config/appConfigStore';
+import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from '@/lib/config/appConfigStore';
 import { useConnectionState } from '@/hooks/useConnectionState';
 
 export interface ConnectionStatus {
@@ -39,9 +39,9 @@ export function useC64Connection() {
 
   const { data: deviceInfo, error, isLoading, refetch } = useQuery({
     queryKey: ['c64-info', baseUrl],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const api = getC64API();
-      return api.getInfo();
+      return api.getInfo({ timeoutMs: 3000, signal });
     },
     enabled: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
     retry: 1,
@@ -127,6 +127,41 @@ export function useC64Category(category: string, enabled = true) {
       return api.getCategory(category);
     },
     enabled: enabled && !!category,
+    staleTime: 30000,
+  });
+}
+
+export function useC64ConfigItems(category: string, items: string[], enabled = true) {
+  const itemKey = items.join('|');
+  const snapshot = loadInitialSnapshot(getC64APIConfigSnapshot().baseUrl);
+  const placeholderData = (() => {
+    if (!snapshot?.data?.[category]) return undefined;
+    const categoryPayload = snapshot.data[category] as Record<string, unknown>;
+    const categoryBlock = (categoryPayload as Record<string, unknown>)[category] ?? categoryPayload;
+    const itemsBlock = (categoryBlock as { items?: Record<string, unknown> }).items ?? categoryBlock;
+    if (!itemsBlock || typeof itemsBlock !== 'object') return undefined;
+    const selected: Record<string, unknown> = {};
+    items.forEach((item) => {
+      if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
+        selected[item] = (itemsBlock as Record<string, unknown>)[item];
+      }
+    });
+    if (!Object.keys(selected).length) return undefined;
+    return {
+      [category]: {
+        items: selected,
+      },
+      errors: [],
+    } as ConfigResponse;
+  })();
+  return useQuery({
+    queryKey: ['c64-config-items', category, itemKey],
+    queryFn: async () => {
+      const api = getC64API();
+      return api.getConfigItems(category, items);
+    },
+    enabled: enabled && !!category && items.length > 0,
+    placeholderData,
     staleTime: 30000,
   });
 }

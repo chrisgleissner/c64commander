@@ -5,6 +5,12 @@ import { discoverConnection, initializeConnectionManager } from '@/lib/connectio
 import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from '@/lib/c64api';
 import { loadBackgroundRediscoveryIntervalMs } from '@/lib/config/appSettings';
 
+const allowBackgroundRediscovery = () => {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES !== '1') return true;
+  if (typeof window === 'undefined') return false;
+  return (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery === true;
+};
+
 const invalidateC64Queries = (queryClient: ReturnType<typeof useQueryClient>) => {
   queryClient.invalidateQueries({
     predicate: (query) =>
@@ -37,6 +43,11 @@ export function ConnectionController() {
     };
 
     if (state !== 'DEMO_ACTIVE' && state !== 'OFFLINE_NO_DEMO') {
+      clearTimer();
+      return;
+    }
+
+    if (!allowBackgroundRediscovery()) {
       clearTimer();
       return;
     }
@@ -87,6 +98,7 @@ export function ConnectionController() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { key?: string } | undefined;
       if (detail?.key !== 'c64u_background_rediscovery_interval_ms') return;
+      if (!allowBackgroundRediscovery()) return;
       if (state !== 'DEMO_ACTIVE' && state !== 'OFFLINE_NO_DEMO') return;
       // Restart timer with new interval.
       if (backgroundTimerRef.current) {

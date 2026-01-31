@@ -5,6 +5,8 @@ import { addErrorLog, addLog } from '@/lib/logging';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
+import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
+import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
 
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
@@ -18,6 +20,62 @@ const isNetworkFailureMessage = (message: string) =>
   /failed to fetch|networkerror|network request failed|unknown host|enotfound|ename_not_found|dns/i.test(message);
 const resolveHostErrorMessage = (message: string) =>
   (isDnsFailure(message) ? 'Host unreachable (DNS)' : 'Host unreachable');
+
+const normalizeUrlPath = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+};
+
+const isTestProbeEnabled = () => import.meta.env?.VITE_ENABLE_TEST_PROBES === '1';
+let requestQueue = Promise.resolve();
+
+const runSerializedRequest = async <T>(handler: () => Promise<T>): Promise<T> => {
+  if (!isTestProbeEnabled()) {
+    return await handler();
+  }
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const previous = requestQueue;
+  requestQueue = previous.then(() => gate);
+  await previous;
+  try {
+    return await handler();
+  } finally {
+    release();
+  }
+};
+
+const extractRequestBody = (body: unknown) => {
+  if (!body) return null;
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return body;
+    }
+  }
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return null;
+  if (typeof Blob !== 'undefined' && body instanceof Blob) return null;
+  if (body instanceof ArrayBuffer) return null;
+  if (ArrayBuffer.isView(body)) return null;
+  return body as unknown;
+};
+
+const readResponseBody = async (response: Response) => {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (!contentType.includes('application/json')) return null;
+  try {
+    return await response.clone().json();
+  } catch {
+    return null;
+  }
+};
 
 const sanitizeHostInput = (input?: string) => {
   const raw = input?.trim() ?? '';
@@ -81,6 +139,21 @@ const isLocalProxy = (baseUrl: string) => {
 
 const isNativePlatform = () => {
   try {
+    const override = (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean; __c64uAllowNativePlatform?: boolean })
+      .__C64U_NATIVE_OVERRIDE__
+      ?? (typeof window !== 'undefined'
+        ? (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__
+        : undefined)
+      ?? (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform;
+    if (typeof override === 'boolean') {
+      return override;
+    }
+    if (typeof process !== 'undefined') {
+      const env = (process as { env?: Record<string, string | undefined> }).env ?? {};
+      if (env.VITEST === 'true' || env.NODE_ENV === 'test') {
+        return false;
+      }
+    }
     return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
   } catch {
     return false;
@@ -201,12 +274,11 @@ export class C64API {
 
   private async parseResponseJson<T>(response: Response): Promise<T> {
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-    const text = await response.text();
-    if (!text || !contentType.includes('application/json')) {
+    if (!contentType.includes('application/json')) {
       return { errors: [] } as T;
     }
     try {
-      return JSON.parse(text) as T;
+      return await response.clone().json() as T;
     } catch (error) {
       addErrorLog('C64 API parse failed', { error: (error as Error).message });
       return { errors: [] } as T;
@@ -228,7 +300,7 @@ export class C64API {
 
   private async request<T>(
     path: string,
-    options: (RequestInit & { timeoutMs?: number }) = {}
+    options: (RequestInit & { timeoutMs?: number; __c64uTraceSuppressed?: boolean }) = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -242,191 +314,302 @@ export class C64API {
     const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
     let status: number | 'error' = 'error';
     const timeoutMs = options.timeoutMs;
-    const requestOptions = { ...options };
+    const requestOptions = { ...options } as RequestInit & { timeoutMs?: number; __c64uTraceSuppressed?: boolean };
+    requestOptions.__c64uTraceSuppressed = true;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
-    try {
-      if (shouldBlockSmokeMutation(method)) {
-        addErrorLog('Smoke mode blocked mutating request', {
-          path,
-          url,
-          method,
-          baseUrl,
-          deviceHost: this.deviceHost,
-        });
-        console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url }));
-        throw new Error('Smoke mode blocked mutating request');
-      }
-      if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
-        addErrorLog('Fuzz mode blocked real device request', {
-          path,
-          url,
-          baseUrl,
-          deviceHost: this.deviceHost,
-        });
-        const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
-        blocked.__fuzzBlocked = true;
-        throw blocked;
-      }
-      if (isNativePlatform()) {
-        if (isSmokeModeEnabled()) {
-          console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, path, url }));
-        }
-        const body = requestOptions.body ? requestOptions.body : undefined;
-        const requestPromise = CapacitorHttp.request({
-          url,
-          method,
-          headers,
-          data: typeof body === 'string' ? JSON.parse(body) : body,
-        });
-        const nativeResponse = timeoutMs
-          ? await Promise.race([
-            requestPromise,
-            new Promise<never>((_, reject) => {
-              window.setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
-            }),
-          ])
-          : await requestPromise;
-
-        status = nativeResponse.status;
-        if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
-          throw new Error(`HTTP ${nativeResponse.status}`);
-        }
-
-        if (typeof nativeResponse.data === 'string') {
-          try {
-            return JSON.parse(nativeResponse.data) as T;
-          } catch (error) {
-            addErrorLog('C64 API parse failed', { error: (error as Error).message });
-            return { errors: [] } as T;
-          }
-        }
-
-        return nativeResponse.data as T;
-      }
-
-      const controller = timeoutMs ? new AbortController() : null;
-      const timeoutId = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : null;
-      const response = await fetch(url, {
-        ...requestOptions,
+    return runSerializedRequest(() => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+      const bodyPayload = extractRequestBody(requestOptions.body);
+      recordRestRequest(action, {
+        method,
+        url,
+        normalizedUrl: normalizeUrlPath(url),
         headers,
-        ...(controller ? { signal: controller.signal } : {}),
+        body: bodyPayload,
       });
-      if (timeoutId) window.clearTimeout(timeoutId);
-
-      status = response.status;
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      return this.parseResponseJson<T>(response);
-    } catch (error) {
-      const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
-      const rawMessage = (error as Error).message || 'Request failed';
-      const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
-      const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-      const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
-      if (!fuzzBlocked) {
-        addErrorLog('C64 API request failed', {
-          path,
-          url,
-          error: normalizedError,
-          rawError: rawMessage,
-          errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
-        });
-      }
-      if (isAbort || isNetworkFailure) {
-        throw new Error(resolveHostErrorMessage(rawMessage));
-      }
-      throw error;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
-    }
-  }
-
-  private async fetchWithTimeout(url: string, options: RequestInit, timeoutMs?: number): Promise<Response> {
-    const body = options.body;
-    const shouldUseWebFetch =
-      isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
-
-    if (isNativePlatform() && !shouldUseWebFetch) {
-      const headers = (options.headers as Record<string, string>) || {};
-      const method = (options.method || 'GET').toString().toUpperCase();
-      let data: unknown = undefined;
-
-      if (isSmokeModeEnabled()) {
-        console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, url }));
-      }
-
-      if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
-        const buffer = await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
-        data = new Uint8Array(buffer);
-      } else if (body instanceof ArrayBuffer) {
-        data = new Uint8Array(body);
-      } else if (ArrayBuffer.isView(body)) {
-        data = new Uint8Array(body.buffer);
-      } else if (typeof body === 'string') {
-        data = body;
-      } else if (body) {
-        data = body;
-      }
+      let responseRecorded = false;
 
       try {
-        const requestPromise = CapacitorHttp.request({
-          url,
-          method,
-          headers,
-          data,
-        });
-        const nativeResponse = timeoutMs
-          ? await Promise.race([
-            requestPromise,
-            new Promise<never>((_, reject) => {
-              window.setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
-            }),
-          ])
-          : await requestPromise;
-
-        const responseHeaders = new Headers();
-        if (nativeResponse.headers) {
-          Object.entries(nativeResponse.headers).forEach(([key, value]) => {
-            if (typeof value === 'string') responseHeaders.set(key, value);
+        if (shouldBlockSmokeMutation(method)) {
+          addErrorLog('Smoke mode blocked mutating request', {
+            path,
+            url,
+            method,
+            baseUrl,
+            deviceHost: this.deviceHost,
           });
+          console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url }));
+          throw new Error('Smoke mode blocked mutating request');
+        }
+        if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
+          addErrorLog('Fuzz mode blocked real device request', {
+            path,
+            url,
+            baseUrl,
+            deviceHost: this.deviceHost,
+          });
+          const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
+          blocked.__fuzzBlocked = true;
+          throw blocked;
+        }
+        if (isNativePlatform()) {
+          if (isSmokeModeEnabled()) {
+            console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, path, url }));
+          }
+          const body = requestOptions.body ? requestOptions.body : undefined;
+          const requestPromise = CapacitorHttp.request({
+            url,
+            method,
+            headers,
+            data: typeof body === 'string' ? JSON.parse(body) : body,
+          });
+          const nativeResponse = timeoutMs
+            ? await Promise.race([
+              requestPromise,
+              new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+              }),
+            ])
+            : await requestPromise;
+
+          status = nativeResponse.status;
+          if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
+            const err = new Error(`HTTP ${nativeResponse.status}`);
+            const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+            recordRestResponse(action, { status: nativeResponse.status, body: null, durationMs, error: err });
+            recordTraceError(action, err);
+            responseRecorded = true;
+            throw err;
+          }
+
+          if (typeof nativeResponse.data === 'string') {
+            try {
+              const parsed = JSON.parse(nativeResponse.data) as T;
+              const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+              recordRestResponse(action, { status: nativeResponse.status, body: parsed, durationMs, error: null });
+              responseRecorded = true;
+              return parsed;
+            } catch (error) {
+              addErrorLog('C64 API parse failed', { error: (error as Error).message });
+              const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+              recordRestResponse(action, { status: nativeResponse.status, body: { errors: [] }, durationMs, error: null });
+              responseRecorded = true;
+              return { errors: [] } as T;
+            }
+          }
+
+          const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+          recordRestResponse(action, { status: nativeResponse.status, body: nativeResponse.data, durationMs, error: null });
+          responseRecorded = true;
+          return nativeResponse.data as T;
         }
 
-        const bodyText = typeof nativeResponse.data === 'string'
-          ? nativeResponse.data
-          : JSON.stringify(nativeResponse.data ?? { errors: [] });
-        return new Response(bodyText, { status: nativeResponse.status, headers: responseHeaders });
+        const outerSignal = requestOptions.signal;
+        const controller = timeoutMs ? new AbortController() : null;
+        const abortFromOuter = () => controller?.abort();
+        if (outerSignal && controller) {
+          if (outerSignal.aborted) {
+            controller.abort();
+          } else {
+            outerSignal.addEventListener('abort', abortFromOuter, { once: true });
+          }
+        }
+        const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+        const signal = controller ? controller.signal : outerSignal;
+        const responsePromise = fetch(url, {
+          ...requestOptions,
+          headers,
+          ...(signal ? { signal } : {}),
+        });
+        let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
+        const timeoutPromise = timeoutMs
+          ? new Promise<never>((_, reject) => {
+            timeoutPromiseId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+          })
+          : null;
+        let response: Response;
+        try {
+          response = timeoutPromise
+            ? await Promise.race([responsePromise, timeoutPromise])
+            : await responsePromise;
+        } finally {
+          if (timeoutId) clearTimeout(timeoutId);
+          if (outerSignal && controller) {
+            outerSignal.removeEventListener('abort', abortFromOuter);
+          }
+          if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
+        }
+
+        status = response.status;
+        const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+        if (!response.ok) {
+          const responseBody = await readResponseBody(response);
+          const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
+          recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: err });
+          recordTraceError(action, err);
+          responseRecorded = true;
+          throw err;
+        }
+
+        const parsedBody = await this.parseResponseJson<T>(response);
+        recordRestResponse(action, { status: response.status, body: parsedBody, durationMs, error: null });
+        responseRecorded = true;
+
+        return parsedBody;
       } catch (error) {
+        const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
         const rawMessage = (error as Error).message || 'Request failed';
         const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
         const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+        const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
+        const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+        if (!responseRecorded) {
+          recordRestResponse(action, { status: status === 'error' ? null : status, body: null, durationMs, error: error as Error });
+          recordTraceError(action, error as Error);
+        }
+        if (!fuzzBlocked) {
+          addErrorLog('C64 API request failed', {
+            path,
+            url,
+            error: normalizedError,
+            rawError: rawMessage,
+            errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
+          });
+        }
         if (isAbort || isNetworkFailure) {
           throw new Error(resolveHostErrorMessage(rawMessage));
         }
         throw error;
+      } finally {
+        this.logRestCall(method, path, status, startedAt);
       }
-    }
+    }));
+  }
 
-    const controller = timeoutMs ? new AbortController() : null;
-    const timeoutId = timeoutMs ? window.setTimeout(() => controller?.abort(), timeoutMs) : null;
-    try {
-      return await fetch(url, {
-        ...options,
-        ...(controller ? { signal: controller.signal } : {}),
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit & { __c64uTraceSuppressed?: boolean },
+    timeoutMs?: number,
+  ): Promise<Response> {
+    options.__c64uTraceSuppressed = true;
+    const body = options.body;
+    const shouldUseWebFetch =
+      isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
+
+    const method = (options.method || 'GET').toString().toUpperCase();
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    return runSerializedRequest(() => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+      const headers = (options.headers as Record<string, string>) || {};
+      recordRestRequest(action, {
+        method,
+        url,
+        normalizedUrl: normalizeUrlPath(url),
+        headers,
+        body: extractRequestBody(body),
       });
-    } catch (error) {
-      const rawMessage = (error as Error).message || 'Request failed';
-      const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
-      const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-      if (isAbort || isNetworkFailure) {
-        throw new Error(resolveHostErrorMessage(rawMessage));
+
+      if (isNativePlatform() && !shouldUseWebFetch) {
+        let data: unknown = undefined;
+
+        if (isSmokeModeEnabled()) {
+          console.info('C64U_HTTP_NATIVE', JSON.stringify({ method, url }));
+        }
+
+        if (body && typeof (body as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer === 'function') {
+          const buffer = await (body as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer();
+          data = new Uint8Array(buffer);
+        } else if (body instanceof ArrayBuffer) {
+          data = new Uint8Array(body);
+        } else if (ArrayBuffer.isView(body)) {
+          data = new Uint8Array(body.buffer);
+        } else if (typeof body === 'string') {
+          data = body;
+        } else if (body) {
+          data = body;
+        }
+
+        try {
+          const requestPromise = CapacitorHttp.request({
+            url,
+            method,
+            headers,
+            data,
+          });
+          const nativeResponse = timeoutMs
+            ? await Promise.race([
+              requestPromise,
+              new Promise<never>((_, reject) => {
+                setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+              }),
+            ])
+            : await requestPromise;
+
+          const responseHeaders = new Headers();
+          if (nativeResponse.headers) {
+            Object.entries(nativeResponse.headers).forEach(([key, value]) => {
+              if (typeof value === 'string') responseHeaders.set(key, value);
+            });
+          }
+
+          const bodyText = typeof nativeResponse.data === 'string'
+            ? nativeResponse.data
+            : JSON.stringify(nativeResponse.data ?? { errors: [] });
+          const response = new Response(bodyText, { status: nativeResponse.status, headers: responseHeaders });
+          const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+          const responseBody = await readResponseBody(response);
+          recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: null });
+          return response;
+        } catch (error) {
+          const rawMessage = (error as Error).message || 'Request failed';
+          const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
+          const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+          const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+          recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
+          recordTraceError(action, error as Error);
+          if (isAbort || isNetworkFailure) {
+            throw new Error(resolveHostErrorMessage(rawMessage));
+          }
+          throw error;
+        }
       }
-      throw error;
-    } finally {
-      if (timeoutId) window.clearTimeout(timeoutId);
-    }
+
+      const controller = timeoutMs ? new AbortController() : null;
+      const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+      let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
+      try {
+        const responsePromise = fetch(url, {
+          ...options,
+          ...(controller ? { signal: controller.signal } : {}),
+        });
+        const timeoutPromise = timeoutMs
+          ? new Promise<never>((_, reject) => {
+            timeoutPromiseId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+          })
+          : null;
+        const response = timeoutPromise
+          ? await Promise.race([responsePromise, timeoutPromise])
+          : await responsePromise;
+        const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+        const responseBody = await readResponseBody(response);
+        recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: null });
+        return response;
+      } catch (error) {
+        const rawMessage = (error as Error).message || 'Request failed';
+        const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
+        const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+        const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+        recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
+        recordTraceError(action, error as Error);
+        if (isAbort || isNetworkFailure) {
+          throw new Error(resolveHostErrorMessage(rawMessage));
+        }
+        throw error;
+      } finally {
+        if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    }));
   }
 
   // About endpoints
@@ -434,8 +617,8 @@ export class C64API {
     return this.request('/v1/version');
   }
 
-  async getInfo(): Promise<DeviceInfo> {
-    return this.request('/v1/info');
+  async getInfo(options: (RequestInit & { timeoutMs?: number }) = {}): Promise<DeviceInfo> {
+    return this.request('/v1/info', options);
   }
 
   // Config endpoints
@@ -452,6 +635,30 @@ export class C64API {
     const catEncoded = encodeURIComponent(category);
     const itemEncoded = encodeURIComponent(item);
     return this.request(`/v1/configs/${catEncoded}/${itemEncoded}`);
+  }
+
+  async getConfigItems(category: string, items: string[]): Promise<ConfigResponse> {
+    const responses = await Promise.allSettled(
+      items.map((item) => this.getConfigItem(category, item)),
+    );
+    const mergedItems: Record<string, unknown> = {};
+    responses.forEach((result) => {
+      if (result.status !== 'fulfilled') return;
+      const payload = result.value as Record<string, any>;
+      const categoryBlock = payload?.[category] ?? payload;
+      const itemsBlock = categoryBlock?.items ?? categoryBlock;
+      if (!itemsBlock || typeof itemsBlock !== 'object') return;
+      Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
+        if (name === 'errors') return;
+        mergedItems[name] = config;
+      });
+    });
+    return {
+      [category]: {
+        items: mergedItems,
+      },
+      errors: [],
+    } as ConfigResponse;
   }
 
   async setConfigValue(category: string, item: string, value: string | number): Promise<ConfigResponse> {
@@ -883,6 +1090,17 @@ export class C64API {
 
 // Singleton instance
 let apiInstance: C64API | null = null;
+let apiProxy: C64API | null = null;
+
+const createApiProxy = (api: C64API): C64API => new Proxy(api, {
+  get(target, prop, receiver) {
+    const value = Reflect.get(target, prop, receiver);
+    if (typeof value === 'function') {
+      return value.bind(target);
+    }
+    return value;
+  },
+});
 
 export function getC64API(): C64API {
   if (!apiInstance) {
@@ -891,7 +1109,10 @@ export function getC64API(): C64API {
     const savedPassword = localStorage.getItem('c64u_password') || undefined;
     apiInstance = new C64API(resolvedBaseUrl, savedPassword, resolvedDeviceHost);
   }
-  return apiInstance;
+  if (!apiProxy) {
+    apiProxy = createApiProxy(apiInstance);
+  }
+  return apiProxy;
 }
 
 export function updateC64APIConfig(baseUrl: string, password?: string, deviceHost?: string) {

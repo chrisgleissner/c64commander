@@ -9,6 +9,7 @@ import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -227,6 +228,7 @@ test.describe('Disk management', () => {
   });
 
   test('drive power toggle button updates state and issues request @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     const requests: Array<{ method: string; url: string }> = [];
     page.on('request', (request: Request) => {
       try {
@@ -254,6 +256,7 @@ test.describe('Disk management', () => {
       expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x - xTolerance);
     }
 
+    await clearTraces(page);
     await powerButton.click();
     await expect(powerButton).toHaveText('Turn On');
     await expect(driveCard.getByText('OFF', { exact: true })).toBeVisible();
@@ -261,6 +264,9 @@ test.describe('Disk management', () => {
 
     const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith('/v1/drives/a:off'));
     expect(lastRequest).toBeTruthy();
+
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/drives/a:off');
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
   });
 
   test('importing C64U folders preserves hierarchy and paths @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {

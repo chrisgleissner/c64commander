@@ -6,6 +6,7 @@ npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+Logs
 
 # Dependencies
 node_modules/
@@ -27,13 +28,10 @@ dist-ssr/
 coverage/
 playwright-report/
 test-results/
-test-results/evidence/
 
 # Local config
 *.local
 .env
-PLANS.md
-plans.md
 
 # Editors
 *.njsproj

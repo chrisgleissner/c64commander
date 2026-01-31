@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { FilesystemStatResult } from '@capacitor/filesystem';
+import { Filesystem, type FilesystemStatResult } from '@capacitor/filesystem';
 import {
   deleteLibraryFile,
   getHvscDurationByMd5,
@@ -173,5 +173,31 @@ describe('hvscFilesystem', () => {
     expect(marker?.version).toBe(85);
     expect(marker?.type).toBe('baseline');
     expect(marker?.sizeBytes).toBe(1024);
+  });
+
+  it('omits non-sid files from folder listings', async () => {
+    ensureDir('hvsc/library/DEMOS/0-9');
+    setFile('hvsc/library/DEMOS/0-9/Readme.txt', toBase64('hello'));
+
+    const listing = await listHvscFolder('/DEMOS/0-9');
+
+    expect(listing.songs).toHaveLength(0);
+  });
+
+  it('returns null when song is missing', async () => {
+    const song = await getHvscSongByVirtualPath('/missing.sid');
+    expect(song).toBeNull();
+  });
+
+  it('short-circuits writes when file already exists', async () => {
+    setFile('hvsc/library/DEMOS/0-9/Existing.sid', toBase64Bytes(new Uint8Array([1])));
+    vi.mocked(Filesystem.writeFile).mockImplementationOnce(async () => {
+      throw new Error('already exists');
+    });
+
+    await expect(writeLibraryFile('/DEMOS/0-9/Existing.sid', new Uint8Array([2]))).resolves.toBeUndefined();
+
+    const stored = files.get('hvsc/library/DEMOS/0-9/Existing.sid');
+    expect(stored?.type).toBe('file');
   });
 });

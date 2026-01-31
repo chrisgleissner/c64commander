@@ -8,6 +8,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from './traceUtils';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const waitForRequests = async (predicate: () => boolean) => {
@@ -214,9 +215,11 @@ test.describe('Playback file browser (part 2)', () => {
   });
 
   test('playlist menu shows size and date for C64 Ultimate items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.goto('/play');
     await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
+    await clearTraces(page);
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await openRemoteFolder(dialog, 'Usb0');
     await openRemoteFolder(dialog, 'Demos');
@@ -224,6 +227,11 @@ test.describe('Playback file browser (part 2)', () => {
     await selectEntryCheckbox(dialog, 'Part 1.d64');
     await page.getByRole('button', { name: 'Add to playlist' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
+
+    await expectFtpTraceSequence(page, testInfo, (event) => {
+      const data = event.data as { operation?: string; path?: string };
+      return data.operation === 'list' && (data.path ?? '').includes('/Usb0');
+    });
 
     const row = page.getByTestId('playlist-item').filter({ hasText: 'Part 1.d64' }).first();
     await row.getByRole('button', { name: 'Item actions' }).click();
@@ -992,7 +1000,7 @@ test.describe('Playback file browser (part 2)', () => {
     await snap(page, testInfo, 'volume-updated');
   });
 
-  test('volume slider respects left-off and right-max bounds', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('volume slider respects left-min and right-max bounds', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         'SID Sockets Configuration': {
@@ -1013,12 +1021,33 @@ test.describe('Playback file browser (part 2)', () => {
     await expect(slider).not.toHaveAttribute('data-disabled');
 
     const thumb = slider.getByRole('slider');
-    await thumb.focus();
-    await thumb.press('Home');
-    await expect(label).toHaveText(/OFF/i);
+    const min = await thumb.getAttribute('aria-valuemin');
+    const max = await thumb.getAttribute('aria-valuemax');
+    expect(min).not.toBeNull();
+    expect(max).not.toBeNull();
 
-    await thumb.press('End');
-    await expect(label).toHaveText(/\+6 dB/i);
+    const sliderBox = await slider.boundingBox();
+    const thumbBox = await thumb.boundingBox();
+    expect(sliderBox).not.toBeNull();
+    expect(thumbBox).not.toBeNull();
+    const centerY = (sliderBox?.y ?? 0) + (sliderBox?.height ?? 0) / 2;
+    const leftX = (sliderBox?.x ?? 0) + 1;
+    const rightX = (sliderBox?.x ?? 0) + (sliderBox?.width ?? 0) - 1;
+    const thumbX = (thumbBox?.x ?? 0) + (thumbBox?.width ?? 0) / 2;
+    const thumbY = (thumbBox?.y ?? 0) + (thumbBox?.height ?? 0) / 2;
+
+    await page.mouse.move(thumbX, thumbY);
+    await page.mouse.down();
+    await page.mouse.move(leftX, centerY);
+    await page.mouse.up();
+    await expect(thumb).toHaveAttribute('aria-valuenow', min ?? '');
+    await expect(label).not.toHaveText('—');
+
+    await page.mouse.move(thumbX, thumbY);
+    await page.mouse.down();
+    await page.mouse.move(rightX, centerY);
+    await page.mouse.up();
+    await expect(thumb).toHaveAttribute('aria-valuenow', max ?? '');
 
     await snap(page, testInfo, 'volume-bounds');
   });

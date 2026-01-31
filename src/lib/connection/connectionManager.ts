@@ -33,15 +33,6 @@ export type ConnectionSnapshot = Readonly<{
 const STARTUP_PROBE_INTERVAL_MS = 500;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
 
-const isLocalProxy = (baseUrl: string) => {
-  try {
-    const url = new URL(baseUrl);
-    return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-  } catch {
-    return false;
-  }
-};
-
 const loadPersistedConnectionConfig = () => {
   const passwordRaw = localStorage.getItem('c64u_password');
   const password = passwordRaw ? passwordRaw : undefined;
@@ -50,12 +41,6 @@ const loadPersistedConnectionConfig = () => {
   return { baseUrl, password, deviceHost };
 };
 
-const buildProbeHeaders = (config: { baseUrl: string; password?: string; deviceHost: string }) => {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (config.password) headers['X-Password'] = config.password;
-  if (config.deviceHost && isLocalProxy(config.baseUrl)) headers['X-C64U-Host'] = config.deviceHost;
-  return headers;
-};
 
 const isProbePayloadHealthy = (payload: unknown) => {
   if (!payload || typeof payload !== 'object') return false;
@@ -68,60 +53,74 @@ const isProbePayloadHealthy = (payload: unknown) => {
   return true;
 };
 
-const isNativePlatform = () => {
+const parseProbePayload = async (response: Response): Promise<unknown> => {
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+  if (!contentType.includes('application/json')) return null;
   try {
-    return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
+    return await response.clone().json();
+  } catch {
+    return null;
+  }
+};
+
+const probeWithFetch = async (
+  baseUrl: string,
+  options: { signal?: AbortSignal; timeoutMs?: number },
+): Promise<boolean> => {
+  const timeoutMs = options.timeoutMs ?? PROBE_REQUEST_TIMEOUT_MS;
+  const outerSignal = options.signal;
+  const controller = timeoutMs ? new AbortController() : null;
+  const abortFromOuter = () => controller?.abort();
+  if (outerSignal && controller) {
+    if (outerSignal.aborted) {
+      controller.abort();
+    } else {
+      outerSignal.addEventListener('abort', abortFromOuter, { once: true });
+    }
+  }
+  const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(`${baseUrl}/v1/info`, {
+      ...(controller ? { signal: controller.signal } : outerSignal ? { signal: outerSignal } : {}),
+    });
+    const payload = await parseProbePayload(response);
+    if (!response.ok) return false;
+    return isProbePayloadHealthy(payload);
   } catch {
     return false;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (outerSignal && controller) {
+      outerSignal.removeEventListener('abort', abortFromOuter);
+    }
   }
 };
 
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = loadPersistedConnectionConfig();
-  const url = `${config.baseUrl.replace(/\/$/, '')}/v1/info`;
   const timeoutMs = options.timeoutMs ?? PROBE_REQUEST_TIMEOUT_MS;
   const outerSignal = options.signal;
+  const isTestEnv = typeof process !== 'undefined'
+    && (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test');
 
-  if (isNativePlatform()) {
-    if (outerSignal?.aborted) return false;
-    let timedOut = false;
-    const timeoutId = window.setTimeout(() => {
-      timedOut = true;
-    }, timeoutMs);
-    try {
-      const api = new C64API(config.baseUrl, config.password, config.deviceHost);
-      const response = await api.getInfo();
-      if (timedOut) return false;
-      return isProbePayloadHealthy(response);
-    } catch {
-      return false;
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
+  if (isTestEnv) {
+    return probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
   }
-
-  const requestController = new AbortController();
-  const abort = () => requestController.abort();
-  if (outerSignal) {
-    if (outerSignal.aborted) abort();
-    else outerSignal.addEventListener('abort', abort, { once: true });
-  }
-  const timeoutId = window.setTimeout(() => requestController.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: buildProbeHeaders(config),
-      signal: requestController.signal,
-    });
-    if (!response.ok) return false;
-    const payload = (await response.json().catch(() => null)) as unknown;
-    return isProbePayloadHealthy(payload);
-  } catch {
-    return false;
-  } finally {
-    window.clearTimeout(timeoutId);
-    if (outerSignal) outerSignal.removeEventListener('abort', abort);
+    const api = new C64API(config.baseUrl, config.password, config.deviceHost);
+    const response = await api.getInfo({ timeoutMs, signal: outerSignal });
+    return isProbePayloadHealthy(response);
+  } catch (error) {
+    const message = (error as Error | undefined)?.message ?? '';
+    if (/^HTTP\s+\d+/.test(message)) {
+      return false;
+    }
+    try {
+      return await probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -208,21 +207,21 @@ const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger 
 const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
+  transitionTo('REAL_CONNECTED', trigger);
+  logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
   await stopDemoServer();
   applyC64APIConfigFromStorage();
   addLog('info', 'Connection switched to real device', { trigger });
-  transitionTo('REAL_CONNECTED', trigger);
-  logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
 };
 
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
+  transitionTo('OFFLINE_NO_DEMO', trigger);
+  logDiscoveryDecision('OFFLINE_NO_DEMO', trigger, { mode: 'offline' });
   await stopDemoServer();
   applyC64APIConfigFromStorage();
   addLog('info', 'Connection switched to offline', { trigger });
-  transitionTo('OFFLINE_NO_DEMO', trigger);
-  logDiscoveryDecision('OFFLINE_NO_DEMO', trigger, { mode: 'offline' });
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
@@ -366,11 +365,11 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
   const windowMs = loadStartupDiscoveryWindowMs();
-  const windowTimer = window.setTimeout(() => {
+  const windowTimer = globalThis.setTimeout(() => {
     void (async () => {
       if (cancelled) return;
       cancelled = true;
-      window.clearInterval(probeTimer);
+      globalThis.clearInterval(probeTimer);
       cancelActiveDiscovery();
       if (autoDemoEnabled) {
         await transitionToDemoActive(trigger);
@@ -394,8 +393,8 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
       }
       cancelled = true;
-      window.clearTimeout(windowTimer);
-      window.clearInterval(probeTimer);
+      globalThis.clearTimeout(windowTimer);
+      globalThis.clearInterval(probeTimer);
       await transitionToRealConnected(trigger);
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
@@ -407,14 +406,16 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
 
   // First probe immediately, then at fixed interval.
   void runProbe();
-  const probeTimer = window.setInterval(runProbe, STARTUP_PROBE_INTERVAL_MS);
+  const probeTimer = globalThis.setInterval(() => {
+    void runProbe();
+  }, STARTUP_PROBE_INTERVAL_MS);
 
   activeDiscovery = {
     abort,
     cancel: () => {
       cancelled = true;
-      window.clearTimeout(windowTimer);
-      window.clearInterval(probeTimer);
+      globalThis.clearTimeout(windowTimer);
+      globalThis.clearInterval(probeTimer);
     },
   };
 }

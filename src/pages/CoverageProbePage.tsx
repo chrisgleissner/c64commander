@@ -10,6 +10,7 @@ import {
   resolveAudioMixerMuteValue,
   soloReducer,
 } from '@/lib/config/audioMixerSolo';
+import { AUDIO_MIXER_VOLUME_ITEMS } from '@/lib/config/configItems';
 import { useSidPlayer } from '@/hooks/useSidPlayer';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useC64Connection } from '@/hooks/useC64Connection';
@@ -118,7 +119,7 @@ export default function CoverageProbePage() {
         await api.getVersion();
         await api.getInfo();
         await api.getCategories();
-        await api.getCategory('Audio Mixer');
+        await api.getConfigItems('Audio Mixer', AUDIO_MIXER_VOLUME_ITEMS);
         await api.getConfigItem('Audio Mixer', 'Vol UltiSid 1');
         await api.setConfigValue('Audio Mixer', 'Vol UltiSid 1', '0 dB');
         await api.updateConfigBatch({ 'Audio Mixer': { 'Vol UltiSid 1': '0 dB' } });

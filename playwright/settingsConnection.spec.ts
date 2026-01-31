@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -48,6 +49,7 @@ test.describe('Settings connection management', () => {
     await expect(page.getByText(/Connection settings saved|Saved/i).first()).toBeVisible();
     await snap(page, testInfo, 'toast-shown');
 
+
     const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
     expect(stored).toBe('localhost:8080');
     await snap(page, testInfo, 'url-saved');
@@ -77,6 +79,7 @@ test.describe('Settings connection management', () => {
   });
 
   test('change password stores in localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -87,6 +90,7 @@ test.describe('Settings connection management', () => {
     await passwordInput.fill('test-password-123');
     await snap(page, testInfo, 'password-entered');
 
+    await clearTraces(page);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
     await snap(page, testInfo, 'save-clicked');
 
@@ -96,6 +100,14 @@ test.describe('Settings connection management', () => {
     const stored = await page.evaluate(() => localStorage.getItem('c64u_password'));
     expect(stored).toBe('test-password-123');
     await snap(page, testInfo, 'password-saved');
+
+    const refreshButton = page.getByRole('button', { name: 'Refresh connection' });
+    await expect(refreshButton).toBeVisible();
+    await clearTraces(page);
+    await refreshButton.click();
+
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/info');
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
   });
 
   test('select light theme applies theme class', async ({ page }: { page: Page }, testInfo: TestInfo) => {

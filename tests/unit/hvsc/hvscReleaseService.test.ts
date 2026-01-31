@@ -9,10 +9,12 @@ import { Capacitor, CapacitorHttp } from '@capacitor/core';
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     isNativePlatform: vi.fn(() => false),
+    getPlatform: vi.fn(() => 'web'),
   },
   CapacitorHttp: {
     request: vi.fn(),
   },
+  registerPlugin: vi.fn(() => ({})),
 }));
 
 describe('hvscReleaseService', () => {

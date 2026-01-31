@@ -4,13 +4,14 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string, demoBaseUrl?: string | null) => {
-  await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }) => {
+  await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }: { realBaseUrl: string; demoBaseUrl: string | null }) => {
     (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = realArg;
     (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = demoArg
       ? [realArg, demoArg]
@@ -46,7 +47,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '1000');
       localStorage.setItem('c64u_device_host', hostArg);
@@ -84,7 +85,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');
@@ -140,6 +141,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
+      (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery = true;
       localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '250');
@@ -157,9 +159,17 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect(demoIndicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
 
     await snap(page, testInfo, 'demo-stays-demo');
+
+    // Stop background rediscovery to prevent race conditions in trace completion
+    await page.evaluate(() => {
+      (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery = false;
+    });
+    // Wait briefly for any in-flight actions to complete
+    await page.waitForTimeout(100);
   });
 
   test('disable demo → connect to real → core operations succeed', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -183,6 +193,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Automatic Demo Mode').uncheck();
+    await clearTraces(page);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
     const realIndicator = page.getByTestId('connectivity-indicator');
@@ -190,6 +201,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/drives'))).toBe(true);
+
+    const { related } = await expectRestTraceSequence(page, testInfo, '/v1/drives');
+    const decisionEvent = related.find((event) => event.type === 'backend-decision');
+    expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
 
     await snap(page, testInfo, 'real-connected-operations');
   });
@@ -304,6 +319,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const realIndicator = page.getByTestId('connectivity-indicator');
     await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
 
+    await clearTraces(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     const realRow = page.getByTestId('playlist-item').filter({ hasText: 'demo.sid' }).first();
     if (await realRow.isVisible().catch(() => false)) {
@@ -333,7 +349,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const demoHost = new URL(demoServer.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.setItem('c64u_password', '');

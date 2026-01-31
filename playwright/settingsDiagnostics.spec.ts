@@ -4,6 +4,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -65,6 +66,7 @@ test.describe('Settings diagnostics workflows', () => {
   });
 
   test('debug logging toggle records REST calls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableTraceAssertions(testInfo);
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
@@ -75,6 +77,7 @@ test.describe('Settings diagnostics workflows', () => {
 
     const refreshButton = page.getByRole('button', { name: 'Refresh connection' });
     await expect(refreshButton).toBeVisible();
+    await clearTraces(page);
     await refreshButton.click();
     await snap(page, testInfo, 'refresh-clicked');
 
@@ -88,6 +91,9 @@ test.describe('Settings diagnostics workflows', () => {
     await expect(apiRequestEntry).toBeVisible();
     await expect(apiRequestEntry.locator('xpath=..')).toContainText(/DEBUG/i);
     await snap(page, testInfo, 'debug-log-entry');
+
+    const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/info');
+    expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
   });
 
   test('share diagnostics copies to clipboard', async ({ page }: { page: Page }, testInfo: TestInfo) => {

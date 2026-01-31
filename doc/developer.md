@@ -16,44 +16,44 @@ Clone the repository and build:
 ```bash
 git clone https://github.com/chrisgleissner/c64commander.git
 cd c64commander
-./local-build.sh
+./build
 ```
 
 This runs the full build pipeline: dependencies, web build, Capacitor sync, tests, and debug APK.
 
-## local-build.sh - One-stop build tool
+## build - One-stop build tool
 
-All common development tasks use `./local-build.sh`:
+All common development tasks use `./build`:
 
 ### Build variants
 
 ```bash
-./local-build.sh                  # Full build: deps, build, web + Android unit tests, APK
-./local-build.sh --skip-tests     # Skip all tests
-./local-build.sh --skip-apk       # Build without APK generation
+./build                  # Full build: deps, build, web + Android unit tests, APK
+./build --skip-tests     # Skip all tests
+./build --skip-apk       # Build without APK generation
 ```
 
 ### Testing
 
 ```bash
-./local-build.sh --test           # Unit tests only (vitest)
-./local-build.sh --test-e2e       # E2E tests only (Playwright, no screenshots)
-./local-build.sh --test-e2e-ci    # Full CI mirror: screenshots + e2e + validation
-./local-build.sh --validate-evidence  # Validate Playwright evidence structure
-./local-build.sh --android-tests  # Run Android instrumentation tests (requires device/emulator)
-./local-build.sh --coverage       # Web + Android coverage checks
+./build --test           # Unit tests only (vitest)
+./build --test-e2e       # E2E tests only (Playwright, no screenshots)
+./build --test-e2e-ci    # Full CI mirror: screenshots + e2e + validation
+./build --validate-evidence  # Validate Playwright evidence structure
+./build --android-tests  # Run Android instrumentation tests (requires device/emulator)
+./build --coverage       # Web + Android coverage checks
 ```
 
 ### Android
 
 ```bash
-./local-build.sh --emulator       # Launch Android emulator
-./local-build.sh --install        # Build and install APK to connected device
-./local-build.sh --device R5CRC3ZY9XH --install  # Install to specific device
-./local-build.sh --smoke-android-emulator  # Run emulator smoke tests (mock target only)
-./local-build.sh --smoke-android-real      # Run mock + real target smoke tests
-./local-build.sh --smoke-android-real --c64u-host C64U
-./local-build.sh --smoke-android-real --c64u-host auto  # External mock for emulator
+./build --emulator       # Launch Android emulator
+./build --install        # Build and install APK to connected device
+./build --device R5CRC3ZY9XH --install  # Install to specific device
+./build --smoke-android-emulator  # Run emulator smoke tests (mock target only)
+./build --smoke-android-real      # Run mock + real target smoke tests
+./build --smoke-android-real --c64u-host C64U
+./build --smoke-android-real --c64u-host auto  # External mock for emulator
 ```
 
 Read `doc/testing/maestro.md` before writing or editing Maestro flows.
@@ -79,8 +79,8 @@ test-results/maestro/
 ### Screenshots
 
 ```bash
-./local-build.sh --screenshots    # Update app screenshots in doc/img
-./local-build.sh --screenshots-only  # Capture screenshots only (no tests or APK)
+./build --screenshots    # Update app screenshots in doc/img
+./build --screenshots-only  # Capture screenshots only (no tests or APK)
 ```
 
 Notes:
@@ -98,7 +98,7 @@ Location: `tests/unit/` and `src/**/*.{test,spec}.{ts,tsx}`
 Run:
 
 ```bash
-./local-build.sh --test
+./build --test
 ```
 
 ### E2E tests (Playwright)
@@ -116,9 +116,9 @@ Key concepts:
 Run:
 
 ```bash
-./local-build.sh --test-e2e           # E2E only
-./local-build.sh --test-e2e-ci        # Full CI mirror
-./local-build.sh --validate-evidence  # Validate evidence structure
+./build --test-e2e           # E2E only
+./build --test-e2e-ci        # Full CI mirror
+./build --validate-evidence  # Validate evidence structure
 ```
 
 Evidence structure:
@@ -178,8 +178,8 @@ Location: `android/app/src/test/java/`
 Run:
 
 ```bash
-./local-build.sh
-./local-build.sh --android-tests
+./build
+./build --android-tests
 ```
 
 ## Evidence validation
@@ -187,7 +187,7 @@ Run:
 Validate that all test evidence folders have correct structure:
 
 ```bash
-./local-build.sh --validate-evidence
+./build --validate-evidence
 node scripts/validate-android-emulator-evidence.mjs
 ```
 
@@ -215,7 +215,7 @@ Performance notes:
 
 - `PLAYWRIGHT_SKIP_BUILD=1` lets Playwright reuse a prebuilt `dist/` (build first).
 - `PLAYWRIGHT_WORKERS` overrides Playwright worker count (default caps at 4).
-- `GRADLE_MAX_WORKERS` caps Gradle workers (used by `local-build.sh` and CI).
+- `GRADLE_MAX_WORKERS` caps Gradle workers (used by `build` and CI).
 - The workflow supports a `package_manager` input for `workflow_dispatch` to compare `npm` vs `bun` install speed.
 
 ## CI + Coverage
@@ -236,7 +236,7 @@ COVERAGE_MIN=75 node scripts/check-coverage-threshold.mjs
 Local reproduction (Android coverage):
 
 ```bash
-./local-build.sh --coverage
+./build --coverage
 ```
 
 Coverage outputs:
@@ -433,7 +433,7 @@ flowchart TB
     LBuild["npm run cap:build"]
     LTest["npm run test"]
     LE2E["npm run test:e2e"]
-    LSmoke["local-build.sh --smoke-android-emulator"]
+    LSmoke["build --smoke-android-emulator"]
   end
 
   subgraph CI["GitHub Actions CI"]
@@ -603,7 +603,7 @@ npx playwright install
 cd android
 ./gradlew clean
 cd ..
-./local-build.sh
+./build
 ```
 
 ### Tests fail with "Port 4173 already in use"
@@ -626,7 +626,7 @@ find test-results/evidence/playwright -name "*.png" -size 0       # Should be em
 
 1. Create feature branch
 2. Make changes
-3. Run full build: `./local-build.sh --test-e2e-ci`
+3. Run full build: `./build --test-e2e-ci`
 4. Ensure all tests pass
 5. Commit and push
 6. Create pull request

@@ -7,6 +7,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import '../tests/mocks/setupMockConfigForTests';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { allowVisualOverflow, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
+import { disableTraceAssertions } from './traceUtils';
 
 test.describe('App screenshots', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -21,6 +22,7 @@ test.describe('App screenshots', () => {
   });
 
   test.beforeEach(async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    disableTraceAssertions(testInfo, 'Visual-only screenshots; trace assertions disabled.');
     await startStrictUiMonitoring(page, testInfo);
     await seedUiMocks(page, server.baseUrl);
     await page.addInitScript(() => {
