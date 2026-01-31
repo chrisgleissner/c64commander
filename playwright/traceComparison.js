@@ -73,8 +73,8 @@ const normalizePayload = (value) => {
         normalized[key] = '***';
         return;
       }
-      if (typeof entry === 'string' && /(\bvol\b|volume)/i.test(key) && /\bdB\b/i.test(entry)) {
-        normalized[key] = '***dB';
+      if (/(\bvol\b|volume)/i.test(key)) {
+        normalized[key] = '***VOL';
         return;
       }
       if (/host|hostname|ip|address/i.test(key)) {
