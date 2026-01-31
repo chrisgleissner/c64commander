@@ -159,6 +159,13 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect(demoIndicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
 
     await snap(page, testInfo, 'demo-stays-demo');
+
+    // Stop background rediscovery to prevent race conditions in trace completion
+    await page.evaluate(() => {
+      (window as Window & { __c64uAllowBackgroundRediscovery?: boolean }).__c64uAllowBackgroundRediscovery = false;
+    });
+    // Wait briefly for any in-flight actions to complete
+    await page.waitForTimeout(100);
   });
 
   test('disable demo → connect to real → core operations succeed', async ({ page }: { page: Page }, testInfo: TestInfo) => {
