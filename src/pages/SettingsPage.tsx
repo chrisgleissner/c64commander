@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   Wifi,
@@ -48,6 +48,7 @@ import { downloadTraceZip } from '@/lib/tracing/traceExport';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
 import {
@@ -68,6 +69,26 @@ import {
   saveDiskAutostartMode,
   type DiskAutostartMode,
 } from '@/lib/config/appSettings';
+import {
+  loadDeviceSafetyConfig,
+  saveDeviceSafetyMode,
+  saveRestMaxConcurrency,
+  saveFtpMaxConcurrency,
+  saveInfoCacheMs,
+  saveConfigsCacheMs,
+  saveConfigsCooldownMs,
+  saveDrivesCooldownMs,
+  saveFtpListCooldownMs,
+  saveBackoffBaseMs,
+  saveBackoffMaxMs,
+  saveBackoffFactor,
+  saveCircuitBreakerThreshold,
+  saveCircuitBreakerCooldownMs,
+  saveDiscoveryProbeIntervalMs,
+  saveAllowUserOverrideCircuit,
+  resetDeviceSafetyOverrides,
+  type DeviceSafetyMode,
+} from '@/lib/config/deviceSafetySettings';
 import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
@@ -120,6 +141,22 @@ export default function SettingsPage() {
   const [backgroundRediscoveryIntervalInput, setBackgroundRediscoveryIntervalInput] = useState(
     String(loadBackgroundRediscoveryIntervalMs() / 1000),
   );
+  const [deviceSafetyConfig, setDeviceSafetyConfig] = useState(() => loadDeviceSafetyConfig());
+  const [deviceSafetyMode, setDeviceSafetyMode] = useState<DeviceSafetyMode>(deviceSafetyConfig.mode);
+  const [restConcurrencyInput, setRestConcurrencyInput] = useState(String(deviceSafetyConfig.restMaxConcurrency));
+  const [ftpConcurrencyInput, setFtpConcurrencyInput] = useState(String(deviceSafetyConfig.ftpMaxConcurrency));
+  const [infoCacheInput, setInfoCacheInput] = useState(String(deviceSafetyConfig.infoCacheMs));
+  const [configsCacheInput, setConfigsCacheInput] = useState(String(deviceSafetyConfig.configsCacheMs));
+  const [configsCooldownInput, setConfigsCooldownInput] = useState(String(deviceSafetyConfig.configsCooldownMs));
+  const [drivesCooldownInput, setDrivesCooldownInput] = useState(String(deviceSafetyConfig.drivesCooldownMs));
+  const [ftpCooldownInput, setFtpCooldownInput] = useState(String(deviceSafetyConfig.ftpListCooldownMs));
+  const [backoffBaseInput, setBackoffBaseInput] = useState(String(deviceSafetyConfig.backoffBaseMs));
+  const [backoffMaxInput, setBackoffMaxInput] = useState(String(deviceSafetyConfig.backoffMaxMs));
+  const [backoffFactorInput, setBackoffFactorInput] = useState(String(deviceSafetyConfig.backoffFactor));
+  const [circuitThresholdInput, setCircuitThresholdInput] = useState(String(deviceSafetyConfig.circuitBreakerThreshold));
+  const [circuitCooldownInput, setCircuitCooldownInput] = useState(String(deviceSafetyConfig.circuitBreakerCooldownMs));
+  const [probeIntervalInput, setProbeIntervalInput] = useState(String(deviceSafetyConfig.discoveryProbeIntervalMs));
+  const [allowCircuitOverride, setAllowCircuitOverride] = useState(deviceSafetyConfig.allowUserOverrideCircuit);
   const [safUris, setSafUris] = useState<SafPersistedUri[]>([]);
   const [safEntries, setSafEntries] = useState<Array<{ name: string; path: string; type: string }>>([]);
   const [safBusy, setSafBusy] = useState(false);
@@ -186,6 +223,32 @@ export default function SettingsPage() {
     window.addEventListener('c64u-app-settings-updated', handler);
     return () => window.removeEventListener('c64u-app-settings-updated', handler);
   }, []);
+
+  const refreshDeviceSafetyState = useCallback(() => {
+    const next = loadDeviceSafetyConfig();
+    setDeviceSafetyConfig(next);
+    setDeviceSafetyMode(next.mode);
+    setRestConcurrencyInput(String(next.restMaxConcurrency));
+    setFtpConcurrencyInput(String(next.ftpMaxConcurrency));
+    setInfoCacheInput(String(next.infoCacheMs));
+    setConfigsCacheInput(String(next.configsCacheMs));
+    setConfigsCooldownInput(String(next.configsCooldownMs));
+    setDrivesCooldownInput(String(next.drivesCooldownMs));
+    setFtpCooldownInput(String(next.ftpListCooldownMs));
+    setBackoffBaseInput(String(next.backoffBaseMs));
+    setBackoffMaxInput(String(next.backoffMaxMs));
+    setBackoffFactorInput(String(next.backoffFactor));
+    setCircuitThresholdInput(String(next.circuitBreakerThreshold));
+    setCircuitCooldownInput(String(next.circuitBreakerCooldownMs));
+    setProbeIntervalInput(String(next.discoveryProbeIntervalMs));
+    setAllowCircuitOverride(next.allowUserOverrideCircuit);
+  }, []);
+
+  useEffect(() => {
+    const handler = () => refreshDeviceSafetyState();
+    window.addEventListener('c64u-device-safety-updated', handler);
+    return () => window.removeEventListener('c64u-device-safety-updated', handler);
+  }, [refreshDeviceSafetyState]);
 
   const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
   const errorsPayload = useMemo(() => formatLogsForShare(errorLogs), [errorLogs]);
@@ -346,6 +409,17 @@ export default function SettingsPage() {
     const clamped = clampBackgroundRediscoveryIntervalMs(Math.round((Number.isFinite(parsed) ? parsed : 5) * 1000));
     saveBackgroundRediscoveryIntervalMs(clamped);
     setBackgroundRediscoveryIntervalInput(String(clamped / 1000));
+  };
+
+  const commitDeviceSafetyMode = (mode: DeviceSafetyMode) => {
+    saveDeviceSafetyMode(mode);
+    refreshDeviceSafetyState();
+  };
+
+  const commitDeviceSafetyNumber = (value: string, commit: (next: number) => void, fallback: number) => {
+    const parsed = Number(value);
+    commit(Number.isFinite(parsed) ? parsed : fallback);
+    refreshDeviceSafetyState();
   };
 
   return (
@@ -509,6 +583,267 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
+        {/* 1b. Device Safety */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.03 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Cpu className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Device Safety</h2>
+          </div>
+
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+            Lower safety settings can overwhelm or destabilize real hardware. Use relaxed settings only if you
+            understand the risks and are willing to accept potential device instability.
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Safety Mode</Label>
+            <Select
+              value={deviceSafetyMode}
+              onValueChange={(value) => commitDeviceSafetyMode(value as DeviceSafetyMode)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select safety mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="RELAXED">Relaxed (higher concurrency, higher risk)</SelectItem>
+                <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
+                <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Mode presets adjust concurrency limits, caching, cooldowns, and backoff behavior.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 p-3 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-1">
+                <Label className="font-medium">Advanced Controls</Label>
+                <p className="text-xs text-muted-foreground">
+                  Fine-tune device protection. Changes apply immediately.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  resetDeviceSafetyOverrides();
+                  refreshDeviceSafetyState();
+                }}
+              >
+                Reset to mode defaults
+              </Button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="rest-concurrency" className="text-sm">REST max concurrency</Label>
+                <Input
+                  id="rest-concurrency"
+                  type="number"
+                  min={1}
+                  max={4}
+                  step={1}
+                  value={restConcurrencyInput}
+                  onChange={(event) => setRestConcurrencyInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(restConcurrencyInput, saveRestMaxConcurrency, deviceSafetyConfig.restMaxConcurrency)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ftp-concurrency" className="text-sm">FTP max concurrency</Label>
+                <Input
+                  id="ftp-concurrency"
+                  type="number"
+                  min={1}
+                  max={4}
+                  step={1}
+                  value={ftpConcurrencyInput}
+                  onChange={(event) => setFtpConcurrencyInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(ftpConcurrencyInput, saveFtpMaxConcurrency, deviceSafetyConfig.ftpMaxConcurrency)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="info-cache" className="text-sm">Info cache window (ms)</Label>
+                <Input
+                  id="info-cache"
+                  type="number"
+                  min={0}
+                  max={5000}
+                  step={50}
+                  value={infoCacheInput}
+                  onChange={(event) => setInfoCacheInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(infoCacheInput, saveInfoCacheMs, deviceSafetyConfig.infoCacheMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="configs-cache" className="text-sm">Configs cache window (ms)</Label>
+                <Input
+                  id="configs-cache"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={50}
+                  value={configsCacheInput}
+                  onChange={(event) => setConfigsCacheInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(configsCacheInput, saveConfigsCacheMs, deviceSafetyConfig.configsCacheMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="configs-cooldown" className="text-sm">Configs cooldown (ms)</Label>
+                <Input
+                  id="configs-cooldown"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={50}
+                  value={configsCooldownInput}
+                  onChange={(event) => setConfigsCooldownInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(configsCooldownInput, saveConfigsCooldownMs, deviceSafetyConfig.configsCooldownMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="drives-cooldown" className="text-sm">Drives cooldown (ms)</Label>
+                <Input
+                  id="drives-cooldown"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={50}
+                  value={drivesCooldownInput}
+                  onChange={(event) => setDrivesCooldownInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(drivesCooldownInput, saveDrivesCooldownMs, deviceSafetyConfig.drivesCooldownMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ftp-cooldown" className="text-sm">FTP list cooldown (ms)</Label>
+                <Input
+                  id="ftp-cooldown"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={50}
+                  value={ftpCooldownInput}
+                  onChange={(event) => setFtpCooldownInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(ftpCooldownInput, saveFtpListCooldownMs, deviceSafetyConfig.ftpListCooldownMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="backoff-base" className="text-sm">Backoff base (ms)</Label>
+                <Input
+                  id="backoff-base"
+                  type="number"
+                  min={0}
+                  max={10000}
+                  step={50}
+                  value={backoffBaseInput}
+                  onChange={(event) => setBackoffBaseInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(backoffBaseInput, saveBackoffBaseMs, deviceSafetyConfig.backoffBaseMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="backoff-max" className="text-sm">Backoff max (ms)</Label>
+                <Input
+                  id="backoff-max"
+                  type="number"
+                  min={0}
+                  max={20000}
+                  step={50}
+                  value={backoffMaxInput}
+                  onChange={(event) => setBackoffMaxInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(backoffMaxInput, saveBackoffMaxMs, deviceSafetyConfig.backoffMaxMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="backoff-factor" className="text-sm">Backoff factor</Label>
+                <Input
+                  id="backoff-factor"
+                  type="number"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={backoffFactorInput}
+                  onChange={(event) => setBackoffFactorInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(backoffFactorInput, saveBackoffFactor, deviceSafetyConfig.backoffFactor)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="circuit-threshold" className="text-sm">Circuit breaker threshold</Label>
+                <Input
+                  id="circuit-threshold"
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={1}
+                  value={circuitThresholdInput}
+                  onChange={(event) => setCircuitThresholdInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(circuitThresholdInput, saveCircuitBreakerThreshold, deviceSafetyConfig.circuitBreakerThreshold)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="circuit-cooldown" className="text-sm">Circuit breaker cooldown (ms)</Label>
+                <Input
+                  id="circuit-cooldown"
+                  type="number"
+                  min={0}
+                  max={20000}
+                  step={100}
+                  value={circuitCooldownInput}
+                  onChange={(event) => setCircuitCooldownInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(circuitCooldownInput, saveCircuitBreakerCooldownMs, deviceSafetyConfig.circuitBreakerCooldownMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="probe-interval" className="text-sm">Discovery probe interval (ms)</Label>
+                <Input
+                  id="probe-interval"
+                  type="number"
+                  min={200}
+                  max={2000}
+                  step={50}
+                  value={probeIntervalInput}
+                  onChange={(event) => setProbeIntervalInput(event.target.value)}
+                  onBlur={() => commitDeviceSafetyNumber(probeIntervalInput, saveDiscoveryProbeIntervalMs, deviceSafetyConfig.discoveryProbeIntervalMs)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm">Allow user override when circuit is open</Label>
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 p-2">
+                  <span className="text-xs text-muted-foreground">User-triggered actions can bypass circuit breaker.</span>
+                  <Checkbox
+                    checked={allowCircuitOverride}
+                    onCheckedChange={(checked) => {
+                      const enabled = checked === true;
+                      setAllowCircuitOverride(enabled);
+                      saveAllowUserOverrideCircuit(enabled);
+                      refreshDeviceSafetyState();
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         {/* 2. Diagnostics */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -629,7 +964,7 @@ export default function SettingsPage() {
               return (
                 <button
                   key={option.value}
-                  onClick={() => setTheme(option.value)}
+                  onClick={wrapUserEvent(() => setTheme(option.value), 'select', 'ThemeSelector', { title: option.label }, 'ThemeOption')}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
                     isActive 
                       ? 'border-primary bg-primary/5' 

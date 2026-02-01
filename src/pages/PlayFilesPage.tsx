@@ -1,3 +1,4 @@
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Folder, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
@@ -60,7 +61,7 @@ import {
   filterEnabledSidVolumeItems,
 } from '@/lib/config/sidVolumeControl';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { getPlatform } from '@/lib/native/platform';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import {
   addHvscProgressListener,
@@ -334,7 +335,7 @@ export default function PlayFilesPage() {
   const addItemsOverlayActiveRef = useRef(false);
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const { limit: listPreviewLimit } = useListPreviewLimit();
-  const isAndroid = getPlatform() === 'android';
+  const isAndroid = getPlatform() === 'android' && isNativePlatform();
   const trace = useActionTrace('PlayFilesPage');
 
   const { flags, isLoaded } = useFeatureFlags();
@@ -900,8 +901,8 @@ export default function PlayFilesPage() {
     return map;
   }, [localSources]);
 
-  const handleLocalSourceInput = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const handleLocalSourceInput = useCallback((files: FileList | File[] | null) => {
+    if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
     addSourceFromFiles(files);
   }, [addSourceFromFiles]);
 
@@ -2993,10 +2994,11 @@ export default function PlayFilesPage() {
           type="file"
           multiple
           className="hidden"
-          onChange={(event) => {
-            handleLocalSourceInput(event.target.files);
+          onChange={wrapUserEvent((event) => {
+            const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
+            handleLocalSourceInput(selected.length ? selected : null);
             event.currentTarget.value = '';
-          }}
+          }, 'upload', 'PlayFilesPage', { type: 'file' }, 'LocalInput')}
         />
 
         <input
@@ -3004,10 +3006,10 @@ export default function PlayFilesPage() {
           type="file"
           accept=".md5,.MD5,.txt,.TXT"
           className="hidden"
-          onChange={(event) => {
+          onChange={wrapUserEvent((event) => {
             handleSonglengthsInput(event.target.files);
             event.currentTarget.value = '';
-          }}
+          }, 'upload', 'PlayFilesPage', { type: 'file' }, 'SonglengthsInput')}
         />
 
         <ItemSelectionDialog

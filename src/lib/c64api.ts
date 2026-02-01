@@ -7,6 +7,7 @@ import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
+import { withRestInteraction, type InteractionIntent } from '@/lib/deviceInteraction/deviceInteractionManager';
 
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
@@ -30,26 +31,6 @@ const normalizeUrlPath = (url: string) => {
   }
 };
 
-const isTestProbeEnabled = () => import.meta.env?.VITE_ENABLE_TEST_PROBES === '1';
-let requestQueue = Promise.resolve();
-
-const runSerializedRequest = async <T>(handler: () => Promise<T>): Promise<T> => {
-  if (!isTestProbeEnabled()) {
-    return await handler();
-  }
-  let release: () => void = () => {};
-  const gate = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  const previous = requestQueue;
-  requestQueue = previous.then(() => gate);
-  await previous;
-  try {
-    return await handler();
-  } finally {
-    release();
-  }
-};
 
 const extractRequestBody = (body: unknown) => {
   if (!body) return null;
@@ -300,7 +281,15 @@ export class C64API {
 
   private async request<T>(
     path: string,
-    options: (RequestInit & { timeoutMs?: number; __c64uTraceSuppressed?: boolean }) = {}
+    options: (RequestInit & {
+      timeoutMs?: number;
+      __c64uTraceSuppressed?: boolean;
+      __c64uIntent?: InteractionIntent;
+      __c64uAllowDuringDiscovery?: boolean;
+      __c64uBypassCache?: boolean;
+      __c64uBypassCooldown?: boolean;
+      __c64uBypassBackoff?: boolean;
+    }) = {}
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -311,14 +300,43 @@ export class C64API {
     const baseUrl = this.getBaseUrl();
     const url = `${baseUrl}${path}`;
     const method = (options.method || 'GET').toString().toUpperCase();
-    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    let status: number | 'error' = 'error';
     const timeoutMs = options.timeoutMs;
-    const requestOptions = { ...options } as RequestInit & { timeoutMs?: number; __c64uTraceSuppressed?: boolean };
+    const intent = options.__c64uIntent ?? 'user';
+    const allowDuringDiscovery = Boolean(options.__c64uAllowDuringDiscovery);
+    const bypassCache = Boolean(options.__c64uBypassCache);
+    const bypassCooldown = Boolean(options.__c64uBypassCooldown);
+    const bypassBackoff = Boolean(options.__c64uBypassBackoff);
+    const requestOptions = { ...options } as RequestInit & {
+      timeoutMs?: number;
+      __c64uTraceSuppressed?: boolean;
+      __c64uIntent?: InteractionIntent;
+      __c64uAllowDuringDiscovery?: boolean;
+      __c64uBypassCache?: boolean;
+      __c64uBypassCooldown?: boolean;
+      __c64uBypassBackoff?: boolean;
+    };
     requestOptions.__c64uTraceSuppressed = true;
+    delete (requestOptions as { __c64uIntent?: InteractionIntent }).__c64uIntent;
+    delete (requestOptions as { __c64uAllowDuringDiscovery?: boolean }).__c64uAllowDuringDiscovery;
+    delete (requestOptions as { __c64uBypassCache?: boolean }).__c64uBypassCache;
+    delete (requestOptions as { __c64uBypassCooldown?: boolean }).__c64uBypassCooldown;
+    delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
-    return runSerializedRequest(() => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => withRestInteraction({
+      action,
+      method,
+      path,
+      normalizedUrl: normalizeUrlPath(url),
+      intent,
+      baseUrl,
+      allowDuringDiscovery,
+      bypassCache,
+      bypassCooldown,
+      bypassBackoff,
+    }, async () => {
+      const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      let status: number | 'error' = 'error';
       const bodyPayload = extractRequestBody(requestOptions.body);
       recordRestRequest(action, {
         method,
@@ -497,9 +515,22 @@ export class C64API {
       isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
 
     const method = (options.method || 'GET').toString().toUpperCase();
-    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-    return runSerializedRequest(() => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => {
+    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => withRestInteraction({
+      action,
+      method,
+      path: normalizeUrlPath(url),
+      normalizedUrl: normalizeUrlPath(url),
+      intent: 'user',
+      baseUrl: (() => {
+        try {
+          return new URL(url).origin;
+        } catch {
+          return '';
+        }
+      })(),
+    }, async () => {
+      const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
       const headers = (options.headers as Record<string, string>) || {};
       recordRestRequest(action, {
         method,
@@ -617,7 +648,14 @@ export class C64API {
     return this.request('/v1/version');
   }
 
-  async getInfo(options: (RequestInit & { timeoutMs?: number }) = {}): Promise<DeviceInfo> {
+  async getInfo(options: (RequestInit & {
+    timeoutMs?: number;
+    __c64uIntent?: InteractionIntent;
+    __c64uAllowDuringDiscovery?: boolean;
+    __c64uBypassCache?: boolean;
+    __c64uBypassCooldown?: boolean;
+    __c64uBypassBackoff?: boolean;
+  }) = {}): Promise<DeviceInfo> {
     return this.request('/v1/info', options);
   }
 

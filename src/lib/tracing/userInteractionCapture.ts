@@ -1,0 +1,143 @@
+import { createActionContext, runWithActionTrace } from '@/lib/tracing/actionTrace';
+
+const INSTALL_FLAG = '__c64uUserInteractionCaptureInstalled';
+const COMPONENT_NAME = 'GlobalInteraction';
+
+const isElement = (value: unknown): value is Element =>
+  typeof value === 'object' && value !== null && 'nodeType' in (value as any) && (value as any).nodeType === 1;
+
+const getAriaLabelledByText = (element: Element) => {
+  const labelledBy = element.getAttribute('aria-labelledby');
+  if (!labelledBy) return null;
+  const ids = labelledBy.split(/\s+/).map((id) => id.trim()).filter(Boolean);
+  for (const id of ids) {
+    const labelEl = document.getElementById(id);
+    const text = labelEl?.textContent?.trim();
+    if (text) return text;
+  }
+  return null;
+};
+
+const getMeaningfulLabel = (element: Element) => {
+  const ariaLabel = element.getAttribute('aria-label')?.trim();
+  if (ariaLabel) return ariaLabel;
+  const ariaLabelledBy = getAriaLabelledByText(element);
+  if (ariaLabelledBy) return ariaLabelledBy;
+
+  const testId = element.getAttribute('data-testid')?.trim();
+  if (testId) return testId;
+
+  const title = element.getAttribute('title')?.trim();
+  if (title) return title;
+
+  const id = (element as HTMLElement).id?.trim();
+  if (id) return id;
+
+  const name = (element as HTMLElement).getAttribute?.('name')?.trim();
+  if (name) return name;
+
+  const text = element.textContent?.replace(/\s+/g, ' ').trim();
+  if (text) return text.slice(0, 60);
+
+  const tag = element.tagName.toLowerCase();
+  const role = element.getAttribute('role')?.trim();
+  return role ? `${tag}[role=${role}]` : tag;
+};
+
+const isPrimaryInteractive = (element: Element) => {
+  const tag = element.tagName.toLowerCase();
+  if (tag === 'button' || tag === 'a' || tag === 'select' || tag === 'textarea') return true;
+  if (tag === 'input') return true;
+
+  const role = element.getAttribute('role');
+  if (!role) return false;
+  return [
+    'button',
+    'checkbox',
+    'switch',
+    'tab',
+    'menuitem',
+    'menuitemcheckbox',
+    'menuitemradio',
+    'option',
+    'slider',
+    'radio',
+    'link',
+  ].includes(role);
+};
+
+const isFallbackInteractive = (element: Element) => {
+  if (element.getAttribute('data-testid')) return true;
+  if (element.getAttribute('data-cta')) return true;
+  if (element.getAttribute('data-action')) return true;
+  if (element.getAttribute('aria-label')) return true;
+  if (element.getAttribute('aria-labelledby')) return true;
+  if (element.getAttribute('title')) return true;
+  if ((element as HTMLElement).isContentEditable) return true;
+  const tabIndex = (element as HTMLElement).tabIndex;
+  return typeof tabIndex === 'number' && tabIndex >= 0;
+};
+
+const findInteractiveTarget = (event: Event) => {
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+  for (const candidate of path) {
+    if (!isElement(candidate)) continue;
+    if (candidate.tagName.toLowerCase() === 'body') break;
+    if (isPrimaryInteractive(candidate)) return candidate;
+  }
+  for (const candidate of path) {
+    if (!isElement(candidate)) continue;
+    if (candidate.tagName.toLowerCase() === 'body') break;
+    if (isFallbackInteractive(candidate)) return candidate;
+  }
+  if (isElement(event.target)) {
+    if (isPrimaryInteractive(event.target) || isFallbackInteractive(event.target)) return event.target;
+  }
+  return null;
+};
+
+const traceInteraction = async (action: string, element: Element, event: Event) => {
+  // Avoid double-tracing when a component wrapper already captured the interaction.
+  if ((event as any).__c64uTraced) return;
+
+  (event as any).__c64uTraced = true;
+
+  const label = getMeaningfulLabel(element);
+  const name = `${action} ${label}`;
+  const context = createActionContext(name, 'user', COMPONENT_NAME);
+  await runWithActionTrace(context, () => undefined);
+};
+
+export const registerUserInteractionCapture = () => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if ((window as any)[INSTALL_FLAG]) return;
+  (window as any)[INSTALL_FLAG] = true;
+
+  const onClick = (event: Event) => {
+    const element = findInteractiveTarget(event);
+    if (!element) return;
+    void traceInteraction('click', element, event);
+  };
+
+  // Use change (not input) to avoid tracing every keystroke.
+  const onChange = (event: Event) => {
+    const element = findInteractiveTarget(event);
+    if (!element) return;
+    void traceInteraction('change', element, event);
+  };
+
+  // Sliders (Radix) often don't emit native change events.
+  const onPointerUp = (event: Event) => {
+    const element = findInteractiveTarget(event);
+    if (!element) return;
+    const role = element.getAttribute('role');
+    const tag = element.tagName.toLowerCase();
+    const isRange = tag === 'input' && (element as HTMLInputElement).type?.toLowerCase?.() === 'range';
+    if (role !== 'slider' && !isRange) return;
+    void traceInteraction('slide', element, event);
+  };
+
+  document.addEventListener('click', onClick, { capture: true });
+  document.addEventListener('change', onChange, { capture: true });
+  document.addEventListener('pointerup', onPointerUp, { capture: true });
+};

@@ -90,8 +90,8 @@ describe('compareTracesEssential', () => {
       responseBody: { version: '1.0' },
     });
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 
   it('ignores volatile timestamps in response bodies', () => {
@@ -114,8 +114,8 @@ describe('compareTracesEssential', () => {
       responseBody: { timestamp: '2026-01-31T00:00:05.000Z', version: '1.0' },
     });
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 
   it('normalizes port fields in REST payloads', () => {
@@ -140,8 +140,8 @@ describe('compareTracesEssential', () => {
       responseBody: { entries: [] },
     });
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 
   it('fails on semantic REST differences', () => {
@@ -150,7 +150,7 @@ describe('compareTracesEssential', () => {
       correlationId: 'COR-0020',
       actionName: 'rest.get',
       method: 'GET',
-      url: 'http://127.0.0.1:5555/v1/info',
+      url: 'http://127.0.0.1:5555/v1/version',
       status: 200,
     });
     const actual = buildRestTrace({
@@ -158,12 +158,12 @@ describe('compareTracesEssential', () => {
       correlationId: 'COR-0020',
       actionName: 'rest.get',
       method: 'POST',
-      url: 'http://127.0.0.1:6666/v1/info',
+      url: 'http://127.0.0.1:6666/v1/version',
       status: 200,
     });
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors.length).toBeGreaterThan(0);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors.length).toBeGreaterThan(0);
   });
 
   it('collapses duplicate GET /v1/info actions', () => {
@@ -196,8 +196,8 @@ describe('compareTracesEssential', () => {
       status: 200,
     });
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 
   it('collapses duplicate GET /v1/drives and /v1/configs actions', () => {
@@ -257,8 +257,8 @@ describe('compareTracesEssential', () => {
       }),
     ];
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 
   it('normalizes host-like substrings in error messages', () => {
@@ -302,8 +302,8 @@ describe('compareTracesEssential', () => {
       }),
     ];
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 
   it('normalizes volume dB values in config payloads', () => {
@@ -336,7 +336,7 @@ describe('compareTracesEssential', () => {
       },
     });
 
-    const errors = compareTracesEssential(expected, actual);
-    expect(errors).toEqual([]);
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors).toEqual([]);
   });
 });

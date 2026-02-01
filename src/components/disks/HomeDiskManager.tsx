@@ -1,3 +1,4 @@
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder } from 'lucide-react';
@@ -12,6 +13,7 @@ import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
+import { useActionTrace } from '@/hooks/useActionTrace';
 import { getC64API } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
@@ -28,7 +30,7 @@ import { getLocalSourceListingMode, requireLocalSourceEntries } from '@/lib/sour
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
-import { getPlatform } from '@/lib/native/platform';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
@@ -82,6 +84,7 @@ export const HomeDiskManager = () => {
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const uniqueId = status.deviceInfo?.unique_id || null;
+  const trace = useActionTrace('HomeDiskManager');
 
   const diskLibrary = useDiskLibrary(uniqueId);
   const disksById = useMemo(
@@ -119,7 +122,7 @@ export const HomeDiskManager = () => {
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const { sources: localSources, addSourceFromPicker, addSourceFromFiles } = useLocalSources();
   const { limit: listPreviewLimit } = useListPreviewLimit();
-  const isAndroid = getPlatform() === 'android';
+  const isAndroid = getPlatform() === 'android' && isNativePlatform();
 
   const api = getC64API();
   const queryClient = useQueryClient();
@@ -240,11 +243,6 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const handleLocalSourceInput = (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    addSourceFromFiles(files);
-  };
-
   const allDiskIds = useMemo(() => diskLibrary.disks.map((disk) => disk.id), [diskLibrary.disks]);
   const selectedCount = selectedDiskIds.size;
   const allSelected = selectedCount > 0 && selectedCount === allDiskIds.length;
@@ -264,7 +262,7 @@ export const HomeDiskManager = () => {
     [diskLibrary.disks],
   );
 
-  const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) => {
+  const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry) => {
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
       await mountDiskToDrive(api, drive, disk, runtimeFile);
@@ -302,9 +300,9 @@ export const HomeDiskManager = () => {
         },
       });
     }
-  };
+  });
 
-  const handleEject = async (drive: DriveKey) => {
+  const handleEject = trace(async (drive: DriveKey) => {
     try {
       await api.unmountDrive(drive);
       setMountedByDrive((prev) => ({ ...prev, [drive]: '' }));
@@ -320,9 +318,9 @@ export const HomeDiskManager = () => {
         context: { drive },
       });
     }
-  };
+  });
 
-  const handleToggleDrivePower = async (drive: DriveKey, targetEnabled: boolean) => {
+  const handleToggleDrivePower = trace(async (drive: DriveKey, targetEnabled: boolean) => {
     if (!status.isConnected) return;
     setDrivePowerPending((prev) => ({ ...prev, [drive]: true }));
     setDrivePowerOverride((prev) => ({ ...prev, [drive]: targetEnabled }));
@@ -355,7 +353,7 @@ export const HomeDiskManager = () => {
     } finally {
       setDrivePowerPending((prev) => ({ ...prev, [drive]: false }));
     }
-  };
+  });
 
   const resolveMountedDiskId = (drive: DriveKey) => {
     const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
@@ -369,7 +367,7 @@ export const HomeDiskManager = () => {
     return disk?.id ?? null;
   };
 
-  const handleRotate = async (drive: DriveKey, direction: 1 | -1) => {
+  const handleRotate = trace(async (drive: DriveKey, direction: 1 | -1) => {
     const currentId = resolveMountedDiskId(drive);
     if (!currentId) return;
     const current = disksById[currentId];
@@ -393,9 +391,9 @@ export const HomeDiskManager = () => {
     const nextDisk = groupDisks[nextIndex];
     if (!nextDisk) return;
     await handleMountDisk(drive, nextDisk);
-  };
+  });
 
-  const handleDeleteDisk = async (disk: DiskEntry, options: { suppressToast?: boolean } = {}) => {
+  const handleDeleteDisk = trace(async (disk: DiskEntry, options: { suppressToast?: boolean } = {}) => {
     const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
     if (mountedDrives.length > 0) {
       try {
@@ -418,7 +416,7 @@ export const HomeDiskManager = () => {
       }
     }
     diskLibrary.removeDisk(disk.id);
-  };
+  });
 
   const handleBulkDelete = async () => {
     const disksToRemove = diskLibrary.disks.filter((disk) => selectedDiskIds.has(disk.id));
@@ -435,7 +433,8 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const handleAddDiskSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
+  const handleAddDiskSelections = useCallback(trace(async (source: SourceLocation, selections: SelectedItem[]) => {
+    if (isAddingItems) return false;
     try {
       const startedAt = Date.now();
       addItemsStartedAtRef.current = startedAt;
@@ -509,7 +508,7 @@ export const HomeDiskManager = () => {
         return files;
       };
 
-      const files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
+      let files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
       const listingCache = new Map<string, SourceEntry[]>();
       const resolveSelectionEntry = async (filePath: string) => {
         const normalizedPath = normalizeSourcePath(filePath);
@@ -528,7 +527,9 @@ export const HomeDiskManager = () => {
       };
       for (const selection of selections) {
         if (selection.type === 'dir') {
-          const nested = await collectRecursive(selection.path);
+          const nested = source.type === 'local'
+            ? await source.listFilesRecursive(selection.path)
+            : await collectRecursive(selection.path);
           nested.forEach((entry) => {
             if (entry.type !== 'file') return;
             files.push({ path: entry.path, name: entry.name, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt, sourceId: source.id });
@@ -547,7 +548,36 @@ export const HomeDiskManager = () => {
         }
       }
 
-      const diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
+      let diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
+      if (!diskCandidates.length && source.type === 'local' && selections.length === 1 && selections[0]?.type === 'dir') {
+        const selectionPath = normalizeSourcePath(selections[0].path);
+        const rootPath = normalizeSourcePath(source.rootPath);
+        if (selectionPath === rootPath) {
+          const localSource = localSourcesById.get(source.id);
+          if (localSource && getLocalSourceListingMode(localSource) === 'entries') {
+            try {
+              const entries = requireLocalSourceEntries(localSource, 'HomeDiskManager.localFallback');
+              files = entries.map((entry) => ({
+                path: normalizeSourcePath(entry.relativePath),
+                name: entry.name,
+                sizeBytes: entry.sizeBytes ?? null,
+                modifiedAt: entry.modifiedAt ?? null,
+                sourceId: source.id,
+              }));
+              diskCandidates = files.filter((entry) => isDiskImagePath(entry.path));
+            } catch (error) {
+              addErrorLog('Local source fallback failed', {
+                sourceId: localSource.id,
+                error: {
+                  name: (error as Error).name,
+                  message: (error as Error).message,
+                  stack: (error as Error).stack,
+                },
+              });
+            }
+          }
+        }
+      }
       if (!diskCandidates.length) {
         addLog('debug', 'No disk files after scan', {
           sourceId: source.id,
@@ -660,7 +690,88 @@ export const HomeDiskManager = () => {
         addItemsOverlayActiveRef.current = false;
       }
     }
-  }, [addItemsSurface, browserOpen, diskLibrary, localSourcesById, reportUserError, showNoDiskWarning]);
+  }), [addItemsSurface, browserOpen, diskLibrary, isAddingItems, localSourcesById, reportUserError, showNoDiskWarning, trace]);
+
+  const handleLocalSourceInput = trace(async (files: FileList | File[] | null) => {
+    if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
+    const source = addSourceFromFiles(files);
+    if (!source) return;
+    const fileList = Array.isArray(files) ? files : Array.from(files);
+    let success = false;
+    try {
+      setIsAddingItems(true);
+      setAddItemsProgress({ status: 'scanning', count: 0, elapsedMs: 0, total: null, message: 'Scanning…' });
+      const normalizedFiles = fileList.map((file) => {
+        const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+        const relativePath = relative.replace(/^\/+/, '');
+        return {
+          path: normalizeSourcePath(relativePath),
+          name: file.name,
+          sizeBytes: file.size ?? null,
+          modifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+        };
+      });
+      const diskCandidates = normalizedFiles.filter((entry) => isDiskImagePath(entry.path));
+      if (!diskCandidates.length) {
+        setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No disk files found.' }));
+        showNoDiskWarning();
+      } else {
+        const groupMap = assignDiskGroupsByPrefix(
+          diskCandidates.map((entry) => ({ path: normalizeDiskPath(entry.path), name: entry.name })),
+        );
+        const runtimeFiles: Record<string, File> = {};
+        const disks = diskCandidates.map((entry, index) => {
+          const normalized = normalizeDiskPath(entry.path);
+          const autoGroup = groupMap.get(normalized);
+          const fallbackGroup = getLeafFolderName(normalized);
+          const groupName = autoGroup ?? fallbackGroup ?? null;
+          const diskEntry = createDiskEntry({
+            path: normalized,
+            location: 'local',
+            group: groupName,
+            sizeBytes: entry.sizeBytes ?? null,
+            modifiedAt: entry.modifiedAt ?? null,
+            importOrder: index,
+          });
+          const runtime = resolveLocalRuntimeFile(source.id, normalized);
+          if (runtime) runtimeFiles[diskEntry.id] = runtime;
+          return diskEntry;
+        });
+        diskLibrary.addDisks(disks, runtimeFiles);
+        setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to library' }));
+        toast({ title: 'Items added', description: `${disks.length} disk(s) added to library.` });
+        success = true;
+      }
+    } catch (error) {
+      setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
+      reportUserError({
+        operation: 'DISK_IMPORT',
+        title: 'Add items failed',
+        description: (error as Error).message,
+        error: error as Error,
+      });
+    } finally {
+      setIsAddingItems(false);
+    }
+    if (success && browserOpen) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      setBrowserOpen(false);
+    }
+  });
+
+  const handleAddLocalSourceFromPicker = useCallback(trace(async () => {
+    const source = await addSourceFromPicker(localSourceInputRef.current);
+    if (!source) return null;
+    const location = createLocalSourceLocation(source);
+    const success = await handleAddDiskSelections(location, [
+      { type: 'dir', name: location.name, path: location.rootPath },
+    ]);
+    if (success && browserOpen) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      setBrowserOpen(false);
+    }
+    return source.id;
+  }), [addSourceFromPicker, browserOpen, handleAddDiskSelections, trace]);
 
   const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
     const detailsDate = disk.modifiedAt || disk.importedAt;
@@ -920,10 +1031,11 @@ export const HomeDiskManager = () => {
         type="file"
         multiple
         className="hidden"
-          onChange={(event) => {
-            handleLocalSourceInput(event.target.files);
-            event.currentTarget.value = '';
-          }}
+          onChange={wrapUserEvent((event) => {
+          const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
+          void handleLocalSourceInput(selected.length ? selected : null);
+          event.currentTarget.value = '';
+          }, 'upload', 'FileInput', { type: 'file' }, 'FileInput')}
       />
 
       <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
@@ -985,7 +1097,7 @@ export const HomeDiskManager = () => {
         title="Add items"
         confirmLabel="Add to library"
         sourceGroups={sourceGroups}
-        onAddLocalSource={async () => (await addSourceFromPicker(localSourceInputRef.current))?.id ?? null}
+        onAddLocalSource={handleAddLocalSourceFromPicker}
         onConfirm={handleAddDiskSelections}
         filterEntry={(entry) => entry.type === 'dir' || isDiskImagePath(entry.path)}
         allowFolderSelection
@@ -994,7 +1106,7 @@ export const HomeDiskManager = () => {
         showProgressFooter={addItemsSurface === 'dialog'}
         autoConfirmCloseBefore={isAndroid}
         onAutoConfirmStart={handleAutoConfirmStart}
-        autoConfirmLocalSource
+        autoConfirmLocalSource={false}
       />
 
       {!browserOpen ? (

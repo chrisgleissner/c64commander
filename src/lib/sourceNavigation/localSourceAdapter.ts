@@ -2,7 +2,7 @@ import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { listLocalFiles, listLocalFolders } from '@/lib/playback/localFileBrowser';
 import { addLog } from '@/lib/logging';
 import { FolderPicker, type SafFolderEntry } from '@/lib/native/folderPicker';
-import { getPlatform } from '@/lib/native/platform';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeSourcePath } from './paths';
 import type { SourceEntry, SourceLocation } from './types';
@@ -132,7 +132,7 @@ const listSafFilesRecursive = async (source: LocalSourceRecord, path: string): P
 
 export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLocation => {
   const rootPath = resolveRootPath(source);
-  const isAndroid = getPlatform() === 'android';
+  const isAndroid = getPlatform() === 'android' && isNativePlatform();
   const listEntries = async (path: string): Promise<SourceEntry[]> => {
     if (source.android?.treeUri) {
       return listSafEntries(source, path);
@@ -173,6 +173,8 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
         type: 'file' as const,
         name: entry.name,
         path: toSourceEntryPath(entry.relativePath),
+        sizeBytes: entry.sizeBytes ?? null,
+        modifiedAt: entry.modifiedAt ?? null,
       }))
       .filter((entry) => entry.path.startsWith(prefix) || entry.path === normalized);
   };

@@ -24,3 +24,13 @@ export const getTraceIdSnapshot = () => ({
   nextEventId: formatTraceId('EVT', eventCounter + 1),
   nextCorrelationId: formatTraceId('COR', correlationCounter + 1),
 });
+
+export const getCurrentTraceIdCounters = () => ({
+  eventCounter,
+  correlationCounter,
+});
+
+export const setTraceIdCounters = (event: number, correlation: number) => {
+  eventCounter = event;
+  correlationCounter = correlation;
+};

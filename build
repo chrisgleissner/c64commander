@@ -44,10 +44,10 @@ export GRADLE_MAX_WORKERS
 
 usage() {
   cat <<'EOF'
-local-build.sh - C64 Commander local build helper
+build - C64 Commander local build helper
 
 Usage:
-  ./local-build.sh [options]
+  ./build [options]
 
 Default (no options):
   - Install deps
@@ -96,14 +96,14 @@ Options:
   -h, --help            Show this help
 
 Examples:
-  ./local-build.sh
-  ./local-build.sh --skip-tests
-  ./local-build.sh --install --device R5CRC3ZY9XH
-  ./local-build.sh --apk-path /path/to/app-debug.apk --install
-  ./local-build.sh --emulator
-  ./local-build.sh --screenshots
-  ./local-build.sh --screenshots-only
-  ./local-build.sh --test-e2e --record-traces --trace-suite playback
+  ./build
+  ./build --skip-tests
+  ./build --install --device R5CRC3ZY9XH
+  ./build --apk-path /path/to/app-debug.apk --install
+  ./build --emulator
+  ./build --screenshots
+  ./build --screenshots-only
+  ./build --test-e2e --record-traces --trace-suite playback
 
 Notes:
   --screenshots       Runs full build/tests by default, then captures screenshots.

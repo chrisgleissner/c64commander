@@ -12,9 +12,12 @@ import {
   loadAutomaticDemoModeEnabled,
   loadStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
+import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
 import { applyFuzzModeDefaults, getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
 import { addLog } from '@/lib/logging';
 import { getSmokeConfig, initializeSmokeMode, isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
+import { resetInteractionState } from '@/lib/deviceInteraction/deviceInteractionManager';
+import { updateDeviceConnectionState } from '@/lib/deviceInteraction/deviceStateStore';
 
 export type ConnectionState = 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
 export type DiscoveryTrigger = 'startup' | 'manual' | 'settings' | 'background';
@@ -30,7 +33,7 @@ export type ConnectionSnapshot = Readonly<{
   demoInterstitialVisible: boolean;
 }>;
 
-const STARTUP_PROBE_INTERVAL_MS = 500;
+const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
 
 const loadPersistedConnectionConfig = () => {
@@ -109,7 +112,15 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
 
   try {
     const api = new C64API(config.baseUrl, config.password, config.deviceHost);
-    const response = await api.getInfo({ timeoutMs, signal: outerSignal });
+    const response = await api.getInfo({
+      timeoutMs,
+      signal: outerSignal,
+      __c64uIntent: 'system',
+      __c64uAllowDuringDiscovery: true,
+      __c64uBypassCache: true,
+      __c64uBypassCooldown: true,
+      __c64uBypassBackoff: true,
+    });
     return isProbePayloadHealthy(response);
   } catch (error) {
     const message = (error as Error | undefined)?.message ?? '';
@@ -190,6 +201,7 @@ const transitionTo = (state: ConnectionState, trigger: DiscoveryTrigger | null) 
     lastDiscoveryTrigger: trigger,
     lastTransitionAtMs: Date.now(),
   });
+  updateDeviceConnectionState(state);
 };
 
 const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger | null, details?: Record<string, unknown>) => {
@@ -207,6 +219,7 @@ const logDiscoveryDecision = (state: ConnectionState, trigger: DiscoveryTrigger 
 const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
+  resetInteractionState('transition-real-connected');
   transitionTo('REAL_CONNECTED', trigger);
   logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
   await stopDemoServer();
@@ -217,6 +230,7 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
 const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
   dismissDemoInterstitial();
+  resetInteractionState('transition-offline');
   transitionTo('OFFLINE_NO_DEMO', trigger);
   logDiscoveryDecision('OFFLINE_NO_DEMO', trigger, { mode: 'offline' });
   await stopDemoServer();
@@ -229,6 +243,7 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   cancelActiveDiscovery();
+  resetInteractionState('transition-demo-active');
   transitionTo('DEMO_ACTIVE', trigger);
   logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 
@@ -408,7 +423,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   void runProbe();
   const probeTimer = globalThis.setInterval(() => {
     void runProbe();
-  }, STARTUP_PROBE_INTERVAL_MS);
+  }, loadDeviceSafetyConfig().discoveryProbeIntervalMs);
 
   activeDiscovery = {
     abort,
@@ -435,6 +450,7 @@ export async function initializeConnectionManager() {
     lastProbeError: null,
     demoInterstitialVisible: false,
   });
+  updateDeviceConnectionState('UNKNOWN');
 
   // Ensure outcomes never persist across cold starts.
   await stopDemoServer().catch(() => {});

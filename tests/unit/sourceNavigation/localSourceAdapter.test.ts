@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const listChildrenMock = vi.fn();
 let platform = 'android';
+let nativePlatform = true;
 
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
@@ -11,6 +12,7 @@ vi.mock('@/lib/native/folderPicker', () => ({
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: () => platform,
+  isNativePlatform: () => nativePlatform,
 }));
 
 import { createLocalSourceLocation } from '@/lib/sourceNavigation/localSourceAdapter';
@@ -58,6 +60,7 @@ describe('localSourceAdapter', () => {
   beforeEach(() => {
     listChildrenMock.mockReset();
     platform = 'android';
+    nativePlatform = true;
   });
 
   it('uses SAF listChildren without touching entries', async () => {
@@ -174,6 +177,7 @@ describe('localSourceAdapter', () => {
 
   it('lists entries from local file list on non-Android platforms', async () => {
     platform = 'web';
+    nativePlatform = false;
     const source = buildWebSource();
 
     const location = createLocalSourceLocation(source);
@@ -197,19 +201,33 @@ describe('localSourceAdapter', () => {
 
   it('filters recursive file listings by prefix', async () => {
     platform = 'web';
+    nativePlatform = false;
     const source = buildWebSource();
 
     const location = createLocalSourceLocation(source);
     const files = await location.listFilesRecursive('/music');
 
     expect(files).toEqual([
-      { type: 'file', name: 'song.sid', path: '/music/song.sid' },
-      { type: 'file', name: 'readme.txt', path: '/music/docs/readme.txt' },
+      {
+        type: 'file',
+        name: 'song.sid',
+        path: '/music/song.sid',
+        sizeBytes: 123,
+        modifiedAt: '2026-01-02T00:00:00.000Z',
+      },
+      {
+        type: 'file',
+        name: 'readme.txt',
+        path: '/music/docs/readme.txt',
+        sizeBytes: 45,
+        modifiedAt: '2026-01-03T00:00:00.000Z',
+      },
     ]);
   });
 
   it('marks sources unavailable when reselect is required', () => {
     platform = 'web';
+    nativePlatform = false;
     const source = buildWebSource({ requiresReselect: true });
 
     const location = createLocalSourceLocation(source);

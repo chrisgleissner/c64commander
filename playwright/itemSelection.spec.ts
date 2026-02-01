@@ -417,13 +417,19 @@ test.describe('Item Selection Dialog UX', () => {
     await input.setInputFiles([path.resolve('playwright/fixtures/disks-local')]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
+    await expect.poll(async () => page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_disk_library:TEST-123');
+      if (!raw) return 0;
+      const parsed = JSON.parse(raw) as { disks?: unknown[] };
+      return parsed.disks?.length ?? 0;
+    })).toBeGreaterThan(0);
+
     const firstCount = await page.evaluate(() => {
       const raw = localStorage.getItem('c64u_disk_library:TEST-123');
       if (!raw) return 0;
       const parsed = JSON.parse(raw) as { disks?: unknown[] };
       return parsed.disks?.length ?? 0;
     });
-    expect(firstCount).toBeGreaterThan(0);
 
     await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
     await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');

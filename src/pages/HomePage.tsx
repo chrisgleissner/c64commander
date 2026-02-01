@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useC64ConfigItems, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { AppBar } from '@/components/AppBar';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -344,7 +345,7 @@ export default function HomePage() {
             <button
               type="button"
               className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
-              onClick={() => navigate('/disks')}
+              onClick={wrapUserEvent(() => navigate('/disks'), 'click', 'DriveTile', { title: 'Drive A' }, 'DriveTile')}
               aria-label="Open Disks"
             >
               <div className="flex items-center gap-2 min-w-0">

@@ -64,6 +64,15 @@ C64 Commander is an Android app that connects to a C64 Ultimate on your local ne
 3. If prompted, allow installs from unknown sources for the browser/files app.
 4. Tap Install to finish.
 
+## Device safety settings
+
+C64 Commander includes a configurable device safety system to reduce REST/FTP overload on fragile hardware.
+You can find these controls in Settings → Device Safety.
+
+- **Safety mode presets**: Relaxed, Balanced (default), and Conservative.
+- **Advanced controls**: REST/FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit breaker thresholds, and discovery probe interval.
+- **Warning**: Lower safety settings can overwhelm the device. Use relaxed settings only if you understand the risks.
+
 ## Developer documentation
 
 For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).

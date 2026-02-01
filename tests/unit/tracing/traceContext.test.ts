@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: () => 'web',
+  isNativePlatform: () => false,
 }));
 
 import {

@@ -4,6 +4,11 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
   test: {
     environment: "jsdom",
     globals: true,
@@ -30,8 +35,5 @@ export default defineConfig({
         lines: 10,
       },
     },
-  },
-  resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
   },
 });

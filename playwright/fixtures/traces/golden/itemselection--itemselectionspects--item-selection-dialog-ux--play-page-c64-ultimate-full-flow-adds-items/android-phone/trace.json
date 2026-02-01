@@ -1,14 +1,14 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-31T14:50:17.056Z",
-    "relativeMs": 47,
+    "timestamp": "2026-02-01T17:25:17.476Z",
+    "relativeMs": 108,
     "type": "action-start",
-    "origin": "system",
+    "origin": "user",
     "correlationId": "COR-0000",
     "data": {
-      "name": "ftp.list",
-      "component": null,
+      "name": "click Add file / folder",
+      "component": "GlobalInteraction",
       "context": {
         "ui": {
           "route": "/play",
@@ -35,14 +35,26 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-31T14:50:17.065Z",
-    "relativeMs": 56,
+    "timestamp": "2026-02-01T17:25:17.476Z",
+    "relativeMs": 108,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0002",
+    "timestamp": "2026-02-01T17:25:17.477Z",
+    "relativeMs": 109,
     "type": "action-start",
-    "origin": "system",
+    "origin": "user",
     "correlationId": "COR-0001",
     "data": {
-      "name": "rest.post",
-      "component": null,
+      "name": "click Button",
+      "component": "Button",
       "context": {
         "ui": {
           "route": "/play",
@@ -68,124 +80,9 @@
     }
   },
   {
-    "id": "EVT-0002",
-    "timestamp": "2026-01-31T14:50:17.066Z",
-    "relativeMs": 57,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0001",
-    "data": {
-      "selectedTarget": "real-device",
-      "reason": "reachable"
-    }
-  },
-  {
     "id": "EVT-0003",
-    "timestamp": "2026-01-31T14:50:17.066Z",
-    "relativeMs": 57,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0001",
-    "data": {
-      "method": "POST",
-      "url": "http://127.0.0.1:38487/v1/ftp/list",
-      "normalizedUrl": "/v1/ftp/list",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "body": {
-        "host": "127.0.0.1",
-        "port": 43537,
-        "password": "***",
-        "path": "/"
-      },
-      "target": "real-device"
-    }
-  },
-  {
-    "id": "EVT-0004",
-    "timestamp": "2026-01-31T14:50:17.184Z",
-    "relativeMs": 175,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0001",
-    "data": {
-      "status": 200,
-      "body": {
-        "entries": [
-          {
-            "name": ".fixture-seeded",
-            "path": "/.fixture-seeded",
-            "type": "file",
-            "size": 24
-          },
-          {
-            "name": "Usb0",
-            "path": "/Usb0",
-            "type": "dir",
-            "size": 100
-          }
-        ]
-      },
-      "durationMs": 118,
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0005",
-    "timestamp": "2026-01-31T14:50:17.184Z",
-    "relativeMs": 175,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0001",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0006",
-    "timestamp": "2026-01-31T14:50:17.184Z",
-    "relativeMs": 175,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode"
-    }
-  },
-  {
-    "id": "EVT-0007",
-    "timestamp": "2026-01-31T14:50:17.184Z",
-    "relativeMs": 175,
-    "type": "ftp-operation",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "operation": "list",
-      "path": "/",
-      "result": "success",
-      "error": null,
-      "target": "external-mock"
-    }
-  },
-  {
-    "id": "EVT-0008",
-    "timestamp": "2026-01-31T14:50:17.184Z",
-    "relativeMs": 175,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0009",
-    "timestamp": "2026-01-31T14:50:17.803Z",
-    "relativeMs": 794,
+    "timestamp": "2026-02-01T17:25:17.486Z",
+    "relativeMs": 118,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -217,9 +114,21 @@
     }
   },
   {
-    "id": "EVT-0010",
-    "timestamp": "2026-01-31T14:50:17.805Z",
-    "relativeMs": 796,
+    "id": "EVT-0004",
+    "timestamp": "2026-02-01T17:25:17.499Z",
+    "relativeMs": 131,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0005",
+    "timestamp": "2026-02-01T17:25:17.517Z",
+    "relativeMs": 149,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -244,16 +153,16 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
-    "id": "EVT-0011",
-    "timestamp": "2026-01-31T14:50:17.805Z",
-    "relativeMs": 796,
+    "id": "EVT-0006",
+    "timestamp": "2026-02-01T17:25:17.524Z",
+    "relativeMs": 156,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -263,22 +172,285 @@
     }
   },
   {
-    "id": "EVT-0012",
-    "timestamp": "2026-01-31T14:50:17.805Z",
-    "relativeMs": 796,
+    "id": "EVT-0007",
+    "timestamp": "2026-02-01T17:25:17.524Z",
+    "relativeMs": 156,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:38487/v1/ftp/list",
+      "url": "http://127.0.0.1:41343/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 43537,
+        "port": 40289,
+        "password": "***",
+        "path": "/"
+      },
+      "target": "real-device"
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-02-01T17:25:17.791Z",
+    "relativeMs": 423,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": 200,
+      "body": {
+        "entries": [
+          {
+            "name": ".fixture-seeded",
+            "path": "/.fixture-seeded",
+            "type": "file",
+            "size": 24
+          },
+          {
+            "name": "Usb0",
+            "path": "/Usb0",
+            "type": "dir",
+            "size": 100
+          }
+        ]
+      },
+      "durationMs": 250,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0009",
+    "timestamp": "2026-02-01T17:25:17.791Z",
+    "relativeMs": 423,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-02-01T17:25:17.792Z",
+    "relativeMs": 424,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-02-01T17:25:17.793Z",
+    "relativeMs": 425,
+    "type": "ftp-operation",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "operation": "list",
+      "path": "/",
+      "result": "success",
+      "error": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-02-01T17:25:17.793Z",
+    "relativeMs": 425,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-02-01T17:25:19.076Z",
+    "relativeMs": 1708,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "click Open Usb0",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-02-01T17:25:19.076Z",
+    "relativeMs": 1708,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0015",
+    "timestamp": "2026-02-01T17:25:19.077Z",
+    "relativeMs": 1709,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0005",
+    "data": {
+      "name": "click Open Usb0",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0016",
+    "timestamp": "2026-02-01T17:25:19.077Z",
+    "relativeMs": 1709,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "name": "ftp.list",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0017",
+    "timestamp": "2026-02-01T17:25:19.084Z",
+    "relativeMs": 1716,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "name": "rest.post",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-02-01T17:25:19.084Z",
+    "relativeMs": 1716,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "selectedTarget": "real-device",
+      "reason": "reachable"
+    }
+  },
+  {
+    "id": "EVT-0019",
+    "timestamp": "2026-02-01T17:25:19.084Z",
+    "relativeMs": 1716,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "method": "POST",
+      "url": "http://127.0.0.1:41343/v1/ftp/list",
+      "normalizedUrl": "/v1/ftp/list",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "host": "127.0.0.1",
+        "port": 40289,
         "password": "***",
         "path": "/Usb0"
       },
@@ -286,12 +458,24 @@
     }
   },
   {
-    "id": "EVT-0013",
-    "timestamp": "2026-01-31T14:50:17.917Z",
-    "relativeMs": 908,
+    "id": "EVT-0020",
+    "timestamp": "2026-02-01T17:25:19.085Z",
+    "relativeMs": 1717,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-02-01T17:25:19.249Z",
+    "relativeMs": 1881,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0007",
     "data": {
       "status": 200,
       "body": {
@@ -316,41 +500,41 @@
           }
         ]
       },
-      "durationMs": 109,
+      "durationMs": 161,
       "error": null
     }
   },
   {
-    "id": "EVT-0014",
-    "timestamp": "2026-01-31T14:50:17.917Z",
-    "relativeMs": 908,
+    "id": "EVT-0022",
+    "timestamp": "2026-02-01T17:25:19.249Z",
+    "relativeMs": 1881,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0007",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0015",
-    "timestamp": "2026-01-31T14:50:17.917Z",
-    "relativeMs": 908,
+    "id": "EVT-0023",
+    "timestamp": "2026-02-01T17:25:19.252Z",
+    "relativeMs": 1884,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0006",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0016",
-    "timestamp": "2026-01-31T14:50:17.917Z",
-    "relativeMs": 908,
+    "id": "EVT-0024",
+    "timestamp": "2026-02-01T17:25:19.252Z",
+    "relativeMs": 1884,
     "type": "ftp-operation",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0006",
     "data": {
       "operation": "list",
       "path": "/Usb0",
@@ -360,24 +544,196 @@
     }
   },
   {
-    "id": "EVT-0017",
-    "timestamp": "2026-01-31T14:50:17.917Z",
-    "relativeMs": 908,
+    "id": "EVT-0025",
+    "timestamp": "2026-02-01T17:25:19.252Z",
+    "relativeMs": 1884,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0006",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0018",
-    "timestamp": "2026-01-31T14:50:18.829Z",
-    "relativeMs": 1820,
+    "id": "EVT-0026",
+    "timestamp": "2026-02-01T17:25:20.302Z",
+    "relativeMs": 2934,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0008",
+    "data": {
+      "name": "click Select Demos",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0027",
+    "timestamp": "2026-02-01T17:25:20.302Z",
+    "relativeMs": 2934,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0028",
+    "timestamp": "2026-02-01T17:25:20.304Z",
+    "relativeMs": 2936,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0009",
+    "data": {
+      "name": "toggle Select Demos [true]",
+      "component": "Checkbox",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0029",
+    "timestamp": "2026-02-01T17:25:20.321Z",
+    "relativeMs": 2953,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0009",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0030",
+    "timestamp": "2026-02-01T17:25:21.712Z",
+    "relativeMs": 4344,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0010",
+    "data": {
+      "name": "click add-items-confirm",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0031",
+    "timestamp": "2026-02-01T17:25:21.713Z",
+    "relativeMs": 4345,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0010",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0032",
+    "timestamp": "2026-02-01T17:25:21.713Z",
+    "relativeMs": 4345,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0011",
+    "data": {
+      "name": "click Add to playlist",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0033",
+    "timestamp": "2026-02-01T17:25:21.742Z",
+    "relativeMs": 4374,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0012",
     "data": {
       "name": "ftp.list",
       "component": null,
@@ -399,19 +755,19 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0019",
-    "timestamp": "2026-01-31T14:50:18.830Z",
-    "relativeMs": 1821,
+    "id": "EVT-0034",
+    "timestamp": "2026-02-01T17:25:21.742Z",
+    "relativeMs": 4374,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0013",
     "data": {
       "name": "rest.post",
       "component": null,
@@ -433,41 +789,41 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
-    "id": "EVT-0020",
-    "timestamp": "2026-01-31T14:50:18.830Z",
-    "relativeMs": 1821,
+    "id": "EVT-0035",
+    "timestamp": "2026-02-01T17:25:21.742Z",
+    "relativeMs": 4374,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0013",
     "data": {
       "selectedTarget": "real-device",
       "reason": "reachable"
     }
   },
   {
-    "id": "EVT-0021",
-    "timestamp": "2026-01-31T14:50:18.830Z",
-    "relativeMs": 1821,
+    "id": "EVT-0036",
+    "timestamp": "2026-02-01T17:25:21.742Z",
+    "relativeMs": 4374,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0013",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:38487/v1/ftp/list",
+      "url": "http://127.0.0.1:41343/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 43537,
+        "port": 40289,
         "password": "***",
         "path": "/Usb0/Demos"
       },
@@ -475,12 +831,12 @@
     }
   },
   {
-    "id": "EVT-0022",
-    "timestamp": "2026-01-31T14:50:18.924Z",
-    "relativeMs": 1915,
+    "id": "EVT-0037",
+    "timestamp": "2026-02-01T17:25:21.892Z",
+    "relativeMs": 4524,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0013",
     "data": {
       "status": 200,
       "body": {
@@ -499,41 +855,41 @@
           }
         ]
       },
-      "durationMs": 94,
+      "durationMs": 139,
       "error": null
     }
   },
   {
-    "id": "EVT-0023",
-    "timestamp": "2026-01-31T14:50:18.925Z",
-    "relativeMs": 1916,
+    "id": "EVT-0038",
+    "timestamp": "2026-02-01T17:25:21.892Z",
+    "relativeMs": 4524,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0013",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0024",
-    "timestamp": "2026-01-31T14:50:18.925Z",
-    "relativeMs": 1916,
+    "id": "EVT-0039",
+    "timestamp": "2026-02-01T17:25:21.892Z",
+    "relativeMs": 4524,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0012",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0025",
-    "timestamp": "2026-01-31T14:50:18.925Z",
-    "relativeMs": 1916,
+    "id": "EVT-0040",
+    "timestamp": "2026-02-01T17:25:21.892Z",
+    "relativeMs": 4524,
     "type": "ftp-operation",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0012",
     "data": {
       "operation": "list",
       "path": "/Usb0/Demos",
@@ -543,24 +899,24 @@
     }
   },
   {
-    "id": "EVT-0026",
-    "timestamp": "2026-01-31T14:50:18.925Z",
-    "relativeMs": 1916,
+    "id": "EVT-0041",
+    "timestamp": "2026-02-01T17:25:21.892Z",
+    "relativeMs": 4524,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0012",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0027",
-    "timestamp": "2026-01-31T14:50:18.931Z",
-    "relativeMs": 1922,
+    "id": "EVT-0042",
+    "timestamp": "2026-02-01T17:25:21.917Z",
+    "relativeMs": 4549,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0014",
     "data": {
       "name": "ftp.list",
       "component": null,
@@ -582,19 +938,19 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0028",
-    "timestamp": "2026-01-31T14:50:18.931Z",
-    "relativeMs": 1922,
+    "id": "EVT-0043",
+    "timestamp": "2026-02-01T17:25:21.917Z",
+    "relativeMs": 4549,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0015",
     "data": {
       "name": "ftp.list",
       "component": null,
@@ -616,19 +972,19 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
-    "id": "EVT-0029",
-    "timestamp": "2026-01-31T14:50:18.931Z",
-    "relativeMs": 1922,
+    "id": "EVT-0044",
+    "timestamp": "2026-02-01T17:25:21.921Z",
+    "relativeMs": 4553,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0016",
     "data": {
       "name": "rest.post",
       "component": null,
@@ -650,41 +1006,41 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
-    "id": "EVT-0030",
-    "timestamp": "2026-01-31T14:50:18.931Z",
-    "relativeMs": 1922,
+    "id": "EVT-0045",
+    "timestamp": "2026-02-01T17:25:21.921Z",
+    "relativeMs": 4553,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0016",
     "data": {
       "selectedTarget": "real-device",
       "reason": "reachable"
     }
   },
   {
-    "id": "EVT-0031",
-    "timestamp": "2026-01-31T14:50:18.931Z",
-    "relativeMs": 1922,
+    "id": "EVT-0046",
+    "timestamp": "2026-02-01T17:25:21.921Z",
+    "relativeMs": 4553,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0016",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:38487/v1/ftp/list",
+      "url": "http://127.0.0.1:41343/v1/ftp/list",
       "normalizedUrl": "/v1/ftp/list",
       "headers": {
         "Content-Type": "application/json"
       },
       "body": {
         "host": "127.0.0.1",
-        "port": 43537,
+        "port": 40289,
         "password": "***",
         "path": "/Usb0/Demos/Krestage 3"
       },
@@ -692,81 +1048,12 @@
     }
   },
   {
-    "id": "EVT-0032",
-    "timestamp": "2026-01-31T14:50:18.932Z",
-    "relativeMs": 1923,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0009",
-    "data": {
-      "name": "rest.post",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
-        }
-      }
-    }
-  },
-  {
-    "id": "EVT-0033",
-    "timestamp": "2026-01-31T14:50:18.932Z",
-    "relativeMs": 1923,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0009",
-    "data": {
-      "selectedTarget": "real-device",
-      "reason": "reachable"
-    }
-  },
-  {
-    "id": "EVT-0034",
-    "timestamp": "2026-01-31T14:50:18.932Z",
-    "relativeMs": 1923,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0009",
-    "data": {
-      "method": "POST",
-      "url": "http://127.0.0.1:38487/v1/ftp/list",
-      "normalizedUrl": "/v1/ftp/list",
-      "headers": {
-        "Content-Type": "application/json"
-      },
-      "body": {
-        "host": "127.0.0.1",
-        "port": 43537,
-        "password": "***",
-        "path": "/Usb0/Demos/Scroller Showcase"
-      },
-      "target": "real-device"
-    }
-  },
-  {
-    "id": "EVT-0035",
-    "timestamp": "2026-01-31T14:50:19.037Z",
-    "relativeMs": 2028,
+    "id": "EVT-0047",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0016",
     "data": {
       "status": 200,
       "body": {
@@ -785,41 +1072,41 @@
           }
         ]
       },
-      "durationMs": 101,
+      "durationMs": 146,
       "error": null
     }
   },
   {
-    "id": "EVT-0036",
-    "timestamp": "2026-01-31T14:50:19.037Z",
-    "relativeMs": 2028,
+    "id": "EVT-0048",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0016",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0037",
-    "timestamp": "2026-01-31T14:50:19.038Z",
-    "relativeMs": 2029,
+    "id": "EVT-0049",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0014",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0038",
-    "timestamp": "2026-01-31T14:50:19.038Z",
-    "relativeMs": 2029,
+    "id": "EVT-0050",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
     "type": "ftp-operation",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0014",
     "data": {
       "operation": "list",
       "path": "/Usb0/Demos/Krestage 3",
@@ -829,24 +1116,93 @@
     }
   },
   {
-    "id": "EVT-0039",
-    "timestamp": "2026-01-31T14:50:19.038Z",
-    "relativeMs": 2029,
+    "id": "EVT-0051",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0014",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0040",
-    "timestamp": "2026-01-31T14:50:19.039Z",
-    "relativeMs": 2030,
+    "id": "EVT-0052",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0017",
+    "data": {
+      "name": "rest.post",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0053",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0017",
+    "data": {
+      "selectedTarget": "real-device",
+      "reason": "reachable"
+    }
+  },
+  {
+    "id": "EVT-0054",
+    "timestamp": "2026-02-01T17:25:22.076Z",
+    "relativeMs": 4708,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0017",
+    "data": {
+      "method": "POST",
+      "url": "http://127.0.0.1:41343/v1/ftp/list",
+      "normalizedUrl": "/v1/ftp/list",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "host": "127.0.0.1",
+        "port": 40289,
+        "password": "***",
+        "path": "/Usb0/Demos/Scroller Showcase"
+      },
+      "target": "real-device"
+    }
+  },
+  {
+    "id": "EVT-0055",
+    "timestamp": "2026-02-01T17:25:22.225Z",
+    "relativeMs": 4857,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0017",
     "data": {
       "status": 200,
       "body": {
@@ -997,41 +1353,41 @@
           }
         ]
       },
-      "durationMs": 106,
+      "durationMs": 144,
       "error": null
     }
   },
   {
-    "id": "EVT-0041",
-    "timestamp": "2026-01-31T14:50:19.039Z",
-    "relativeMs": 2030,
+    "id": "EVT-0056",
+    "timestamp": "2026-02-01T17:25:22.225Z",
+    "relativeMs": 4857,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0017",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0042",
-    "timestamp": "2026-01-31T14:50:19.039Z",
-    "relativeMs": 2030,
+    "id": "EVT-0057",
+    "timestamp": "2026-02-01T17:25:22.225Z",
+    "relativeMs": 4857,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0015",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0043",
-    "timestamp": "2026-01-31T14:50:19.039Z",
-    "relativeMs": 2030,
+    "id": "EVT-0058",
+    "timestamp": "2026-02-01T17:25:22.225Z",
+    "relativeMs": 4857,
     "type": "ftp-operation",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0015",
     "data": {
       "operation": "list",
       "path": "/Usb0/Demos/Scroller Showcase",
@@ -1041,12 +1397,24 @@
     }
   },
   {
-    "id": "EVT-0044",
-    "timestamp": "2026-01-31T14:50:19.039Z",
-    "relativeMs": 2030,
+    "id": "EVT-0059",
+    "timestamp": "2026-02-01T17:25:22.225Z",
+    "relativeMs": 4857,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0015",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0060",
+    "timestamp": "2026-02-01T17:25:22.767Z",
+    "relativeMs": 5399,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0011",
     "data": {
       "status": "success",
       "error": null

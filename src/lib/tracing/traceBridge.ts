@@ -1,5 +1,12 @@
 import { resetActionTrace } from '@/lib/tracing/actionTrace';
-import { clearTraceEvents, exportTraceZip, getTraceEvents, resetTraceSession } from '@/lib/tracing/traceSession';
+import {
+  clearTraceEvents,
+  exportTraceZip,
+  getTraceEvents,
+  persistTracesToSession,
+  resetTraceSession,
+  restoreTracesFromSession,
+} from '@/lib/tracing/traceSession';
 import { resetTraceIds } from '@/lib/tracing/traceIds';
 
 export type TraceBridge = {
@@ -8,6 +15,8 @@ export type TraceBridge = {
   exportTraces: () => Uint8Array;
   resetTraceIds: (eventStart?: number, correlationStart?: number) => void;
   resetTraceSession: (eventStart?: number, correlationStart?: number) => void;
+  persistTracesToSession: () => void;
+  restoreTracesFromSession: () => void;
 };
 
 declare global {
@@ -18,6 +27,15 @@ declare global {
 
 export const registerTraceBridge = () => {
   if (typeof window === 'undefined') return;
+
+  // Restore any traces from previous navigation
+  restoreTracesFromSession();
+
+  // Persist traces before page unload
+  window.addEventListener('beforeunload', () => {
+    persistTracesToSession();
+  });
+
   window.__c64uTracing = {
     clearTraces: () => {
       resetActionTrace();
@@ -30,5 +48,7 @@ export const registerTraceBridge = () => {
       resetActionTrace();
       resetTraceSession(eventStart, correlationStart);
     },
+    persistTracesToSession,
+    restoreTracesFromSession,
   };
 };
