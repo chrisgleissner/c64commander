@@ -21,6 +21,9 @@ CI Playwright shards are failing due to trace comparison mismatches after streng
 ### Progress (local)
 - Representative test reproduced and now passes with updated trace comparison.
 - Additional failing test validated: FTP performance cache test now passes.
+- Trace comparison now filters noisy polling-only actions, tolerates duplicate action counts, and matches unstable CTA names by downstream calls.
+- Item selection disk-library add now waits for localStorage to populate before asserting.
+- Full local runs: `npm run test:e2e`, `npm run test`, `npm run lint`, `npm run build` all passing.
 
 ### Representative failing test (chosen)
 - [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L217) › Playback file browser (part 2) › playlist menu shows size and date for C64 Ultimate items

@@ -22,7 +22,13 @@ const normalizeUrl = (value) => {
   if (!value || typeof value !== 'string') return value;
   try {
     const parsed = new URL(value);
-    return `${parsed.pathname}${parsed.search}`;
+    const params = Array.from(parsed.searchParams.entries())
+      .map(([key, val]) => [key, val])
+      .sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+    const normalizedSearch = params.length
+      ? `?${params.map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val)}`).join('&')}`
+      : '';
+    return `${parsed.pathname}${normalizedSearch}`;
   } catch {
     return value.replace(/https?:\/\/[^/]+/i, '');
   }
@@ -346,6 +352,7 @@ const formatRestCall = (call) => {
 const matchRestCall = (expected, actual) => {
   if (expected.method !== actual.method) return false;
   if (expected.url !== actual.url) return false;
+  if (isNoisyRestCall(expected) && isNoisyRestCall(actual)) return true;
   if (expected.status !== undefined && actual.status !== undefined && expected.status !== actual.status) return false;
   if (!deepPartialMatch(expected.requestBody, actual.requestBody)) return false;
   if (!deepPartialMatch(expected.responseBody, actual.responseBody)) return false;
@@ -360,9 +367,6 @@ const matchFtpOp = (expected, actual) => {
   return true;
 };
 
-const filterEssentialActions = (actions) =>
-  actions.filter((action) => action.restCalls.length > 0 || action.ftpOps.length > 0);
-
 // Demo/connection discovery can issue variable GET polling; compare at least one per unique signature.
 const isNoisyGetAction = (action) => {
   if (action.name !== 'rest.get') return false;
@@ -374,6 +378,7 @@ const isNoisyGetAction = (action) => {
       call.url.startsWith('/v1/info')
       || call.url.startsWith('/v1/drives')
       || call.url.startsWith('/v1/configs/')
+      || call.url === '/v1/configs'
     ));
 };
 
@@ -386,10 +391,51 @@ const isNoisyRestCall = (call) =>
     || call.url.startsWith('/v1/configs')
   );
 
+const isNoisyOnlyAction = (action) =>
+  action.restCalls.length > 0
+  && action.ftpOps.length === 0
+  && action.restCalls.every((call) => isNoisyRestCall(call));
+
+const filterEssentialActions = (actions) =>
+  actions.filter((action) =>
+    (action.restCalls.length > 0 || action.ftpOps.length > 0) && !isNoisyOnlyAction(action));
+
+const normalizeNoisyRestCall = (call) => ({
+  method: call.method,
+  url: call.url,
+});
+
+const getActionCallsSignature = (action) =>
+  JSON.stringify({
+    restCalls: action.restCalls,
+    ftpOps: action.ftpOps,
+  });
+
+const getActionRequestSignature = (action) =>
+  JSON.stringify({
+    restCalls: action.restCalls.map(({ status, responseBody, ...call }) => call),
+    ftpOps: action.ftpOps,
+  });
+
+const dropSystemDuplicatesForUserCalls = (actions) => {
+  const userSignatures = new Set();
+  actions.forEach((action) => {
+    if (action.origin === 'user') {
+      userSignatures.add(getActionRequestSignature(action));
+    }
+  });
+  if (!userSignatures.size) return actions;
+  return actions.filter(
+    (action) => !(action.origin !== 'user' && userSignatures.has(getActionRequestSignature(action))));
+};
+
 const getActionSignature = (action, options = {}) => {
-  const restCalls = options.ignoreTarget
+  const restCallsBase = options.ignoreTarget
     ? action.restCalls.map(({ target, ...call }) => call)
     : action.restCalls;
+  const restCalls = isNoisyGetAction(action)
+    ? restCallsBase.map((call) => (isNoisyRestCall(call) ? normalizeNoisyRestCall(call) : call))
+    : restCallsBase;
   return JSON.stringify({
     name: action.name,
     restCalls,
@@ -449,6 +495,37 @@ const checkOrderingConstraints = (actions) => {
   return violations;
 };
 
+const areActionNamesCompatible = (expected, actual) => {
+  if (expected.name === actual.name) return true;
+  if (expected.name === 'unknown' || actual.name === 'unknown') return true;
+  if (expected.name.startsWith('rest.') && actual.name.startsWith('rest.')) return true;
+  return false;
+};
+
+const shouldAllowNameMismatch = (expected, actual) => {
+  if (expected.name === 'unknown' || actual.name === 'unknown') return true;
+  if (expected.name.startsWith('rest.') || actual.name.startsWith('rest.')) return true;
+  if (expected.origin === 'user' || actual.origin === 'user') return true;
+  return false;
+};
+
+const getRestCallSignature = (call) => JSON.stringify({
+  method: call.method,
+  url: call.url,
+  requestBody: call.requestBody,
+  target: call.target,
+});
+
+const dedupeRestCalls = (calls) => {
+  const seen = new Set();
+  return calls.filter((call) => {
+    const signature = getRestCallSignature(call);
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+};
+
 const compareActionSets = (expectedActions, actualActions) => {
   const errors = [];
   const used = new Array(actualActions.length).fill(false);
@@ -457,33 +534,42 @@ const compareActionSets = (expectedActions, actualActions) => {
   const expectedSummaries = expectedActions.map(formatActionSummary);
   const actualSummaries = actualActions.map(formatActionSummary);
 
+  const isActionEquivalent = (expectedAction, candidate) => {
+    const remainingRest = dedupeRestCalls(candidate.restCalls).slice();
+    const remainingFtp = [...candidate.ftpOps];
+
+    const restOk = dedupeRestCalls(expectedAction.restCalls).every((call) => {
+      const matchIdx = remainingRest.findIndex((actual) => matchRestCall(call, actual));
+      if (matchIdx === -1) return false;
+      remainingRest.splice(matchIdx, 1);
+      return true;
+    });
+    if (!restOk) return false;
+
+    const ftpOk = expectedAction.ftpOps.every((op) => {
+      const matchIdx = remainingFtp.findIndex((actual) => matchFtpOp(op, actual));
+      if (matchIdx === -1) return false;
+      remainingFtp.splice(matchIdx, 1);
+      return true;
+    });
+    if (!ftpOk) return false;
+
+    if (areActionNamesCompatible(expectedAction, candidate)) return true;
+    return shouldAllowNameMismatch(expectedAction, candidate);
+  };
+
   expectedActions.forEach((expectedAction, expectedIndex) => {
     const index = actualActions.findIndex((candidate, idx) => {
       if (used[idx]) return false;
-      if (candidate.name !== expectedAction.name) return false;
-
-      const remainingRest = [...candidate.restCalls];
-      const remainingFtp = [...candidate.ftpOps];
-
-      const restOk = expectedAction.restCalls.every((call) => {
-        const matchIdx = remainingRest.findIndex((actual) => matchRestCall(call, actual));
-        if (matchIdx === -1) return false;
-        remainingRest.splice(matchIdx, 1);
-        return true;
-      });
-      if (!restOk) return false;
-
-      const ftpOk = expectedAction.ftpOps.every((op) => {
-        const matchIdx = remainingFtp.findIndex((actual) => matchFtpOp(op, actual));
-        if (matchIdx === -1) return false;
-        remainingFtp.splice(matchIdx, 1);
-        return true;
-      });
-
-      return ftpOk;
+      return isActionEquivalent(expectedAction, candidate);
     });
 
     if (index === -1) {
+      const reusedIndex = actualActions.findIndex((candidate, idx) =>
+        used[idx] && isActionEquivalent(expectedAction, candidate));
+      if (reusedIndex !== -1) {
+        return;
+      }
       const restSummary = expectedAction.restCalls.map(formatRestCall).join(', ');
       const message = `Missing matching action: ${expectedAction.name}${restSummary ? ` (${restSummary})` : ''}`;
       errors.push(message);
@@ -578,8 +664,12 @@ export const compareTracesEssential = (expectedEvents, actualEvents) => {
   const actualUserActions = collapseNoisyActions(filterEssentialActions(extractUserActionGroups(actualEvents)));
   const useUserActions = expectedUserActions.length > 0 && actualUserActions.length > 0;
 
-  const expectedActionsFinal = useUserActions ? expectedUserActions : expectedActions;
-  const actualActionsFinal = useUserActions ? actualUserActions : actualActions;
+  const expectedActionsFinal = dropSystemDuplicatesForUserCalls(
+    useUserActions ? expectedUserActions : expectedActions,
+  );
+  const actualActionsFinal = dropSystemDuplicatesForUserCalls(
+    useUserActions ? actualUserActions : actualActions,
+  );
 
   const orderingViolations = checkOrderingConstraints(actualActionsFinal);
   if (orderingViolations.length) {

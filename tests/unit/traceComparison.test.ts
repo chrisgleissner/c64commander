@@ -150,7 +150,7 @@ describe('compareTracesEssential', () => {
       correlationId: 'COR-0020',
       actionName: 'rest.get',
       method: 'GET',
-      url: 'http://127.0.0.1:5555/v1/info',
+      url: 'http://127.0.0.1:5555/v1/version',
       status: 200,
     });
     const actual = buildRestTrace({
@@ -158,7 +158,7 @@ describe('compareTracesEssential', () => {
       correlationId: 'COR-0020',
       actionName: 'rest.get',
       method: 'POST',
-      url: 'http://127.0.0.1:6666/v1/info',
+      url: 'http://127.0.0.1:6666/v1/version',
       status: 200,
     });
 
