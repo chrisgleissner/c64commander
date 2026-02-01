@@ -2,6 +2,71 @@
 
 ## 2026-02-01 CI trace comparison failures (current)
 
+### Remaining CI Failures
+
+#### Current focus (one-at-a-time)
+- Selected test: [playwright/playback.spec.ts](playwright/playback.spec.ts#L824) Playback file browser › mute button toggles and slider does not unmute.
+  - Reason: smallest scope with a clear single-action trace mismatch (mute vs slider POST), ideal for isolating grouping/causality issues.
+  - Status: fixed (local validation complete).
+
+#### Definition of done (re-stated)
+- CI fully green across all workflows.
+- No regression in trace strictness for meaningful causality.
+
+#### Failing tests (authoritative list)
+- [playwright/playback.spec.ts](playwright/playback.spec.ts#L824) Playback file browser › mute button toggles and slider does not unmute
+  - Failure signature: Missing matching action `click Mute (POST /v1/configs)`; unexpected action count 1.
+  - Suspected category: causality grouping incorrect (CTA -> REST mapping) or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/diskManagement.spec.ts](playwright/diskManagement.spec.ts#L187) Disk management › disks header layout matches play list pattern @layout (android-tablet)
+  - Failure signature: Missing `rest.get (GET /v1/configs/SID Addressing/UltiSID 1 Address)`; unexpected action 1.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/diskManagement.spec.ts](playwright/diskManagement.spec.ts#L361) Disk management › settings changes while disk mounted preserve mounted state @layout (android-tablet)
+  - Failure signature: Missing `click Mount Disk 1.d64 (PUT /v1/drives/a:mount...)`.
+  - Suspected category: causality grouping incorrect or missing trace action.
+  - Status: fixed (local validation complete).
+- [playwright/demoMode.spec.ts](playwright/demoMode.spec.ts#L33) Automatic Demo Mode › connectivity indicator is present on all main pages
+  - Failure signature: Missing `rest.get (GET /v1/configs/SID Sockets Configuration/SID Socket 2)`; unexpected actions 2.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/coverageProbes.spec.ts](playwright/coverageProbes.spec.ts#L37) Coverage probes › covers primary routes for coverage
+  - Failure signature: Missing `rest.get (GET /v1/configs/SID Sockets Configuration/SID Socket 1 200)`; unexpected action 1.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L329) Layout overflow safeguards › primary pages avoid horizontal overflow @layout (android-phone)
+  - Failure signature: Missing `rest.get (GET /v1/configs 200)`; unexpected action 1.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L393) Layout overflow safeguards › viewport matrix preserves layout and scrolling @layout (android-phone)
+  - Failure signature: Missing `rest.get (GET /v1/configs 200)` x2.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: open.
+- [playwright/layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L329) Layout overflow safeguards › primary pages avoid horizontal overflow @layout (android-tablet)
+  - Failure signature: Multiple missing `rest.get (GET /v1/info)` and `rest.get (GET /v1/configs/...)`; unexpected actions 4.
+  - Suspected category: ordering too strict or causality grouping incorrect.
+  - Status: fixed (local validation complete).
+- [playwright/layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L393) Layout overflow safeguards › viewport matrix preserves layout and scrolling @layout (android-tablet)
+  - Failure signature: Multiple missing `rest.get` actions (info + configs); unexpected actions 10.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: open.
+- [playwright/connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L38) Deterministic Connectivity Simulation › real device unreachable → enable demo → app remains usable
+  - Failure signature: Missing `rest.get (GET /v1/info)` and `rest.get (GET /v1/info 503)`.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L103) Deterministic Connectivity Simulation › demo fallback appears once per session
+  - Failure signature: Missing `rest.get (GET /v1/configs/SID Addressing/UltiSID 2 Address 503)`.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L341) Deterministic Connectivity Simulation › switches real → demo → real using manual discovery
+  - Failure signature: Missing `rest.get (GET /v1/configs/SID Addressing/UltiSID 1 Address 200)` and `rest.get (GET /v1/info 503)`.
+  - Suspected category: ordering too strict or missing normalization.
+  - Status: fixed (local validation complete).
+- [playwright/ui.spec.ts](playwright/ui.spec.ts#L136) UI coverage › config widgets read/write and refresh
+  - Failure signature: Missing `toggle HDMI Scan lines checkbox [false] (PUT /v1/configs/U64 Specific Settings/HDMI Scan lines?value=Disabled)`; unexpected action 1.
+  - Suspected category: causality grouping incorrect or missing trace action.
+  - Status: fixed (local validation complete).
+
 ### Problem summary
 CI Playwright shards are failing due to trace comparison mismatches after strengthened user-CTA tracing. Many failures report missing REST/FTP actions (especially `POST /v1/ftp/list`) and some non-trace assertion failures.
 

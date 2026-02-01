@@ -164,11 +164,13 @@ const extractUserActionGroups = (events) => {
   const sorted = sortEvents(events);
   const userStarts = sorted.filter(({ event }) => event.type === 'action-start' && event.origin === 'user');
   if (!userStarts.length) return [];
+  const nonGlobalUserStarts = userStarts.filter(({ event }) => event?.data?.component !== 'GlobalInteraction');
+  const effectiveStarts = nonGlobalUserStarts.length ? nonGlobalUserStarts : userStarts;
 
   const groups = [];
-  for (let i = 0; i < userStarts.length; i += 1) {
-    const startEntry = userStarts[i];
-    const endIndex = i + 1 < userStarts.length ? userStarts[i + 1].index - 1 : sorted[sorted.length - 1].index;
+  for (let i = 0; i < effectiveStarts.length; i += 1) {
+    const startEntry = effectiveStarts[i];
+    const endIndex = i + 1 < effectiveStarts.length ? effectiveStarts[i + 1].index - 1 : sorted[sorted.length - 1].index;
     const groupEvents = sorted.filter(({ index }) => index >= startEntry.index && index <= endIndex);
     const restRequests = [];
     const ftpOps = [];
