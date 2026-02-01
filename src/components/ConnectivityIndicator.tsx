@@ -4,6 +4,7 @@ import { discoverConnection } from '@/lib/connection/connectionManager';
 import { C64U_DEMO_GOLDEN_LIGHT, C64U_DEMO_GOLDEN_DARK } from '@/lib/ui/colors';
 import { cn } from '@/lib/utils';
 import { useThemeContext } from '@/components/ThemeProvider';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
 type Props = {
   className?: string;
@@ -37,7 +38,7 @@ export function ConnectivityIndicator({ className }: Props) {
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={wrapUserEvent(handleClick, 'click', 'ConnectivityIndicator', { title: label }, 'ConnectivityIndicator')}
       className={cn(
         'flex items-center gap-2 rounded-lg border border-border px-3 py-2 touch-none',
         'hover:border-primary/60 transition-colors',

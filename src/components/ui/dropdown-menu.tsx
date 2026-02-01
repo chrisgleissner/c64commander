@@ -3,6 +3,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronRight, Circle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { wrapUserEvent, wrapValueChange } from "@/lib/tracing/userTrace";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -14,7 +15,17 @@ const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 
 const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 
-const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
+const DropdownMenuRadioGroup = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.RadioGroup>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioGroup>
+>(({ onValueChange, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioGroup
+    ref={ref}
+    onValueChange={wrapValueChange(onValueChange, 'select', 'DropdownMenuRadioGroup', props, 'MenuRadioGroup')}
+    {...props}
+  />
+));
+DropdownMenuRadioGroup.displayName = DropdownMenuPrimitive.RadioGroup.displayName;
 
 const DropdownMenuSubTrigger = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
@@ -75,9 +86,10 @@ const DropdownMenuItem = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean;
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, onSelect, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
+    onSelect={wrapUserEvent(onSelect, 'select', 'DropdownMenuItem', props, 'MenuItem')}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground whitespace-normal break-words min-w-0",
       inset && "pl-8",
@@ -91,9 +103,10 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+>(({ className, children, checked, onCheckedChange, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
+    onCheckedChange={wrapValueChange(onCheckedChange, 'toggle', 'DropdownMenuCheckboxItem', { ...props, children }, 'MenuCheckboxItem')}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-accent focus:text-accent-foreground whitespace-normal break-words min-w-0",
       className,

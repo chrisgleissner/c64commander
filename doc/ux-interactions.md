@@ -302,7 +302,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 ### 9.2 By Importance
 
 | Importance | Total | Covered | % |
-|------------|-------|---------|---|
+| ---------- | ----- | ------- | - |
 | CRITICAL | 15 | 13 | 87% |
 | HIGH | 50 | 40 | 80% |
 | MEDIUM | 60 | 25 | 42% |

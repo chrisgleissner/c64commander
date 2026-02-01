@@ -1,10 +1,11 @@
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+import { wrapUserEvent } from "@/lib/tracing/userTrace";
 
 export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
-const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, ...props }, ref) => {
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, onChange, ...props }, ref) => {
   return (
     <textarea
       className={cn(
@@ -12,6 +13,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ classNa
         className,
       )}
       ref={ref}
+      onChange={wrapUserEvent(onChange, 'change', 'Textarea', props, 'Textarea')}
       {...props}
     />
   );

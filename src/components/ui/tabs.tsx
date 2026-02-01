@@ -2,8 +2,15 @@ import * as React from "react";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 
 import { cn } from "@/lib/utils";
+import { wrapValueChange } from "@/lib/tracing/userTrace";
 
-const Tabs = TabsPrimitive.Root;
+const Tabs = (props: React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root>) => (
+  <TabsPrimitive.Root
+    {...props}
+    onValueChange={wrapValueChange(props.onValueChange, 'select', 'Tabs', props, 'Tabs')}
+  />
+);
+Tabs.displayName = TabsPrimitive.Root.displayName;
 
 const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,

@@ -2,17 +2,26 @@ import { addErrorLog } from '@/lib/logging';
 import { FtpClient, type FtpEntry, type FtpListOptions } from '@/lib/native/ftpClient';
 import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordFtpOperation, recordTraceError } from '@/lib/tracing/traceSession';
+import { withFtpInteraction, type InteractionIntent } from '@/lib/deviceInteraction/deviceInteractionManager';
 
 export type FtpListResult = {
   path: string;
   entries: FtpEntry[];
 };
 
-export const listFtpDirectory = async (options: FtpListOptions): Promise<FtpListResult> => {
-  return runWithImplicitAction('ftp.list', async (action) => {
+export const listFtpDirectory = async (
+  options: FtpListOptions & { __c64uIntent?: InteractionIntent },
+): Promise<FtpListResult> => {
+  const { __c64uIntent, ...ftpOptions } = options;
+  return runWithImplicitAction('ftp.list', async (action) => withFtpInteraction({
+    action,
+    operation: 'list',
+    path: options.path && options.path !== '' ? options.path : '/',
+    intent: __c64uIntent ?? 'user',
+  }, async () => {
     const normalizedPath = options.path && options.path !== '' ? options.path : '/';
     try {
-      const response = await FtpClient.listDirectory({ ...options, path: normalizedPath });
+      const response = await FtpClient.listDirectory({ ...ftpOptions, path: normalizedPath });
       recordFtpOperation(action, {
         operation: 'list',
         path: normalizedPath,
@@ -36,5 +45,5 @@ export const listFtpDirectory = async (options: FtpListOptions): Promise<FtpList
       recordTraceError(action, err);
       throw error;
     }
-  });
+  }));
 };

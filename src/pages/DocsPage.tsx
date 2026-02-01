@@ -11,6 +11,7 @@ import {
   Sliders,
 } from 'lucide-react';
 import { AppBar } from '@/components/AppBar';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
 interface DocSection {
   id: string;
@@ -156,7 +157,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
       className="bg-card border border-border rounded-xl overflow-hidden"
     >
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'DocsSection', { title: section.title }, 'DocsHeader')}
         className="w-full flex items-center justify-between p-4 text-left"
       >
         <div className="flex items-center gap-3">

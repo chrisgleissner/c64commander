@@ -42,6 +42,12 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+// Add window.scrollTo mock
+Object.defineProperty(window, "scrollTo", {
+  writable: true,
+  value: () => {},
+});
+
 // Radix Slider uses ResizeObserver in JSDOM.
 if (typeof (window as any).ResizeObserver === "undefined") {
   (window as any).ResizeObserver = class {

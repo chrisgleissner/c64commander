@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { PathWrap } from '@/components/PathWrap';
 import { AlphabetScrollbar } from './AlphabetScrollbar';
 import { cn } from '@/lib/utils';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
 export type ActionListMenuItem =
   | { type: 'label'; label: string }
@@ -174,10 +175,10 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           <button
             type="button"
             className="text-sm font-medium text-left hover:underline max-w-full min-w-0 flex items-center gap-1"
-            onClick={(event) => {
+            onClick={wrapUserEvent((event) => {
               event.stopPropagation();
               item.onTitleClick?.();
-            }}
+            }, 'click', 'ActionListTitle', { title: item.title }, 'TitleButton')}
             disabled={item.isDimmed || item.disableActions}
           >
             <span className={cn('min-w-0', item.titleClassName ?? 'truncate')}>{item.title}</span>

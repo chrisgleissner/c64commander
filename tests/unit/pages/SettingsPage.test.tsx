@@ -15,6 +15,16 @@ import {
   saveStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    span: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    section: ({ children, ...props }: any) => <section {...props}>{children}</section>,
+    li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
 const {
   mockUpdateConfig,
   mockRefetch,
@@ -107,6 +117,7 @@ vi.mock('@/lib/logging', () => ({
 
 vi.mock('@/lib/native/platform', () => ({
   getPlatform: () => 'android',
+  isNativePlatform: () => true,
 }));
 
 vi.mock('@/lib/native/folderPicker', () => ({
@@ -128,6 +139,11 @@ vi.mock('@/lib/connection/connectionManager', () => ({
 vi.mock('@/lib/tracing/traceSession', () => ({
   clearTraceEvents: vi.fn(),
   getTraceEvents: vi.fn(() => []),
+  recordActionStart: vi.fn(),
+  recordActionEnd: vi.fn(),
+  recordActionScopeStart: vi.fn(),
+  recordActionScopeEnd: vi.fn(),
+  recordTraceError: vi.fn(),
 }));
 
 vi.mock('@/hooks/useActionTrace', () => ({

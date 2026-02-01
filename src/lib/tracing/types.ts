@@ -6,6 +6,7 @@ export type TraceEventType =
   | 'action-scope-start'
   | 'action-scope-end'
   | 'backend-decision'
+  | 'device-guard'
   | 'rest-request'
   | 'rest-response'
   | 'ftp-operation'

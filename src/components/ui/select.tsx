@@ -3,8 +3,15 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { wrapValueChange } from "@/lib/tracing/userTrace";
 
-const Select = SelectPrimitive.Root;
+const Select = (props: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Root>) => (
+  <SelectPrimitive.Root
+    {...props}
+    onValueChange={wrapValueChange(props.onValueChange, 'select', 'Select', props, 'Select')}
+  />
+);
+Select.displayName = SelectPrimitive.Root.displayName;
 
 const SelectGroup = SelectPrimitive.Group;
 

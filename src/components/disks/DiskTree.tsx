@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { DiskEntry } from '@/lib/disks/diskTypes';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import type { DiskTreeNode, DiskTreeState } from '@/lib/disks/diskTree';
 import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
 
@@ -158,7 +159,7 @@ const DiskRow = ({
           <button
             type="button"
             className="text-sm font-medium text-left hover:underline truncate max-w-full"
-            onClick={() => onMount?.(disk)}
+            onClick={wrapUserEvent(() => onMount?.(disk), 'click', 'Disk', { title: disk.name }, 'DiskRow')}
             disabled={isDimmed || disableActions}
           >
             {highlightText(disk.name, filter)}

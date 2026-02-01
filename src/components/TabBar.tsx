@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Home, Sliders, Settings, BookOpen, Play, Disc } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
 const baseTabs = [
   { path: '/', icon: Home, label: 'Home' },
@@ -26,7 +27,7 @@ export function TabBar() {
           return (
             <button
               key={tab.path}
-              onClick={() => navigate(tab.path)}
+              onClick={wrapUserEvent(() => navigate(tab.path), 'click', 'Tab', { title: tab.label }, 'Tab')}
               className={`tab-item touch-none ${isActive ? 'active' : ''}`}
             >
               <div className="relative">
