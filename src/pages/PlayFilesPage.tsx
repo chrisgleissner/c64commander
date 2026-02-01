@@ -1,3 +1,4 @@
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Folder, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
@@ -2993,11 +2994,11 @@ export default function PlayFilesPage() {
           type="file"
           multiple
           className="hidden"
-          onChange={(event) => {
+          onChange={wrapUserEvent((event) => {
             const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
             handleLocalSourceInput(selected.length ? selected : null);
             event.currentTarget.value = '';
-          }}
+          }, 'upload', 'PlayFilesPage', { type: 'file' }, 'LocalInput')}
         />
 
         <input
@@ -3005,10 +3006,10 @@ export default function PlayFilesPage() {
           type="file"
           accept=".md5,.MD5,.txt,.TXT"
           className="hidden"
-          onChange={(event) => {
+          onChange={wrapUserEvent((event) => {
             handleSonglengthsInput(event.target.files);
             event.currentTarget.value = '';
-          }}
+          }, 'upload', 'PlayFilesPage', { type: 'file' }, 'SonglengthsInput')}
         />
 
         <ItemSelectionDialog

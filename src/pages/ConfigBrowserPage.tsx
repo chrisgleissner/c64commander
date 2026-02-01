@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useReducer, useRef, useCallback } from 'react';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
@@ -409,7 +410,7 @@ function CategorySection({
       className="bg-card border border-border rounded-xl overflow-hidden"
     >
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'ConfigSection', { title: categoryName }, 'ConfigHeader')}
         className="w-full flex items-center justify-between p-4 text-left"
       >
         <div className="flex items-center gap-3">

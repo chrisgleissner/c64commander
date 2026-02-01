@@ -48,6 +48,7 @@ import { downloadTraceZip } from '@/lib/tracing/traceExport';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
 import {
@@ -963,7 +964,7 @@ export default function SettingsPage() {
               return (
                 <button
                   key={option.value}
-                  onClick={() => setTheme(option.value)}
+                  onClick={wrapUserEvent(() => setTheme(option.value), 'select', 'ThemeSelector', { title: option.label }, 'ThemeOption')}
                   className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
                     isActive 
                       ? 'border-primary bg-primary/5' 

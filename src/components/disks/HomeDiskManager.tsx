@@ -1,3 +1,4 @@
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder } from 'lucide-react';
@@ -12,6 +13,7 @@ import { toast } from '@/hooks/use-toast';
 import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
+import { useActionTrace } from '@/hooks/useActionTrace';
 import { getC64API } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
@@ -82,6 +84,7 @@ export const HomeDiskManager = () => {
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const uniqueId = status.deviceInfo?.unique_id || null;
+  const trace = useActionTrace('HomeDiskManager');
 
   const diskLibrary = useDiskLibrary(uniqueId);
   const disksById = useMemo(
@@ -259,7 +262,7 @@ export const HomeDiskManager = () => {
     [diskLibrary.disks],
   );
 
-  const handleMountDisk = async (drive: DriveKey, disk: DiskEntry) => {
+  const handleMountDisk = trace(async (drive: DriveKey, disk: DiskEntry) => {
     try {
       const runtimeFile = diskLibrary.runtimeFiles[disk.id];
       await mountDiskToDrive(api, drive, disk, runtimeFile);
@@ -297,9 +300,9 @@ export const HomeDiskManager = () => {
         },
       });
     }
-  };
+  });
 
-  const handleEject = async (drive: DriveKey) => {
+  const handleEject = trace(async (drive: DriveKey) => {
     try {
       await api.unmountDrive(drive);
       setMountedByDrive((prev) => ({ ...prev, [drive]: '' }));
@@ -315,9 +318,9 @@ export const HomeDiskManager = () => {
         context: { drive },
       });
     }
-  };
+  });
 
-  const handleToggleDrivePower = async (drive: DriveKey, targetEnabled: boolean) => {
+  const handleToggleDrivePower = trace(async (drive: DriveKey, targetEnabled: boolean) => {
     if (!status.isConnected) return;
     setDrivePowerPending((prev) => ({ ...prev, [drive]: true }));
     setDrivePowerOverride((prev) => ({ ...prev, [drive]: targetEnabled }));
@@ -350,7 +353,7 @@ export const HomeDiskManager = () => {
     } finally {
       setDrivePowerPending((prev) => ({ ...prev, [drive]: false }));
     }
-  };
+  });
 
   const resolveMountedDiskId = (drive: DriveKey) => {
     const driveInfo = drivesData?.drives?.find((entry) => entry[drive])?.[drive];
@@ -364,7 +367,7 @@ export const HomeDiskManager = () => {
     return disk?.id ?? null;
   };
 
-  const handleRotate = async (drive: DriveKey, direction: 1 | -1) => {
+  const handleRotate = trace(async (drive: DriveKey, direction: 1 | -1) => {
     const currentId = resolveMountedDiskId(drive);
     if (!currentId) return;
     const current = disksById[currentId];
@@ -388,9 +391,9 @@ export const HomeDiskManager = () => {
     const nextDisk = groupDisks[nextIndex];
     if (!nextDisk) return;
     await handleMountDisk(drive, nextDisk);
-  };
+  });
 
-  const handleDeleteDisk = async (disk: DiskEntry, options: { suppressToast?: boolean } = {}) => {
+  const handleDeleteDisk = trace(async (disk: DiskEntry, options: { suppressToast?: boolean } = {}) => {
     const mountedDrives = DRIVE_KEYS.filter((drive) => resolveMountedDiskId(drive) === disk.id);
     if (mountedDrives.length > 0) {
       try {
@@ -413,7 +416,7 @@ export const HomeDiskManager = () => {
       }
     }
     diskLibrary.removeDisk(disk.id);
-  };
+  });
 
   const handleBulkDelete = async () => {
     const disksToRemove = diskLibrary.disks.filter((disk) => selectedDiskIds.has(disk.id));
@@ -430,7 +433,7 @@ export const HomeDiskManager = () => {
     });
   };
 
-  const handleAddDiskSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
+  const handleAddDiskSelections = useCallback(trace(async (source: SourceLocation, selections: SelectedItem[]) => {
     if (isAddingItems) return false;
     try {
       const startedAt = Date.now();
@@ -687,9 +690,9 @@ export const HomeDiskManager = () => {
         addItemsOverlayActiveRef.current = false;
       }
     }
-  }, [addItemsSurface, browserOpen, diskLibrary, isAddingItems, localSourcesById, reportUserError, showNoDiskWarning]);
+  }), [addItemsSurface, browserOpen, diskLibrary, isAddingItems, localSourcesById, reportUserError, showNoDiskWarning, trace]);
 
-  const handleLocalSourceInput = async (files: FileList | File[] | null) => {
+  const handleLocalSourceInput = trace(async (files: FileList | File[] | null) => {
     if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
     const source = addSourceFromFiles(files);
     if (!source) return;
@@ -754,9 +757,9 @@ export const HomeDiskManager = () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
       setBrowserOpen(false);
     }
-  };
+  });
 
-  const handleAddLocalSourceFromPicker = useCallback(async () => {
+  const handleAddLocalSourceFromPicker = useCallback(trace(async () => {
     const source = await addSourceFromPicker(localSourceInputRef.current);
     if (!source) return null;
     const location = createLocalSourceLocation(source);
@@ -768,7 +771,7 @@ export const HomeDiskManager = () => {
       setBrowserOpen(false);
     }
     return source.id;
-  }, [addSourceFromPicker, browserOpen, handleAddDiskSelections]);
+  }), [addSourceFromPicker, browserOpen, handleAddDiskSelections, trace]);
 
   const buildDiskMenuItems = useCallback((disk: DiskEntry, disableActions?: boolean): ActionListMenuItem[] => {
     const detailsDate = disk.modifiedAt || disk.importedAt;
@@ -1028,11 +1031,11 @@ export const HomeDiskManager = () => {
         type="file"
         multiple
         className="hidden"
-          onChange={(event) => {
+          onChange={wrapUserEvent((event) => {
           const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
           void handleLocalSourceInput(selected.length ? selected : null);
           event.currentTarget.value = '';
-          }}
+          }, 'upload', 'FileInput', { type: 'file' }, 'FileInput')}
       />
 
       <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>

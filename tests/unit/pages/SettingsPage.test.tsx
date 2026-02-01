@@ -139,6 +139,11 @@ vi.mock('@/lib/connection/connectionManager', () => ({
 vi.mock('@/lib/tracing/traceSession', () => ({
   clearTraceEvents: vi.fn(),
   getTraceEvents: vi.fn(() => []),
+  recordActionStart: vi.fn(),
+  recordActionEnd: vi.fn(),
+  recordActionScopeStart: vi.fn(),
+  recordActionScopeEnd: vi.fn(),
+  recordTraceError: vi.fn(),
 }));
 
 vi.mock('@/hooks/useActionTrace', () => ({

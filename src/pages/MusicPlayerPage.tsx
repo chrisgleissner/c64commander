@@ -1,3 +1,4 @@
+import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Music, Shuffle, SkipBack, SkipForward, Play, Folder, FolderOpen } from 'lucide-react';
@@ -926,7 +927,7 @@ export default function MusicPlayerPage() {
                     type="file"
                     multiple
                     className="hidden"
-                    onChange={(e) => void handleLocalFolderPick(e.target.files)}
+                    onChange={wrapUserEvent((e) => void handleLocalFolderPick(e.target.files), 'upload', 'MusicPlayer', { type: 'file' }, 'LocalFolderInput')}
                   />
                   <Button
                     variant="outline"

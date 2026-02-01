@@ -2,13 +2,15 @@ import * as React from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
+import { wrapValueChange } from "@/lib/tracing/userTrace";
 
 const Slider = React.forwardRef<
   React.ElementRef<typeof SliderPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
->(({ className, ...props }, ref) => (
+>(({ className, onValueChange, ...props }, ref) => (
   <SliderPrimitive.Root
     ref={ref}
+    onValueChange={wrapValueChange(onValueChange, 'slide', 'Slider', props, 'Slider')}
     className={cn("relative flex w-full touch-none select-none items-center", className)}
     {...props}
   >
