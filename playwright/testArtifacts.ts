@@ -229,7 +229,6 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
     const result = await compareOrPromoteTraceFiles(goldenDir, evidenceDir);
     if (result.promoted) {
       const relativeGolden = path.relative(process.cwd(), goldenDir);
-      // eslint-disable-next-line no-console
       console.warn(`Promoted missing golden trace: ${relativeGolden}`);
     }
     if (result.errors.length) {

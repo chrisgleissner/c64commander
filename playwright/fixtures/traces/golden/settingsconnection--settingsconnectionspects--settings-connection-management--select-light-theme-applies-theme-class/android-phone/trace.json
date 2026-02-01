@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-02-01T17:08:32.300Z",
-    "relativeMs": 193,
+    "timestamp": "2026-02-01T17:30:01.486Z",
+    "relativeMs": 590,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,8 +35,8 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-02-01T17:08:32.301Z",
-    "relativeMs": 194,
+    "timestamp": "2026-02-01T17:30:01.497Z",
+    "relativeMs": 601,
     "type": "device-guard",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -48,8 +48,8 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-02-01T17:08:32.301Z",
-    "relativeMs": 194,
+    "timestamp": "2026-02-01T17:30:01.498Z",
+    "relativeMs": 602,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -60,8 +60,8 @@
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-02-01T17:08:32.302Z",
-    "relativeMs": 195,
+    "timestamp": "2026-02-01T17:30:01.498Z",
+    "relativeMs": 602,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -72,8 +72,8 @@
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-02-01T17:08:32.302Z",
-    "relativeMs": 195,
+    "timestamp": "2026-02-01T17:30:01.498Z",
+    "relativeMs": 602,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -106,8 +106,8 @@
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-02-01T17:08:32.302Z",
-    "relativeMs": 195,
+    "timestamp": "2026-02-01T17:30:01.506Z",
+    "relativeMs": 610,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -118,18 +118,18 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-02-01T17:08:32.303Z",
-    "relativeMs": 196,
+    "timestamp": "2026-02-01T17:30:01.506Z",
+    "relativeMs": 610,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:46181/v1/info",
+      "url": "http://127.0.0.1:35309/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:46181"
+        "X-C64U-Host": "127.0.0.1:35309"
       },
       "body": null,
       "target": "external-mock"
@@ -137,8 +137,8 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-02-01T17:08:32.389Z",
-    "relativeMs": 282,
+    "timestamp": "2026-02-01T17:30:01.753Z",
+    "relativeMs": 857,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -153,14 +153,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 45,
+      "durationMs": 191,
       "error": null
     }
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-02-01T17:08:32.389Z",
-    "relativeMs": 282,
+    "timestamp": "2026-02-01T17:30:01.760Z",
+    "relativeMs": 864,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -171,8 +171,8 @@
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-02-01T17:08:33.312Z",
-    "relativeMs": 1205,
+    "timestamp": "2026-02-01T17:30:02.762Z",
+    "relativeMs": 1866,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -205,8 +205,8 @@
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-02-01T17:08:33.313Z",
-    "relativeMs": 1206,
+    "timestamp": "2026-02-01T17:30:02.762Z",
+    "relativeMs": 1866,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -217,18 +217,18 @@
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-02-01T17:08:33.313Z",
-    "relativeMs": 1206,
+    "timestamp": "2026-02-01T17:30:02.762Z",
+    "relativeMs": 1866,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:46181/v1/info",
+      "url": "http://127.0.0.1:35309/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:46181"
+        "X-C64U-Host": "127.0.0.1:35309"
       },
       "body": null,
       "target": "external-mock"
@@ -236,8 +236,8 @@
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-02-01T17:08:33.322Z",
-    "relativeMs": 1215,
+    "timestamp": "2026-02-01T17:30:02.792Z",
+    "relativeMs": 1896,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -252,14 +252,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 8,
+      "durationMs": 22,
       "error": null
     }
   },
   {
     "id": "EVT-0013",
-    "timestamp": "2026-02-01T17:08:33.323Z",
-    "relativeMs": 1216,
+    "timestamp": "2026-02-01T17:30:02.792Z",
+    "relativeMs": 1896,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -270,8 +270,8 @@
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-02-01T17:08:35.215Z",
-    "relativeMs": 3108,
+    "timestamp": "2026-02-01T17:30:07.064Z",
+    "relativeMs": 6168,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0003",
@@ -304,8 +304,8 @@
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-02-01T17:08:35.215Z",
-    "relativeMs": 3108,
+    "timestamp": "2026-02-01T17:30:07.065Z",
+    "relativeMs": 6169,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0003",
@@ -316,8 +316,8 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-02-01T17:08:35.215Z",
-    "relativeMs": 3108,
+    "timestamp": "2026-02-01T17:30:07.066Z",
+    "relativeMs": 6170,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0004",
@@ -350,8 +350,8 @@
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-02-01T17:08:35.219Z",
-    "relativeMs": 3112,
+    "timestamp": "2026-02-01T17:30:07.075Z",
+    "relativeMs": 6179,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0004",
