@@ -11,7 +11,7 @@ import type {
 } from '@/lib/tracing/types';
 import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
-import { nextTraceEventId, resetTraceIds } from '@/lib/tracing/traceIds';
+import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from '@/lib/tracing/traceIds';
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
 const MAX_EVENT_COUNT = 10_000;
@@ -102,6 +102,73 @@ const emitBackendDecision = (origin: TraceOrigin, correlationId: string, target:
 };
 
 export const getTraceEvents = () => [...events];
+
+const SESSION_STORAGE_KEY = '__c64uPersistedTraces';
+const SESSION_COUNTERS_KEY = '__c64uPersistedTraceCounters';
+
+type PersistedCounters = {
+  eventCounter: number;
+  correlationCounter: number;
+  sessionStartMs: number;
+};
+
+/**
+ * Persist current traces to sessionStorage so they survive page navigation.
+ * Call this before page unload/navigation.
+ */
+export const persistTracesToSession = () => {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    const data = JSON.stringify(events);
+    sessionStorage.setItem(SESSION_STORAGE_KEY, data);
+    // Also persist counters so new events continue from the right IDs
+    const counters = getCurrentTraceIdCounters();
+    const countersData: PersistedCounters = {
+      ...counters,
+      sessionStartMs,
+    };
+    sessionStorage.setItem(SESSION_COUNTERS_KEY, JSON.stringify(countersData));
+  } catch {
+    // Storage full or unavailable
+  }
+};
+
+/**
+ * Restore traces from sessionStorage after page navigation.
+ * Merges with any existing traces to avoid losing data.
+ */
+export const restoreTracesFromSession = () => {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    // First restore counters to ensure new events get unique IDs
+    const countersData = sessionStorage.getItem(SESSION_COUNTERS_KEY);
+    if (countersData) {
+      const counters = JSON.parse(countersData) as PersistedCounters;
+      setTraceIdCounters(counters.eventCounter, counters.correlationCounter);
+      sessionStartMs = counters.sessionStartMs;
+      sessionStorage.removeItem(SESSION_COUNTERS_KEY);
+    }
+
+    const data = sessionStorage.getItem(SESSION_STORAGE_KEY);
+    if (!data) return;
+    const restored = JSON.parse(data) as TraceEvent[];
+    if (Array.isArray(restored) && restored.length > 0) {
+      const existingIds = new Set(events.map((e) => e.id));
+      for (const event of restored) {
+        if (!existingIds.has(event.id)) {
+          events.push(event);
+          existingIds.add(event.id);
+        }
+      }
+      // Sort by relativeMs to maintain order
+      events.sort((a, b) => a.relativeMs - b.relativeMs);
+    }
+    // Clear persisted data after restore
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // Parse error or storage unavailable
+  }
+};
 
 export const clearTraceEvents = () => {
   events = [];

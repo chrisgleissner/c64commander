@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { registerFetchTrace } from "./lib/tracing/fetchTrace";
+import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
 import "./index.css";
 
 const loadFonts = () => {
@@ -13,5 +14,6 @@ const loadFonts = () => {
 
 loadFonts();
 registerFetchTrace();
+registerUserInteractionCapture();
 
 createRoot(document.getElementById("root")!).render(<App />);

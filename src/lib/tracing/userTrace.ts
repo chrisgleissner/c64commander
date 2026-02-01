@@ -36,6 +36,11 @@ export const wrapUserEvent = <E extends React.SyntheticEvent<any> | Event, R>(
   defaultLabel: string = 'Element'
 ): ((e: E) => Promise<void>) => {
   return async (e: E) => {
+    (e as any).__c64uTraced = true;
+    const nativeEvent = (e as any).nativeEvent;
+    if (nativeEvent && typeof nativeEvent === 'object') {
+      (nativeEvent as any).__c64uTraced = true;
+    }
     const label = getMeaningfulName(props, defaultLabel);
     const actionName = `${actionType} ${label}`;
     

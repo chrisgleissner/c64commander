@@ -334,6 +334,10 @@ export const resolveGoldenRoot = () => {
   if (process.env.TRACE_GOLDEN_DIR) {
     return path.resolve(process.env.TRACE_GOLDEN_DIR);
   }
+  // Keep comparison/promote aligned with recording output overrides.
+  if (process.env.TRACE_OUTPUT_DIR) {
+    return path.resolve(process.env.TRACE_OUTPUT_DIR);
+  }
   if (fs.existsSync(defaultGoldenRoot)) return defaultGoldenRoot;
   return legacyGoldenRoot;
 };
@@ -377,6 +381,21 @@ export const compareTraceFiles = async (goldenDir, evidenceDir) => {
   const evidence = JSON.parse(evidenceRaw);
 
   return compareTracesEssential(golden, evidence);
+};
+
+export const compareOrPromoteTraceFiles = async (goldenDir, evidenceDir) => {
+  const goldenPath = path.join(goldenDir, 'trace.json');
+  const evidencePath = path.join(evidenceDir, 'trace.json');
+
+  const goldenStat = await fsp.stat(goldenPath).catch(() => null);
+  if (!goldenStat || !goldenStat.isFile()) {
+    await fsp.mkdir(goldenDir, { recursive: true });
+    await fsp.copyFile(evidencePath, goldenPath);
+    return { promoted: true, errors: [] };
+  }
+
+  const errors = await compareTraceFiles(goldenDir, evidenceDir);
+  return { promoted: false, errors };
 };
 
 export const formatTraceErrors = (errors, context) => {

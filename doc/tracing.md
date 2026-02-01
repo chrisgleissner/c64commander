@@ -705,8 +705,9 @@ Meta normalization for `meta.json` is not used in golden trace comparison.
 - Re-run step 1 after the code change.
 - Commit the updated golden traces alongside the code change.
 - Golden traces under `playwright/fixtures/traces/golden/**` MUST be committed and MUST NOT be gitignored.
-- When trace assertions are enabled and `RECORD_TRACES` is not set, Playwright tests fail if a golden trace
-  is missing or essential REST/FTP interactions do not match.
+- During Playwright runs, if a golden trace is missing for a test, the run promotes the test's
+  `test-results/evidence/playwright/<testId>/<deviceId>/trace.json` to the golden location.
+- Playwright tests fail if essential REST/FTP interactions do not match the golden.
 
 ### 19.5 Failure Modes and Diagnosis
 

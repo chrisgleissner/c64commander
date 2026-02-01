@@ -45,21 +45,17 @@ test('verify comprehensive user tracing', async ({ page }) => {
   userActions.forEach(t => console.log(`- ${t.data?.name}`));
 
   // Verify DriveTile click
-  // Name should be "click DriveTile" (title='Drive A' passed? No, I passed title='Drive A', so name is "click Drive A")
-  // Wait, I passed: wrapUserEvent(..., 'click', 'DriveTile', { title: 'Drive A' }, 'DriveTile')
-  // getMeaningfulName uses props['title'] -> 'Drive A'.
-  // actionName -> "click Drive A"
-  
-  const driveClick = userActions.find((t: any) => t.data?.name.includes('Drive A'));
+  // The component wrapper emits with component='DriveTile' and name='click Drive A'
+  const driveClick = userActions.find((t: any) => 
+    t.data?.name.includes('Drive A') && t.data?.component === 'DriveTile');
   expect(driveClick).toBeDefined();
   expect(driveClick.data.component).toBe('DriveTile');
 
   // Verify Tab click
-  // I passed: wrapUserEvent(..., 'click', 'Tab', { title: tab.label }, 'Tab')
-  // title -> "Config"
-  // name -> "click Config"
-  
-  const tabClick = userActions.find((t: any) => t.data?.name.includes('Config'));
+  // The component wrapper emits with component='Tab' and name='click Config'
+  // Note: GlobalInteraction also emits a trace for the same click, so we filter by component
+  const tabClick = userActions.find((t: any) => 
+    t.data?.name.includes('Config') && t.data?.component === 'Tab');
   expect(tabClick).toBeDefined();
   expect(tabClick.data.component).toBe('Tab');
 });

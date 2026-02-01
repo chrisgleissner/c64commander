@@ -1,14 +1,14 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-31T14:51:00.999Z",
-    "relativeMs": 43,
+    "timestamp": "2026-02-01T17:28:07.371Z",
+    "relativeMs": 86,
     "type": "action-start",
-    "origin": "system",
+    "origin": "user",
     "correlationId": "COR-0000",
     "data": {
-      "name": "rest.put",
-      "component": null,
+      "name": "click Drive A (#8)",
+      "component": "GlobalInteraction",
       "context": {
         "ui": {
           "route": "/disks",
@@ -35,57 +35,10 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-31T14:51:00.999Z",
-    "relativeMs": 43,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode"
-    }
-  },
-  {
-    "id": "EVT-0002",
-    "timestamp": "2026-01-31T14:51:00.999Z",
-    "relativeMs": 43,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "method": "PUT",
-      "url": "http://127.0.0.1:45573/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
-      "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:45573"
-      },
-      "body": null,
-      "target": "external-mock"
-    }
-  },
-  {
-    "id": "EVT-0003",
-    "timestamp": "2026-01-31T14:51:01.018Z",
-    "relativeMs": 62,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "status": 200,
-      "body": {
-        "errors": []
-      },
-      "durationMs": 16,
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0004",
-    "timestamp": "2026-01-31T14:51:01.018Z",
-    "relativeMs": 62,
+    "timestamp": "2026-02-01T17:28:07.371Z",
+    "relativeMs": 86,
     "type": "action-end",
-    "origin": "system",
+    "origin": "user",
     "correlationId": "COR-0000",
     "data": {
       "status": "success",
@@ -93,12 +46,80 @@
     }
   },
   {
-    "id": "EVT-0005",
-    "timestamp": "2026-01-31T14:51:01.298Z",
-    "relativeMs": 342,
+    "id": "EVT-0002",
+    "timestamp": "2026-02-01T17:28:07.372Z",
+    "relativeMs": 87,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "name": "click Drive A",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": "TEST-123",
+          "connectionState": "REAL_CONNECTED"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-02-01T17:28:07.372Z",
+    "relativeMs": 87,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "name": "HomeDiskManager.anonymousAction",
+      "component": "HomeDiskManager",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": "TEST-123",
+          "connectionState": "REAL_CONNECTED"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-02-01T17:28:07.372Z",
+    "relativeMs": 87,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0003",
     "data": {
       "name": "rest.put",
       "component": null,
@@ -127,59 +148,360 @@
     }
   },
   {
-    "id": "EVT-0006",
-    "timestamp": "2026-01-31T14:51:01.298Z",
-    "relativeMs": 342,
+    "id": "EVT-0005",
+    "timestamp": "2026-02-01T17:28:07.372Z",
+    "relativeMs": 87,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0003",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0007",
-    "timestamp": "2026-01-31T14:51:01.298Z",
-    "relativeMs": 342,
+    "id": "EVT-0006",
+    "timestamp": "2026-02-01T17:28:07.372Z",
+    "relativeMs": 87,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0003",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:45573/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
-      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "url": "http://127.0.0.1:41271/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:45573"
+        "X-C64U-Host": "127.0.0.1:41271"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
+    "id": "EVT-0007",
+    "timestamp": "2026-02-01T17:28:07.377Z",
+    "relativeMs": 92,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
     "id": "EVT-0008",
-    "timestamp": "2026-01-31T14:51:01.310Z",
-    "relativeMs": 354,
+    "timestamp": "2026-02-01T17:28:07.402Z",
+    "relativeMs": 117,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0003",
     "data": {
       "status": 200,
       "body": {
         "errors": []
       },
-      "durationMs": 12,
+      "durationMs": 27,
       "error": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-01-31T14:51:01.310Z",
-    "relativeMs": 354,
+    "timestamp": "2026-02-01T17:28:07.402Z",
+    "relativeMs": 117,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-02-01T17:28:07.403Z",
+    "relativeMs": 118,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-02-01T17:28:10.201Z",
+    "relativeMs": 2916,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "click Prev",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-02-01T17:28:10.201Z",
+    "relativeMs": 2916,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-02-01T17:28:10.201Z",
+    "relativeMs": 2916,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0005",
+    "data": {
+      "name": "click Prev",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-02-01T17:28:10.201Z",
+    "relativeMs": 2916,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0006",
+    "data": {
+      "name": "HomeDiskManager.anonymousAction",
+      "component": "HomeDiskManager",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0015",
+    "timestamp": "2026-02-01T17:28:10.202Z",
+    "relativeMs": 2917,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0007",
+    "data": {
+      "name": "HomeDiskManager.anonymousAction",
+      "component": "HomeDiskManager",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0016",
+    "timestamp": "2026-02-01T17:28:10.210Z",
+    "relativeMs": 2925,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "name": "rest.put",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0017",
+    "timestamp": "2026-02-01T17:28:10.210Z",
+    "relativeMs": 2925,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-02-01T17:28:10.211Z",
+    "relativeMs": 2926,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "method": "PUT",
+      "url": "http://127.0.0.1:41271/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:41271"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0019",
+    "timestamp": "2026-02-01T17:28:10.211Z",
+    "relativeMs": 2926,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-02-01T17:28:10.290Z",
+    "relativeMs": 3005,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": 200,
+      "body": {
+        "errors": []
+      },
+      "durationMs": 79,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-02-01T17:28:10.290Z",
+    "relativeMs": 3005,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0022",
+    "timestamp": "2026-02-01T17:28:10.290Z",
+    "relativeMs": 3005,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0023",
+    "timestamp": "2026-02-01T17:28:10.290Z",
+    "relativeMs": 3005,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0006",
     "data": {
       "status": "success",
       "error": null

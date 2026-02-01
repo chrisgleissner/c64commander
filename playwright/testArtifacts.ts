@@ -5,6 +5,7 @@ import { validateViewport, enforceVisualBoundaries } from './viewportValidation'
 import { getTraceAssertionConfig, getTraces, saveTracesFromPage } from './traceUtils';
 import {
   compareTraceFiles,
+  compareOrPromoteTraceFiles,
   formatTraceErrors,
   resolveGoldenDirForEvidence,
 } from './traceComparison.js';
@@ -56,6 +57,16 @@ const getEvidenceDir = (testInfo: TestInfo) => {
   return path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright', testId, deviceId);
 };
 
+type TraceEvent = {
+  id: string;
+  timestamp: string;
+  relativeMs: number;
+  type: string;
+  origin: string;
+  correlationId: string;
+  data: Record<string, unknown>;
+};
+
 type StrictUiTracker = {
   consoleErrors: string[];
   consoleWarnings: string[];
@@ -65,6 +76,8 @@ type StrictUiTracker = {
   requestLog: Array<{ method: string; url: string; resourceType: string }>
   routingIssues: string[];
   traceResetAt?: number;
+  /** Traces accumulated across page navigations */
+  accumulatedTraces: TraceEvent[];
   detach: () => void;
 };
 
@@ -199,6 +212,7 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
     if (tracker?.requestLog) {
       requestLogSnapshot = [...tracker.requestLog];
     }
+
     await saveTracesFromPage(page, testInfo, traces).catch(() => {});
   }
 
@@ -208,6 +222,23 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
       JSON.stringify(requestLogSnapshot, null, 2),
       'utf8',
     );
+  }
+
+  const goldenDir = resolveGoldenDirForEvidence(evidenceDir);
+  try {
+    const result = await compareOrPromoteTraceFiles(goldenDir, evidenceDir);
+    if (result.promoted) {
+      const relativeGolden = path.relative(process.cwd(), goldenDir);
+      // eslint-disable-next-line no-console
+      console.warn(`Promoted missing golden trace: ${relativeGolden}`);
+    }
+    if (result.errors.length) {
+      const relativeGolden = path.relative(process.cwd(), goldenDir);
+      throw new Error(formatTraceErrors(result.errors, relativeGolden));
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Trace comparison failed: ${message}`);
   }
 
   const traceConfig = getTraceAssertionConfig(testInfo);
@@ -304,24 +335,6 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
         }
       });
     }
-
-    // Trace comparison is opt-in only. Enable with TRACE_ASSERTIONS_STRICT=1.
-    // Golden trace comparison is currently unstable across local vs CI environments
-    // due to timing and mock server behavior differences. The underlying test logic
-    // (UI behavior, API interactions) is still validated through standard assertions.
-    if (process.env.RECORD_TRACES !== '1' && process.env.TRACE_ASSERTIONS_STRICT === '1') {
-      const goldenDir = resolveGoldenDirForEvidence(evidenceDir);
-      try {
-        const traceErrors = await compareTraceFiles(goldenDir, evidenceDir);
-        if (traceErrors.length) {
-          const relativeGolden = path.relative(process.cwd(), goldenDir);
-          throw new Error(formatTraceErrors(traceErrors, relativeGolden));
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Trace comparison failed: ${message}`);
-      }
-    }
   }
 
   
@@ -372,6 +385,7 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     requestLog: [],
     routingIssues: [],
     traceResetAt: undefined,
+    accumulatedTraces: [],
     detach: () => {},
   };
 

@@ -1,14 +1,14 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-01-31T14:51:50.505Z",
-    "relativeMs": 57,
+    "timestamp": "2026-02-01T17:12:20.319Z",
+    "relativeMs": 70,
     "type": "action-start",
-    "origin": "system",
+    "origin": "user",
     "correlationId": "COR-0000",
     "data": {
-      "name": "rest.post",
-      "component": null,
+      "name": "click Play multi.sid",
+      "component": "GlobalInteraction",
       "context": {
         "ui": {
           "route": "/play",
@@ -35,56 +35,10 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-01-31T14:51:50.505Z",
-    "relativeMs": 57,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode"
-    }
-  },
-  {
-    "id": "EVT-0002",
-    "timestamp": "2026-01-31T14:51:50.505Z",
-    "relativeMs": 57,
-    "type": "rest-request",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "method": "POST",
-      "url": "http://127.0.0.1:39571/v1/runners:sidplay",
-      "normalizedUrl": "/v1/runners:sidplay",
-      "headers": {
-        "X-C64U-Host": "127.0.0.1:39571"
-      },
-      "body": null,
-      "target": "external-mock"
-    }
-  },
-  {
-    "id": "EVT-0003",
-    "timestamp": "2026-01-31T14:51:50.524Z",
-    "relativeMs": 76,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "status": 200,
-      "body": {
-        "errors": []
-      },
-      "durationMs": 18,
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0004",
-    "timestamp": "2026-01-31T14:51:50.524Z",
-    "relativeMs": 76,
+    "timestamp": "2026-02-01T17:12:20.319Z",
+    "relativeMs": 70,
     "type": "action-end",
-    "origin": "system",
+    "origin": "user",
     "correlationId": "COR-0000",
     "data": {
       "status": "success",
@@ -92,12 +46,58 @@
     }
   },
   {
-    "id": "EVT-0005",
-    "timestamp": "2026-01-31T14:51:51.850Z",
-    "relativeMs": 1402,
+    "id": "EVT-0002",
+    "timestamp": "2026-02-01T17:12:20.320Z",
+    "relativeMs": 71,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "name": "click Play multi.sid",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": "TEST-123",
+          "connectionState": "REAL_CONNECTED"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-02-01T17:12:20.320Z",
+    "relativeMs": 71,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-02-01T17:12:20.346Z",
+    "relativeMs": 97,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0002",
     "data": {
       "name": "rest.post",
       "component": null,
@@ -126,58 +126,334 @@
     }
   },
   {
-    "id": "EVT-0006",
-    "timestamp": "2026-01-31T14:51:51.850Z",
-    "relativeMs": 1402,
+    "id": "EVT-0005",
+    "timestamp": "2026-02-01T17:12:20.347Z",
+    "relativeMs": 98,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0002",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0007",
-    "timestamp": "2026-01-31T14:51:51.850Z",
-    "relativeMs": 1402,
+    "id": "EVT-0006",
+    "timestamp": "2026-02-01T17:12:20.347Z",
+    "relativeMs": 98,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0002",
     "data": {
       "method": "POST",
-      "url": "http://127.0.0.1:39571/v1/runners:sidplay?songnr=2",
-      "normalizedUrl": "/v1/runners:sidplay?songnr=2",
+      "url": "http://127.0.0.1:34535/v1/runners:sidplay",
+      "normalizedUrl": "/v1/runners:sidplay",
       "headers": {
-        "X-C64U-Host": "127.0.0.1:39571"
+        "X-C64U-Host": "127.0.0.1:34535"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0008",
-    "timestamp": "2026-01-31T14:51:51.860Z",
-    "relativeMs": 1412,
+    "id": "EVT-0007",
+    "timestamp": "2026-02-01T17:12:20.370Z",
+    "relativeMs": 121,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0002",
     "data": {
       "status": 200,
       "body": {
         "errors": []
       },
-      "durationMs": 9,
+      "durationMs": 20,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-02-01T17:12:20.370Z",
+    "relativeMs": 121,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "success",
       "error": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-01-31T14:51:51.860Z",
-    "relativeMs": 1412,
+    "timestamp": "2026-02-01T17:12:21.981Z",
+    "relativeMs": 1732,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0003",
+    "data": {
+      "name": "click song-selector-trigger",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-02-01T17:12:21.981Z",
+    "relativeMs": 1732,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "click Song ",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-02-01T17:12:21.981Z",
+    "relativeMs": 1732,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-02-01T17:12:21.988Z",
+    "relativeMs": 1739,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-02-01T17:12:22.728Z",
+    "relativeMs": 2479,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0005",
+    "data": {
+      "name": "click Song 2",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-02-01T17:12:22.728Z",
+    "relativeMs": 2479,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0015",
+    "timestamp": "2026-02-01T17:12:22.728Z",
+    "relativeMs": 2479,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0006",
+    "data": {
+      "name": "click Song ",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0016",
+    "timestamp": "2026-02-01T17:12:22.736Z",
+    "relativeMs": 2487,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0017",
+    "timestamp": "2026-02-01T17:12:22.746Z",
+    "relativeMs": 2497,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "name": "rest.post",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-02-01T17:12:22.746Z",
+    "relativeMs": 2497,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0019",
+    "timestamp": "2026-02-01T17:12:22.746Z",
+    "relativeMs": 2497,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "method": "POST",
+      "url": "http://127.0.0.1:34535/v1/runners:sidplay?songnr=2",
+      "normalizedUrl": "/v1/runners:sidplay?songnr=2",
+      "headers": {
+        "X-C64U-Host": "127.0.0.1:34535"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-02-01T17:12:22.774Z",
+    "relativeMs": 2525,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": 200,
+      "body": {
+        "errors": []
+      },
+      "durationMs": 21,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-02-01T17:12:22.774Z",
+    "relativeMs": 2525,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0007",
     "data": {
       "status": "success",
       "error": null
