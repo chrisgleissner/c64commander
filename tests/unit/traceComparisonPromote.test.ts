@@ -28,6 +28,7 @@ describe('compareOrPromoteTraceFiles', () => {
     const result = await compareOrPromoteTraceFiles(goldenDir, evidenceDir);
     expect(result.promoted).toBe(true);
     expect(result.errors).toEqual([]);
+    expect(result.diff).toBeNull();
 
     const promoted = await fs.readFile(path.join(goldenDir, 'trace.json'), 'utf8');
     expect(promoted).toContain('EVT-0000');

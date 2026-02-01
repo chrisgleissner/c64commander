@@ -232,8 +232,20 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
       console.warn(`Promoted missing golden trace: ${relativeGolden}`);
     }
     if (result.errors.length) {
+      if (result.diff) {
+        const diffPayload = {
+          goldenDir: path.relative(process.cwd(), goldenDir),
+          evidenceDir: path.relative(process.cwd(), evidenceDir),
+          ...result.diff,
+        };
+        await fs.writeFile(
+          path.join(evidenceDir, 'trace.diff.json'),
+          JSON.stringify(diffPayload, null, 2),
+          'utf8',
+        );
+      }
       const relativeGolden = path.relative(process.cwd(), goldenDir);
-      throw new Error(formatTraceErrors(result.errors, relativeGolden));
+      throw new Error(formatTraceErrors(result.errors, relativeGolden, result.diff));
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

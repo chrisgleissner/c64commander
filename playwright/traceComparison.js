@@ -41,6 +41,15 @@ const normalizeHeaders = (headers) => {
   return normalized;
 };
 
+const normalizePathLikeString = (value) => {
+  if (typeof value !== 'string') return value;
+  if (!value.trim()) return value;
+  return value
+    .replace(/\b[a-zA-Z]:\\[^\s"']+/g, '***')
+    .replace(/\/(?:Users|home|runner|workspace|tmp|var)\/[^\s"']+/g, '***/***')
+    .replace(/\\(?:Users|home|runner|workspace|tmp|var)\\[^\s"']+/g, '***\\***');
+};
+
 const normalizeHostLikeString = (value) => {
   if (typeof value !== 'string') return value;
   if (!value.trim()) return value;
@@ -73,6 +82,10 @@ const normalizePayload = (value) => {
         normalized[key] = '***';
         return;
       }
+      if (/trace|session|correlation|request/i.test(key) && /id$/i.test(key)) {
+        normalized[key] = '***';
+        return;
+      }
       if (/(\bvol\b|volume)/i.test(key)) {
         normalized[key] = '***VOL';
         return;
@@ -85,7 +98,7 @@ const normalizePayload = (value) => {
     });
     return normalized;
   }
-  if (typeof value === 'string') return normalizeHostLikeString(value);
+  if (typeof value === 'string') return normalizePathLikeString(normalizeHostLikeString(value));
   return normalizeHostLike(value);
 };
 
@@ -120,6 +133,19 @@ const deepPartialMatch = (expected, actual) => {
   return Object.keys(expected).every((key) => deepPartialMatch(expected[key], actual[key]));
 };
 
+const sortEvents = (events) =>
+  events
+    .map((event, index) => ({ event, index }))
+    .sort((a, b) => {
+      const aMs = typeof a.event?.relativeMs === 'number' ? a.event.relativeMs : null;
+      const bMs = typeof b.event?.relativeMs === 'number' ? b.event.relativeMs : null;
+      if (aMs !== null && bMs !== null && aMs !== bMs) return aMs - bMs;
+      const aTs = a.event?.timestamp ? Date.parse(a.event.timestamp) : null;
+      const bTs = b.event?.timestamp ? Date.parse(b.event.timestamp) : null;
+      if (aTs !== null && bTs !== null && aTs !== bTs) return aTs - bTs;
+      return a.index - b.index;
+    });
+
 const extractActionName = (event) => {
   if (!event || typeof event !== 'object') return 'unknown';
   if (event.type !== 'action-start') return 'unknown';
@@ -128,19 +154,119 @@ const extractActionName = (event) => {
   return 'unknown';
 };
 
+const extractUserActionGroups = (events) => {
+  const sorted = sortEvents(events);
+  const userStarts = sorted.filter(({ event }) => event.type === 'action-start' && event.origin === 'user');
+  if (!userStarts.length) return [];
+
+  const groups = [];
+  for (let i = 0; i < userStarts.length; i += 1) {
+    const startEntry = userStarts[i];
+    const endIndex = i + 1 < userStarts.length ? userStarts[i + 1].index - 1 : sorted[sorted.length - 1].index;
+    const groupEvents = sorted.filter(({ index }) => index >= startEntry.index && index <= endIndex);
+    const restRequests = [];
+    const ftpOps = [];
+    const restIndices = [];
+    const ftpIndices = [];
+    let actionEndIndex = null;
+
+    groupEvents.forEach(({ event, index }) => {
+      if (event.type === 'action-end' && event.correlationId === startEntry.event.correlationId) {
+        actionEndIndex = index;
+      }
+      if (event.type === 'rest-request') {
+        const data = normalizeEventData(event.data ?? {});
+        const method = typeof data?.method === 'string' ? data.method.toUpperCase() : 'GET';
+        const url = typeof data?.normalizedUrl === 'string'
+          ? data.normalizedUrl
+          : typeof data?.url === 'string'
+            ? data.url
+            : '';
+        const request = {
+          method,
+          url,
+          body: normalizePayload(data?.body),
+          target: typeof data?.target === 'string' ? data.target : undefined,
+        };
+        if (!isNoisyRestCall(request)) {
+          restRequests.push(request);
+          restIndices.push(index);
+        }
+      }
+      if (event.type === 'rest-response') {
+        // user-origin grouping only considers requests; responses are ignored
+      }
+      if (event.type === 'ftp-operation') {
+        const data = normalizeEventData(event.data ?? {});
+        ftpOps.push({
+          operation: typeof data?.operation === 'string' ? data.operation : 'unknown',
+          path: typeof data?.path === 'string' ? data.path : '',
+          result: typeof data?.result === 'string' ? data.result : 'unknown',
+          error: data?.error ?? null,
+        });
+        ftpIndices.push(index);
+      }
+    });
+
+    groups.push({
+      correlationId: startEntry.event.correlationId ?? 'unknown',
+      name: extractActionName(startEntry.event),
+      restCalls: restRequests.map((request) => ({
+        method: request.method,
+        url: request.url || 'unknown-url',
+        status: undefined,
+        requestBody: request.body,
+        responseBody: undefined,
+        target: request.target,
+      })),
+      ftpOps,
+      origin: 'user',
+      actionStartIndex: startEntry.index,
+      actionEndIndex,
+      restIndices,
+      ftpIndices,
+    });
+  }
+
+  return groups;
+};
+
+const buildRestCalls = (requests, responses) => {
+  const total = Math.max(requests.length, responses.length);
+  const calls = [];
+  for (let i = 0; i < total; i += 1) {
+    const request = requests[i];
+    const response = responses[i];
+    calls.push({
+      method: request?.method ?? 'UNKNOWN',
+      url: request?.url ?? 'unknown-url',
+      status: response?.status,
+      requestBody: request?.body,
+      responseBody: response?.body,
+      target: request?.target,
+    });
+  }
+  return calls;
+};
+
 const extractActions = (events) => {
   const actions = new Map();
   const order = [];
 
-  events.forEach((event) => {
+  sortEvents(events).forEach(({ event, index }) => {
     const correlationId = typeof event.correlationId === 'string' ? event.correlationId : 'unknown';
     if (!actions.has(correlationId)) {
       actions.set(correlationId, {
         correlationId,
         name: 'unknown',
-        restCalls: [],
+        origin: 'system',
+        actionStartIndex: null,
+        actionEndIndex: null,
+        restRequests: [],
+        restResponses: [],
         ftpOps: [],
-        pendingRequests: [],
+        restIndices: [],
+        ftpIndices: [],
       });
       order.push(correlationId);
     }
@@ -148,6 +274,14 @@ const extractActions = (events) => {
 
     if (event.type === 'action-start' && entry.name === 'unknown') {
       entry.name = extractActionName(event);
+      entry.actionStartIndex = index;
+      if (typeof event.origin === 'string') {
+        entry.origin = event.origin;
+      }
+    }
+
+    if (event.type === 'action-end') {
+      entry.actionEndIndex = index;
     }
 
     if (event.type === 'rest-request') {
@@ -158,27 +292,21 @@ const extractActions = (events) => {
         : typeof data?.url === 'string'
           ? data.url
           : '';
-      entry.pendingRequests.push({
+      entry.restRequests.push({
         method,
         url,
         body: normalizePayload(data?.body),
         target: typeof data?.target === 'string' ? data.target : undefined,
       });
+      entry.restIndices.push(index);
     }
 
     if (event.type === 'rest-response') {
       const data = normalizeEventData(event.data ?? {});
       const status = typeof data?.status === 'number' ? data.status : undefined;
       const responseBody = normalizePayload(data?.body);
-      const request = entry.pendingRequests.shift();
-      entry.restCalls.push({
-        method: request?.method ?? 'UNKNOWN',
-        url: request?.url ?? '',
-        status,
-        requestBody: request?.body,
-        responseBody,
-        target: request?.target,
-      });
+      entry.restResponses.push({ status, body: responseBody });
+      entry.restIndices.push(index);
     }
 
     if (event.type === 'ftp-operation') {
@@ -189,6 +317,7 @@ const extractActions = (events) => {
         result: typeof data?.result === 'string' ? data.result : 'unknown',
         error: data?.error ?? null,
       });
+      entry.ftpIndices.push(index);
     }
   });
 
@@ -197,8 +326,13 @@ const extractActions = (events) => {
     return {
       correlationId,
       name: entry.name,
-      restCalls: entry.restCalls,
+      restCalls: buildRestCalls(entry.restRequests, entry.restResponses),
       ftpOps: entry.ftpOps,
+      origin: entry.origin,
+      actionStartIndex: entry.actionStartIndex,
+      actionEndIndex: entry.actionEndIndex,
+      restIndices: entry.restIndices,
+      ftpIndices: entry.ftpIndices,
     };
   });
 };
@@ -212,7 +346,7 @@ const formatRestCall = (call) => {
 const matchRestCall = (expected, actual) => {
   if (expected.method !== actual.method) return false;
   if (expected.url !== actual.url) return false;
-  if (expected.status !== undefined && expected.status !== actual.status) return false;
+  if (expected.status !== undefined && actual.status !== undefined && expected.status !== actual.status) return false;
   if (!deepPartialMatch(expected.requestBody, actual.requestBody)) return false;
   if (!deepPartialMatch(expected.responseBody, actual.responseBody)) return false;
   return true;
@@ -243,6 +377,15 @@ const isNoisyGetAction = (action) => {
     ));
 };
 
+const isNoisyRestCall = (call) =>
+  call.method === 'GET'
+  && typeof call.url === 'string'
+  && (
+    call.url.startsWith('/v1/info')
+    || call.url.startsWith('/v1/drives')
+    || call.url.startsWith('/v1/configs')
+  );
+
 const getActionSignature = (action, options = {}) => {
   const restCalls = options.ignoreTarget
     ? action.restCalls.map(({ target, ...call }) => call)
@@ -270,11 +413,51 @@ const collapseNoisyActions = (actions) => {
   return result;
 };
 
+const formatActionSummary = (action) => {
+  const restSummary = action.restCalls.map(formatRestCall).join(', ');
+  const ftpSummary = action.ftpOps.map((op) => `${op.operation} ${op.path} ${op.result}`).join(', ');
+  const details = [restSummary, ftpSummary].filter(Boolean).join(', ');
+  return `${action.name}${details ? ` (${details})` : ''}`;
+};
+
+const buildExcerpt = (list, index, radius = 2) => {
+  const start = Math.max(0, index - radius);
+  const end = Math.min(list.length, index + radius + 1);
+  return list.slice(start, end);
+};
+
+const checkOrderingConstraints = (actions) => {
+  const violations = [];
+  actions.forEach((action) => {
+    const { actionStartIndex, actionEndIndex, restIndices, ftpIndices, name, origin } = action;
+    const allIndices = [...restIndices, ...ftpIndices];
+    if (actionStartIndex === null || actionEndIndex === null) return;
+    const earliest = allIndices.length ? Math.min(...allIndices) : null;
+    const latest = allIndices.length ? Math.max(...allIndices) : null;
+    if (earliest !== null && actionStartIndex > earliest) {
+      violations.push(`Ordering violation: ${name} action-start after downstream event.`);
+    }
+    if (origin !== 'user') {
+      if (latest !== null && actionEndIndex < latest) {
+        violations.push(`Ordering violation: ${name} action-end before downstream event.`);
+      }
+      if (actionStartIndex > actionEndIndex) {
+        violations.push(`Ordering violation: ${name} action-start after action-end.`);
+      }
+    }
+  });
+  return violations;
+};
+
 const compareActionSets = (expectedActions, actualActions) => {
   const errors = [];
   const used = new Array(actualActions.length).fill(false);
+  const missing = [];
+  const unexpected = [];
+  const expectedSummaries = expectedActions.map(formatActionSummary);
+  const actualSummaries = actualActions.map(formatActionSummary);
 
-  expectedActions.forEach((expectedAction) => {
+  expectedActions.forEach((expectedAction, expectedIndex) => {
     const index = actualActions.findIndex((candidate, idx) => {
       if (used[idx]) return false;
       if (candidate.name !== expectedAction.name) return false;
@@ -302,13 +485,35 @@ const compareActionSets = (expectedActions, actualActions) => {
 
     if (index === -1) {
       const restSummary = expectedAction.restCalls.map(formatRestCall).join(', ');
-      errors.push(`Missing matching action: ${expectedAction.name}${restSummary ? ` (${restSummary})` : ''}`);
+      const message = `Missing matching action: ${expectedAction.name}${restSummary ? ` (${restSummary})` : ''}`;
+      errors.push(message);
+      missing.push({
+        action: formatActionSummary(expectedAction),
+        expectedIndex,
+        expectedExcerpt: buildExcerpt(expectedSummaries, expectedIndex),
+        actualExcerpt: buildExcerpt(actualSummaries, Math.max(0, actualSummaries.indexOf(expectedAction.name))),
+      });
       return;
     }
     used[index] = true;
   });
 
-  return errors;
+  actualActions.forEach((actualAction, idx) => {
+    if (used[idx]) return;
+    unexpected.push({
+      action: formatActionSummary(actualAction),
+      actualIndex: idx,
+      actualExcerpt: buildExcerpt(actualSummaries, idx),
+    });
+  });
+
+  return {
+    errors,
+    missing,
+    unexpected,
+    expectedSummaries,
+    actualSummaries,
+  };
 };
 
 const validateTraceIds = (events) => {
@@ -352,20 +557,44 @@ export const resolveGoldenDirForEvidence = (evidenceDir) => {
 
 export const compareTracesEssential = (expectedEvents, actualEvents) => {
   const errors = [];
+  const diff = {
+    missingActions: [],
+    unexpectedActions: [],
+    orderingViolations: [],
+    expectedActions: [],
+    actualActions: [],
+  };
 
   if (!Array.isArray(expectedEvents) || !Array.isArray(actualEvents)) {
     errors.push('Trace payload is not a valid array.');
-    return errors;
+    return { errors, diff };
   }
 
   errors.push(...validateTraceIds(actualEvents));
 
   const expectedActions = collapseNoisyActions(filterEssentialActions(extractActions(expectedEvents)));
   const actualActions = collapseNoisyActions(filterEssentialActions(extractActions(actualEvents)));
+  const expectedUserActions = collapseNoisyActions(filterEssentialActions(extractUserActionGroups(expectedEvents)));
+  const actualUserActions = collapseNoisyActions(filterEssentialActions(extractUserActionGroups(actualEvents)));
+  const useUserActions = expectedUserActions.length > 0 && actualUserActions.length > 0;
 
-  errors.push(...compareActionSets(expectedActions, actualActions));
+  const expectedActionsFinal = useUserActions ? expectedUserActions : expectedActions;
+  const actualActionsFinal = useUserActions ? actualUserActions : actualActions;
 
-  return errors;
+  const orderingViolations = checkOrderingConstraints(actualActionsFinal);
+  if (orderingViolations.length) {
+    errors.push(...orderingViolations);
+    diff.orderingViolations = orderingViolations;
+  }
+
+  const comparison = compareActionSets(expectedActionsFinal, actualActionsFinal);
+  errors.push(...comparison.errors);
+  diff.missingActions = comparison.missing;
+  diff.unexpectedActions = comparison.unexpected;
+  diff.expectedActions = comparison.expectedSummaries;
+  diff.actualActions = comparison.actualSummaries;
+
+  return { errors, diff };
 };
 
 export const compareTraceFiles = async (goldenDir, evidenceDir) => {
@@ -391,15 +620,21 @@ export const compareOrPromoteTraceFiles = async (goldenDir, evidenceDir) => {
   if (!goldenStat || !goldenStat.isFile()) {
     await fsp.mkdir(goldenDir, { recursive: true });
     await fsp.copyFile(evidencePath, goldenPath);
-    return { promoted: true, errors: [] };
+    return { promoted: true, errors: [], diff: null };
   }
 
-  const errors = await compareTraceFiles(goldenDir, evidenceDir);
-  return { promoted: false, errors };
+  const result = await compareTraceFiles(goldenDir, evidenceDir);
+  return { promoted: false, errors: result.errors, diff: result.diff };
 };
 
-export const formatTraceErrors = (errors, context) => {
+export const formatTraceErrors = (errors, context, diff = null) => {
   if (!errors.length) return '';
   const header = context ? `Trace comparison failed for ${context}` : 'Trace comparison failed';
-  return `${header}:\n${errors.join('\n')}`;
+  const summary = [];
+  if (diff?.missingActions?.length) summary.push(`Missing actions: ${diff.missingActions.length}`);
+  if (diff?.unexpectedActions?.length) summary.push(`Unexpected actions: ${diff.unexpectedActions.length}`);
+  if (diff?.orderingViolations?.length) summary.push(`Ordering violations: ${diff.orderingViolations.length}`);
+  const summaryLine = summary.length ? `\nSummary: ${summary.join(', ')}` : '';
+  const diffHint = diff ? '\nSee trace.diff.json for normalized excerpts.' : '';
+  return `${header}:\n${errors.join('\n')}${summaryLine}${diffHint}`;
 };

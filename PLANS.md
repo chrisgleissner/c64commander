@@ -1,5 +1,74 @@
 # C64Commander - Green Build Plan
 
+## 2026-02-01 CI trace comparison failures (current)
+
+### Problem summary
+CI Playwright shards are failing due to trace comparison mismatches after strengthened user-CTA tracing. Many failures report missing REST/FTP actions (especially `POST /v1/ftp/list`) and some non-trace assertion failures.
+
+### Hypotheses (ordered)
+1. Trace comparison is too strict on ordering/matching of interleaved REST/FTP events (false negatives).
+2. Canonicalization misses volatile fields (e.g., status detail grouping, workspace paths), causing mismatches.
+3. Matching algorithm is total-order dependent and fails under CI concurrency.
+4. A real product regression causes missing REST/FTP requests for some CTA flows.
+
+### Investigation steps
+1. Reproduce a single representative failing test locally in CI-equivalent mode.
+2. Compare local vs CI trace artifacts for that test (prefer artifacts download).
+3. Locate trace comparison implementation and inspect normalization + matching logic.
+4. Implement canonicalization + partial-order constraints and improved diff output.
+5. Validate against a small subset of failing tests; iterate if needed.
+
+### Progress (local)
+- Representative test reproduced and now passes with updated trace comparison.
+- Additional failing test validated: FTP performance cache test now passes.
+
+### Representative failing test (chosen)
+- [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L217) › Playback file browser (part 2) › playlist menu shows size and date for C64 Ultimate items
+  - Chosen because it shows multiple missing FTP list and config REST actions, making ordering/matching issues most visible.
+
+### Checklist of failing tests (from CI logs)
+- [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L217) playlist menu shows size and date for C64 Ultimate items
+- [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L710) ultimate browsing lists FTP entries and mounts remote disk image
+- [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L737) C64U browser remembers last path and supports root
+- [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L801) demo mode disk image waits for keyboard buffer readiness
+- [playback.part2.spec.ts](playwright/playback.part2.spec.ts#L1089) end-to-end add, browse, and play (local + remote)
+- [playback.spec.ts](playwright/playback.spec.ts#L237) mute only affects enabled SID chips (non-trace assertion)
+- [diskManagement.spec.ts](playwright/diskManagement.spec.ts#L187) disks header layout matches play list pattern @layout (tablet)
+- [diskManagement.spec.ts](playwright/diskManagement.spec.ts#L216) FTP directory listing shows hierarchy @layout
+- [diskManagement.spec.ts](playwright/diskManagement.spec.ts#L272) importing C64U folders preserves hierarchy and paths @layout
+- [diskManagement.spec.ts](playwright/diskManagement.spec.ts#L361) settings changes while disk mounted preserve mounted state @layout
+- [diskManagement.spec.ts](playwright/diskManagement.spec.ts#L622) disk menu shows size and date for C64 Ultimate imports @layout
+- [ftpPerformance.spec.ts](playwright/ftpPerformance.spec.ts#L59) FTP navigation uses cache across reloads
+- [ftpPerformance.spec.ts](playwright/ftpPerformance.spec.ts#L102) FTP navigation shows minimal loading delay
+- [ftpPerformance.spec.ts](playwright/ftpPerformance.spec.ts#L113) FTP navigation shows delayed loading indicator on slow requests
+- [itemSelection.spec.ts](playwright/itemSelection.spec.ts#L150) add items modal content is scrollable
+- [itemSelection.spec.ts](playwright/itemSelection.spec.ts#L176) C64 Ultimate folder selection shows confirm button
+- [itemSelection.spec.ts](playwright/itemSelection.spec.ts#L203) Play page: C64 Ultimate full flow adds items
+- [itemSelection.spec.ts](playwright/itemSelection.spec.ts#L295) Disks page: C64 Ultimate full flow adds disks
+- [itemSelection.spec.ts](playwright/itemSelection.spec.ts#L443) Play page: repeated add items via C64 Ultimate remains stable
+- [itemSelection.spec.ts](playwright/itemSelection.spec.ts#L475) Disks page: repeated add items via C64 Ultimate remains stable
+- [navigationBoundaries.spec.ts](playwright/navigationBoundaries.spec.ts#L64) navigate parent from subfolder shows parent
+- [navigationBoundaries.spec.ts](playwright/navigationBoundaries.spec.ts#L104) navigate parent from root disables or hides button
+- [navigationBoundaries.spec.ts](playwright/navigationBoundaries.spec.ts#L126) breadcrumb click jumps to ancestor folder
+- [navigationBoundaries.spec.ts](playwright/navigationBoundaries.spec.ts#L165) add items with no selection shows validation
+- [layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L195) FTP browser handles long names without overflow @layout (phone/tablet)
+- [layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L329) primary pages avoid horizontal overflow @layout (phone/tablet)
+- [layoutOverflow.spec.ts](playwright/layoutOverflow.spec.ts#L393) viewport matrix preserves layout and scrolling @layout (phone/tablet)
+- [solo.spec.ts](playwright/solo.spec.ts#L116) navigation reset clears solo and restores mix
+- [connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L38) real device unreachable → enable demo → app remains usable
+- [connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L132) demo enabled → real device reachable (informational only)
+- [connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L270) playback routes to demo then real after switching
+- [connectionSimulation.spec.ts](playwright/connectionSimulation.spec.ts#L341) switches real → demo → real using manual discovery
+- [ui.spec.ts](playwright/ui.spec.ts#L267) add-items shows progress feedback after confirm
+- [ui.spec.ts](playwright/ui.spec.ts#L298) selection state stays stable when filtering
+- [ui.spec.ts](playwright/ui.spec.ts#L328) item browser does not overflow viewport width
+
+### Definition of done
+- CI green on all required workflows.
+- Trace comparison stable across CI/local; benign reordering tolerated; volatile fields normalized.
+- Trace comparison still detects missing required downstream events and ordering violations.
+- At least one previously failing test passes locally after fix; CI confirms full suite.
+
 ## Non-negotiable constraints
 - No test weakening, skipping, or disabling.
 - No sleeps/delays/timeouts to mask races.
