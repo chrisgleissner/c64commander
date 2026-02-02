@@ -632,8 +632,13 @@ jobs:
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Run Maestro gating flows
+        env:
+          CI: "true"
         run: |
+          start=$(date +%s)
           bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build
+          end=$(date +%s)
+          echo "- maestro gating: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Maestro evidence
         if: always()

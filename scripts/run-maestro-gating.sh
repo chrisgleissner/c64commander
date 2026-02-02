@@ -320,7 +320,13 @@ adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c
 log "Running Maestro gating flows"
 set +e
 MAESTRO_EXIT_CODE=0
-if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" --include-tags=device --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+# On CI, run only critical tests to keep build time under 6 minutes
+# Critical tests verify native Android components (file picker integration)
+TAG_FILTER="device"
+if [[ "${CI:-false}" == "true" ]]; then
+  TAG_FILTER="ci-critical"
+fi
+if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" --include-tags="$TAG_FILTER" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
   MAESTRO_EXIT_CODE=$?
 fi
 set -e

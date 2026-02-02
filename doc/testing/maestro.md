@@ -13,6 +13,19 @@ Source: https://docs.maestro.dev/api-reference/commands
 
 ## Rules
 
+### Tag tests for CI optimization
+
+Use tags to control which tests run on CI versus locally:
+
+- **`ci-critical`**: Tests that verify critical native Android components (e.g., file picker integration). These run on CI to keep build times under 6 minutes. Exclude `slow` tag from ci-critical tests.
+- **`device`**: Tests that require a real Android device/emulator. These run locally by default via `--include-tags=device`.
+- **`slow`**: Tests that take significant time (>30s). Excluded by default in `.maestro/config.yaml`.
+- **`edge`**: Edge case tests. Excluded by default.
+- **`hvsc`**: HVSC-specific integration tests. Excluded by default.
+- **`file-picker`**: Tests using the native Android file picker. Subset of `device` tests.
+
+The script `run-maestro-gating.sh` automatically uses `ci-critical` filter when `CI=true`.
+
 ### Use env defaults for config-like values
 
 Define config-like constants (app id, timeouts, fixture names, screenshot names) in `env` with fallbacks. Use the variables in commands so values can be overridden by CI or local runs.
