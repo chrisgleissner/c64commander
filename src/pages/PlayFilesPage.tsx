@@ -1,16 +1,10 @@
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Folder, FolderOpen, Pause, Play, Repeat, Shuffle, SkipBack, SkipForward, Square, Volume2, VolumeX } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
-import { Slider } from '@/components/ui/slider';
-import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
-import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { useC64ConfigItems, useC64Connection, useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
@@ -20,6 +14,7 @@ import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { getC64API } from '@/lib/c64api';
+import { discoverConnection, getConnectionSnapshot } from '@/lib/connection/connectionManager';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { buildPlayPlan, executePlayPlan, type PlaySource, type PlayRequest, type LocalPlayFile } from '@/lib/playback/playbackRouter';
@@ -37,15 +32,9 @@ import {
 } from '@/lib/sourceNavigation/localSourcesStore';
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
-import { base64ToUint8, computeSidMd5 } from '@/lib/sid/sidUtils';
-import { parseSonglengths } from '@/lib/sid/songlengths';
-import {
-  collectSonglengthsSearchPaths,
-  DOCUMENTS_FOLDER,
-  isSonglengthsFileName,
-} from '@/lib/sid/songlengthsDiscovery';
+import { computeSidMd5 } from '@/lib/sid/sidUtils';
+import { isSonglengthsFileName } from '@/lib/sid/songlengthsDiscovery';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
-import { mergeAudioMixerOptions } from '@/lib/config/audioMixer';
 import {
   AUDIO_MIXER_VOLUME_ITEMS,
   SID_ADDRESSING_ITEMS,
@@ -53,6 +42,7 @@ import {
 } from '@/lib/config/configItems';
 import {
   buildEnabledSidMuteUpdates,
+  buildEnabledSidRestoreUpdates,
   buildEnabledSidUnmuteUpdates,
   buildEnabledSidVolumeSnapshot,
   buildEnabledSidVolumeUpdates,
@@ -60,225 +50,45 @@ import {
   buildSidVolumeSteps,
   filterEnabledSidVolumeItems,
 } from '@/lib/config/sidVolumeControl';
-import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
-import {
-  addHvscProgressListener,
-  cancelHvscInstall,
-  checkForHvscUpdates,
-  getHvscDurationByMd5Seconds,
-  getHvscFolderListing,
-  loadHvscRoot,
-  getHvscSong,
-  getHvscStatus,
-  loadHvscStatusSummary,
-  saveHvscStatusSummary,
-  ingestCachedHvsc,
-  installOrUpdateHvsc,
-  isHvscBridgeAvailable,
-  type HvscFailureCategory,
-  type HvscProgressEvent,
-  type HvscStatusSummary,
-  type HvscStatus,
-} from '@/lib/hvsc';
+import { getHvscDurationByMd5Seconds, getHvscFolderListing } from '@/lib/hvsc';
 import { AppBar } from '@/components/AppBar';
+import { VolumeControls } from '@/pages/playFiles/components/VolumeControls';
+import { PlaybackControlsCard } from '@/pages/playFiles/components/PlaybackControlsCard';
+import { PlaybackSettingsPanel } from '@/pages/playFiles/components/PlaybackSettingsPanel';
+import { PlaylistPanel } from '@/pages/playFiles/components/PlaylistPanel';
+import { HvscControls } from '@/pages/playFiles/components/HvscControls';
+import { useHvscLibrary } from '@/pages/playFiles/hooks/useHvscLibrary';
+import { usePlaylistListItems } from '@/pages/playFiles/hooks/usePlaylistListItems';
+import { useSonglengths } from '@/pages/playFiles/hooks/useSonglengths';
+import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFileSelections';
+import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from '@/pages/playFiles/types';
+import {
+  CATEGORY_OPTIONS,
+  DEFAULT_SONG_DURATION_MS,
+  DURATION_SLIDER_STEPS,
+  LAST_DEVICE_ID_KEY,
+  PLAYBACK_SESSION_KEY,
+  PLAYLIST_STORAGE_PREFIX,
+  buildPlaylistStorageKey,
+  clampDurationSeconds,
+  durationSecondsToSlider,
+  extractAudioMixerItems,
+  formatBytes,
+  formatDate,
+  formatDurationSeconds,
+  formatTime,
+  getLocalFilePath,
+  getSidSongCount,
+  isSongCategory,
+  parseDurationInput,
+  parseModifiedAt,
+  parseVolumeOption,
+  shuffleArray,
+  sliderToDurationSeconds,
+} from '@/pages/playFiles/playFilesUtils';
 
-type PlayableEntry = {
-  source: PlaySource;
-  name: string;
-  path: string;
-  file?: LocalPlayFile;
-  durationMs?: number;
-  sourceId?: string | null;
-  sizeBytes?: number | null;
-  modifiedAt?: string | null;
-};
-
-type PlaylistItem = {
-  id: string;
-  request: PlayRequest;
-  category: PlayFileCategory;
-  label: string;
-  path: string;
-  durationMs?: number;
-  subsongCount?: number;
-  sourceId?: string | null;
-  sizeBytes?: number | null;
-  modifiedAt?: string | null;
-  addedAt?: string | null;
-};
-
-type StoredPlaylistState = {
-  items: Array<{
-    source: PlaySource;
-    path: string;
-    name: string;
-    durationMs?: number;
-    songNr?: number;
-    sourceId?: string | null;
-    sizeBytes?: number | null;
-    modifiedAt?: string | null;
-    addedAt?: string | null;
-  }>;
-  currentIndex?: number;
-};
-
-type StoredPlaybackSession = {
-  playlistKey: string;
-  currentItemId: string | null;
-  currentIndex: number;
-  isPlaying: boolean;
-  isPaused: boolean;
-  elapsedMs: number;
-  playedMs: number;
-  durationMs?: number;
-  updatedAt: string;
-};
-
-type AudioMixerItem = {
-  name: string;
-  value: string | number;
-  options?: string[];
-};
-
-const CATEGORY_OPTIONS: PlayFileCategory[] = ['sid', 'mod', 'prg', 'crt', 'disk'];
-const buildPlaylistStorageKey = (deviceId: string) => `c64u_playlist:v1:${deviceId}`;
-const LAST_DEVICE_ID_KEY = 'c64u_last_device_id';
-const PLAYLIST_STORAGE_PREFIX = 'c64u_playlist:v1:';
-const PLAYBACK_SESSION_KEY = 'c64u_playback_session:v1';
-const DEFAULT_SONG_DURATION_MS = 3 * 60 * 1000;
-const DURATION_MIN_SECONDS = 1;
-const DURATION_MAX_SECONDS = 3600;
-const DURATION_SLIDER_STEPS = 1000;
-
-const formatTime = (ms?: number) => {
-  if (ms === undefined) return '—';
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-};
-
-const formatBytes = (value?: number | null) => {
-  if (!value || value <= 0) return '—';
-  const units = ['B', 'KB', 'MB', 'GB'];
-  let size = value;
-  let unitIndex = 0;
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex += 1;
-  }
-  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
-};
-
-const formatDate = (value?: string | null) => {
-  if (!value) return '—';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  }).format(date);
-};
-
-const isSongCategory = (category: PlayFileCategory) => category === 'sid' || category === 'mod';
-
-const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
-
-const getLocalFilePath = (file: LocalPlayFile) => {
-  const candidate =
-    (file as File).webkitRelativePath || (file as { webkitRelativePath?: string }).webkitRelativePath || file.name;
-  return normalizeLocalPath(candidate);
-};
-
-const parseDurationInput = (value: string) => {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (trimmed.includes(':')) {
-    const [minutesRaw, secondsRaw] = trimmed.split(':');
-    const minutes = Number(minutesRaw);
-    const seconds = Number(secondsRaw);
-    if (Number.isNaN(minutes) || Number.isNaN(seconds)) return undefined;
-    return Math.max(0, (minutes * 60 + seconds) * 1000);
-  }
-  const seconds = Number(trimmed);
-  if (Number.isNaN(seconds)) return undefined;
-  return Math.max(0, seconds * 1000);
-};
-
-const clampDurationSeconds = (value: number) =>
-  Math.min(DURATION_MAX_SECONDS, Math.max(DURATION_MIN_SECONDS, value));
-
-const formatDurationSeconds = (seconds: number) => formatTime(seconds * 1000);
-
-const durationSecondsToSlider = (seconds: number) => {
-  const clamped = clampDurationSeconds(seconds);
-  const ratio = Math.log(clamped / DURATION_MIN_SECONDS) / Math.log(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS);
-  return Math.round(ratio * DURATION_SLIDER_STEPS);
-};
-
-const sliderToDurationSeconds = (value: number) => {
-  const ratio = Math.min(1, Math.max(0, value / DURATION_SLIDER_STEPS));
-  const seconds = DURATION_MIN_SECONDS * Math.pow(DURATION_MAX_SECONDS / DURATION_MIN_SECONDS, ratio);
-  return clampDurationSeconds(Math.round(seconds));
-};
-
-const parseVolumeOption = (option: string) => {
-  const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : undefined;
-};
-
-const parseModifiedAt = (value?: string | null) => {
-  if (!value) return undefined;
-  const parsed = Date.parse(value);
-  return Number.isNaN(parsed) ? undefined : parsed;
-};
-
-const extractAudioMixerItems = (payload: Record<string, unknown> | undefined): AudioMixerItem[] => {
-  if (!payload) return [];
-  const categoryData = (payload as Record<string, any>)['Audio Mixer'] ?? payload;
-  const itemsData = (categoryData as Record<string, any>)?.items ?? categoryData;
-  if (!itemsData || typeof itemsData !== 'object') return [];
-  return Object.entries(itemsData)
-    .filter(([key]) => key !== 'errors')
-    .map(([name, config]) => {
-      const normalized = normalizeConfigItem(config);
-      return {
-        name,
-        value: normalized.value,
-        options: mergeAudioMixerOptions(normalized.options, normalized.details?.presets),
-      };
-    });
-};
-
-const shuffleArray = <T,>(items: T[]) => {
-  const shuffled = [...items];
-  for (let i = shuffled.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
-
-const getSidSongCount = (buffer: ArrayBuffer) => {
-  try {
-    const view = new DataView(buffer);
-    if (view.byteLength < 18) return 1;
-    const magic = String.fromCharCode(
-      view.getUint8(0),
-      view.getUint8(1),
-      view.getUint8(2),
-      view.getUint8(3),
-    );
-    if (magic !== 'PSID' && magic !== 'RSID') return 1;
-    const songs = view.getUint16(14, false);
-    return songs > 0 ? songs : 1;
-  } catch {
-    return 1;
-  }
-};
 
 export default function PlayFilesPage() {
   const navigate = useNavigate();
@@ -314,7 +124,15 @@ export default function PlayFilesPage() {
   const [durationInput, setDurationInput] = useState(() => formatDurationSeconds(Math.round(DEFAULT_SONG_DURATION_MS / 1000)));
   const [songNrInput, setSongNrInput] = useState('');
   const [currentSubsongCount, setCurrentSubsongCount] = useState<number | null>(null);
-  const [songlengthsFiles, setSonglengthsFiles] = useState<Array<{ path: string; file: LocalPlayFile }>>([]);
+  const {
+    songlengthsFiles,
+    activeSonglengthsPath,
+    handleSonglengthsInput,
+    loadSonglengthsForPath,
+    applySonglengthsToItems,
+    mergeSonglengthsFiles,
+    collectSonglengthsCandidates,
+  } = useSonglengths({ playlist });
   const [recurseFolders, setRecurseFolders] = useState(true);
   const [shuffleEnabled, setShuffleEnabled] = useState(false);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
@@ -362,41 +180,59 @@ export default function PlayFilesPage() {
     const baseOptions = sidVolumeItems.find((item) => Array.isArray(item.options) && item.options.length)?.options ?? [];
     return buildSidVolumeSteps(baseOptions);
   }, [sidVolumeItems]);
-
-  const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
-  const [hvscStatusSummary, setHvscStatusSummary] = useState<HvscStatusSummary>(() => loadHvscStatusSummary());
-  const [hvscLoading, setHvscLoading] = useState(false);
-  const [hvscProgress, setHvscProgress] = useState<number | null>(null);
-  const [hvscStage, setHvscStage] = useState<string | null>(null);
-  const [hvscActionLabel, setHvscActionLabel] = useState<string | null>(null);
-  const [hvscCurrentFile, setHvscCurrentFile] = useState<string | null>(null);
-  const [hvscErrorMessage, setHvscErrorMessage] = useState<string | null>(null);
-  const [hvscActiveToken, setHvscActiveToken] = useState<'hvsc-install' | 'hvsc-ingest' | null>(null);
-  const [hvscElapsedNow, setHvscElapsedNow] = useState(() => Date.now());
-  const [hvscFolderFilter, setHvscFolderFilter] = useState('');
-  const [hvscFolders, setHvscFolders] = useState<string[]>([]);
-  const [hvscSongs, setHvscSongs] = useState<Array<{ id: number; virtualPath: string; fileName: string; durationSeconds?: number | null }>>([]);
-  const [selectedHvscFolder, setSelectedHvscFolder] = useState('/');
+  const {
+    hvscStatus,
+    hvscRoot,
+    hvscAvailable,
+    hvscLibraryAvailable,
+    hvscFolderFilter,
+    hvscFolders,
+    hvscSongs,
+    selectedHvscFolder,
+    setHvscFolderFilter,
+    loadHvscFolder,
+    handleHvscInstall,
+    handleHvscIngest,
+    handleHvscCancel,
+    buildHvscLocalPlayFile,
+    formatHvscDuration,
+    formatHvscTimestamp,
+    hvscInstalled,
+    hvscInProgress,
+    hvscUpdating,
+    hvscInlineError,
+    hvscSummaryState,
+    hvscSummaryFilesExtracted,
+    hvscSummaryDurationMs,
+    hvscSummaryUpdatedAt,
+    hvscSummaryFailureLabel,
+    hvscDownloadPercent,
+    hvscDownloadBytes,
+    hvscDownloadTotalBytes,
+    hvscDownloadElapsedMs,
+    hvscDownloadStatus,
+    hvscExtractionPercent,
+    hvscExtractionTotalFiles,
+    hvscExtractionElapsedMs,
+    hvscExtractionStatus,
+    hvscCurrentFile,
+    hvscActionLabel,
+    hvscStage,
+    hvscVisibleFolders,
+  } = useHvscLibrary();
   const [volumeIndex, setVolumeIndex] = useState(0);
   const [volumeMuted, setVolumeMuted] = useState(false);
   const [reshuffleActive, setReshuffleActive] = useState(false);
-  const hvscLastStageRef = useRef<string | null>(null);
-  const hvscProgressThrottleRef = useRef(0);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
   const songlengthsInputRef = useRef<HTMLInputElement | null>(null);
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
-  const songlengthsCacheRef = useRef(
-    new Map<string, {
-      signature: string;
-      promise: Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>;
-    }>(),
-  );
-  const songlengthsFileCacheRef = useRef(new Map<string, { mtime: number; data: { md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null }>());
   const addItemsStartedAtRef = useRef<number | null>(null);
   const manualMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
+  const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
+  const volumeSessionActiveRef = useRef(false);
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const reshuffleTimerRef = useRef<number | null>(null);
@@ -406,69 +242,6 @@ export default function PlayFilesPage() {
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
   }, []);
-
-  const updateHvscSummary = useCallback((updater: (prev: HvscStatusSummary) => HvscStatusSummary) => {
-    setHvscStatusSummary((prev) => {
-      const next = updater(prev);
-      saveHvscStatusSummary(next);
-      return next;
-    });
-  }, []);
-
-  const resolveHvscFailureCategory = useCallback((event: HvscProgressEvent, lastStage: string | null): HvscFailureCategory => {
-    const details = `${event.errorType ?? ''} ${event.errorCause ?? ''}`.toLowerCase();
-    const isNetwork = /timeout|network|socket|host|dns|connection|ssl|refused|reset/.test(details);
-    const isStorage = /disk|space|permission|storage|file|io|not found|readonly|denied|enospc|eacces/.test(details);
-    if (isNetwork) return 'network';
-    if (isStorage) return 'storage';
-    if (lastStage === 'download') return 'download';
-    if (
-      lastStage === 'archive_extraction' ||
-      lastStage === 'archive_validation' ||
-      lastStage === 'sid_enumeration' ||
-      lastStage === 'songlengths' ||
-      lastStage === 'sid_metadata_parsing'
-    ) {
-      return 'extraction';
-    }
-    return 'unknown';
-  }, []);
-
-  const formatHvscDuration = (durationMs?: number | null) => {
-    if (!durationMs && durationMs !== 0) return '—';
-    const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const formatHvscTimestamp = (value?: string | null) => {
-    if (!value) return '—';
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString();
-  };
-
-  const handleSonglengthsInput = useCallback((files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const file = files[0];
-    if (!isSonglengthsFileName(file.name)) {
-      toast({ title: 'Unsupported file', description: 'Choose a .txt or .md5 songlengths file.' });
-      return;
-    }
-    const path = normalizeSourcePath(getLocalFilePath(file));
-    setSonglengthsFiles([{ path, file }]);
-  }, []);
-
-  const buildHvscLocalPlayFile = useCallback((path: string, name: string): LocalPlayFile => ({
-    name,
-    webkitRelativePath: path,
-    lastModified: Date.now(),
-    arrayBuffer: async () => {
-      const detail = await getHvscSong({ virtualPath: path });
-      const data = base64ToUint8(detail.dataBase64);
-      return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
-    },
-  }), []);
 
   const defaultVolumeIndex = useMemo(() => {
     const zeroIndex = volumeSteps.findIndex((option) => option.numeric === 0);
@@ -509,6 +282,10 @@ export default function PlayFilesPage() {
         `${context} audio mixer update`,
       );
     } catch (error) {
+      if (context.startsWith('Restore')) {
+        addErrorLog('Audio mixer restore failed', { error: (error as Error).message, context });
+        return;
+      }
       reportUserError({
         operation: 'VOLUME_UPDATE',
         title: 'Audio mixer update failed',
@@ -561,6 +338,57 @@ export default function PlayFilesPage() {
     const enablement = forceRefresh ? await resolveSidEnablement(true) : sidEnablement;
     return filterEnabledSidVolumeItems(items, enablement);
   }, [resolveSidEnablement, resolveSidVolumeItems, sidEnablement]);
+
+  const ensureVolumeSessionSnapshot = useCallback(async () => {
+    if (volumeSessionSnapshotRef.current) return volumeSessionSnapshotRef.current;
+    const items = enabledSidVolumeItems.length
+      ? enabledSidVolumeItems
+      : await resolveEnabledSidVolumeItems(true);
+    if (!items.length) return null;
+    const snapshot = buildEnabledSidVolumeSnapshot(items, sidEnablement);
+    volumeSessionSnapshotRef.current = snapshot;
+    volumeSessionActiveRef.current = true;
+    return snapshot;
+  }, [buildEnabledSidVolumeSnapshot, enabledSidVolumeItems, resolveEnabledSidVolumeItems, sidEnablement]);
+
+  const restoreVolumeOverrides = useCallback(async (reason: string) => {
+    if (!volumeSessionActiveRef.current) return;
+    const snapshot = volumeSessionSnapshotRef.current;
+    if (!snapshot) return;
+    if (status.state === 'DEMO_ACTIVE' || (!status.isConnected && !status.isConnecting)) {
+      volumeSessionSnapshotRef.current = null;
+      volumeSessionActiveRef.current = false;
+      manualMuteSnapshotRef.current = null;
+      pauseMuteSnapshotRef.current = null;
+      setVolumeMuted(false);
+      return;
+    }
+    const items = await resolveEnabledSidVolumeItems(true);
+    const updates = buildEnabledSidRestoreUpdates(items, sidEnablement, snapshot);
+    if (Object.keys(updates).length) {
+      await applyAudioMixerUpdates(updates, `Restore (${reason})`);
+    }
+    volumeSessionSnapshotRef.current = null;
+    volumeSessionActiveRef.current = false;
+    manualMuteSnapshotRef.current = null;
+    pauseMuteSnapshotRef.current = null;
+    setVolumeMuted(false);
+  }, [applyAudioMixerUpdates, buildEnabledSidRestoreUpdates, resolveEnabledSidVolumeItems, sidEnablement, status.isConnected, status.isConnecting, status.state]);
+
+  const restoreVolumeOverridesRef = useRef(restoreVolumeOverrides);
+
+  useEffect(() => {
+    restoreVolumeOverridesRef.current = restoreVolumeOverrides;
+  }, [restoreVolumeOverrides]);
+
+  const ensurePlaybackConnection = useCallback(async () => {
+    if (status.isConnected) return;
+    await discoverConnection('manual');
+    const snapshot = getConnectionSnapshot();
+    if (snapshot.state !== 'REAL_CONNECTED' && snapshot.state !== 'DEMO_ACTIVE') {
+      throw new Error('Device not connected. Check connection settings.');
+    }
+  }, [status.isConnected]);
 
   useEffect(() => {
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
@@ -652,116 +480,6 @@ export default function PlayFilesPage() {
       setAddItemsSurface('dialog');
     }
   }, [browserOpen]);
-
-  useEffect(() => {
-    songlengthsCacheRef.current.clear();
-  }, [playlist, songlengthsFiles]);
-
-  const songlengthsFilesByDir = useMemo(() => {
-    const map = new Map<string, LocalPlayFile>();
-    const addSonglengthsFile = (file: LocalPlayFile, pathOverride?: string) => {
-      const path = pathOverride ?? getLocalFilePath(file);
-      const folder = path.slice(0, path.lastIndexOf('/') + 1) || '/';
-      const existing = map.get(folder);
-      if (existing) {
-        const existingPath = getLocalFilePath(existing).toLowerCase();
-        const nextPath = path.toLowerCase();
-        const existingIsMd5 = existingPath.endsWith('.md5');
-        const nextIsMd5 = nextPath.endsWith('.md5');
-        if (existingIsMd5 && !nextIsMd5) return;
-        if (!existingIsMd5 && nextIsMd5) {
-          map.set(folder, file);
-          return;
-        }
-      }
-      map.set(folder, file);
-    };
-    playlist.forEach((item) => {
-      if (item.request.source !== 'local' || !item.request.file) return;
-      if (!isSonglengthsFileName(item.label)) return;
-      addSonglengthsFile(item.request.file);
-    });
-    songlengthsFiles.forEach((entry) => addSonglengthsFile(entry.file, entry.path));
-    return map;
-  }, [playlist, songlengthsFiles]);
-
-  const activeSonglengthsPath = songlengthsFiles[0]?.path ?? null;
-
-  const readLocalText = useCallback(async (file: LocalPlayFile) => {
-    if (file instanceof File && typeof file.text === 'function') {
-      return file.text();
-    }
-    const buffer = await file.arrayBuffer();
-    return new TextDecoder().decode(new Uint8Array(buffer));
-  }, []);
-
-  const loadSonglengthsForPath = useCallback(async (
-    path: string,
-    extraFiles?: Array<{ path: string; file: LocalPlayFile }>,
-  ) => {
-    const normalized = normalizeLocalPath(path || '/');
-    const folderPath = normalized.endsWith('/') ? normalized : `${normalized.slice(0, normalized.lastIndexOf('/') + 1)}`;
-    const cacheKey = folderPath || '/';
-    const filesByDir = extraFiles?.length
-      ? extraFiles.reduce((map, entry) => {
-          const normalizedPath = normalizeSourcePath(entry.path);
-          const folder = normalizedPath.slice(0, normalizedPath.lastIndexOf('/') + 1) || '/';
-          map.set(folder, entry.file);
-          return map;
-        }, new Map(songlengthsFilesByDir))
-      : songlengthsFilesByDir;
-    const files = new Map<string, LocalPlayFile>();
-    let current = cacheKey;
-    while (current) {
-      const candidate = filesByDir.get(current);
-      if (candidate) files.set(getLocalFilePath(candidate), candidate);
-      const docsCandidate = filesByDir.get(`${current}${DOCUMENTS_FOLDER}/`);
-      if (docsCandidate) files.set(getLocalFilePath(docsCandidate), docsCandidate);
-      if (current === '/') break;
-      current = getParentPath(current);
-    }
-    if (!files.size) return null;
-
-    const signature = Array.from(files.values())
-      .map((file) => `${getLocalFilePath(file)}:${typeof file.lastModified === 'number' ? file.lastModified : 0}`)
-      .sort()
-      .join('|');
-    const cached = songlengthsCacheRef.current.get(cacheKey);
-    if (cached && cached.signature === signature) {
-      return cached.promise;
-    }
-
-    const loader = (async () => {
-      const merged = { md5ToSeconds: new Map<string, number>(), pathToSeconds: new Map<string, number>() };
-      const ordered = Array.from(files.values()).reverse();
-      for (const file of ordered) {
-        try {
-          const filePath = getLocalFilePath(file);
-          const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
-          const cachedEntry = songlengthsFileCacheRef.current.get(filePath);
-          if (cachedEntry && cachedEntry.mtime === mtime && cachedEntry.data) {
-            cachedEntry.data.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
-            cachedEntry.data.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
-            continue;
-          }
-          const content = await readLocalText(file);
-          const parsed = parseSonglengths(content);
-          songlengthsFileCacheRef.current.set(filePath, { mtime, data: parsed });
-          parsed.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
-          parsed.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
-        } catch {
-          // Ignore malformed songlengths files.
-          const filePath = getLocalFilePath(file);
-          const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
-          songlengthsFileCacheRef.current.set(filePath, { mtime, data: null });
-        }
-      }
-      return merged;
-    })();
-
-    songlengthsCacheRef.current.set(cacheKey, { signature, promise: loader });
-    return loader;
-  }, [readLocalText, songlengthsFilesByDir]);
 
   const [lastKnownDeviceId, setLastKnownDeviceId] = useState<string | null>(() => {
     if (typeof localStorage === 'undefined') return null;
@@ -860,13 +578,6 @@ export default function PlayFilesPage() {
     }
   }, [addItemsProgress.status, addItemsSurface, isAddingItems]);
 
-  const hvscRoot = useMemo(() => loadHvscRoot(), []);
-  const hvscAvailable = isHvscBridgeAvailable();
-  const hvscLibraryAvailable = hvscAvailable
-    && (Boolean(hvscStatus?.installedVersion)
-      || (hvscStatusSummary.download.status === 'success' && hvscStatusSummary.extraction.status === 'success'));
-
-
   const sourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
@@ -955,566 +666,43 @@ export default function PlayFilesPage() {
       addedAt: addedAtOverride ?? new Date().toISOString(),
     };
   }, [songNrInput]);
+  const handleAddFileSelections = useMemo(
+    () => createAddFileSelectionsHandler({
+      addItemsStartedAtRef,
+      addItemsOverlayActiveRef,
+      addItemsOverlayStartedAtRef,
+      addItemsSurface,
+      browserOpen,
+      recurseFolders,
+      songlengthsFiles,
+      localSourceTreeUris,
+      localEntriesBySourceId,
+      setAddItemsSurface,
+      setShowAddItemsOverlay,
+      setIsAddingItems,
+      setAddItemsProgress,
+      setPlaylist,
+      buildPlaylistItem,
+      applySonglengthsToItems,
+      mergeSonglengthsFiles,
+      collectSonglengthsCandidates,
+      buildHvscLocalPlayFile,
+    }),
+    [
+      addItemsSurface,
+      applySonglengthsToItems,
+      browserOpen,
+      buildPlaylistItem,
+      collectSonglengthsCandidates,
+      localEntriesBySourceId,
+      localSourceTreeUris,
+      mergeSonglengthsFiles,
+      recurseFolders,
+      songlengthsFiles,
+      buildHvscLocalPlayFile,
+    ],
+  );
 
-  const applySonglengthsToItems = useCallback(async (
-    items: PlaylistItem[],
-    songlengthsOverrides?: Array<{ path: string; file: LocalPlayFile }>,
-  ) => {
-    const updated = await Promise.all(
-      items.map(async (item) => {
-        if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
-        const filePath = getLocalFilePath(item.request.file);
-        const songlengths = await loadSonglengthsForPath(filePath, songlengthsOverrides);
-        const seconds = songlengths?.pathToSeconds.get(filePath);
-        if (seconds === undefined || seconds === null) return item;
-        return { ...item, durationMs: seconds * 1000 };
-      }),
-    );
-    return updated;
-  }, [loadSonglengthsForPath]);
-
-  const handleAddFileSelections = useCallback(async (source: SourceLocation, selections: SelectedItem[]) => {
-    const startedAt = Date.now();
-    addItemsStartedAtRef.current = startedAt;
-    const localTreeUri = source.type === 'local' ? localSourceTreeUris.get(source.id) : null;
-    if (localTreeUri) {
-      addLog('debug', 'SAF scan started', {
-        sourceId: source.id,
-        treeUri: redactTreeUri(localTreeUri),
-        rootPath: source.rootPath,
-      });
-    }
-    if (!browserOpen) {
-      setAddItemsSurface('page');
-      if (!addItemsOverlayActiveRef.current) {
-        setShowAddItemsOverlay(true);
-        addItemsOverlayStartedAtRef.current = Date.now();
-        addItemsOverlayActiveRef.current = true;
-      }
-    }
-    setIsAddingItems(true);
-    setAddItemsProgress({ status: 'scanning', count: 0, elapsedMs: 0, total: null, message: 'Scanning…' });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    let processed = 0;
-    let lastUpdate = 0;
-
-    const updateProgress = (delta: number) => {
-      processed += delta;
-      const now = Date.now();
-      if (now - lastUpdate < 120) return;
-      lastUpdate = now;
-      setAddItemsProgress((prev) => ({
-        ...prev,
-        count: processed,
-        elapsedMs: now - startedAt,
-      }));
-    };
-
-    const collectRecursive = async (rootPath: string) => {
-      const queue = [rootPath];
-      const visited = new Set<string>();
-      const files: SourceEntry[] = [];
-      const maxConcurrent = 3;
-      const pending = new Set<Promise<void>>();
-
-      const processPath = async (path: string) => {
-        if (!path || visited.has(path)) return;
-        visited.add(path);
-        const entries = await source.listEntries(path);
-        entries.forEach((entry) => {
-          if (entry.type === 'dir') {
-            queue.push(entry.path);
-          } else {
-            files.push(entry);
-          }
-        });
-        updateProgress(entries.filter((entry) => entry.type === 'file').length);
-      };
-
-      while (queue.length || pending.size) {
-        while (queue.length && pending.size < maxConcurrent) {
-          const nextPath = queue.shift();
-          if (!nextPath) continue;
-          const job = processPath(nextPath).finally(() => pending.delete(job));
-          pending.add(job);
-        }
-        if (pending.size) {
-          await Promise.race(pending);
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        }
-      }
-      return files;
-    };
-
-    try {
-      const selectedFiles: SourceEntry[] = [];
-      const listingCache = new Map<string, SourceEntry[]>();
-      const resolveSelectionEntry = async (filePath: string) => {
-        const parent = getParentPath(filePath);
-        if (!listingCache.has(parent)) {
-          try {
-            listingCache.set(parent, await source.listEntries(parent));
-          } catch {
-            listingCache.set(parent, []);
-          }
-        }
-        const entries = listingCache.get(parent) ?? [];
-        return entries.find(
-          (entry) => entry.type === 'file' && normalizeSourcePath(entry.path) === normalizeSourcePath(filePath),
-        ) ?? null;
-      };
-      for (const selection of selections) {
-        if (selection.type === 'dir') {
-          if (recurseFolders) {
-            const nested = await collectRecursive(selection.path);
-            selectedFiles.push(...nested);
-          } else {
-            const entries = await source.listEntries(selection.path);
-            const files = entries.filter((entry) => entry.type === 'file');
-            selectedFiles.push(...files);
-            updateProgress(files.length);
-          }
-        } else {
-          const normalizedPath = normalizeSourcePath(selection.path);
-          const meta = await resolveSelectionEntry(normalizedPath);
-          selectedFiles.push({
-            type: 'file',
-            name: meta?.name ?? selection.name,
-            path: normalizedPath,
-            sizeBytes: meta?.sizeBytes ?? null,
-            modifiedAt: meta?.modifiedAt ?? null,
-          });
-          updateProgress(1);
-        }
-      }
-
-      const playlistItems: PlaylistItem[] = [];
-      let discoveredSonglengths: Array<{ path: string; file: LocalPlayFile }> | undefined;
-      if (source.type === 'local') {
-        const treeUri = localSourceTreeUris.get(source.id);
-        const entriesMap = localEntriesBySourceId.get(source.id);
-        const knownSonglengths = new Set(songlengthsFiles.map((entry) => entry.path));
-        const discovered: Array<{ path: string; file: LocalPlayFile }> = [];
-        const addSonglengthsEntry = (path: string, file?: LocalPlayFile) => {
-          if (!file) return;
-          const normalizedPath = normalizeSourcePath(path);
-          if (knownSonglengths.has(normalizedPath)) return;
-          knownSonglengths.add(normalizedPath);
-          discovered.push({ path: normalizedPath, file });
-        };
-        const resolveSonglengthsFile = (entryPath: string, entryName: string, modifiedAt?: string | null) => {
-          const normalizedPath = normalizeSourcePath(entryPath);
-          const lastModified = parseModifiedAt(modifiedAt);
-          const entry = entriesMap?.get(normalizedPath);
-          return resolveLocalRuntimeFile(source.id, normalizedPath)
-            || (entry?.uri
-              ? buildLocalPlayFileFromUri(entryName, normalizedPath, entry.uri, lastModified)
-              : undefined)
-            || (treeUri
-              ? buildLocalPlayFileFromTree(entryName, normalizedPath, treeUri, lastModified)
-              : undefined);
-        };
-
-        selectedFiles
-          .filter((entry) => entry.type === 'file' && isSonglengthsFileName(entry.name))
-          .forEach((entry) => {
-            const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
-            addSonglengthsEntry(entry.path, file);
-          });
-
-        const directorySelections = selections.filter((selection) => selection.type === 'dir');
-        for (const selection of directorySelections) {
-          try {
-            const recursiveEntries = await source.listFilesRecursive(selection.path);
-            recursiveEntries
-              .filter((entry) => entry.type === 'file' && isSonglengthsFileName(entry.name))
-              .forEach((entry) => {
-                const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
-                addSonglengthsEntry(entry.path, file);
-              });
-          } catch {
-            // Ignore recursive scan failures.
-          }
-        }
-
-        const sidPaths = selectedFiles
-          .filter((entry) => getPlayCategory(entry.path) === 'sid')
-          .map((entry) => entry.path);
-        const candidatePaths = collectSonglengthsSearchPaths(sidPaths).filter((path) => !knownSonglengths.has(path));
-        if (candidatePaths.length) {
-          if (treeUri) {
-            const foldersToScan = new Set(candidatePaths.map((path) => {
-              const trimmed = path.replace(/\/[^/]+$/, '/');
-              return normalizeSourcePath(trimmed || '/');
-            }));
-            for (const folder of foldersToScan) {
-              try {
-                const entries = await source.listEntries(folder);
-                const songEntry = entries.find(
-                  (entry) => entry.type === 'file' && isSonglengthsFileName(entry.name),
-                );
-                if (!songEntry) continue;
-                const songPath = normalizeSourcePath(songEntry.path);
-                addSonglengthsEntry(
-                  songPath,
-                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt),
-                );
-              } catch {
-                // Ignore missing folders or SAF errors.
-              }
-            }
-          } else if (entriesMap) {
-            candidatePaths.forEach((candidate) => {
-              const entry = entriesMap.get(candidate);
-              if (!entry) return;
-              const file = resolveSonglengthsFile(candidate, entry.name, entry.modifiedAt);
-              addSonglengthsEntry(candidate, file);
-            });
-          }
-        }
-
-        if (discovered.length) {
-          discoveredSonglengths = discovered;
-          setSonglengthsFiles((prev) => {
-            const seen = new Set(prev.map((entry) => entry.path));
-            const next = [...prev];
-            discovered.forEach((entry) => {
-              if (seen.has(entry.path)) return;
-              seen.add(entry.path);
-              next.push(entry);
-            });
-            return next;
-          });
-        }
-      }
-      selectedFiles.forEach((file) => {
-        if (!getPlayCategory(file.path)) return;
-        const normalizedPath = normalizeSourcePath(file.path);
-        const localEntry = source.type === 'local' ? localEntriesBySourceId.get(source.id)?.get(normalizedPath) : null;
-        const entryModified = localEntry?.modifiedAt ? parseModifiedAt(localEntry.modifiedAt) : parseModifiedAt(file.modifiedAt);
-        const localFile =
-          source.type === 'local'
-            ? resolveLocalRuntimeFile(source.id, normalizedPath)
-              || (localEntry?.uri ? buildLocalPlayFileFromUri(localEntry.name, normalizedPath, localEntry.uri, entryModified) : undefined)
-              || (localTreeUri ? buildLocalPlayFileFromTree(file.name, normalizedPath, localTreeUri, entryModified) : undefined)
-            : undefined;
-        const hvscFile = source.type === 'hvsc'
-          ? buildHvscLocalPlayFile(normalizedPath, file.name)
-          : undefined;
-        const playable: PlayableEntry = {
-          source: source.type === 'ultimate' ? 'ultimate' : source.type === 'hvsc' ? 'hvsc' : 'local',
-          name: file.name,
-          path: normalizedPath,
-          durationMs: undefined,
-          sourceId: source.type === 'local' || source.type === 'hvsc' ? source.id : null,
-          file: hvscFile ?? localFile,
-          sizeBytes: file.sizeBytes ?? localEntry?.sizeBytes ?? null,
-          modifiedAt: file.modifiedAt ?? localEntry?.modifiedAt ?? null,
-        };
-        const item = buildPlaylistItem(playable);
-        if (item) playlistItems.push(item);
-      });
-
-      if (!playlistItems.length) {
-        const reason = selectedFiles.length === 0 ? 'no-files-found' : 'unsupported-files';
-        addLog('debug', 'No supported files after scan', {
-          sourceId: source.id,
-          sourceType: source.type,
-          reason,
-          totalFiles: selectedFiles.length,
-        });
-        reportUserError({
-          operation: 'PLAYLIST_ADD',
-          title: 'No supported files',
-          description: 'Found no supported files.',
-          context: {
-            sourceId: source.id,
-            sourceType: source.type,
-            totalFiles: selectedFiles.length,
-          },
-        });
-        setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'No supported files found.' }));
-        return false;
-      }
-
-      const minDuration = addItemsSurface === 'page' ? 800 : 300;
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < minDuration) {
-        await new Promise((resolve) => setTimeout(resolve, minDuration - elapsed));
-      }
-      const resolvedItems = await applySonglengthsToItems(playlistItems, discoveredSonglengths);
-      setPlaylist((prev) => [...prev, ...resolvedItems]);
-      if (localTreeUri) {
-        addLog('debug', 'SAF scan complete', {
-          sourceId: source.id,
-          treeUri: redactTreeUri(localTreeUri),
-          totalFiles: selectedFiles.length,
-          supportedFiles: playlistItems.length,
-          elapsedMs: Date.now() - startedAt,
-        });
-      }
-      toast({ title: 'Items added', description: `${playlistItems.length} file(s) added to playlist.` });
-      setAddItemsProgress((prev) => ({ ...prev, status: 'done', message: 'Added to playlist' }));
-      await new Promise((resolve) => setTimeout(resolve, 150));
-      return true;
-    } catch (error) {
-      const err = error as Error;
-      const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
-      if (localTreeUri) {
-        addLog('debug', 'SAF scan failed', {
-          sourceId: source.id,
-          treeUri: redactTreeUri(localTreeUri),
-          error: err.message,
-        });
-      }
-      setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
-      reportUserError({
-        operation: 'PLAYLIST_ADD',
-        title: 'Add items failed',
-        description: err.message,
-        error: err,
-        context: {
-          sourceId: source.id,
-          sourceType: source.type,
-          platform: getPlatform(),
-          treeUri: localTreeUri ? redactTreeUri(localTreeUri) : null,
-          details: listingDetails,
-        },
-      });
-      return false;
-    } finally {
-      setIsAddingItems(false);
-      if (addItemsStartedAtRef.current) {
-        setAddItemsProgress((prev) => ({
-          ...prev,
-          elapsedMs: Date.now() - addItemsStartedAtRef.current!,
-        }));
-      }
-      if (addItemsOverlayActiveRef.current) {
-        const overlayStartedAt = addItemsOverlayStartedAtRef.current ?? startedAt;
-        const minOverlayDuration = 800;
-        const overlayElapsed = Date.now() - overlayStartedAt;
-        if (overlayElapsed < minOverlayDuration) {
-          await new Promise((resolve) => setTimeout(resolve, minOverlayDuration - overlayElapsed));
-        }
-        setShowAddItemsOverlay(false);
-        addItemsOverlayStartedAtRef.current = null;
-        addItemsOverlayActiveRef.current = false;
-      }
-    }
-  }, [
-    addItemsSurface,
-    applySonglengthsToItems,
-    browserOpen,
-    buildPlaylistItem,
-    localEntriesBySourceId,
-    localSourceTreeUris,
-    reportUserError,
-    recurseFolders,
-    songlengthsFiles,
-  ]);
-
-
-  const refreshHvscStatus = useCallback(() => {
-    if (!isHvscBridgeAvailable()) return;
-    getHvscStatus()
-      .then(setHvscStatus)
-      .catch((error) => {
-        addErrorLog('HVSC status fetch failed', { error: (error as Error).message });
-        setHvscStatus(null);
-      });
-  }, []);
-
-  useEffect(() => {
-    refreshHvscStatus();
-  }, [refreshHvscStatus]);
-
-  useEffect(() => {
-    if (!hvscStatus) return;
-    const summaryInProgress =
-      hvscStatusSummary.download.status === 'in-progress'
-      || hvscStatusSummary.extraction.status === 'in-progress';
-    const activeIngestion = ['installing', 'updating'].includes(hvscStatus.ingestionState);
-    const lastUpdatedAtMs = hvscStatusSummary.lastUpdatedAt ? Date.parse(hvscStatusSummary.lastUpdatedAt) : null;
-    const isStale = lastUpdatedAtMs ? Date.now() - lastUpdatedAtMs > 15000 : true;
-    if (!summaryInProgress || activeIngestion || !isStale) return;
-
-    const now = new Date().toISOString();
-    updateHvscSummary((prev) => ({
-      ...prev,
-      download: prev.download.status === 'in-progress'
-        ? {
-            ...prev.download,
-            status: 'failure',
-            finishedAt: now,
-            errorCategory: prev.download.errorCategory ?? 'unknown',
-            errorMessage: prev.download.errorMessage ?? 'Interrupted',
-          }
-        : prev.download,
-      extraction: prev.extraction.status === 'in-progress'
-        ? {
-            ...prev.extraction,
-            status: 'failure',
-            finishedAt: now,
-            errorCategory: prev.extraction.errorCategory ?? 'unknown',
-            errorMessage: prev.extraction.errorMessage ?? 'Interrupted',
-          }
-        : prev.extraction,
-      lastUpdatedAt: now,
-    }));
-    addErrorLog('HVSC progress interrupted', {
-      ingestionState: hvscStatus.ingestionState,
-      downloadStatus: hvscStatusSummary.download.status,
-      extractionStatus: hvscStatusSummary.extraction.status,
-    });
-  }, [hvscStatus, hvscStatusSummary, updateHvscSummary]);
-
-  useEffect(() => {
-    if (!isHvscBridgeAvailable()) return;
-    let removeListener: (() => Promise<void>) | null = null;
-    addHvscProgressListener((event) => {
-      const now = new Date().toISOString();
-      const lastStage = hvscLastStageRef.current;
-      if (event.stage && event.stage !== 'error') {
-        hvscLastStageRef.current = event.stage;
-      }
-      const nowMs = Date.now();
-      const shouldUpdate =
-        event.stage === 'complete'
-        || event.stage === 'error'
-        || event.stage !== lastStage
-        || nowMs - hvscProgressThrottleRef.current >= 120;
-      if (shouldUpdate) {
-        hvscProgressThrottleRef.current = nowMs;
-        if (event.message) setHvscActionLabel(event.message);
-        if (event.stage) setHvscStage(event.stage);
-        if (typeof event.percent === 'number') setHvscProgress(event.percent);
-        if (event.currentFile) setHvscCurrentFile(event.currentFile);
-      }
-      if (event.errorCause) setHvscErrorMessage(event.errorCause);
-      if (event.stage === 'download') {
-        if (shouldUpdate) {
-          updateHvscSummary((prev) => ({
-            ...prev,
-            download: {
-              ...prev.download,
-              status: 'in-progress',
-              startedAt: prev.download.startedAt ?? now,
-              durationMs: event.elapsedTimeMs ?? prev.download.durationMs ?? null,
-              sizeBytes: event.totalBytes ?? event.downloadedBytes ?? prev.download.sizeBytes ?? null,
-              downloadedBytes: event.downloadedBytes ?? prev.download.downloadedBytes ?? null,
-              totalBytes: event.totalBytes ?? prev.download.totalBytes ?? null,
-              errorCategory: null,
-              errorMessage: null,
-            },
-          }));
-        }
-      }
-      if (
-        event.stage === 'archive_extraction' ||
-        event.stage === 'archive_validation' ||
-        event.stage === 'sid_enumeration' ||
-        event.stage === 'songlengths' ||
-        event.stage === 'sid_metadata_parsing'
-      ) {
-        if (shouldUpdate) {
-          updateHvscSummary((prev) => ({
-            ...prev,
-            extraction: {
-              ...prev.extraction,
-              status: 'in-progress',
-              startedAt: prev.extraction.startedAt ?? now,
-              durationMs: event.elapsedTimeMs ?? prev.extraction.durationMs ?? null,
-              filesExtracted: event.processedCount ?? prev.extraction.filesExtracted ?? null,
-              totalFiles: event.totalCount ?? prev.extraction.totalFiles ?? null,
-              errorCategory: null,
-              errorMessage: null,
-            },
-          }));
-        }
-      }
-      if (event.stage === 'complete') {
-        updateHvscSummary((prev) => ({
-          ...prev,
-          download: {
-            ...prev.download,
-            status: prev.download.status === 'success' ? prev.download.status : 'success',
-            finishedAt: prev.download.finishedAt ?? now,
-          },
-          extraction: {
-            ...prev.extraction,
-            status: prev.extraction.status === 'success' ? prev.extraction.status : 'success',
-            finishedAt: prev.extraction.finishedAt ?? now,
-          },
-          lastUpdatedAt: now,
-        }));
-      }
-      if (event.stage === 'error') {
-        const category = resolveHvscFailureCategory(event, lastStage);
-        const errorMessage = event.errorCause ?? event.message ?? null;
-        updateHvscSummary((prev) => {
-          if (lastStage === 'download') {
-            return {
-              ...prev,
-              download: {
-                ...prev.download,
-                status: 'failure',
-                finishedAt: now,
-                errorCategory: category,
-                errorMessage,
-              },
-              lastUpdatedAt: now,
-            };
-          }
-          return {
-            ...prev,
-            extraction: {
-              ...prev.extraction,
-              status: 'failure',
-              finishedAt: now,
-              errorCategory: category,
-              errorMessage,
-            },
-            lastUpdatedAt: now,
-          };
-        });
-      }
-      if (event.stage === 'songlengths') {
-        addLog('info', 'HVSC songlengths source loaded', {
-          message: event.message,
-          archiveName: event.archiveName,
-        });
-      }
-    }).then((handler) => {
-      removeListener = handler.remove;
-    });
-    return () => {
-      if (removeListener) void removeListener();
-    };
-  }, [resolveHvscFailureCategory, updateHvscSummary]);
-
-  const loadHvscFolder = useCallback(async (path: string) => {
-    try {
-      const listing = await getHvscFolderListing(path);
-      setHvscFolders(listing.folders);
-      setHvscSongs(listing.songs);
-      setSelectedHvscFolder(listing.path);
-    } catch (error) {
-      reportUserError({
-        operation: 'HVSC_BROWSE',
-        title: 'HVSC browse failed',
-        description: (error as Error).message,
-        error,
-        context: { path },
-      });
-    }
-  }, [reportUserError]);
-
-  useEffect(() => {
-    if (!hvscStatus?.installedVersion) return;
-    if (hvscFolders.length || hvscSongs.length) return;
-    void loadHvscFolder(selectedHvscFolder || '/');
-  }, [hvscStatus?.installedVersion, hvscFolders.length, hvscSongs.length, loadHvscFolder, selectedHvscFolder]);
 
   useEffect(() => {
     if (!isPlaying || isPaused || currentIndex < 0) return;
@@ -1568,6 +756,7 @@ export default function PlayFilesPage() {
 
   const playItem = useCallback(
     async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean }) => {
+      await ensurePlaybackConnection();
       const api = getC64API();
       if (item.request.source === 'local' && !item.request.file) {
         throw new Error('Local file unavailable. Re-add it to the playlist.');
@@ -1613,7 +802,7 @@ export default function PlayFilesPage() {
       setIsPlaying(true);
       setIsPaused(false);
     },
-    [durationFallbackMs, resolveSidMetadata],
+    [durationFallbackMs, ensurePlaybackConnection, resolveSidMetadata],
   );
 
   const playlistItemDuration = useCallback(
@@ -1964,6 +1153,7 @@ export default function PlayFilesPage() {
         },
       });
     }
+    await restoreVolumeOverrides('stop');
     const now = Date.now();
     playedClockRef.current.stop(now, true);
     setPlayedMs(0);
@@ -1973,7 +1163,17 @@ export default function PlayFilesPage() {
     setDurationMs(undefined);
     setCurrentSubsongCount(null);
     trackStartedAtRef.current = null;
-  }), [currentIndex, isPaused, isPlaying, playlist, reportUserError, withTimeout, trace]);
+  }), [currentIndex, isPaused, isPlaying, playlist, reportUserError, restoreVolumeOverrides, withTimeout, trace]);
+
+  useEffect(() => {
+    if (isPlaying || isPaused) return;
+    if (!volumeSessionActiveRef.current) return;
+    void restoreVolumeOverrides('playback-ended');
+  }, [isPaused, isPlaying, restoreVolumeOverrides]);
+
+  useEffect(() => () => {
+    void restoreVolumeOverridesRef.current('navigate');
+  }, []);
 
   const handlePauseResume = useCallback(trace(async function handlePauseResume() {
     if (!isPlaying) return;
@@ -2037,6 +1237,7 @@ export default function PlayFilesPage() {
 
     const runUpdate = () => {
       if (token !== volumeUpdateSeqRef.current) return;
+      void ensureVolumeSessionSnapshot();
       void applyAudioMixerUpdates(updates, 'Volume');
       setVolumeMuted(false);
     };
@@ -2052,7 +1253,7 @@ export default function PlayFilesPage() {
     }
 
     volumeUpdateTimerRef.current = window.setTimeout(runUpdate, 200);
-  }, [applyAudioMixerUpdates, buildEnabledSidVolumeUpdates, sidEnablement, sidVolumeItems, volumeSteps]);
+  }, [applyAudioMixerUpdates, buildEnabledSidVolumeUpdates, ensureVolumeSessionSnapshot, sidEnablement, sidVolumeItems, volumeSteps]);
 
   const handleVolumeChange = useCallback((value: number[]) => {
     const nextIndex = value[0] ?? 0;
@@ -2092,6 +1293,7 @@ export default function PlayFilesPage() {
     const items = await resolveEnabledSidVolumeItems(true);
     if (!items.length) return;
     if (!volumeMuted) {
+      await ensureVolumeSessionSnapshot();
       manualMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(items, sidEnablement);
       setVolumeMuted(true);
       await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(items, sidEnablement), 'Mute');
@@ -2108,6 +1310,7 @@ export default function PlayFilesPage() {
     applyAudioMixerUpdates,
     buildEnabledSidUnmuteUpdates,
     buildEnabledSidVolumeSnapshot,
+    ensureVolumeSessionSnapshot,
     resolveEnabledSidVolumeItems,
     sidEnablement,
     volumeMuted,
@@ -2251,230 +1454,6 @@ export default function PlayFilesPage() {
   }, [buildPlaylistItem, reportUserError, startPlaylist]);
 
 
-  const handleHvscInstall = useCallback(async () => {
-    try {
-      const startedAt = new Date().toISOString();
-      setHvscActiveToken('hvsc-install');
-      setHvscLoading(true);
-      setHvscProgress(0);
-      setHvscStage(null);
-      setHvscErrorMessage(null);
-      setHvscActionLabel('Checking for updates…');
-      updateHvscSummary((prev) => ({
-        ...prev,
-        download: {
-          ...prev.download,
-          status: 'in-progress',
-          startedAt,
-          finishedAt: null,
-          durationMs: null,
-          errorCategory: null,
-          errorMessage: null,
-        },
-        extraction: {
-          ...prev.extraction,
-          status: prev.extraction.status === 'success' ? prev.extraction.status : 'idle',
-          errorCategory: null,
-          errorMessage: null,
-        },
-      }));
-      const updateStatus = await checkForHvscUpdates();
-      if (!updateStatus.requiredUpdates.length && updateStatus.installedVersion > 0) {
-        toast({ title: 'HVSC up to date', description: 'No new updates detected.' });
-        const status = await getHvscStatus();
-        setHvscStatus(status);
-        const finishedAt = new Date().toISOString();
-        updateHvscSummary((prev) => ({
-          ...prev,
-          download: {
-            ...prev.download,
-            status: 'success',
-            finishedAt,
-            errorCategory: null,
-            errorMessage: null,
-          },
-          extraction: {
-            ...prev.extraction,
-            status: 'success',
-            finishedAt,
-            errorCategory: null,
-            errorMessage: null,
-          },
-          lastUpdatedAt: finishedAt,
-        }));
-        refreshHvscStatus();
-        return;
-      }
-      setHvscActionLabel(updateStatus.installedVersion ? 'Applying updates…' : 'Installing HVSC…');
-      await installOrUpdateHvsc('hvsc-install');
-      const status = await getHvscStatus();
-      setHvscStatus(status);
-      const finishedAt = new Date().toISOString();
-      updateHvscSummary((prev) => ({
-        ...prev,
-        download: {
-          ...prev.download,
-          status: 'success',
-          finishedAt,
-          errorCategory: null,
-          errorMessage: null,
-        },
-        extraction: {
-          ...prev.extraction,
-          status: 'success',
-          finishedAt,
-          errorCategory: null,
-          errorMessage: null,
-        },
-        lastUpdatedAt: finishedAt,
-      }));
-      toast({
-        title: 'HVSC ready',
-        description: `Version ${status.installedVersion} installed.`,
-      });
-    } catch (error) {
-      if (/cancelled/i.test((error as Error).message)) {
-        return;
-      }
-      const failedAt = new Date().toISOString();
-      setHvscErrorMessage((error as Error).message);
-      updateHvscSummary((prev) => ({
-        ...prev,
-        download: {
-          ...prev.download,
-          status: 'failure',
-          finishedAt: failedAt,
-          errorCategory: 'download',
-          errorMessage: (error as Error).message,
-        },
-        lastUpdatedAt: failedAt,
-      }));
-      reportUserError({
-        operation: 'HVSC_DOWNLOAD',
-        title: 'HVSC update failed',
-        description: (error as Error).message,
-        error,
-      });
-    } finally {
-      setHvscLoading(false);
-      setHvscActiveToken(null);
-    }
-  }, [refreshHvscStatus, reportUserError, updateHvscSummary]);
-
-  const handleHvscIngest = useCallback(async () => {
-    try {
-      const startedAt = new Date().toISOString();
-      setHvscActiveToken('hvsc-ingest');
-      setHvscLoading(true);
-      setHvscProgress(0);
-      setHvscStage(null);
-      setHvscErrorMessage(null);
-      setHvscActionLabel('Ingesting cached HVSC…');
-      updateHvscSummary((prev) => ({
-        ...prev,
-        extraction: {
-          ...prev.extraction,
-          status: 'in-progress',
-          startedAt,
-          finishedAt: null,
-          durationMs: null,
-          errorCategory: null,
-          errorMessage: null,
-        },
-      }));
-      await ingestCachedHvsc('hvsc-ingest');
-      const status = await getHvscStatus();
-      setHvscStatus(status);
-      const finishedAt = new Date().toISOString();
-      updateHvscSummary((prev) => ({
-        ...prev,
-        extraction: {
-          ...prev.extraction,
-          status: 'success',
-          finishedAt,
-          errorCategory: null,
-          errorMessage: null,
-        },
-        lastUpdatedAt: finishedAt,
-      }));
-      toast({
-        title: 'HVSC ready',
-        description: `Version ${status.installedVersion} installed.`,
-      });
-    } catch (error) {
-      if (/cancelled/i.test((error as Error).message)) {
-        return;
-      }
-      const failedAt = new Date().toISOString();
-      setHvscErrorMessage((error as Error).message);
-      updateHvscSummary((prev) => ({
-        ...prev,
-        extraction: {
-          ...prev.extraction,
-          status: 'failure',
-          finishedAt: failedAt,
-          errorCategory: 'extraction',
-          errorMessage: (error as Error).message,
-        },
-        lastUpdatedAt: failedAt,
-      }));
-      reportUserError({
-        operation: 'HVSC_INGEST',
-        title: 'HVSC ingest failed',
-        description: (error as Error).message,
-        error,
-      });
-    } finally {
-      setHvscLoading(false);
-      setHvscActiveToken(null);
-    }
-  }, [reportUserError, updateHvscSummary]);
-
-  const handleHvscCancel = useCallback(async () => {
-    const token = hvscActiveToken ?? 'hvsc-install';
-    try {
-      await cancelHvscInstall(token);
-      const stoppedAt = new Date().toISOString();
-      setHvscLoading(false);
-      setHvscProgress(null);
-      setHvscStage(null);
-      setHvscActionLabel(null);
-      setHvscCurrentFile(null);
-      setHvscErrorMessage('Cancelled');
-      updateHvscSummary((prev) => ({
-        ...prev,
-        download: prev.download.status === 'in-progress'
-          ? {
-            ...prev.download,
-            status: 'idle',
-            finishedAt: stoppedAt,
-            errorCategory: null,
-            errorMessage: 'Cancelled',
-          }
-          : prev.download,
-        extraction: prev.extraction.status === 'in-progress'
-          ? {
-            ...prev.extraction,
-            status: 'idle',
-            finishedAt: stoppedAt,
-            errorCategory: null,
-            errorMessage: 'Cancelled',
-          }
-          : prev.extraction,
-        lastUpdatedAt: stoppedAt,
-      }));
-      setHvscActiveToken(null);
-      toast({ title: 'HVSC update cancelled' });
-    } catch (error) {
-      reportUserError({
-        operation: 'HVSC_CANCEL',
-        title: 'Cancel failed',
-        description: (error as Error).message,
-        error,
-      });
-    }
-  }, [cancelHvscInstall, hvscActiveToken, reportUserError, updateHvscSummary]);
-
   const buildHvscFile = useCallback((song: { id: number; virtualPath: string; fileName: string }) => {
     return buildHvscLocalPlayFile(song.virtualPath, song.fileName) as LocalPlayFile;
   }, [buildHvscLocalPlayFile]);
@@ -2559,145 +1538,20 @@ export default function PlayFilesPage() {
     [playlist, playlistTypeFilters],
   );
 
-  const playlistListItems = useMemo(() => {
-    const items: ActionListItem[] = [];
-    let lastFolder: string | null = null;
-    filteredPlaylist.forEach((item, index) => {
-      const folderPath = getParentPath(item.path);
-      if (folderPath !== lastFolder) {
-        items.push({
-          id: `folder:${folderPath}`,
-          title: folderPath,
-          variant: 'header',
-          icon: <Folder className="h-3.5 w-3.5" aria-hidden="true" />,
-          selected: false,
-          actionLabel: '',
-          showMenu: false,
-          showSelection: false,
-          disableActions: true,
-        });
-        lastFolder = folderPath;
-      }
-      const playlistIndex = playlist.findIndex((entry) => entry.id === item.id);
-      const durationLabel = formatTime(playlistItemDuration(item, Math.max(0, playlistIndex)));
-      const detailsDate = item.modifiedAt ?? item.addedAt ?? null;
-      const menuItems: ActionListMenuItem[] = [
-        { type: 'label', label: 'Details' },
-        { type: 'info', label: 'Type', value: formatPlayCategory(item.category) },
-        { type: 'info', label: 'Duration', value: durationLabel },
-        { type: 'info', label: 'Size', value: formatBytes(item.sizeBytes) },
-        { type: 'info', label: 'Date', value: formatDate(detailsDate) },
-        { type: 'info', label: 'Source', value: item.request.source === 'ultimate' ? 'C64 Ultimate' : 'This device' },
-      ];
-      items.push({
-        id: item.id,
-        title: item.label,
-        titleClassName: 'line-clamp-2 whitespace-normal break-words block',
-        meta: (
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <FileOriginIcon
-              origin={item.request.source === 'ultimate' ? 'ultimate' : 'local'}
-              label={item.request.source === 'hvsc' ? 'HVSC library file' : undefined}
-              className="h-3.5 w-3.5 shrink-0 opacity-60"
-            />
-            <span>{formatPlayCategory(item.category)}</span>
-            <span>•</span>
-            <span>{durationLabel}</span>
-          </div>
-        ),
-        selected: selectedPlaylistIds.has(item.id),
-        onSelectToggle: (selected) => handlePlaylistSelect(item, selected),
-        menuItems,
-        actionLabel: 'Play',
-        onAction: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        onTitleClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        onRowClick: () => void startPlaylist(playlist, Math.max(0, playlistIndex)),
-        disableActions: isPlaylistLoading,
-      } as ActionListItem);
-    });
-    return items;
-  }, [filteredPlaylist, handlePlaylistSelect, isPlaylistLoading, playlist, playlistItemDuration, removePlaylistItemsById, selectedPlaylistIds, startPlaylist]);
-
-  const hvscInstalled = Boolean(hvscStatus?.installedVersion);
-  const hvscInProgress = hvscStatusSummary.download.status === 'in-progress'
-    || hvscStatusSummary.extraction.status === 'in-progress'
-    || hvscStatus?.ingestionState === 'installing'
-    || hvscStatus?.ingestionState === 'updating';
-  const hvscUpdating = hvscLoading || hvscInProgress;
-  const hvscInlineError = hvscErrorMessage || (hvscStatus?.ingestionState === 'error' ? hvscStatus.ingestionError : null);
-  const hvscSummaryState = useMemo(() => {
-    if (hvscStatusSummary.download.status === 'failure' || hvscStatusSummary.extraction.status === 'failure') return 'failure';
-    if (hvscStatusSummary.download.status === 'success' || hvscStatusSummary.extraction.status === 'success') return 'success';
-    return 'idle';
-  }, [hvscStatusSummary]);
-  const hvscSummaryFailureCategory = hvscStatusSummary.extraction.status === 'failure'
-    ? hvscStatusSummary.extraction.errorCategory
-    : hvscStatusSummary.download.errorCategory;
-  const hvscSummaryFailureLabel = useMemo(() => {
-    switch (hvscSummaryFailureCategory) {
-      case 'network':
-        return 'Network error';
-      case 'storage':
-        return 'Storage error';
-      case 'download':
-        return 'Download error';
-      case 'extraction':
-      case 'corrupt-archive':
-      case 'unsupported-format':
-        return 'Extraction error';
-      default:
-        return 'Download error';
-    }
-  }, [hvscSummaryFailureCategory]);
-  const hvscSummaryDurationMs = hvscStatusSummary.extraction.durationMs ?? hvscStatusSummary.download.durationMs;
-  const hvscSummaryFilesExtracted = hvscStatusSummary.extraction.filesExtracted;
-  const hvscSummaryUpdatedAt = hvscStatusSummary.lastUpdatedAt;
-  const hvscDownloadBytes = hvscStatusSummary.download.downloadedBytes ?? null;
-  const hvscDownloadTotalBytes = hvscStatusSummary.download.totalBytes ?? hvscStatusSummary.download.sizeBytes ?? null;
-  const hvscExtractionTotalFiles = hvscStatusSummary.extraction.totalFiles ?? null;
-
-  const resolveElapsedMs = useCallback((startedAt?: string | null, fallback?: number | null) => {
-    if (startedAt) {
-      const started = new Date(startedAt).getTime();
-      if (!Number.isNaN(started)) {
-        return Math.max(0, hvscElapsedNow - started);
-      }
-    }
-    return fallback ?? null;
-  }, [hvscElapsedNow]);
-
-  const hvscDownloadElapsedMs = hvscStatusSummary.download.status === 'in-progress'
-    ? resolveElapsedMs(hvscStatusSummary.download.startedAt, hvscStatusSummary.download.durationMs)
-    : hvscStatusSummary.download.durationMs;
-  const hvscExtractionElapsedMs = hvscStatusSummary.extraction.status === 'in-progress'
-    ? resolveElapsedMs(hvscStatusSummary.extraction.startedAt, hvscStatusSummary.extraction.durationMs)
-    : hvscStatusSummary.extraction.durationMs;
-
-  const hvscDownloadPercent = hvscDownloadBytes !== null && hvscDownloadTotalBytes
-    ? Math.min(100, (hvscDownloadBytes / hvscDownloadTotalBytes) * 100)
-    : hvscProgress;
-  const hvscExtractionPercent = hvscSummaryFilesExtracted !== null && hvscExtractionTotalFiles
-    ? Math.min(100, (hvscSummaryFilesExtracted / hvscExtractionTotalFiles) * 100)
-    : hvscProgress;
-
-  const hvscVisibleFolders = useMemo(() => {
-    if (!hvscFolderFilter) return hvscFolders;
-    return hvscFolders.filter((folder) => folder.toLowerCase().includes(hvscFolderFilter.toLowerCase()));
-  }, [hvscFolders, hvscFolderFilter]);
-
-  useEffect(() => {
-    if (!hvscInProgress) return;
-    const timer = window.setInterval(() => setHvscElapsedNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [hvscInProgress]);
-
-  useEffect(() => {
-    if (hvscStatusSummary.download.status === 'in-progress') {
-      setHvscActiveToken('hvsc-install');
-    } else if (hvscStatusSummary.extraction.status === 'in-progress') {
-      setHvscActiveToken('hvsc-ingest');
-    }
-  }, [hvscStatusSummary.download.status, hvscStatusSummary.extraction.status]);
+  const playlistListItems = usePlaylistListItems({
+    filteredPlaylist,
+    playlist,
+    selectedPlaylistIds,
+    isPlaylistLoading,
+    handlePlaylistSelect,
+    startPlaylist,
+    playlistItemDuration,
+    formatTime,
+    formatPlayCategory,
+    formatBytes,
+    formatDate,
+    getParentPath,
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-background/95">
@@ -2707,311 +1561,90 @@ export default function PlayFilesPage() {
       />
       <main className="container max-w-3xl mx-auto px-4 py-6 pb-24 space-y-6">
         <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="text-xs text-muted-foreground" data-testid="playback-current-track">
-              {currentItem ? (
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="text-sm font-medium text-foreground">{currentItem.label}</span>
-                  {currentDurationLabel ? (
-                    <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
-                  ) : null}
-                </div>
-              ) : (
-                'Select a playlist item to start'
-              )}
-            </div>
-            <div className="flex flex-col gap-3 w-full sm:w-auto">
-              <div className="grid grid-cols-4 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-w-[96px] justify-center"
-                  onClick={() => void handlePrevious()}
-                  disabled={!canTransport || !hasPrev}
-                  data-testid="playlist-prev"
-                >
-                  <SkipBack className="h-4 w-4 mr-1" />
-                  Prev
-                </Button>
-                <Button
-                  variant={isPlaying ? 'destructive' : 'default'}
-                  size="sm"
-                  className="min-w-[96px] justify-center"
-                  onClick={() => (isPlaying ? void handleStop() : void handlePlay())}
-                  disabled={!hasPlaylist || isPlaylistLoading}
-                  data-testid="playlist-play"
-                >
-                  {isPlaying ? <Square className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-                  {isPlaying ? 'Stop' : 'Play'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-w-[96px] justify-center"
-                  onClick={() => void handlePauseResume()}
-                  disabled={!canPause || isPlaylistLoading}
-                  data-testid="playlist-pause"
-                >
-                  {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
-                  {isPaused ? 'Resume' : 'Pause'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-w-[96px] justify-center"
-                  onClick={() => void handleNext()}
-                  disabled={!canTransport || !hasNext}
-                  data-testid="playlist-next"
-                >
-                  <SkipForward className="h-4 w-4 mr-1" />
-                  Next
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span className="shrink-0" data-testid="playback-elapsed">{formatTime(elapsedMs)}</span>
-                  <Progress value={progressPercent} className="flex-1 min-w-0" />
-                  <span className="shrink-0" data-testid="playback-remaining">{remainingLabel}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground" data-testid="playback-counters">
-                  <span>Total: {formatTime(playlistTotals.total)}</span>
-                  <span>Remaining: {formatTime(playlistTotals.remaining)}</span>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="min-w-[96px] justify-center"
-                  onClick={() => void handleToggleMute()}
-                  disabled={!canControlVolume || updateConfigBatch.isPending}
-                  data-testid="volume-mute"
-                >
-                  {volumeMuted ? <Volume2 className="h-4 w-4 mr-1" /> : <VolumeX className="h-4 w-4 mr-1" />}
-                  {volumeMuted ? 'Unmute' : 'Mute'}
-                </Button>
-                <div className="flex flex-1 items-center gap-3 min-w-[160px] sm:min-w-[200px]">
-                  <Slider
-                    min={0}
-                    max={Math.max(0, volumeSteps.length - 1)}
-                    step={1}
-                    value={[volumeIndex]}
-                    onValueChange={handleVolumeChange}
-                    onValueCommit={(value) => void handleVolumeCommit(value[0] ?? 0)}
-                    onPointerDown={handleVolumeInteraction}
-                    disabled={!canControlVolume || updateConfigBatch.isPending}
-                    data-testid="volume-slider"
-                  />
-                  <span className="text-xs text-muted-foreground w-[52px] text-right" data-testid="volume-label">{volumeLabel}</span>
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    checked={recurseFolders}
-                    onCheckedChange={(value) => setRecurseFolders(Boolean(value))}
-                    aria-label="Recurse"
-                    data-testid="playback-recurse"
-                  />
-                  Recurse
-                </label>
-                <label className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    checked={shuffleEnabled}
-                    onCheckedChange={(value) => setShuffleEnabled(Boolean(value))}
-                    aria-label="Shuffle"
-                    data-testid="playback-shuffle"
-                  />
-                  <span className="flex items-center gap-1"><Shuffle className="h-3.5 w-3.5" /> Shuffle</span>
-                </label>
-                <label className="flex items-center gap-2 text-xs">
-                  <Checkbox
-                    checked={repeatEnabled}
-                    onCheckedChange={(value) => setRepeatEnabled(Boolean(value))}
-                    aria-label="Repeat"
-                    data-testid="playback-repeat"
-                  />
-                  <span className="flex items-center gap-1"><Repeat className="h-3.5 w-3.5" /> Repeat</span>
-                </label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleReshuffle}
-                  disabled={!shuffleEnabled || playlist.length < 2}
-                  data-testid="playlist-reshuffle"
-                  data-active={reshuffleActive ? 'true' : 'false'}
-                  className={reshuffleActive ? 'bg-accent text-accent-foreground' : undefined}
-                >
-                  <Shuffle className="h-4 w-4 mr-1" />
-                  Reshuffle
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Default duration</p>
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex-1 min-w-[160px]">
-                <Slider
-                  min={0}
-                  max={DURATION_SLIDER_STEPS}
-                  step={1}
-                  value={[durationSecondsToSlider(durationSeconds)]}
-                  onValueChange={handleDurationSliderChange}
-                  data-testid="duration-slider"
-                />
-              </div>
-              <Input
-                value={durationInput}
-                onChange={(event) => handleDurationInputChange(event.target.value)}
-                onBlur={handleDurationInputBlur}
-                inputMode="numeric"
-                placeholder="mm:ss"
-                className="w-[84px] text-right"
-                data-testid="duration-input"
+          <PlaybackControlsCard
+            hasCurrentItem={Boolean(currentItem)}
+            currentItemLabel={currentItem?.label ?? null}
+            currentDurationLabel={currentDurationLabel ?? null}
+            canTransport={canTransport}
+            hasPrev={hasPrev}
+            hasNext={hasNext}
+            isPlaying={isPlaying}
+            isPaused={isPaused}
+            hasPlaylist={hasPlaylist}
+            isPlaylistLoading={isPlaylistLoading}
+            canPause={canPause}
+            onPrevious={() => void handlePrevious()}
+            onPlay={() => void handlePlay()}
+            onStop={() => void handleStop()}
+            onPauseResume={() => void handlePauseResume()}
+            onNext={() => void handleNext()}
+            progressPercent={progressPercent}
+            elapsedLabel={formatTime(elapsedMs)}
+            remainingLabel={remainingLabel}
+            totalLabel={formatTime(playlistTotals.total)}
+            remainingTotalLabel={formatTime(playlistTotals.remaining)}
+            volumeControls={(
+              <VolumeControls
+                volumeMuted={volumeMuted}
+                canControlVolume={canControlVolume}
+                isPending={updateConfigBatch.isPending}
+                onToggleMute={() => void handleToggleMute()}
+                volumeStepsCount={volumeSteps.length}
+                volumeIndex={volumeIndex}
+                onVolumeChange={handleVolumeChange}
+                onVolumeCommit={(value) => void handleVolumeCommit(value)}
+                onVolumeInteraction={handleVolumeInteraction}
+                volumeLabel={volumeLabel}
               />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted-foreground">Songlengths file</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => songlengthsInputRef.current?.click()}
-              >
-                Choose file
-              </Button>
-            </div>
-            {activeSonglengthsPath ? (
-              <button
-                type="button"
-                className="text-xs font-mono text-primary hover:underline text-left break-all"
-                onClick={() => songlengthsInputRef.current?.click()}
-              >
-                {activeSonglengthsPath}
-              </button>
-            ) : (
-              <p className="text-xs text-muted-foreground">Not found yet.</p>
             )}
-          </div>
-
-          <div className="space-y-3">
-            {songSelectorVisible ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex flex-col gap-2 w-full max-w-full">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="song-selector-trigger"
-                      data-open={songPickerOpen ? 'true' : 'false'}
-                      onPointerDown={() => setSongPickerOpen(true)}
-                      onClick={() => {
-                        setSongNrInput(String(clampedSongNr));
-                        setSongPickerOpen(true);
-                      }}
-                    >
-                      Song {clampedSongNr}/{subsongCount}
-                    </Button>
-                  </div>
-                </div>
-                {songPickerOpen ? (
-                  <div
-                    role="dialog"
-                    aria-label="SID song number"
-                    data-testid="song-selector-dialog"
-                    className="w-full max-w-full rounded-lg border border-border bg-background p-3 shadow-sm space-y-2"
-                  >
-                    <p className="text-sm font-semibold">SID song number</p>
-                    <p className="text-xs text-muted-foreground">Select a subsong index to start playback.</p>
-                    <div className="space-y-2" data-testid="song-selector-options">
-                      {Array.from({ length: subsongCount }, (_, index) => {
-                        const value = index + 1;
-                        return (
-                          <Button
-                            key={value}
-                            variant={value === clampedSongNr ? 'default' : 'outline'}
-                            className="w-full justify-start"
-                            onClick={() => void handleSongSelection(value)}
-                          >
-                            Song {value}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Available songs: 1–{subsongCount}
-                    </p>
-                    <Button variant="outline" size="sm" className="w-full" onClick={() => setSongPickerOpen(false)}>
-                      Close
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-          <SelectableActionList
-            title="Playlist"
-            selectionLabel="items"
-            items={playlistListItems}
-            emptyLabel="No tracks in playlist yet."
-            selectAllLabel="Select all"
-            deselectAllLabel="Deselect all"
-            removeSelectedLabel={selectedPlaylistCount ? 'Remove selected items' : undefined}
-            selectedCount={selectedPlaylistCount}
-            allSelected={allPlaylistSelected}
-            onToggleSelectAll={toggleSelectAllPlaylist}
-            onRemoveSelected={handleRemoveSelectedPlaylist}
-            maxVisible={listPreviewLimit}
-            viewAllTitle="Playlist"
-            listTestId="playlist-list"
-            rowTestId="playlist-item"
-            filterHeader={(
-              <div className="flex flex-wrap gap-2">
-                {CATEGORY_OPTIONS.map((category) => (
-                  <label key={category} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Checkbox
-                      checked={playlistTypeFilters.includes(category)}
-                      onCheckedChange={() => togglePlaylistTypeFilter(category)}
-                      aria-label={formatPlayCategory(category)}
-                      data-testid={`playlist-type-${category}`}
-                    />
-                    {formatPlayCategory(category)}
-                  </label>
-                ))}
-              </div>
-            )}
-            headerActions={
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setBrowserOpen(true)}
-                  aria-label="Add items to playlist"
-                >
-                  {hasPlaylist ? 'Add more items' : 'Add items'}
-                </Button>
-                {hasPlaylist ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removePlaylistItemsById(new Set(playlistIds))}
-                    aria-label="Clear playlist"
-                    className="text-destructive hover:text-destructive"
-                  >
-                    Clear playlist
-                  </Button>
-                ) : null}
-              </div>
-            }
+            recurseFolders={recurseFolders}
+            onRecurseChange={(value) => setRecurseFolders(Boolean(value))}
+            shuffleEnabled={shuffleEnabled}
+            onShuffleChange={(value) => setShuffleEnabled(Boolean(value))}
+            repeatEnabled={repeatEnabled}
+            onRepeatChange={(value) => setRepeatEnabled(Boolean(value))}
+            onReshuffle={handleReshuffle}
+            reshuffleActive={reshuffleActive}
+            reshuffleDisabled={!shuffleEnabled || playlist.length < 2}
+          />
+          <PlaybackSettingsPanel
+            durationSliderMax={DURATION_SLIDER_STEPS}
+            durationSliderValue={durationSecondsToSlider(durationSeconds)}
+            durationInput={durationInput}
+            onDurationSliderChange={handleDurationSliderChange}
+            onDurationInputChange={handleDurationInputChange}
+            onDurationInputBlur={handleDurationInputBlur}
+            onChooseSonglengthsFile={() => songlengthsInputRef.current?.click()}
+            activeSonglengthsPath={activeSonglengthsPath}
+            songSelectorVisible={songSelectorVisible}
+            songPickerOpen={songPickerOpen}
+            onSongPickerPointerDown={() => setSongPickerOpen(true)}
+            onSongPickerClick={() => {
+              setSongNrInput(String(clampedSongNr));
+              setSongPickerOpen(true);
+            }}
+            clampedSongNr={clampedSongNr}
+            subsongCount={subsongCount}
+            onSelectSong={(value) => void handleSongSelection(value)}
+            onCloseSongPicker={() => setSongPickerOpen(false)}
           />
         </div>
+
+        <PlaylistPanel
+          items={playlistListItems}
+          selectedCount={selectedPlaylistCount}
+          allSelected={allPlaylistSelected}
+          onToggleSelectAll={toggleSelectAllPlaylist}
+          onRemoveSelected={handleRemoveSelectedPlaylist}
+          maxVisible={listPreviewLimit}
+          categoryOptions={CATEGORY_OPTIONS}
+          playlistTypeFilters={playlistTypeFilters}
+          onToggleFilter={togglePlaylistTypeFilter}
+          formatCategory={formatPlayCategory}
+          hasPlaylist={hasPlaylist}
+          onAddItems={() => setBrowserOpen(true)}
+          onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
+        />
 
         <input
           ref={localSourceInputRef}
@@ -3064,203 +1697,47 @@ export default function PlayFilesPage() {
         ) : null}
 
         {hvscControlsEnabled && (
-          <div className="bg-card border border-border rounded-xl p-4 space-y-4" data-testid="hvsc-controls">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-medium">HVSC library</p>
-                <p className="text-xs text-muted-foreground">
-                  {hvscInstalled
-                    ? `Installed version ${hvscStatus?.installedVersion ?? '—'}`
-                    : 'Download the HVSC library to browse the SID collection.'}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => void handleHvscInstall()}
-                  disabled={hvscUpdating || !hvscAvailable}
-                  className="whitespace-normal"
-                >
-                  Download HVSC
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleHvscIngest()}
-                  disabled={hvscUpdating || !hvscAvailable}
-                  className="whitespace-normal"
-                >
-                  Ingest HVSC
-                </Button>
-                {hvscInProgress && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void handleHvscCancel()}
-                    className="whitespace-normal"
-                    data-testid="hvsc-stop"
-                  >
-                    Stop
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {hvscSummaryState !== 'idle' && (
-              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="hvsc-summary">
-                {hvscSummaryState === 'success' ? (
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">HVSC downloaded successfully</p>
-                    <p>Files extracted: {hvscSummaryFilesExtracted ?? '—'}</p>
-                    <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
-                    <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">HVSC download failed</p>
-                    <p>{hvscSummaryFailureLabel}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!hvscAvailable && (
-              <p className="text-xs text-muted-foreground">
-                HVSC controls are available on native builds or when a mock bridge is enabled.
-              </p>
-            )}
-
-            {(hvscUpdating || hvscSummaryState !== 'idle') && (
-              <div className="space-y-2" data-testid="hvsc-progress">
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{hvscActionLabel || 'Processing HVSC…'}</span>
-                  <span>{hvscStage ? hvscStage : '—'}</span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>Download</span>
-                    <span>{hvscDownloadPercent !== null && hvscDownloadPercent !== undefined ? `${Math.round(hvscDownloadPercent)}%` : '—'}</span>
-                  </div>
-                  <Progress value={hvscDownloadPercent ?? 0} />
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
-                    <span>Downloaded: {formatBytes(hvscDownloadBytes)}</span>
-                    <span>Total: {formatBytes(hvscDownloadTotalBytes)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-elapsed">
-                    <span>Elapsed: {formatHvscDuration(hvscDownloadElapsedMs)}</span>
-                    <span>Status: {hvscStatusSummary.download.status}</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                    <span>Extraction + indexing</span>
-                    <span>{hvscExtractionPercent !== null && hvscExtractionPercent !== undefined ? `${Math.round(hvscExtractionPercent)}%` : '—'}</span>
-                  </div>
-                  <Progress value={hvscExtractionPercent ?? 0} />
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-files">
-                    <span>Files: {hvscSummaryFilesExtracted ?? '—'}</span>
-                    <span>Total: {hvscExtractionTotalFiles ?? '—'}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-elapsed">
-                    <span>Elapsed: {formatHvscDuration(hvscExtractionElapsedMs)}</span>
-                    <span>Status: {hvscStatusSummary.extraction.status}</span>
-                  </div>
-                </div>
-                {hvscCurrentFile && (
-                  <p className="text-[11px] text-muted-foreground truncate">Current: {hvscCurrentFile}</p>
-                )}
-              </div>
-            )}
-
-            {hvscInlineError && (
-              <p className="text-xs text-destructive">{hvscInlineError}</p>
-            )}
-
-            {hvscInstalled && hvscAvailable && (
-              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Browse HVSC folders</p>
-                    <p className="text-xs text-muted-foreground">Play SID files from the collection.</p>
-                  </div>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => void handlePlayHvscFolder(selectedHvscFolder)}
-                    disabled={hvscUpdating}
-                  >
-                    <Play className="h-4 w-4 mr-1" />
-                    Play folder
-                  </Button>
-                </div>
-
-                <Input
-                  placeholder="Filter folders…"
-                  value={hvscFolderFilter}
-                  onChange={(e) => setHvscFolderFilter(e.target.value)}
-                />
-
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {hvscVisibleFolders.slice(0, 24).map((folder) => (
-                    <div key={folder} className="flex items-center gap-2 min-w-0">
-                      <Button
-                        variant={folder === selectedHvscFolder ? 'secondary' : 'outline'}
-                        size="sm"
-                        className="flex-1 justify-start min-w-0"
-                        onClick={() => void loadHvscFolder(folder)}
-                      >
-                        <FolderOpen className="h-4 w-4 mr-1 shrink-0" />
-                        <span className="truncate">{folder}</span>
-                      </Button>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() => void handlePlayHvscFolder(folder)}
-                        disabled={hvscUpdating}
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Play
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-2">
-                  {hvscSongs.length === 0 && (
-                    <p className="text-xs text-muted-foreground">No songs in this folder.</p>
-                  )}
-                  {hvscSongs.slice(0, 80).map((song) => (
-                    <div key={song.id} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium break-words whitespace-normal">{song.fileName}</p>
-                        <p className="text-xs text-muted-foreground break-words whitespace-normal">{song.virtualPath}</p>
-                      </div>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() =>
-                          void handlePlayEntry({
-                            source: 'hvsc',
-                            name: song.fileName,
-                            path: song.virtualPath,
-                            file: buildHvscFile(song),
-                            durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
-                            sourceId: hvscRoot.path,
-                          })
-                        }
-                        disabled={hvscUpdating}
-                      >
-                        <Play className="h-4 w-4 mr-1" />
-                        Play
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <HvscControls
+            hvscInstalled={hvscInstalled}
+            hvscInstalledVersion={hvscStatus?.installedVersion ?? null}
+            hvscAvailable={hvscAvailable}
+            hvscUpdating={hvscUpdating}
+            hvscInProgress={hvscInProgress}
+            hvscSummaryState={hvscSummaryState}
+            hvscSummaryFilesExtracted={hvscSummaryFilesExtracted}
+            hvscSummaryDurationMs={hvscSummaryDurationMs}
+            hvscSummaryUpdatedAt={hvscSummaryUpdatedAt}
+            hvscSummaryFailureLabel={hvscSummaryFailureLabel}
+            hvscActionLabel={hvscActionLabel}
+            hvscStage={hvscStage}
+            hvscDownloadPercent={hvscDownloadPercent}
+            hvscDownloadBytes={hvscDownloadBytes}
+            hvscDownloadTotalBytes={hvscDownloadTotalBytes}
+            hvscDownloadElapsedMs={hvscDownloadElapsedMs}
+            hvscDownloadStatus={hvscDownloadStatus}
+            hvscExtractionPercent={hvscExtractionPercent}
+            hvscExtractionTotalFiles={hvscExtractionTotalFiles}
+            hvscExtractionElapsedMs={hvscExtractionElapsedMs}
+            hvscExtractionStatus={hvscExtractionStatus}
+            hvscCurrentFile={hvscCurrentFile}
+            hvscInlineError={hvscInlineError}
+            hvscFolderFilter={hvscFolderFilter}
+            hvscVisibleFolders={hvscVisibleFolders}
+            hvscSongs={hvscSongs}
+            selectedHvscFolder={selectedHvscFolder}
+            hvscRootPath={hvscRoot.path}
+            formatHvscDuration={formatHvscDuration}
+            formatHvscTimestamp={formatHvscTimestamp}
+            formatBytes={formatBytes}
+            onInstall={() => void handleHvscInstall()}
+            onIngest={() => void handleHvscIngest()}
+            onCancel={() => void handleHvscCancel()}
+            onFolderFilterChange={setHvscFolderFilter}
+            onSelectFolder={(folder) => void loadHvscFolder(folder)}
+            onPlayFolder={(folder) => void handlePlayHvscFolder(folder)}
+            onPlayEntry={(entry) => void handlePlayEntry(entry)}
+            buildHvscFile={buildHvscFile}
+          />
         )}
       </main>
     </div>

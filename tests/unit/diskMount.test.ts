@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { C64API } from '@/lib/c64api';
 import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
+import { saveLocalSources, setLocalSourceRuntimeFiles } from '@/lib/sourceNavigation/localSourcesStore';
 
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
@@ -20,7 +21,19 @@ const mockFolderPickerFromTree = async (data: string) => {
   (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
 };
 
+const readBlobText = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.readAsText(blob);
+  });
+
 describe('mountDiskToDrive', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   it('mounts ultimate disks via mountDrive', async () => {
     const api = {
       mountDrive: vi.fn().mockResolvedValue(undefined),
@@ -112,6 +125,66 @@ describe('mountDiskToDrive', () => {
       path: '/Local/Disk 3.d64',
     });
 
-    await expect(resolveLocalDiskBlob(disk)).rejects.toThrow('Local disk is missing a readable URI.');
+    await expect(resolveLocalDiskBlob(disk)).rejects.toThrow('Local disk access is missing.');
+  });
+
+  it('resolves local disk blobs via source runtime files', async () => {
+    const sourceId = 'source-runtime';
+    saveLocalSources([
+      {
+        id: sourceId,
+        name: 'Local Source',
+        rootName: 'Local Source',
+        rootPath: '/',
+        createdAt: new Date().toISOString(),
+        entries: [],
+      },
+    ]);
+
+    const runtimeFile = new File([new Uint8Array([100, 101, 102])], 'Disk 4.d64', {
+      type: 'application/octet-stream',
+    });
+    setLocalSourceRuntimeFiles(sourceId, {
+      '/Local/Disk 4.d64': runtimeFile,
+    });
+
+    const disk = createDiskEntry({
+      location: 'local',
+      path: '/Local/Disk 4.d64',
+      sourceId,
+    });
+
+    const blob = await resolveLocalDiskBlob(disk);
+    const text = await readBlobText(blob);
+    expect(text).toBe('def');
+  });
+
+  it('resolves local disk blobs via source SAF tree URIs', async () => {
+    await mockFolderPickerFromTree(btoa('saf-data'));
+    const sourceId = 'source-saf';
+    saveLocalSources([
+      {
+        id: sourceId,
+        name: 'Android SAF',
+        rootName: 'Android SAF',
+        rootPath: '/',
+        createdAt: new Date().toISOString(),
+        android: {
+          treeUri: 'content://tree/primary%3ADisks',
+          rootName: 'Disks',
+          permissionGrantedAt: new Date().toISOString(),
+        },
+      },
+    ]);
+
+    const disk = createDiskEntry({
+      location: 'local',
+      path: '/Local/Disk 5.d64',
+      sourceId,
+    });
+
+    const blob = await resolveLocalDiskBlob(disk);
+    const text = await readBlobText(blob);
+    expect(text).toBe('saf-data');
   });
 });

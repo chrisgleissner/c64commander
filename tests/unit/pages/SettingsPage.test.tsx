@@ -7,7 +7,7 @@ import { discoverConnection } from '@/lib/connection/connectionManager';
 import { toast } from '@/hooks/use-toast';
 import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { downloadTraceZip } from '@/lib/tracing/traceExport';
+import { shareTraceZip } from '@/lib/tracing/traceExport';
 import {
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
@@ -165,7 +165,7 @@ vi.mock('@/hooks/useActionTrace', () => ({
 }));
 
 vi.mock('@/lib/tracing/traceExport', () => ({
-  downloadTraceZip: vi.fn(),
+  shareTraceZip: vi.fn(),
 }));
 
 vi.mock('@/lib/config/settingsTransfer', () => ({
@@ -213,7 +213,7 @@ beforeEach(() => {
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(getTraceEvents).mockReturnValue([]);
-  vi.mocked(downloadTraceZip).mockReset();
+  vi.mocked(shareTraceZip).mockReset();
 });
 
 describe('SettingsPage', () => {
@@ -478,7 +478,7 @@ describe('SettingsPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
-    expect(await within(dialog).findByText(/1\. rest · user/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/rest · user/i)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear traces/i }));
     expect(clearTraceEvents).toHaveBeenCalled();
@@ -490,7 +490,7 @@ describe('SettingsPage', () => {
   });
 
   it('exports traces and reports export failures', async () => {
-    vi.mocked(downloadTraceZip).mockImplementation(() => undefined);
+    vi.mocked(shareTraceZip).mockImplementation(() => undefined);
 
     render(<SettingsPage />);
 
@@ -506,16 +506,15 @@ describe('SettingsPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
-    fireEvent.click(await within(dialog).findByRole('button', { name: /^export traces$/i }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: /share\s*\/\s*export/i }));
 
-    expect(downloadTraceZip).toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith({ title: 'Trace export ready' });
+    expect(shareTraceZip).toHaveBeenCalled();
 
-    vi.mocked(downloadTraceZip).mockImplementation(() => {
+    vi.mocked(shareTraceZip).mockImplementation(() => {
       throw new Error('export failed');
     });
 
-    fireEvent.click(await within(dialog).findByRole('button', { name: /^export traces$/i }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: /share\s*\/\s*export/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
