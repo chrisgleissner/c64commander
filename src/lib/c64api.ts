@@ -388,14 +388,20 @@ export class C64API {
             headers,
             data: typeof body === 'string' ? JSON.parse(body) : body,
           });
-          const nativeResponse = timeoutMs
-            ? await Promise.race([
-              requestPromise,
-              new Promise<never>((_, reject) => {
-                setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
-              }),
-            ])
-            : await requestPromise;
+          let nativeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+          const nativeTimeoutPromise = timeoutMs
+            ? new Promise<never>((_, reject) => {
+              nativeTimeoutId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+            })
+            : null;
+          let nativeResponse: Awaited<typeof requestPromise>;
+          try {
+            nativeResponse = nativeTimeoutPromise
+              ? await Promise.race([requestPromise, nativeTimeoutPromise])
+              : await requestPromise;
+          } finally {
+            if (nativeTimeoutId) clearTimeout(nativeTimeoutId);
+          }
 
           status = nativeResponse.status;
           if (nativeResponse.status < 200 || nativeResponse.status >= 300) {
@@ -574,14 +580,20 @@ export class C64API {
             headers,
             data,
           });
-          const nativeResponse = timeoutMs
-            ? await Promise.race([
-              requestPromise,
-              new Promise<never>((_, reject) => {
-                setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
-              }),
-            ])
-            : await requestPromise;
+          let nativeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+          const nativeTimeoutPromise = timeoutMs
+            ? new Promise<never>((_, reject) => {
+              nativeTimeoutId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+            })
+            : null;
+          let nativeResponse: Awaited<typeof requestPromise>;
+          try {
+            nativeResponse = nativeTimeoutPromise
+              ? await Promise.race([requestPromise, nativeTimeoutPromise])
+              : await requestPromise;
+          } finally {
+            if (nativeTimeoutId) clearTimeout(nativeTimeoutId);
+          }
 
           const responseHeaders = new Headers();
           if (nativeResponse.headers) {

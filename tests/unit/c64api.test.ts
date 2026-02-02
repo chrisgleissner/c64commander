@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   C64API,
   getC64API,
@@ -75,16 +75,13 @@ const ensureLocalStorage = () => {
 ensureWindow();
 ensureLocalStorage();
 
-const setFetchMock = () => {
-  const fetchMock = vi.fn();
-  Object.defineProperty(globalThis, 'fetch', {
-    value: fetchMock,
-    configurable: true,
-  });
-  return fetchMock;
-};
+const fetchMock = vi.fn();
+Object.defineProperty(globalThis, 'fetch', {
+  value: fetchMock,
+  configurable: true,
+});
 
-const getFetchMock = () => globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
@@ -144,18 +141,51 @@ describe('c64api', () => {
     fuzzSafeMock.mockReset();
     smokeEnabledMock.mockReset();
     smokeReadOnlyMock.mockReset();
+    fetchMock.mockReset();
     fuzzEnabledMock.mockReturnValue(false);
     fuzzSafeMock.mockReturnValue(true);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
     (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
-    setFetchMock();
     resetConfigWriteThrottle();
     saveConfigWriteIntervalMs(0);
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
     storePasswordMock.mockReset();
     clearPasswordMock.mockReset();
+  });
+
+  afterAll(() => {
+    const handles = (process as { _getActiveHandles?: () => any[] })._getActiveHandles?.() ?? [];
+    if (process.env.C64U_DEBUG_HANDLES === '1') {
+      const summary = handles.map((handle) => {
+        const type = handle?.constructor?.name ?? 'unknown';
+        const hasRef = typeof handle?.hasRef === 'function' ? handle.hasRef() : undefined;
+        const idleTimeout = typeof handle?._idleTimeout === 'number' ? handle._idleTimeout : undefined;
+        const fd = typeof handle?.fd === 'number' ? handle.fd : undefined;
+        const socketInfo = type === 'Socket'
+          ? {
+            localAddress: handle.localAddress,
+            localPort: handle.localPort,
+            remoteAddress: handle.remoteAddress,
+            remotePort: handle.remotePort,
+          }
+          : undefined;
+        return { type, hasRef, idleTimeout, fd, socketInfo };
+      });
+      // eslint-disable-next-line no-console
+      console.log('c64api.test active handles:', summary);
+    }
+    handles.forEach((handle) => {
+      if (handle?.constructor?.name === 'Timeout') {
+        try {
+          clearTimeout(handle);
+          clearInterval(handle);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    });
   });
 
   it('adds auth headers for password', async () => {
