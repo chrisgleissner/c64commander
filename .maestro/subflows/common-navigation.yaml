@@ -1,16 +1,31 @@
 appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
 tags:
   - subflow
 ---
 - tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
 - takeScreenshot: play-tab
 - tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "Settings"
+    timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Settings"
 - takeScreenshot: settings-tab
 - tapOn: "Config"
+- extendedWaitUntil:
+    visible: "Configuration"
+    timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Configuration"
 - takeScreenshot: config-tab
 - tapOn: "Home"
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: ${SHORT_TIMEOUT}
 - assertVisible: "C64 Commander"
 - takeScreenshot: home-tab

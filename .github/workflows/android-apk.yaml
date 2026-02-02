@@ -551,9 +551,103 @@ jobs:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  android-maestro:
+    name: Android | Maestro gating
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_MAX_WORKERS: "6"
+      ANDROID_API_LEVEL: "34"
+      ANDROID_SYSTEM_IMAGE: "system-images;android-34;google_apis;x86_64"
+      ANDROID_DEVICE_PROFILE: "pixel_6"
+      ANDROID_AVD_NAME: "c64-ci"
+      EMULATOR_HEADLESS: "1"
+      BOOT_TIMEOUT_SECS: "180"
+      MAESTRO_TIMEOUT_SECS: "300"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Export Android SDK env
+        run: |
+          if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
+            echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          elif [[ -n "${ANDROID_HOME:-}" ]]; then
+            echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+
+      - name: Start emulator (background)
+        run: |
+          set -e
+          sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
+          if ! avdmanager list avd | grep -q "Name: ${ANDROID_AVD_NAME}"; then
+            echo "no" | avdmanager create avd -n "${ANDROID_AVD_NAME}" -k "${ANDROID_SYSTEM_IMAGE}" -d "${ANDROID_DEVICE_PROFILE}"
+          fi
+          mkdir -p test-results/maestro
+          nohup emulator -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
+          echo $! > test-results/maestro/emulator.pid
+
+      - name: Install dependencies
+        run: |
+          start=$(date +%s)
+          npm ci
+          end=$(date +%s)
+          echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Build web + sync
+        run: |
+          start=$(date +%s)
+          npm run cap:build
+          end=$(date +%s)
+          echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Build APK (debug)
+        run: |
+          start=$(date +%s)
+          npm run android:apk
+          end=$(date +%s)
+          echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Run Maestro gating flows
+        run: |
+          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build
+
+      - name: Upload Maestro evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-evidence
+          path: |
+            test-results/maestro/**
+            test-results/evidence/maestro/**
+
   android-packaging:
     name: Android | Packaging
     runs-on: ubuntu-latest
+    needs: [android-maestro]
     env:
       GRADLE_MAX_WORKERS: "6"
 
