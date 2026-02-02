@@ -31,6 +31,7 @@ export type ItemSelectionDialogProps = {
   showProgressFooter?: boolean;
   autoConfirmCloseBefore?: boolean;
   onAutoConfirmStart?: (source: SourceLocation) => void;
+  onCancelScan?: () => void;
 };
 
 export const ItemSelectionDialog = ({
@@ -49,6 +50,7 @@ export const ItemSelectionDialog = ({
   showProgressFooter = true,
   autoConfirmCloseBefore = false,
   onAutoConfirmStart,
+  onCancelScan,
 }: ItemSelectionDialogProps) => {
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Map<string, SourceEntry>>(new Map());
@@ -334,8 +336,17 @@ export const ItemSelectionDialog = ({
               </div>
             )}
             <div className="flex gap-2 sm:ml-auto">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (progress?.status === 'scanning' && onCancelScan) {
+                    onCancelScan();
+                    return;
+                  }
+                  onOpenChange(false);
+                }}
+              >
+                {progress?.status === 'scanning' && onCancelScan ? 'Cancel scan' : 'Cancel'}
               </Button>
               {source && (
                 <Button

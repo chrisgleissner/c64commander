@@ -114,6 +114,21 @@ describe('localSourceAdapter', () => {
     });
   });
 
+  it('parses SAF entries when returned as JSON string', async () => {
+    const source = buildAndroidSource();
+    listChildrenMock.mockResolvedValue({
+      entries: JSON.stringify([
+        { type: 'dir', name: 'Albums', path: '/Albums' },
+        { type: 'file', name: 'song.sid', path: '/song.sid' },
+      ]),
+    });
+
+    const location = createLocalSourceLocation(source);
+    const result = await location.listEntries('/');
+
+    expect(result.map((entry) => entry.name)).toEqual(['Albums', 'song.sid']);
+  });
+
   it('rejects invalid SAF entries inside the list', async () => {
     const source = buildAndroidSource();
     listChildrenMock.mockResolvedValue({

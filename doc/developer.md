@@ -281,6 +281,15 @@ Fixtures:
 - REST config: `tests/mocks/mockC64Server.ts`
 - FTP files: `playwright/fixtures/ftp-root/`
 
+## FTP bridge overrides (Settings)
+
+When troubleshooting FTP connectivity, the Settings → Connection page includes fields for:
+
+- **FTP port** (default 21)
+- **FTP bridge URL** (optional proxy/bridge)
+
+These overrides are stored locally and take effect immediately for FTP listings and transfers.
+
 ## Project structure
 
 ```

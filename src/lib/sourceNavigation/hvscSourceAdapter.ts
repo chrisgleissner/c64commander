@@ -26,11 +26,14 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
     return [...folders, ...songs].sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
+  const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
     const queue = [normalizeHvscPath(path)];
     const visited = new Set<string>();
     const files: SourceEntry[] = [];
     while (queue.length) {
+      if (options?.signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
       const next = queue.shift();
       if (!next || visited.has(next)) continue;
       visited.add(next);

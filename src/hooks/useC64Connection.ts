@@ -12,6 +12,7 @@ import {
   normalizeDeviceHost,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
+import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from '@/lib/secureStorage';
 import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from '@/lib/config/appConfigStore';
 import { useConnectionState } from '@/hooks/useConnectionState';
 
@@ -29,9 +30,7 @@ export function useC64Connection() {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
     return buildBaseUrlFromDeviceHost(resolvedDeviceHost);
   });
-  const [password, setPassword] = useState(() => 
-    localStorage.getItem('c64u_password') || ''
-  );
+  const [password, setPassword] = useState('');
   const [deviceHost, setDeviceHost] = useState(() => {
     return resolveDeviceHostFromStorage();
   });
@@ -50,6 +49,14 @@ export function useC64Connection() {
   });
 
   useEffect(() => {
+    let isMounted = true;
+    if (hasStoredPasswordFlag()) {
+      void loadStoredPassword().then((value) => {
+        if (!isMounted) return;
+        setPassword(value || '');
+      });
+    }
+
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as {
         baseUrl?: string;
@@ -69,7 +76,10 @@ export function useC64Connection() {
     };
 
     window.addEventListener('c64u-connection-change', handler as EventListener);
-    return () => window.removeEventListener('c64u-connection-change', handler as EventListener);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('c64u-connection-change', handler as EventListener);
+    };
   }, [queryClient, refetch]);
 
   const updateConfig = useCallback((newDeviceHost: string, newPassword?: string) => {

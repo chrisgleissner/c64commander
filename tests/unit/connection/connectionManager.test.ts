@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
-import { loadAutomaticDemoModeEnabled, loadStartupDiscoveryWindowMs } from '@/lib/config/appSettings';
+import { loadAutomaticDemoModeEnabled, loadDiscoveryProbeTimeoutMs, loadStartupDiscoveryWindowMs } from '@/lib/config/appSettings';
 import { isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
 
 vi.mock('@/lib/config/appSettings', () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
+  loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 600),
 }));
 
@@ -30,6 +31,14 @@ vi.mock('@/lib/c64api', async () => {
   };
 });
 
+vi.mock('@/lib/secureStorage', () => ({
+  getPassword: vi.fn(async () => null),
+  setPassword: vi.fn(async () => undefined),
+  clearPassword: vi.fn(async () => undefined),
+  hasStoredPasswordFlag: vi.fn(() => false),
+  getCachedPassword: vi.fn(() => null),
+}));
+
 const startMockServer = vi.fn(async () => {
   throw new Error('Mock C64U server is only available on native platforms.');
 });
@@ -53,6 +62,7 @@ describe('connectionManager', () => {
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(2500);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
     vi.mocked(isSmokeModeEnabled).mockReturnValue(false);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
@@ -71,7 +81,7 @@ describe('connectionManager', () => {
 
     // Force an unreachable URL so probes always fail quickly.
     localStorage.setItem('c64u_device_host', '127.0.0.1:1');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     await initializeConnectionManager();
     expect(getConnectionSnapshot().state).toBe('UNKNOWN');
@@ -124,7 +134,7 @@ describe('connectionManager', () => {
 
     localStorage.setItem('c64u_base_url', 'http://127.0.0.1:9999');
     localStorage.removeItem('c64u_device_host');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
@@ -150,7 +160,7 @@ describe('connectionManager', () => {
     vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
@@ -173,7 +183,7 @@ describe('connectionManager', () => {
   it('accepts healthy probe payload without product field', async () => {
     const { probeOnce } = await import('@/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
@@ -189,7 +199,7 @@ describe('connectionManager', () => {
   it('returns false when probe exceeds timeout', async () => {
     const { probeOnce } = await import('@/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation((_: RequestInfo, init?: RequestInit) => {
@@ -214,12 +224,41 @@ describe('connectionManager', () => {
     await expect(resultPromise).resolves.toBe(false);
   });
 
+  it('uses configured probe timeout when not provided', async () => {
+    const { probeOnce } = await import('@/lib/connection/connectionManager');
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(40);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((_: RequestInfo, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        setTimeout(() => {
+          resolve(new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }));
+        }, 200);
+      });
+    });
+
+    const resultPromise = probeOnce();
+    await vi.advanceTimersByTimeAsync(60);
+    await expect(resultPromise).resolves.toBe(false);
+  });
+
   it('connects to real device before discovery window expires', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('@/lib/connection/connectionManager');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
@@ -244,7 +283,7 @@ describe('connectionManager', () => {
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockImplementation(() =>
@@ -275,7 +314,7 @@ describe('connectionManager', () => {
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchStub = vi.mocked(fetch);
     fetchStub
@@ -308,7 +347,7 @@ describe('connectionManager', () => {
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(
@@ -335,7 +374,7 @@ describe('connectionManager', () => {
     getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:7777');
 
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
-    localStorage.setItem('c64u_password', '');
+    localStorage.removeItem('c64u_has_password');
 
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(

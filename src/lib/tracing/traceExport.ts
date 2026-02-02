@@ -1,9 +1,26 @@
-import { exportTraceZip } from '@/lib/tracing/traceSession';
+import { zipSync, strToU8 } from 'fflate';
+import { redactExportValue } from '@/lib/diagnostics/exportRedaction';
+import { buildAppMetadata, exportTraceZip, getTraceEvents } from '@/lib/tracing/traceSession';
 
-export const buildTraceZipBlob = () => new Blob([exportTraceZip()], { type: 'application/zip' });
+const buildTraceZipData = (options: { redacted?: boolean } = {}) => {
+  if (!options.redacted) {
+    return exportTraceZip();
+  }
+  const traceEvents = redactExportValue(getTraceEvents());
+  const metadata = redactExportValue(buildAppMetadata());
+  const traceJson = JSON.stringify(traceEvents, null, 2);
+  const metadataJson = JSON.stringify(metadata, null, 2);
+  return zipSync({
+    'trace.json': strToU8(traceJson),
+    'app-metadata.json': strToU8(metadataJson),
+  });
+};
 
-export const downloadTraceZip = (filename = 'c64commander-traces.zip') => {
-  const blob = buildTraceZipBlob();
+export const buildTraceZipBlob = (options: { redacted?: boolean } = {}) =>
+  new Blob([buildTraceZipData(options)], { type: 'application/zip' });
+
+export const downloadTraceZip = (filename = 'c64commander-traces.zip', options: { redacted?: boolean } = {}) => {
+  const blob = buildTraceZipBlob(options);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

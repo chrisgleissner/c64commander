@@ -78,7 +78,7 @@ test.describe('Settings connection management', () => {
     }
   });
 
-  test('change password stores in localStorage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('change password stores secure flag', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     enableTraceAssertions(testInfo);
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
@@ -97,8 +97,10 @@ test.describe('Settings connection management', () => {
     await expect(page.getByText(/Connection settings saved|Saved/i).first()).toBeVisible();
     await snap(page, testInfo, 'toast-shown');
 
-    const stored = await page.evaluate(() => localStorage.getItem('c64u_password'));
-    expect(stored).toBe('test-password-123');
+    const storedFlag = await page.evaluate(() => localStorage.getItem('c64u_has_password'));
+    expect(storedFlag).toBe('1');
+    const legacyPassword = await page.evaluate(() => localStorage.getItem('c64u_password'));
+    expect(legacyPassword).toBeNull();
     await snap(page, testInfo, 'password-saved');
 
     const refreshButton = page.getByRole('button', { name: 'Refresh connection' });

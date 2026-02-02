@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import { registerFetchTrace } from "./lib/tracing/fetchTrace";
 import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
+import { primeStoredPassword } from "./lib/secureStorage";
 import "./index.css";
 
 const loadFonts = () => {
@@ -15,5 +16,6 @@ const loadFonts = () => {
 loadFonts();
 registerFetchTrace();
 registerUserInteractionCapture();
+void primeStoredPassword();
 
 createRoot(document.getElementById("root")!).render(<App />);

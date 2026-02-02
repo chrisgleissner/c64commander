@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/tracing/traceSession', () => ({
-  exportTraceZip: () => new Uint8Array([1, 2, 3]),
+  exportTraceZip: vi.fn(() => new Uint8Array([1, 2, 3])),
+  getTraceEvents: vi.fn(() => [{ id: 'trace-1', type: 'rest', origin: 'user' }]),
+  buildAppMetadata: vi.fn(() => ({ appVersion: '1.0.0', platform: 'web' })),
 }));
 
 import { buildTraceZipBlob, downloadTraceZip } from '@/lib/tracing/traceExport';
+import { exportTraceZip } from '@/lib/tracing/traceSession';
 
 describe('traceExport', () => {
   afterEach(() => {
@@ -14,6 +17,12 @@ describe('traceExport', () => {
 
   it('builds a zip blob', () => {
     const blob = buildTraceZipBlob();
+    expect(blob.type).toBe('application/zip');
+    expect(vi.mocked(exportTraceZip)).toHaveBeenCalled();
+  });
+
+  it('builds a redacted zip blob', () => {
+    const blob = buildTraceZipBlob({ redacted: true });
     expect(blob.type).toBe('application/zip');
   });
 

@@ -4,6 +4,7 @@ import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection, initializeConnectionManager } from '@/lib/connection/connectionManager';
 import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage } from '@/lib/c64api';
 import { loadBackgroundRediscoveryIntervalMs } from '@/lib/config/appSettings';
+import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from '@/lib/secureStorage';
 
 const allowBackgroundRediscovery = () => {
   if (import.meta.env.VITE_ENABLE_TEST_PROBES !== '1') return true;
@@ -86,9 +87,18 @@ export function ConnectionController() {
     const storedDeviceHost = resolveDeviceHostFromStorage();
     lastSettingsRef.current = {
       baseUrl: buildBaseUrlFromDeviceHost(storedDeviceHost),
-      password: localStorage.getItem('c64u_password') || '',
+      password: '',
       deviceHost: storedDeviceHost,
     };
+    if (hasStoredPasswordFlag()) {
+      void loadStoredPassword().then((value) => {
+        if (!lastSettingsRef.current) return;
+        lastSettingsRef.current = {
+          ...lastSettingsRef.current,
+          password: value || '',
+        };
+      });
+    }
 
     window.addEventListener('c64u-connection-change', handler as EventListener);
     return () => window.removeEventListener('c64u-connection-change', handler as EventListener);

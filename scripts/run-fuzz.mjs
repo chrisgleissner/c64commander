@@ -38,6 +38,7 @@ const lastInteractions = parseArg('--fuzz-last-interactions');
 const retainSuccess = parseArg('--fuzz-retain-success');
 const minSessionSteps = parseArg('--fuzz-min-session-steps');
 const noProgressSteps = parseArg('--fuzz-no-progress-steps');
+const progressTimeout = parseArg('--fuzz-progress-timeout');
 const platform = parseArg('--fuzz-platform');
 const runMode = parseArg('--fuzz-run-mode');
 const concurrencyArg = parseArg('--fuzz-concurrency');
@@ -56,6 +57,8 @@ if (runMode) env.FUZZ_RUN_MODE = runMode;
 if (retainSuccess) env.FUZZ_RETAIN_SUCCESS = retainSuccess;
 if (minSessionSteps) env.FUZZ_MIN_SESSION_STEPS = minSessionSteps;
 if (noProgressSteps) env.FUZZ_NO_PROGRESS_STEPS = noProgressSteps;
+const progressTimeoutMs = parseDurationMs(progressTimeout);
+if (progressTimeoutMs) env.FUZZ_PROGRESS_TIMEOUT_MS = String(progressTimeoutMs);
 
 const budgetMs = parseDurationMs(timeBudget) ?? 30 * 60 * 1000;
 if (budgetMs) env.FUZZ_TIME_BUDGET_MS = String(budgetMs);

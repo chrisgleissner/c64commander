@@ -1,5 +1,18 @@
 # C64Commander - Green Build Plan
 
+## 2026-02-01 Hardening task set (audit follow-up)
+
+Status: complete (all tasks implemented and verified).
+
+- [x] FTP recursive operation cancellation (AbortSignal + UI cancel + unit tests)
+- [x] Settings export / import with versioned, whitelisted JSON (validation + tests)
+- [x] Configurable device discovery probe timeout (bounded setting + tests)
+- [x] Log redaction on export (raw vs redacted + tests)
+- [x] Relaxed safety mode warning (confirmation + test)
+- [x] Troubleshooting safety preset (UI + defaults + logging enablement)
+- [x] FTP port / bridge surfaced in Settings + docs update
+- [x] Trace viewing + export with raw/redacted options (shared redaction + tests)
+
 ## 2026-02-01 CI trace comparison failures (current)
 
 ### Remaining CI Failures

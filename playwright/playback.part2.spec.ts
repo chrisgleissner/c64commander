@@ -805,7 +805,9 @@ test.describe('Playback file browser (part 2)', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '300');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', 'demo.invalid');
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       sessionStorage.setItem('c64u_demo_interstitial_shown', '1');
     }, { demoBaseUrl: server.baseUrl });
 

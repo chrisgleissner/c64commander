@@ -3,12 +3,14 @@ const CONFIG_WRITE_INTERVAL_KEY = 'c64u_config_write_min_interval_ms';
 const AUTO_DEMO_MODE_KEY = 'c64u_automatic_demo_mode_enabled';
 const STARTUP_DISCOVERY_WINDOW_MS_KEY = 'c64u_startup_discovery_window_ms';
 const BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY = 'c64u_background_rediscovery_interval_ms';
+const DISCOVERY_PROBE_TIMEOUT_MS_KEY = 'c64u_discovery_probe_timeout_ms';
 const DISK_AUTOSTART_MODE_KEY = 'c64u_disk_autostart_mode';
 
 export const DEFAULT_CONFIG_WRITE_INTERVAL_MS = 500;
 export const DEFAULT_AUTO_DEMO_MODE_ENABLED = true;
 export const DEFAULT_STARTUP_DISCOVERY_WINDOW_MS = 3000;
 export const DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS = 5000;
+export const DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS = 2500;
 export type DiskAutostartMode = 'kernal' | 'dma';
 export const DEFAULT_DISK_AUTOSTART_MODE: DiskAutostartMode = 'kernal';
 
@@ -27,6 +29,12 @@ const clampBackgroundRediscoveryIntervalMsInternal = (value: number) => {
   if (Number.isNaN(value)) return DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS;
   const rounded = Math.round(value / 100) * 100;
   return Math.min(60000, Math.max(1000, rounded));
+};
+
+const clampDiscoveryProbeTimeoutMsInternal = (value: number) => {
+  if (Number.isNaN(value)) return DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS;
+  const rounded = Math.round(value / 100) * 100;
+  return Math.min(10000, Math.max(500, rounded));
 };
 
 const readBoolean = (key: string, fallback: boolean) => {
@@ -107,6 +115,21 @@ export const saveBackgroundRediscoveryIntervalMs = (value: number) => {
 export const clampBackgroundRediscoveryIntervalMs = (value: number) =>
   clampBackgroundRediscoveryIntervalMsInternal(value);
 
+export const loadDiscoveryProbeTimeoutMs = () =>
+  clampDiscoveryProbeTimeoutMsInternal(
+    readNumber(DISCOVERY_PROBE_TIMEOUT_MS_KEY, DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS),
+  );
+
+export const saveDiscoveryProbeTimeoutMs = (value: number) => {
+  if (typeof localStorage === 'undefined') return;
+  const clamped = clampDiscoveryProbeTimeoutMsInternal(value);
+  localStorage.setItem(DISCOVERY_PROBE_TIMEOUT_MS_KEY, String(clamped));
+  broadcast(DISCOVERY_PROBE_TIMEOUT_MS_KEY, clamped);
+};
+
+export const clampDiscoveryProbeTimeoutMs = (value: number) =>
+  clampDiscoveryProbeTimeoutMsInternal(value);
+
 export const loadDiskAutostartMode = () => {
   if (typeof localStorage === 'undefined') return DEFAULT_DISK_AUTOSTART_MODE;
   const raw = localStorage.getItem(DISK_AUTOSTART_MODE_KEY);
@@ -125,5 +148,6 @@ export const APP_SETTINGS_KEYS = {
   AUTO_DEMO_MODE_KEY,
   STARTUP_DISCOVERY_WINDOW_MS_KEY,
   BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY,
+  DISCOVERY_PROBE_TIMEOUT_MS_KEY,
   DISK_AUTOSTART_MODE_KEY,
 };

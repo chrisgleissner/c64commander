@@ -50,7 +50,9 @@ test.describe('Config visibility across modes', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '300');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrl}`, JSON.stringify(snapshot));
       sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrl}`, '1');
       localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrl}`, JSON.stringify(snapshot));
@@ -121,7 +123,9 @@ test.describe('Config visibility across modes', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '300');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       localStorage.setItem(`c64u_initial_snapshot:${serverBaseUrl}`, JSON.stringify(snapshot));
       sessionStorage.setItem(`c64u_initial_snapshot_session:${serverBaseUrl}`, '1');
       localStorage.setItem(`c64u_initial_snapshot:${demoBaseUrl}`, JSON.stringify(snapshot));

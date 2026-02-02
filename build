@@ -32,6 +32,7 @@ FUZZ_LAST_INTERACTIONS=""
 FUZZ_RETAIN_SUCCESS=""
 FUZZ_MIN_SESSION_STEPS=""
 FUZZ_NO_PROGRESS_STEPS=""
+FUZZ_PROGRESS_TIMEOUT=""
 C64U_TARGET="mock"
 C64U_HOST="C64U"
 C64U_TARGET_SET=false
@@ -84,6 +85,7 @@ Options:
   --fuzz-retain-success N    Keep last N successful sessions (default 10)
   --fuzz-min-session-steps N Minimum steps per session (default 200)
   --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
+  --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
   
   --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
   --skip-install        Skip npm install
@@ -250,6 +252,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --fuzz-no-progress-steps)
       FUZZ_NO_PROGRESS_STEPS="$2"
+      shift 2
+      ;;
+    --fuzz-progress-timeout)
+      FUZZ_PROGRESS_TIMEOUT="$2"
       shift 2
       ;;
     --devices)
@@ -525,6 +531,7 @@ if [[ "$RUN_FUZZ" == "true" ]]; then
   if [[ -n "$FUZZ_RETAIN_SUCCESS" ]]; then FUZZ_ARGS+=(--fuzz-retain-success "$FUZZ_RETAIN_SUCCESS"); fi
   if [[ -n "$FUZZ_MIN_SESSION_STEPS" ]]; then FUZZ_ARGS+=(--fuzz-min-session-steps "$FUZZ_MIN_SESSION_STEPS"); fi
   if [[ -n "$FUZZ_NO_PROGRESS_STEPS" ]]; then FUZZ_ARGS+=(--fuzz-no-progress-steps "$FUZZ_NO_PROGRESS_STEPS"); fi
+  if [[ -n "$FUZZ_PROGRESS_TIMEOUT" ]]; then FUZZ_ARGS+=(--fuzz-progress-timeout "$FUZZ_PROGRESS_TIMEOUT"); fi
   if [[ "$RUN_BUILD" == "true" || -f "$ROOT_DIR/dist/index.html" ]]; then
     export PLAYWRIGHT_SKIP_BUILD=1
   fi

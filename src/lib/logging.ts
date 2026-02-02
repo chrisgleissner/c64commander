@@ -1,4 +1,5 @@
 import { loadDebugLoggingEnabled } from '@/lib/config/appSettings';
+import { redactExportValue, redactExportText } from '@/lib/diagnostics/exportRedaction';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -58,10 +59,15 @@ export const clearLogs = () => {
   window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
 };
 
-export const formatLogsForShare = (entries: LogEntry[]) =>
+export const formatLogsForShare = (
+  entries: LogEntry[],
+  options: { redacted?: boolean } = {},
+) =>
   entries
     .map((entry) => {
-      const details = entry.details ? `\n${JSON.stringify(entry.details, null, 2)}` : '';
-      return `[${entry.timestamp}] ${entry.level.toUpperCase()} - ${entry.message}${details}`;
+      const message = options.redacted ? redactExportText(entry.message) : entry.message;
+      const detailsValue = options.redacted ? redactExportValue(entry.details) : entry.details;
+      const details = detailsValue ? `\n${JSON.stringify(detailsValue, null, 2)}` : '';
+      return `[${entry.timestamp}] ${entry.level.toUpperCase()} - ${message}${details}`;
     })
     .join('\n\n');

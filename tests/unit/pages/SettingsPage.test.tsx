@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from '@/pages/SettingsPage';
 import { reportUserError } from '@/lib/uiErrors';
@@ -14,6 +14,8 @@ import {
   saveDebugLoggingEnabled,
   saveStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
+import * as deviceSafetySettings from '@/lib/config/deviceSafetySettings';
+import { exportSettingsJson, importSettingsJson } from '@/lib/config/settingsTransfer';
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -23,6 +25,18 @@ vi.mock('framer-motion', () => ({
     li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ value, onValueChange, children }: any) => (
+    <select value={value} onChange={(event) => onValueChange?.(event.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectContent: ({ children }: any) => <>{children}</>,
+  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+  SelectTrigger: () => null,
+  SelectValue: () => null,
 }));
 
 const {
@@ -154,18 +168,26 @@ vi.mock('@/lib/tracing/traceExport', () => ({
   downloadTraceZip: vi.fn(),
 }));
 
+vi.mock('@/lib/config/settingsTransfer', () => ({
+  exportSettingsJson: vi.fn(() => '{"version":1}'),
+  importSettingsJson: vi.fn(() => ({ ok: true })),
+}));
+
 vi.mock('@/lib/config/appSettings', () => ({
   clampConfigWriteIntervalMs: (value: number) => value,
+  clampDiscoveryProbeTimeoutMs: (value: number) => value,
   loadConfigWriteIntervalMs: vi.fn(() => 500),
   clampBackgroundRediscoveryIntervalMs: (value: number) => value,
   clampStartupDiscoveryWindowMs: (value: number) => value,
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
   loadBackgroundRediscoveryIntervalMs: vi.fn(() => 5000),
+  loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 3000),
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => 'ask'),
   saveAutomaticDemoModeEnabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
+  saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveStartupDiscoveryWindowMs: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
   saveDebugLoggingEnabled: vi.fn(),
@@ -195,6 +217,18 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
+  const buildFileList = (file: File) => {
+    if (typeof DataTransfer !== 'undefined') {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      return transfer.files;
+    }
+    return {
+      0: file,
+      length: 1,
+      item: () => file,
+    } as FileList;
+  };
   it('saves connection settings and triggers discovery', async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
@@ -314,7 +348,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /share via email/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /email errors/i }));
 
     expect(window.location.href).toMatch(/^mailto:/);
 
@@ -353,7 +387,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /^share$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /share errors/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
@@ -429,7 +463,9 @@ describe('SettingsPage', () => {
     vi.mocked(getLogs).mockReturnValue([
       { id: 'log-1', level: 'info', message: 'Log entry', timestamp: Date.now(), details: { ok: true } },
     ] as any);
-    window.dispatchEvent(new Event('c64u-logs-updated'));
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-logs-updated'));
+    });
     expect(await within(dialog).findByText('Log entry')).toBeInTheDocument();
 
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
@@ -439,7 +475,9 @@ describe('SettingsPage', () => {
     vi.mocked(getTraceEvents).mockReturnValue([
       { id: 'trace-1', type: 'rest', origin: 'user' },
     ] as any);
-    window.dispatchEvent(new Event('c64u-traces-updated'));
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-traces-updated'));
+    });
     expect(await within(dialog).findByText(/1\. rest · user/i)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear traces/i }));
@@ -465,8 +503,10 @@ describe('SettingsPage', () => {
     vi.mocked(getTraceEvents).mockReturnValue([
       { id: 'trace-1', type: 'rest', origin: 'user' },
     ] as any);
-    window.dispatchEvent(new Event('c64u-traces-updated'));
-    fireEvent.click(await within(dialog).findByRole('button', { name: /export traces/i }));
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-traces-updated'));
+    });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /^export traces$/i }));
 
     expect(downloadTraceZip).toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith({ title: 'Trace export ready' });
@@ -475,7 +515,7 @@ describe('SettingsPage', () => {
       throw new Error('export failed');
     });
 
-    fireEvent.click(await within(dialog).findByRole('button', { name: /export traces/i }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: /^export traces$/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
@@ -501,11 +541,11 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /share errors/i }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith('payload');
-      expect(toast).toHaveBeenCalledWith({ title: 'Copied error details to clipboard' });
+      expect(toast).toHaveBeenCalledWith({ title: 'Copied errors to clipboard' });
     });
 
     if (originalShare) {
@@ -519,5 +559,106 @@ describe('SettingsPage', () => {
     } else {
       delete (navigator as Navigator & { clipboard?: unknown }).clipboard;
     }
+  });
+
+  it('requires confirmation when switching into relaxed safety mode', async () => {
+    const saveSpy = vi.spyOn(deviceSafetySettings, 'saveDeviceSafetyMode');
+
+    render(<SettingsPage />);
+
+    const trigger = screen.getAllByRole('combobox')[0];
+    fireEvent.change(trigger, { target: { value: 'RELAXED' } });
+
+    const warningDialog = await screen.findByRole('dialog', { name: /enable relaxed safety mode/i });
+    expect(warningDialog).toBeInTheDocument();
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(within(warningDialog).getByRole('button', { name: /enable relaxed/i }));
+    expect(saveSpy).toHaveBeenCalledWith('RELAXED');
+  });
+
+  it('exports settings and shows a toast', async () => {
+    const createObjectURL = vi.fn(() => 'blob:settings');
+    const revokeObjectURL = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === 'a') {
+        (element as HTMLAnchorElement).click = vi.fn();
+      }
+      return element;
+    });
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /export settings/i }));
+
+    expect(exportSettingsJson).toHaveBeenCalled();
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith({ title: 'Settings export ready' });
+    createElementSpy.mockRestore();
+  });
+
+  it('imports settings and refreshes local state', async () => {
+    vi.mocked(importSettingsJson).mockReturnValue({ ok: true });
+    const file = new File(['{"version":1}'], 'settings.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', {
+      value: vi.fn(async () => '{"version":1}'),
+    });
+
+    render(<SettingsPage />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
+
+    await waitFor(() => {
+      expect(importSettingsJson).toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith({ title: 'Settings imported' });
+    });
+  });
+
+  it('reports import validation errors', async () => {
+    vi.mocked(importSettingsJson).mockReturnValue({ ok: false, error: 'Invalid payload' });
+    const file = new File(['{"version":1}'], 'settings.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', {
+      value: vi.fn(async () => '{"version":1}'),
+    });
+
+    render(<SettingsPage />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'SETTINGS_IMPORT',
+      }));
+    });
+  });
+
+  it('commits FTP overrides on blur and enter', () => {
+    render(<SettingsPage />);
+
+    const ftpPortInput = screen.getByLabelText(/ftp port/i);
+    fireEvent.change(ftpPortInput, { target: { value: '2121' } });
+    fireEvent.blur(ftpPortInput);
+
+    const bridgeInput = screen.getByLabelText(/ftp bridge url/i);
+    fireEvent.change(bridgeInput, { target: { value: 'https://bridge.example' } });
+    fireEvent.keyDown(bridgeInput, { key: 'Enter' });
+
+    expect(localStorage.getItem('c64u_ftp_port')).toBe('2121');
+    expect(localStorage.getItem('c64u_ftp_bridge_url')).toBe('https://bridge.example');
+  });
+
+  it('enables debug logging when switching to troubleshooting mode', () => {
+    render(<SettingsPage />);
+
+    const trigger = screen.getAllByRole('combobox')[0];
+    fireEvent.change(trigger, { target: { value: 'TROUBLESHOOTING' } });
+
+    expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
   });
 });

@@ -3,6 +3,9 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
+import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
+import { attemptStructuredRecovery } from './fuzzRecovery';
+import { diffProgress, hasMeaningfulProgress, readProgressSnapshot } from './fuzzProgress';
 
 const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
 const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
@@ -231,31 +234,6 @@ const isExternalOrBlankTarget = async (element: import('@playwright/test').Eleme
     return false;
   });
 
-const resolveBlockingDialog = async (page: import('@playwright/test').Page) => {
-  const dialog = await page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
-  if (!dialog) return false;
-
-  const input = await dialog.$('input[type="text"], input[type="search"], textarea');
-  if (input) {
-    const labelText = await dialog.evaluate((node) => node.textContent?.toLowerCase() || '');
-    const value = labelText.includes('delete') ? 'delete' : 'confirm';
-    await input.fill(value).catch(() => {});
-  }
-
-  const buttons = await dialog.$$('button, [role="button"]');
-  for (const button of buttons) {
-    const text = (await button.textContent())?.trim().toLowerCase() || '';
-    if (!text) continue;
-    if (/(confirm|continue|ok|yes|save|delete|submit|proceed)/.test(text)) {
-      await button.click().catch(() => {});
-      return true;
-    }
-  }
-
-  await page.keyboard.press('Escape').catch(() => {});
-  return true;
-};
-
 const showInteractionPulse = async (
   page: import('@playwright/test').Page,
   target?: import('@playwright/test').ElementHandle<HTMLElement>,
@@ -478,6 +456,9 @@ test.describe('Chaos fuzz', () => {
     const noProgressLimit = infraMode
       ? maxSteps
       : Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
+    const progressTimeoutMs = infraMode
+      ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
+      : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;
 
@@ -561,23 +542,6 @@ test.describe('Chaos fuzz', () => {
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(12000);
       let networkOffline = false;
-
-      const readUiSignature = async () => {
-        try {
-          const signature = await page.evaluate(() => {
-            const text = document.body?.innerText?.slice(0, 200) ?? '';
-            const active = document.activeElement?.tagName ?? '';
-            return `${location.pathname}|${document.title}|${window.scrollX},${window.scrollY}|${active}|${text}`;
-          });
-          return signature;
-        } catch {
-          try {
-            return `error:${page.url()}`;
-          } catch {
-            return 'error:unknown';
-          }
-        }
-      };
 
       await page.addInitScript(({ baseUrl: baseUrlArg }) => {
         try {
@@ -670,6 +634,11 @@ test.describe('Chaos fuzz', () => {
       let currentFaultMode: 'none' | 'slow' | 'timeout' | 'refused' = 'none';
       let serverReachable = true;
       let lastOutageAt = 0;
+      const backendTracker = createBackendFailureTracker({
+        baseDelayMs: infraMode ? 50 : 250,
+        maxDelayMs: infraMode ? 300 : 2500,
+        factor: 1.8,
+      });
 
       const recordIssueOnce = (payload: IssueRecord) => {
         if (issue) return;
@@ -701,18 +670,24 @@ test.describe('Chaos fuzz', () => {
         if (issue) return;
         if (msg.type() !== 'error' && msg.type() !== 'warning') return;
         const text = msg.text();
-        const outageExpected = !serverReachable || currentFaultMode !== 'none' || networkOffline;
-        if (
-          outageExpected &&
-          text.includes('Failed to load resource') &&
-          (text.includes('Service Unavailable') || text.includes('net::ERR_'))
-        ) {
-          return;
+        if (msg.type() === 'error') {
+          const shouldIgnore = shouldIgnoreBackendFailure(
+            { id: 'console', level: msg.type(), message: text } as AppLogEntry,
+            {
+              now: Date.now(),
+              serverReachable,
+              networkOffline,
+              faultMode: currentFaultMode,
+              lastOutageAt,
+            },
+          );
+          if (shouldIgnore) {
+            lastOutageAt = Date.now();
+            backendTracker.recordFailure();
+            return;
+          }
         }
-        if (
-          msg.type() === 'error' &&
-          (text.includes('Failed to load resource') && text.includes('net::ERR_'))
-        ) {
+        if (msg.type() === 'error' && text.includes('Failed to load resource') && text.includes('net::ERR_')) {
           return;
         }
         recordIssueOnce({
@@ -725,14 +700,14 @@ test.describe('Chaos fuzz', () => {
         });
       });
 
-      const readAppLogs = async () => {
+      const readAppLogs = async (): Promise<AppLogEntry[]> => {
         try {
           const raw = await page.evaluate(() => localStorage.getItem('c64u_app_logs'));
-          if (!raw) return [] as Array<{ id: string; level: string; message: string; details?: unknown }>; 
-          const parsed = JSON.parse(raw) as Array<{ id: string; level: string; message: string; details?: unknown }>;
+          if (!raw) return [] as AppLogEntry[];
+          const parsed = JSON.parse(raw) as AppLogEntry[];
           return Array.isArray(parsed) ? parsed : [];
         } catch {
-          return [] as Array<{ id: string; level: string; message: string; details?: unknown }>;
+          return [] as AppLogEntry[];
         }
       };
 
@@ -743,7 +718,7 @@ test.describe('Chaos fuzz', () => {
           lastLogId = logs[0]?.id ?? null;
           return;
         }
-        const fresh = [] as Array<{ id: string; level: string; message: string; details?: unknown }>;
+        const fresh = [] as AppLogEntry[];
         for (const entry of logs) {
           if (entry.id === lastLogId) break;
           fresh.push(entry);
@@ -752,10 +727,17 @@ test.describe('Chaos fuzz', () => {
         const errorEntry = fresh.find((entry) => entry.level === 'error');
         const warnEntry = fresh.find((entry) => entry.level === 'warn');
         if (errorEntry) {
-          if (
-            errorEntry.message === 'C64 API request failed' &&
-            (!serverReachable || networkOffline || currentFaultMode !== 'none' || (lastOutageAt > 0 && Date.now() - lastOutageAt < 60000))
-          ) {
+          if (errorEntry.message.toLowerCase().includes('fuzz mode blocked')) return;
+          const shouldIgnore = shouldIgnoreBackendFailure(errorEntry, {
+            now: Date.now(),
+            serverReachable,
+            networkOffline,
+            faultMode: currentFaultMode,
+            lastOutageAt,
+          });
+          if (shouldIgnore) {
+            lastOutageAt = Date.now();
+            backendTracker.recordFailure();
             return;
           }
           recordIssueOnce({
@@ -782,7 +764,11 @@ test.describe('Chaos fuzz', () => {
 
       let sessionSteps = 0;
       let noProgressCount = 0;
-      let lastSignature = await readUiSignature();
+      let progressSnapshot = await readProgressSnapshot(page);
+      let lastProgressAt = Date.now();
+      let mode: 'chaos' | 'recovery' = 'chaos';
+      let recoveryAttempts = 0;
+      const recoveryStepLimit = infraMode ? 1 : 6;
 
       if (infraMode) {
         totalSteps += 1;
@@ -1255,9 +1241,9 @@ test.describe('Chaos fuzz', () => {
           name: 'type',
           weight: 12,
           canRun: async () =>
-            hasVisibleElement(page, 'input[type="text"], input[type="search"], textarea, [contenteditable="true"]'),
+            hasVisibleElement(page, 'input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]'),
           run: async () => {
-            const pick = await pickVisibleElement(page, 'input[type="text"], input[type="search"], textarea, [contenteditable="true"]', rng);
+            const pick = await pickVisibleElement(page, 'input:not([type]), input[type="text"], input[type="search"], textarea, [contenteditable="true"]', rng);
             if (!pick) return { log: 'type skip' };
             const supportsFill = await pick.target.evaluate((node) =>
               node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement,
@@ -1392,52 +1378,96 @@ test.describe('Chaos fuzz', () => {
         if (issue) break;
         totalSteps += 1;
         sessionSteps += 1;
+
+        const now = Date.now();
+        if (mode === 'chaos' && now - lastProgressAt >= progressTimeoutMs) {
+          mode = 'recovery';
+          recoveryAttempts = 0;
+          logInteraction(`s=${totalSteps}\ta=progress\twatchdog ${now - lastProgressAt}ms`);
+        }
+
+        const backoffUntil = backendTracker.getBackoffUntilMs();
+        if (backoffUntil > now) {
+          const waitMs = backoffUntil - now;
+          logInteraction(`s=${totalSteps}\ta=backend\tbackoff ${waitMs}ms`);
+          await page.waitForTimeout(waitMs);
+        }
+
+        let progressed = false;
+        let actionLogged = false;
+        let recoveryAttempted = false;
+
         if (await ensureAppOrigin()) {
           logInteraction(`s=${totalSteps}\ta=recover\treturn-to-app`);
-          continue;
-        }
-        if (await closeBlockingOverlay(page)) {
+          actionLogged = true;
+        } else if (await closeBlockingOverlay(page)) {
           logInteraction(`s=${totalSteps}\ta=modal\tauto-close`);
-          continue;
+          actionLogged = true;
+        } else if (mode === 'recovery') {
+          recoveryAttempts += 1;
+          recoveryAttempted = true;
+          const recoveryResult = await attemptStructuredRecovery(page, {
+            seed,
+            sessionId,
+            attempt: recoveryAttempts,
+          });
+          logInteraction(`s=${totalSteps}\ta=recovery\t${recoveryResult.log}`);
+          actionLogged = true;
+        } else {
+          const action = await pickAction();
+          if (!action) break;
+          try {
+            const result = await action.run();
+            logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
+          } catch (error) {
+            logInteraction(`s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`);
+            if (parseActionTimeout(error)) {
+              recordIssueOnce({
+                severity: 'freeze',
+                message: (error as Error).message || 'Action timeout',
+                source: 'action.timeout',
+                interactionIndex: totalSteps,
+                lastInteractions: interactions.slice(-lastInteractionCount),
+              });
+            } else {
+              recordIssueOnce({
+                severity: 'errorLog',
+                message: (error as Error)?.message || 'Action failed',
+                source: (error as Error)?.name || 'action.error',
+                stack: (error as Error)?.stack,
+                interactionIndex: totalSteps,
+                lastInteractions: interactions.slice(-lastInteractionCount),
+              });
+            }
+          }
+          actionLogged = true;
         }
-        if (await resolveBlockingDialog(page)) {
-          logInteraction(`s=${totalSteps}\ta=modal\tauto-resolve`);
-          continue;
-        }
-        const action = await pickAction();
-        if (!action) break;
-        try {
-          const result = await action.run();
-          logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
-        } catch (error) {
-          logInteraction(`s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`);
-          if (parseActionTimeout(error)) {
-            recordIssueOnce({
-              severity: 'freeze',
-              message: (error as Error).message || 'Action timeout',
-              source: 'action.timeout',
-              interactionIndex: totalSteps,
-              lastInteractions: interactions.slice(-lastInteractionCount),
-            });
-          } else {
-            recordIssueOnce({
-              severity: 'errorLog',
-              message: (error as Error)?.message || 'Action failed',
-              source: (error as Error)?.name || 'action.error',
-              stack: (error as Error)?.stack,
-              interactionIndex: totalSteps,
-              lastInteractions: interactions.slice(-lastInteractionCount),
-            });
+
+        if (actionLogged) {
+          await checkAppLogsForIssues();
+          if (issue) break;
+          const nextSnapshot = await readProgressSnapshot(page);
+          const delta = diffProgress(progressSnapshot, nextSnapshot);
+          progressed = hasMeaningfulProgress(delta);
+          if (progressed) {
+            lastProgressAt = Date.now();
+            noProgressCount = 0;
+            progressSnapshot = nextSnapshot;
+            if (mode === 'recovery') {
+              logInteraction(
+                `s=${totalSteps}\ta=recovery\tprogress screen=${Number(delta.screenChanged)} nav=${Number(delta.navigationChanged)} trace=${Number(delta.traceChanged)} state=${Number(delta.stateChanged)}`,
+              );
+              mode = 'chaos';
+              recoveryAttempts = 0;
+            }
+          } else if (mode === 'chaos') {
+            noProgressCount += 1;
           }
         }
-        await checkAppLogsForIssues();
-        if (issue) break;
-        const signature = await readUiSignature();
-        if (signature === lastSignature) {
-          noProgressCount += 1;
-        } else {
-          noProgressCount = 0;
-          lastSignature = signature;
+
+        if (mode === 'recovery' && recoveryAttempted && recoveryAttempts >= recoveryStepLimit && !progressed) {
+          logInteraction(`s=${totalSteps}\ta=session\trecovery-exhausted`);
+          break;
         }
         if (noProgressCount >= noProgressLimit) {
           logInteraction(`s=${totalSteps}\ta=session\tno-progress`);

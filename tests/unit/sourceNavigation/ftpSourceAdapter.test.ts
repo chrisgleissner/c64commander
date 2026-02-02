@@ -8,6 +8,14 @@ vi.mock('@/lib/ftp/ftpConfig', () => ({
   getStoredFtpPort: vi.fn(() => 21),
 }));
 
+vi.mock('@/lib/secureStorage', () => ({
+  getPassword: vi.fn(async () => 'secret'),
+  setPassword: vi.fn(async () => undefined),
+  clearPassword: vi.fn(async () => undefined),
+  hasStoredPasswordFlag: vi.fn(() => true),
+  getCachedPassword: vi.fn(() => 'secret'),
+}));
+
 import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 
@@ -18,7 +26,7 @@ describe('ftpSourceAdapter', () => {
     listFtpDirectoryMock.mockReset();
     localStorage.clear();
     localStorage.setItem('c64u_device_host', 'c64u');
-    localStorage.setItem('c64u_password', 'secret');
+    localStorage.setItem('c64u_has_password', '1');
   });
 
   it('caches directory listings and reuses cache', async () => {
@@ -75,5 +83,29 @@ describe('ftpSourceAdapter', () => {
     const results = await source.listFilesRecursive('/');
 
     expect(results.map((entry) => entry.path).sort()).toEqual(['/music/song.sid', '/root.sid']);
+  });
+
+  it('cancels recursive listing and stops further FTP calls', async () => {
+    const controller = new AbortController();
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === '/') {
+        controller.abort();
+        return {
+          entries: [
+            { type: 'dir', name: 'music', path: '/music' },
+            { type: 'file', name: 'root.sid', path: '/root.sid', size: 5, modifiedAt: 'now' },
+          ],
+        };
+      }
+      return {
+        entries: [
+          { type: 'file', name: 'song.sid', path: '/music/song.sid', size: 10, modifiedAt: 'now' },
+        ],
+      };
+    });
+
+    const source = createUltimateSourceLocation();
+    await expect(source.listFilesRecursive('/', { signal: controller.signal })).rejects.toThrow(/Aborted/);
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
   });
 });
