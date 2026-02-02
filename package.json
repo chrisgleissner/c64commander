@@ -31,6 +31,7 @@
     "cap:open:android": "cap open android",
     "cap:build": "npm run build && cap sync",
     "android:apk": "cd android && ./gradlew assembleDebug",
+    "maestro:gating": "bash scripts/run-maestro-gating.sh",
     "assets:play": "node scripts/generate-play-assets.mjs"
   },
   "dependencies": {
