@@ -11,6 +11,10 @@ export type PlaybackSettingsPanelProps = {
   onDurationInputBlur: () => void;
   onChooseSonglengthsFile: () => void;
   activeSonglengthsPath: string | null;
+  songlengthsName: string | null;
+  songlengthsSizeLabel: string | null;
+  songlengthsEntryCount: number | null;
+  songlengthsError: string | null;
   songSelectorVisible: boolean;
   songPickerOpen: boolean;
   onSongPickerPointerDown: () => void;
@@ -30,6 +34,10 @@ export const PlaybackSettingsPanel = ({
   onDurationInputBlur,
   onChooseSonglengthsFile,
   activeSonglengthsPath,
+  songlengthsName,
+  songlengthsSizeLabel,
+  songlengthsEntryCount,
+  songlengthsError,
   songSelectorVisible,
   songPickerOpen,
   onSongPickerPointerDown,
@@ -66,8 +74,31 @@ export const PlaybackSettingsPanel = ({
     </div>
 
     <div className="space-y-2">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs text-muted-foreground">Songlengths file</p>
+      <p className="text-xs text-muted-foreground">Songlengths file</p>
+      {songlengthsName ? (
+        <button
+          type="button"
+          className="text-xs font-mono text-primary hover:underline text-left break-all"
+          onClick={onChooseSonglengthsFile}
+        >
+          {songlengthsName}
+        </button>
+      ) : (
+        <p className="text-xs text-muted-foreground">Not selected.</p>
+      )}
+      {songlengthsName && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
+        <div className="text-[11px] text-muted-foreground space-y-0.5">
+          {songlengthsSizeLabel ? <p>Size: {songlengthsSizeLabel}</p> : null}
+          {songlengthsEntryCount !== null ? <p>Entries: {songlengthsEntryCount}</p> : null}
+        </div>
+      ) : null}
+      {songlengthsError ? (
+        <p className="text-xs text-destructive">{songlengthsError}</p>
+      ) : null}
+      {activeSonglengthsPath && songlengthsName !== activeSonglengthsPath ? (
+        <p className="text-[11px] text-muted-foreground break-all">{activeSonglengthsPath}</p>
+      ) : null}
+      <div className="flex">
         <Button
           variant="outline"
           size="sm"
@@ -76,17 +107,6 @@ export const PlaybackSettingsPanel = ({
           Choose file
         </Button>
       </div>
-      {activeSonglengthsPath ? (
-        <button
-          type="button"
-          className="text-xs font-mono text-primary hover:underline text-left break-all"
-          onClick={onChooseSonglengthsFile}
-        >
-          {activeSonglengthsPath}
-        </button>
-      ) : (
-        <p className="text-xs text-muted-foreground">Not found yet.</p>
-      )}
     </div>
 
     <div className="space-y-3">

@@ -228,7 +228,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
               status: 'in-progress',
               startedAt: prev.download.startedAt ?? now,
               durationMs: event.elapsedTimeMs ?? prev.download.durationMs ?? null,
-              sizeBytes: event.totalBytes ?? event.downloadedBytes ?? prev.download.sizeBytes ?? null,
+              sizeBytes: event.totalBytes ?? (event.percent === 100 ? event.downloadedBytes : prev.download.sizeBytes) ?? null,
               downloadedBytes: event.downloadedBytes ?? prev.download.downloadedBytes ?? null,
               totalBytes: event.totalBytes ?? prev.download.totalBytes ?? null,
               errorCategory: null,
@@ -247,6 +247,13 @@ export const useHvscLibrary = (): HvscLibraryState => {
         if (shouldUpdate) {
           updateHvscSummary((prev) => ({
             ...prev,
+            download: prev.download.status === 'in-progress'
+              ? {
+                ...prev.download,
+                status: 'success',
+                finishedAt: prev.download.finishedAt ?? now,
+              }
+              : prev.download,
             extraction: {
               ...prev.extraction,
               status: 'in-progress',

@@ -172,7 +172,7 @@ export const HvscControls = ({
             <span>Download</span>
             <span>{hvscDownloadPercent !== null && hvscDownloadPercent !== undefined ? `${Math.round(hvscDownloadPercent)}%` : '—'}</span>
           </div>
-          <Progress value={hvscDownloadPercent ?? 0} />
+          <Progress value={hvscDownloadPercent ?? undefined} />
           <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-download-bytes">
             <span>Downloaded: {formatBytes(hvscDownloadBytes)}</span>
             <span>Total: {formatBytes(hvscDownloadTotalBytes)}</span>
@@ -187,7 +187,7 @@ export const HvscControls = ({
             <span>Extraction + indexing</span>
             <span>{hvscExtractionPercent !== null && hvscExtractionPercent !== undefined ? `${Math.round(hvscExtractionPercent)}%` : '—'}</span>
           </div>
-          <Progress value={hvscExtractionPercent ?? 0} />
+          <Progress value={hvscExtractionPercent ?? undefined} />
           <div className="flex items-center justify-between text-[11px] text-muted-foreground" data-testid="hvsc-extraction-files">
             <span>Files: {hvscSummaryFilesExtracted ?? '—'}</span>
             <span>Total: {hvscExtractionTotalFiles ?? '—'}</span>

@@ -174,7 +174,6 @@ describe('c64api', () => {
           : undefined;
         return { type, hasRef, idleTimeout, fd, socketInfo };
       });
-      // eslint-disable-next-line no-console
       console.log('c64api.test active handles:', summary);
     }
     handles.forEach((handle) => {

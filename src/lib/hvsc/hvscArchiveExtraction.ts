@@ -50,6 +50,9 @@ const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractA
     processed += 1;
     await onEntry(normalizePath(path), data as Uint8Array);
     onProgress?.(processed, total);
+    if (processed % 50 === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
   }
 };
 
@@ -107,6 +110,9 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
       const data = module.FS.readFile(file.fullPath, { encoding: 'binary' }) as Uint8Array;
       await onEntry(normalizePath(file.path), data);
       onProgress?.(processed, total);
+      if (processed % 50 === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -8,6 +8,7 @@ import { loadDiskAutostartMode } from '@/lib/config/appSettings';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 vi.mock('@/lib/playback/autostart', async () => {
@@ -142,6 +143,21 @@ describe('playbackRouter', () => {
       'b',
       expect.objectContaining({ path: '/Usb0/DEMO.D64', location: 'ultimate' }),
     );
+    vi.useRealTimers();
+  });
+
+  it('retries autostart injection after mount when initial attempt fails', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    vi.mocked(injectAutostart)
+      .mockRejectedValueOnce(new Error('busy'))
+      .mockResolvedValueOnce(undefined as any);
+    const file = new File(['disk'], 'demo.d64');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
+    const task = executePlayPlan(api as any, plan, { drive: 'a', rebootBeforeMount: true });
+    await vi.runAllTimersAsync();
+    await task;
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
   });
 

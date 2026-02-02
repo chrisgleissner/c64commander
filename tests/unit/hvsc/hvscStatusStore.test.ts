@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  applyHvscProgressEventToSummary,
   clearHvscStatusSummary,
   getDefaultHvscStatusSummary,
   loadHvscStatusSummary,
@@ -9,7 +11,23 @@ import {
 
 describe('hvscStatusStore', () => {
   beforeEach(() => {
-    localStorage.clear();
+    if (typeof globalThis.localStorage === 'undefined') {
+      const store = new Map<string, string>();
+      (globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          store.set(key, value);
+        },
+        removeItem: (key: string) => {
+          store.delete(key);
+        },
+        clear: () => {
+          store.clear();
+        },
+      } as Storage;
+    } else {
+      globalThis.localStorage.clear();
+    }
   });
 
   it('returns defaults when storage is empty', () => {
@@ -43,5 +61,28 @@ describe('hvscStatusStore', () => {
 
     clearHvscStatusSummary();
     expect(loadHvscStatusSummary()).toEqual(getDefaultHvscStatusSummary());
+  });
+
+  it('marks download success when extraction starts', () => {
+    const base = getDefaultHvscStatusSummary();
+    const downloadEvent = {
+      stage: 'download',
+      message: 'Downloading',
+      downloadedBytes: 10,
+      totalBytes: 100,
+    } as any;
+    const extractionEvent = {
+      stage: 'archive_extraction',
+      message: 'Extracting',
+      processedCount: 1,
+      totalCount: 2,
+    } as any;
+
+    const afterDownload = applyHvscProgressEventToSummary(base, downloadEvent, null);
+    expect(afterDownload.download.status).toBe('in-progress');
+
+    const afterExtraction = applyHvscProgressEventToSummary(afterDownload, extractionEvent, 'download');
+    expect(afterExtraction.download.status).toBe('success');
+    expect(afterExtraction.extraction.status).toBe('in-progress');
   });
 });

@@ -3,7 +3,7 @@ import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
 const VOLATILE_KEY_PATTERN = /^(timestamp|relativeMs|relative_ms|durationMs|duration_ms|elapsedMs|elapsed_ms|timeMs|time_ms|timingMs|timing_ms)$/i;
-const TRACE_ID_PATTERN = /^(EVT|COR)-\d{4}$/;
+const TRACE_ID_PATTERN = /^(EVT|COR)-\d{4,}$/;
 const evidenceRoot = path.resolve(process.cwd(), 'test-results', 'evidence', 'playwright');
 const defaultGoldenRoot = path.resolve(process.cwd(), 'playwright', 'fixtures', 'traces', 'golden');
 const legacyGoldenRoot = path.resolve(process.cwd(), 'test-results', 'traces', 'golden');

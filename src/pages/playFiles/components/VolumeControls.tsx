@@ -48,7 +48,7 @@ export const VolumeControls = ({
         onValueChange={onVolumeChange}
         onValueCommit={(value) => onVolumeCommit(value[0] ?? 0)}
         onPointerDown={onVolumeInteraction}
-        disabled={!canControlVolume || isPending}
+        disabled={!canControlVolume}
         data-testid="volume-slider"
       />
       <span className="text-xs text-muted-foreground w-[52px] text-right" data-testid="volume-label">{volumeLabel}</span>

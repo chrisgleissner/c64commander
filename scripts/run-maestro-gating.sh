@@ -304,10 +304,21 @@ if ! resolve_apk_path; then
   exit 1
 fi
 log "Installing APK: $APK_PATH"
-if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install -r "$APK_PATH" >/dev/null; then
-  log "APK install failed"
-  capture_failure_artifacts "$DEVICE_ID"
-  exit 1
+INSTALL_LOG="$RAW_OUTPUT_DIR/adb-install.log"
+if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install -r "$APK_PATH" >"$INSTALL_LOG" 2>&1; then
+  if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE" "$INSTALL_LOG"; then
+    log "APK signature mismatch; uninstalling existing package $APP_ID"
+    adb -s "$DEVICE_ID" uninstall "$APP_ID" >/dev/null 2>&1 || true
+    if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install "$APK_PATH" >>"$INSTALL_LOG" 2>&1; then
+      log "APK install failed after uninstall"
+      capture_failure_artifacts "$DEVICE_ID"
+      exit 1
+    fi
+  else
+    log "APK install failed"
+    capture_failure_artifacts "$DEVICE_ID"
+    exit 1
+  fi
 fi
 
 adb -s "$DEVICE_ID" shell am force-stop "$APP_ID" >/dev/null 2>&1 || true

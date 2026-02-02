@@ -22,6 +22,12 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const waitForConnectivityReady = async (page: Page) => {
+  const indicator = page.getByTestId('connectivity-indicator');
+  await expect(indicator).toBeVisible({ timeout: 15000 });
+  await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 15000 });
+};
+
 test.describe('Audio Mixer volumes', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -56,6 +62,7 @@ test.describe('Audio Mixer volumes', () => {
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
+    await waitForConnectivityReady(page);
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 
@@ -94,6 +101,7 @@ test.describe('Audio Mixer volumes', () => {
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
+    await waitForConnectivityReady(page);
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 
@@ -122,6 +130,7 @@ test.describe('Audio Mixer volumes', () => {
     if (await demoButton.isVisible().catch(() => false)) {
       await demoButton.click();
     }
+    await waitForConnectivityReady(page);
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 
@@ -141,6 +150,7 @@ test.describe('Audio Mixer volumes', () => {
 
   test('reset audio mixer applies defaults', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/config');
+    await waitForConnectivityReady(page);
     await page.getByRole('button', { name: 'Audio Mixer' }).click();
     await snap(page, testInfo, 'audio-mixer-open');
 

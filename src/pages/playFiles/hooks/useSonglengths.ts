@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
+import { buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { parseSonglengths } from '@/lib/sid/songlengths';
+import {
+  countSonglengthsEntries,
+  parseSonglengths,
+  resolveSonglengthsDurationMs,
+  resolveSonglengthsSeconds,
+} from '@/lib/sid/songlengths';
 import {
   collectSonglengthsSearchPaths,
   DOCUMENTS_FOLDER,
@@ -11,8 +17,32 @@ import {
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { getLocalFilePath, normalizeLocalPath } from '@/pages/playFiles/playFilesUtils';
 import type { PlaylistItem } from '@/pages/playFiles/types';
+import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 
-export type SonglengthsFileEntry = { path: string; file: LocalPlayFile };
+export type SonglengthsFileEntry = {
+  path: string;
+  file: LocalPlayFile;
+  uri?: string | null;
+  name?: string | null;
+  sizeBytes?: number | null;
+  modifiedAt?: string | null;
+};
+
+export type SonglengthsSummary = {
+  fileName: string | null;
+  path: string | null;
+  sizeLabel: string | null;
+  entryCount: number | null;
+  error: string | null;
+};
+
+type PersistedSonglengthsFile = {
+  path: string;
+  uri: string;
+  name: string;
+  sizeBytes?: number | null;
+  modifiedAt?: string | null;
+};
 
 export type UseSonglengthsParams = {
   playlist: PlaylistItem[];
@@ -21,7 +51,9 @@ export type UseSonglengthsParams = {
 export type UseSonglengthsResult = {
   songlengthsFiles: SonglengthsFileEntry[];
   activeSonglengthsPath: string | null;
+  songlengthsSummary: SonglengthsSummary;
   handleSonglengthsInput: (files: FileList | null) => void;
+  handleSonglengthsPicked: (file: PersistedSonglengthsFile) => void;
   loadSonglengthsForPath: (
     path: string,
     extraFiles?: SonglengthsFileEntry[],
@@ -36,6 +68,13 @@ export type UseSonglengthsResult = {
 
 export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengthsResult => {
   const [songlengthsFiles, setSonglengthsFiles] = useState<SonglengthsFileEntry[]>([]);
+  const [songlengthsSummary, setSonglengthsSummary] = useState<SonglengthsSummary>({
+    fileName: null,
+    path: null,
+    sizeLabel: null,
+    entryCount: null,
+    error: null,
+  });
   const songlengthsCacheRef = useRef(
     new Map<string, {
       signature: string;
@@ -49,9 +88,43 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     }>(),
   );
 
+  const isAndroid = getPlatform() === 'android' && isNativePlatform();
+  const persistedKey = 'c64u_songlengths_file:v1';
+
+  const formatKiB = (bytes: number | null | undefined) => {
+    if (bytes === null || bytes === undefined || bytes <= 0) return null;
+    const kib = bytes / 1024;
+    const rounded = kib >= 10 ? kib.toFixed(0) : kib.toFixed(1);
+    return `${rounded} KiB`;
+  };
+
   useEffect(() => {
     songlengthsCacheRef.current.clear();
   }, [playlist, songlengthsFiles]);
+
+  useEffect(() => {
+    if (!isAndroid || typeof localStorage === 'undefined') return;
+    if (songlengthsFiles.length) return;
+    const raw = localStorage.getItem(persistedKey);
+    if (!raw) return;
+    try {
+      const stored = JSON.parse(raw) as PersistedSonglengthsFile;
+      if (!stored?.uri || !stored?.name || !stored?.path) return;
+      const file = buildLocalPlayFileFromUri(stored.name, stored.path, stored.uri);
+      setSonglengthsFiles([
+        {
+          path: stored.path,
+          file,
+          uri: stored.uri,
+          name: stored.name,
+          sizeBytes: stored.sizeBytes ?? null,
+          modifiedAt: stored.modifiedAt ?? null,
+        },
+      ]);
+    } catch {
+      // Ignore persisted selection failures.
+    }
+  }, [isAndroid, songlengthsFiles.length]);
 
   const songlengthsFilesByDir = useMemo(() => {
     const map = new Map<string, LocalPlayFile>();
@@ -90,6 +163,59 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     const buffer = await file.arrayBuffer();
     return new TextDecoder().decode(new Uint8Array(buffer));
   }, []);
+
+  const summarizeSonglengthsFile = useCallback(async (entry: SonglengthsFileEntry | null) => {
+    if (!entry) {
+      setSonglengthsSummary({
+        fileName: null,
+        path: null,
+        sizeLabel: null,
+        entryCount: null,
+        error: null,
+      });
+      return;
+    }
+    const fileName = entry.name ?? entry.file.name ?? entry.path.split('/').pop() ?? entry.path;
+    const path = entry.path;
+    try {
+      const buffer = await entry.file.arrayBuffer();
+      const sizeBytes = entry.file instanceof File
+        ? entry.file.size
+        : entry.sizeBytes ?? buffer.byteLength;
+      const text = new TextDecoder().decode(new Uint8Array(buffer));
+      const parsed = parseSonglengths(text);
+      const entryCount = countSonglengthsEntries(parsed);
+      if (!entryCount) {
+        setSonglengthsSummary({
+          fileName,
+          path,
+          sizeLabel: formatKiB(sizeBytes),
+          entryCount: 0,
+          error: 'Songlengths file contains no entries.',
+        });
+        return;
+      }
+      setSonglengthsSummary({
+        fileName,
+        path,
+        sizeLabel: formatKiB(sizeBytes),
+        entryCount,
+        error: null,
+      });
+    } catch (error) {
+      setSonglengthsSummary({
+        fileName,
+        path,
+        sizeLabel: null,
+        entryCount: null,
+        error: (error as Error).message || 'Songlengths file could not be read.',
+      });
+    }
+  }, [formatKiB]);
+
+  useEffect(() => {
+    void summarizeSonglengthsFile(songlengthsFiles[0] ?? null);
+  }, [songlengthsFiles, summarizeSonglengthsFile]);
 
   const loadSonglengthsForPath = useCallback(async (
     path: string,
@@ -166,7 +292,39 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       return;
     }
     const path = normalizeSourcePath(getLocalFilePath(file));
-    setSonglengthsFiles([{ path, file }]);
+    setSonglengthsFiles([{ path, file, name: file.name, sizeBytes: file.size }]);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(persistedKey);
+    }
+  }, []);
+
+  const handleSonglengthsPicked = useCallback((picked: PersistedSonglengthsFile) => {
+    if (!picked?.uri || !picked?.name) return;
+    if (!isSonglengthsFileName(picked.name)) {
+      toast({ title: 'Unsupported file', description: 'Choose a .txt or .md5 songlengths file.' });
+      return;
+    }
+    const path = normalizeSourcePath(picked.path || `/${picked.name}`);
+    const file = buildLocalPlayFileFromUri(picked.name, path, picked.uri);
+    setSonglengthsFiles([
+      {
+        path,
+        file,
+        uri: picked.uri,
+        name: picked.name,
+        sizeBytes: picked.sizeBytes ?? null,
+        modifiedAt: picked.modifiedAt ?? null,
+      },
+    ]);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(persistedKey, JSON.stringify({
+        path,
+        uri: picked.uri,
+        name: picked.name,
+        sizeBytes: picked.sizeBytes ?? null,
+        modifiedAt: picked.modifiedAt ?? null,
+      }));
+    }
   }, []);
 
   const mergeSonglengthsFiles = useCallback((entries: SonglengthsFileEntry[]) => {
@@ -191,9 +349,9 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
         if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
         const filePath = getLocalFilePath(item.request.file);
         const songlengths = await loadSonglengthsForPath(filePath, songlengthsOverrides);
-        const seconds = songlengths?.pathToSeconds.get(filePath);
-        if (seconds === undefined || seconds === null) return item;
-        return { ...item, durationMs: seconds * 1000 };
+        const resolvedDurationMs = await resolveSonglengthsDurationMs(songlengths, filePath, item.request.file);
+        if (resolvedDurationMs === null) return item;
+        return { ...item, durationMs: resolvedDurationMs };
       }),
     );
     return updated;
@@ -206,7 +364,9 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   return {
     songlengthsFiles,
     activeSonglengthsPath,
+    songlengthsSummary,
     handleSonglengthsInput,
+    handleSonglengthsPicked,
     loadSonglengthsForPath,
     applySonglengthsToItems,
     mergeSonglengthsFiles,

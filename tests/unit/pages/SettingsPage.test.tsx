@@ -184,7 +184,7 @@ vi.mock('@/lib/config/appSettings', () => ({
   loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 3000),
   loadDebugLoggingEnabled: vi.fn(() => true),
-  loadDiskAutostartMode: vi.fn(() => 'ask'),
+  loadDiskAutostartMode: vi.fn(() => 'kernal'),
   saveAutomaticDemoModeEnabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
   saveDiscoveryProbeTimeoutMs: vi.fn(),
@@ -241,6 +241,40 @@ describe('SettingsPage', () => {
       expect(discoverConnection).toHaveBeenCalledWith('settings');
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Connection settings saved' }));
     });
+  });
+
+  it('orders core sections and places network timing under Device Safety', () => {
+    render(<SettingsPage />);
+
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent ?? '');
+    const appearanceIndex = headings.indexOf('Appearance');
+    const connectionIndex = headings.indexOf('Connection');
+    const diagnosticsIndex = headings.indexOf('Diagnostics');
+    const deviceSafetyIndex = headings.indexOf('Device Safety');
+
+    expect(appearanceIndex).toBeGreaterThanOrEqual(0);
+    expect(connectionIndex).toBeGreaterThan(appearanceIndex);
+    expect(diagnosticsIndex).toBeGreaterThan(connectionIndex);
+    expect(deviceSafetyIndex).toBeGreaterThan(diagnosticsIndex);
+    expect(deviceSafetyIndex).toBe(headings.length - 1);
+
+    const connectionSection = screen.getByRole('heading', { name: 'Connection' }).closest('.bg-card');
+    const deviceSafetySection = screen.getByRole('heading', { name: 'Device Safety' }).closest('.bg-card');
+
+    expect(connectionSection).toBeTruthy();
+    expect(deviceSafetySection).toBeTruthy();
+
+    if (connectionSection) {
+      expect(within(connectionSection).queryByText('Startup Discovery Window (seconds)')).toBeNull();
+      expect(within(connectionSection).queryByText('Background Rediscovery Interval (seconds)')).toBeNull();
+      expect(within(connectionSection).queryByText('Discovery Probe Timeout (seconds)')).toBeNull();
+    }
+
+    if (deviceSafetySection) {
+      expect(within(deviceSafetySection).getByText('Startup Discovery Window (seconds)')).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText('Background Rediscovery Interval (seconds)')).toBeInTheDocument();
+      expect(within(deviceSafetySection).getByText('Discovery Probe Timeout (seconds)')).toBeInTheDocument();
+    }
   });
 
   it('reports connection save errors', async () => {
@@ -565,7 +599,7 @@ describe('SettingsPage', () => {
 
     render(<SettingsPage />);
 
-    const trigger = screen.getAllByRole('combobox')[0];
+    const trigger = screen.getAllByRole('combobox')[1];
     fireEvent.change(trigger, { target: { value: 'RELAXED' } });
 
     const warningDialog = await screen.findByRole('dialog', { name: /enable relaxed safety mode/i });
@@ -655,7 +689,7 @@ describe('SettingsPage', () => {
   it('enables debug logging when switching to troubleshooting mode', () => {
     render(<SettingsPage />);
 
-    const trigger = screen.getAllByRole('combobox')[0];
+    const trigger = screen.getAllByRole('combobox')[1];
     fireEvent.change(trigger, { target: { value: 'TROUBLESHOOTING' } });
 
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);

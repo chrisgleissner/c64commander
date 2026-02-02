@@ -51,6 +51,7 @@ import {
   filterEnabledSidVolumeItems,
 } from '@/lib/config/sidVolumeControl';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
+import { FolderPicker } from '@/lib/native/folderPicker';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { getHvscDurationByMd5Seconds, getHvscFolderListing } from '@/lib/hvsc';
 import { AppBar } from '@/components/AppBar';
@@ -127,7 +128,9 @@ export default function PlayFilesPage() {
   const {
     songlengthsFiles,
     activeSonglengthsPath,
+    songlengthsSummary,
     handleSonglengthsInput,
+    handleSonglengthsPicked,
     loadSonglengthsForPath,
     applySonglengthsToItems,
     mergeSonglengthsFiles,
@@ -722,12 +725,12 @@ export default function PlayFilesPage() {
 
   const resolveSidMetadata = useCallback(
     async (file?: LocalPlayFile) => {
-      if (!file) return { durationMs: undefined, subsongCount: undefined } as const;
+      if (!file) return { durationMs: undefined, subsongCount: undefined, readable: false } as const;
       let buffer: ArrayBuffer;
       try {
         buffer = await file.arrayBuffer();
       } catch {
-        return { durationMs: durationFallbackMs, subsongCount: undefined } as const;
+        return { durationMs: durationFallbackMs, subsongCount: undefined, readable: false } as const;
       }
       const subsongCount = getSidSongCount(buffer);
       try {
@@ -736,19 +739,19 @@ export default function PlayFilesPage() {
         if (songlengths?.pathToSeconds.has(filePath)) {
           const seconds = songlengths.pathToSeconds.get(filePath);
           const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
-          return { durationMs, subsongCount } as const;
+          return { durationMs, subsongCount, readable: true } as const;
         }
 
         const md5 = await computeSidMd5(buffer);
         const md5Duration = songlengths?.md5ToSeconds.get(md5);
         if (md5Duration !== undefined && md5Duration !== null) {
-          return { durationMs: md5Duration * 1000, subsongCount } as const;
+          return { durationMs: md5Duration * 1000, subsongCount, readable: true } as const;
         }
         const seconds = await getHvscDurationByMd5Seconds(md5);
         const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
-        return { durationMs, subsongCount } as const;
+        return { durationMs, subsongCount, readable: true } as const;
       } catch {
-        return { durationMs: durationFallbackMs, subsongCount } as const;
+        return { durationMs: durationFallbackMs, subsongCount, readable: true } as const;
       }
     },
     [durationFallbackMs, loadSonglengthsForPath],
@@ -756,8 +759,6 @@ export default function PlayFilesPage() {
 
   const playItem = useCallback(
     async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean }) => {
-      await ensurePlaybackConnection();
-      const api = getC64API();
       if (item.request.source === 'local' && !item.request.file) {
         throw new Error('Local file unavailable. Re-add it to the playlist.');
       }
@@ -767,7 +768,12 @@ export default function PlayFilesPage() {
         const metadata = await resolveSidMetadata(item.request.file);
         durationOverride = metadata.durationMs;
         subsongCount = metadata.subsongCount;
+        if (!metadata.readable) {
+          throw new Error('Local file unavailable. Re-add it to the playlist.');
+        }
       }
+      await ensurePlaybackConnection();
+      const api = getC64API();
       if (isSongCategory(item.category)) {
         setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
       } else {
@@ -885,6 +891,23 @@ export default function PlayFilesPage() {
   const toggleSelectAllPlaylist = useCallback(() => {
     setSelectedPlaylistIds(allPlaylistSelected ? new Set() : new Set(playlistIds));
   }, [allPlaylistSelected, playlistIds]);
+
+  useEffect(() => {
+    if (!songlengthsFiles.length || !playlist.length) return;
+    let cancelled = false;
+    const snapshot = playlist;
+    const applyUpdates = async () => {
+      const updated = await applySonglengthsToItems(snapshot);
+      if (cancelled) return;
+      const changed = updated.some((item, index) => item.durationMs !== snapshot[index]?.durationMs);
+      if (!changed) return;
+      setPlaylist((prev) => (prev === snapshot ? updated : prev));
+    };
+    void applyUpdates();
+    return () => {
+      cancelled = true;
+    };
+  }, [applySonglengthsToItems, playlist, songlengthsFiles]);
 
   const removePlaylistItemsById = useCallback((ids: Set<string>) => {
     if (!ids.size) return;
@@ -1614,8 +1637,39 @@ export default function PlayFilesPage() {
             onDurationSliderChange={handleDurationSliderChange}
             onDurationInputChange={handleDurationInputChange}
             onDurationInputBlur={handleDurationInputBlur}
-            onChooseSonglengthsFile={() => songlengthsInputRef.current?.click()}
+            onChooseSonglengthsFile={async () => {
+              if (!isAndroid) {
+                songlengthsInputRef.current?.click();
+                return;
+              }
+              try {
+                const result = await FolderPicker.pickFile({
+                  mimeTypes: ['text/plain', 'application/octet-stream'],
+                });
+                if (!result?.uri || !result?.permissionPersisted) {
+                  throw new Error('Songlengths file access was not granted.');
+                }
+                handleSonglengthsPicked({
+                  path: normalizeSourcePath(`/${result.name ?? 'songlengths.md5'}`),
+                  uri: result.uri,
+                  name: result.name ?? 'songlengths.md5',
+                  sizeBytes: result.sizeBytes ?? null,
+                  modifiedAt: result.modifiedAt ?? null,
+                });
+              } catch (error) {
+                reportUserError({
+                  operation: 'SONGLENGTHS_PICK',
+                  title: 'Songlengths file selection failed',
+                  description: (error as Error).message,
+                  error,
+                });
+              }
+            }}
             activeSonglengthsPath={activeSonglengthsPath}
+            songlengthsName={songlengthsSummary.fileName}
+            songlengthsSizeLabel={songlengthsSummary.sizeLabel}
+            songlengthsEntryCount={songlengthsSummary.entryCount}
+            songlengthsError={songlengthsSummary.error}
             songSelectorVisible={songSelectorVisible}
             songPickerOpen={songPickerOpen}
             onSongPickerPointerDown={() => setSongPickerOpen(true)}
@@ -1661,7 +1715,7 @@ export default function PlayFilesPage() {
         <input
           ref={songlengthsInputRef}
           type="file"
-          accept=".md5,.MD5,.txt,.TXT"
+          accept=".md5,.MD5,.txt,.TXT,text/plain,application/octet-stream"
           className="hidden"
           onChange={wrapUserEvent((event) => {
             handleSonglengthsInput(event.target.files);

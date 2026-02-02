@@ -8,6 +8,10 @@ tags:
 ---
 - launchApp
 - extendedWaitUntil:
+    visible: "Home"
+    timeout: ${SHORT_TIMEOUT}
+- tapOn: "Home"
+- extendedWaitUntil:
     visible: "C64 Commander"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd

@@ -72,6 +72,7 @@ test.describe('Config visibility across modes', () => {
     }
     await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
     const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
 
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
@@ -145,6 +146,7 @@ test.describe('Config visibility across modes', () => {
     }
     await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
     const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
     await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();
 

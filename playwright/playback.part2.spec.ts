@@ -967,9 +967,9 @@ test.describe('Playback file browser (part 2)', () => {
       server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > muteUpdateCount,
     );
     await expect(slider).not.toHaveAttribute('data-disabled');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1']?.value).toBe('OFF');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2']?.value).toBe('OFF');
     const mutedState = server.getState()['Audio Mixer'];
-    expect(mutedState['Vol Socket 1']?.value).toBe('OFF');
-    expect(mutedState['Vol UltiSid 2']?.value).toBe('OFF');
     expect(mutedState['Vol Socket 2']?.value).toBe(initialSocket2);
     expect(mutedState['Vol UltiSid 1']?.value).toBe(initialUlti1);
 
@@ -992,6 +992,8 @@ test.describe('Playback file browser (part 2)', () => {
     await waitForRequests(() =>
       server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > unmuteUpdateCount,
     );
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1']?.value).not.toBe('OFF');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2']?.value).not.toBe('OFF');
     const unmutedState = server.getState()['Audio Mixer'];
     const updatedTarget = unmutedState['Vol Socket 1']?.value;
     expect(updatedTarget).toBeDefined();

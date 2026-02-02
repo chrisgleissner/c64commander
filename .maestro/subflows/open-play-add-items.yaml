@@ -8,6 +8,9 @@ tags:
 ---
 - runFlow: launch-and-wait.yaml
 - tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
 - takeScreenshot: play-files
 - scrollUntilVisible:
