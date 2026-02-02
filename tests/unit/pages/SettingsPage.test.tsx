@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from '@/pages/SettingsPage';
 import { reportUserError } from '@/lib/uiErrors';
@@ -14,6 +14,7 @@ import {
   saveDebugLoggingEnabled,
   saveStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
+import * as deviceSafetySettings from '@/lib/config/deviceSafetySettings';
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -23,6 +24,18 @@ vi.mock('framer-motion', () => ({
     li: ({ children, ...props }: any) => <li {...props}>{children}</li>,
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
+}));
+
+vi.mock('@/components/ui/select', () => ({
+  Select: ({ value, onValueChange, children }: any) => (
+    <select value={value} onChange={(event) => onValueChange?.(event.target.value)}>
+      {children}
+    </select>
+  ),
+  SelectContent: ({ children }: any) => <>{children}</>,
+  SelectItem: ({ value, children }: any) => <option value={value}>{children}</option>,
+  SelectTrigger: () => null,
+  SelectValue: () => null,
 }));
 
 const {
@@ -156,16 +169,19 @@ vi.mock('@/lib/tracing/traceExport', () => ({
 
 vi.mock('@/lib/config/appSettings', () => ({
   clampConfigWriteIntervalMs: (value: number) => value,
+  clampDiscoveryProbeTimeoutMs: (value: number) => value,
   loadConfigWriteIntervalMs: vi.fn(() => 500),
   clampBackgroundRediscoveryIntervalMs: (value: number) => value,
   clampStartupDiscoveryWindowMs: (value: number) => value,
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
   loadBackgroundRediscoveryIntervalMs: vi.fn(() => 5000),
+  loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 3000),
   loadDebugLoggingEnabled: vi.fn(() => true),
   loadDiskAutostartMode: vi.fn(() => 'ask'),
   saveAutomaticDemoModeEnabled: vi.fn(),
   saveBackgroundRediscoveryIntervalMs: vi.fn(),
+  saveDiscoveryProbeTimeoutMs: vi.fn(),
   saveStartupDiscoveryWindowMs: vi.fn(),
   saveConfigWriteIntervalMs: vi.fn(),
   saveDebugLoggingEnabled: vi.fn(),
@@ -314,7 +330,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /share via email/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /email errors/i }));
 
     expect(window.location.href).toMatch(/^mailto:/);
 
@@ -353,7 +369,7 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /^share$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /share errors/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
@@ -429,7 +445,9 @@ describe('SettingsPage', () => {
     vi.mocked(getLogs).mockReturnValue([
       { id: 'log-1', level: 'info', message: 'Log entry', timestamp: Date.now(), details: { ok: true } },
     ] as any);
-    window.dispatchEvent(new Event('c64u-logs-updated'));
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-logs-updated'));
+    });
     expect(await within(dialog).findByText('Log entry')).toBeInTheDocument();
 
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
@@ -439,7 +457,9 @@ describe('SettingsPage', () => {
     vi.mocked(getTraceEvents).mockReturnValue([
       { id: 'trace-1', type: 'rest', origin: 'user' },
     ] as any);
-    window.dispatchEvent(new Event('c64u-traces-updated'));
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-traces-updated'));
+    });
     expect(await within(dialog).findByText(/1\. rest · user/i)).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear traces/i }));
@@ -465,8 +485,10 @@ describe('SettingsPage', () => {
     vi.mocked(getTraceEvents).mockReturnValue([
       { id: 'trace-1', type: 'rest', origin: 'user' },
     ] as any);
-    window.dispatchEvent(new Event('c64u-traces-updated'));
-    fireEvent.click(await within(dialog).findByRole('button', { name: /export traces/i }));
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-traces-updated'));
+    });
+    fireEvent.click(await within(dialog).findByRole('button', { name: /^export traces$/i }));
 
     expect(downloadTraceZip).toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith({ title: 'Trace export ready' });
@@ -475,7 +497,7 @@ describe('SettingsPage', () => {
       throw new Error('export failed');
     });
 
-    fireEvent.click(await within(dialog).findByRole('button', { name: /export traces/i }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: /^export traces$/i }));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
@@ -501,11 +523,11 @@ describe('SettingsPage', () => {
     render(<SettingsPage />);
 
     fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /share errors/i }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith('payload');
-      expect(toast).toHaveBeenCalledWith({ title: 'Copied error details to clipboard' });
+      expect(toast).toHaveBeenCalledWith({ title: 'Copied errors to clipboard' });
     });
 
     if (originalShare) {
@@ -519,5 +541,21 @@ describe('SettingsPage', () => {
     } else {
       delete (navigator as Navigator & { clipboard?: unknown }).clipboard;
     }
+  });
+
+  it('requires confirmation when switching into relaxed safety mode', async () => {
+    const saveSpy = vi.spyOn(deviceSafetySettings, 'saveDeviceSafetyMode');
+
+    render(<SettingsPage />);
+
+    const trigger = screen.getAllByRole('combobox')[0];
+    fireEvent.change(trigger, { target: { value: 'RELAXED' } });
+
+    const warningDialog = await screen.findByRole('dialog', { name: /enable relaxed safety mode/i });
+    expect(warningDialog).toBeInTheDocument();
+    expect(saveSpy).not.toHaveBeenCalled();
+
+    fireEvent.click(within(warningDialog).getByRole('button', { name: /enable relaxed/i }));
+    expect(saveSpy).toHaveBeenCalledWith('RELAXED');
   });
 });

@@ -106,6 +106,12 @@ export const HomeDiskManager = () => {
     total: null,
     message: null,
   });
+  const addItemsAbortRef = useRef<AbortController | null>(null);
+  const cancelAddItemsScan = useCallback(() => {
+    const controller = addItemsAbortRef.current;
+    if (!controller || controller.signal.aborted) return;
+    controller.abort();
+  }, []);
   const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
   const [isAddingItems, setIsAddingItems] = useState(false);
@@ -456,6 +462,9 @@ export const HomeDiskManager = () => {
       }
       setIsAddingItems(true);
       setAddItemsProgress({ status: 'scanning', count: 0, elapsedMs: 0, total: null, message: 'Scanning…' });
+      const abortController = new AbortController();
+      addItemsAbortRef.current = abortController;
+      const abortSignal = abortController.signal;
       await new Promise((resolve) => setTimeout(resolve, 0));
       let processed = 0;
       let lastUpdate = 0;
@@ -470,42 +479,6 @@ export const HomeDiskManager = () => {
           count: processed,
           elapsedMs: now - startedAt,
         }));
-      };
-
-      const collectRecursive = async (rootPath: string) => {
-        const queue = [rootPath];
-        const visited = new Set<string>();
-        const files: SourceEntry[] = [];
-        const maxConcurrent = 3;
-        const pending = new Set<Promise<void>>();
-
-        const processPath = async (path: string) => {
-          if (!path || visited.has(path)) return;
-          visited.add(path);
-          const entries = await source.listEntries(path);
-          entries.forEach((entry) => {
-            if (entry.type === 'dir') {
-              queue.push(entry.path);
-            } else {
-              files.push(entry);
-            }
-          });
-          updateProgress(entries.filter((entry) => entry.type === 'file').length);
-        };
-
-        while (queue.length || pending.size) {
-          while (queue.length && pending.size < maxConcurrent) {
-            const nextPath = queue.shift();
-            if (!nextPath) continue;
-            const job = processPath(nextPath).finally(() => pending.delete(job));
-            pending.add(job);
-          }
-          if (pending.size) {
-            await Promise.race(pending);
-            await new Promise((resolve) => setTimeout(resolve, 0));
-          }
-        }
-        return files;
       };
 
       let files: Array<{ path: string; name: string; sizeBytes?: number | null; modifiedAt?: string | null; sourceId?: string | null }> = [];
@@ -526,10 +499,12 @@ export const HomeDiskManager = () => {
         ) ?? null;
       };
       for (const selection of selections) {
+        if (abortSignal.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
         if (selection.type === 'dir') {
-          const nested = source.type === 'local'
-            ? await source.listFilesRecursive(selection.path)
-            : await collectRecursive(selection.path);
+          const nested = await source.listFilesRecursive(selection.path, { signal: abortSignal });
+          updateProgress(nested.length);
           nested.forEach((entry) => {
             if (entry.type !== 'file') return;
             files.push({ path: entry.path, name: entry.name, sizeBytes: entry.sizeBytes, modifiedAt: entry.modifiedAt, sourceId: source.id });
@@ -655,6 +630,10 @@ export const HomeDiskManager = () => {
       return true;
     } catch (error) {
       const err = error as Error;
+      if (err.name === 'AbortError') {
+        setAddItemsProgress((prev) => ({ ...prev, status: 'idle', message: 'Scan canceled.' }));
+        return false;
+      }
       const listingDetails = err instanceof LocalSourceListingError ? err.details : undefined;
       setAddItemsProgress((prev) => ({ ...prev, status: 'error', message: 'Add items failed' }));
       reportUserError({
@@ -672,6 +651,7 @@ export const HomeDiskManager = () => {
       return false;
     } finally {
       setIsAddingItems(false);
+      addItemsAbortRef.current = null;
       if (addItemsStartedAtRef.current) {
         setAddItemsProgress((prev) => ({
           ...prev,
@@ -1107,6 +1087,7 @@ export const HomeDiskManager = () => {
         autoConfirmCloseBefore={isAndroid}
         onAutoConfirmStart={handleAutoConfirmStart}
         autoConfirmLocalSource={false}
+        onCancelScan={cancelAddItemsScan}
       />
 
       {!browserOpen ? (
@@ -1115,6 +1096,7 @@ export const HomeDiskManager = () => {
           title="Adding disks"
           testId="add-disks-overlay"
           visible={showAddItemsOverlay || addItemsProgress.status === 'scanning'}
+          onCancel={cancelAddItemsScan}
         />
       ) : null}
 

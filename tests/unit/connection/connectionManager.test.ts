@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from '@/lib/fuzz/fuzzMode';
-import { loadAutomaticDemoModeEnabled, loadStartupDiscoveryWindowMs } from '@/lib/config/appSettings';
+import { loadAutomaticDemoModeEnabled, loadDiscoveryProbeTimeoutMs, loadStartupDiscoveryWindowMs } from '@/lib/config/appSettings';
 import { isSmokeModeEnabled, recordSmokeStatus } from '@/lib/smoke/smokeMode';
 
 vi.mock('@/lib/config/appSettings', () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
+  loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 600),
 }));
 
@@ -53,6 +54,7 @@ describe('connectionManager', () => {
     vi.mocked(isFuzzModeEnabled).mockReturnValue(false);
     vi.mocked(getFuzzMockBaseUrl).mockReturnValue(null);
     vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(true);
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(2500);
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
     vi.mocked(isSmokeModeEnabled).mockReturnValue(false);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
@@ -210,6 +212,35 @@ describe('connectionManager', () => {
     });
 
     const resultPromise = probeOnce({ timeoutMs: 50 });
+    await vi.advanceTimersByTimeAsync(60);
+    await expect(resultPromise).resolves.toBe(false);
+  });
+
+  it('uses configured probe timeout when not provided', async () => {
+    const { probeOnce } = await import('@/lib/connection/connectionManager');
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockReturnValue(40);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.setItem('c64u_password', '');
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation((_: RequestInfo, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        setTimeout(() => {
+          resolve(new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }));
+        }, 200);
+      });
+    });
+
+    const resultPromise = probeOnce();
     await vi.advanceTimersByTimeAsync(60);
     await expect(resultPromise).resolves.toBe(false);
   });

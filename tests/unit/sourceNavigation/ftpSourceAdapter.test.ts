@@ -76,4 +76,28 @@ describe('ftpSourceAdapter', () => {
 
     expect(results.map((entry) => entry.path).sort()).toEqual(['/music/song.sid', '/root.sid']);
   });
+
+  it('cancels recursive listing and stops further FTP calls', async () => {
+    const controller = new AbortController();
+    listFtpDirectoryMock.mockImplementation(async ({ path }) => {
+      if (path === '/') {
+        controller.abort();
+        return {
+          entries: [
+            { type: 'dir', name: 'music', path: '/music' },
+            { type: 'file', name: 'root.sid', path: '/root.sid', size: 5, modifiedAt: 'now' },
+          ],
+        };
+      }
+      return {
+        entries: [
+          { type: 'file', name: 'song.sid', path: '/music/song.sid', size: 10, modifiedAt: 'now' },
+        ],
+      };
+    });
+
+    const source = createUltimateSourceLocation();
+    await expect(source.listFilesRecursive('/', { signal: controller.signal })).rejects.toThrow(/Aborted/);
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
+  });
 });

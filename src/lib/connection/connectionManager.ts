@@ -10,6 +10,7 @@ import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ft
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
 import {
   loadAutomaticDemoModeEnabled,
+  loadDiscoveryProbeTimeoutMs,
   loadStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 import { loadDeviceSafetyConfig } from '@/lib/config/deviceSafetySettings';
@@ -70,7 +71,7 @@ const probeWithFetch = async (
   baseUrl: string,
   options: { signal?: AbortSignal; timeoutMs?: number },
 ): Promise<boolean> => {
-  const timeoutMs = options.timeoutMs ?? PROBE_REQUEST_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
   const controller = timeoutMs ? new AbortController() : null;
   const abortFromOuter = () => controller?.abort();
@@ -101,7 +102,7 @@ const probeWithFetch = async (
 
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
   const config = loadPersistedConnectionConfig();
-  const timeoutMs = options.timeoutMs ?? PROBE_REQUEST_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
   const isTestEnv = typeof process !== 'undefined'
     && (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test');

@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 export type AddItemsProgressState = {
@@ -13,6 +14,7 @@ type AddItemsProgressOverlayProps = {
   title?: string;
   testId?: string;
   visible?: boolean;
+  onCancel?: () => void;
 };
 
 const formatElapsed = (ms: number) => {
@@ -22,7 +24,13 @@ const formatElapsed = (ms: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-export const AddItemsProgressOverlay = ({ progress, title = 'Scanning…', testId, visible }: AddItemsProgressOverlayProps) => {
+export const AddItemsProgressOverlay = ({
+  progress,
+  title = 'Scanning…',
+  testId,
+  visible,
+  onCancel,
+}: AddItemsProgressOverlayProps) => {
   if (visible === false) return null;
   if (visible !== true && progress.status !== 'scanning') return null;
 
@@ -48,6 +56,13 @@ export const AddItemsProgressOverlay = ({ progress, title = 'Scanning…', testI
         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
           <div className="h-full w-1/2 animate-pulse rounded-full bg-primary/70" />
         </div>
+        {onCancel ? (
+          <div className="mt-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

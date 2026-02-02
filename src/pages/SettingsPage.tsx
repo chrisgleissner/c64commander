@@ -53,16 +53,19 @@ import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
 import {
   clampConfigWriteIntervalMs,
+  clampDiscoveryProbeTimeoutMs,
   loadConfigWriteIntervalMs,
   clampBackgroundRediscoveryIntervalMs,
   clampStartupDiscoveryWindowMs,
   loadAutomaticDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
+  loadDiscoveryProbeTimeoutMs,
   loadStartupDiscoveryWindowMs,
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
+  saveDiscoveryProbeTimeoutMs,
   saveStartupDiscoveryWindowMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
@@ -89,11 +92,20 @@ import {
   resetDeviceSafetyOverrides,
   type DeviceSafetyMode,
 } from '@/lib/config/deviceSafetySettings';
+import { exportSettingsJson, importSettingsJson } from '@/lib/config/settingsTransfer';
 import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
+import {
+  clearFtpBridgeUrl,
+  clearStoredFtpPort,
+  getFtpBridgeUrl,
+  getStoredFtpPort,
+  setFtpBridgeUrl,
+  setStoredFtpPort,
+} from '@/lib/ftp/ftpConfig';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -141,8 +153,13 @@ export default function SettingsPage() {
   const [backgroundRediscoveryIntervalInput, setBackgroundRediscoveryIntervalInput] = useState(
     String(loadBackgroundRediscoveryIntervalMs() / 1000),
   );
+  const [probeTimeoutInput, setProbeTimeoutInput] = useState(
+    String(loadDiscoveryProbeTimeoutMs() / 1000),
+  );
   const [deviceSafetyConfig, setDeviceSafetyConfig] = useState(() => loadDeviceSafetyConfig());
   const [deviceSafetyMode, setDeviceSafetyMode] = useState<DeviceSafetyMode>(deviceSafetyConfig.mode);
+  const [pendingSafetyMode, setPendingSafetyMode] = useState<DeviceSafetyMode | null>(null);
+  const [relaxedWarningOpen, setRelaxedWarningOpen] = useState(false);
   const [restConcurrencyInput, setRestConcurrencyInput] = useState(String(deviceSafetyConfig.restMaxConcurrency));
   const [ftpConcurrencyInput, setFtpConcurrencyInput] = useState(String(deviceSafetyConfig.ftpMaxConcurrency));
   const [infoCacheInput, setInfoCacheInput] = useState(String(deviceSafetyConfig.infoCacheMs));
@@ -162,7 +179,10 @@ export default function SettingsPage() {
   const [safBusy, setSafBusy] = useState(false);
   const [safError, setSafError] = useState<string | null>(null);
   const devTapTimestamps = useRef<number[]>([]);
+  const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === 'android';
+  const [ftpPortInput, setFtpPortInput] = useState(String(getStoredFtpPort()));
+  const [ftpBridgeUrlInput, setFtpBridgeUrlInput] = useState(getFtpBridgeUrl());
 
   useEffect(() => {
     setPasswordInput(password);
@@ -216,6 +236,9 @@ export default function SettingsPage() {
       if (detail.key === 'c64u_background_rediscovery_interval_ms') {
         setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
       }
+      if (detail.key === 'c64u_discovery_probe_timeout_ms') {
+        setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
+      }
       if (detail.key === 'c64u_disk_autostart_mode') {
         setDiskAutostartMode(loadDiskAutostartMode());
       }
@@ -251,8 +274,18 @@ export default function SettingsPage() {
   }, [refreshDeviceSafetyState]);
 
   const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
+  const logsRedactedPayload = useMemo(() => formatLogsForShare(logs, { redacted: true }), [logs]);
   const errorsPayload = useMemo(() => formatLogsForShare(errorLogs), [errorLogs]);
-  const activePayload = diagnosticsTab === 'errors' ? errorsPayload : logsPayload;
+  const errorsRedactedPayload = useMemo(() => formatLogsForShare(errorLogs, { redacted: true }), [errorLogs]);
+  const resolveLogPayload = useCallback(
+    (redacted: boolean) => {
+      if (diagnosticsTab === 'errors') {
+        return redacted ? errorsRedactedPayload : errorsPayload;
+      }
+      return redacted ? logsRedactedPayload : logsPayload;
+    },
+    [diagnosticsTab, errorsPayload, errorsRedactedPayload, logsPayload, logsRedactedPayload],
+  );
 
   const refreshSafPermissions = async () => {
     if (!isAndroid) return;
@@ -303,12 +336,13 @@ export default function SettingsPage() {
     }
   };
 
-  const handleShareActive = trace(async function handleShareActive() {
-    const content = activePayload || 'No entries recorded.';
+  const handleShareLogs = trace(async function handleShareLogs(redacted: boolean) {
+    const label = diagnosticsTab === 'errors' ? 'errors' : 'logs';
+    const content = resolveLogPayload(redacted) || 'No entries recorded.';
     try {
       if (navigator.share) {
         await navigator.share({
-          title: 'C64 Commander error report',
+          title: `C64 Commander ${redacted ? 'redacted ' : ''}${label}`,
           text: content,
         });
         return;
@@ -319,7 +353,7 @@ export default function SettingsPage() {
 
     try {
       await navigator.clipboard.writeText(content);
-      toast({ title: 'Copied error details to clipboard' });
+      toast({ title: `Copied ${redacted ? 'redacted ' : ''}${label} to clipboard` });
     } catch (error) {
       reportUserError({
         operation: 'LOG_SHARE',
@@ -330,17 +364,19 @@ export default function SettingsPage() {
     }
   });
 
-  const handleShareViaEmail = trace(function handleShareViaEmail() {
+  const handleEmailLogs = trace(function handleEmailLogs(redacted: boolean) {
+    const label = diagnosticsTab === 'errors' ? 'errors' : 'logs';
     const address = ['apps', 'gleissner.uk'].join('@');
     const subject = encodeURIComponent('C64 Commander diagnostics');
-    const body = encodeURIComponent(activePayload || 'No entries recorded.');
+    const body = encodeURIComponent(resolveLogPayload(redacted) || 'No entries recorded.');
     window.location.href = `mailto:${address}?subject=${subject}&body=${body}`;
+    addLog('info', 'Diagnostics email prepared', { redacted, label });
   });
 
-  const handleExportTraces = trace(function handleExportTraces() {
+  const handleExportTraces = trace(function handleExportTraces(redacted: boolean) {
     try {
-      downloadTraceZip();
-      toast({ title: 'Trace export ready' });
+      downloadTraceZip('c64commander-traces.zip', { redacted });
+      toast({ title: redacted ? 'Redacted trace export ready' : 'Trace export ready' });
     } catch (error) {
       reportUserError({
         operation: 'TRACE_EXPORT',
@@ -411,8 +447,46 @@ export default function SettingsPage() {
     setBackgroundRediscoveryIntervalInput(String(clamped / 1000));
   };
 
+  const commitProbeTimeout = () => {
+    const parsed = Number(probeTimeoutInput);
+    const clamped = clampDiscoveryProbeTimeoutMs(Math.round((Number.isFinite(parsed) ? parsed : 2.5) * 1000));
+    saveDiscoveryProbeTimeoutMs(clamped);
+    setProbeTimeoutInput(String(clamped / 1000));
+  };
+
+  const commitFtpPort = () => {
+    const parsed = Number(ftpPortInput);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      clearStoredFtpPort();
+      setFtpPortInput(String(getStoredFtpPort()));
+      return;
+    }
+    setStoredFtpPort(Math.round(parsed));
+    setFtpPortInput(String(getStoredFtpPort()));
+  };
+
+  const commitFtpBridgeUrl = () => {
+    const trimmed = ftpBridgeUrlInput.trim();
+    if (!trimmed) {
+      clearFtpBridgeUrl();
+      setFtpBridgeUrlInput(getFtpBridgeUrl());
+      return;
+    }
+    setFtpBridgeUrl(trimmed);
+    setFtpBridgeUrlInput(getFtpBridgeUrl());
+  };
+
   const commitDeviceSafetyMode = (mode: DeviceSafetyMode) => {
+    if (mode === 'RELAXED' && deviceSafetyMode !== 'RELAXED') {
+      setPendingSafetyMode(mode);
+      setRelaxedWarningOpen(true);
+      return;
+    }
     saveDeviceSafetyMode(mode);
+    if (mode === 'TROUBLESHOOTING') {
+      setDebugLoggingEnabled(true);
+      saveDebugLoggingEnabled(true);
+    }
     refreshDeviceSafetyState();
   };
 
@@ -421,6 +495,78 @@ export default function SettingsPage() {
     commit(Number.isFinite(parsed) ? parsed : fallback);
     refreshDeviceSafetyState();
   };
+
+  const logExportLabel = diagnosticsTab === 'errors' ? 'errors' : 'logs';
+
+  const handleConfirmRelaxedMode = () => {
+    if (pendingSafetyMode !== 'RELAXED') {
+      setRelaxedWarningOpen(false);
+      setPendingSafetyMode(null);
+      return;
+    }
+    saveDeviceSafetyMode('RELAXED');
+    refreshDeviceSafetyState();
+    setRelaxedWarningOpen(false);
+    setPendingSafetyMode(null);
+  };
+
+  const handleCancelRelaxedMode = () => {
+    setRelaxedWarningOpen(false);
+    setPendingSafetyMode(null);
+  };
+
+  const handleExportSettings = trace(function handleExportSettings() {
+    try {
+      const payload = exportSettingsJson();
+      const blob = new Blob([payload], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'c64commander-settings.json';
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast({ title: 'Settings export ready' });
+    } catch (error) {
+      reportUserError({
+        operation: 'SETTINGS_EXPORT',
+        title: 'Settings export failed',
+        description: (error as Error).message,
+        error,
+      });
+    }
+  });
+
+  const handleImportSettings = trace(async function handleImportSettings(file?: File | null) {
+    if (!file) return;
+    try {
+      const content = await file.text();
+      const result = importSettingsJson(content);
+      if (!result.ok) {
+        reportUserError({
+          operation: 'SETTINGS_IMPORT',
+          title: 'Settings import failed',
+          description: result.error,
+        });
+        return;
+      }
+      refreshDeviceSafetyState();
+      setDebugLoggingEnabled(loadDebugLoggingEnabled());
+      setConfigWriteIntervalMs(loadConfigWriteIntervalMs());
+      setAutomaticDemoModeEnabled(loadAutomaticDemoModeEnabled());
+      setStartupDiscoveryWindowInput(String(loadStartupDiscoveryWindowMs() / 1000));
+      setBackgroundRediscoveryIntervalInput(String(loadBackgroundRediscoveryIntervalMs() / 1000));
+      setProbeTimeoutInput(String(loadDiscoveryProbeTimeoutMs() / 1000));
+      setDiskAutostartMode(loadDiskAutostartMode());
+      toast({ title: 'Settings imported' });
+    } catch (error) {
+      reportUserError({
+        operation: 'SETTINGS_IMPORT',
+        title: 'Settings import failed',
+        description: (error as Error).message,
+        error,
+      });
+    }
+  });
 
   return (
     <div className="min-h-screen pb-24">
@@ -542,6 +688,65 @@ export default function SettingsPage() {
               />
               <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="probe-timeout" className="font-medium">Discovery Probe Timeout (seconds)</Label>
+              <Input
+                id="probe-timeout"
+                type="number"
+                min={0.5}
+                max={10}
+                step={0.1}
+                value={probeTimeoutInput}
+                onChange={(event) => setProbeTimeoutInput(event.target.value)}
+                onBlur={commitProbeTimeout}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitProbeTimeout();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 rounded-lg border border-border/70 p-3">
+            <div className="space-y-1">
+              <Label className="font-medium">FTP Connection</Label>
+              <p className="text-xs text-muted-foreground">
+                Override FTP port or bridge URL when troubleshooting non-standard setups.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="ftp-port" className="text-sm">FTP port</Label>
+                <Input
+                  id="ftp-port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  step={1}
+                  value={ftpPortInput}
+                  onChange={(event) => setFtpPortInput(event.target.value)}
+                  onBlur={commitFtpPort}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitFtpPort();
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ftp-bridge-url" className="text-sm">FTP bridge URL</Label>
+                <Input
+                  id="ftp-bridge-url"
+                  value={ftpBridgeUrlInput}
+                  onChange={(event) => setFtpBridgeUrlInput(event.target.value)}
+                  onBlur={commitFtpBridgeUrl}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitFtpBridgeUrl();
+                  }}
+                  placeholder="https://bridge.example"
+                  className="font-mono"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex gap-2 pt-2">
@@ -615,10 +820,12 @@ export default function SettingsPage() {
                 <SelectItem value="RELAXED">Relaxed (higher concurrency, higher risk)</SelectItem>
                 <SelectItem value="BALANCED">Balanced (recommended)</SelectItem>
                 <SelectItem value="CONSERVATIVE">Conservative (maximum safety)</SelectItem>
+                <SelectItem value="TROUBLESHOOTING">Troubleshooting (low concurrency, extra logging)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
               Mode presets adjust concurrency limits, caching, cooldowns, and backoff behavior.
+              Troubleshooting mode also enables debug logging for richer diagnostics.
             </p>
           </div>
 
@@ -919,6 +1126,40 @@ export default function SettingsPage() {
               </div>
             ) : null}
 
+            <div className="space-y-2 rounded-lg border border-border/70 p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Settings transfer</p>
+                <p className="text-xs text-muted-foreground">
+                  Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={handleExportSettings}>
+                  Export settings
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => settingsFileInputRef.current?.click()}
+                >
+                  Import settings
+                </Button>
+              </div>
+              <input
+                ref={settingsFileInputRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  void handleImportSettings(file);
+                  if (event.currentTarget) {
+                    event.currentTarget.value = '';
+                  }
+                }}
+              />
+            </div>
+
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="config-write-interval" className="font-medium">
@@ -1212,11 +1453,27 @@ export default function SettingsPage() {
         </motion.div>
       </main>
 
+      <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enable Relaxed Safety Mode?</DialogTitle>
+            <DialogDescription>
+              Relaxed mode increases concurrency and reduces protection. This can overload or destabilize real
+              hardware. Confirm only if you understand the risks.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelRelaxedMode}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmRelaxedMode}>Enable Relaxed</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
-        <DialogContent className="max-h-[85vh] overflow-hidden">
+        <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>
-            <DialogDescription>Review app logs and error history.</DialogDescription>
+            <DialogDescription>Review logs, errors, and traces. Choose raw or redacted exports.</DialogDescription>
           </DialogHeader>
           <Tabs
             value={diagnosticsTab}
@@ -1228,7 +1485,7 @@ export default function SettingsPage() {
               <TabsTrigger value="logs">All logs</TabsTrigger>
               <TabsTrigger value="traces">Traces</TabsTrigger>
             </TabsList>
-            <TabsContent value="errors" className="space-y-2 max-h-[55vh] overflow-auto pr-2">
+            <TabsContent value="errors" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               {errorLogs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No errors recorded.</p>
               ) : (
@@ -1245,7 +1502,7 @@ export default function SettingsPage() {
                 ))
               )}
             </TabsContent>
-            <TabsContent value="logs" className="space-y-2 max-h-[55vh] overflow-auto pr-2">
+            <TabsContent value="logs" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               {logs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No logs recorded.</p>
               ) : (
@@ -1264,7 +1521,7 @@ export default function SettingsPage() {
                 ))
               )}
             </TabsContent>
-            <TabsContent value="traces" className="space-y-3 max-h-[55vh] overflow-auto pr-2">
+            <TabsContent value="traces" className="space-y-3 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="destructive"
@@ -1277,11 +1534,16 @@ export default function SettingsPage() {
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear traces
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleExportTraces}>
+                <Button variant="outline" size="sm" onClick={() => handleExportTraces(false)}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Export traces
                 </Button>
+                <Button variant="outline" size="sm" onClick={() => handleExportTraces(true)}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Export redacted traces
+                </Button>
               </div>
+              <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
               {traceEvents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No traces recorded.</p>
               ) : (
@@ -1300,16 +1562,28 @@ export default function SettingsPage() {
           </Tabs>
           <DialogFooter>
             <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2 min-w-0">
-                <Button variant="outline" onClick={handleShareActive}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
-                <Button variant="outline" onClick={handleShareViaEmail}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share via email
-                </Button>
-              </div>
+              {diagnosticsTab !== 'traces' ? (
+                <div className="flex flex-wrap gap-2 min-w-0">
+                  <Button variant="outline" onClick={() => handleShareLogs(false)}>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share {logExportLabel}
+                  </Button>
+                  <Button variant="outline" onClick={() => handleShareLogs(true)}>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share redacted {logExportLabel}
+                  </Button>
+                  <Button variant="outline" onClick={() => handleEmailLogs(false)}>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Email {logExportLabel}
+                  </Button>
+                  <Button variant="outline" onClick={() => handleEmailLogs(true)}>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Email redacted {logExportLabel}
+                  </Button>
+                </div>
+              ) : (
+                <div />
+              )}
               <div className="flex flex-wrap gap-2 min-w-0">
                 <Button
                   variant="destructive"

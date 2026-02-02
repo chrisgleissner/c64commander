@@ -3,17 +3,20 @@ import {
   DEFAULT_AUTO_DEMO_MODE_ENABLED,
   DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS,
   DEFAULT_CONFIG_WRITE_INTERVAL_MS,
+  DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS,
   DEFAULT_DISK_AUTOSTART_MODE,
   DEFAULT_STARTUP_DISCOVERY_WINDOW_MS,
   APP_SETTINGS_KEYS,
   loadAutomaticDemoModeEnabled,
   loadBackgroundRediscoveryIntervalMs,
+  loadDiscoveryProbeTimeoutMs,
   loadConfigWriteIntervalMs,
   loadDebugLoggingEnabled,
   loadDiskAutostartMode,
   loadStartupDiscoveryWindowMs,
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
+  saveDiscoveryProbeTimeoutMs,
   saveConfigWriteIntervalMs,
   saveDebugLoggingEnabled,
   saveDiskAutostartMode,
@@ -44,6 +47,7 @@ describe('appSettings', () => {
     expect(loadAutomaticDemoModeEnabled()).toBe(DEFAULT_AUTO_DEMO_MODE_ENABLED);
     expect(loadStartupDiscoveryWindowMs()).toBe(DEFAULT_STARTUP_DISCOVERY_WINDOW_MS);
     expect(loadBackgroundRediscoveryIntervalMs()).toBe(DEFAULT_BACKGROUND_REDISCOVERY_INTERVAL_MS);
+    expect(loadDiscoveryProbeTimeoutMs()).toBe(DEFAULT_DISCOVERY_PROBE_TIMEOUT_MS);
     expect(loadDiskAutostartMode()).toBe(DEFAULT_DISK_AUTOSTART_MODE);
   });
 
@@ -55,6 +59,7 @@ describe('appSettings', () => {
     saveAutomaticDemoModeEnabled(false);
     saveStartupDiscoveryWindowMs(3499);
     saveBackgroundRediscoveryIntervalMs(800);
+    saveDiscoveryProbeTimeoutMs(2780);
     saveDiskAutostartMode('dma');
 
     dispose();
@@ -64,6 +69,7 @@ describe('appSettings', () => {
     expect(localStorage.getItem(APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY)).toBe('0');
     expect(localStorage.getItem(APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY)).toBe('3500');
     expect(localStorage.getItem(APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY)).toBe('1000');
+    expect(localStorage.getItem(APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY)).toBe('2800');
     expect(localStorage.getItem(APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY)).toBe('dma');
 
     expect(events).toEqual(expect.arrayContaining([
@@ -72,6 +78,7 @@ describe('appSettings', () => {
       { key: APP_SETTINGS_KEYS.AUTO_DEMO_MODE_KEY, value: false },
       { key: APP_SETTINGS_KEYS.STARTUP_DISCOVERY_WINDOW_MS_KEY, value: 3500 },
       { key: APP_SETTINGS_KEYS.BACKGROUND_REDISCOVERY_INTERVAL_MS_KEY, value: 1000 },
+      { key: APP_SETTINGS_KEYS.DISCOVERY_PROBE_TIMEOUT_MS_KEY, value: 2800 },
       { key: APP_SETTINGS_KEYS.DISK_AUTOSTART_MODE_KEY, value: 'dma' },
     ]));
   });

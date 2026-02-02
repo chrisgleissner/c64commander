@@ -1,4 +1,4 @@
-export type DeviceSafetyMode = 'RELAXED' | 'BALANCED' | 'CONSERVATIVE';
+export type DeviceSafetyMode = 'RELAXED' | 'BALANCED' | 'CONSERVATIVE' | 'TROUBLESHOOTING';
 
 export type DeviceSafetyConfig = {
   mode: DeviceSafetyMode;
@@ -85,6 +85,22 @@ const MODE_DEFAULTS: Record<DeviceSafetyMode, Omit<DeviceSafetyConfig, 'mode'>> 
     discoveryProbeIntervalMs: 1000,
     allowUserOverrideCircuit: false,
   },
+  TROUBLESHOOTING: {
+    restMaxConcurrency: 1,
+    ftpMaxConcurrency: 1,
+    infoCacheMs: 300,
+    configsCacheMs: 600,
+    configsCooldownMs: 300,
+    drivesCooldownMs: 300,
+    ftpListCooldownMs: 300,
+    backoffBaseMs: 200,
+    backoffMaxMs: 1200,
+    backoffFactor: 1.4,
+    circuitBreakerThreshold: 2,
+    circuitBreakerCooldownMs: 1500,
+    discoveryProbeIntervalMs: 500,
+    allowUserOverrideCircuit: true,
+  },
 };
 
 const readString = (key: string) => {
@@ -115,7 +131,7 @@ const clampNumber = (value: number, min: number, max: number, step = 1) => {
 };
 
 const normalizeMode = (mode?: string | null): DeviceSafetyMode => {
-  if (mode === 'RELAXED' || mode === 'CONSERVATIVE') return mode;
+  if (mode === 'RELAXED' || mode === 'CONSERVATIVE' || mode === 'TROUBLESHOOTING') return mode;
   return 'BALANCED';
 };
 

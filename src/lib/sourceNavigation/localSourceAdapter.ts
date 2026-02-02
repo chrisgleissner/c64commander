@@ -111,11 +111,19 @@ const listSafEntries = async (source: LocalSourceRecord, path: string): Promise<
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 };
 
-const listSafFilesRecursive = async (source: LocalSourceRecord, path: string): Promise<SourceEntry[]> => {
+const listSafFilesRecursive = async (
+  source: LocalSourceRecord,
+  path: string,
+  options?: { signal?: AbortSignal },
+): Promise<SourceEntry[]> => {
   const root = normalizeSafPath(path);
   const queue = [root];
   const files: SourceEntry[] = [];
+  const signal = options?.signal;
   while (queue.length) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     const next = queue.shift();
     if (!next) continue;
     const entries = await listSafEntries(source, next);
@@ -162,9 +170,12 @@ export const createLocalSourceLocation = (source: LocalSourceRecord): SourceLoca
     return [...folders, ...fileEntries].sort((a, b) => a.name.localeCompare(b.name));
   };
 
-  const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
+  const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
     if (source.android?.treeUri) {
-      return listSafFilesRecursive(source, path);
+      return listSafFilesRecursive(source, path, options);
+    }
+    if (options?.signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
     }
     const normalized = normalizeSourcePath(path);
     const prefix = normalized.endsWith('/') ? normalized : `${normalized}/`;

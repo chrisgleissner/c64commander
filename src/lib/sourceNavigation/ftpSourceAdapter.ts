@@ -107,17 +107,27 @@ const listEntries = async (path: string): Promise<SourceEntry[]> => {
   return entries;
 };
 
-const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
+const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal }): Promise<SourceEntry[]> => {
   const queue = [path || '/'];
   const visited = new Set<string>();
   const results: SourceEntry[] = [];
   const maxConcurrent = 3;
   const pending = new Set<Promise<void>>();
+  const signal = options?.signal;
+  const abortError = new DOMException('Aborted', 'AbortError');
+
+  const assertNotAborted = () => {
+    if (signal?.aborted) {
+      throw abortError;
+    }
+  };
 
   const processPath = async (current: string) => {
+    assertNotAborted();
     if (!current || visited.has(current)) return;
     visited.add(current);
     const entries = await listEntries(current);
+    assertNotAborted();
     entries.forEach((entry) => {
       if (entry.type === 'dir') {
         queue.push(entry.path);
@@ -127,19 +137,29 @@ const listFilesRecursive = async (path: string): Promise<SourceEntry[]> => {
     });
   };
 
-  while (queue.length || pending.size) {
-    while (queue.length && pending.size < maxConcurrent) {
-      const nextPath = queue.shift();
-      if (!nextPath) continue;
-      const job = processPath(nextPath).finally(() => pending.delete(job));
-      pending.add(job);
+  try {
+    while (queue.length || pending.size) {
+      assertNotAborted();
+      while (queue.length && pending.size < maxConcurrent) {
+        assertNotAborted();
+        const nextPath = queue.shift();
+        if (!nextPath) continue;
+        const job = processPath(nextPath).finally(() => pending.delete(job));
+        pending.add(job);
+      }
+      if (pending.size) {
+        await Promise.race(pending);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
-    if (pending.size) {
-      await Promise.race(pending);
-    }
-  }
 
-  return results;
+    return results;
+  } catch (error) {
+    if (signal?.aborted) {
+      await Promise.allSettled(Array.from(pending));
+    }
+    throw error;
+  }
 };
 
 export const createUltimateSourceLocation = (): SourceLocation => ({
