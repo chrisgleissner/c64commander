@@ -44,7 +44,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { downloadTraceZip } from '@/lib/tracing/traceExport';
+import { shareTraceZip } from '@/lib/tracing/traceExport';
+import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
@@ -373,10 +374,9 @@ export default function SettingsPage() {
     addLog('info', 'Diagnostics email prepared', { redacted, label });
   });
 
-  const handleExportTraces = trace(function handleExportTraces(redacted: boolean) {
+  const handleExportTraces = trace(async function handleExportTraces(redacted: boolean) {
     try {
-      downloadTraceZip('c64commander-traces.zip', { redacted });
-      toast({ title: redacted ? 'Redacted trace export ready' : 'Trace export ready' });
+      await shareTraceZip('c64commander-traces.zip', { redacted });
     } catch (error) {
       reportUserError({
         operation: 'TRACE_EXPORT',
@@ -545,7 +545,7 @@ export default function SettingsPage() {
         reportUserError({
           operation: 'SETTINGS_IMPORT',
           title: 'Settings import failed',
-          description: result.error,
+          description: (result as { error: string }).error,
         });
         return;
       }
@@ -1528,6 +1528,7 @@ export default function SettingsPage() {
                   size="sm"
                   onClick={() => {
                     clearTraceEvents();
+                    setTraceEvents([]);
                     toast({ title: 'Traces cleared' });
                   }}
                 >
@@ -1536,27 +1537,40 @@ export default function SettingsPage() {
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => handleExportTraces(false)}>
                   <Share2 className="h-4 w-4 mr-2" />
-                  Export traces
+                  Share / Export
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => handleExportTraces(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
-                  Export redacted traces
+                  Share Redacted
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
               {traceEvents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No traces recorded.</p>
               ) : (
-                traceEvents.map((entry, index) => (
-                  <details key={entry.id} className="rounded-lg border border-border p-3">
-                    <summary className="cursor-pointer text-sm font-medium">
-                      {index + 1}. {entry.type} · {entry.origin}
-                    </summary>
-                    <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                      {JSON.stringify(entry, null, 2)}
-                    </pre>
-                  </details>
-                ))
+                <>
+                  {traceEvents.length > 100 && (
+                    <p className="text-xs text-muted-foreground font-medium text-amber-500">
+                      Showing last 100 events. Export for full history.
+                    </p>
+                  )}
+                  {traceEvents
+                    .slice(-100)
+                    .reverse()
+                    .map((entry) => (
+                      <details key={entry.id} className="rounded-lg border border-border p-3">
+                        <summary className="cursor-pointer text-sm font-medium flex justify-between items-center select-none">
+                          <span>{getTraceTitle(entry)}</span>
+                          <span className="text-muted-foreground font-mono text-xs ml-2 shrink-0">
+                            +{entry.relativeMs}ms
+                          </span>
+                        </summary>
+                        <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry, null, 2)}
+                        </pre>
+                      </details>
+                    ))}
+                </>
               )}
             </TabsContent>
           </Tabs>
