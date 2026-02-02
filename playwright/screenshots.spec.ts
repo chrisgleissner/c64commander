@@ -149,7 +149,9 @@ test.describe('App screenshots', () => {
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '5000');
       localStorage.setItem('c64u_device_host', 'demo.invalid');
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = baseUrl;
       (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = baseUrl;
       (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [baseUrl, 'http://demo.invalid'];

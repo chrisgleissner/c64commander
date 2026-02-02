@@ -125,12 +125,20 @@ The interaction logs and last-N traces in the issue report provide the step inde
 
 ## Session length controls
 
-Each session runs for at least **200 steps** by default. It will end early if no progress is detected for a configurable number of consecutive steps.
+Each session runs for at least **200 steps** by default. It will end early if no meaningful progress is detected for a configurable number of consecutive steps. A separate **progress watchdog** triggers structured recovery when progress stalls for too long.
 
 - `FUZZ_MIN_SESSION_STEPS` (default: 200)
 - `FUZZ_NO_PROGRESS_STEPS` (default: 20)
+- `FUZZ_PROGRESS_TIMEOUT_MS` (default: 5000)
 
-The no-progress detector uses a lightweight UI signature (route, title, scroll position, and a small text sample).
+Progress signals are explicitly defined as:
+
+- Screen change (route/title/primary headings)
+- Navigation stack change (history state)
+- Event trace delta (backend/FTP/guard/error trace activity)
+- State machine transition (device + playback state)
+
+When the watchdog fires, the runner switches to **structured recovery** (fills required inputs, confirms dialogs, acknowledges prompts) and returns to chaos once progress resumes.
 
 ### Consolidated artifacts
 

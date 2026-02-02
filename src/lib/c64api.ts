@@ -1,6 +1,13 @@
 // C64 Ultimate REST API Client
 
 import { CapacitorHttp } from '@capacitor/core';
+import {
+  clearPassword as clearStoredPassword,
+  getCachedPassword,
+  getPassword as loadStoredPassword,
+  hasStoredPasswordFlag,
+  setPassword as storePassword,
+} from '@/lib/secureStorage';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
@@ -1144,8 +1151,13 @@ export function getC64API(): C64API {
   if (!apiInstance) {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
     const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
-    const savedPassword = localStorage.getItem('c64u_password') || undefined;
-    apiInstance = new C64API(resolvedBaseUrl, savedPassword, resolvedDeviceHost);
+    const cachedPassword = getCachedPassword();
+    apiInstance = new C64API(resolvedBaseUrl, cachedPassword ?? undefined, resolvedDeviceHost);
+    if (hasStoredPasswordFlag() && cachedPassword === null) {
+      void loadStoredPassword().then((password) => {
+        apiInstance?.setPassword(password ?? undefined);
+      });
+    }
   }
   if (!apiProxy) {
     apiProxy = createApiProxy(apiInstance);
@@ -1163,11 +1175,11 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
   api.setDeviceHost(resolvedDeviceHost);
   localStorage.removeItem('c64u_base_url');
   localStorage.setItem('c64u_device_host', resolvedDeviceHost);
-
+  localStorage.removeItem('c64u_password');
   if (password) {
-    localStorage.setItem('c64u_password', password);
+    void storePassword(password);
   } else {
-    localStorage.removeItem('c64u_password');
+    void clearStoredPassword();
   }
 
   addLog('info', 'API routing updated (persisted)', {
@@ -1234,11 +1246,11 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
   );
 }
 
-export function applyC64APIConfigFromStorage() {
-  const savedPassword = localStorage.getItem('c64u_password') || undefined;
+export async function applyC64APIConfigFromStorage() {
+  const savedPassword = await loadStoredPassword();
   const resolvedDeviceHost = resolveDeviceHostFromStorage();
   const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
-  applyC64APIRuntimeConfig(resolvedBaseUrl, savedPassword, resolvedDeviceHost);
+  applyC64APIRuntimeConfig(resolvedBaseUrl, savedPassword ?? undefined, resolvedDeviceHost);
 }
 
 export const C64_DEFAULTS = {

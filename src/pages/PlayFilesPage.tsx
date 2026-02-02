@@ -533,10 +533,34 @@ export default function PlayFilesPage() {
     }
   }, [sidVolumeItems]);
 
+  const resolveSidEnablement = useCallback(async (forceRefresh = false) => {
+    if (!forceRefresh && sidSocketsCategory && sidAddressingCategory) {
+      return buildSidEnablement(
+        sidSocketsCategory as Record<string, unknown>,
+        sidAddressingCategory as Record<string, unknown>,
+      );
+    }
+    try {
+      const api = getC64API();
+      const [sockets, addressing] = await Promise.all([
+        api.getConfigItems('SID Sockets Configuration', SID_SOCKETS_ITEMS),
+        api.getConfigItems('SID Addressing', SID_ADDRESSING_ITEMS),
+      ]);
+      return buildSidEnablement(
+        sockets as Record<string, unknown>,
+        addressing as Record<string, unknown>,
+      );
+    } catch (error) {
+      addErrorLog('SID enablement lookup failed', { error: (error as Error).message });
+      return sidEnablement;
+    }
+  }, [sidAddressingCategory, sidEnablement, sidSocketsCategory]);
+
   const resolveEnabledSidVolumeItems = useCallback(async (forceRefresh = false) => {
     const items = await resolveSidVolumeItems(forceRefresh);
-    return filterEnabledSidVolumeItems(items, sidEnablement);
-  }, [resolveSidVolumeItems, sidEnablement]);
+    const enablement = forceRefresh ? await resolveSidEnablement(true) : sidEnablement;
+    return filterEnabledSidVolumeItems(items, enablement);
+  }, [resolveSidEnablement, resolveSidVolumeItems, sidEnablement]);
 
   useEffect(() => {
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {

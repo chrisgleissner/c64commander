@@ -83,8 +83,15 @@ export const seedFtpConfig = async (
     ({ host, port, bridgeUrl, password }) => {
       localStorage.setItem('c64u_ftp_port', String(port));
       localStorage.setItem('c64u_ftp_bridge_url', bridgeUrl);
-      if (password !== undefined) {
-        localStorage.setItem('c64u_password', password);
+      localStorage.removeItem('c64u_password');
+      if (password) {
+        localStorage.setItem('c64u_has_password', '1');
+        (window as Window & { __c64uSecureStorageOverride?: { password?: string | null } }).__c64uSecureStorageOverride = {
+          password,
+        };
+      } else {
+        localStorage.removeItem('c64u_has_password');
+        delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       }
       const routingWindow = window as Window & { __c64uAllowedBaseUrls?: string[] };
       const allowed = new Set<string>();

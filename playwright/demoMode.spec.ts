@@ -100,7 +100,9 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '5000');
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -161,7 +163,9 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '192.168.1.13');
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -187,7 +191,9 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '3000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });

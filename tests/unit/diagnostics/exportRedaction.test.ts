@@ -27,4 +27,14 @@ describe('exportRedaction', () => {
     expect(String(output.path)).not.toContain('/private/keys');
     expect(JSON.stringify(output.nested)).not.toContain('c64u.local');
   });
+
+  it('uses key hints to redact URLs and arrays', () => {
+    const input = {
+      apiUrl: 'https://example.com/secret',
+      hosts: ['c64u.local', '10.0.0.1'],
+    };
+    const output = redactExportValue(input) as Record<string, unknown>;
+    expect(String(output.apiUrl)).toContain('***');
+    expect(JSON.stringify(output.hosts)).toContain('***');
+  });
 });

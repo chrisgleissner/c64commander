@@ -7,6 +7,7 @@ import {
   C64_DEFAULTS,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
+import { clearPassword as clearStoredPassword, setPassword as storePassword } from '@/lib/secureStorage';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
@@ -111,6 +112,18 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
 
+vi.mock('@/lib/secureStorage', () => ({
+  setPassword: vi.fn(async () => {
+    localStorage.setItem('c64u_has_password', '1');
+  }),
+  getPassword: vi.fn(async () => null),
+  clearPassword: vi.fn(async () => {
+    localStorage.removeItem('c64u_has_password');
+  }),
+  hasStoredPasswordFlag: vi.fn(() => false),
+  getCachedPassword: vi.fn(() => null),
+}));
+
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
 const capacitorRequestMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
@@ -118,6 +131,8 @@ const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
 const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
+const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
+const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
 
 describe('c64api', () => {
   beforeEach(() => {
@@ -139,6 +154,8 @@ describe('c64api', () => {
     resetConfigWriteThrottle();
     saveConfigWriteIntervalMs(0);
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
+    storePasswordMock.mockReset();
+    clearPasswordMock.mockReset();
   });
 
   it('adds auth headers for password', async () => {
@@ -249,13 +266,14 @@ describe('c64api', () => {
   });
 
   it('does not persist runtime config updates', async () => {
-    localStorage.setItem('c64u_password', 'saved-pass');
+    localStorage.setItem('c64u_has_password', '1');
     localStorage.setItem('c64u_device_host', 'saved-host');
 
     applyC64APIRuntimeConfig('http://runtime', 'runtime-pass', 'runtime-host');
 
     expect(localStorage.getItem('c64u_base_url')).toBeNull();
-    expect(localStorage.getItem('c64u_password')).toBe('saved-pass');
+    expect(localStorage.getItem('c64u_password')).toBeNull();
+    expect(localStorage.getItem('c64u_has_password')).toBe('1');
     expect(localStorage.getItem('c64u_device_host')).toBe('saved-host');
   });
 
@@ -323,8 +341,10 @@ describe('c64api', () => {
 
     updateC64APIConfig('http://host', 'pw', 'host');
     expect(localStorage.getItem('c64u_base_url')).toBeNull();
-    expect(localStorage.getItem('c64u_password')).toBe('pw');
+    expect(localStorage.getItem('c64u_password')).toBeNull();
+    expect(localStorage.getItem('c64u_has_password')).toBe('1');
     expect(localStorage.getItem('c64u_device_host')).toBe('host');
+    expect(storePasswordMock).toHaveBeenCalledWith('pw');
     expect(handler).toHaveBeenCalled();
 
     window.removeEventListener('c64u-connection-change', handler as EventListener);
@@ -334,8 +354,10 @@ describe('c64api', () => {
     updateC64APIConfig('http://host', 'pw', 'host');
     updateC64APIConfig('http://device');
     expect(localStorage.getItem('c64u_password')).toBeNull();
+    expect(localStorage.getItem('c64u_has_password')).toBeNull();
     expect(localStorage.getItem('c64u_device_host')).toBe('device');
     expect(localStorage.getItem('c64u_base_url')).toBeNull();
+    expect(clearPasswordMock).toHaveBeenCalled();
   });
 
   it('uploads cartridge files and handles upload failures', async () => {

@@ -15,6 +15,7 @@ import {
   saveStartupDiscoveryWindowMs,
 } from '@/lib/config/appSettings';
 import * as deviceSafetySettings from '@/lib/config/deviceSafetySettings';
+import { exportSettingsJson, importSettingsJson } from '@/lib/config/settingsTransfer';
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -167,6 +168,11 @@ vi.mock('@/lib/tracing/traceExport', () => ({
   downloadTraceZip: vi.fn(),
 }));
 
+vi.mock('@/lib/config/settingsTransfer', () => ({
+  exportSettingsJson: vi.fn(() => '{"version":1}'),
+  importSettingsJson: vi.fn(() => ({ ok: true })),
+}));
+
 vi.mock('@/lib/config/appSettings', () => ({
   clampConfigWriteIntervalMs: (value: number) => value,
   clampDiscoveryProbeTimeoutMs: (value: number) => value,
@@ -211,6 +217,18 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
+  const buildFileList = (file: File) => {
+    if (typeof DataTransfer !== 'undefined') {
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      return transfer.files;
+    }
+    return {
+      0: file,
+      length: 1,
+      item: () => file,
+    } as FileList;
+  };
   it('saves connection settings and triggers discovery', async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
@@ -557,5 +575,90 @@ describe('SettingsPage', () => {
 
     fireEvent.click(within(warningDialog).getByRole('button', { name: /enable relaxed/i }));
     expect(saveSpy).toHaveBeenCalledWith('RELAXED');
+  });
+
+  it('exports settings and shows a toast', async () => {
+    const createObjectURL = vi.fn(() => 'blob:settings');
+    const revokeObjectURL = vi.fn();
+    const originalCreateElement = document.createElement.bind(document);
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      const element = originalCreateElement(tagName);
+      if (tagName.toLowerCase() === 'a') {
+        (element as HTMLAnchorElement).click = vi.fn();
+      }
+      return element;
+    });
+    Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /export settings/i }));
+
+    expect(exportSettingsJson).toHaveBeenCalled();
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith({ title: 'Settings export ready' });
+    createElementSpy.mockRestore();
+  });
+
+  it('imports settings and refreshes local state', async () => {
+    vi.mocked(importSettingsJson).mockReturnValue({ ok: true });
+    const file = new File(['{"version":1}'], 'settings.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', {
+      value: vi.fn(async () => '{"version":1}'),
+    });
+
+    render(<SettingsPage />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
+
+    await waitFor(() => {
+      expect(importSettingsJson).toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith({ title: 'Settings imported' });
+    });
+  });
+
+  it('reports import validation errors', async () => {
+    vi.mocked(importSettingsJson).mockReturnValue({ ok: false, error: 'Invalid payload' });
+    const file = new File(['{"version":1}'], 'settings.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', {
+      value: vi.fn(async () => '{"version":1}'),
+    });
+
+    render(<SettingsPage />);
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'SETTINGS_IMPORT',
+      }));
+    });
+  });
+
+  it('commits FTP overrides on blur and enter', () => {
+    render(<SettingsPage />);
+
+    const ftpPortInput = screen.getByLabelText(/ftp port/i);
+    fireEvent.change(ftpPortInput, { target: { value: '2121' } });
+    fireEvent.blur(ftpPortInput);
+
+    const bridgeInput = screen.getByLabelText(/ftp bridge url/i);
+    fireEvent.change(bridgeInput, { target: { value: 'https://bridge.example' } });
+    fireEvent.keyDown(bridgeInput, { key: 'Enter' });
+
+    expect(localStorage.getItem('c64u_ftp_port')).toBe('2121');
+    expect(localStorage.getItem('c64u_ftp_bridge_url')).toBe('https://bridge.example');
+  });
+
+  it('enables debug logging when switching to troubleshooting mode', () => {
+    render(<SettingsPage />);
+
+    const trigger = screen.getAllByRole('combobox')[0];
+    fireEvent.change(trigger, { target: { value: 'TROUBLESHOOTING' } });
+
+    expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
   });
 });

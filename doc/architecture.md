@@ -9,6 +9,7 @@ C64 Commander is a React + Vite + Capacitor app that controls a C64 Ultimate dev
 - **API client**: REST client in [src/lib/c64api.ts](../src/lib/c64api.ts).
 - **Domain modules**: playback, disks, HVSC, config, and logging in [src/lib](../src/lib).
 - **Native bridges**: Capacitor plugins in [src/lib/native](../src/lib/native) and Android implementations under [android/app/src/main/java](../android/app/src/main/java).
+- **Secure storage**: Device password is stored via the SecureStorage bridge (Android Keystore); localStorage only tracks a `c64u_has_password` flag for presence.
 
 ## High-level data flow
 

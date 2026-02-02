@@ -15,7 +15,8 @@ C64 Commander stores a limited amount of data **locally on your device only**, s
 This may include:
 
 - **Device connection settings**, such as the network address of your C64 Ultimate.
-- **Optional device access credentials**, such as a password you enter to access your C64 Ultimate.
+- **Optional device access credentials**, such as a password you enter to access your C64 Ultimate.  
+  These credentials are stored locally using the platform’s secure storage mechanisms.
 - **Diagnostic and application logs**, used for local troubleshooting and debugging.
 
 This data:
@@ -44,7 +45,7 @@ C64 Commander performs network communication only for the following purposes:
   The app communicates with a C64 Ultimate device configured by the user, typically over the local network. This communication is required to read device state, update settings, and transfer files for playback.
 
 - **Optional content download:**  
-  At the user’s request, the app may download the High Voltage SID Collection (HVSC) from its official public site at <https://www.hvsc.c64.org/>. This process retrieves **SID music files**, which are data files containing music composed for the Commodore 64’s SID sound chip. These files contain no personal information.
+  At the user’s request, the app may download the High Voltage SID Collection (HVSC) from its official public site at <https://www.hvsc.c64.org/>. This process retrieves **SID music files**, which are data files containing music composed for the Commodore 64’s SID sound chip and contain no personal information.
 
   The downloaded files are stored locally on the user’s device, and no personal data or identifiers are transmitted as part of this process.
 

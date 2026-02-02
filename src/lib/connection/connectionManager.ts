@@ -6,6 +6,7 @@ import {
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
+import { getPassword as loadStoredPassword } from '@/lib/secureStorage';
 import { clearRuntimeFtpPortOverride, setRuntimeFtpPortOverride } from '@/lib/ftp/ftpConfig';
 import { getActiveMockBaseUrl, getActiveMockFtpPort, startMockServer, stopMockServer } from '@/lib/mock/mockServer';
 import {
@@ -37,12 +38,11 @@ export type ConnectionSnapshot = Readonly<{
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
 
-const loadPersistedConnectionConfig = () => {
-  const passwordRaw = localStorage.getItem('c64u_password');
-  const password = passwordRaw ? passwordRaw : undefined;
+const loadPersistedConnectionConfig = async () => {
+  const password = await loadStoredPassword();
   const deviceHost = resolveDeviceHostFromStorage();
   const baseUrl = buildBaseUrlFromDeviceHost(deviceHost);
-  return { baseUrl, password, deviceHost };
+  return { baseUrl, password: password ?? undefined, deviceHost };
 };
 
 
@@ -101,7 +101,7 @@ const probeWithFetch = async (
 };
 
 export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<boolean> {
-  const config = loadPersistedConnectionConfig();
+  const config = await loadPersistedConnectionConfig();
   const timeoutMs = options.timeoutMs ?? loadDiscoveryProbeTimeoutMs();
   const outerSignal = options.signal;
   const isTestEnv = typeof process !== 'undefined'
@@ -192,7 +192,7 @@ const stopDemoServer = async () => {
   } finally {
     demoServerStartedThisSession = false;
     clearRuntimeFtpPortOverride();
-    applyC64APIConfigFromStorage();
+    await applyC64APIConfigFromStorage();
   }
 };
 
@@ -224,7 +224,7 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   transitionTo('REAL_CONNECTED', trigger);
   logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
   await stopDemoServer();
-  applyC64APIConfigFromStorage();
+  await applyC64APIConfigFromStorage();
   addLog('info', 'Connection switched to real device', { trigger });
 };
 
@@ -235,7 +235,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
   transitionTo('OFFLINE_NO_DEMO', trigger);
   logDiscoveryDecision('OFFLINE_NO_DEMO', trigger, { mode: 'offline' });
   await stopDemoServer();
-  applyC64APIConfigFromStorage();
+  await applyC64APIConfigFromStorage();
   addLog('info', 'Connection switched to offline', { trigger });
 };
 
@@ -455,7 +455,7 @@ export async function initializeConnectionManager() {
 
   // Ensure outcomes never persist across cold starts.
   await stopDemoServer().catch(() => {});
-  applyC64APIConfigFromStorage();
+  await applyC64APIConfigFromStorage();
 }
 
 export const CONNECTION_CONSTANTS = {

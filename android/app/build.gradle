@@ -155,6 +155,7 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.datastore:datastore-preferences:$dataStoreVersion"
     implementation "androidx.documentfile:documentfile:1.0.1"
+    implementation "androidx.security:security-crypto:1.1.0-alpha06"
     implementation "commons-net:commons-net:3.9.0"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"

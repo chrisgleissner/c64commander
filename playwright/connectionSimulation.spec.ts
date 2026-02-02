@@ -51,7 +51,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '1000');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
@@ -88,7 +90,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -115,7 +119,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -146,7 +152,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_background_rediscovery_interval_ms', '250');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -184,7 +192,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -221,7 +231,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       const playlistPayload = JSON.stringify({
@@ -281,7 +293,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
@@ -352,7 +366,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '1500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -394,7 +410,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '300');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
-      localStorage.setItem('c64u_password', '');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });

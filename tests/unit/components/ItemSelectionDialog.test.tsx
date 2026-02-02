@@ -203,6 +203,108 @@ describe('ItemSelectionDialog source picker', () => {
     });
   });
 
+  it('reports browse errors when open', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: 'Boom',
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={[{ label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] }]}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'BROWSE',
+        title: 'Browse failed',
+      }));
+    });
+  });
+
+  it('requires at least one selection before confirming', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [{ type: 'file', name: 'song.sid', path: '/song.sid' }],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={[{ label: 'C64 Ultimate', sources: [buildSource('ultimate', 'C64 Ultimate', 'ultimate')] }]}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    const confirmButton = screen.getByTestId('add-items-confirm');
+    expect(confirmButton).toBeDisabled();
+    expect(reportUserError).not.toHaveBeenCalled();
+  });
+
+  it('auto-confirms and closes before confirm when configured', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const onOpenChange = vi.fn();
+    const onConfirm = vi.fn().mockResolvedValue(true);
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={onOpenChange}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={[{ label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] }]}
+        onAddLocalSource={vi.fn().mockResolvedValue('local-1')}
+        onConfirm={onConfirm}
+        autoConfirmLocalSource
+        autoConfirmCloseBefore
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onConfirm).toHaveBeenCalled();
+    });
+  });
+
   it('auto-confirms newly added local source', async () => {
     vi.mocked(useSourceNavigator).mockReturnValue({
       path: '/',

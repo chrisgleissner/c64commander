@@ -105,4 +105,55 @@ describe('settingsTransfer', () => {
     expect(safety.mode).toBe('TROUBLESHOOTING');
     expect(safety.allowUserOverrideCircuit).toBe(false);
   });
+
+  it('rejects invalid JSON payloads', () => {
+    const result = importSettingsJson('{bad json');
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects unsupported versions', () => {
+    const payload = {
+      version: 999,
+      appSettings: {},
+      deviceSafety: {},
+    };
+
+    const result = importSettingsJson(JSON.stringify(payload));
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects invalid disk autostart mode', () => {
+    const payload = {
+      version: SETTINGS_EXPORT_VERSION,
+      appSettings: {
+        debugLoggingEnabled: true,
+        configWriteIntervalMs: 500,
+        automaticDemoModeEnabled: true,
+        startupDiscoveryWindowMs: 3000,
+        backgroundRediscoveryIntervalMs: 5000,
+        discoveryProbeTimeoutMs: 2500,
+        diskAutostartMode: 'never',
+      },
+      deviceSafety: {
+        mode: 'BALANCED',
+        restMaxConcurrency: 1,
+        ftpMaxConcurrency: 1,
+        infoCacheMs: 600,
+        configsCacheMs: 1200,
+        configsCooldownMs: 600,
+        drivesCooldownMs: 600,
+        ftpListCooldownMs: 400,
+        backoffBaseMs: 300,
+        backoffMaxMs: 3000,
+        backoffFactor: 1.8,
+        circuitBreakerThreshold: 4,
+        circuitBreakerCooldownMs: 3000,
+        discoveryProbeIntervalMs: 700,
+        allowUserOverrideCircuit: true,
+      },
+    };
+
+    const result = importSettingsJson(JSON.stringify(payload));
+    expect(result.ok).toBe(false);
+  });
 });
