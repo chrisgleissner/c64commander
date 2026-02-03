@@ -91,7 +91,7 @@ describe('platform', () => {
     describe('SSR environment', () => {
         it('returns web/false when window is undefined', () => {
             const originalWindow = global.window;
-            // @ts-ignore
+            // @ts-expect-error - delete window for SSR
             delete global.window;
             
             try {
@@ -109,9 +109,9 @@ describe('platform', () => {
             const originalGet = Capacitor.getPlatform;
             const originalIs = Capacitor.isNativePlatform;
             
-            // @ts-ignore
+            // @ts-expect-error - mock missing method
             Capacitor.getPlatform = undefined;
-            // @ts-ignore
+            // @ts-expect-error - mock missing method
             Capacitor.isNativePlatform = undefined;
             
             try {
@@ -125,7 +125,7 @@ describe('platform', () => {
         
         it('uses window.Capacitor fallback', () => {
             const originalIs = Capacitor.isNativePlatform;
-            // @ts-ignore
+            // @ts-expect-error - mock missing method
             Capacitor.isNativePlatform = undefined;
             
             const win = window as any;

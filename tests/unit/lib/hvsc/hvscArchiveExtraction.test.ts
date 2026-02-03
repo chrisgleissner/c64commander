@@ -58,7 +58,7 @@ describe('hvscArchiveExtraction', () => {
         'file2.bin': new Uint8Array([4, 5]),
         'ignore_me': 'not a uint8array', // Should be filtered out
       };
-      // @ts-ignore - simplified mock
+      // @ts-expect-error - simplified mock
       vi.mocked(unzipSync).mockReturnValue(mockFiles);
 
       const onEntry = vi.fn();
@@ -89,7 +89,7 @@ describe('hvscArchiveExtraction', () => {
         '\\windows\\path\\file.txt': new Uint8Array([]),
         '//leading/slash/file.txt': new Uint8Array([]),
       };
-      // @ts-ignore
+      // @ts-expect-error - mock return shape
       vi.mocked(unzipSync).mockReturnValue(mockFiles);
 
       const onEntry = vi.fn();
@@ -176,7 +176,7 @@ describe('hvscArchiveExtraction', () => {
         mockModule.callMain.mockImplementation(() => { throw new Error('7z broken'); });
         
         // Mock Zip success
-        // @ts-ignore
+        // @ts-expect-error - mock return shape
         vi.mocked(unzipSync).mockReturnValue({'fallback.txt': new Uint8Array([1])});
         
         const onEntry = vi.fn();

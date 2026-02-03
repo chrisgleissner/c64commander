@@ -48,7 +48,7 @@ describe('hvscFilesystem', () => {
 
   describe('ensureHvscDirs', () => {
     it('creates library and cache directories', async () => {
-      // @ts-ignore
+      // @ts-expect-error - mock typing
       vi.mocked(Filesystem.stat).mockRejectedValue(new Error('Not found'));
       
       await hvscFS.ensureHvscDirs();
@@ -62,7 +62,7 @@ describe('hvscFilesystem', () => {
     });
 
     it('handles existing directories gracefully', async () => {
-      // @ts-ignore
+      // @ts-expect-error - mock typing
       vi.mocked(Filesystem.stat).mockResolvedValue({ type: 'directory' });
       
       await hvscFS.ensureHvscDirs();
@@ -71,7 +71,7 @@ describe('hvscFilesystem', () => {
     });
 
     it('deletes conflicting files', async () => {
-      // @ts-ignore
+      // @ts-expect-error - mock typing
       vi.mocked(Filesystem.stat).mockResolvedValue({ type: 'file' });
       
       await hvscFS.ensureHvscDirs();
@@ -83,7 +83,7 @@ describe('hvscFilesystem', () => {
 
   describe('listHvscFolder', () => {
     it('lists folders and songs', async () => {
-      // @ts-ignore
+      // @ts-expect-error - mock typing
       vi.mocked(Filesystem.readdir).mockResolvedValue({
         files: [
           { name: 'SUBDIR', type: 'directory' },
@@ -91,10 +91,10 @@ describe('hvscFilesystem', () => {
         ]
       });
 
-      // @ts-ignore
+      // @ts-expect-error - mock typing
        vi.mocked(Filesystem.readFile).mockResolvedValue({ data: btoa('MOCK_DATA') }); 
        const mockDurations = { pathToSeconds: new Map([['/ROOT/MUSIC.sid', 123]]), md5ToSeconds: new Map() };
-       // @ts-ignore
+      // @ts-expect-error - mock typing
        vi.mocked(parseSonglengths).mockReturnValue(mockDurations);
        
       const result = await hvscFS.listHvscFolder('/ROOT');
@@ -109,7 +109,7 @@ describe('hvscFilesystem', () => {
 
   describe('writeLibraryFile behavior (writeFileWithRetry)', () => {
     it('writes file creating parents', async () => {
-        // @ts-ignore
+        // @ts-expect-error - mock typing
         vi.mocked(Filesystem.stat).mockRejectedValue(new Error('no dir'));
         
         await hvscFS.writeLibraryFile('/DEMO/test.sid', new Uint8Array([65, 66]));
@@ -120,12 +120,12 @@ describe('hvscFilesystem', () => {
 
     it('retries on exists error (directory conflict)', async () => {
          const failError = new Error('File exists');
-         // @ts-ignore
+         // @ts-expect-error - mock typing
          vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(failError)
                                         .mockResolvedValueOnce({ uri: 'ok' });
          
          // Stat called for parent dir check AND for retry logic
-         // @ts-ignore
+         // @ts-expect-error - mock typing
          vi.mocked(Filesystem.stat).mockImplementation(async ({ path }) => {
             if (path.includes('test.sid')) return { type: 'directory' }; // Conflict is a directory
             return { type: 'directory' }; // Parent
@@ -139,11 +139,11 @@ describe('hvscFilesystem', () => {
     
     it('ignores exists error if it is already a file', async () => {
         const failError = new Error('File exists');
-        // @ts-ignore
+        // @ts-expect-error - mock typing
         vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(failError);
         
         // Stat confirms it is a file
-        // @ts-ignore
+        // @ts-expect-error - mock typing
         vi.mocked(Filesystem.stat).mockImplementation(async ({ path }) => {
             if (path.includes('test.sid')) return { type: 'file' };
             return { type: 'directory' }; // Parent must be directory
@@ -160,7 +160,7 @@ describe('hvscFilesystem', () => {
       it('reads and parses marker', async () => {
           const marker = { version: 1, type: 'baseline', completedAt: 'now' };
           const json = JSON.stringify(marker);
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.readFile).mockResolvedValue({
               data: btoa(json)
           });
@@ -170,7 +170,7 @@ describe('hvscFilesystem', () => {
       });
 
       it('returns null on invalid json', async () => {
-           // @ts-ignore
+           // @ts-expect-error - mock typing
            vi.mocked(Filesystem.readFile).mockResolvedValue({
               data: btoa('{ invalid: }')
           });
@@ -179,7 +179,7 @@ describe('hvscFilesystem', () => {
       });
       
       it('returns null on missing file', async () => {
-           // @ts-ignore
+           // @ts-expect-error - mock typing
            vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('no file'));
           const result = await hvscFS.readCachedArchiveMarker('test');
           expect(result).toBeNull();
@@ -188,7 +188,7 @@ describe('hvscFilesystem', () => {
   
   describe('resetLibraryRoot', () => {
       it('recreates the library directory', async () => {
-           // @ts-ignore
+           // @ts-expect-error - mock typing
            vi.mocked(Filesystem.stat).mockRejectedValue(new Error('not found'));
 
            await hvscFS.resetLibraryRoot();
@@ -200,9 +200,9 @@ describe('hvscFilesystem', () => {
       });
 
       it('ignores errors during rmdir', async () => {
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.rmdir).mockRejectedValue(new Error('rmdir fail'));
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.stat).mockRejectedValue(new Error('not found'));
           
           await hvscFS.resetLibraryRoot();
@@ -212,7 +212,7 @@ describe('hvscFilesystem', () => {
   
   describe('getHvscSongByVirtualPath', () => {
       it('reads song content and returns object', async () => {
-           // @ts-ignore
+           // @ts-expect-error - mock typing
            vi.mocked(Filesystem.readFile).mockResolvedValue({ data: 'BASE64DATA' });
            
            const song = await hvscFS.getHvscSongByVirtualPath('/C64/Music.sid');
@@ -222,7 +222,7 @@ describe('hvscFilesystem', () => {
       });
       
       it('returns null on error', async () => {
-            // @ts-ignore
+            // @ts-expect-error - mock typing
            vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('fail'));
            const song = await hvscFS.getHvscSongByVirtualPath('/C64/Music.sid');
            expect(song).toBeNull();
@@ -238,7 +238,7 @@ describe('hvscFilesystem', () => {
       });
 
       it('writes cached archive', async () => {
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.stat).mockRejectedValue(new Error('no dir'));
           await hvscFS.writeCachedArchive('arch.zip', new Uint8Array([65]));
            expect(Filesystem.writeFile).toHaveBeenCalledWith(expect.objectContaining({
@@ -247,14 +247,14 @@ describe('hvscFilesystem', () => {
       });
       
       it('reads cached archive', async () => {
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.readFile).mockResolvedValue({ data: btoa('bin') });
           const content = await hvscFS.readCachedArchive('arch.zip');
           expect(content).toBeInstanceOf(Uint8Array);
       });
 
       it('writes cached archive marker', async () => {
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.stat).mockRejectedValue(new Error('no dir'));
           await hvscFS.writeCachedArchiveMarker('arch', { version: 1, type: 'baseline', completedAt: 'now' });
           expect(Filesystem.writeFile).toHaveBeenCalledWith(expect.objectContaining({
@@ -264,12 +264,12 @@ describe('hvscFilesystem', () => {
 
       it('deletes cached archive robustly', async () => {
           // Case 1: Delete file succeeds
-           // @ts-ignore
+           // @ts-expect-error - mock typing
           vi.mocked(Filesystem.deleteFile).mockResolvedValue();
           await hvscFS.deleteCachedArchive('sub/arch.zip');
           
           // Case 2: Delete file fails (it's a dir?), try rmdir
-           // @ts-ignore
+           // @ts-expect-error - mock typing
            vi.mocked(Filesystem.deleteFile).mockRejectedValueOnce(new Error('fail'));
            await hvscFS.deleteCachedArchive('sub/arch.zip');
            expect(Filesystem.rmdir).toHaveBeenCalled();
@@ -282,9 +282,9 @@ describe('hvscFilesystem', () => {
 
       it('ignores all errors when deleting cached archive', async () => {
           // Mock ALL failures
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.deleteFile).mockRejectedValue(new Error('fail delete'));
-          // @ts-ignore
+          // @ts-expect-error - mock typing
           vi.mocked(Filesystem.rmdir).mockRejectedValue(new Error('fail rmdir'));
 
           await hvscFS.deleteCachedArchive('sub/arch.zip');

@@ -1,4 +1,6 @@
 appId: uk.gleissner.c64commander
+tags:
+  - ci-critical
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - runFlow: subflows/common-navigation.yaml

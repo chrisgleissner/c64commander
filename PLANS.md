@@ -1,53 +1,75 @@
 # PLANS.md - Authoritative Execution Plan
 
-## Phase 0: Coverage and Code Hygiene (BLOCKING)
+## Mission
+Fix local + CI build so everything is green, starting with `npm ci` lockfile sync. Work is tracked here and updated after every meaningful action.
 
-### 0.1 Unit Test Coverage > 85%
-- [x] playwright/traceComparison.js (Current: 86.14%)
-- [x] src/components/disks/HomeDiskManager.tsx (Current: 90.26%)
-- [x] src/lib/uiErrors.ts (Current: 100%)
-- [x] src/lib/hvsc/hvscArchiveExtraction.ts (Current: 93.91%)
-- [x] src/lib/hvsc/hvscFilesystem.ts (Current: 85.86%)
-- [x] src/lib/hvsc/hvscIngestionRuntime.ts (Current: >85% verified via coverage tests)
-- [x] src/lib/hvsc/hvscReleaseService.ts (Current: 96.42%)
-- [x] src/lib/native/folderPicker.ts (Current: 100%)
-- [x] src/lib/native/platform.ts (Current: 100%)
-- [x] src/lib/native/playbackClock.ts (Current: 100%)
-- [x] src/lib/tracing/traceExport.ts (Current: 100%)
-- [x] src/lib/tracing/traceFormatter.ts (Current: 100%)
-- [x] src/lib/tracing/traceIds.ts (Current: 100%)
-- [x] src/lib/tracing/traceSession.ts (Current: 93%)
+## Phase 1: Dependency + Lockfile Sync (BLOCKING)
 
-### 0.2 Exception Handling Rule
-- [x] Audit code during coverage uplift for silent catches
-- [x] Fix identified silent catches
-- [x] Add exception handling rule to `AGENTS.md`
+### Hypotheses
+- H1: `package.json` has `react-virtuoso@4.18.1` but `package-lock.json` is missing it.
+- H2: Lockfile was generated with a different npm version or was not updated after dependency changes.
 
-## Phase 1: Android Build Stabilization (BLOCKING)
+### Actions
+- [x] Inspect `package.json` and `package-lock.json` for `react-virtuoso` entries.
+- [x] Regenerate lockfile deterministically with project npm version (if needed).
+- [x] Validate `npm ci` locally after lockfile fix.
 
-### 1.1 Android Compilation
-- [x] Fix `FolderPickerPlugin.kt` compilation errors (Verified environment issue, builds with Java 21)
+### Observations
+- `package.json` declares `react-virtuoso@^4.18.1`, but `package-lock.json` has no `react-virtuoso` entry.
+- Ran `npm install`; lockfile now includes `react-virtuoso@4.18.1` and related node_modules metadata.
+- `npm ci` completes successfully (with existing deprecation warnings).
 
-### 1.2 Android Coverage Artifacts
-- [x] Ensure `android/app/build/reports` and JaCoCo XML are generated
-- [x] Verify `verify-coverage-artifacts.mjs` passes
+### Decisions / Rationale
+- Updated lockfile via `npm install` to align with `package.json` and unblock deterministic `npm ci`.
 
-## Phase 2: Playwright Failures
+## Phase 2: Local Build + Test (BLOCKING)
 
-### 2.1 Product Regressions
-- [x] Restore Playback failure UX
-- [x] Fix Missing REST calls (`/v1/runners:sidplay`, `/v1/configs`)
-- [x] Fix Playlist persistence across navigation
-- [x] Fix SID volume and mute semantics
-- [x] Fix Enabled vs disabled SID routing
+### Hypotheses
+- H1: Build and tests should pass once dependencies are aligned.
 
-### 2.2 Intentional UX Changes
-- [x] Update Playwright tests for Settings page canonical order
+### Actions
+- [x] Run `npm run lint`.
+- [x] Run `npm run test`.
+- [x] Run `npm run build`.
 
-## Phase 3: Maestro (Conditional Gate)
+### Observations
+- `npm run lint` fails with 33 `@typescript-eslint/ban-ts-comment` errors in unit tests; requires replacing `@ts-ignore` with `@ts-expect-error`.
+- Replaced `@ts-ignore` comments with `@ts-expect-error` in affected unit tests.
+- Re-run lint still fails because `@ts-expect-error` directives require a description.
+- Added descriptions to all `@ts-expect-error` directives in affected unit tests.
+- `npm run lint` now passes.
+- `npm run test` fails in `hvscIngestionRuntime_coverage.test.ts` with `Cannot read properties of undefined (reading 'data')` at `ingestCachedHvsc` (reading `archiveData.data`).
+- Added `Filesystem.readFile` mock in `hvscIngestionRuntime_coverage.test.ts` for cached archive ingestion.
+- Reapplied `extractArchiveEntries` mock implementation in `hvscIngestionRuntime_coverage.test.ts` after `resetAllMocks`.
+- `npm run test` now passes.
+- `npm run build` completes successfully (with Vite externalized module warning).
 
-- [ ] Attempt Maestro in CI
-- [ ] If blocked, gate behind CI condition with justification
+### Decisions / Rationale
+- Updated unit tests to comply with `@typescript-eslint/ban-ts-comment` and to restore deterministic mocks after `resetAllMocks`.
 
-## Final
-- [x] CI is fully green
+## Phase 3: Maestro on CI (BLOCKING)
+
+### Hypotheses
+- H1: Maestro can run in parallel with other CI phases and still finish within ~6 minutes total wall-clock.
+- H2: Emulator startup (~3 minutes) can overlap with build/test steps.
+
+### Actions
+- [x] Review CI pipeline for Maestro orchestration and overlap.
+- [ ] Ensure Maestro runs without extending total wall time beyond ~6 minutes.
+
+### Observations
+- Maestro CI job starts emulator in background before `npm ci`, builds, and Maestro run; job is separate and can overlap with web/Android jobs.
+
+### Decisions / Rationale
+- Pending.
+
+## Phase 4: CI Validation
+
+### Actions
+- [ ] Confirm CI green (build + tests + Maestro).
+
+### Observations
+- Pending.
+
+### Decisions / Rationale
+- Pending.

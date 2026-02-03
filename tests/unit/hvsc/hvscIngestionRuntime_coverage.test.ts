@@ -82,6 +82,7 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
     let hvscReleaseService: any;
     let hvscStateStore: any;
     let hvscFilesystem: any;
+    let hvscArchiveExtraction: any;
 
     beforeEach(async () => {
         vi.resetAllMocks();
@@ -91,10 +92,21 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
         hvscReleaseService = await import('@/lib/hvsc/hvscReleaseService');
         hvscStateStore = await import('@/lib/hvsc/hvscStateStore');
         hvscFilesystem = await import('@/lib/hvsc/hvscFilesystem');
+        hvscArchiveExtraction = await import('@/lib/hvsc/hvscArchiveExtraction');
         hvscIngestionRuntime = await import('@/lib/hvsc/hvscIngestionRuntime');
         
         (hvscStateStore.loadHvscState as any).mockReturnValue({ ingestionState: 'idle' });
         (Capacitor.isNativePlatform as any).mockReturnValue(false);
+        (hvscArchiveExtraction.extractArchiveEntries as any).mockImplementation(
+            async ({ onEntry, onEnumerate, onProgress }: any) => {
+                if (onEnumerate) onEnumerate(2);
+                if (onProgress) onProgress(0, 2);
+                await onEntry('HVSC/C64Music/DEMOS/foo.sid', new Uint8Array([1]));
+                await onEntry('HVSC/DOCUMENTS/songlengths.txt', new Uint8Array([1]));
+                await onEntry('HVSC/C64Music/DOCUMENTS/delete.txt', new TextEncoder().encode('DEMOS/old.sid\n/DEMOS/gone.sid'));
+                if (onProgress) onProgress(2, 2);
+            }
+        );
     });
 
     it('reports not ingesting when idle', async () => {
@@ -161,7 +173,9 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
         });
         (hvscFilesystem.getHvscCacheDir as any).mockReturnValue('hvsc_cache');
         (Filesystem.stat as any).mockResolvedValue({ size: 100, type: 'file' } as any);
-        // Need to mock readCachedArchive to return valid archive data (simulated by extract mocked impl)
+        // Mock archive read for cached ingestion
+        (Filesystem.readFile as any).mockResolvedValue({ data: 'AAE=' });
+        // Ensure cached archive helpers are set for resolution
         (hvscFilesystem.readCachedArchive as any).mockResolvedValue(new Uint8Array(10));
         
         (hvscFilesystem.readCachedArchiveMarker as any).mockResolvedValue({
