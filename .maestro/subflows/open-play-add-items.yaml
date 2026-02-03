@@ -7,6 +7,9 @@ tags:
   - subflow
 ---
 - runFlow: launch-and-wait.yaml
+- extendedWaitUntil:
+  visible: "Play"
+  timeout: ${SHORT_TIMEOUT}
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Play Files"

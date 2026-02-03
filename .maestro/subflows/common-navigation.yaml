@@ -5,6 +5,9 @@ env:
 tags:
   - subflow
 ---
+- extendedWaitUntil:
+  visible: "Play"
+  timeout: ${SHORT_TIMEOUT}
 - tapOn: "Play"
 - extendedWaitUntil:
     visible: "Play Files"

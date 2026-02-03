@@ -7,6 +7,12 @@ tags:
   - subflow
 ---
 - launchApp
+- tapOn:
+  text: "Continue in Demo Mode"
+  optional: true
+- tapOn:
+  text: "Retry connection"
+  optional: true
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}
