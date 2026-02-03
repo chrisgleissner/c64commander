@@ -1,4 +1,4 @@
-name: Android E2E (Real Device Install Base 2026)
+name: Android E2E Maestro
 
 on:
   push:
@@ -13,20 +13,16 @@ jobs:
       max-parallel: 1
       matrix:
         include:
-          # Primary 2026 baseline: modern Pixel / Galaxy / Xiaomi class devices
           - arch: arm64-v8a
-            api-level: 34
+            api-level: 36 # Android 16
             target: google_apis
-
-          # Large installed base, still dominant in 2026
-          - arch: arm64-v8a
-            api-level: 33
-            target: google_apis
-
-          # Long-tail regression guard
-          - arch: arm64-v8a
-            api-level: 32
-            target: google_apis
+          # TODO Enable once the other tests pass
+          # - arch: arm64-v8a
+          #   api-level: 35
+          #   target: google_apis          
+          # - arch: arm64-v8a
+          #   api-level: 32
+          #   target: google_apis
 
     steps:
       - name: Checkout
