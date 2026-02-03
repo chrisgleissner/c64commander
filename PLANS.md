@@ -56,11 +56,15 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 ### Actions
 - [x] Review CI pipeline for Maestro orchestration and overlap.
 - [x] Add Android SDK/system image cache to Maestro CI job.
+- [x] Ensure emulator is installed and invoked with explicit SDK PATH in Maestro CI.
+- [x] Increase Maestro CLI verbosity on CI.
 - [ ] Ensure Maestro runs without extending total wall time beyond ~6 minutes.
 
 ### Observations
 - Maestro CI job starts emulator in background before `npm ci`, builds, and Maestro run; job is separate and can overlap with web/Android jobs.
 - Added cache for Android system images, emulator, platform tools, platforms, and AVD to avoid repeated downloads.
+- CI failure shows `emulator` not found; CI now exports SDK PATH and uses absolute emulator path.
+- Maestro CLI now runs with debug log levels to surface flow execution.
 
 ### Decisions / Rationale
 - Pending.

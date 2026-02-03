@@ -468,6 +468,18 @@ jobs:
             ~/.android/adb*
           key: android-sdk-${{ runner.os }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_SYSTEM_IMAGE }}
 
+      - name: Cache Android SDK system images
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_SDK_ROOT }}/system-images
+            ${{ env.ANDROID_SDK_ROOT }}/emulator
+            ${{ env.ANDROID_SDK_ROOT }}/platform-tools
+            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ~/.android/avd
+            ~/.android/adb*
+          key: android-sdk-${{ runner.os }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_SYSTEM_IMAGE }}
+
       - name: Decode keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -609,12 +621,14 @@ jobs:
       - name: Start emulator (background)
         run: |
           set -e
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
           sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
           if ! avdmanager list avd | grep -q "Name: ${ANDROID_AVD_NAME}"; then
             echo "no" | avdmanager create avd -n "${ANDROID_AVD_NAME}" -k "${ANDROID_SYSTEM_IMAGE}" -d "${ANDROID_DEVICE_PROFILE}"
           fi
           mkdir -p test-results/maestro
-          nohup emulator -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
           echo $! > test-results/maestro/emulator.pid
 
       - name: Install dependencies
@@ -646,6 +660,8 @@ jobs:
       - name: Run Maestro gating flows
         env:
           CI: "true"
+          MAESTRO_LOG_LEVEL: "debug"
+          MAESTRO_CLI_LOG_LEVEL: "debug"
         run: |
           start=$(date +%s)
           bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build
