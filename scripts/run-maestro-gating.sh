@@ -15,6 +15,7 @@ API_LEVEL="${ANDROID_API_LEVEL:-34}"
 SYSTEM_IMAGE="${ANDROID_SYSTEM_IMAGE:-system-images;android-34;google_apis;x86_64}"
 DEVICE_PROFILE="${ANDROID_DEVICE_PROFILE:-pixel_6}"
 EMULATOR_HEADLESS="${EMULATOR_HEADLESS:-1}"
+EMULATOR_PORT="${EMULATOR_PORT:-5556}"
 SKIP_BUILD=0
 SKIP_EMULATOR_START=0
 DEVICE_ID=""
@@ -136,11 +137,16 @@ wait_for_boot() {
 }
 
 wait_for_device() {
+  local target_serial="${1:-}"
   local deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECS ))
   log "Waiting for adb device to become available..."
   while [[ $(date +%s) -lt $deadline ]]; do
     local serial
-    serial=$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')
+    if [[ -n "$target_serial" ]]; then
+      serial=$(adb devices | awk -v target="$target_serial" 'NR>1 && $1==target && $2=="device" {print $1; exit}')
+    else
+      serial=$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')
+    fi
     if [[ -n "$serial" ]]; then
       log "adb device detected: $serial"
       return 0
@@ -162,6 +168,7 @@ ensure_avd() {
 start_emulator() {
   log "Starting emulator $AVD_NAME"
   local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-boot-anim" "-gpu" "swiftshader_indirect" "-noaudio" "-netdelay" "none" "-netspeed" "full")
+  args+=("-port" "$EMULATOR_PORT")
   if [[ "$EMULATOR_HEADLESS" == "1" ]]; then
     args+=("-no-window")
   fi
@@ -289,6 +296,7 @@ if [[ "$SKIP_EMULATOR_START" == "0" ]]; then
   stop_existing_emulators
   ensure_avd
   EMULATOR_PID=$(start_emulator)
+  DEVICE_ID="emulator-$EMULATOR_PORT"
 fi
 
 if [[ -z "$DEVICE_ID" ]]; then
@@ -297,6 +305,11 @@ if [[ -z "$DEVICE_ID" ]]; then
     exit 1
   fi
   DEVICE_ID=$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')
+else
+  if ! wait_for_device "$DEVICE_ID"; then
+    log "Device $DEVICE_ID did not become available within ${BOOT_TIMEOUT_SECS}s"
+    exit 1
+  fi
 fi
 
 if [[ -z "$DEVICE_ID" ]]; then
