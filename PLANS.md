@@ -67,6 +67,7 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 - CI failure shows `emulator` not found; CI now exports SDK PATH and uses absolute emulator path.
 - Maestro CLI now runs with debug log levels to surface flow execution.
 - Added BuildJet workflow to run Maestro E2E matrix on buildjet runners.
+- Reduced BuildJet Maestro matrix to a single api-level/arch/target combination.
 
 ### Decisions / Rationale
 - Pending.
