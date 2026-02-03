@@ -137,8 +137,12 @@ wait_for_boot() {
 
 wait_for_device() {
   local deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECS ))
+  log "Waiting for adb device to become available..."
   while [[ $(date +%s) -lt $deadline ]]; do
-    if adb devices | awk 'NR>1 && $2=="device" {print $1; exit}' | grep -q .; then
+    local serial
+    serial=$(adb devices | awk 'NR>1 && $2=="device" {print $1; exit}')
+    if [[ -n "$serial" ]]; then
+      log "adb device detected: $serial"
       return 0
     fi
     sleep 2
@@ -284,6 +288,21 @@ fi
 if [[ -z "$DEVICE_ID" ]]; then
   log "No emulator/device detected via adb"
   exit 1
+fi
+
+log "Ensuring device $DEVICE_ID is ready"
+if command -v adb >/dev/null 2>&1; then
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$BOOT_TIMEOUT_SECS" adb -s "$DEVICE_ID" wait-for-device || {
+      log "Device $DEVICE_ID did not become ready"
+      exit 1
+    }
+  else
+    adb -s "$DEVICE_ID" wait-for-device || {
+      log "Device $DEVICE_ID did not become ready"
+      exit 1
+    }
+  fi
 fi
 
 if ! wait_for_boot "$DEVICE_ID"; then
