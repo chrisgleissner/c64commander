@@ -73,6 +73,8 @@ export const PlaylistPanel = ({
             size="sm"
             onClick={onAddItems}
             aria-label="Add items to playlist"
+            id="add-items-to-playlist"
+            data-testid="add-items-to-playlist"
           >
             {hasPlaylist ? 'Add more items' : 'Add items'}
           </Button>

@@ -20,14 +20,15 @@ tags:
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
-- runFlow:
-    when:
-      visible: "Add items"
-    file: tap-add-items.yaml
-- runFlow:
-    when:
-      visible: "Add more items"
-    file: tap-add-more-items.yaml
+- tapOn:
+  id: "add-items-to-playlist"
+  optional: true
+- tapOn:
+  text: "Add items"
+  optional: true
+- tapOn:
+  text: "Add more items"
+  optional: true
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source
