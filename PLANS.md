@@ -72,7 +72,7 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 ### Decisions / Rationale
 - Pending.
 
-## Phase 3.1: Fix android-e2e-maestro.yaml (BuildJet) - COMPLETED
+## Phase 3.1: Fix android-e2e-maestro.yaml (BuildJet) - COMPLETED ✅
 
 ### Root Cause Analysis
 - BuildJet runner `buildjet-2vcpu-ubuntu-2204-arm` expected to be ARM64
@@ -91,37 +91,50 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 - [x] Update workflow to use x86_64 arch with API 34
 - [x] Switch from BuildJet ARM to ubuntu-latest
 - [x] Enable KVM for hardware acceleration
-- [x] Add Maestro to PATH
-- [ ] Commit and push
-- [ ] Verify CI passes
+- [x] Add Android SDK setup step
+- [x] Add APK build and verification steps
+- [x] Fix script block backslash continuation issue
+- [x] Commit and push
+- [x] Verify CI passes (run 21633205095 = success)
 
-## Phase 3.2: Fix android-apk.yaml (Public GitHub runner) - COMPLETED
+## Phase 3.2: Fix android-apk.yaml (Public GitHub runner) - COMPLETED ✅
 
 ### Root Cause Analysis
 - Emulator started in background step but script proceeds immediately
 - `run-maestro-gating.sh --skip-emulator-start` expects emulator already running
-- No explicit wait for boot completion between emulator start and Maestro
+- AVD created in `/home/runner/.config/.android/avd/` but emulator looked in `$HOME/.android/avd/`
+- Missing `ANDROID_AVD_HOME` environment variable caused location mismatch
 
 ### Fix Strategy
 - Add explicit boot wait after emulator starts
 - Poll for `sys.boot_completed == 1`
 - Add emulator log capture on failure
 - Enable KVM for hardware acceleration
+- Set `ANDROID_AVD_HOME` at job level to ensure consistent AVD location
 
 ### Actions
 - [x] Add KVM enable step
 - [x] Add explicit boot wait step (waits for device + boot_completed + bootanim stopped)
 - [x] Add error diagnostics on Maestro failure
-- [ ] Commit and push
-- [ ] Verify CI passes
+- [x] Add AVD creation verification
+- [x] Set ANDROID_AVD_HOME at job level
+- [x] Commit and push
+- [x] Verify CI passes (run 21633205116 = success, Maestro gating = success)
 
-## Phase 4: CI Validation
+## Phase 4: CI Validation - COMPLETED ✅
 
 ### Actions
-- [ ] Confirm CI green (build + tests + Maestro).
+- [x] Confirm CI green (build + tests + Maestro).
 
 ### Observations
-- Pending.
+- Android E2E Maestro workflow: run 21633205095 = success
+- Build Android APK workflow: run 21633205116 = success
+- Android | Maestro gating job: success
 
 ### Decisions / Rationale
-- Pending.
+- Both Android Maestro workflows are now passing on CI
+- Key fixes:
+  1. Architecture mismatch (x86_64 vs arm64-v8a)
+  2. AVD home location mismatch (ANDROID_AVD_HOME)
+  3. Script backslash continuation issue in emulator-runner action
+  4. Missing Android SDK setup and APK verification steps
