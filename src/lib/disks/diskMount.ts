@@ -30,13 +30,33 @@ export const resolveLocalDiskBlob = async (
   disk: DiskEntry,
   runtimeFile?: File,
 ): Promise<Blob> => {
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, context: string) => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(`${context} timed out`)), timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+    }
+  };
+
   if (runtimeFile) return runtimeFile;
   if (disk.localUri) {
-    const data = await FolderPicker.readFile({ uri: disk.localUri });
+    const data = await withTimeout(
+      FolderPicker.readFile({ uri: disk.localUri }),
+      2000,
+      'Local disk file read',
+    );
     return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
   }
   if (disk.localTreeUri) {
-    const data = await FolderPicker.readFileFromTree({ treeUri: disk.localTreeUri, path: disk.path });
+    const data = await withTimeout(
+      FolderPicker.readFileFromTree({ treeUri: disk.localTreeUri, path: disk.path }),
+      2000,
+      'Local disk tree read',
+    );
     return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
   }
   const normalizedPath = normalizeSourcePath(disk.path);
@@ -46,18 +66,44 @@ export const resolveLocalDiskBlob = async (
     const runtime = getLocalSourceRuntimeFile(source.id, normalizedPath);
     if (runtime) return runtime;
     if (source.android?.treeUri) {
-      const data = await FolderPicker.readFileFromTree({ treeUri: source.android.treeUri, path: normalizedPath });
-      return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+      try {
+        const data = await withTimeout(
+          FolderPicker.readFileFromTree({ treeUri: source.android.treeUri, path: normalizedPath }),
+          2000,
+          'Local disk tree read',
+        );
+        return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
+      } catch (error) {
+        addErrorLog('Local disk tree read failed', {
+          sourceId: source.id,
+          normalizedPath,
+          error: (error as Error).message,
+        });
+        return null;
+      }
     }
     if (getLocalSourceListingMode(source) === 'entries') {
       try {
         const entries = requireLocalSourceEntries(source, 'diskMount.resolveLocalDiskBlob');
         const match = entries.find((entry) => normalizeSourcePath(entry.relativePath) === normalizedPath);
         if (match?.uri) {
-          const data = await FolderPicker.readFile({ uri: match.uri });
+          const data = await withTimeout(
+            FolderPicker.readFile({ uri: match.uri }),
+            2000,
+            'Local disk file read',
+          );
           return new Blob([base64ToUint8(data.data)], { type: 'application/octet-stream' });
         }
-      } catch {
+      } catch (error) {
+        addErrorLog('Local source entries resolve failed', {
+          path: disk.path,
+          sourceId: source.id,
+          diskSourceId: disk.sourceId,
+          normalizedPath,
+          listingMode: getLocalSourceListingMode(source),
+          location: 'diskMount.resolveLocalDiskBlob',
+          error: (error as Error).message,
+        });
         return null;
       }
     }

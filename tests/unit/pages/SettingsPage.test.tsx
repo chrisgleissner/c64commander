@@ -516,7 +516,9 @@ describe('SettingsPage', () => {
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear traces/i }));
     expect(clearTraceEvents).toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith({ title: 'Traces cleared' });
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith({ title: 'Traces cleared' });
+    });
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear logs/i }));
     expect(clearLogs).toHaveBeenCalled();

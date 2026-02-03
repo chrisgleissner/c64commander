@@ -28,11 +28,16 @@ vi.mock('@capacitor/core', () => ({
   }
 }));
 
+vi.mock('@/lib/logging', () => ({
+  addErrorLog: vi.fn(),
+}));
+
 import { buildTraceZipBlob, downloadTraceZip, shareTraceZip } from '@/lib/tracing/traceExport';
 import { exportTraceZip } from '@/lib/tracing/traceSession';
 import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import { addErrorLog } from '@/lib/logging';
 
 describe('traceExport', () => {
   afterEach(() => {
@@ -108,10 +113,11 @@ describe('traceExport', () => {
     it('handles errors on native', async () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
       vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error('Write failed'));
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       
       await expect(shareTraceZip('fail.zip')).rejects.toThrow('Write failed');
-      expect(consoleSpy).toHaveBeenCalledWith('Failed to share trace:', expect.any(Error));
+      expect(addErrorLog).toHaveBeenCalledWith('Trace share failed', expect.objectContaining({
+        error: 'Write failed',
+      }));
     });
   });
 });

@@ -1,7 +1,6 @@
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
@@ -33,7 +32,6 @@ import {
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { computeSidMd5 } from '@/lib/sid/sidUtils';
-import { isSonglengthsFileName } from '@/lib/sid/songlengthsDiscovery';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import {
   AUDIO_MIXER_VOLUME_ITEMS,
@@ -189,7 +187,6 @@ export default function PlayFilesPage() {
     hvscAvailable,
     hvscLibraryAvailable,
     hvscFolderFilter,
-    hvscFolders,
     hvscSongs,
     selectedHvscFolder,
     setHvscFolderFilter,
@@ -288,6 +285,11 @@ export default function PlayFilesPage() {
     } catch (error) {
       if (context.startsWith('Restore')) {
         addErrorLog('Audio mixer restore failed', { error: (error as Error).message, context });
+        toast({
+          variant: 'destructive',
+          title: 'Could not restore volume settings',
+          description: 'Your current volume may be different than before playback.',
+        });
         return;
       }
       reportUserError({
@@ -774,7 +776,20 @@ export default function PlayFilesPage() {
           throw new Error('Local file unavailable. Re-add it to the playlist.');
         }
       }
-      await ensurePlaybackConnection();
+      try {
+        await ensurePlaybackConnection();
+      } catch (error) {
+        reportUserError({
+          operation: 'PLAYBACK_CONNECT',
+          title: 'Connection failed',
+          description: (error as Error).message,
+          error,
+          context: {
+            item: item.label,
+          },
+        });
+        throw error;
+      }
       const api = getC64API();
       if (isSongCategory(item.category)) {
         setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
@@ -810,7 +825,7 @@ export default function PlayFilesPage() {
       setIsPlaying(true);
       setIsPaused(false);
     },
-    [durationFallbackMs, ensurePlaybackConnection, resolveSidMetadata],
+    [durationFallbackMs, ensurePlaybackConnection, reportUserError, resolveSidMetadata],
   );
 
   const playlistItemDuration = useCallback(
@@ -1197,7 +1212,9 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying, restoreVolumeOverrides]);
 
   useEffect(() => () => {
-    void restoreVolumeOverridesRef.current('navigate');
+    void restoreVolumeOverridesRef.current('navigate').catch((error) => {
+      addErrorLog('Volume restore failed during navigation', { error: (error as Error).message });
+    });
   }, []);
 
   const handlePauseResume = useCallback(trace(async function handlePauseResume() {

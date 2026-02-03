@@ -4,7 +4,7 @@ import { addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
-import { getPlayCategory, isSupportedPlayFile } from '@/lib/playback/fileTypes';
+import { getPlayCategory } from '@/lib/playback/fileTypes';
 import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
@@ -143,7 +143,14 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         if (!listingCache.has(parent)) {
           try {
             listingCache.set(parent, await source.listEntries(parent));
-          } catch {
+          } catch (error) {
+            addLog('warn', 'Failed to list entries for selection lookup', {
+              sourceId: source.id,
+              sourceType: source.type,
+              selectionPath: filePath,
+              parentPath: parent,
+              error: (error as Error).message,
+            });
             listingCache.set(parent, []);
           }
         }
@@ -221,8 +228,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                 const file = resolveSonglengthsFile(entry.path, entry.name, entry.modifiedAt);
                 addSonglengthsEntry(entry.path, file);
               });
-          } catch {
-            // Ignore recursive scan failures.
+          } catch (error) {
+            addLog('warn', 'Failed to recursively list files for songlengths discovery.', {
+              sourceId: source.id,
+              selectionPath: selection.path,
+              error: (error as Error).message,
+            });
           }
         }
 
@@ -248,8 +259,12 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
                   songPath,
                   resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt),
                 );
-              } catch {
-                // Ignore missing folders or SAF errors.
+              } catch (error) {
+                addLog('debug', 'Failed to list entries while scanning for songlengths file', {
+                  folder,
+                  sourceId: source.id,
+                  error: (error as Error).message,
+                });
               }
             }
           } else if (entriesMap) {

@@ -1537,8 +1537,8 @@ export default function SettingsPage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => {
-                    clearTraceEvents();
+                  onClick={async () => {
+                    await Promise.resolve(clearTraceEvents());
                     setTraceEvents([]);
                     toast({ title: 'Traces cleared' });
                   }}
@@ -1546,11 +1546,11 @@ export default function SettingsPage() {
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear traces
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleExportTraces(false)}>
+                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(false)}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share / Export
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleExportTraces(true)}>
+                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share Redacted
                 </Button>
@@ -1561,7 +1561,7 @@ export default function SettingsPage() {
               ) : (
                 <>
                   {traceEvents.length > 100 && (
-                    <p className="text-xs text-muted-foreground font-medium text-amber-500">
+                    <p className="text-xs text-muted-foreground font-medium text-amber-600">
                       Showing last 100 events. Export for full history.
                     </p>
                   )}

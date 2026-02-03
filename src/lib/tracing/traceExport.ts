@@ -3,6 +3,7 @@ import { Share } from '@capacitor/share';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { redactExportValue } from '@/lib/diagnostics/exportRedaction';
+import { addErrorLog } from '@/lib/logging';
 import { buildAppMetadata, exportTraceZip, getTraceEvents } from '@/lib/tracing/traceSession';
 
 const buildTraceZipData = (options: { redacted?: boolean } = {}) => {
@@ -28,8 +29,12 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
     reader.onloadend = () => {
       const result = reader.result as string;
       // remove data:application/zip;base64, prefix
-      const base64 = result.split(',')[1];
-      resolve(base64);
+      const parts = typeof result === 'string' ? result.split(',') : [];
+      if (parts.length < 2 || !parts[1]) {
+        reject(new Error('Unexpected data URL format for trace export.'));
+        return;
+      }
+      resolve(parts[1]);
     };
     reader.onerror = reject;
     reader.readAsDataURL(blob);
@@ -68,7 +73,7 @@ export const shareTraceZip = async (filename = 'c64commander-traces.zip', option
         files: [uriResult.uri],
       });
     } catch (error) {
-      console.error('Failed to share trace:', error);
+      addErrorLog('Trace share failed', { error: (error as Error).message });
       throw error;
     }
   } else {

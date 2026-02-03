@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/hooks/use-toast';
+import { addErrorLog } from '@/lib/logging';
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
@@ -121,8 +122,10 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
           modifiedAt: stored.modifiedAt ?? null,
         },
       ]);
-    } catch {
-      // Ignore persisted selection failures.
+    } catch (error) {
+      addErrorLog('Songlengths persisted selection load failed', {
+        error: (error as Error).message,
+      });
     }
   }, [isAndroid, songlengthsFiles.length]);
 
@@ -271,10 +274,15 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
           songlengthsFileCacheRef.current.set(filePath, { mtime, data: parsed });
           parsed.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
           parsed.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
-        } catch {
+        } catch (error) {
           const filePath = getLocalFilePath(file);
           const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
           songlengthsFileCacheRef.current.set(filePath, { mtime, data: null });
+          addErrorLog('Failed to read or parse songlengths file', {
+            filePath,
+            mtime,
+            error: (error as Error).message,
+          });
         }
       }
       return merged;

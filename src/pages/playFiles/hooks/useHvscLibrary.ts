@@ -98,6 +98,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
     });
   }, []);
 
+  // Best-effort categorization based on error messages; update if upstream errors change.
   const resolveHvscFailureCategory = useCallback((event: HvscProgressEvent, lastStage: string | null): HvscFailureCategory => {
     const details = `${event.errorType ?? ''} ${event.errorCause ?? ''}`.toLowerCase();
     const isNetwork = /timeout|network|socket|host|dns|connection|ssl|refused|reset/.test(details);

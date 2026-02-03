@@ -28,7 +28,7 @@ export const formatTime = (ms?: number) => {
 };
 
 export const formatBytes = (value?: number | null) => {
-  if (!value || value <= 0) return '—';
+  if (value === null || value === undefined || value < 0) return '—';
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = value;
   let unitIndex = 0;
@@ -68,6 +68,7 @@ export const parseDurationInput = (value: string) => {
     const minutes = Number(minutesRaw);
     const seconds = Number(secondsRaw);
     if (Number.isNaN(minutes) || Number.isNaN(seconds)) return undefined;
+    if (seconds < 0 || seconds >= 60) return undefined;
     return Math.max(0, (minutes * 60 + seconds) * 1000);
   }
   const seconds = Number(trimmed);
