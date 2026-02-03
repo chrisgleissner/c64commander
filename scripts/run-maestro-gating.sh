@@ -342,6 +342,16 @@ if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" 
 fi
 set -e
 
+if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
+  if grep -q "<failure" "$RAW_OUTPUT_DIR/maestro-report.xml" || grep -q "<error" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
+    log "Maestro report contains failures"
+    MAESTRO_EXIT_CODE=1
+  fi
+else
+  log "Maestro report missing at $RAW_OUTPUT_DIR/maestro-report.xml"
+  MAESTRO_EXIT_CODE=1
+fi
+
 export MAESTRO_EXIT_CODE
 node "$ROOT_DIR/scripts/build-maestro-evidence.mjs" || true
 

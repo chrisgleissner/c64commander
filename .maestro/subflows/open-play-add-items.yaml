@@ -14,11 +14,12 @@ tags:
 - assertVisible: "Play Files"
 - takeScreenshot: play-files
 - scrollUntilVisible:
-    element: "Add items"
+    element:
+      id: "Add items to playlist"
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
-    text: "Add items"
+  id: "Add items to playlist"
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source
