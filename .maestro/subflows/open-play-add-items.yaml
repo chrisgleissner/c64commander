@@ -16,8 +16,8 @@ tags:
     timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
 - extendedWaitUntil:
-  visible: "Playlist"
-  timeout: ${TIMEOUT}
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
 - scrollUntilVisible:
