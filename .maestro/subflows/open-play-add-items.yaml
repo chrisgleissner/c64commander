@@ -7,9 +7,6 @@ tags:
   - subflow
 ---
 - runFlow: launch-and-wait.yaml
-- tapOn:
-    text: "Continue in Demo Mode"
-    optional: true
 - extendedWaitUntil:
     visible: "Play"
     timeout: ${TIMEOUT}
