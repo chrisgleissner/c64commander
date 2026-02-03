@@ -18,11 +18,15 @@ tags:
 - takeScreenshot: play-files
 - scrollUntilVisible:
     element:
-      id: "Add items to playlist"
+      text: "Add items"
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
-    id: "Add items to playlist"
+    text: "Add items"
+    optional: true
+- tapOn:
+    text: "Add more items"
+    optional: true
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source
