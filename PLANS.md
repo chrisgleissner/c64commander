@@ -58,6 +58,7 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 - [x] Add Android SDK/system image cache to Maestro CI job.
 - [x] Ensure emulator is installed and invoked with explicit SDK PATH in Maestro CI.
 - [x] Increase Maestro CLI verbosity on CI.
+- [x] Add BuildJet-based Android E2E workflow for Maestro.
 - [ ] Ensure Maestro runs without extending total wall time beyond ~6 minutes.
 
 ### Observations
@@ -65,6 +66,7 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 - Added cache for Android system images, emulator, platform tools, platforms, and AVD to avoid repeated downloads.
 - CI failure shows `emulator` not found; CI now exports SDK PATH and uses absolute emulator path.
 - Maestro CLI now runs with debug log levels to surface flow execution.
+- Added BuildJet workflow to run Maestro E2E matrix on buildjet runners.
 
 ### Decisions / Rationale
 - Pending.

@@ -1,0 +1,131 @@
+name: Android E2E (BuildJet AMD64)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  run_android_e2e:
+    timeout-minutes: 10
+    runs-on: buildjet-2vcpu-ubuntu-2204
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        arch: [x86, x86_64]
+        api-level: [26, 27, 28, 29, 30, 31, 32, 33, 34]
+        target: [default, google_apis, google_apis_playstore]
+        exclude:
+          - arch: x86
+            api-level: 31
+          - arch: x86
+            api-level: 32
+          - arch: x86
+            api-level: 33
+          - arch: x86
+            api-level: 34
+
+          - target: default
+            api-level: 30
+            arch: x86
+          - target: default
+            api-level: 31
+            arch: x86
+          - target: default
+            api-level: 32
+          - target: default
+            api-level: 33
+          - target: default
+            api-level: 34
+
+          - target: google_apis
+            api-level: 27
+            arch: x86_64
+
+          - target: google_apis_playstore
+            api-level: 21
+          - target: google_apis_playstore
+            api-level: 22
+          - target: google_apis_playstore
+            api-level: 23
+          - target: google_apis_playstore
+            api-level: 24
+            arch: x86_64
+          - target: google_apis_playstore
+            api-level: 25
+            arch: x86_64
+          - target: google_apis_playstore
+            api-level: 26
+            arch: x86_64
+          - target: google_apis_playstore
+            api-level: 27
+            arch: x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Environment info
+        run: npx envinfo
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web + sync
+        run: npm run cap:build
+
+      - name: Build APK (debug)
+        run: npm run android:apk
+
+      - name: Install Maestro CLI
+        run: MAESTRO_VERSION=1.30.4 curl -Ls 'https://get.maestro.mobile.dev' | bash
+
+      - name: Run Maestro E2E tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          cores: 2
+          ram-size: 2048M
+          force-avd-creation: false
+          emulator-boot-timeout: 600
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          pre-emulator-launch-script: |
+            echo "Running pre emulator launch script. Printing the working directory now:"
+            pwd
+          script: |
+            npx envinfo
+            adb devices
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            MAESTRO_LOG_LEVEL=debug MAESTRO_CLI_LOG_LEVEL=debug CI=true \
+              bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build --apk-path android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: E2E Report (${{ matrix.arch }}, ${{ matrix.api-level }}, ${{ matrix.target }})
+          path: |
+            ${{ github.workspace }}/*.mp4
+            ${{ github.workspace }}/*.png
+            ${{ github.workspace }}/report*.xml
+            ${{ github.workspace }}/test-results/maestro/**
+            ${{ github.workspace }}/test-results/evidence/maestro/**
+            ~/.maestro/tests/**
