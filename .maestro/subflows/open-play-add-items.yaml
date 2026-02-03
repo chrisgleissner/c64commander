@@ -19,7 +19,7 @@ tags:
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
-  id: "Add items to playlist"
+    id: "Add items to playlist"
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source
