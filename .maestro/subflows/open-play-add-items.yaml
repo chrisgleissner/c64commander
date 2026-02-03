@@ -21,14 +21,14 @@ tags:
 - waitForAnimationToEnd
 - takeScreenshot: play-files
 - tapOn:
-  id: "add-items-to-playlist"
-  optional: true
+    id: "add-items-to-playlist"
+    optional: true
 - tapOn:
-  text: "Add items"
-  optional: true
+    text: "Add items"
+    optional: true
 - tapOn:
-  text: "Add more items"
-  optional: true
+    text: "Add more items"
+    optional: true
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source
