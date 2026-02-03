@@ -44,8 +44,8 @@ test.describe('Settings diagnostics workflows', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    // The button says "Logs" under the Diagnostics section
-    const diagnosticsButton = page.getByRole('button', { name: 'Logs' });
+    // The button says "Logs and Traces" under the Diagnostics section
+      const diagnosticsButton = page.getByRole('button', { name: /Logs( and Traces)?/i });
     await expect(diagnosticsButton).toBeVisible();
     await snap(page, testInfo, 'diagnostics-button-visible');
 
@@ -81,7 +81,7 @@ test.describe('Settings diagnostics workflows', () => {
     await refreshButton.click();
     await snap(page, testInfo, 'refresh-clicked');
 
-    await page.getByRole('button', { name: 'Logs' }).click();
+      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
     const dialog = page.getByRole('dialog', { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'diagnostics-open');
@@ -100,7 +100,7 @@ test.describe('Settings diagnostics workflows', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    await page.getByRole('button', { name: 'Logs' }).click();
+      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
     await snap(page, testInfo, 'dialog-open');
 
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -139,7 +139,7 @@ test.describe('Settings diagnostics workflows', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    await page.getByRole('button', { name: 'Logs' }).click();
+      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
     await snap(page, testInfo, 'dialog-open');
 
     const emailButton = page.getByRole('button', { name: /Email|Send email/i });
@@ -174,7 +174,7 @@ test.describe('Settings diagnostics workflows', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    await page.getByRole('button', { name: 'Logs' }).click();
+      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
     await snap(page, testInfo, 'dialog-open');
 
     const clearButton = page.getByRole('button', { name: /Clear|Clear logs/i });

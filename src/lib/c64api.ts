@@ -132,8 +132,20 @@ const isLocalProxy = (baseUrl: string) => {
 };
 
 const isLocalDeviceHost = (host: string) => {
-  const normalized = host.trim().toLowerCase();
-  return normalized === 'localhost' || normalized.startsWith('127.0.0.1');
+  let normalized = host.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.startsWith('[')) {
+    const closingBracketIndex = normalized.indexOf(']');
+    if (closingBracketIndex !== -1) {
+      normalized = normalized.slice(1, closingBracketIndex);
+    }
+  } else {
+    const colonIndex = normalized.indexOf(':');
+    if (colonIndex !== -1) {
+      normalized = normalized.slice(0, colonIndex);
+    }
+  }
+  return normalized === 'localhost' || normalized === '127.0.0.1';
 };
 
 const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {

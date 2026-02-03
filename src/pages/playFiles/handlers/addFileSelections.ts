@@ -7,6 +7,7 @@ import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { getPlayCategory } from '@/lib/playback/fileTypes';
 import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
+import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
@@ -195,7 +196,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const entriesMap = localEntriesBySourceId.get(source.id);
         const knownSonglengths = new Set(songlengthsFiles.map((entry) => entry.path));
         const discovered: SonglengthsFileEntry[] = [];
-        const normalizeFtpHost = (host: string) => host.split(':')[0] ?? host;
         const base64ToArrayBuffer = (base64: string) => {
           const binary = atob(base64);
           const bytes = new Uint8Array(binary.length);

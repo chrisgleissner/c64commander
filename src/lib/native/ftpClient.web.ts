@@ -44,11 +44,46 @@ export class FtpClientWeb implements FtpClientPlugin {
     return { entries: payload.entries || [] };
   }
 
-  async readFile(_options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {
+  async readFile(options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {
     const bridgeUrl = getFtpBridgeUrl();
     if (!bridgeUrl) {
       throw new Error('FTP file download is unavailable: missing FTP bridge URL.');
     }
-    throw new Error('FTP file download is unavailable in web builds.');
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 3000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${bridgeUrl.replace(/\/$/, '')}/v1/ftp/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify(options),
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === 'AbortError') {
+        throw new Error('FTP bridge request timed out');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      const message = errorPayload?.error || `FTP bridge error: HTTP ${response.status}`;
+      throw new Error(message);
+    }
+
+    const payload = (await response.json()) as { data?: string; sizeBytes?: number } | null;
+    if (!payload || typeof payload.data !== 'string') {
+      throw new Error('FTP bridge error: invalid file payload');
+    }
+
+    return {
+      data: payload.data,
+      sizeBytes: typeof payload.sizeBytes === 'number' ? payload.sizeBytes : payload.data.length,
+    };
   }
 }

@@ -255,7 +255,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
               errorCategory: null,
               errorMessage: null,
             },
-            lastUpdatedAt: isDownloadComplete ? now : prev.lastUpdatedAt ?? null,
+            lastUpdatedAt: now,
           }));
         }
       }

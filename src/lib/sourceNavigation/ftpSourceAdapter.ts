@@ -45,7 +45,7 @@ const saveCache = (state: FtpCacheState) => {
 const buildCacheKey = (host: string, port: number | undefined, path: string) =>
   `${host}:${port ?? ''}:${path || '/'}`;
 
-const normalizeFtpHost = (host: string) => {
+export const normalizeFtpHost = (host: string) => {
   if (!host) return host;
   if (host.startsWith('[')) {
     const end = host.indexOf(']');

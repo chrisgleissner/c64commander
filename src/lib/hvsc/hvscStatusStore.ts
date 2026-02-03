@@ -122,7 +122,7 @@ export const applyHvscProgressEventToSummary = (
         errorCategory: null,
         errorMessage: null,
       },
-      lastUpdatedAt: isDownloadComplete ? now : summary.lastUpdatedAt ?? null,
+      lastUpdatedAt: now,
     };
   }
 
