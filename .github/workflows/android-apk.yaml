@@ -626,16 +626,48 @@ jobs:
 
       - name: Start emulator (background)
         run: |
-          set -e
+          set -ex
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+          
+          echo "=== Installing Android SDK components ==="
           sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
+          
+          echo "=== Listing existing AVDs ==="
+          avdmanager list avd || true
+          
+          echo "=== Creating AVD if needed ==="
           if ! avdmanager list avd | grep -q "Name: ${ANDROID_AVD_NAME}"; then
-            echo "no" | avdmanager create avd -n "${ANDROID_AVD_NAME}" -k "${ANDROID_SYSTEM_IMAGE}" -d "${ANDROID_DEVICE_PROFILE}"
+            echo "Creating AVD: ${ANDROID_AVD_NAME}"
+            echo "no" | avdmanager create avd -n "${ANDROID_AVD_NAME}" -k "${ANDROID_SYSTEM_IMAGE}" -d "${ANDROID_DEVICE_PROFILE}" --force
+            echo "AVD creation completed"
+          else
+            echo "AVD ${ANDROID_AVD_NAME} already exists"
           fi
+          
+          echo "=== Verifying AVD exists ==="
+          avdmanager list avd
+          if ! avdmanager list avd | grep -q "Name: ${ANDROID_AVD_NAME}"; then
+            echo "ERROR: AVD ${ANDROID_AVD_NAME} was not created!"
+            ls -la ~/.android/avd/ || true
+            exit 1
+          fi
+          
+          echo "=== Starting emulator in background ==="
           mkdir -p test-results/maestro
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
-          echo $! > test-results/maestro/emulator.pid
+          EMULATOR_PID=$!
+          echo $EMULATOR_PID > test-results/maestro/emulator.pid
+          echo "Emulator started with PID: $EMULATOR_PID"
+          
+          # Give emulator a moment to start and check if it's still running
+          sleep 3
+          if ! kill -0 $EMULATOR_PID 2>/dev/null; then
+            echo "ERROR: Emulator process died immediately"
+            cat test-results/maestro/emulator.log || true
+            exit 1
+          fi
+          echo "Emulator process is running"
 
       - name: Wait for emulator boot
         run: |
