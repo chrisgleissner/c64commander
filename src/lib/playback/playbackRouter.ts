@@ -1,4 +1,4 @@
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import type { C64API } from '@/lib/c64api';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import {
@@ -55,6 +55,31 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
     songNr: request.songNr,
     durationMs: request.durationMs,
   };
+};
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const injectDiskAutostart = async (api: C64API, payload: Uint8Array) => {
+  const baseDelayMs = 250;
+  const maxAttempts = 4;
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    if (attempt > 0) {
+      await delay(baseDelayMs * Math.pow(1.6, attempt - 1));
+    } else {
+      await delay(baseDelayMs);
+    }
+    try {
+      await injectAutostart(api, payload, { pollIntervalMs: 140, maxAttempts: 20 });
+      addLog('info', 'Disk autostart injected', { attempt: attempt + 1 });
+      return;
+    } catch (error) {
+      lastError = error as Error;
+      addLog('debug', 'Disk autostart retry', { attempt: attempt + 1, error: lastError.message });
+    }
+  }
+  addErrorLog('Disk autostart failed', { error: lastError?.message ?? 'Unknown error' });
+  throw new Error('Disk autostart failed. Try again after the disk finishes mounting.');
 };
 
 const toBlob = async (file?: LocalPlayFile) => {
@@ -149,10 +174,10 @@ export const executePlayPlan = async (
       case 'disk': {
         if (rebootBeforeMount) {
           await api.machineReboot();
-          await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
+          await delay(resetDelayMs);
         } else if (resetBeforeMount) {
           await api.machineReset();
-          await new Promise((resolve) => setTimeout(resolve, resetDelayMs));
+          await delay(resetDelayMs);
         }
 
         let localBlob: Blob | null = null;
@@ -200,10 +225,10 @@ export const executePlayPlan = async (
             const image = new Uint8Array(await blob.arrayBuffer());
             await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
           } catch {
-            await injectAutostart(api, AUTOSTART_SEQUENCE);
+            await injectDiskAutostart(api, AUTOSTART_SEQUENCE);
           }
         } else {
-          await injectAutostart(api, AUTOSTART_SEQUENCE);
+          await injectDiskAutostart(api, AUTOSTART_SEQUENCE);
         }
         return;
       }

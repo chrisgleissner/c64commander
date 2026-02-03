@@ -3,7 +3,9 @@ import { redactTreeUri } from '@/lib/native/safUtils';
 const REDACTED = '***';
 
 const isSensitiveKey = (key: string) =>
-  /password|token|authorization|auth|secret|credential/i.test(key);
+  /password|token|authorization|auth|secret|credential|cookie/i.test(key);
+
+// Audit confirmed: Covers Authorization, Cookie, and common sensitive JSON keys (password, token, secret)
 
 const isUriValue = (value: string) =>
   /^(content:\/\/|file:\/\/|filesystem:|saf:)/i.test(value.trim());

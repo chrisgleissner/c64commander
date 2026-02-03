@@ -18,6 +18,10 @@ import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from '
 import { deleteLibraryFile, resetLibraryRoot, resetSonglengthsCache, writeLibraryFile, readCachedArchiveMarker } from '@/lib/hvsc/hvscFilesystem';
 import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
 
+if (!(vi as typeof vi & { mocked?: <T>(value: T) => T }).mocked) {
+  (vi as typeof vi & { mocked: <T>(value: T) => T }).mocked = (value) => value;
+}
+
 vi.mock('@capacitor/filesystem', () => ({
   Directory: { Data: 'DATA' },
   Filesystem: {
@@ -77,6 +81,7 @@ vi.mock('@/lib/sid/sidUtils', () => ({
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 describe('hvscIngestionRuntime', () => {
@@ -109,7 +114,7 @@ describe('hvscIngestionRuntime', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
+    // vitest environment cleanup handled by reset/restore calls above.
   });
 
   it('skips cached ingest when no newer archives exist', async () => {
@@ -235,7 +240,8 @@ describe('hvscIngestionRuntime', () => {
   });
 
   it('downloads archives via fetch when cache is missing', async () => {
-    vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
+    const originalEnv = process.env.VITE_ENABLE_TEST_PROBES;
+    process.env.VITE_ENABLE_TEST_PROBES = '1';
     const originalFetch = globalThis.fetch;
     const reader = {
       read: vi
@@ -243,14 +249,21 @@ describe('hvscIngestionRuntime', () => {
         .mockResolvedValueOnce({ done: false, value: new Uint8Array([1, 2]) })
         .mockResolvedValueOnce({ done: true, value: undefined }),
     };
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      statusText: 'OK',
-      headers: { get: () => '2' },
-      body: { getReader: () => reader },
-      arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
-    });
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => '2' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => '2' },
+        body: { getReader: () => reader },
+        arrayBuffer: async () => new Uint8Array([1, 2]).buffer,
+      });
 
     vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
       baselineVersion: 5,
@@ -278,6 +291,80 @@ describe('hvscIngestionRuntime', () => {
     } else {
       delete (globalThis as { fetch?: typeof fetch }).fetch;
     }
+    if (originalEnv === undefined) {
+      delete process.env.VITE_ENABLE_TEST_PROBES;
+    } else {
+      process.env.VITE_ENABLE_TEST_PROBES = originalEnv;
+    }
+  });
+
+  it('emits incremental download progress during streaming fetch', async () => {
+    const originalEnv = process.env.VITE_ENABLE_TEST_PROBES;
+    process.env.VITE_ENABLE_TEST_PROBES = '1';
+    const originalFetch = globalThis.fetch;
+    const reader = {
+      read: vi
+        .fn()
+        .mockResolvedValueOnce({ done: false, value: new Uint8Array([1, 2]) })
+        .mockResolvedValueOnce({ done: false, value: new Uint8Array([3, 4]) })
+        .mockResolvedValueOnce({ done: true, value: undefined }),
+    };
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => '4' },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: { get: () => '4' },
+        body: { getReader: () => reader },
+        arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+      });
+
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(Filesystem.stat).mockRejectedValue(new Error('missing'));
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue(null as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
+    });
+
+    const progressEvents: Array<{ downloadedBytes?: number | null }> = [];
+    const listener = await addHvscProgressListener((event) => {
+      if (event.stage === 'download') {
+        progressEvents.push({ downloadedBytes: event.downloadedBytes ?? null });
+      }
+    });
+
+    await installOrUpdateHvsc('token-download-progress');
+    await listener.remove();
+
+    expect(progressEvents.length).toBeGreaterThan(1);
+    expect(progressEvents[0]?.downloadedBytes ?? 0).toBeLessThan(progressEvents.at(-1)?.downloadedBytes ?? 0);
+
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
+    if (originalEnv === undefined) {
+      delete process.env.VITE_ENABLE_TEST_PROBES;
+    } else {
+      process.env.VITE_ENABLE_TEST_PROBES = originalEnv;
+    }
   });
 
   it('skips install when already up to date', async () => {
@@ -299,6 +386,13 @@ describe('hvscIngestionRuntime', () => {
   });
 
   it('uses native download when available', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: { get: () => '1024' },
+    });
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
     vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
       baselineVersion: 5,
@@ -320,6 +414,12 @@ describe('hvscIngestionRuntime', () => {
     await installOrUpdateHvsc('token-native');
 
     expect(Filesystem.downloadFile).toHaveBeenCalled();
+
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    } else {
+      delete (globalThis as { fetch?: typeof fetch }).fetch;
+    }
   });
 
   it('rejects cached ingest when baseline is missing', async () => {

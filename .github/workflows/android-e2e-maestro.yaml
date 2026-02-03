@@ -1,0 +1,126 @@
+name: Android E2E Maestro
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  run_android_e2e:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - arch: x86_64
+            api-level: 34
+            target: google_apis
+          # TODO Enable once the other tests pass
+          # - arch: arm64-v8a
+          #   api-level: 35
+          #   target: google_apis          
+          # - arch: arm64-v8a
+          #   api-level: 32
+          #   target: google_apis
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Environment info
+        run: npx envinfo
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web + sync
+        run: npm run cap:build
+
+      - name: Build APK (debug)
+        run: |
+          npm run android:apk
+          echo "Listing APK output:"
+          find android/app/build/outputs/apk -name "*.apk" 2>/dev/null || echo "No APK found"
+
+      - name: Verify APK exists
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found in android/app/build/outputs/apk/debug"
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          echo "Found APK: $APK_PATH"
+
+      - name: Install Maestro CLI
+        run: |
+          MAESTRO_VERSION=1.30.4 curl -Ls 'https://get.maestro.mobile.dev' | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Maestro E2E tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          arch: ${{ matrix.arch }}
+          cores: 2
+          ram-size: 3072M
+          force-avd-creation: false
+          emulator-boot-timeout: 600
+          emulator-options: >
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -camera-back none
+          disable-animations: true
+          pre-emulator-launch-script: |
+            echo "Pre-emulator diagnostics"
+            pwd
+          script: |
+            npx envinfo
+            adb devices
+            # Find the actual APK path
+            APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+            echo "Installing APK: $APK_PATH"
+            adb install -r "$APK_PATH"
+            export PATH="$HOME/.maestro/bin:$PATH"
+            MAESTRO_LOG_LEVEL=debug MAESTRO_CLI_LOG_LEVEL=debug CI=true bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build --apk-path "$APK_PATH"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: E2E Report (${{ matrix.arch }}, api-${{ matrix.api-level }})
+          path: |
+            ${{ github.workspace }}/*.mp4
+            ${{ github.workspace }}/*.png
+            ${{ github.workspace }}/report*.xml
+            ${{ github.workspace }}/test-results/maestro/**
+            ${{ github.workspace }}/test-results/evidence/maestro/**
+            ~/.maestro/tests/**

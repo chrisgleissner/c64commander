@@ -7,15 +7,30 @@ tags:
   - subflow
 ---
 - runFlow: launch-and-wait.yaml
+- extendedWaitUntil:
+    visible: "Play"
+    timeout: ${TIMEOUT}
 - tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
-- takeScreenshot: play-files
 - scrollUntilVisible:
-    element: "Add items to playlist"
+    element:
+      id: "add-items-to-playlist"
     direction: DOWN
     timeout: ${TIMEOUT}
+- waitForAnimationToEnd
+- takeScreenshot: play-files
 - tapOn:
-    text: "Add items to playlist"
+    id: "add-items-to-playlist"
+    optional: true
+- tapOn:
+    text: "Add items"
+    optional: true
+- tapOn:
+    text: "Add more items"
+    optional: true
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source

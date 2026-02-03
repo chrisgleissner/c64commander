@@ -4,9 +4,8 @@
 
 appId: uk.gleissner.c64commander
 tags:
-    - slow
-    - file-picker
     - device
+    - ci-critical
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
   TIMEOUT: ${TIMEOUT || "30000"}
@@ -14,11 +13,12 @@ env:
 ---
 - runFlow: subflows/open-play-add-items.yaml
 - scrollUntilVisible:
-    element: "Add file / folder from device"
+    element:
+      id: "add-local-source"
     direction: DOWN
     timeout: ${SHORT_TIMEOUT}
 - tapOn:
-    text: "Add file / folder from device"
+    id: "add-local-source"
 - takeScreenshot: file-picker-open
 
 # Try to dismiss the file picker
@@ -38,19 +38,7 @@ env:
     commands:
       - back
 
-# Re-launch the app to ensure clean state
-- launchApp:
-    clearState: false
-
-# Wait for app to stabilize
-- waitForAnimationToEnd
-
-# Verify we're back in the app - use optional assertions for resilience
-- assertVisible:
-    text: "C64 Commander"
-    optional: true
-- assertVisible:
-    text: "Play"
-    optional: true
+# Re-launch the app and return to Home
+- runFlow: subflows/launch-and-wait.yaml
 
 - takeScreenshot: picker-cancelled

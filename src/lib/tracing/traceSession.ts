@@ -14,7 +14,7 @@ import { getPlatform } from '@/lib/native/platform';
 import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from '@/lib/tracing/traceIds';
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
-const MAX_EVENT_COUNT = 10_000;
+const MAX_EVENT_COUNT = 25_000;
 const MAX_STORAGE_BYTES = 50 * 1024 * 1024;
 
 let sessionStartMs = Date.now();
@@ -32,7 +32,8 @@ const estimateEventSize = (event: TraceEvent) => {
       return new TextEncoder().encode(json).length;
     }
     return json.length;
-  } catch {
+  } catch (error) {
+    console.warn('Failed to estimate event size:', error);
     return 0;
   }
 };
@@ -128,8 +129,8 @@ export const persistTracesToSession = () => {
       sessionStartMs,
     };
     sessionStorage.setItem(SESSION_COUNTERS_KEY, JSON.stringify(countersData));
-  } catch {
-    // Storage full or unavailable
+  } catch (error) {
+    console.warn('Failed to persist traces:', error);
   }
 };
 
@@ -165,8 +166,8 @@ export const restoreTracesFromSession = () => {
     }
     // Clear persisted data after restore
     sessionStorage.removeItem(SESSION_STORAGE_KEY);
-  } catch {
-    // Parse error or storage unavailable
+  } catch (error) {
+    console.warn('Failed to restore traces:', error);
   }
 };
 
@@ -291,8 +292,8 @@ export const recordTraceError = (action: TraceActionContext, error: Error) => {
         const data = exportTraceZip();
         lastExport = { reason: 'error', timestamp: new Date().toISOString(), data };
         window.dispatchEvent(new CustomEvent('c64u-trace-exported', { detail: { reason: 'error' } }));
-      } catch {
-        // ignore export failures
+      } catch (errorExport) {
+        console.warn('Failed to export error trace:', errorExport);
       }
     }, 0);
   }

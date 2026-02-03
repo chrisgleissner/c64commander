@@ -31,8 +31,17 @@ export type FolderPickerDirectoryResult = {
   uri?: string;
 };
 
+export type FolderPickerFileResult = {
+  uri?: string;
+  name?: string | null;
+  sizeBytes?: number | null;
+  modifiedAt?: string | null;
+  permissionPersisted?: boolean;
+};
+
 type FolderPickerPlugin = {
   pickDirectory: (options?: { extensions?: string[] }) => Promise<FolderPickerDirectoryResult>;
+  pickFile: (options?: { extensions?: string[]; mimeTypes?: string[] }) => Promise<FolderPickerFileResult>;
   listChildren: (options: { treeUri: string; path?: string }) => Promise<{ entries: SafFolderEntry[] }>;
   getPersistedUris: () => Promise<{ uris: SafPersistedUri[] }>;
   readFile: (options: { uri: string }) => Promise<{ data: string }>;
@@ -68,6 +77,11 @@ export const FolderPicker: FolderPickerPlugin = {
     const override = resolveOverrideMethod('pickDirectory');
     if (override) return override(options);
     return plugin.pickDirectory(options);
+  },
+  pickFile: (options) => {
+    const override = resolveOverrideMethod('pickFile');
+    if (override) return override(options);
+    return plugin.pickFile(options);
   },
   listChildren: (options) => {
     const override = resolveOverrideMethod('listChildren');

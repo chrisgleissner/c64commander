@@ -4,56 +4,56 @@ import "@testing-library/jest-dom";
 (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
 if (typeof window !== "undefined") {
   (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
-}
 
-Object.defineProperty(window, "matchMedia", {
-  writable: true,
-  value: (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: () => {},
-    removeListener: () => {},
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    dispatchEvent: () => {},
-  }),
-});
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => {},
+    }),
+  });
 
-// Radix UI (Select) relies on pointer capture APIs that are missing in JSDOM.
-if (!Element.prototype.hasPointerCapture) {
-  Element.prototype.hasPointerCapture = () => false;
-}
-if (!Element.prototype.setPointerCapture) {
-  Element.prototype.setPointerCapture = () => {};
-}
-if (!Element.prototype.releasePointerCapture) {
-  Element.prototype.releasePointerCapture = () => {};
-}
+  // Radix UI (Select) relies on pointer capture APIs that are missing in JSDOM.
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = () => {};
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = () => {};
+  }
 
-// Minimal PointerEvent polyfill for libraries expecting it.
-if (typeof (window as any).PointerEvent === "undefined") {
-  class PointerEvent extends MouseEvent {}
-  (window as any).PointerEvent = PointerEvent;
-}
+  // Minimal PointerEvent polyfill for libraries expecting it.
+  if (typeof (window as any).PointerEvent === "undefined") {
+    class PointerEvent extends MouseEvent {}
+    (window as any).PointerEvent = PointerEvent;
+  }
 
-// Used by Radix Select to bring the active item into view.
-if (!Element.prototype.scrollIntoView) {
-  Element.prototype.scrollIntoView = () => {};
-}
+  // Used by Radix Select to bring the active item into view.
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
 
-// Add window.scrollTo mock
-Object.defineProperty(window, "scrollTo", {
-  writable: true,
-  value: () => {},
-});
+  // Add window.scrollTo mock
+  Object.defineProperty(window, "scrollTo", {
+    writable: true,
+    value: () => {},
+  });
 
-// Radix Slider uses ResizeObserver in JSDOM.
-if (typeof (window as any).ResizeObserver === "undefined") {
-  (window as any).ResizeObserver = class {
-    constructor(_callback?: ResizeObserverCallback) {}
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
+  // Radix Slider uses ResizeObserver in JSDOM.
+  if (typeof (window as any).ResizeObserver === "undefined") {
+    (window as any).ResizeObserver = class {
+      constructor(_callback?: ResizeObserverCallback) {}
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
 }

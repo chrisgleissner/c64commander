@@ -280,6 +280,8 @@ export const ItemSelectionDialog = ({
                           disabled={pendingLocalSource}
                           aria-busy={pendingLocalSource}
                           aria-label="Add file / folder from device"
+                          data-testid="add-local-source"
+                          id="add-local-source"
                         >
                           <FolderPlus className="h-4 w-4 mr-1" />
                           <span className="truncate">Add file / folder</span>

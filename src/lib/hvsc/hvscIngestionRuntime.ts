@@ -21,7 +21,7 @@ import {
 import { loadHvscState, markUpdateApplied, updateHvscState, isUpdateApplied } from './hvscStateStore';
 import { updateHvscStatusSummaryFromEvent } from './hvscStatusStore';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 
 const listeners = new Set<(event: HvscProgressEvent) => void>();
 const cancelTokens = new Map<string, { cancelled: boolean }>();
@@ -58,8 +58,17 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const isExistsError = (error: unknown) => /exists|already exists/i.test(getErrorMessage(error));
+const isTestProbeEnabled = () => {
+  try {
+    if (import.meta.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  } catch {
+    // ignore
+  }
+  return typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1';
+};
+
 const shouldUseNativeDownload = () => {
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return false;
+  if (isTestProbeEnabled()) return false;
   try {
     return Capacitor.isNativePlatform();
   } catch {
@@ -72,6 +81,17 @@ const parseContentLength = (value: string | null) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
   return parsed;
+};
+
+const fetchContentLength = async (url: string) => {
+  if (typeof fetch === 'undefined') return null;
+  try {
+    const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    if (!response.ok) return null;
+    return parseContentLength(response.headers.get('content-length'));
+  } catch {
+    return null;
+  }
 };
 
 const concatChunks = (chunks: Uint8Array[], totalLength?: number | null) => {
@@ -149,6 +169,22 @@ const parseDeletionList = (content: string) =>
 const parseCachedVersion = (prefix: string, name: string) => {
   const match = new RegExp(`^${prefix}-(\\d+)(\\..+)?$`, 'i').exec(name);
   return match ? Number(match[1]) : null;
+};
+
+const emitDownloadProgress = (
+  emitProgress: (event: Omit<HvscProgressEvent, 'ingestionId' | 'elapsedTimeMs'>) => void,
+  archiveName: string,
+  downloadedBytes?: number | null,
+  totalBytes?: number | null,
+) => {
+  emitProgress({
+    stage: 'download',
+    message: `Downloading ${archiveName}…`,
+    archiveName,
+    downloadedBytes: downloadedBytes ?? undefined,
+    totalBytes: totalBytes ?? undefined,
+    percent: totalBytes ? Math.round(((downloadedBytes ?? 0) / totalBytes) * 100) : undefined,
+  });
 };
 
 const resolveCachedArchive = async (prefix: string, version: number) => {
@@ -315,27 +351,47 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       const cached = await resolveCachedArchive(prefix, plan.version);
       const cacheDir = getHvscCacheDir();
       const archivePath = cached ?? archiveName;
+      updateHvscState({
+        ingestionState: plan.type === 'baseline' ? 'installing' : 'updating',
+        ingestionError: null,
+      });
       if (!cached) {
         emitProgress({ stage: 'download', message: `Downloading ${archiveName}…`, archiveName, percent: 0 });
         await deleteCachedArchive(archivePath);
         const downloadUrl = plan.type === 'baseline'
           ? buildHvscBaselineUrl(plan.version, baseUrl)
           : buildHvscUpdateUrl(plan.version, baseUrl);
+        addLog('info', 'HVSC download started', { archiveName, url: downloadUrl });
+        const totalBytesHint = await fetchContentLength(downloadUrl);
         if (shouldUseNativeDownload()) {
+          let lastReported = 0;
+          let pollingTimer: ReturnType<typeof setInterval> | null = null;
+          let totalBytes = totalBytesHint ?? null;
+          const pollSize = async () => {
+            try {
+              const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${archivePath}` });
+              const size = stat.size ?? 0;
+              if (size > lastReported) {
+                lastReported = size;
+                emitDownloadProgress(emitProgress, archiveName, size, totalBytes);
+              }
+            } catch {
+              // ignore
+            }
+          };
           try {
+            pollingTimer = setInterval(pollSize, 400);
             await Filesystem.downloadFile({
               url: downloadUrl,
               directory: Directory.Data,
               path: `${cacheDir}/${archivePath}`,
               progress: (status) => {
-                emitProgress({
-                  stage: 'download',
-                  message: `Downloading ${archiveName}…`,
-                  archiveName,
-                  downloadedBytes: status.loaded,
-                  totalBytes: status.total,
-                  percent: status.total ? Math.round((status.loaded / status.total) * 100) : undefined,
-                });
+                totalBytes = status.total ?? totalBytes;
+                const loaded = status.loaded ?? 0;
+                if (loaded >= lastReported) {
+                  lastReported = loaded;
+                  emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes);
+                }
               },
             });
           } catch (error) {
@@ -347,32 +403,20 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
             }
             const buffer = new Uint8Array(await response.arrayBuffer());
             await writeCachedArchive(archivePath, buffer);
-            emitProgress({
-              stage: 'download',
-              message: `Downloaded ${archiveName}`,
-              archiveName,
-              downloadedBytes: buffer.byteLength,
-              totalBytes: buffer.byteLength,
-              percent: 100,
-            });
+            emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
+          } finally {
+            if (pollingTimer) clearInterval(pollingTimer);
           }
         } else {
           const response = await fetch(downloadUrl, { cache: 'no-store' });
           if (!response.ok) {
             throw new Error(`Download failed: ${response.status} ${response.statusText}`);
           }
-          const totalBytes = parseContentLength(response.headers.get('content-length'));
+          const totalBytes = parseContentLength(response.headers.get('content-length')) ?? totalBytesHint;
           if (!response.body) {
             const buffer = new Uint8Array(await response.arrayBuffer());
             await writeCachedArchive(archivePath, buffer);
-            emitProgress({
-              stage: 'download',
-              message: `Downloaded ${archiveName}`,
-              archiveName,
-              downloadedBytes: buffer.byteLength,
-              totalBytes: buffer.byteLength,
-              percent: 100,
-            });
+            emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
           } else {
             const reader = response.body.getReader();
             const chunks: Uint8Array[] = [];
@@ -383,28 +427,15 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
               if (value) {
                 chunks.push(value);
                 loaded += value.length;
-                emitProgress({
-                  stage: 'download',
-                  message: `Downloading ${archiveName}…`,
-                  archiveName,
-                  downloadedBytes: loaded,
-                  totalBytes: totalBytes ?? undefined,
-                  percent: totalBytes ? Math.round((loaded / totalBytes) * 100) : undefined,
-                });
+                emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
               }
             }
-            const buffer = concatChunks(chunks, totalBytes);
+            const buffer = concatChunks(chunks, totalBytes ?? undefined);
             await writeCachedArchive(archivePath, buffer);
-            emitProgress({
-              stage: 'download',
-              message: `Downloaded ${archiveName}`,
-              archiveName,
-              downloadedBytes: buffer.byteLength,
-              totalBytes: totalBytes ?? buffer.byteLength,
-              percent: totalBytes ? 100 : undefined,
-            });
+            emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
           }
         }
+        addLog('info', 'HVSC download completed', { archiveName });
         try {
           const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${archivePath}` });
           await writeCachedArchiveMarker(archivePath, {
@@ -467,11 +498,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       });
 
       if (plan.type === 'baseline') {
-        updateHvscState({ ingestionState: 'installing', ingestionError: null });
         await resetLibraryRoot();
         baselineInstalled = plan.version;
-      } else {
-        updateHvscState({ ingestionState: 'updating', ingestionError: null });
       }
 
       const deletions: string[] = [];

@@ -1,3 +1,6 @@
+import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
+import { computeSidMd5 } from '@/lib/sid/sidUtils';
+
 export type SonglengthsData = {
   pathToSeconds: Map<string, number>;
   md5ToSeconds: Map<string, number>;
@@ -6,6 +9,43 @@ export type SonglengthsData = {
 const normalizePath = (path: string) => {
   const normalized = path.replace(/\\/g, '/');
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
+};
+
+export const resolveSonglengthsSeconds = (
+  data: SonglengthsData | null | undefined,
+  path: string,
+  md5?: string | null,
+) => {
+  if (!data) return null;
+  const normalizedPath = normalizePath(path || '/');
+  const pathMatch = data.pathToSeconds.get(normalizedPath);
+  if (pathMatch !== undefined && pathMatch !== null) return pathMatch;
+  if (!md5) return null;
+  const md5Match = data.md5ToSeconds.get(md5);
+  return md5Match !== undefined && md5Match !== null ? md5Match : null;
+};
+
+export const countSonglengthsEntries = (data: SonglengthsData | null | undefined) => {
+  if (!data) return 0;
+  return Math.max(data.pathToSeconds.size, data.md5ToSeconds.size);
+};
+
+export const resolveSonglengthsDurationMs = async (
+  data: SonglengthsData | null | undefined,
+  path: string,
+  file?: LocalPlayFile | null,
+) => {
+  const seconds = resolveSonglengthsSeconds(data, path, null);
+  if (seconds !== null) return seconds * 1000;
+  if (!file) return null;
+  try {
+    const buffer = await file.arrayBuffer();
+    const md5 = await computeSidMd5(buffer);
+    const md5Seconds = resolveSonglengthsSeconds(data, path, md5);
+    return md5Seconds !== null ? md5Seconds * 1000 : null;
+  } catch {
+    return null;
+  }
 };
 
 const parseTimeToSeconds = (value: string) => {

@@ -1,16 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildFileLibraryId, buildLocalPlayFileFromUri, resolvePlayRequestFromLibrary } from '@/lib/playback/fileLibraryUtils';
+import {
+  buildFileLibraryId,
+  buildLocalPlayFileFromTree,
+  buildLocalPlayFileFromUri,
+  resolvePlayRequestFromLibrary,
+} from '@/lib/playback/fileLibraryUtils';
 import type { FileLibraryEntry } from '@/lib/playback/fileLibraryTypes';
 
 vi.mock('@/lib/native/folderPicker', () => ({
   FolderPicker: {
     readFile: vi.fn(),
+    readFileFromTree: vi.fn(),
   },
 }));
 
 const mockFolderPicker = async (data: string) => {
   const { FolderPicker } = await import('@/lib/native/folderPicker');
   (FolderPicker.readFile as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
+};
+
+const mockFolderPickerTree = async (data: string) => {
+  const { FolderPicker } = await import('@/lib/native/folderPicker');
+  (FolderPicker.readFileFromTree as ReturnType<typeof vi.fn>).mockResolvedValue({ data });
 };
 
 describe('fileLibraryUtils', () => {
@@ -31,6 +42,17 @@ describe('fileLibraryUtils', () => {
     expect(file.name).toBe('demo.sid');
     expect(file.webkitRelativePath).toBe('/demo.sid');
     expect(text).toBe('hello');
+  });
+
+  it('builds local play files that read from SAF tree URIs', async () => {
+    await mockFolderPickerTree(btoa('tree-data'));
+    const file = buildLocalPlayFileFromTree('demo.sid', '/demo.sid', 'content://tree');
+    const buffer = await file.arrayBuffer();
+    const text = new TextDecoder().decode(new Uint8Array(buffer));
+
+    expect(file.name).toBe('demo.sid');
+    expect(file.webkitRelativePath).toBe('/demo.sid');
+    expect(text).toBe('tree-data');
   });
 
   it('resolves play requests for ultimate entries', () => {

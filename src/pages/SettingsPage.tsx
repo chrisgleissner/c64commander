@@ -44,7 +44,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { downloadTraceZip } from '@/lib/tracing/traceExport';
+import { shareTraceZip } from '@/lib/tracing/traceExport';
+import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
@@ -373,10 +374,9 @@ export default function SettingsPage() {
     addLog('info', 'Diagnostics email prepared', { redacted, label });
   });
 
-  const handleExportTraces = trace(function handleExportTraces(redacted: boolean) {
+  const handleExportTraces = trace(async function handleExportTraces(redacted: boolean) {
     try {
-      downloadTraceZip('c64commander-traces.zip', { redacted });
-      toast({ title: redacted ? 'Redacted trace export ready' : 'Trace export ready' });
+      await shareTraceZip('c64commander-traces.zip', { redacted });
     } catch (error) {
       reportUserError({
         operation: 'TRACE_EXPORT',
@@ -545,7 +545,7 @@ export default function SettingsPage() {
         reportUserError({
           operation: 'SETTINGS_IMPORT',
           title: 'Settings import failed',
-          description: result.error,
+          description: (result as { error: string }).error,
         });
         return;
       }
@@ -573,7 +573,46 @@ export default function SettingsPage() {
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <main className="container py-6 space-y-6">
-        {/* 1. Connection Settings */}
+        {/* 1. Appearance */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.02 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Monitor className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Appearance</h2>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {themeOptions.map((option) => {
+              const Icon = option.icon;
+              const isActive = theme === option.value;
+            
+              return (
+                <button
+                  key={option.value}
+                  onClick={wrapUserEvent(() => setTheme(option.value), 'select', 'ThemeSelector', { title: option.label }, 'ThemeOption')}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
+                    isActive 
+                      ? 'border-primary bg-primary/5' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <Icon className={`h-6 w-6 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm ${isActive ? 'font-medium' : ''}`}>
+                    {option.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* 2. Connection Settings */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -653,59 +692,6 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
-              <Input
-                id="startup-discovery-window"
-                type="number"
-                min={0.5}
-                max={15}
-                step={0.1}
-                value={startupDiscoveryWindowInput}
-                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
-                onBlur={commitStartupDiscoveryWindow}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
-              <Input
-                id="background-rediscovery-interval"
-                type="number"
-                min={1}
-                max={60}
-                step={0.1}
-                value={backgroundRediscoveryIntervalInput}
-                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
-                onBlur={commitBackgroundRediscoveryInterval}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="probe-timeout" className="font-medium">Discovery Probe Timeout (seconds)</Label>
-              <Input
-                id="probe-timeout"
-                type="number"
-                min={0.5}
-                max={10}
-                step={0.1}
-                value={probeTimeoutInput}
-                onChange={(event) => setProbeTimeoutInput(event.target.value)}
-                onBlur={commitProbeTimeout}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitProbeTimeout();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
-            </div>
           </div>
 
           <div className="space-y-4 rounded-lg border border-border/70 p-3">
@@ -788,11 +774,374 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* 1b. Device Safety */}
+        {/* 3. Diagnostics */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.03 }}
+          transition={{ delay: 0.05 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <FileText className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Diagnostics</h2>
+          </div>
+
+          <div className="space-y-4">
+            <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
+              <FileText className="h-4 w-4 mr-2" />
+              Logs
+            </Button>
+
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="debug-logging" className="font-medium">Enable Debug Logging</Label>
+                <p className="text-xs text-muted-foreground">
+                  Emits all debug-level logs for diagnostics, including SAF and REST events.
+                </p>
+              </div>
+              <Checkbox
+                id="debug-logging"
+                checked={debugLoggingEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setDebugLoggingEnabled(enabled);
+                  saveDebugLoggingEnabled(enabled);
+                }}
+              />
+            </div>
+
+            {debugLoggingEnabled && isAndroid ? (
+              <div className="space-y-2 rounded-lg border border-border/70 p-3">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold">SAF diagnostics</p>
+                  <p className="text-xs text-muted-foreground">
+                    Manual checks for persisted SAF permissions and enumeration.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => void refreshSafPermissions()} disabled={safBusy}>
+                    List persisted URIs
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void enumerateSafRoot()}
+                    disabled={safBusy || safUris.length === 0}
+                  >
+                    Enumerate first root
+                  </Button>
+                </div>
+                {safError ? (
+                  <p className="text-xs text-destructive">{safError}</p>
+                ) : null}
+                {safUris.length ? (
+                  <div className="text-xs text-muted-foreground break-words min-w-0">
+                    Persisted: {safUris.map((entry) => redactTreeUri(entry.uri)).filter(Boolean).join(', ')}
+                  </div>
+                ) : null}
+                {safEntries.length ? (
+                  <div className="max-h-28 overflow-auto whitespace-pre-line break-words min-w-0 text-xs text-muted-foreground">
+                    {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join('\n')}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="space-y-2 rounded-lg border border-border/70 p-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Settings transfer</p>
+                <p className="text-xs text-muted-foreground">
+                  Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={handleExportSettings}>
+                  Export settings
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => settingsFileInputRef.current?.click()}
+                >
+                  Import settings
+                </Button>
+              </div>
+              <input
+                ref={settingsFileInputRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  void handleImportSettings(file);
+                  if (event.currentTarget) {
+                    event.currentTarget.value = '';
+                  }
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="config-write-interval" className="font-medium">
+                  Config write spacing
+                </Label>
+                <span className="text-xs text-muted-foreground">{configWriteIntervalMs} ms</span>
+              </div>
+              <Slider
+                id="config-write-interval"
+                min={0}
+                max={2000}
+                step={100}
+                value={[configWriteIntervalMs]}
+                onValueChange={(value) => setConfigWriteIntervalMs(clampConfigWriteIntervalMs(value[0] ?? 0))}
+                onValueCommit={(value) => saveConfigWriteIntervalMs(value[0] ?? 0)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum delay between consecutive config write calls. Default 500 ms.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 4. Play and Disk */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Play className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Play and Disk</h2>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="listPreviewLimit" className="text-sm">
+                List preview limit
+              </Label>
+              <Input
+                id="listPreviewLimit"
+                type="number"
+                min={1}
+                max={200}
+                value={listPreviewInput}
+                onChange={(event) => setListPreviewInput(event.target.value)}
+                onBlur={commitListPreviewLimit}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    commitListPreviewLimit();
+                  }
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls how many playlist or disk items are shown before opening View all. Default is 50.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="disk-autostart-mode" className="text-sm">
+                Disk first-PRG load
+              </Label>
+              <Select
+                value={diskAutostartMode}
+                onValueChange={(value) => {
+                  const mode = value as DiskAutostartMode;
+                  setDiskAutostartMode(mode);
+                  saveDiskAutostartMode(mode);
+                }}
+              >
+                <SelectTrigger id="disk-autostart-mode">
+                  <SelectValue placeholder="Select load mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
+                  <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
+                the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
+                loaders may not like DMA.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 5. Config */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Cpu className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">Config</h2>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div className="space-y-1 min-w-0">
+                <Label htmlFor="auto-demo-mode" className="font-medium">Automatic Demo Mode</Label>
+                <p className="text-xs text-muted-foreground">
+                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
+                </p>
+              </div>
+              <Checkbox
+                id="auto-demo-mode"
+                checked={automaticDemoModeEnabled}
+                onCheckedChange={(checked) => {
+                  const enabled = checked === true;
+                  setAutomaticDemoModeEnabled(enabled);
+                  saveAutomaticDemoModeEnabled(enabled);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
+              <Input
+                id="startup-discovery-window"
+                type="number"
+                min={0.5}
+                max={15}
+                step={0.1}
+                value={startupDiscoveryWindowInput}
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                onBlur={commitStartupDiscoveryWindow}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
+              <Input
+                id="background-rediscovery-interval"
+                type="number"
+                min={1}
+                max={60}
+                step={0.1}
+                value={backgroundRediscoveryIntervalInput}
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                onBlur={commitBackgroundRediscoveryInterval}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 6. HVSC Library */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Cpu className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">HVSC Library</h2>
+          </div>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-start justify-between gap-3 min-w-0">
+              <div
+                className="space-y-1 min-w-0 cursor-pointer"
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setHvscEnabledAndPersist(!isHvscEnabled);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  setHvscEnabledAndPersist(!isHvscEnabled);
+                }}
+              >
+                <Label htmlFor="hvsc-flag" className="font-medium">
+                  Enable HVSC downloads
+                </Label>
+                <p className="text-xs text-muted-foreground">Shows HVSC download and ingest controls on the Play page.</p>
+              </div>
+              <Checkbox
+                id="hvsc-flag"
+                aria-label="Enable HVSC downloads"
+                data-testid="hvsc-toggle"
+                checked={isHvscEnabled}
+                onCheckedChange={(checked) => {
+                  setHvscEnabledAndPersist(checked === true);
+                }}
+              />
+            </div>
+          </div>
+        </motion.div>
+
+        {/* 7. About */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
+          onClick={handleDeveloperTap}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              handleDeveloperTap();
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Info className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">About</h2>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">App Version</span>
+              <span className="font-mono">1.0.0</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">REST API</span>
+              <span className="font-mono">v0.1</span>
+            </div>
+            {isDeveloperModeEnabled ? (
+              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
+            ) : null}
+          </div>
+
+          <a
+            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ultimate REST API Documentation
+          </a>
+        </motion.div>
+
+        {/* Last. Device Safety */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35 }}
           className="bg-card border border-border rounded-xl p-4 space-y-4"
         >
           <div className="flex items-center gap-2">
@@ -827,6 +1176,69 @@ export default function SettingsPage() {
               Mode presets adjust concurrency limits, caching, cooldowns, and backoff behavior.
               Troubleshooting mode also enables debug logging for richer diagnostics.
             </p>
+          </div>
+
+          <div className="rounded-lg border border-border/70 p-3 space-y-4">
+            <div className="space-y-1">
+              <Label className="font-medium">Network timing</Label>
+              <p className="text-xs text-muted-foreground">
+                Tune discovery timing to reduce connection churn or speed up detection.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
+              <Input
+                id="startup-discovery-window"
+                type="number"
+                min={0.5}
+                max={15}
+                step={0.1}
+                value={startupDiscoveryWindowInput}
+                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
+                onBlur={commitStartupDiscoveryWindow}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
+              <Input
+                id="background-rediscovery-interval"
+                type="number"
+                min={1}
+                max={60}
+                step={0.1}
+                value={backgroundRediscoveryIntervalInput}
+                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
+                onBlur={commitBackgroundRediscoveryInterval}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="probe-timeout" className="font-medium">Discovery Probe Timeout (seconds)</Label>
+              <Input
+                id="probe-timeout"
+                type="number"
+                min={0.5}
+                max={10}
+                step={0.1}
+                value={probeTimeoutInput}
+                onChange={(event) => setProbeTimeoutInput(event.target.value)}
+                onBlur={commitProbeTimeout}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') commitProbeTimeout();
+                }}
+              />
+              <p className="text-xs text-muted-foreground">Default 2.5s. Range 0.5s–10s.</p>
+            </div>
           </div>
 
           <div className="rounded-lg border border-border/70 p-3 space-y-4">
@@ -1050,407 +1462,6 @@ export default function SettingsPage() {
             </div>
           </div>
         </motion.div>
-
-        {/* 2. Diagnostics */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <FileText className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Diagnostics</h2>
-          </div>
-
-          <div className="space-y-4">
-            <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
-              <FileText className="h-4 w-4 mr-2" />
-              Logs
-            </Button>
-
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <Label htmlFor="debug-logging" className="font-medium">Enable Debug Logging</Label>
-                <p className="text-xs text-muted-foreground">
-                  Emits all debug-level logs for diagnostics, including SAF and REST events.
-                </p>
-              </div>
-              <Checkbox
-                id="debug-logging"
-                checked={debugLoggingEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  setDebugLoggingEnabled(enabled);
-                  saveDebugLoggingEnabled(enabled);
-                }}
-              />
-            </div>
-
-            {debugLoggingEnabled && isAndroid ? (
-              <div className="space-y-2 rounded-lg border border-border/70 p-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">SAF diagnostics</p>
-                  <p className="text-xs text-muted-foreground">
-                    Manual checks for persisted SAF permissions and enumeration.
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void refreshSafPermissions()} disabled={safBusy}>
-                    List persisted URIs
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void enumerateSafRoot()}
-                    disabled={safBusy || safUris.length === 0}
-                  >
-                    Enumerate first root
-                  </Button>
-                </div>
-                {safError ? (
-                  <p className="text-xs text-destructive">{safError}</p>
-                ) : null}
-                {safUris.length ? (
-                  <div className="text-xs text-muted-foreground break-words min-w-0">
-                    Persisted: {safUris.map((entry) => redactTreeUri(entry.uri)).filter(Boolean).join(', ')}
-                  </div>
-                ) : null}
-                {safEntries.length ? (
-                  <div className="max-h-28 overflow-auto whitespace-pre-line break-words min-w-0 text-xs text-muted-foreground">
-                    {safEntries.map((entry) => `${entry.type.toUpperCase()}: ${entry.path}`).join('\n')}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="space-y-2 rounded-lg border border-border/70 p-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Settings transfer</p>
-                <p className="text-xs text-muted-foreground">
-                  Export or import non-sensitive settings (connection timing, safety presets, and diagnostics).
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={handleExportSettings}>
-                  Export settings
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => settingsFileInputRef.current?.click()}
-                >
-                  Import settings
-                </Button>
-              </div>
-              <input
-                ref={settingsFileInputRef}
-                type="file"
-                accept="application/json"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  void handleImportSettings(file);
-                  if (event.currentTarget) {
-                    event.currentTarget.value = '';
-                  }
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="config-write-interval" className="font-medium">
-                  Config write spacing
-                </Label>
-                <span className="text-xs text-muted-foreground">{configWriteIntervalMs} ms</span>
-              </div>
-              <Slider
-                id="config-write-interval"
-                min={0}
-                max={2000}
-                step={100}
-                value={[configWriteIntervalMs]}
-                onValueChange={(value) => setConfigWriteIntervalMs(clampConfigWriteIntervalMs(value[0] ?? 0))}
-                onValueCommit={(value) => saveConfigWriteIntervalMs(value[0] ?? 0)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum delay between consecutive config write calls. Default 500 ms.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 3. Appearance */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Monitor className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Appearance</h2>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {themeOptions.map((option) => {
-              const Icon = option.icon;
-              const isActive = theme === option.value;
-              
-              return (
-                <button
-                  key={option.value}
-                  onClick={wrapUserEvent(() => setTheme(option.value), 'select', 'ThemeSelector', { title: option.label }, 'ThemeOption')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-                    isActive 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <Icon className={`h-6 w-6 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={`text-sm ${isActive ? 'font-medium' : ''}`}>
-                    {option.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* 4. Play and Disk */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Play className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Play and Disk</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="listPreviewLimit" className="text-sm">
-                List preview limit
-              </Label>
-              <Input
-                id="listPreviewLimit"
-                type="number"
-                min={1}
-                max={200}
-                value={listPreviewInput}
-                onChange={(event) => setListPreviewInput(event.target.value)}
-                onBlur={commitListPreviewLimit}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    commitListPreviewLimit();
-                  }
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Controls how many playlist or disk items are shown before opening View all. Default is 50.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="disk-autostart-mode" className="text-sm">
-                Disk first-PRG load
-              </Label>
-              <Select
-                value={diskAutostartMode}
-                onValueChange={(value) => {
-                  const mode = value as DiskAutostartMode;
-                  setDiskAutostartMode(mode);
-                  saveDiskAutostartMode(mode);
-                }}
-              >
-                <SelectTrigger id="disk-autostart-mode">
-                  <SelectValue placeholder="Select load mode" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="kernal">Classic KERNAL load (LOAD"*",8,1)</SelectItem>
-                  <SelectItem value="dma">DMA (Direct Memory Access)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Classic KERNAL load mounts the disk and uses LOAD"*",8,1 then RUN. DMA (Direct Memory Access) extracts
-                the first PRG from a D64/D71/D81 image and writes it directly to C64 memory for faster starts. Some
-                loaders may not like DMA.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 5. Config */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Cpu className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">Config</h2>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div className="space-y-1 min-w-0">
-                <Label htmlFor="auto-demo-mode" className="font-medium">Automatic Demo Mode</Label>
-                <p className="text-xs text-muted-foreground">
-                  When no hardware is found during discovery, automatically offer Demo Mode for this session.
-                </p>
-              </div>
-              <Checkbox
-                id="auto-demo-mode"
-                checked={automaticDemoModeEnabled}
-                onCheckedChange={(checked) => {
-                  const enabled = checked === true;
-                  setAutomaticDemoModeEnabled(enabled);
-                  saveAutomaticDemoModeEnabled(enabled);
-                }}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="startup-discovery-window" className="font-medium">Startup Discovery Window (seconds)</Label>
-              <Input
-                id="startup-discovery-window"
-                type="number"
-                min={0.5}
-                max={15}
-                step={0.1}
-                value={startupDiscoveryWindowInput}
-                onChange={(event) => setStartupDiscoveryWindowInput(event.target.value)}
-                onBlur={commitStartupDiscoveryWindow}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitStartupDiscoveryWindow();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 3s. Range 0.5s–15s.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="background-rediscovery-interval" className="font-medium">Background Rediscovery Interval (seconds)</Label>
-              <Input
-                id="background-rediscovery-interval"
-                type="number"
-                min={1}
-                max={60}
-                step={0.1}
-                value={backgroundRediscoveryIntervalInput}
-                onChange={(event) => setBackgroundRediscoveryIntervalInput(event.target.value)}
-                onBlur={commitBackgroundRediscoveryInterval}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') commitBackgroundRediscoveryInterval();
-                }}
-              />
-              <p className="text-xs text-muted-foreground">Default 5s. Range 1s–60s.</p>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Cpu className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">HVSC Library</h2>
-          </div>
-          <div className="space-y-3 text-sm">
-            <div className="flex items-start justify-between gap-3 min-w-0">
-              <div
-                className="space-y-1 min-w-0 cursor-pointer"
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  setHvscEnabledAndPersist(!isHvscEnabled);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key !== 'Enter' && event.key !== ' ') return;
-                  event.preventDefault();
-                  setHvscEnabledAndPersist(!isHvscEnabled);
-                }}
-              >
-                <Label htmlFor="hvsc-flag" className="font-medium">
-                  Enable HVSC downloads
-                </Label>
-                <p className="text-xs text-muted-foreground">Shows HVSC download and ingest controls on the Play page.</p>
-              </div>
-              <Checkbox
-                id="hvsc-flag"
-                aria-label="Enable HVSC downloads"
-                data-testid="hvsc-toggle"
-                checked={isHvscEnabled}
-                onCheckedChange={(checked) => {
-                  setHvscEnabledAndPersist(checked === true);
-                }}
-              />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* 7. About */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
-          onClick={handleDeveloperTap}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              handleDeveloperTap();
-            }
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Info className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">About</h2>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">App Version</span>
-              <span className="font-mono">1.0.0</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">REST API</span>
-              <span className="font-mono">v0.1</span>
-            </div>
-            {isDeveloperModeEnabled ? (
-              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
-            ) : null}
-          </div>
-
-          <a
-            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ultimate REST API Documentation
-          </a>
-        </motion.div>
       </main>
 
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
@@ -1526,37 +1537,51 @@ export default function SettingsPage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => {
-                    clearTraceEvents();
+                  onClick={async () => {
+                    await Promise.resolve(clearTraceEvents());
+                    setTraceEvents([]);
                     toast({ title: 'Traces cleared' });
                   }}
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
                   Clear traces
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleExportTraces(false)}>
+                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(false)}>
                   <Share2 className="h-4 w-4 mr-2" />
-                  Export traces
+                  Share / Export
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => handleExportTraces(true)}>
+                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
-                  Export redacted traces
+                  Share Redacted
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
               {traceEvents.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No traces recorded.</p>
               ) : (
-                traceEvents.map((entry, index) => (
-                  <details key={entry.id} className="rounded-lg border border-border p-3">
-                    <summary className="cursor-pointer text-sm font-medium">
-                      {index + 1}. {entry.type} · {entry.origin}
-                    </summary>
-                    <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                      {JSON.stringify(entry, null, 2)}
-                    </pre>
-                  </details>
-                ))
+                <>
+                  {traceEvents.length > 100 && (
+                    <p className="text-xs text-muted-foreground font-medium text-amber-600">
+                      Showing last 100 events. Export for full history.
+                    </p>
+                  )}
+                  {traceEvents
+                    .slice(-100)
+                    .reverse()
+                    .map((entry) => (
+                      <details key={entry.id} className="rounded-lg border border-border p-3">
+                        <summary className="cursor-pointer text-sm font-medium flex justify-between items-center select-none">
+                          <span>{getTraceTitle(entry)}</span>
+                          <span className="text-muted-foreground font-mono text-xs ml-2 shrink-0">
+                            +{entry.relativeMs}ms
+                          </span>
+                        </summary>
+                        <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry, null, 2)}
+                        </pre>
+                      </details>
+                    ))}
+                </>
               )}
             </TabsContent>
           </Tabs>

@@ -20,6 +20,8 @@ vi.mock('@capacitor/core', () => ({
 describe('hvscReleaseService', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
+    vi.stubGlobal('localStorage', { getItem: vi.fn() });
+    
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(CapacitorHttp.request).mockReset();
   });
@@ -88,5 +90,45 @@ describe('hvscReleaseService', () => {
       url: 'https://example.com/hvsc/',
       method: 'GET',
     }));
+  });
+
+  it('handles native platform check exception', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockImplementationOnce(() => {
+        throw new Error('explode');
+    });
+    // Should fallback to fetch (non-native)
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(new Response('<html></html>', { status: 200 }));
+    
+    await fetchLatestHvscVersions('http://foo.com');
+    // If it didn't crash, it caught the error and returned false (web)
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it('resolves base URL from localStorage if available', async () => {
+    // Stub localStorage
+    const getItem = vi.fn().mockReturnValue('https://stored.com/hvsc');
+    vi.stubGlobal('localStorage', { getItem });
+    
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(new Response('<html></html>', { status: 200 }));
+    
+    // Pass empty/undefined url to trigger lookup
+    const result = await fetchLatestHvscVersions();
+    
+    expect(result.baseUrl).toBe('https://stored.com/hvsc/');
+    expect(fetchMock).toHaveBeenCalledWith('https://stored.com/hvsc/', expect.anything());
+  });
+
+  it('throws on native HTTP error', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 404,
+      data: 'Not Found',
+      headers: {},
+      url: ''
+    });
+
+    await expect(fetchLatestHvscVersions('http://foo.com')).rejects.toThrow('HVSC release fetch failed: 404');
   });
 });

@@ -8,6 +8,7 @@ export type DiskEntry = {
   path: string;
   location: DiskLocation;
   group: string | null;
+  sourceId?: string | null;
   localUri?: string | null;
   localTreeUri?: string | null;
   sizeBytes?: number | null;
@@ -56,6 +57,7 @@ export const createDiskEntry = (params: {
   path: string;
   location: DiskLocation;
   group?: string | null;
+  sourceId?: string | null;
   localUri?: string | null;
   localTreeUri?: string | null;
   name?: string | null;
@@ -70,6 +72,7 @@ export const createDiskEntry = (params: {
     path,
     location: params.location,
     group: params.group ?? null,
+    sourceId: params.sourceId ?? null,
     localUri: params.localUri ?? null,
     localTreeUri: params.localTreeUri ?? null,
     sizeBytes: params.sizeBytes ?? null,

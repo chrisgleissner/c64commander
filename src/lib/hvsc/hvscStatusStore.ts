@@ -103,7 +103,7 @@ export const applyHvscProgressEventToSummary = (
         status: 'in-progress',
         startedAt: summary.download.startedAt ?? now,
         durationMs: event.elapsedTimeMs ?? summary.download.durationMs ?? null,
-        sizeBytes: event.totalBytes ?? event.downloadedBytes ?? summary.download.sizeBytes ?? null,
+        sizeBytes: event.totalBytes ?? (event.percent === 100 ? event.downloadedBytes : summary.download.sizeBytes) ?? null,
         downloadedBytes: event.downloadedBytes ?? summary.download.downloadedBytes ?? null,
         totalBytes: event.totalBytes ?? summary.download.totalBytes ?? null,
         errorCategory: null,
@@ -115,6 +115,13 @@ export const applyHvscProgressEventToSummary = (
   if (extractionStages.has(event.stage)) {
     return {
       ...summary,
+      download: summary.download.status === 'in-progress'
+        ? {
+          ...summary.download,
+          status: 'success',
+          finishedAt: summary.download.finishedAt ?? now,
+        }
+        : summary.download,
       extraction: {
         ...summary.extraction,
         status: 'in-progress',

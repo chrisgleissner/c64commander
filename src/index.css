@@ -129,6 +129,23 @@
   }
 }
 
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(-20%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.progress-indeterminate {
+  width: 40%;
+  animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
+
 @layer base {
   * {
     @apply border-border;

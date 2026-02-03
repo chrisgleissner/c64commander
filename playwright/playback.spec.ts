@@ -111,6 +111,8 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
+    await expect(page.getByTestId('playlist-list')).toContainText('Track_0001.sid');
+
     await clearTraces(page);
 
     await page.getByTestId('playlist-play').click();
@@ -357,10 +359,15 @@ test.describe('Playback file browser', () => {
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
       expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
+    
+    // Verify list is populated
+    await expect(page.getByText('Track_0001.sid').first()).toBeVisible();
 
-    const scrollArea = page.getByTestId('action-list-scroll');
-    const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
-    expect(scrollable).toBeTruthy();
+    const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
+    await expect.poll(async () => {
+      const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
+      return scrollable;
+    }).toBeTruthy();
 
     await scrollArea.evaluate((node: HTMLElement) => {
       node.scrollTop = node.scrollHeight;
@@ -400,8 +407,8 @@ test.describe('Playback file browser', () => {
     const viewAllFilter = page.getByTestId('view-all-filter-input');
     await viewAllFilter.fill('Gamma');
     await snap(page, testInfo, 'view-all-filtered');
-    await expect(page.getByTestId('action-list-scroll')).toContainText('Gamma.sid');
-    await expect(page.getByTestId('action-list-scroll')).not.toContainText('Alpha.sid');
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText('Gamma.sid');
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText('Alpha.sid');
   });
 
   test('play add button uses "Add items" label and opens dialog', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -422,7 +429,7 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await page.getByRole('button', { name: 'View all' }).click();
 
-    const scrollArea = page.getByTestId('action-list-scroll');
+    const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     const initialMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
       width: node.clientWidth,
       height: node.clientHeight,

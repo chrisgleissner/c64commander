@@ -1,0 +1,11 @@
+appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+tags:
+  - subflow
+---
+- tapOn:
+    text: "Continue in Demo Mode"
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: ${SHORT_TIMEOUT}

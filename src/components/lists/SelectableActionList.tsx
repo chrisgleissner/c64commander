@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState, useRef } from 'react';
+import React, { useCallback, useMemo, useState, useRef } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { MoreVertical, Play, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -261,6 +262,7 @@ export const SelectableActionList = ({
   const [filterText, setFilterText] = useState('');
   const [viewAllFilterText, setViewAllFilterText] = useState('');
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   
   const filterWithHeaders = useCallback((query: string) => {
     const trimmed = query.trim();
@@ -461,18 +463,44 @@ export const SelectableActionList = ({
                   </div>
                 ) : null}
               </DialogHeader>
-              <div 
-                ref={viewAllScrollRef}
-                className="flex-1 min-h-0 overflow-y-auto px-6 py-4" 
-                data-testid="action-list-scroll"
-              >
-                <div className="bg-card border border-border rounded-xl p-4 overflow-hidden">
-                  {renderList(viewAllFilteredItems)}
+              <div className="flex-1 min-h-0 flex flex-col px-6 py-4">
+                <div className="bg-card border border-border rounded-xl p-4 overflow-hidden flex-1 h-full min-h-0 flex flex-col">
+                  {viewAllFilteredItems.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">{emptyLabel}</p>
+                  ) : (
+                    <Virtuoso
+                      ref={virtuosoRef}
+                      style={{ height: '100%' }}
+                      data={viewAllFilteredItems}
+                      defaultItemHeight={60}
+                      overscan={500}
+                      scrollerRef={(ref) => {
+                        if (ref && viewAllScrollRef) {
+                          (viewAllScrollRef as React.MutableRefObject<HTMLElement | null>).current = ref as HTMLElement;
+                        }
+                      }}
+                      itemContent={(index, item) => (
+                        <div className="mb-2 last:mb-0">
+                          <ActionListRow item={item} rowTestId={rowTestId} />
+                        </div>
+                      )}
+                    />
+                  )}
                 </div>
               </div>
               <AlphabetScrollbar 
                 items={viewAllFilteredItems.filter(item => item.variant !== 'header').map(item => ({ title: item.title, id: item.id }))}
                 scrollContainerRef={viewAllScrollRef}
+                onScrollToIndex={(index) => {
+                  const filtered = viewAllFilteredItems.filter(item => item.variant !== 'header');
+                  const targetItem = filtered[index];
+                  if (targetItem) {
+                    const originalIndex = viewAllFilteredItems.findIndex(item => item.id === targetItem.id);
+                    if (originalIndex !== -1) {
+                      virtuosoRef.current?.scrollToIndex({ index: originalIndex, align: 'start' });
+                    }
+                  }
+                }}
               />
             </div>
           </DialogContent>

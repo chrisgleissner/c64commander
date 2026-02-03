@@ -53,3 +53,6 @@ android/keystore/
 # Other
 golden-trace-reference
 tmp-ci-artifacts
+
+# Planning artifacts
+.planning/

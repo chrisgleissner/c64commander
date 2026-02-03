@@ -66,6 +66,26 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - **Single Responsibility**: Functions and classes must have one clear responsibility and a well-defined scope.
 - **Stable Public Surfaces**: Public APIs must be minimal, intentional, and documented. Breaking changes require explicit versioning.
 
+## MANDATORY: Exception Handling (SHOWSTOPPER)
+
+It is absolutely forbidden to catch an exception silently.
+
+Whenever an exception is caught, you must do **one** of the following:
+
+1. **Rethrow it**, enriched with context:
+   - What operation was being performed
+   - Relevant identifiers, paths, or inputs
+2. **Log it** at WARN or ERROR level:
+   - Full stack trace
+   - Context explaining what failed and why
+
+Unacceptable patterns include:
+- `catch (e) {}`
+- `catch (e) { /* ignore */ }`
+- `catch (e) { return null; }` without logging or rethrowing
+
+Violine this rule is a release blocker.
+
 ## MANDATORY: Error investigation
 
 - Always investigate errors, warnings, and assertion failures.

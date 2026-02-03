@@ -257,7 +257,11 @@ export const expectRestTraceSequence = async (
   }).toBe(true);
 
   const traces = await getTraces(page);
-  return assertRestTraceSequence(testInfo, traces, matcher, expectedTypes);
+  const result = assertRestTraceSequence(testInfo, traces, matcher, expectedTypes);
+  if (!result) {
+    throw new Error(`Expected rest trace sequence not found for matcher: ${String(matcher)}`);
+  }
+  return result;
 };
 
 export const expectFtpTraceSequence = async (

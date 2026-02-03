@@ -49,8 +49,18 @@ type QueueTask<T> = {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const isTestEnv = () => typeof process !== 'undefined'
-  && (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test');
+const isTestEnv = () => {
+  if (typeof import.meta !== 'undefined') {
+    const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+    if (env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  }
+  if (typeof process !== 'undefined') {
+    if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test' || process.env.PLAYWRIGHT === '1') {
+      return true;
+    }
+  }
+  return false;
+};
 
 class InteractionScheduler {
   private running = 0;

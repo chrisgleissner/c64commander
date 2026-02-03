@@ -33,9 +33,14 @@ import {
   recordRestResponse,
   recordTraceError,
   resetTraceSession,
+  persistTracesToSession,
+  restoreTracesFromSession,
+  recordDeviceGuard
 } from '@/lib/tracing/traceSession';
+import { getCurrentTraceIdCounters, setTraceIdCounters } from '@/lib/tracing/traceIds';
+import type { TraceActionContext } from '@/lib/tracing/types';
 
-const action = { correlationId: 'COR-1', origin: 'user', name: 'Action', componentName: 'Widget' };
+const action: TraceActionContext = { correlationId: 'COR-1', origin: 'user', name: 'Action', componentName: 'Widget' };
 
 describe('traceSession', () => {
   beforeEach(() => {
@@ -45,9 +50,14 @@ describe('traceSession', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('records action lifecycle events', () => {
+    // Need window for event dispatch (appendEvent)
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    
     recordActionStart(action);
     recordActionScopeStart(action, 'scope');
     recordActionScopeEnd(action, 'scope', null);
@@ -61,6 +71,7 @@ describe('traceSession', () => {
   });
 
   it('records backend decisions once per correlation', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
     recordRestRequest(action, {
       method: 'GET',
       url: 'http://device',
@@ -82,6 +93,7 @@ describe('traceSession', () => {
   });
 
   it('records REST and FTP responses', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
     recordRestResponse(action, {
       status: 200,
       body: { ok: true },
@@ -103,6 +115,13 @@ describe('traceSession', () => {
   it('deduplicates trace errors and exports on error', async () => {
     vi.useFakeTimers();
     const error = new Error('boom');
+    
+    const dispatchSpy = vi.fn();
+    vi.stubGlobal('window', { 
+        dispatchEvent: dispatchSpy, 
+        setTimeout: setTimeout,
+        CustomEvent: class CustomEvent { constructor(public type: string, public detail?: any) {} }
+    });
 
     recordTraceError(action, error);
     recordTraceError(action, error);
@@ -114,11 +133,74 @@ describe('traceSession', () => {
 
     const lastExport = getLastTraceExport();
     expect(lastExport?.reason).toBe('error');
+    expect(dispatchSpy).toHaveBeenCalled();
   });
 
   it('exports trace zips on demand', () => {
     const zip = exportTraceZip();
     expect(zip).toBeInstanceOf(Uint8Array);
     expect(getLastTraceExport()?.reason).toBe('manual');
+  });
+  
+  it('persists and restores traces from sessionStorage', () => {
+    const storage: Record<string, string> = {};
+    vi.stubGlobal('sessionStorage', {
+      setItem: (key: string, value: string) => { storage[key] = value; },
+      getItem: (key: string) => storage[key] || null,
+      removeItem: (key: string) => { delete storage[key]; }
+    });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+
+    recordActionStart({ ...action, correlationId: 'C1' });
+    const countersBefore = getCurrentTraceIdCounters();
+    
+    persistTracesToSession();
+    
+    expect(storage['__c64uPersistedTraces']).toBeDefined();
+    expect(storage['__c64uPersistedTraceCounters']).toBeDefined();
+    
+    resetTraceSession(0, 0); 
+    setTraceIdCounters(0, 0);
+    expect(getTraceEvents()).toHaveLength(0);
+    
+    restoreTracesFromSession();
+    
+    expect(getTraceEvents()).toHaveLength(1);
+    const countersAfter = getCurrentTraceIdCounters();
+    expect(countersAfter.eventCounter).toBe(countersBefore.eventCounter);
+    expect(storage['__c64uPersistedTraces']).toBeUndefined(); 
+  });
+
+  it('handles restore with no data', () => {
+    vi.stubGlobal('sessionStorage', {
+      getItem: () => null,
+      removeItem: () => {}
+    });
+     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    
+    restoreTracesFromSession();
+    expect(getTraceEvents()).toHaveLength(0);
+  });
+  
+  it('records device guard event', () => {
+     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    recordDeviceGuard(action, { allowed: true });
+    const events = getTraceEvents();
+    expect(events).toContainEqual(expect.objectContaining({ type: 'device-guard', data: { allowed: true } }));
+  });
+
+  it('handles storage errors gracefully', () => {
+     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+     vi.stubGlobal('sessionStorage', {
+       setItem: () => { throw new Error('Full'); },
+       getItem: () => { throw new Error('Corrupt'); }
+     });
+     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+     
+     persistTracesToSession();
+     expect(consoleSpy).toHaveBeenCalledWith('Failed to persist traces:', expect.any(Error));
+     
+     restoreTracesFromSession();
+     expect(consoleSpy).toHaveBeenCalledWith('Failed to restore traces:', expect.any(Error));
   });
 });

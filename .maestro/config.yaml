@@ -1,3 +1,11 @@
+# Maestro test configuration
+# On CI, only tests tagged with 'ci-critical' run to keep build times under 6 minutes.
+# The ci-critical tag identifies tests that verify native Android components requiring
+# a real emulator (e.g., file picker integration).
+#
+# Locally, tests tagged with 'device' run by default.
+# Tests tagged with 'slow', 'edge', 'hvsc' are excluded unless explicitly requested.
+
 testOutputDir: ../test-results/maestro
 excludeTags:
   - subflow
@@ -5,5 +13,3 @@ excludeTags:
   - slow
   - edge
   - hvsc
-  - file-picker
-  - device

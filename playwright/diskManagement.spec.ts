@@ -500,7 +500,7 @@ test.describe('Disk management', () => {
       expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
 
-    const scrollArea = page.getByTestId('action-list-scroll');
+    const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
     const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
     expect(scrollable).toBeTruthy();
     await scrollArea.evaluate((node: HTMLElement) => {
@@ -590,8 +590,8 @@ test.describe('Disk management', () => {
     await filter.fill('Disk_005');
     await snap(page, testInfo, 'disk-view-all-filtered');
 
-    await expect(page.getByTestId('action-list-scroll')).toContainText('Disk_005.d64');
-    await expect(page.getByTestId('action-list-scroll')).not.toContainText('Disk_001.d64');
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).toContainText('Disk_005.d64');
+    await expect(page.locator('[data-virtuoso-scroller="true"]')).not.toContainText('Disk_001.d64');
   });
 
   test('disk removal wording is non-destructive @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {

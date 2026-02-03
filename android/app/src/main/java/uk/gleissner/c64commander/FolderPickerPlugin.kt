@@ -27,6 +27,32 @@ class FolderPickerPlugin : Plugin() {
     startActivityForResult(call, intent, "pickDirectoryResult")
   }
 
+  @PluginMethod
+  fun pickFile(call: PluginCall) {
+    val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+    intent.addCategory(Intent.CATEGORY_OPENABLE)
+    intent.type = "*/*"
+    val mimeTypesArray = call.getArray("mimeTypes")
+    val mimeTypes: Array<String>? = if (mimeTypesArray != null) {
+      val list = mutableListOf<String>()
+      for (index in 0 until mimeTypesArray.length()) {
+        val value = mimeTypesArray.opt(index)?.toString()
+        if (!value.isNullOrBlank()) {
+          list.add(value)
+        }
+      }
+      list.toTypedArray()
+    } else {
+      null
+    }
+    if (mimeTypes != null && mimeTypes.isNotEmpty()) {
+      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
+    }
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+    startActivityForResult(call, intent, "pickFileResult")
+  }
+
   @ActivityCallback
   private fun pickDirectoryResult(call: PluginCall, result: ActivityResult) {
     if (result.resultCode != Activity.RESULT_OK) {
@@ -62,6 +88,56 @@ class FolderPickerPlugin : Plugin() {
         val response = JSObject()
         response.put("treeUri", treeUri.toString())
         response.put("rootName", root.name ?: "")
+        response.put("permissionPersisted", true)
+        call.resolve(response)
+      } catch (error: Exception) {
+        call.reject(error.message, error)
+      }
+    }
+  }
+
+  @ActivityCallback
+  private fun pickFileResult(call: PluginCall, result: ActivityResult) {
+    if (result.resultCode != Activity.RESULT_OK) {
+      call.reject("File selection canceled")
+      return
+    }
+
+    val data = result.data
+    val fileUri = data?.data
+    if (fileUri == null) {
+      call.reject("No file selected")
+      return
+    }
+
+    val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    try {
+      context.contentResolver.takePersistableUriPermission(fileUri, flags)
+    } catch (error: SecurityException) {
+      call.reject("Persistable permission rejected", error)
+      return
+    }
+
+    executor.execute {
+      try {
+        val doc = DocumentFile.fromSingleUri(context, fileUri)
+          ?: throw IllegalStateException("Unable to access selected file")
+        val permissionPersisted = context.contentResolver.persistedUriPermissions.any {
+          it.uri == fileUri && it.isReadPermission
+        }
+        if (!permissionPersisted) {
+          throw IllegalStateException("Persistable permission not persisted")
+        }
+        val response = JSObject()
+        response.put("uri", fileUri.toString())
+        response.put("name", doc.name ?: "")
+        response.put("sizeBytes", doc.length())
+        val modifiedAt = if (doc.lastModified() > 0) {
+          val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+          formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
+          formatter.format(java.util.Date(doc.lastModified()))
+        } else null
+        response.put("modifiedAt", modifiedAt)
         response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
