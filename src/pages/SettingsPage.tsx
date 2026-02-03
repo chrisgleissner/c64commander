@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
+import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { shareTraceZip } from '@/lib/tracing/traceExport';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
@@ -791,7 +792,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
               <FileText className="h-4 w-4 mr-2" />
-              Logs
+              Logs and Traces
             </Button>
 
             <div className="flex items-start justify-between gap-3 min-w-0">
@@ -1503,7 +1504,7 @@ export default function SettingsPage() {
                 errorLogs.map((entry) => (
                   <div key={entry.id} className="rounded-lg border border-border p-3">
                     <p className="text-sm font-medium">{entry.message}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(entry.timestamp).toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{formatLocalTime(entry.timestamp)}</p>
                     {entry.details && (
                       <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                         {JSON.stringify(entry.details, null, 2)}
@@ -1521,7 +1522,7 @@ export default function SettingsPage() {
                   <div key={entry.id} className="rounded-lg border border-border p-3">
                     <p className="text-sm font-medium">{entry.message}</p>
                     <p className="text-xs text-muted-foreground">
-                      {entry.level.toUpperCase()} · {new Date(entry.timestamp).toLocaleString()}
+                      {entry.level.toUpperCase()} · {formatLocalTime(entry.timestamp)}
                     </p>
                     {entry.details && (
                       <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
@@ -1573,7 +1574,7 @@ export default function SettingsPage() {
                         <summary className="cursor-pointer text-sm font-medium flex justify-between items-center select-none">
                           <span>{getTraceTitle(entry)}</span>
                           <span className="text-muted-foreground font-mono text-xs ml-2 shrink-0">
-                            +{entry.relativeMs}ms
+                            {formatLocalTime(entry.timestamp)}
                           </span>
                         </summary>
                         <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">

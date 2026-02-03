@@ -85,4 +85,22 @@ describe('hvscStatusStore', () => {
     expect(afterExtraction.download.status).toBe('success');
     expect(afterExtraction.extraction.status).toBe('in-progress');
   });
+
+  it('marks download success when percent reaches 100', () => {
+    const base = getDefaultHvscStatusSummary();
+    const event = {
+      stage: 'download',
+      message: 'Downloaded',
+      downloadedBytes: 100,
+      totalBytes: 100,
+      percent: 100,
+      elapsedTimeMs: 1234,
+    } as any;
+
+    const next = applyHvscProgressEventToSummary(base, event, null);
+    expect(next.download.status).toBe('success');
+    expect(next.download.finishedAt).toBeTruthy();
+    expect(next.download.durationMs).toBe(1234);
+    expect(next.download.totalBytes).toBe(100);
+  });
 });

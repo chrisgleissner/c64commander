@@ -233,6 +233,7 @@ export default function PlayFilesPage() {
   const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionActiveRef = useRef(false);
+  const previousVolumeIndexRef = useRef<number | null>(null);
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
   const volumeDragRef = useRef(false);
@@ -398,6 +399,7 @@ export default function PlayFilesPage() {
   }, [status.isConnected]);
 
   useEffect(() => {
+    if (updateConfigBatch.isPending) return;
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
       setVolumeMuted(false);
       setVolumeIndex(defaultVolumeIndex);
@@ -434,7 +436,7 @@ export default function PlayFilesPage() {
     activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
     const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
     setVolumeIndex(nextIndex);
-  }, [defaultVolumeIndex, enabledSidVolumeItems, resolveVolumeIndex, volumeSteps]);
+  }, [defaultVolumeIndex, enabledSidVolumeItems, resolveVolumeIndex, updateConfigBatch.isPending, volumeSteps]);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -1273,6 +1275,7 @@ export default function PlayFilesPage() {
     if (!target) return;
     const updates = buildEnabledSidVolumeUpdates(sidVolumeItems, sidEnablement, target);
     manualMuteSnapshotRef.current = null;
+    previousVolumeIndexRef.current = nextIndex;
 
     volumeUpdateSeqRef.current += 1;
     const token = volumeUpdateSeqRef.current;
@@ -1301,6 +1304,7 @@ export default function PlayFilesPage() {
     const nextIndex = value[0] ?? 0;
     setVolumeIndex(nextIndex);
     if (volumeMuted) {
+      previousVolumeIndexRef.current = nextIndex;
       const snapshot = manualMuteSnapshotRef.current;
       const target = volumeSteps[nextIndex]?.option;
       if (snapshot && target) {
@@ -1317,6 +1321,7 @@ export default function PlayFilesPage() {
   const handleVolumeCommit = useCallback(async (nextIndex: number) => {
     volumeDragRef.current = false;
     if (volumeMuted) {
+      previousVolumeIndexRef.current = nextIndex;
       const snapshot = manualMuteSnapshotRef.current;
       const target = volumeSteps[nextIndex]?.option;
       if (snapshot && target) {
@@ -1338,6 +1343,7 @@ export default function PlayFilesPage() {
     const items = await resolveEnabledSidVolumeItems(true);
     if (!items.length) return;
     if (!volumeMuted) {
+      previousVolumeIndexRef.current = volumeIndex;
       await ensureVolumeSessionSnapshot();
       manualMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(items, sidEnablement);
       setVolumeMuted(true);
@@ -1345,7 +1351,14 @@ export default function PlayFilesPage() {
       return;
     }
     const snapshot = manualMuteSnapshotRef.current;
-    const updates = buildEnabledSidUnmuteUpdates(snapshot, sidEnablement);
+    let updates = buildEnabledSidUnmuteUpdates(snapshot, sidEnablement);
+    if (!Object.keys(updates).length) {
+      const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
+      const target = volumeSteps[fallbackIndex]?.option;
+      if (target) {
+        updates = buildEnabledSidVolumeUpdates(items, sidEnablement, target);
+      }
+    }
     if (Object.keys(updates).length) {
       await applyAudioMixerUpdates(updates, 'Unmute');
     }
@@ -1355,10 +1368,13 @@ export default function PlayFilesPage() {
     applyAudioMixerUpdates,
     buildEnabledSidUnmuteUpdates,
     buildEnabledSidVolumeSnapshot,
+    buildEnabledSidVolumeUpdates,
     ensureVolumeSessionSnapshot,
     resolveEnabledSidVolumeItems,
     sidEnablement,
+    volumeIndex,
     volumeMuted,
+    volumeSteps,
   ]);
 
   const handleDurationSliderChange = useCallback((value: number[]) => {

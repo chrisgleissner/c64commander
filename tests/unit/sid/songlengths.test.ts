@@ -63,4 +63,10 @@ describe('parseSonglengths', () => {
     const md5Duration = await resolveSonglengthsDurationMs(data, '/missing.sid', file);
     expect(md5Duration).toBe(42 * 1000);
   });
+
+  it('resolves duration by path without file data', async () => {
+    const data = parseSonglengths('/songs/demo.sid 0:25');
+    const duration = await resolveSonglengthsDurationMs(data, '/songs/demo.sid', null);
+    expect(duration).toBe(25 * 1000);
+  });
 });

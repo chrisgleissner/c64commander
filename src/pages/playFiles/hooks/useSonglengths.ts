@@ -354,10 +354,17 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   ) => {
     const updated = await Promise.all(
       items.map(async (item) => {
-        if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
-        const filePath = getLocalFilePath(item.request.file);
+        if (item.category !== 'sid') return item;
+        const isLocal = item.request.source === 'local';
+        const filePath = isLocal && item.request.file
+          ? getLocalFilePath(item.request.file)
+          : normalizeLocalPath(item.request.path);
         const songlengths = await loadSonglengthsForPath(filePath, songlengthsOverrides);
-        const resolvedDurationMs = await resolveSonglengthsDurationMs(songlengths, filePath, item.request.file);
+        const resolvedDurationMs = await resolveSonglengthsDurationMs(
+          songlengths,
+          filePath,
+          isLocal ? item.request.file : null,
+        );
         if (resolvedDurationMs === null) return item;
         return { ...item, durationMs: resolvedDurationMs };
       }),

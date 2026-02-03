@@ -1,6 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { addLog } from '@/lib/logging';
+import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { reportUserError } from '@/lib/uiErrors';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
@@ -9,6 +10,8 @@ import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapt
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
+import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
+import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import type { AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
@@ -186,11 +189,21 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const playlistItems: PlaylistItem[] = [];
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
-      if (source.type === 'local') {
+      if (source.type === 'local' || source.type === 'ultimate') {
+        const isUltimateSource = source.type === 'ultimate';
         const treeUri = localSourceTreeUris.get(source.id);
         const entriesMap = localEntriesBySourceId.get(source.id);
         const knownSonglengths = new Set(songlengthsFiles.map((entry) => entry.path));
         const discovered: SonglengthsFileEntry[] = [];
+        const normalizeFtpHost = (host: string) => host.split(':')[0] ?? host;
+        const base64ToArrayBuffer = (base64: string) => {
+          const binary = atob(base64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+          return bytes.buffer;
+        };
         const addSonglengthsEntry = (path: string, file?: LocalPlayFile) => {
           if (!file) return;
           const normalizedPath = normalizeSourcePath(path);
@@ -201,6 +214,23 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const resolveSonglengthsFile = (entryPath: string, entryName: string, modifiedAt?: string | null) => {
           const normalizedPath = normalizeSourcePath(entryPath);
           const lastModified = parseModifiedAt(modifiedAt);
+          if (isUltimateSource) {
+            return {
+              name: entryName,
+              webkitRelativePath: normalizedPath,
+              lastModified: lastModified ?? Date.now(),
+              arrayBuffer: async () => {
+                const { deviceHost, password } = getC64APIConfigSnapshot();
+                const response = await readFtpFile({
+                  host: normalizeFtpHost(deviceHost),
+                  port: getStoredFtpPort(),
+                  password: password ?? '',
+                  path: normalizedPath,
+                });
+                return base64ToArrayBuffer(response.data);
+              },
+            } as LocalPlayFile;
+          }
           const entry = entriesMap?.get(normalizedPath);
           return resolveLocalRuntimeFile(source.id, normalizedPath)
             || (entry?.uri
@@ -274,12 +304,43 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               const file = resolveSonglengthsFile(candidate, entry.name, entry.modifiedAt);
               addSonglengthsEntry(candidate, file);
             });
+          } else {
+            const foldersToScan = new Set(candidatePaths.map((path) => {
+              const trimmed = path.replace(/\/[^/]+$/, '/');
+              return normalizeSourcePath(trimmed || '/');
+            }));
+            for (const folder of foldersToScan) {
+              try {
+                const entries = await source.listEntries(folder);
+                const songEntry = entries.find(
+                  (entry) => entry.type === 'file' && isSonglengthsFileName(entry.name),
+                );
+                if (!songEntry) continue;
+                const songPath = normalizeSourcePath(songEntry.path);
+                addSonglengthsEntry(
+                  songPath,
+                  resolveSonglengthsFile(songEntry.path, songEntry.name, songEntry.modifiedAt),
+                );
+              } catch (error) {
+                addLog('debug', 'Failed to list entries while scanning for songlengths file', {
+                  folder,
+                  sourceId: source.id,
+                  error: (error as Error).message,
+                });
+              }
+            }
           }
         }
 
         if (discovered.length) {
           discoveredSonglengths = discovered;
           mergeSonglengthsFiles(discovered);
+          addLog('info', 'Songlengths file(s) discovered', {
+            sourceId: source.id,
+            sourceType: source.type,
+            count: discovered.length,
+            paths: discovered.map((entry) => entry.path),
+          });
         }
       }
       selectedFiles.forEach((file) => {

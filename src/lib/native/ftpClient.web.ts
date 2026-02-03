@@ -1,4 +1,4 @@
-import type { FtpClientPlugin, FtpListOptions, FtpEntry } from './ftpClient';
+import type { FtpClientPlugin, FtpListOptions, FtpEntry, FtpReadOptions } from './ftpClient';
 import { getFtpBridgeUrl } from '@/lib/ftp/ftpConfig';
 
 export class FtpClientWeb implements FtpClientPlugin {
@@ -42,5 +42,13 @@ export class FtpClientWeb implements FtpClientPlugin {
 
     const payload = (await response.json()) as { entries: FtpEntry[] };
     return { entries: payload.entries || [] };
+  }
+
+  async readFile(_options: FtpReadOptions): Promise<{ data: string; sizeBytes?: number }> {
+    const bridgeUrl = getFtpBridgeUrl();
+    if (!bridgeUrl) {
+      throw new Error('FTP file download is unavailable: missing FTP bridge URL.');
+    }
+    throw new Error('FTP file download is unavailable in web builds.');
   }
 }

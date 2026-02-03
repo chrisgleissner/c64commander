@@ -1,140 +1,108 @@
 # PLANS.md - Authoritative Execution Plan
 
 ## Mission
-Fix local + CI build so everything is green, starting with `npm ci` lockfile sync. Work is tracked here and updated after every meaningful action.
+Fix critical, user-visible correctness and state-management bugs in the C64 Commander Android app (Capacitor). Work is tracked here and updated after every meaningful action.
 
-## Phase 1: Dependency + Lockfile Sync (BLOCKING)
-
-### Hypotheses
-- H1: `package.json` has `react-virtuoso@4.18.1` but `package-lock.json` is missing it.
-- H2: Lockfile was generated with a different npm version or was not updated after dependency changes.
+## Phase 0: Baseline + Instrumentation Check
 
 ### Actions
-- [x] Inspect `package.json` and `package-lock.json` for `react-virtuoso` entries.
-- [x] Regenerate lockfile deterministically with project npm version (if needed).
-- [x] Validate `npm ci` locally after lockfile fix.
+- [x] Inspect relevant HVSC download/extraction, REST client, volume, disk mount, trace/log timestamp, and UI label code paths.
+- [x] Identify current logging/tracing hooks available for state transitions.
 
-### Observations
-- `package.json` declares `react-virtuoso@^4.18.1`, but `package-lock.json` has no `react-virtuoso` entry.
-- Ran `npm install`; lockfile now includes `react-virtuoso@4.18.1` and related node_modules metadata.
-- `npm ci` completes successfully (with existing deprecation warnings).
+### Verification
+- [ ] Confirm current behaviors in code match reported failures before changes.
 
-### Decisions / Rationale
-- Updated lockfile via `npm install` to align with `package.json` and unblock deterministic `npm ci`.
-
-## Phase 2: Local Build + Test (BLOCKING)
-
-### Hypotheses
-- H1: Build and tests should pass once dependencies are aligned.
+## Phase 1: HVSC Download Progress + Crash (Task A)
 
 ### Actions
-- [x] Run `npm run lint`.
+- [x] Bind download slider to `bytesReceived / totalBytes` continuously.
+- [x] Ensure download completion transitions to deterministic “downloaded” state without crash/background.
+- [x] Persist and restore download state after process death.
+- [x] Stop elapsed time at completion and prevent post-completion increments.
+
+### Verification
+- [ ] Download progress moves smoothly and finishes at 100%.
+- [ ] App remains foreground on completion.
+- [ ] Restart restores correct “downloaded” state and elapsed time is frozen.
+
+## Phase 2: HVSC Extraction + Indexing Progress + Cancel (Task B)
+
+### Actions
+- [x] Replace indeterminate progress with real file counts and elapsed time.
+- [x] Implement explicit START/FINISH/CANCEL transitions.
+- [x] Cancel stops workers/animations and re-enables “Ingest HVSC” when download present.
+- [x] Restore clean idle state after restart when canceled.
+
+### Verification
+- [ ] Progress shows files processed/total and elapsed time.
+- [ ] Cancel stops activity and re-enables ingest immediately.
+- [ ] Restart after cancel shows idle state.
+
+## Phase 3: REST Host Stability (Task C)
+
+### Actions
+- [x] Identify why REST base URL regresses to localhost after ingestion/file picker.
+- [x] Enforce invariant: REST host always equals configured C64U host.
+- [x] Add defensive assertions + trace logging when host changes.
+
+### Verification
+- [ ] Playback works after local file ingestion.
+- [ ] Logs/traces never show localhost host regression.
+
+## Phase 4: Diagnostics Labeling (Task D)
+
+### Actions
+- [x] Rename button label “Logs” → “Logs and Traces”.
+
+### Verification
+- [ ] UI shows updated label.
+
+## Phase 5: Songlengths.md5 Discovery (Task E)
+
+### Actions
+- [x] Walk upward directory hierarchy to find nearest `Songlengths.md5`.
+- [x] Log discovery and apply lengths to playlist immediately.
+
+### Verification
+- [ ] Nearest file is discovered and logged.
+- [ ] Playlist displays correct lengths without restart.
+
+## Phase 6: Volume Control Correctness (Task F)
+
+### Actions
+- [x] Define single authoritative volume state (level + muted + previous volume).
+- [x] Ensure slider updates volume deterministically.
+- [x] Ensure mute preserves previous volume and unmute restores it.
+- [x] Prevent double inversion/race conditions.
+
+### Verification
+- [ ] Repeat play → pause → resume → mute → unmute → adjust volume works reliably.
+
+## Phase 7: Disk Mount POST Payload (Task G)
+
+### Actions
+- [x] Ensure mount POST body matches API contract (drive, path, type, mode).
+- [x] Validate inputs and log request payload before send.
+
+### Verification
+- [ ] Mount succeeds; no timeout; no “Host unreachable”.
+
+## Phase 8: Trace Timestamp Format (Task H)
+
+### Actions
+- [x] Update logs/traces/events to show local wall-clock time `HH:mm:ss.SSS`.
+
+### Verification
+- [ ] All logs/traces/events show local time format (no relative millis).
+
+## Phase 9: Tests + Build Verification
+
+### Actions
+- [x] Extend/adjust tests to cover fixed behaviors.
 - [x] Run `npm run test`.
+- [x] Run `npm run lint`.
 - [x] Run `npm run build`.
 
-### Observations
-- `npm run lint` fails with 33 `@typescript-eslint/ban-ts-comment` errors in unit tests; requires replacing `@ts-ignore` with `@ts-expect-error`.
-- Replaced `@ts-ignore` comments with `@ts-expect-error` in affected unit tests.
-- Re-run lint still fails because `@ts-expect-error` directives require a description.
-- Added descriptions to all `@ts-expect-error` directives in affected unit tests.
-- `npm run lint` now passes.
-- `npm run test` fails in `hvscIngestionRuntime_coverage.test.ts` with `Cannot read properties of undefined (reading 'data')` at `ingestCachedHvsc` (reading `archiveData.data`).
-- Added `Filesystem.readFile` mock in `hvscIngestionRuntime_coverage.test.ts` for cached archive ingestion.
-- Reapplied `extractArchiveEntries` mock implementation in `hvscIngestionRuntime_coverage.test.ts` after `resetAllMocks`.
-- `npm run test` now passes.
-- `npm run build` completes successfully (with Vite externalized module warning).
-
-### Decisions / Rationale
-- Updated unit tests to comply with `@typescript-eslint/ban-ts-comment` and to restore deterministic mocks after `resetAllMocks`.
-
-## Phase 3: Maestro on CI (BLOCKING)
-
-### Hypotheses
-- H1: Maestro can run in parallel with other CI phases and still finish within ~6 minutes total wall-clock.
-- H2: Emulator startup (~3 minutes) can overlap with build/test steps.
-
-### Actions
-- [x] Review CI pipeline for Maestro orchestration and overlap.
-- [x] Add Android SDK/system image cache to Maestro CI job.
-- [x] Ensure emulator is installed and invoked with explicit SDK PATH in Maestro CI.
-- [x] Increase Maestro CLI verbosity on CI.
-- [x] Add BuildJet-based Android E2E workflow for Maestro.
-- [ ] Ensure Maestro runs without extending total wall time beyond ~6 minutes.
-
-### Observations
-- Maestro CI job starts emulator in background before `npm ci`, builds, and Maestro run; job is separate and can overlap with web/Android jobs.
-- Added cache for Android system images, emulator, platform tools, platforms, and AVD to avoid repeated downloads.
-- CI failure shows `emulator` not found; CI now exports SDK PATH and uses absolute emulator path.
-- Maestro CLI now runs with debug log levels to surface flow execution.
-- Added BuildJet workflow to run Maestro E2E matrix on buildjet runners.
-- Reduced BuildJet Maestro matrix to a single api-level/arch/target combination.
-
-### Decisions / Rationale
-- Pending.
-
-## Phase 3.1: Fix android-e2e-maestro.yaml (BuildJet) - COMPLETED ✅
-
-### Root Cause Analysis
-- BuildJet runner `buildjet-2vcpu-ubuntu-2204-arm` expected to be ARM64
-- BUT CI logs show: `Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator on x86_64 host`
-- The runner is actually x86_64, not ARM64 as the name suggests
-- System image `arm64-v8a` cannot run on x86_64 QEMU
-
-### Fix Strategy
-- Change to x86_64 system image instead of arm64-v8a
-- Use API level 34 (stable and well-tested)
-- Keep reactivecircus/android-emulator-runner@v2
-- Switch to ubuntu-latest (standard GitHub runner) for consistency
-
-### Actions
-- [x] Identified architecture mismatch
-- [x] Update workflow to use x86_64 arch with API 34
-- [x] Switch from BuildJet ARM to ubuntu-latest
-- [x] Enable KVM for hardware acceleration
-- [x] Add Android SDK setup step
-- [x] Add APK build and verification steps
-- [x] Fix script block backslash continuation issue
-- [x] Commit and push
-- [x] Verify CI passes (run 21633205095 = success)
-
-## Phase 3.2: Fix android-apk.yaml (Public GitHub runner) - COMPLETED ✅
-
-### Root Cause Analysis
-- Emulator started in background step but script proceeds immediately
-- `run-maestro-gating.sh --skip-emulator-start` expects emulator already running
-- AVD created in `/home/runner/.config/.android/avd/` but emulator looked in `$HOME/.android/avd/`
-- Missing `ANDROID_AVD_HOME` environment variable caused location mismatch
-
-### Fix Strategy
-- Add explicit boot wait after emulator starts
-- Poll for `sys.boot_completed == 1`
-- Add emulator log capture on failure
-- Enable KVM for hardware acceleration
-- Set `ANDROID_AVD_HOME` at job level to ensure consistent AVD location
-
-### Actions
-- [x] Add KVM enable step
-- [x] Add explicit boot wait step (waits for device + boot_completed + bootanim stopped)
-- [x] Add error diagnostics on Maestro failure
-- [x] Add AVD creation verification
-- [x] Set ANDROID_AVD_HOME at job level
-- [x] Commit and push
-- [x] Verify CI passes (run 21633205116 = success, Maestro gating = success)
-
-## Phase 4: CI Validation - COMPLETED ✅
-
-### Actions
-- [x] Confirm CI green (build + tests + Maestro).
-
-### Observations
-- Android E2E Maestro workflow: run 21633205095 = success
-- Build Android APK workflow: run 21633205116 = success
-- Android | Maestro gating job: success
-
-### Decisions / Rationale
-- Both Android Maestro workflows are now passing on CI
-- Key fixes:
-  1. Architecture mismatch (x86_64 vs arm64-v8a)
-  2. AVD home location mismatch (ANDROID_AVD_HOME)
-  3. Script backslash continuation issue in emulator-runner action
-  4. Missing Android SDK setup and APK verification steps
+### Verification
+- [ ] All tests pass.
+- [ ] Build passes.

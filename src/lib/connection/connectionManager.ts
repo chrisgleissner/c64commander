@@ -283,10 +283,10 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     if (activeFtpPort) setRuntimeFtpPortOverride(activeFtpPort);
     addLog('info', 'Demo mode using mock C64U', { trigger, baseUrl: activeMockUrl });
   } else {
-    const fallbackHost = 'localhost';
+    const fallbackHost = resolveDeviceHostFromStorage();
     const fallbackBaseUrl = buildBaseUrlFromDeviceHost(fallbackHost);
     applyC64APIRuntimeConfig(fallbackBaseUrl, undefined, fallbackHost);
-    addLog('info', 'Demo mode using localhost fallback', { trigger, baseUrl: fallbackBaseUrl });
+    addLog('info', 'Demo mode using stored device host', { trigger, baseUrl: fallbackBaseUrl });
   }
 
   if (shouldShowDemoInterstitial(trigger)) {
