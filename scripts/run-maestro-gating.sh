@@ -169,6 +169,18 @@ start_emulator() {
   echo $!
 }
 
+stop_existing_emulators() {
+  local serials
+  serials=$(adb devices | awk '/emulator-/{print $1}')
+  if [[ -z "$serials" ]]; then
+    return 0
+  fi
+  log "Stopping existing emulators: $serials"
+  for serial in $serials; do
+    adb -s "$serial" emu kill >/dev/null 2>&1 || true
+  done
+}
+
 prepare_diagnostics() {
   local serial="$1"
   mkdir -p "$RAW_OUTPUT_DIR" "$EVIDENCE_DIR"
@@ -273,6 +285,8 @@ if [[ "$SKIP_EMULATOR_START" == "0" ]]; then
   require_cmd sdkmanager
   require_cmd avdmanager
   require_cmd emulator
+  adb start-server >/dev/null 2>&1 || true
+  stop_existing_emulators
   ensure_avd
   EMULATOR_PID=$(start_emulator)
 fi
