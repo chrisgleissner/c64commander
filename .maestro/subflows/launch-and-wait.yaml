@@ -18,5 +18,12 @@ tags:
 - extendedWaitUntil:
     visible: "C64 Commander"
     timeout: ${SHORT_TIMEOUT}
+- runFlow:
+    when:
+      visible: "Continue in Demo Mode"
+    file: continue-demo.yaml
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: home
