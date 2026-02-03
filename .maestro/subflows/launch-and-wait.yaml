@@ -10,7 +10,7 @@ tags:
 - runFlow:
     when:
       visible: "Continue in Demo Mode"
-    file: subflows/continue-demo.yaml
+    file: continue-demo.yaml
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}
