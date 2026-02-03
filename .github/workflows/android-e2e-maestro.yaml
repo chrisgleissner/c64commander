@@ -46,6 +46,9 @@ jobs:
           java-version: 17
           cache: gradle
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install dependencies
         run: npm ci
 
@@ -53,7 +56,20 @@ jobs:
         run: npm run cap:build
 
       - name: Build APK (debug)
-        run: npm run android:apk
+        run: |
+          npm run android:apk
+          echo "Listing APK output:"
+          find android/app/build/outputs/apk -name "*.apk" 2>/dev/null || echo "No APK found"
+
+      - name: Verify APK exists
+        run: |
+          APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+          if [ -z "$APK_PATH" ]; then
+            echo "No APK found in android/app/build/outputs/apk/debug"
+            exit 1
+          fi
+          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          echo "Found APK: $APK_PATH"
 
       - name: Install Maestro CLI
         run: |
@@ -89,13 +105,16 @@ jobs:
           script: |
             npx envinfo
             adb devices
-            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            # Find the actual APK path
+            APK_PATH=$(find android/app/build/outputs/apk/debug -name "*.apk" -type f | head -1)
+            echo "Installing APK: $APK_PATH"
+            adb install -r "$APK_PATH"
             export PATH="$HOME/.maestro/bin:$PATH"
             MAESTRO_LOG_LEVEL=debug MAESTRO_CLI_LOG_LEVEL=debug CI=true \
               bash scripts/run-maestro-gating.sh \
                 --skip-emulator-start \
                 --skip-build \
-                --apk-path android/app/build/outputs/apk/debug/app-debug.apk
+                --apk-path "$APK_PATH"
 
       - name: Upload report
         if: always()
