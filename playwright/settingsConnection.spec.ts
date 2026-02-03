@@ -179,14 +179,14 @@ test.describe('Settings connection management', () => {
 
     const headings = await page.locator('h2').allTextContents();
     expect(headings).toEqual([
-      'Connection',
-      'Device Safety',
-      'Diagnostics',
       'Appearance',
+      'Connection',
+      'Diagnostics',
       'Play and Disk',
       'Config',
       'HVSC Library',
       'About',
+      'Device Safety',
     ]);
   });
 });

@@ -111,6 +111,8 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
+    await expect(page.getByTestId('playlist-list')).toContainText('Track_0001.sid');
+
     await clearTraces(page);
 
     await page.getByTestId('playlist-play').click();

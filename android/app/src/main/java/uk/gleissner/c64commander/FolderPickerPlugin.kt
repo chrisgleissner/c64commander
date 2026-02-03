@@ -32,7 +32,19 @@ class FolderPickerPlugin : Plugin() {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
     intent.addCategory(Intent.CATEGORY_OPENABLE)
     intent.type = "*/*"
-    val mimeTypes = call.getArray("mimeTypes")?.toList()?.mapNotNull { it?.toString() }?.toTypedArray()
+    val mimeTypesArray = call.getArray("mimeTypes")
+    val mimeTypes: Array<String>? = if (mimeTypesArray != null) {
+      val list = mutableListOf<String>()
+      for (index in 0 until mimeTypesArray.length()) {
+        val value = mimeTypesArray.opt(index)?.toString()
+        if (!value.isNullOrBlank()) {
+          list.add(value)
+        }
+      }
+      list.toTypedArray()
+    } else {
+      null
+    }
     if (mimeTypes != null && mimeTypes.isNotEmpty()) {
       intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
     }

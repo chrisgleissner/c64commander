@@ -238,6 +238,7 @@ export default function PlayFilesPage() {
   const volumeSessionActiveRef = useRef(false);
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
+  const volumeDragRef = useRef(false);
   const reshuffleTimerRef = useRef<number | null>(null);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
   const hasHydratedPlaylistRef = useRef(false);
@@ -280,7 +281,7 @@ export default function PlayFilesPage() {
     if (!Object.keys(updates).length) return;
     try {
       await withTimeout(
-        updateConfigBatch.mutateAsync({ category: 'Audio Mixer', updates }),
+        updateConfigBatch.mutateAsync({ category: 'Audio Mixer', updates, immediate: true }),
         4000,
         `${context} audio mixer update`,
       );
@@ -343,6 +344,7 @@ export default function PlayFilesPage() {
   }, [resolveSidEnablement, resolveSidVolumeItems, sidEnablement]);
 
   const ensureVolumeSessionSnapshot = useCallback(async () => {
+    if (!isPlaying && !isPaused) return null;
     if (volumeSessionSnapshotRef.current) return volumeSessionSnapshotRef.current;
     const items = enabledSidVolumeItems.length
       ? enabledSidVolumeItems
@@ -352,7 +354,7 @@ export default function PlayFilesPage() {
     volumeSessionSnapshotRef.current = snapshot;
     volumeSessionActiveRef.current = true;
     return snapshot;
-  }, [buildEnabledSidVolumeSnapshot, enabledSidVolumeItems, resolveEnabledSidVolumeItems, sidEnablement]);
+  }, [buildEnabledSidVolumeSnapshot, enabledSidVolumeItems, isPaused, isPlaying, resolveEnabledSidVolumeItems, sidEnablement]);
 
   const restoreVolumeOverrides = useCallback(async (reason: string) => {
     if (!volumeSessionActiveRef.current) return;
@@ -1291,10 +1293,12 @@ export default function PlayFilesPage() {
       }
       return;
     }
+    if (volumeDragRef.current) return;
     scheduleVolumeUpdate(nextIndex);
   }, [scheduleVolumeUpdate, volumeMuted, volumeSteps]);
 
   const handleVolumeCommit = useCallback(async (nextIndex: number) => {
+    volumeDragRef.current = false;
     if (volumeMuted) {
       const snapshot = manualMuteSnapshotRef.current;
       const target = volumeSteps[nextIndex]?.option;
@@ -1309,6 +1313,7 @@ export default function PlayFilesPage() {
   }, [scheduleVolumeUpdate, volumeMuted, volumeSteps]);
 
   const handleVolumeInteraction = useCallback(() => {
+    volumeDragRef.current = true;
     if (!volumeMuted) return;
   }, [volumeMuted]);
 

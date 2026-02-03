@@ -741,13 +741,19 @@ export class C64API {
     return scheduleConfigWrite(() => this.request('/v1/configs:reset_to_default', { method: 'PUT' }));
   }
 
-  async updateConfigBatch(payload: Record<string, Record<string, string | number>>): Promise<{ errors: string[] }> {
-    return scheduleConfigWrite(() =>
+  async updateConfigBatch(
+    payload: Record<string, Record<string, string | number>>,
+    options: { immediate?: boolean } = {},
+  ): Promise<{ errors: string[] }> {
+    const run = () =>
       this.request('/v1/configs', {
         method: 'POST',
         body: JSON.stringify(payload),
-      }),
-    );
+      });
+    if (options.immediate) {
+      return run();
+    }
+    return scheduleConfigWrite(run);
   }
 
   // Machine control endpoints

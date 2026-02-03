@@ -224,12 +224,14 @@ export function useC64UpdateConfigBatch() {
     mutationFn: async ({
       category,
       updates,
+      immediate,
     }: {
       category: string;
       updates: Record<string, string | number>;
+      immediate?: boolean;
     }) => {
       const api = getC64API();
-      return api.updateConfigBatch({ [category]: updates });
+      return api.updateConfigBatch({ [category]: updates }, { immediate });
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['c64-category', variables.category] });
