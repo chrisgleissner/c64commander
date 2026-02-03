@@ -456,6 +456,18 @@ jobs:
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           fi
 
+      - name: Cache Android SDK system images
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.ANDROID_SDK_ROOT }}/system-images
+            ${{ env.ANDROID_SDK_ROOT }}/emulator
+            ${{ env.ANDROID_SDK_ROOT }}/platform-tools
+            ${{ env.ANDROID_SDK_ROOT }}/platforms/android-${{ env.ANDROID_API_LEVEL }}
+            ~/.android/avd
+            ~/.android/adb*
+          key: android-sdk-${{ runner.os }}-api${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_SYSTEM_IMAGE }}
+
       - name: Decode keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
