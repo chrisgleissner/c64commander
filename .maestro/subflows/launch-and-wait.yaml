@@ -8,9 +8,9 @@ tags:
 ---
 - launchApp
 - runFlow:
-  when:
-    visible: "Continue in Demo Mode"
-  file: subflows/continue-demo.yaml
+    when:
+      visible: "Continue in Demo Mode"
+    file: subflows/continue-demo.yaml
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}
