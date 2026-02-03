@@ -7,7 +7,7 @@ on:
 jobs:
   run_android_e2e:
     timeout-minutes: 15
-    runs-on: buildjet-2vcpu-ubuntu-2204
+    runs-on: buildjet-2vcpu-ubuntu-2204-arm
     strategy:
       fail-fast: false
       max-parallel: 1
