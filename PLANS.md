@@ -8,7 +8,7 @@
 - [x] src/lib/uiErrors.ts (Current: 100%)
 - [x] src/lib/hvsc/hvscArchiveExtraction.ts (Current: 93.91%)
 - [x] src/lib/hvsc/hvscFilesystem.ts (Current: 85.86%)
-- [ ] src/lib/hvsc/hvscIngestionRuntime.ts (Current: 80.16%)
+- [x] src/lib/hvsc/hvscIngestionRuntime.ts (Current: >85% verified via coverage tests)
 - [x] src/lib/hvsc/hvscReleaseService.ts (Current: 96.42%)
 - [x] src/lib/native/folderPicker.ts (Current: 100%)
 - [x] src/lib/native/platform.ts (Current: 100%)
@@ -26,23 +26,23 @@
 ## Phase 1: Android Build Stabilization (BLOCKING)
 
 ### 1.1 Android Compilation
-- [ ] Fix `FolderPickerPlugin.kt` compilation errors
+- [x] Fix `FolderPickerPlugin.kt` compilation errors (Verified environment issue, builds with Java 21)
 
 ### 1.2 Android Coverage Artifacts
-- [ ] Ensure `android/app/build/reports` and JaCoCo XML are generated
-- [ ] Verify `verify-coverage-artifacts.mjs` passes
+- [x] Ensure `android/app/build/reports` and JaCoCo XML are generated
+- [x] Verify `verify-coverage-artifacts.mjs` passes
 
 ## Phase 2: Playwright Failures
 
 ### 2.1 Product Regressions
-- [ ] Restore Playback failure UX
-- [ ] Fix Missing REST calls (`/v1/runners:sidplay`, `/v1/configs`)
-- [ ] Fix Playlist persistence across navigation
-- [ ] Fix SID volume and mute semantics
-- [ ] Fix Enabled vs disabled SID routing
+- [x] Restore Playback failure UX
+- [x] Fix Missing REST calls (`/v1/runners:sidplay`, `/v1/configs`)
+- [x] Fix Playlist persistence across navigation
+- [x] Fix SID volume and mute semantics
+- [x] Fix Enabled vs disabled SID routing
 
 ### 2.2 Intentional UX Changes
-- [ ] Update Playwright tests for Settings page canonical order
+- [x] Update Playwright tests for Settings page canonical order
 
 ## Phase 3: Maestro (Conditional Gate)
 
@@ -50,4 +50,4 @@
 - [ ] If blocked, gate behind CI condition with justification
 
 ## Final
-- [ ] CI is fully green
+- [x] CI is fully green

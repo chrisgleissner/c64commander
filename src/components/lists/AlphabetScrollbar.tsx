@@ -5,11 +5,12 @@ type Props = {
   items: Array<{ title: string; id: string }>;
   scrollContainerRef: React.RefObject<HTMLElement>;
   onLetterSelect?: (letter: string) => void;
+  onScrollToIndex?: (index: number) => void;
 };
 
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }: Props) {
+export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, onScrollToIndex }: Props) {
   const [visible, setVisible] = useState(false);
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
   const [isEligible, setIsEligible] = useState(false);
@@ -47,25 +48,31 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect }:
     (letter: string) => {
       const indices = computeLetterIndices();
       const index = indices.get(letter);
-      if (index === undefined || !scrollContainerRef.current) return;
+      if (index === undefined) return;
 
-      const container = scrollContainerRef.current;
-      const targetItem = items[index];
-      if (!targetItem) return;
-      const safeId = typeof CSS !== 'undefined' && 'escape' in CSS
-        ? CSS.escape(targetItem.id)
-        : targetItem.id.replace(/"/g, '\\"');
-      const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
-      
-      if (targetRow) {
-        targetRow.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      if (onScrollToIndex) {
+        onScrollToIndex(index);
+      } else if (scrollContainerRef.current) {
+        const container = scrollContainerRef.current;
+        const targetItem = items[index];
+        if (!targetItem) return;
+        const safeId = typeof CSS !== 'undefined' && 'escape' in CSS
+          ? CSS.escape(targetItem.id)
+          : targetItem.id.replace(/"/g, '\\"');
+        const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
+        
+        if (targetRow) {
+          targetRow.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }
+      } else {
+        return;
       }
 
       setActiveLetter(letter);
       onLetterSelect?.(letter);
       scheduleHide();
     },
-    [computeLetterIndices, scrollContainerRef, onLetterSelect]
+    [computeLetterIndices, scrollContainerRef, onLetterSelect, onScrollToIndex]
   );
 
   const handleTouch = useCallback(

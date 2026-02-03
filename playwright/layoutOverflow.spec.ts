@@ -445,7 +445,7 @@ test.describe('Layout overflow safeguards', () => {
       await expectDialogWithinViewport(page, addDialog);
       await expectVerticalOverflowHandled(addDialog);
       await snap(page, testInfo, `matrix-add-items-${viewport.label}`);
-      const scrollArea = addDialog.locator('[data-testid="action-list-scroll"]');
+      const scrollArea = addDialog.locator('[data-virtuoso-scroller="true"]');
       if (await scrollArea.count()) {
         const scrollable = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight);
         expect(scrollable).toBeTruthy();
