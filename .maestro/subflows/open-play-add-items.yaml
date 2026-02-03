@@ -20,17 +20,14 @@ tags:
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
-- scrollUntilVisible:
-    element:
-      text: "Add items"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- tapOn:
-    text: "Add items"
-    optional: true
-- tapOn:
-    text: "Add more items"
-    optional: true
+- runFlow:
+    when:
+      visible: "Add items"
+    file: tap-add-items.yaml
+- runFlow:
+    when:
+      visible: "Add more items"
+    file: tap-add-more-items.yaml
 - assertVisible: "Choose source"
 - assertVisible: "This device"
 - takeScreenshot: choose-source

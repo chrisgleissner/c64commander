@@ -1,0 +1,4 @@
+appId: uk.gleissner.c64commander
+---
+- tapOn:
+    text: "Add more items"
