@@ -1,9 +1,11 @@
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
+import { addErrorLog } from '@/lib/logging';
 import { computeSidMd5 } from '@/lib/sid/sidUtils';
 
 export type SonglengthsData = {
-  pathToSeconds: Map<string, number>;
-  md5ToSeconds: Map<string, number>;
+  // Values are 1-based sub-tune durations (index 0 is song #1).
+  pathToSeconds: Map<string, number[]>;
+  md5ToSeconds: Map<string, number[]>;
 };
 
 const normalizePath = (path: string) => {
@@ -11,18 +13,28 @@ const normalizePath = (path: string) => {
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
 };
 
+const resolveDuration = (durations: number[] | undefined, songNr?: number | null) => {
+  if (!durations || durations.length === 0) return null;
+  const index = songNr && songNr > 0 ? songNr - 1 : 0;
+  if (index < 0 || index >= durations.length) return null;
+  return durations[index] ?? null;
+};
+
 export const resolveSonglengthsSeconds = (
   data: SonglengthsData | null | undefined,
   path: string,
   md5?: string | null,
+  songNr?: number | null,
 ) => {
   if (!data) return null;
+
   const normalizedPath = normalizePath(path || '/');
-  const pathMatch = data.pathToSeconds.get(normalizedPath);
-  if (pathMatch !== undefined && pathMatch !== null) return pathMatch;
+  const pathMatch = resolveDuration(data.pathToSeconds.get(normalizedPath), songNr);
+  if (pathMatch !== null) return pathMatch;
+
   if (!md5) return null;
-  const md5Match = data.md5ToSeconds.get(md5);
-  return md5Match !== undefined && md5Match !== null ? md5Match : null;
+  const md5Match = resolveDuration(data.md5ToSeconds.get(md5.trim().toLowerCase()), songNr);
+  return md5Match !== null ? md5Match : null;
 };
 
 export const countSonglengthsEntries = (data: SonglengthsData | null | undefined) => {
@@ -34,16 +46,25 @@ export const resolveSonglengthsDurationMs = async (
   data: SonglengthsData | null | undefined,
   path: string,
   file?: LocalPlayFile | null,
+  songNr?: number | null,
 ) => {
-  const seconds = resolveSonglengthsSeconds(data, path, null);
+  if (!data) return null;
+
+  const seconds = resolveSonglengthsSeconds(data, path, null, songNr);
   if (seconds !== null) return seconds * 1000;
   if (!file) return null;
+
   try {
     const buffer = await file.arrayBuffer();
     const md5 = await computeSidMd5(buffer);
-    const md5Seconds = resolveSonglengthsSeconds(data, path, md5);
+    const md5Seconds = resolveSonglengthsSeconds(data, path, md5, songNr);
     return md5Seconds !== null ? md5Seconds * 1000 : null;
-  } catch {
+  } catch (error) {
+    addErrorLog('Failed to resolve SID duration via songlengths MD5', {
+      error: (error as Error).message,
+      path,
+      songNr: songNr ?? null,
+    });
     return null;
   }
 };
@@ -62,9 +83,23 @@ const parseTimeToSeconds = (value: string) => {
   return Math.round(totalMs / 1000);
 };
 
+const parseDurations = (value: string) => {
+  const durations: number[] = [];
+  const tokens = value.trim().split(/\s+/).filter(Boolean);
+  tokens.forEach((token) => {
+    // Old-format Songlengths.txt tokens may include attributes like 0:06(G)
+    const match = token.match(/^(\d+:\d{2}(?:\.\d{1,3})?)/);
+    if (!match) return;
+    const seconds = parseTimeToSeconds(match[1]);
+    if (seconds === null) return;
+    durations.push(seconds);
+  });
+  return durations;
+};
+
 export const parseSonglengths = (content: string): SonglengthsData => {
-  const pathToSeconds = new Map<string, number>();
-  const md5ToSeconds = new Map<string, number>();
+  const pathToSeconds = new Map<string, number[]>();
+  const md5ToSeconds = new Map<string, number[]>();
   let currentPath = '';
 
   const lines = content.split(/\r?\n/);
@@ -78,29 +113,29 @@ export const parseSonglengths = (content: string): SonglengthsData => {
     }
     if (line.startsWith('[')) return;
 
-    if (line.includes('=')) {
-      const parts = line.split('=');
-      if (parts.length !== 2) return;
-      const md5 = parts[0]?.trim();
-      const time = parts[1]?.trim();
-      if (!md5 || !time) return;
-      const seconds = parseTimeToSeconds(time);
-      if (seconds === null) return;
+    const eqIndex = line.indexOf('=');
+    if (eqIndex > 0) {
+      const md5 = line.slice(0, eqIndex).trim().toLowerCase();
+      const value = line.slice(eqIndex + 1).trim();
+      if (!md5 || !value) return;
+      const durations = parseDurations(value);
+      if (!durations.length) return;
       if (currentPath) {
-        pathToSeconds.set(currentPath, seconds);
+        pathToSeconds.set(currentPath, durations);
       }
-      md5ToSeconds.set(md5, seconds);
+      md5ToSeconds.set(md5, durations);
       return;
     }
 
-    const match = line.match(/^(.+?)\s+(\d+:\d{2}(?:\.\d{1,3})?)$/);
+    // Legacy/non-HVSC format: "<path> <mm:ss[.SSS]> [<mm:ss[.SSS]> ...]"
+    const match = line.match(/^(.+?)\s+((?:\d+:\d{2}(?:\.\d{1,3})?(?:\s+|$))+)$);
     if (!match) return;
     const path = match[1]?.trim();
-    const time = match[2]?.trim();
-    if (!path || !time) return;
-    const seconds = parseTimeToSeconds(time);
-    if (seconds === null) return;
-    pathToSeconds.set(normalizePath(path), seconds);
+    const value = match[2]?.trim();
+    if (!path || !value) return;
+    const durations = parseDurations(value);
+    if (!durations.length) return;
+    pathToSeconds.set(normalizePath(path), durations);
   });
 
   return { pathToSeconds, md5ToSeconds };

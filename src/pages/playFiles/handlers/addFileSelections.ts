@@ -298,11 +298,20 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
               }
             }
           } else if (entriesMap) {
+            // Candidate paths are generated with lowercase file names, but SAF paths are case-sensitive.
+            // Use the actual entry path casing when possible.
+            const entriesByLowerPath = new Map<string, { path: string; meta: { uri?: string | null; name: string; modifiedAt?: string | null; sizeBytes?: number | null } }>();
+            entriesMap.forEach((meta, entryPath) => {
+              entriesByLowerPath.set(entryPath.toLowerCase(), { path: entryPath, meta });
+            });
             candidatePaths.forEach((candidate) => {
-              const entry = entriesMap.get(candidate);
-              if (!entry) return;
-              const file = resolveSonglengthsFile(candidate, entry.name, entry.modifiedAt);
-              addSonglengthsEntry(candidate, file);
+              const direct = entriesMap.get(candidate);
+              const resolved = direct
+                ? { path: candidate, meta: direct }
+                : entriesByLowerPath.get(candidate.toLowerCase());
+              if (!resolved) return;
+              const file = resolveSonglengthsFile(resolved.path, resolved.meta.name, resolved.meta.modifiedAt);
+              addSonglengthsEntry(resolved.path, file);
             });
           } else {
             const foldersToScan = new Set(candidatePaths.map((path) => {

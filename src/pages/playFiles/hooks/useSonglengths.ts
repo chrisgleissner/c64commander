@@ -58,7 +58,7 @@ export type UseSonglengthsResult = {
   loadSonglengthsForPath: (
     path: string,
     extraFiles?: SonglengthsFileEntry[],
-  ) => Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>;
+  ) => Promise<{ md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null>;
   applySonglengthsToItems: (
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
@@ -79,13 +79,13 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   const songlengthsCacheRef = useRef(
     new Map<string, {
       signature: string;
-      promise: Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>;
+      promise: Promise<{ md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null>;
     }>(),
   );
   const songlengthsFileCacheRef = useRef(
     new Map<string, {
       mtime: number;
-      data: { md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null;
+      data: { md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null;
     }>(),
   );
 
@@ -257,7 +257,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     }
 
     const loader = (async () => {
-      const merged = { md5ToSeconds: new Map<string, number>(), pathToSeconds: new Map<string, number>() };
+      const merged = { md5ToSeconds: new Map<string, number[]>(), pathToSeconds: new Map<string, number[]>() };
       const ordered = Array.from(files.values()).reverse();
       for (const file of ordered) {
         try {
@@ -364,6 +364,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
           songlengths,
           filePath,
           isLocal ? item.request.file : null,
+          item.request.songNr ?? null,
         );
         if (resolvedDurationMs === null) return item;
         return { ...item, durationMs: resolvedDurationMs };

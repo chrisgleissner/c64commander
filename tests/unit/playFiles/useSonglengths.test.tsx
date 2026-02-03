@@ -10,20 +10,20 @@ describe('songlengths helpers', () => {
       lastModified: Date.now(),
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     };
-    const duration = await resolveSonglengthsDurationMs(data, '/songs/demo.sid', file);
+    const duration = await resolveSonglengthsDurationMs(data, '/songs/demo.sid', file, 1);
     expect(duration).toBe(25 * 1000);
   });
 
   it('resolves duration by md5 fallback when path is missing', async () => {
     const buffer = new Uint8Array([5, 6, 7, 8]).buffer;
     const md5 = await computeSidMd5(buffer);
-    const data = parseSonglengths(`${md5}=0:42`);
+    const data = parseSonglengths(`${md5}=0:42 0:55`);
     const file = {
       name: 'demo.sid',
       lastModified: Date.now(),
       arrayBuffer: async () => buffer,
     };
-    const duration = await resolveSonglengthsDurationMs(data, '/missing.sid', file);
-    expect(duration).toBe(42 * 1000);
+    const duration = await resolveSonglengthsDurationMs(data, '/missing.sid', file, 2);
+    expect(duration).toBe(55 * 1000);
   });
 });

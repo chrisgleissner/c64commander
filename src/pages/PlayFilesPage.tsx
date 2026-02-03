@@ -733,7 +733,7 @@ export default function PlayFilesPage() {
   const durationFallbackMs = durationSeconds * 1000;
 
   const resolveSidMetadata = useCallback(
-    async (file?: LocalPlayFile) => {
+    async (file?: LocalPlayFile, songNr?: number | null) => {
       if (!file) return { durationMs: undefined, subsongCount: undefined, readable: false } as const;
       let buffer: ArrayBuffer;
       try {
@@ -742,19 +742,26 @@ export default function PlayFilesPage() {
         return { durationMs: durationFallbackMs, subsongCount: undefined, readable: false } as const;
       }
       const subsongCount = getSidSongCount(buffer);
+      const resolveSeconds = (durations: number[] | undefined) => {
+        if (!durations || durations.length === 0) return null;
+        const index = songNr && songNr > 0 ? songNr - 1 : 0;
+        if (index < 0 || index >= durations.length) return null;
+        return durations[index] ?? null;
+      };
+
       try {
         const filePath = getLocalFilePath(file);
         const songlengths = await loadSonglengthsForPath(filePath);
         if (songlengths?.pathToSeconds.has(filePath)) {
-          const seconds = songlengths.pathToSeconds.get(filePath);
-          const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
+          const seconds = resolveSeconds(songlengths.pathToSeconds.get(filePath));
+          const durationMs = seconds !== null ? seconds * 1000 : durationFallbackMs;
           return { durationMs, subsongCount, readable: true } as const;
         }
 
         const md5 = await computeSidMd5(buffer);
-        const md5Duration = songlengths?.md5ToSeconds.get(md5);
-        if (md5Duration !== undefined && md5Duration !== null) {
-          return { durationMs: md5Duration * 1000, subsongCount, readable: true } as const;
+        const md5Seconds = resolveSeconds(songlengths?.md5ToSeconds.get(md5));
+        if (md5Seconds !== null) {
+          return { durationMs: md5Seconds * 1000, subsongCount, readable: true } as const;
         }
         const seconds = await getHvscDurationByMd5Seconds(md5);
         const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
@@ -766,6 +773,7 @@ export default function PlayFilesPage() {
     [durationFallbackMs, loadSonglengthsForPath],
   );
 
+
   const playItem = useCallback(
     async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean }) => {
       if (item.request.source === 'local' && !item.request.file) {
@@ -774,7 +782,7 @@ export default function PlayFilesPage() {
       let durationOverride: number | undefined;
       let subsongCount: number | undefined;
       if (item.category === 'sid' && item.request.source === 'local') {
-        const metadata = await resolveSidMetadata(item.request.file);
+        const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
         durationOverride = metadata.durationMs;
         subsongCount = metadata.subsongCount;
         if (!metadata.readable) {
