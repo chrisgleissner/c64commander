@@ -587,6 +587,7 @@ jobs:
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
       MAESTRO_TIMEOUT_SECS: "300"
+      ANDROID_AVD_HOME: /home/runner/.android/avd
 
     steps:
       - name: Checkout
@@ -630,6 +631,10 @@ jobs:
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
           
+          # Ensure AVD directory exists
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
+          
           echo "=== Installing Android SDK components ==="
           sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
           
@@ -647,9 +652,9 @@ jobs:
           
           echo "=== Verifying AVD exists ==="
           avdmanager list avd
+          ls -la "$ANDROID_AVD_HOME" || true
           if ! avdmanager list avd | grep -q "Name: ${ANDROID_AVD_NAME}"; then
             echo "ERROR: AVD ${ANDROID_AVD_NAME} was not created!"
-            ls -la ~/.android/avd/ || true
             exit 1
           fi
           
