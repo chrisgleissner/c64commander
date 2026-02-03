@@ -618,6 +618,12 @@ jobs:
             echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
           fi
 
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       - name: Start emulator (background)
         run: |
           set -e
@@ -630,6 +636,22 @@ jobs:
           mkdir -p test-results/maestro
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
           echo $! > test-results/maestro/emulator.pid
+
+      - name: Wait for emulator boot
+        run: |
+          set -e
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          echo "Waiting for emulator to appear in adb devices..."
+          timeout 120 bash -c 'until adb devices | grep -q "emulator-"; do sleep 2; done' || { echo "Emulator did not appear"; adb devices; cat test-results/maestro/emulator.log || true; exit 1; }
+          SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
+          echo "Emulator serial: $SERIAL"
+          echo "Waiting for boot completion..."
+          timeout 180 bash -c "until adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '1'; do sleep 3; done" || { echo "Boot did not complete"; adb -s $SERIAL shell getprop sys.boot_completed || true; cat test-results/maestro/emulator.log || true; exit 1; }
+          echo "Waiting for boot animation to stop..."
+          timeout 60 bash -c "until adb -s $SERIAL shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' | grep -q 'stopped'; do sleep 2; done" || true
+          echo "Emulator is ready"
+          adb devices -l
 
       - name: Install dependencies
         run: |
@@ -664,7 +686,17 @@ jobs:
           MAESTRO_CLI_LOG_LEVEL: "debug"
         run: |
           start=$(date +%s)
-          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
+          # Verify emulator is still available
+          adb devices -l
+          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build || {
+            echo "=== Emulator log ===" >&2
+            cat test-results/maestro/emulator.log || true
+            echo "=== adb devices ===" >&2
+            adb devices -l || true
+            exit 1
+          }
           end=$(date +%s)
           echo "- maestro gating: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 

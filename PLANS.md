@@ -72,6 +72,49 @@ Fix local + CI build so everything is green, starting with `npm ci` lockfile syn
 ### Decisions / Rationale
 - Pending.
 
+## Phase 3.1: Fix android-e2e-maestro.yaml (BuildJet) - COMPLETED
+
+### Root Cause Analysis
+- BuildJet runner `buildjet-2vcpu-ubuntu-2204-arm` expected to be ARM64
+- BUT CI logs show: `Avd's CPU Architecture 'arm64' is not supported by the QEMU2 emulator on x86_64 host`
+- The runner is actually x86_64, not ARM64 as the name suggests
+- System image `arm64-v8a` cannot run on x86_64 QEMU
+
+### Fix Strategy
+- Change to x86_64 system image instead of arm64-v8a
+- Use API level 34 (stable and well-tested)
+- Keep reactivecircus/android-emulator-runner@v2
+- Switch to ubuntu-latest (standard GitHub runner) for consistency
+
+### Actions
+- [x] Identified architecture mismatch
+- [x] Update workflow to use x86_64 arch with API 34
+- [x] Switch from BuildJet ARM to ubuntu-latest
+- [x] Enable KVM for hardware acceleration
+- [x] Add Maestro to PATH
+- [ ] Commit and push
+- [ ] Verify CI passes
+
+## Phase 3.2: Fix android-apk.yaml (Public GitHub runner) - COMPLETED
+
+### Root Cause Analysis
+- Emulator started in background step but script proceeds immediately
+- `run-maestro-gating.sh --skip-emulator-start` expects emulator already running
+- No explicit wait for boot completion between emulator start and Maestro
+
+### Fix Strategy
+- Add explicit boot wait after emulator starts
+- Poll for `sys.boot_completed == 1`
+- Add emulator log capture on failure
+- Enable KVM for hardware acceleration
+
+### Actions
+- [x] Add KVM enable step
+- [x] Add explicit boot wait step (waits for device + boot_completed + bootanim stopped)
+- [x] Add error diagnostics on Maestro failure
+- [ ] Commit and push
+- [ ] Verify CI passes
+
 ## Phase 4: CI Validation
 
 ### Actions
