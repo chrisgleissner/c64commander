@@ -8,11 +8,11 @@ tags:
 ---
 - launchApp
 - tapOn:
-  text: "Continue in Demo Mode"
-  optional: true
+    text: "Continue in Demo Mode"
+    optional: true
 - tapOn:
-  text: "Retry connection"
-  optional: true
+    text: "Retry connection"
+    optional: true
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}
