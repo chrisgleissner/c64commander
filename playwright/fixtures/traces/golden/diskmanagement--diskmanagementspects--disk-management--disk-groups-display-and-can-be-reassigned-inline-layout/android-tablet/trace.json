@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-02-01T10:43:30.415Z",
-    "relativeMs": 161,
+    "timestamp": "2026-02-03T23:35:13.001Z",
+    "relativeMs": 321,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,21 +35,39 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-02-01T10:43:30.417Z",
-    "relativeMs": 163,
-    "type": "device-guard",
-    "origin": "automatic",
+    "timestamp": "2026-02-03T23:35:13.007Z",
+    "relativeMs": 327,
+    "type": "backend-decision",
+    "origin": "system",
     "correlationId": "COR-0000",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "UNKNOWN"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-02-01T10:43:30.431Z",
-    "relativeMs": 177,
+    "timestamp": "2026-02-03T23:35:13.007Z",
+    "relativeMs": 327,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-02-03T23:35:13.030Z",
+    "relativeMs": 350,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -81,70 +99,40 @@
     }
   },
   {
-    "id": "EVT-0003",
-    "timestamp": "2026-02-01T10:43:30.431Z",
-    "relativeMs": 177,
-    "type": "device-guard",
-    "origin": "automatic",
+    "id": "EVT-0004",
+    "timestamp": "2026-02-03T23:35:13.030Z",
+    "relativeMs": 350,
+    "type": "backend-decision",
+    "origin": "system",
     "correlationId": "COR-0001",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "UNKNOWN"
-    }
-  },
-  {
-    "id": "EVT-0004",
-    "timestamp": "2026-02-01T10:43:30.432Z",
-    "relativeMs": 178,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-02-01T10:43:30.432Z",
-    "relativeMs": 178,
-    "type": "action-end",
+    "timestamp": "2026-02-03T23:35:13.030Z",
+    "relativeMs": 350,
+    "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0000",
+    "correlationId": "COR-0001",
     "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-02-01T10:43:30.432Z",
-    "relativeMs": 178,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0001",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0007",
-    "timestamp": "2026-02-01T10:43:30.432Z",
-    "relativeMs": 178,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0001",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0008",
-    "timestamp": "2026-02-01T10:43:30.433Z",
-    "relativeMs": 179,
+    "timestamp": "2026-02-03T23:35:13.036Z",
+    "relativeMs": 356,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -176,11 +164,11 @@
     }
   },
   {
-    "id": "EVT-0009",
-    "timestamp": "2026-02-01T10:43:30.434Z",
-    "relativeMs": 180,
+    "id": "EVT-0007",
+    "timestamp": "2026-02-03T23:35:13.036Z",
+    "relativeMs": 356,
     "type": "backend-decision",
-    "origin": "automatic",
+    "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "selectedTarget": "external-mock",
@@ -188,28 +176,106 @@
     }
   },
   {
-    "id": "EVT-0010",
-    "timestamp": "2026-02-01T10:43:30.434Z",
-    "relativeMs": 180,
+    "id": "EVT-0008",
+    "timestamp": "2026-02-03T23:35:13.036Z",
+    "relativeMs": 356,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:45685/v1/info",
+      "url": "http://127.0.0.1:44143/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:45685"
+        "X-C64U-Host": "127.0.0.1:44143"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
+    "id": "EVT-0009",
+    "timestamp": "2026-02-03T23:35:13.111Z",
+    "relativeMs": 431,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": 200,
+      "body": {
+        "drives": [
+          {
+            "a": {
+              "enabled": true,
+              "bus_id": 8,
+              "type": "1541"
+            }
+          },
+          {
+            "b": {
+              "enabled": true,
+              "bus_id": 9,
+              "type": "1541"
+            }
+          }
+        ],
+        "errors": []
+      },
+      "durationMs": 74,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-02-03T23:35:13.111Z",
+    "relativeMs": 431,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
     "id": "EVT-0011",
-    "timestamp": "2026-02-01T10:43:30.507Z",
-    "relativeMs": 253,
+    "timestamp": "2026-02-03T23:35:13.111Z",
+    "relativeMs": 431,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": 200,
+      "body": {
+        "product": "C64 Ultimate",
+        "firmware_version": "3.12.0",
+        "fpga_version": "1.0.0",
+        "core_version": "1.0.0",
+        "hostname": "c64u",
+        "unique_id": "TEST-123",
+        "errors": []
+      },
+      "durationMs": 64,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-02-03T23:35:13.111Z",
+    "relativeMs": 431,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-02-03T23:35:13.112Z",
+    "relativeMs": 432,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -224,14 +290,14 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 56,
+      "durationMs": 60,
       "error": null
     }
   },
   {
-    "id": "EVT-0012",
-    "timestamp": "2026-02-01T10:43:30.508Z",
-    "relativeMs": 254,
+    "id": "EVT-0014",
+    "timestamp": "2026-02-03T23:35:13.112Z",
+    "relativeMs": 432,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -241,61 +307,15 @@
     }
   },
   {
-    "id": "EVT-0013",
-    "timestamp": "2026-02-01T10:43:30.955Z",
-    "relativeMs": 701,
-    "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0003",
-    "data": {
-      "name": "click Add disks",
-      "component": "GlobalInteraction",
-      "context": {
-        "ui": {
-          "route": "/disks",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
-        }
-      }
-    }
-  },
-  {
-    "id": "EVT-0014",
-    "timestamp": "2026-02-01T10:43:30.956Z",
-    "relativeMs": 702,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0003",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
     "id": "EVT-0015",
-    "timestamp": "2026-02-01T10:43:30.958Z",
-    "relativeMs": 704,
+    "timestamp": "2026-02-03T23:35:13.128Z",
+    "relativeMs": 448,
     "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0004",
+    "origin": "system",
+    "correlationId": "COR-0003",
     "data": {
-      "name": "click Add disks",
-      "component": "Button",
+      "name": "rest.get",
+      "component": null,
       "context": {
         "ui": {
           "route": "/disks",
@@ -314,7 +334,7 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": null,
+          "deviceId": "TEST-123",
           "connectionState": "REAL_CONNECTED"
         }
       }
@@ -322,140 +342,110 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-02-01T10:43:30.988Z",
-    "relativeMs": 734,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0004",
+    "timestamp": "2026-02-03T23:35:13.128Z",
+    "relativeMs": 448,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0003",
     "data": {
-      "status": "success",
-      "error": null
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-02-01T10:43:31.253Z",
-    "relativeMs": 999,
-    "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0005",
+    "timestamp": "2026-02-03T23:35:13.128Z",
+    "relativeMs": 448,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0003",
     "data": {
-      "name": "click Add file / folder from device",
-      "component": "GlobalInteraction",
-      "context": {
-        "ui": {
-          "route": "/disks",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
-        }
-      }
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-02-01T10:43:31.253Z",
-    "relativeMs": 999,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0005",
+    "timestamp": "2026-02-03T23:35:13.130Z",
+    "relativeMs": 450,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0004",
     "data": {
-      "status": "success",
-      "error": null
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
     }
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-02-01T10:43:31.253Z",
-    "relativeMs": 999,
-    "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0006",
+    "timestamp": "2026-02-03T23:35:13.130Z",
+    "relativeMs": 450,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0004",
     "data": {
-      "name": "click Add file / folder from device",
-      "component": "Button",
-      "context": {
-        "ui": {
-          "route": "/disks",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
-        }
-      }
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0020",
-    "timestamp": "2026-02-01T10:43:31.254Z",
-    "relativeMs": 1000,
-    "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0007",
+    "timestamp": "2026-02-03T23:35:13.131Z",
+    "relativeMs": 451,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0004",
     "data": {
-      "name": "HomeDiskManager.anonymousAction",
-      "component": "HomeDiskManager",
-      "context": {
-        "ui": {
-          "route": "/disks",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
-        }
-      }
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-02-01T10:43:31.258Z",
-    "relativeMs": 1004,
+    "timestamp": "2026-02-03T23:35:13.147Z",
+    "relativeMs": 467,
     "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0008",
+    "origin": "system",
+    "correlationId": "COR-0005",
     "data": {
-      "name": "click input",
-      "component": "GlobalInteraction",
+      "name": "rest.get",
+      "component": null,
       "context": {
         "ui": {
           "route": "/disks",
@@ -475,91 +465,117 @@
         },
         "device": {
           "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-02-01T10:43:31.270Z",
-    "relativeMs": 1016,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0008",
+    "timestamp": "2026-02-03T23:35:13.147Z",
+    "relativeMs": 467,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0005",
     "data": {
-      "status": "success",
-      "error": null
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-02-01T10:43:31.270Z",
-    "relativeMs": 1016,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0006",
+    "timestamp": "2026-02-03T23:35:13.147Z",
+    "relativeMs": 467,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0005",
     "data": {
-      "status": "success",
-      "error": null
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-02-01T10:43:31.272Z",
-    "relativeMs": 1018,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0007",
+    "timestamp": "2026-02-03T23:35:13.149Z",
+    "relativeMs": 469,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0006",
     "data": {
-      "status": "success",
-      "error": null
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
     }
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-02-01T10:43:31.347Z",
-    "relativeMs": 1093,
-    "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0009",
+    "timestamp": "2026-02-03T23:35:13.149Z",
+    "relativeMs": 469,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0006",
     "data": {
-      "name": "upload FileInput",
-      "component": "FileInput",
-      "context": {
-        "ui": {
-          "route": "/disks",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
-        }
-      }
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-02-01T10:43:31.348Z",
-    "relativeMs": 1094,
-    "type": "action-start",
-    "origin": "user",
-    "correlationId": "COR-0010",
+    "timestamp": "2026-02-03T23:35:13.149Z",
+    "relativeMs": 469,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0006",
     "data": {
-      "name": "HomeDiskManager.anonymousAction",
-      "component": "HomeDiskManager",
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0027",
+    "timestamp": "2026-02-03T23:35:13.150Z",
+    "relativeMs": 470,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "name": "rest.get",
+      "component": null,
       "context": {
         "ui": {
           "route": "/disks",
@@ -579,39 +595,267 @@
         },
         "device": {
           "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
-    "id": "EVT-0027",
-    "timestamp": "2026-02-01T10:43:31.410Z",
-    "relativeMs": 1156,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0009",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
     "id": "EVT-0028",
-    "timestamp": "2026-02-01T10:43:31.420Z",
-    "relativeMs": 1166,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0010",
+    "timestamp": "2026-02-03T23:35:13.150Z",
+    "relativeMs": 470,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0007",
     "data": {
-      "status": "success",
-      "error": null
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-02-01T10:43:31.484Z",
-    "relativeMs": 1230,
+    "timestamp": "2026-02-03T23:35:13.150Z",
+    "relativeMs": 470,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0030",
+    "timestamp": "2026-02-03T23:35:13.153Z",
+    "relativeMs": 473,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0031",
+    "timestamp": "2026-02-03T23:35:13.153Z",
+    "relativeMs": 473,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0032",
+    "timestamp": "2026-02-03T23:35:13.153Z",
+    "relativeMs": 473,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0033",
+    "timestamp": "2026-02-03T23:35:13.155Z",
+    "relativeMs": 475,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0034",
+    "timestamp": "2026-02-03T23:35:13.156Z",
+    "relativeMs": 476,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0035",
+    "timestamp": "2026-02-03T23:35:13.156Z",
+    "relativeMs": 476,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0036",
+    "timestamp": "2026-02-03T23:35:13.160Z",
+    "relativeMs": 480,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0037",
+    "timestamp": "2026-02-03T23:35:13.160Z",
+    "relativeMs": 480,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0038",
+    "timestamp": "2026-02-03T23:35:13.160Z",
+    "relativeMs": 480,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0039",
+    "timestamp": "2026-02-03T23:35:13.161Z",
+    "relativeMs": 481,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 32,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0040",
+    "timestamp": "2026-02-03T23:35:13.161Z",
+    "relativeMs": 481,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0041",
+    "timestamp": "2026-02-03T23:35:13.162Z",
+    "relativeMs": 482,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0011",
@@ -637,17 +881,17 @@
         },
         "device": {
           "deviceId": null,
-          "connectionState": "REAL_CONNECTED"
+          "connectionState": "BUSY"
         }
       }
     }
   },
   {
-    "id": "EVT-0030",
-    "timestamp": "2026-02-01T10:43:31.485Z",
-    "relativeMs": 1231,
+    "id": "EVT-0042",
+    "timestamp": "2026-02-03T23:35:13.162Z",
+    "relativeMs": 482,
     "type": "backend-decision",
-    "origin": "automatic",
+    "origin": "system",
     "correlationId": "COR-0011",
     "data": {
       "selectedTarget": "external-mock",
@@ -655,28 +899,28 @@
     }
   },
   {
-    "id": "EVT-0031",
-    "timestamp": "2026-02-01T10:43:31.485Z",
-    "relativeMs": 1231,
+    "id": "EVT-0043",
+    "timestamp": "2026-02-03T23:35:13.162Z",
+    "relativeMs": 482,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0011",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:45685/v1/drives",
-      "normalizedUrl": "/v1/drives",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:45685"
+        "X-C64U-Host": "127.0.0.1:44143"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0032",
-    "timestamp": "2026-02-01T10:43:31.486Z",
-    "relativeMs": 1232,
+    "id": "EVT-0044",
+    "timestamp": "2026-02-03T23:35:13.163Z",
+    "relativeMs": 483,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0012",
@@ -708,12 +952,677 @@
     }
   },
   {
-    "id": "EVT-0033",
-    "timestamp": "2026-02-01T10:43:31.520Z",
-    "relativeMs": 1266,
+    "id": "EVT-0045",
+    "timestamp": "2026-02-03T23:35:13.163Z",
+    "relativeMs": 483,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0046",
+    "timestamp": "2026-02-03T23:35:13.163Z",
+    "relativeMs": 483,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0047",
+    "timestamp": "2026-02-03T23:35:13.166Z",
+    "relativeMs": 486,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0048",
+    "timestamp": "2026-02-03T23:35:13.166Z",
+    "relativeMs": 486,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0049",
+    "timestamp": "2026-02-03T23:35:13.166Z",
+    "relativeMs": 486,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0050",
+    "timestamp": "2026-02-03T23:35:13.167Z",
+    "relativeMs": 487,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0051",
+    "timestamp": "2026-02-03T23:35:13.167Z",
+    "relativeMs": 487,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0052",
+    "timestamp": "2026-02-03T23:35:13.167Z",
+    "relativeMs": 487,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0053",
+    "timestamp": "2026-02-03T23:35:13.169Z",
+    "relativeMs": 489,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0054",
+    "timestamp": "2026-02-03T23:35:13.169Z",
+    "relativeMs": 489,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0055",
+    "timestamp": "2026-02-03T23:35:13.169Z",
+    "relativeMs": 489,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/drives",
+      "normalizedUrl": "/v1/drives",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0056",
+    "timestamp": "2026-02-03T23:35:13.172Z",
+    "relativeMs": 492,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0016",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "BUSY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0057",
+    "timestamp": "2026-02-03T23:35:13.172Z",
+    "relativeMs": 492,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0016",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0058",
+    "timestamp": "2026-02-03T23:35:13.172Z",
+    "relativeMs": 492,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0016",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:44143/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:44143"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0059",
+    "timestamp": "2026-02-03T23:35:13.175Z",
+    "relativeMs": 495,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 27,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0060",
+    "timestamp": "2026-02-03T23:35:13.175Z",
+    "relativeMs": 495,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0061",
+    "timestamp": "2026-02-03T23:35:13.176Z",
+    "relativeMs": 496,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 26,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0062",
+    "timestamp": "2026-02-03T23:35:13.176Z",
+    "relativeMs": 496,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0063",
+    "timestamp": "2026-02-03T23:35:13.176Z",
+    "relativeMs": 496,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 23,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0064",
+    "timestamp": "2026-02-03T23:35:13.176Z",
+    "relativeMs": 496,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0065",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0066",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0067",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 20,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0068",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0069",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0070",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0071",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0072",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0073",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0074",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0075",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0011",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 18,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0076",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0077",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 14,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0078",
+    "timestamp": "2026-02-03T23:35:13.180Z",
+    "relativeMs": 500,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0079",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 14,
+      "error": "signal is aborted without reason"
+    }
+  },
+  {
+    "id": "EVT-0080",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0081",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0082",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0010",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0083",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0084",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0011",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0085",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0086",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0087",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "message": "Host unreachable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0088",
+    "timestamp": "2026-02-03T23:35:13.181Z",
+    "relativeMs": 501,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0014",
+    "data": {
+      "status": "error",
+      "error": "Host unreachable"
+    }
+  },
+  {
+    "id": "EVT-0089",
+    "timestamp": "2026-02-03T23:35:13.386Z",
+    "relativeMs": 706,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0004",
     "data": {
       "status": 200,
       "body": {
@@ -735,60 +1644,205 @@
         ],
         "errors": []
       },
-      "durationMs": 29,
+      "durationMs": 78,
       "error": null
     }
   },
   {
-    "id": "EVT-0034",
-    "timestamp": "2026-02-01T10:43:31.521Z",
-    "relativeMs": 1267,
+    "id": "EVT-0090",
+    "timestamp": "2026-02-03T23:35:13.386Z",
+    "relativeMs": 706,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0011",
+    "correlationId": "COR-0004",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0035",
-    "timestamp": "2026-02-01T10:43:31.522Z",
-    "relativeMs": 1268,
-    "type": "backend-decision",
-    "origin": "automatic",
-    "correlationId": "COR-0012",
-    "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode"
-    }
-  },
-  {
-    "id": "EVT-0036",
-    "timestamp": "2026-02-01T10:43:31.523Z",
-    "relativeMs": 1269,
-    "type": "rest-request",
+    "id": "EVT-0091",
+    "timestamp": "2026-02-03T23:35:13.400Z",
+    "relativeMs": 720,
+    "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0012",
+    "correlationId": "COR-0006",
     "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:45685/v1/info",
-      "normalizedUrl": "/v1/info",
-      "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:45685"
+      "status": 200,
+      "body": {
+        "drives": [
+          {
+            "a": {
+              "enabled": true,
+              "bus_id": 8,
+              "type": "1541"
+            }
+          },
+          {
+            "b": {
+              "enabled": true,
+              "bus_id": 9,
+              "type": "1541"
+            }
+          }
+        ],
+        "errors": []
       },
-      "body": null,
-      "target": "external-mock"
+      "durationMs": 124,
+      "error": null
     }
   },
   {
-    "id": "EVT-0037",
-    "timestamp": "2026-02-01T10:43:31.557Z",
-    "relativeMs": 1303,
+    "id": "EVT-0092",
+    "timestamp": "2026-02-03T23:35:13.400Z",
+    "relativeMs": 720,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0093",
+    "timestamp": "2026-02-03T23:35:13.400Z",
+    "relativeMs": 720,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "status": 200,
+      "body": {
+        "drives": [
+          {
+            "a": {
+              "enabled": true,
+              "bus_id": 8,
+              "type": "1541"
+            }
+          },
+          {
+            "b": {
+              "enabled": true,
+              "bus_id": 9,
+              "type": "1541"
+            }
+          }
+        ],
+        "errors": []
+      },
+      "durationMs": 120,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0094",
+    "timestamp": "2026-02-03T23:35:13.400Z",
+    "relativeMs": 720,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0095",
+    "timestamp": "2026-02-03T23:35:13.400Z",
+    "relativeMs": 720,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0012",
+    "data": {
+      "status": 200,
+      "body": {
+        "drives": [
+          {
+            "a": {
+              "enabled": true,
+              "bus_id": 8,
+              "type": "1541"
+            }
+          },
+          {
+            "b": {
+              "enabled": true,
+              "bus_id": 9,
+              "type": "1541"
+            }
+          }
+        ],
+        "errors": []
+      },
+      "durationMs": 214,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0096",
+    "timestamp": "2026-02-03T23:35:13.400Z",
+    "relativeMs": 720,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0012",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0097",
+    "timestamp": "2026-02-03T23:35:13.402Z",
+    "relativeMs": 722,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "status": 200,
+      "body": {
+        "drives": [
+          {
+            "a": {
+              "enabled": true,
+              "bus_id": 8,
+              "type": "1541"
+            }
+          },
+          {
+            "b": {
+              "enabled": true,
+              "bus_id": 9,
+              "type": "1541"
+            }
+          }
+        ],
+        "errors": []
+      },
+      "durationMs": 213,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0098",
+    "timestamp": "2026-02-03T23:35:13.402Z",
+    "relativeMs": 722,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0099",
+    "timestamp": "2026-02-03T23:35:13.402Z",
+    "relativeMs": 722,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0016",
     "data": {
       "status": 200,
       "body": {
@@ -800,29 +1854,443 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 27,
+      "durationMs": 210,
       "error": null
     }
   },
   {
-    "id": "EVT-0038",
-    "timestamp": "2026-02-01T10:43:31.558Z",
-    "relativeMs": 1304,
+    "id": "EVT-0100",
+    "timestamp": "2026-02-03T23:35:13.402Z",
+    "relativeMs": 722,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0012",
+    "correlationId": "COR-0016",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0039",
-    "timestamp": "2026-02-01T10:43:33.694Z",
-    "relativeMs": 3440,
+    "id": "EVT-0101",
+    "timestamp": "2026-02-03T23:35:14.307Z",
+    "relativeMs": 1627,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0013",
+    "correlationId": "COR-0017",
+    "data": {
+      "name": "click Add disks",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0102",
+    "timestamp": "2026-02-03T23:35:14.307Z",
+    "relativeMs": 1627,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0017",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0103",
+    "timestamp": "2026-02-03T23:35:14.308Z",
+    "relativeMs": 1628,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0018",
+    "data": {
+      "name": "click Add disks",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0104",
+    "timestamp": "2026-02-03T23:35:14.435Z",
+    "relativeMs": 1755,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0018",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0105",
+    "timestamp": "2026-02-03T23:35:14.696Z",
+    "relativeMs": 2016,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0019",
+    "data": {
+      "name": "click Add file / folder from device",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0106",
+    "timestamp": "2026-02-03T23:35:14.696Z",
+    "relativeMs": 2016,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0019",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0107",
+    "timestamp": "2026-02-03T23:35:14.696Z",
+    "relativeMs": 2016,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0020",
+    "data": {
+      "name": "click Add file / folder from device",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0108",
+    "timestamp": "2026-02-03T23:35:14.696Z",
+    "relativeMs": 2016,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0021",
+    "data": {
+      "name": "HomeDiskManager.anonymousAction",
+      "component": "HomeDiskManager",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0109",
+    "timestamp": "2026-02-03T23:35:14.696Z",
+    "relativeMs": 2016,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0022",
+    "data": {
+      "name": "click input",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0110",
+    "timestamp": "2026-02-03T23:35:14.699Z",
+    "relativeMs": 2019,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0022",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0111",
+    "timestamp": "2026-02-03T23:35:14.699Z",
+    "relativeMs": 2019,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0020",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0112",
+    "timestamp": "2026-02-03T23:35:14.699Z",
+    "relativeMs": 2019,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0021",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0113",
+    "timestamp": "2026-02-03T23:35:14.806Z",
+    "relativeMs": 2126,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0023",
+    "data": {
+      "name": "change input",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0114",
+    "timestamp": "2026-02-03T23:35:14.806Z",
+    "relativeMs": 2126,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0023",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0115",
+    "timestamp": "2026-02-03T23:35:14.806Z",
+    "relativeMs": 2126,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0024",
+    "data": {
+      "name": "upload FileInput",
+      "component": "FileInput",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0116",
+    "timestamp": "2026-02-03T23:35:14.806Z",
+    "relativeMs": 2126,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0025",
+    "data": {
+      "name": "HomeDiskManager.anonymousAction",
+      "component": "HomeDiskManager",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0117",
+    "timestamp": "2026-02-03T23:35:15.075Z",
+    "relativeMs": 2395,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0024",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0118",
+    "timestamp": "2026-02-03T23:35:15.099Z",
+    "relativeMs": 2419,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0025",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0119",
+    "timestamp": "2026-02-03T23:35:17.831Z",
+    "relativeMs": 5151,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0026",
     "data": {
       "name": "click Item actions",
       "component": "GlobalInteraction",
@@ -844,31 +2312,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0040",
-    "timestamp": "2026-02-01T10:43:33.695Z",
-    "relativeMs": 3441,
+    "id": "EVT-0120",
+    "timestamp": "2026-02-03T23:35:17.832Z",
+    "relativeMs": 5152,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0013",
+    "correlationId": "COR-0026",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0041",
-    "timestamp": "2026-02-01T10:43:33.695Z",
-    "relativeMs": 3441,
+    "id": "EVT-0121",
+    "timestamp": "2026-02-03T23:35:17.832Z",
+    "relativeMs": 5152,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0014",
+    "correlationId": "COR-0027",
     "data": {
       "name": "click Item actions",
       "component": "Button",
@@ -890,31 +2358,77 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0042",
-    "timestamp": "2026-02-01T10:43:33.695Z",
-    "relativeMs": 3441,
+    "id": "EVT-0122",
+    "timestamp": "2026-02-03T23:35:17.832Z",
+    "relativeMs": 5152,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0014",
+    "correlationId": "COR-0027",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0043",
-    "timestamp": "2026-02-01T10:43:33.894Z",
-    "relativeMs": 3640,
+    "id": "EVT-0123",
+    "timestamp": "2026-02-03T23:35:18.159Z",
+    "relativeMs": 5479,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0015",
+    "correlationId": "COR-0028",
+    "data": {
+      "name": "click Set group…",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0124",
+    "timestamp": "2026-02-03T23:35:18.159Z",
+    "relativeMs": 5479,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0028",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0125",
+    "timestamp": "2026-02-03T23:35:18.159Z",
+    "relativeMs": 5479,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0029",
     "data": {
       "name": "select Set group…",
       "component": "DropdownMenuItem",
@@ -936,31 +2450,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0044",
-    "timestamp": "2026-02-01T10:43:33.949Z",
-    "relativeMs": 3695,
+    "id": "EVT-0126",
+    "timestamp": "2026-02-03T23:35:18.203Z",
+    "relativeMs": 5523,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0015",
+    "correlationId": "COR-0029",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0045",
-    "timestamp": "2026-02-01T10:43:34.272Z",
-    "relativeMs": 4018,
+    "id": "EVT-0127",
+    "timestamp": "2026-02-03T23:35:18.673Z",
+    "relativeMs": 5993,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0016",
+    "correlationId": "COR-0030",
     "data": {
       "name": "click Disk(2)",
       "component": "GlobalInteraction",
@@ -982,31 +2496,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0046",
-    "timestamp": "2026-02-01T10:43:34.273Z",
-    "relativeMs": 4019,
+    "id": "EVT-0128",
+    "timestamp": "2026-02-03T23:35:18.673Z",
+    "relativeMs": 5993,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0016",
+    "correlationId": "COR-0030",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0047",
-    "timestamp": "2026-02-01T10:43:34.275Z",
-    "relativeMs": 4021,
+    "id": "EVT-0129",
+    "timestamp": "2026-02-03T23:35:18.673Z",
+    "relativeMs": 5993,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0017",
+    "correlationId": "COR-0031",
     "data": {
       "name": "click Button",
       "component": "Button",
@@ -1028,31 +2542,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0048",
-    "timestamp": "2026-02-01T10:43:34.309Z",
-    "relativeMs": 4055,
+    "id": "EVT-0130",
+    "timestamp": "2026-02-03T23:35:18.684Z",
+    "relativeMs": 6004,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0017",
+    "correlationId": "COR-0031",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0049",
-    "timestamp": "2026-02-01T10:43:34.606Z",
-    "relativeMs": 4352,
+    "id": "EVT-0131",
+    "timestamp": "2026-02-03T23:35:19.106Z",
+    "relativeMs": 6426,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0018",
+    "correlationId": "COR-0032",
     "data": {
       "name": "click Item actions",
       "component": "GlobalInteraction",
@@ -1074,31 +2588,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0050",
-    "timestamp": "2026-02-01T10:43:34.607Z",
-    "relativeMs": 4353,
+    "id": "EVT-0132",
+    "timestamp": "2026-02-03T23:35:19.106Z",
+    "relativeMs": 6426,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0018",
+    "correlationId": "COR-0032",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0051",
-    "timestamp": "2026-02-01T10:43:34.608Z",
-    "relativeMs": 4354,
+    "id": "EVT-0133",
+    "timestamp": "2026-02-03T23:35:19.107Z",
+    "relativeMs": 6427,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0019",
+    "correlationId": "COR-0033",
     "data": {
       "name": "click Item actions",
       "component": "Button",
@@ -1120,31 +2634,77 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0052",
-    "timestamp": "2026-02-01T10:43:34.609Z",
-    "relativeMs": 4355,
+    "id": "EVT-0134",
+    "timestamp": "2026-02-03T23:35:19.107Z",
+    "relativeMs": 6427,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0019",
+    "correlationId": "COR-0033",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0053",
-    "timestamp": "2026-02-01T10:43:34.892Z",
-    "relativeMs": 4638,
+    "id": "EVT-0135",
+    "timestamp": "2026-02-03T23:35:19.356Z",
+    "relativeMs": 6676,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0020",
+    "correlationId": "COR-0034",
+    "data": {
+      "name": "click Set group…",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0136",
+    "timestamp": "2026-02-03T23:35:19.356Z",
+    "relativeMs": 6676,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0034",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0137",
+    "timestamp": "2026-02-03T23:35:19.364Z",
+    "relativeMs": 6684,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0035",
     "data": {
       "name": "select Set group…",
       "component": "DropdownMenuItem",
@@ -1166,31 +2726,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0054",
-    "timestamp": "2026-02-01T10:43:34.921Z",
-    "relativeMs": 4667,
+    "id": "EVT-0138",
+    "timestamp": "2026-02-03T23:35:19.413Z",
+    "relativeMs": 6733,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0020",
+    "correlationId": "COR-0035",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0055",
-    "timestamp": "2026-02-01T10:43:34.955Z",
-    "relativeMs": 4701,
+    "id": "EVT-0139",
+    "timestamp": "2026-02-03T23:35:19.679Z",
+    "relativeMs": 6999,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0021",
+    "correlationId": "COR-0036",
     "data": {
       "name": "change Input",
       "component": "Input",
@@ -1212,31 +2772,77 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0056",
-    "timestamp": "2026-02-01T10:43:34.968Z",
-    "relativeMs": 4714,
+    "id": "EVT-0140",
+    "timestamp": "2026-02-03T23:35:19.749Z",
+    "relativeMs": 7069,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0021",
+    "correlationId": "COR-0036",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0057",
-    "timestamp": "2026-02-01T10:43:35.142Z",
-    "relativeMs": 4888,
+    "id": "EVT-0141",
+    "timestamp": "2026-02-03T23:35:19.834Z",
+    "relativeMs": 7154,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0022",
+    "correlationId": "COR-0037",
+    "data": {
+      "name": "change input",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/disks",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0142",
+    "timestamp": "2026-02-03T23:35:19.834Z",
+    "relativeMs": 7154,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0037",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0143",
+    "timestamp": "2026-02-03T23:35:19.835Z",
+    "relativeMs": 7155,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0038",
     "data": {
       "name": "click Create & assign",
       "component": "GlobalInteraction",
@@ -1258,31 +2864,31 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0058",
-    "timestamp": "2026-02-01T10:43:35.144Z",
-    "relativeMs": 4890,
+    "id": "EVT-0144",
+    "timestamp": "2026-02-03T23:35:19.835Z",
+    "relativeMs": 7155,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0022",
+    "correlationId": "COR-0038",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0059",
-    "timestamp": "2026-02-01T10:43:35.144Z",
-    "relativeMs": 4890,
+    "id": "EVT-0145",
+    "timestamp": "2026-02-03T23:35:19.835Z",
+    "relativeMs": 7155,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0023",
+    "correlationId": "COR-0039",
     "data": {
       "name": "click Create & assign",
       "component": "Button",
@@ -1304,19 +2910,19 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
-    "id": "EVT-0060",
-    "timestamp": "2026-02-01T10:43:35.165Z",
-    "relativeMs": 4911,
+    "id": "EVT-0146",
+    "timestamp": "2026-02-03T23:35:19.842Z",
+    "relativeMs": 7162,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0023",
+    "correlationId": "COR-0039",
     "data": {
       "status": "success",
       "error": null

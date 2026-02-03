@@ -411,6 +411,9 @@ export default function PlayFilesPage() {
       if (item.value === muteValues[index]) return;
       activeIndices.push(resolveVolumeIndex(item.value));
     });
+    if (manualMuteSnapshotRef.current && volumeMuted && activeIndices.length) {
+      return;
+    }
     if (!activeIndices.length) {
       setVolumeMuted(true);
       const snapshot = manualMuteSnapshotRef.current;

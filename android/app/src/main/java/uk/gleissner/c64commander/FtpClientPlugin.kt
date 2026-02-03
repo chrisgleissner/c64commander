@@ -106,16 +106,13 @@ class FtpClientPlugin : Plugin() {
         client.enterLocalPassiveMode()
         client.setFileType(FTP.BINARY_FILE_TYPE)
 
-        val stream = client.retrieveFileStream(path)
-        if (stream == null) {
+        val output = java.io.ByteArrayOutputStream()
+        val success = client.retrieveFile(path, output)
+        if (!success) {
           call.reject("FTP file read failed")
           return@execute
         }
-        val bytes = stream.use { it.readBytes() }
-        if (!client.completePendingCommand()) {
-          call.reject("FTP file read failed")
-          return@execute
-        }
+        val bytes = output.toByteArray()
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val result = JSObject()
         result.put("data", encoded)

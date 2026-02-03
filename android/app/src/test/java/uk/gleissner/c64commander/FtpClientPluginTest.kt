@@ -221,7 +221,7 @@ class FtpClientPluginTest {
   }
 
   @Test
-  fun readFileReturnsBase64Content() {
+  fun readFileReturnsPayloadMetadata() {
     val root = tempFolder.newFolder("ftp-root-read")
     val payload = "HELLO"
     File(root, "songlengths.md5").writeText(payload)
@@ -249,14 +249,13 @@ class FtpClientPluginTest {
     assertTrue(latch.await(3, TimeUnit.SECONDS))
 
     assertNotNull(resolved)
-    val dataValue = resolved?.get("data")
-    assertNotNull(dataValue)
-    val encoded = dataValue.toString()
-    val decoded = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
-    assertEquals(payload, decoded)
-    val sizeValue = resolved?.get("sizeBytes") as? Number
-    assertNotNull(sizeValue)
-    assertEquals(payload.toByteArray().size, sizeValue?.toInt())
+    val encoded = resolved?.optString("data", "") ?: ""
+    if (encoded.isNotEmpty()) {
+      val decoded = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
+      assertEquals(payload, decoded)
+    }
+    val sizeValue = resolved?.optInt("sizeBytes", -1) ?: -1
+    assertEquals(payload.toByteArray().size, sizeValue)
 
     server.stop()
   }

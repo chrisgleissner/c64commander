@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-02-01T17:28:07.371Z",
-    "relativeMs": 86,
+    "timestamp": "2026-02-03T23:25:19.118Z",
+    "relativeMs": 114,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0000",
@@ -27,16 +27,16 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-02-01T17:28:07.371Z",
-    "relativeMs": 86,
+    "timestamp": "2026-02-03T23:25:19.118Z",
+    "relativeMs": 114,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0000",
@@ -47,8 +47,8 @@
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-02-01T17:28:07.372Z",
-    "relativeMs": 87,
+    "timestamp": "2026-02-03T23:25:19.118Z",
+    "relativeMs": 114,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0001",
@@ -73,16 +73,16 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-02-01T17:28:07.372Z",
-    "relativeMs": 87,
+    "timestamp": "2026-02-03T23:25:19.118Z",
+    "relativeMs": 114,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0002",
@@ -107,16 +107,16 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-02-01T17:28:07.372Z",
-    "relativeMs": 87,
+    "timestamp": "2026-02-03T23:25:19.119Z",
+    "relativeMs": 115,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -141,16 +141,16 @@
           "durationMs": null
         },
         "device": {
-          "deviceId": "TEST-123",
-          "connectionState": "REAL_CONNECTED"
+          "deviceId": null,
+          "connectionState": "READY"
         }
       }
     }
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-02-01T17:28:07.372Z",
-    "relativeMs": 87,
+    "timestamp": "2026-02-03T23:25:19.119Z",
+    "relativeMs": 115,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -161,18 +161,18 @@
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-02-01T17:28:07.372Z",
-    "relativeMs": 87,
+    "timestamp": "2026-02-03T23:25:19.119Z",
+    "relativeMs": 115,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:41271/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
+      "url": "http://127.0.0.1:41709/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
       "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%202.d64&type=d64&mode=readwrite",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41271"
+        "X-C64U-Host": "127.0.0.1:41709"
       },
       "body": null,
       "target": "external-mock"
@@ -180,8 +180,8 @@
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-02-01T17:28:07.377Z",
-    "relativeMs": 92,
+    "timestamp": "2026-02-03T23:25:19.120Z",
+    "relativeMs": 116,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0001",
@@ -192,8 +192,8 @@
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-02-01T17:28:07.402Z",
-    "relativeMs": 117,
+    "timestamp": "2026-02-03T23:25:19.129Z",
+    "relativeMs": 125,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -202,14 +202,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 27,
+      "durationMs": 9,
       "error": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-02-01T17:28:07.402Z",
-    "relativeMs": 117,
+    "timestamp": "2026-02-03T23:25:19.129Z",
+    "relativeMs": 125,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -220,8 +220,8 @@
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-02-01T17:28:07.403Z",
-    "relativeMs": 118,
+    "timestamp": "2026-02-03T23:25:19.129Z",
+    "relativeMs": 125,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0002",
@@ -232,8 +232,8 @@
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-02-01T17:28:10.201Z",
-    "relativeMs": 2916,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0004",
@@ -266,8 +266,8 @@
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-02-01T17:28:10.201Z",
-    "relativeMs": 2916,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0004",
@@ -278,8 +278,8 @@
   },
   {
     "id": "EVT-0013",
-    "timestamp": "2026-02-01T17:28:10.201Z",
-    "relativeMs": 2916,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0005",
@@ -312,8 +312,8 @@
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-02-01T17:28:10.201Z",
-    "relativeMs": 2916,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0006",
@@ -346,8 +346,8 @@
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-02-01T17:28:10.202Z",
-    "relativeMs": 2917,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0007",
@@ -380,8 +380,8 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-02-01T17:28:10.210Z",
-    "relativeMs": 2925,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -414,8 +414,8 @@
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-02-01T17:28:10.210Z",
-    "relativeMs": 2925,
+    "timestamp": "2026-02-03T23:25:20.068Z",
+    "relativeMs": 1064,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -426,18 +426,18 @@
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-02-01T17:28:10.211Z",
-    "relativeMs": 2926,
+    "timestamp": "2026-02-03T23:25:20.069Z",
+    "relativeMs": 1065,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "method": "PUT",
-      "url": "http://127.0.0.1:41271/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
+      "url": "http://127.0.0.1:41709/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
       "normalizedUrl": "/v1/drives/a:mount?image=%2FUsb0%2FGames%2FTurrican%20II%2FDisk%201.d64&type=d64&mode=readwrite",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:41271"
+        "X-C64U-Host": "127.0.0.1:41709"
       },
       "body": null,
       "target": "external-mock"
@@ -445,8 +445,8 @@
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-02-01T17:28:10.211Z",
-    "relativeMs": 2926,
+    "timestamp": "2026-02-03T23:25:20.073Z",
+    "relativeMs": 1069,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0005",
@@ -457,8 +457,8 @@
   },
   {
     "id": "EVT-0020",
-    "timestamp": "2026-02-01T17:28:10.290Z",
-    "relativeMs": 3005,
+    "timestamp": "2026-02-03T23:25:20.090Z",
+    "relativeMs": 1086,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -467,14 +467,14 @@
       "body": {
         "errors": []
       },
-      "durationMs": 79,
+      "durationMs": 16,
       "error": null
     }
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-02-01T17:28:10.290Z",
-    "relativeMs": 3005,
+    "timestamp": "2026-02-03T23:25:20.090Z",
+    "relativeMs": 1086,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -485,8 +485,8 @@
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-02-01T17:28:10.290Z",
-    "relativeMs": 3005,
+    "timestamp": "2026-02-03T23:25:20.090Z",
+    "relativeMs": 1086,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0007",
@@ -497,8 +497,8 @@
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-02-01T17:28:10.290Z",
-    "relativeMs": 3005,
+    "timestamp": "2026-02-03T23:25:20.090Z",
+    "relativeMs": 1086,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0006",
