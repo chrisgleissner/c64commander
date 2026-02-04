@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
+import type { TraceEvent } from '../src/lib/tracing/types';
 import { seedUiMocks } from './uiMocks';
 import { saveCoverageFromPage } from './withCoverage';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
@@ -35,13 +36,15 @@ test.describe('Diagnostics Actions tab', () => {
     // Reset trace session - start counters high enough that natural events don't reach seeded IDs
     // Natural events from navigation will use EVT-0500+, our seeded events use EVT-0900+
     await page.evaluate(() => {
-      const tracing = (window as Window & { __c64uTracing?: { resetTraceSession?: (e?: number, c?: number) => void } }).__c64uTracing;
+      const tracing = (window as Window & {
+        __c64uTracing?: { resetTraceSession?: (eventIdStart?: number, correlationIdStart?: number) => void };
+      }).__c64uTracing;
       tracing?.resetTraceSession?.(500, 500);
     });
 
     // Build events with CURRENT timestamps (within retention window)
     // Using EVT-0900+ to avoid any conflict with natural emissions starting at EVT-0500
-    const events = await page.evaluate(() => {
+    const events = (await page.evaluate(() => {
       const now = Date.now();
       return [
         {
@@ -106,18 +109,18 @@ test.describe('Diagnostics Actions tab', () => {
           data: { status: 'error', error: 'FTP failed' },
         },
       ];
-    });
+    })) as TraceEvent[];
 
     // Seed traces with await for event to propagate
-    await page.evaluate((seedEvents) => {
+    await page.evaluate((seedEvents: TraceEvent[]) => {
       return new Promise<void>((resolve) => {
         const handler = () => {
           window.removeEventListener('c64u-traces-updated', handler);
           setTimeout(resolve, 50);
         };
         window.addEventListener('c64u-traces-updated', handler);
-        const tracing = (window as Window & { __c64uTracing?: { seedTraces?: (events: any[]) => void } }).__c64uTracing;
-        tracing?.seedTraces?.(seedEvents as any[]);
+        const tracing = (window as Window & { __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void } }).__c64uTracing;
+        tracing?.seedTraces?.(seedEvents);
       });
     }, events);
 
@@ -128,7 +131,7 @@ test.describe('Diagnostics Actions tab', () => {
 
     // Navigate to Actions tab
     await page.getByRole('tab', { name: 'Actions' }).click();
-    
+
     // Wait for the actions tab to render and verify action summary is visible
     await expect(page.getByTestId('action-summary-COR-0900')).toBeVisible();
 

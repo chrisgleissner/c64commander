@@ -51,22 +51,22 @@ Tracing is not a replacement for logs. Logs remain message-oriented and human-re
 
 ## 3. Terminology
 
-- Trace Session  
+- Trace Session
   The rolling, in-memory collection of trace events.
 
-- Trace Event  
+- Trace Event
   A single structured record describing one meaningful occurrence.
 
-- Action Trace  
+- Action Trace
   A root semantic trace representing a logical operation.
 
-- Event ID  
+- Event ID
   A deterministic identifier uniquely identifying a single trace event.
 
-- Correlation ID  
+- Correlation ID
   A deterministic identifier linking one logical action to all downstream events.
 
-- Origin  
+- Origin
   One of user, automatic, or system.
 
 ---
@@ -226,16 +226,16 @@ A single physical user interaction (e.g., click, tap, key press) MUST produce **
 
 **Normative rules:**
 
-1. **No duplicate traces for the same DOM event**  
+1. **No duplicate traces for the same DOM event**
    If multiple instrumentation layers exist (e.g., global capture listener and component-level tracing), they MUST NOT both emit Action Traces for the same user interaction.
 
-2. **Global capture as authoritative source**  
+2. **Global capture as authoritative source**
    The global user interaction capture (`userInteractionCapture.ts`) is the authoritative source for user Action Traces. Component-level tracing MUST NOT create additional user Action Traces for interactions already captured globally.
 
-3. **Deduplication via event marking**  
+3. **Deduplication via event marking**
    The `__c64uTraced` flag on DOM events is used to prevent double-tracing. Once set, subsequent instrumentation layers MUST NOT emit duplicate Action Traces.
 
-4. **Component name indicates capture source**  
+4. **Component name indicates capture source**
    The `component` field in `action-start.data` indicates which layer captured the trace:
    - `GlobalInteraction`: captured by global DOM listener
    - Other values: captured by component-specific instrumentation (rare, used only for specialized components)
@@ -248,24 +248,24 @@ REST and FTP operations that occur **during** an active Action Trace MUST be rec
 
 **Normative rules:**
 
-1. **Effect reuse of active action**  
+1. **Effect reuse of active action**
    When a REST or FTP operation is triggered while an Action Trace is active (i.e., `getActiveAction()` returns non-null), that operation MUST use the active action's `correlationId` and inherit its `origin`.
 
-2. **Implicit actions for standalone effects**  
+2. **Implicit actions for standalone effects**
    When a REST or FTP operation is triggered with no active Action Trace, an implicit system-origin Action Trace MUST be created for that operation.
 
-3. **No origin downgrade**  
+3. **No origin downgrade**
    REST and FTP events triggered by a user Action Trace MUST retain `origin=user`. The origin MUST NOT be downgraded to `system` simply because internal code executes the operation.
 
-4. **Async context propagation guarantee**  
+4. **Async context propagation guarantee**
    Correlation MUST propagate correctly across all async boundaries, including:
    - Promise chains (`.then()`, `.catch()`, `.finally()`)
    - `async`/`await` patterns
    - Fire-and-forget patterns (`void promise`)
    - `setTimeout`, `setInterval`, and `queueMicrotask` callbacks
-   
+
    **Loss of correlation across async boundaries is a tracing bug**, not acceptable behavior.
-   
+
    Implementation note: The tracing system uses async context propagation internally (via `TraceActionContext` as the causal carrier) to ensure that effects scheduled during an action trace retain access to the originating action context, even if they execute after the logical action completes. This is transparent to business logic—no explicit context passing is required.
 
 ---
@@ -319,6 +319,7 @@ Derivation rules:
 - `elapsedMs` is derived from the SID player runtime clock (`now - trackStartedAt`) and reflects "how far into the current track we are" at snapshot time.
 - `durationMs` is derived from current track metadata (if known) and reflects the expected total track length.
 - These values are playback state, not network timing.
+- For REST latency timing (`rest-response.data.durationMs`), see [REST Response Event](#rest-response-event).
 
 ---
 

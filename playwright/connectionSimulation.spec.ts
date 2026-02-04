@@ -11,6 +11,7 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+// Seed once per test; allowed base URLs cover both real and demo, so no paired call is required.
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string, demoBaseUrl?: string | null) => {
   await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }: { realBaseUrl: string; demoBaseUrl: string | null }) => {
     (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = realArg;
@@ -30,9 +31,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await demoServer?.close?.().catch(() => {});
+      await demoServer?.close?.().catch(() => { });
       demoServer = null;
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -383,10 +384,8 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server.setReachable(false);
     await indicator.click();
     const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    const dialogVisible = await dialogTitle.isVisible({ timeout: 5000 }).catch(() => false);
-    if (dialogVisible) {
-      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
-    }
+    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();
