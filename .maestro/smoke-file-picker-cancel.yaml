@@ -40,5 +40,15 @@ env:
 
 # Re-launch the app and return to Home
 - runFlow: subflows/launch-and-wait.yaml
+- runFlow:
+    when:
+      visible: "Continue in Demo Mode"
+    file: subflows/continue-demo.yaml
+- tapOn:
+    text: "Continue in Demo Mode"
+    optional: true
+- extendedWaitUntil:
+    visible: "C64 Commander"
+    timeout: ${SHORT_TIMEOUT}
 
 - takeScreenshot: picker-cancelled
