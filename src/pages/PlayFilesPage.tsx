@@ -31,7 +31,6 @@ import {
 } from '@/lib/sourceNavigation/localSourcesStore';
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
-import { computeSidMd5 } from '@/lib/sid/sidUtils';
 import { isSidVolumeName, resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import {
   AUDIO_MIXER_VOLUME_ITEMS,
@@ -758,6 +757,7 @@ export default function PlayFilesPage() {
           return { durationMs, subsongCount, readable: true } as const;
         }
 
+        const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
         const md5 = await computeSidMd5(buffer);
         const md5Seconds = resolveSeconds(songlengths?.md5ToSeconds.get(md5));
         if (md5Seconds !== null) {

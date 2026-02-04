@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   countSonglengthsEntries,
   parseSonglengths,
   resolveSonglengthsDurationMs,
   resolveSonglengthsSeconds,
 } from '@/lib/sid/songlengths';
-import { computeSidMd5 } from '@/lib/sid/sidUtils';
+
+vi.mock('@/lib/sid/sidUtils', () => ({
+  computeSidMd5: async () => 'deadbeefdeadbeefdeadbeefdeadbeef',
+}));
 
 const fixture = `
 ; /HVSC/Demos/demo.sid
@@ -55,8 +58,7 @@ describe('parseSonglengths', () => {
 
   it('resolves duration ms using path or md5 fallback', async () => {
     const buffer = new Uint8Array([1, 2, 3, 4]).buffer;
-    const md5 = await computeSidMd5(buffer);
-    const md5Fixture = `${md5}=0:42 0:55`;
+    const md5Fixture = 'deadbeefdeadbeefdeadbeefdeadbeef=0:42 0:55';
     const data = parseSonglengths(md5Fixture);
     const file = {
       name: 'demo.sid',

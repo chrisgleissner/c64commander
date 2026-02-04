@@ -35,7 +35,6 @@
     "assets:play": "node scripts/generate-play-assets.mjs"
   },
   "dependencies": {
-    "7z-wasm": "^1.2.0",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
     "@hookform/resolvers": "^3.10.0",
@@ -67,6 +66,7 @@
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@tanstack/react-query": "^5.83.0",
+    "7z-wasm": "^1.2.0",
     "baseline-browser-mapping": "^2.9.15",
     "caniuse-lite": "^1.0.30001765",
     "class-variance-authority": "^0.7.1",
@@ -125,6 +125,7 @@
     "openapi-client-axios": "^7.6.0",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.6",
+    "react-test-renderer": "^18.3.1",
     "sharp": "^0.33.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",

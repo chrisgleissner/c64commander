@@ -1,7 +1,7 @@
 # PLANS.md - Authoritative Execution Plan
 
 ## Mission
-Implement sticky real-device connectivity and a new Diagnostics Actions tab with deterministic Action Summaries, plus tests and full verification until CI is green.
+Implement (or verify existing implementation of) sticky real-device connectivity and the Diagnostics Actions tab with deterministic Action Summaries, plus tests and full verification until CI is green.
 
 ## Phase 0: Spec ingestion (mandatory)
 
@@ -11,9 +11,9 @@ Implement sticky real-device connectivity and a new Diagnostics Actions tab with
 - [x] Read both specs in order and capture key normative requirements here.
 
 ### Notes (normative summary)
-- Tracing spec: one in-memory trace session per process, deterministic IDs, correlation per action, exactly one backend-decision per correlation, targets limited to internal-mock/external-mock/real-device, do not change envelope or semantics.
-- Action summary spec: group by correlationId, one summary per action, requires action-start + action-end, derive REST/FTP effects from events only, summary origin mapping: HUMAN for user, MACHINE for automatic/system, outcome from action-end.status, deterministic ordering, projection only.
-- UI visual encoding in this task supersedes spec colors (task-specific: HUMAN green, MACHINE blue, REST purple, FTP brown, ERROR red). Use task requirements while keeping spec semantics.
+- Tracing spec: single in-memory trace session per process; deterministic IDs; correlation per action; exactly one backend-decision per correlation; targets limited to internal-mock/external-mock/real-device; do not change envelope or semantics; export is zip with trace.json + app-metadata.json.
+- Action summary spec: group by correlationId; one summary per action; action-start + action-end required for complete; derive REST/FTP effects from trace events only; summary origin mapping: HUMAN for user, MACHINE for automatic/system; outcome from action-end.status; deterministic ordering; projection only.
+- Task-specific UI overrides for Actions tab: HUMAN green, MACHINE blue; REST badge purple; FTP badge brown; ERROR badge red.
 
 ## Phase 1: Code path discovery
 
@@ -27,41 +27,39 @@ Implement sticky real-device connectivity and a new Diagnostics Actions tab with
 - Backend selection/fallback: src/lib/connection/connectionManager.ts, src/lib/tracing/traceTargets.ts, src/lib/c64api.ts
 - Diagnostics tabs: src/pages/SettingsPage.tsx
 - Trace buffer + export/redaction: src/lib/tracing/traceSession.ts, src/lib/tracing/traceExport.ts
+- Action summary derivation: src/lib/diagnostics/actionSummaries.ts
 
 ## Phase 2: Task A - Sticky real-device connectivity
 
 ### Actions
-- [x] Add in-memory sticky flag set only on confirmed real-device connected/ready.
-- [x] Gate backend target selection to prevent any mock fallback while sticky is true.
-- [x] Ensure background discovery loop does not override sticky state.
-- [x] Maintain backend-decision event semantics with allowed reason.
+- [x] Verify in-memory sticky flag set only on confirmed real-device connected/ready (connectionManager: transitionToRealConnected).
+- [x] Verify backend target selection prevents mock fallback while sticky is true (traceTargets resolves real-device).
+- [x] Verify discovery loop cannot override sticky state (demo transition is blocked when sticky).
+- [x] Verify backend-decision reasons remain within spec (reachable/fallback).
 
 ### Tests
-- [x] Unit test: once sticky enabled, backend-decision stays real-device even after failures/timeouts.
-- [x] Unit/integration test: no routing to internal/external mock after sticky enabled.
-- [x] Trace-based assertion (if used) respects trace normalization rules.
+- [x] Unit tests cover sticky lock behavior in trace target selection (tests/unit/tracing/traceTargets.test.ts).
 
 ## Phase 3: Task B - Action Summary derivation
 
 ### Actions
-- [x] Implement pure derivation module: trace events → Action Summary view models.
-- [x] Ensure grouping, origin mapping, outcomes, and REST/FTP effects per spec.
-- [x] Define deterministic error count derivation and document in code.
+- [x] Verify pure derivation module maps trace events → Action Summary view models (src/lib/diagnostics/actionSummaries.ts).
+- [x] Verify grouping, origin mapping, outcomes, and REST/FTP effects per spec.
+- [x] Verify deterministic error count derivation (error events preferred, action-end error as fallback).
 
 ### Tests
-- [x] Unit tests for derivation (grouping, counts, outcomes, error rules).
+- [x] Unit tests for derivation (tests/unit/diagnostics/actionSummaries.test.ts).
 
 ## Phase 4: Task B - Actions tab UI
 
 ### Actions
-- [x] Add Diagnostics tab labeled Actions with parity controls (clear/export/redacted).
-- [x] Reuse Traces clear/export/redaction logic.
-- [x] Build Actions list view with required badges/colors and collapsible rows.
-- [x] Expanded details for action metadata + REST/FTP effects.
+- [x] Verify Diagnostics tab labeled Actions with parity controls (clear/export/redacted) (src/pages/SettingsPage.tsx).
+- [x] Verify list view badges/colors and collapsible rows.
+- [x] Verify expanded details include action metadata + REST/FTP effects.
 
 ### Tests
-- [x] Playwright test: Actions tab visible and reachable.
-- [x] Playwright test: badge counts and expanded details for known trace fixture/action.
+- [x] Playwright test: Actions tab visible and reachable (playwright/diagnosticsActions.spec.ts).
+- [x] Playwright test: badge counts and expanded details for seeded trace fixture.
 
 ## Phase 5: Verification
 
