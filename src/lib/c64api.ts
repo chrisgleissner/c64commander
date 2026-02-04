@@ -48,10 +48,16 @@ const extractRequestBody = (body: unknown) => {
       return body;
     }
   }
-  if (typeof FormData !== 'undefined' && body instanceof FormData) return null;
-  if (typeof Blob !== 'undefined' && body instanceof Blob) return null;
-  if (body instanceof ArrayBuffer) return null;
-  if (ArrayBuffer.isView(body)) return null;
+  if (typeof FormData !== 'undefined' && body instanceof FormData) return '[form-data]';
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    return { type: 'blob', sizeBytes: body.size, mimeType: body.type || null };
+  }
+  if (body instanceof ArrayBuffer) {
+    return { type: 'array-buffer', sizeBytes: body.byteLength };
+  }
+  if (ArrayBuffer.isView(body)) {
+    return { type: 'array-buffer-view', sizeBytes: body.byteLength };
+  }
   return body as unknown;
 };
 
@@ -123,6 +129,62 @@ const isLocalProxy = (baseUrl: string) => {
   } catch {
     return false;
   }
+};
+
+const isLocalDeviceHost = (host: string) => {
+  let normalized = host.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized.startsWith('[')) {
+    const closingBracketIndex = normalized.indexOf(']');
+    if (closingBracketIndex !== -1) {
+      normalized = normalized.slice(1, closingBracketIndex);
+    }
+  } else {
+    const colonIndex = normalized.indexOf(':');
+    if (colonIndex !== -1) {
+      normalized = normalized.slice(0, colonIndex);
+    }
+  }
+  return normalized === 'localhost' || normalized === '127.0.0.1';
+};
+
+const resolvePreferredDeviceHost = (baseUrl: string, deviceHost?: string) => {
+  const explicitHost = deviceHost ? normalizeDeviceHost(deviceHost) : null;
+  const derivedHost = normalizeDeviceHost(explicitHost ?? getDeviceHostFromBaseUrl(baseUrl));
+  const isLikelyFallbackOrigin = (() => {
+    if (typeof window === 'undefined') return false;
+    const origin = window.location?.origin;
+    return Boolean(origin && (baseUrl === origin || baseUrl.startsWith(`${origin}/`)));
+  })();
+  if (!explicitHost && isLocalDeviceHost(derivedHost) && isLikelyFallbackOrigin) {
+    const storedHost = resolveDeviceHostFromStorage();
+    if (!isLocalDeviceHost(storedHost)) {
+      addLog('warn', 'Ignoring localhost base URL in favor of stored host', {
+        baseUrl,
+        derivedHost,
+        storedHost,
+      });
+      return storedHost;
+    }
+  }
+  return derivedHost;
+};
+
+let lastDeviceHost: string | null = null;
+
+const logDeviceHostChange = (nextHost: string, context: { baseUrl: string; mode: 'persisted' | 'runtime' }) => {
+  if (lastDeviceHost && lastDeviceHost !== nextHost) {
+    addLog('warn', 'API device host changed', {
+      previous: lastDeviceHost,
+      next: nextHost,
+      baseUrl: context.baseUrl,
+      mode: context.mode,
+    });
+    void runWithImplicitAction(`api.host-change:${lastDeviceHost}->${nextHost}`, async () => {
+      return;
+    });
+  }
+  lastDeviceHost = nextHost;
 };
 
 const isNativePlatform = () => {
@@ -525,7 +587,13 @@ export class C64API {
     options.__c64uTraceSuppressed = true;
     const body = options.body;
     const shouldUseWebFetch =
-      isNativePlatform() && typeof FormData !== 'undefined' && body instanceof FormData;
+      isNativePlatform()
+      && (
+        (typeof FormData !== 'undefined' && body instanceof FormData)
+        || (typeof Blob !== 'undefined' && body instanceof Blob)
+        || body instanceof ArrayBuffer
+        || ArrayBuffer.isView(body)
+      );
 
     const method = (options.method || 'GET').toString().toUpperCase();
 
@@ -877,6 +945,14 @@ export class C64API {
     let response: Response;
     try {
       const baseUrl = this.getBaseUrl();
+      addLog('debug', 'Drive mount upload payload prepared', {
+        drive,
+        type: type ?? null,
+        mode: mode ?? null,
+        sizeBytes: typeof image?.size === 'number' ? image.size : null,
+        baseUrl,
+        deviceHost: this.deviceHost,
+      });
       response = await this.fetchWithTimeout(
         `${baseUrl}${path}`,
         {
@@ -1171,6 +1247,9 @@ export function getC64API(): C64API {
     const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
     const cachedPassword = getCachedPassword();
     apiInstance = new C64API(resolvedBaseUrl, cachedPassword ?? undefined, resolvedDeviceHost);
+    if (!lastDeviceHost) {
+      lastDeviceHost = apiInstance.getDeviceHost();
+    }
     if (hasStoredPasswordFlag() && cachedPassword === null) {
       void loadStoredPassword().then((password) => {
         apiInstance?.setPassword(password ?? undefined);
@@ -1185,7 +1264,7 @@ export function getC64API(): C64API {
 
 export function updateC64APIConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
-  const resolvedDeviceHost = normalizeDeviceHost(deviceHost ?? getDeviceHostFromBaseUrl(baseUrl));
+  const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
   const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
 
   api.setBaseUrl(resolvedBaseUrl);
@@ -1204,6 +1283,7 @@ export function updateC64APIConfig(baseUrl: string, password?: string, deviceHos
     baseUrl: resolvedBaseUrl,
     deviceHost: resolvedDeviceHost,
   });
+  logDeviceHostChange(resolvedDeviceHost, { baseUrl: resolvedBaseUrl, mode: 'persisted' });
   if (isSmokeModeEnabled()) {
     console.info('C64U_ROUTING_UPDATED', JSON.stringify({ baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'persisted' }));
   }
@@ -1240,7 +1320,7 @@ export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
  */
 export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
-  const resolvedDeviceHost = normalizeDeviceHost(deviceHost ?? getDeviceHostFromBaseUrl(baseUrl));
+  const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
   const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
@@ -1249,6 +1329,7 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
     baseUrl: resolvedBaseUrl,
     deviceHost: resolvedDeviceHost,
   });
+  logDeviceHostChange(resolvedDeviceHost, { baseUrl: resolvedBaseUrl, mode: 'runtime' });
   if (isSmokeModeEnabled()) {
     console.info('C64U_ROUTING_UPDATED', JSON.stringify({ baseUrl: resolvedBaseUrl, deviceHost: resolvedDeviceHost, mode: 'runtime' }));
   }

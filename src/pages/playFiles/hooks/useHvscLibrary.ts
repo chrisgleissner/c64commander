@@ -72,6 +72,14 @@ export type HvscLibraryState = {
   hvscVisibleFolders: string[];
 };
 
+const HVSC_EXTRACTION_STAGES = new Set([
+  'archive_extraction',
+  'archive_validation',
+  'sid_enumeration',
+  'songlengths',
+  'sid_metadata_parsing',
+]);
+
 export const useHvscLibrary = (): HvscLibraryState => {
   const [hvscStatus, setHvscStatus] = useState<HvscStatus | null>(null);
   const [hvscStatusSummary, setHvscStatusSummary] = useState<HvscStatusSummary>(() => loadHvscStatusSummary());
@@ -203,6 +211,15 @@ export const useHvscLibrary = (): HvscLibraryState => {
     addHvscProgressListener((event) => {
       const now = new Date().toISOString();
       const lastStage = hvscLastStageRef.current;
+      const isDownloadComplete =
+        event.stage === 'download'
+        && (
+          (typeof event.percent === 'number' && event.percent >= 100)
+          || (typeof event.downloadedBytes === 'number'
+            && typeof event.totalBytes === 'number'
+            && event.totalBytes > 0
+            && event.downloadedBytes >= event.totalBytes)
+        );
       if (event.stage && event.stage !== 'error') {
         hvscLastStageRef.current = event.stage;
       }
@@ -226,15 +243,19 @@ export const useHvscLibrary = (): HvscLibraryState => {
             ...prev,
             download: {
               ...prev.download,
-              status: 'in-progress',
+              status: isDownloadComplete ? 'success' : 'in-progress',
               startedAt: prev.download.startedAt ?? now,
+              finishedAt: isDownloadComplete ? (prev.download.finishedAt ?? now) : prev.download.finishedAt ?? null,
               durationMs: event.elapsedTimeMs ?? prev.download.durationMs ?? null,
-              sizeBytes: event.totalBytes ?? (event.percent === 100 ? event.downloadedBytes : prev.download.sizeBytes) ?? null,
+              sizeBytes: event.totalBytes
+                ?? (isDownloadComplete ? event.downloadedBytes : prev.download.sizeBytes)
+                ?? null,
               downloadedBytes: event.downloadedBytes ?? prev.download.downloadedBytes ?? null,
               totalBytes: event.totalBytes ?? prev.download.totalBytes ?? null,
               errorCategory: null,
               errorMessage: null,
             },
+            lastUpdatedAt: now,
           }));
         }
       }
@@ -563,6 +584,12 @@ export const useHvscLibrary = (): HvscLibraryState => {
           : prev.extraction,
         lastUpdatedAt: stoppedAt,
       }));
+      try {
+        const status = await getHvscStatus();
+        setHvscStatus(status);
+      } catch (error) {
+        addErrorLog('HVSC status refresh failed after cancel', { error: (error as Error).message });
+      }
       setHvscActiveToken(null);
       toast({ title: 'HVSC update cancelled' });
     } catch (error) {
@@ -638,10 +665,14 @@ export const useHvscLibrary = (): HvscLibraryState => {
 
   const hvscDownloadPercent = hvscDownloadBytes !== null && hvscDownloadTotalBytes
     ? Math.min(100, (hvscDownloadBytes / hvscDownloadTotalBytes) * 100)
-    : hvscProgress;
+    : hvscStage === 'download'
+      ? hvscProgress
+      : null;
   const hvscExtractionPercent = hvscSummaryFilesExtracted !== null && hvscExtractionTotalFiles
     ? Math.min(100, (hvscSummaryFilesExtracted / hvscExtractionTotalFiles) * 100)
-    : hvscProgress;
+    : hvscStage && HVSC_EXTRACTION_STAGES.has(hvscStage)
+      ? hvscProgress
+      : null;
 
   const hvscVisibleFolders = useMemo(() => {
     if (!hvscFolderFilter) return hvscFolders;

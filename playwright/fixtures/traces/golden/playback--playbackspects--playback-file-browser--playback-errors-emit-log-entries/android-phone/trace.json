@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-02-01T17:28:45.237Z",
-    "relativeMs": 361,
+    "timestamp": "2026-02-03T23:27:46.945Z",
+    "relativeMs": 419,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -35,45 +35,39 @@
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-02-01T17:28:45.239Z",
-    "relativeMs": 363,
-    "type": "device-guard",
+    "timestamp": "2026-02-03T23:27:46.947Z",
+    "relativeMs": 421,
+    "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "UNKNOWN"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-02-01T17:28:45.240Z",
-    "relativeMs": 364,
-    "type": "error",
+    "timestamp": "2026-02-03T23:27:46.947Z",
+    "relativeMs": 421,
+    "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-02-01T17:28:45.240Z",
-    "relativeMs": 364,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0004",
-    "timestamp": "2026-02-01T17:28:45.251Z",
-    "relativeMs": 375,
+    "timestamp": "2026-02-03T23:27:46.965Z",
+    "relativeMs": 439,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -105,9 +99,9 @@
     }
   },
   {
-    "id": "EVT-0005",
-    "timestamp": "2026-02-01T17:28:45.252Z",
-    "relativeMs": 376,
+    "id": "EVT-0004",
+    "timestamp": "2026-02-03T23:27:46.965Z",
+    "relativeMs": 439,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -117,28 +111,28 @@
     }
   },
   {
-    "id": "EVT-0006",
-    "timestamp": "2026-02-01T17:28:45.252Z",
-    "relativeMs": 376,
+    "id": "EVT-0005",
+    "timestamp": "2026-02-03T23:27:46.965Z",
+    "relativeMs": 439,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:33283/v1/info",
-      "normalizedUrl": "/v1/info",
+      "url": "http://127.0.0.1:43749/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
+      "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:33283"
+        "X-C64U-Host": "127.0.0.1:43749"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0007",
-    "timestamp": "2026-02-01T17:28:45.288Z",
-    "relativeMs": 412,
+    "id": "EVT-0006",
+    "timestamp": "2026-02-03T23:27:46.967Z",
+    "relativeMs": 441,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -170,22 +164,40 @@
     }
   },
   {
-    "id": "EVT-0008",
-    "timestamp": "2026-02-01T17:28:45.288Z",
-    "relativeMs": 412,
-    "type": "device-guard",
+    "id": "EVT-0007",
+    "timestamp": "2026-02-03T23:27:46.968Z",
+    "relativeMs": 442,
+    "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-02-03T23:27:46.968Z",
+    "relativeMs": 442,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
+      "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
+    "timestamp": "2026-02-03T23:27:46.968Z",
+    "relativeMs": 442,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -218,71 +230,42 @@
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
-    "type": "device-guard",
+    "timestamp": "2026-02-03T23:27:46.968Z",
+    "relativeMs": 442,
+    "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
-    "type": "action-start",
+    "timestamp": "2026-02-03T23:27:46.968Z",
+    "relativeMs": 442,
+    "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0003",
     "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "DISCOVERING"
-        }
-      }
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/Audio%20Mixer/Vol%20Socket%201",
+      "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
-    "type": "device-guard",
-    "origin": "system",
-    "correlationId": "COR-0004",
-    "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
-    }
-  },
-  {
-    "id": "EVT-0013",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
+    "timestamp": "2026-02-03T23:27:46.968Z",
+    "relativeMs": 442,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0004",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -311,25 +294,43 @@
     }
   },
   {
-    "id": "EVT-0014",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
-    "type": "device-guard",
+    "id": "EVT-0013",
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
+    "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0004",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/Audio%20Mixer/Vol%20Socket%202",
+      "normalizedUrl": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-02-01T17:28:45.289Z",
-    "relativeMs": 413,
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0005",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -359,71 +360,42 @@
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-02-01T17:28:45.290Z",
-    "relativeMs": 414,
-    "type": "device-guard",
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
+    "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0005",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-02-01T17:28:45.290Z",
-    "relativeMs": 414,
-    "type": "action-start",
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
+    "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0005",
     "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "DISCOVERING"
-        }
-      }
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201",
+      "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-02-01T17:28:45.290Z",
-    "relativeMs": 414,
-    "type": "device-guard",
-    "origin": "system",
-    "correlationId": "COR-0007",
-    "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
-    }
-  },
-  {
-    "id": "EVT-0019",
-    "timestamp": "2026-02-01T17:28:45.290Z",
-    "relativeMs": 414,
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0006",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -452,25 +424,43 @@
     }
   },
   {
-    "id": "EVT-0020",
-    "timestamp": "2026-02-01T17:28:45.290Z",
-    "relativeMs": 414,
-    "type": "device-guard",
+    "id": "EVT-0019",
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
+    "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0006",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-02-03T23:27:46.969Z",
+    "relativeMs": 443,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202",
+      "normalizedUrl": "/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-02-01T17:28:45.290Z",
-    "relativeMs": 414,
+    "timestamp": "2026-02-03T23:27:46.970Z",
+    "relativeMs": 444,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0007",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -500,213 +490,211 @@
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-02-01T17:28:45.291Z",
-    "relativeMs": 415,
-    "type": "device-guard",
+    "timestamp": "2026-02-03T23:27:46.970Z",
+    "relativeMs": 444,
+    "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0007",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
+    "timestamp": "2026-02-03T23:27:46.970Z",
+    "relativeMs": 444,
+    "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0007",
     "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/SID%20Addressing/UltiSID%201%20Address",
+      "normalizedUrl": "/v1/configs/SID%20Addressing/UltiSID%201%20Address",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
+    "timestamp": "2026-02-03T23:27:46.974Z",
+    "relativeMs": 448,
+    "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0008",
     "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      }
     }
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
+    "timestamp": "2026-02-03T23:27:46.974Z",
+    "relativeMs": 448,
+    "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0008",
     "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
+    "timestamp": "2026-02-03T23:27:46.974Z",
+    "relativeMs": 448,
+    "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0008",
     "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/configs/SID%20Addressing/UltiSID%202%20Address",
+      "normalizedUrl": "/v1/configs/SID%20Addressing/UltiSID%202%20Address",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0027",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
+    "timestamp": "2026-02-03T23:27:46.976Z",
+    "relativeMs": 450,
+    "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0009",
     "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      }
     }
   },
   {
     "id": "EVT-0028",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
+    "timestamp": "2026-02-03T23:27:46.976Z",
+    "relativeMs": 450,
+    "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0009",
     "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
+    "timestamp": "2026-02-03T23:27:46.976Z",
+    "relativeMs": 450,
+    "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0009",
     "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
     "id": "EVT-0030",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
+    "timestamp": "2026-02-03T23:27:47.154Z",
+    "relativeMs": 628,
+    "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0005",
+    "correlationId": "COR-0000",
     "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 55,
+      "error": "HTTP 503: Service Unavailable"
     }
   },
   {
     "id": "EVT-0031",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
+    "timestamp": "2026-02-03T23:27:47.154Z",
+    "relativeMs": 628,
     "type": "error",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0000",
     "data": {
-      "message": "Device not ready for requests",
+      "message": "HTTP 503: Service Unavailable",
       "name": "Error"
     }
   },
   {
     "id": "EVT-0032",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
+    "timestamp": "2026-02-03T23:27:47.155Z",
+    "relativeMs": 629,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0000",
     "data": {
       "status": "error",
-      "error": "Device not ready for requests"
+      "error": "HTTP 503: Service Unavailable"
     }
   },
   {
     "id": "EVT-0033",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0007",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0034",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0007",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0035",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0008",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0036",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0008",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0037",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0009",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0038",
-    "timestamp": "2026-02-01T17:28:45.292Z",
-    "relativeMs": 416,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0009",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0039",
-    "timestamp": "2026-02-01T17:28:45.510Z",
-    "relativeMs": 634,
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -717,14 +705,14 @@
           "Device unreachable"
         ]
       },
-      "durationMs": 121,
+      "durationMs": 158,
       "error": "HTTP 503: Service Unavailable"
     }
   },
   {
-    "id": "EVT-0040",
-    "timestamp": "2026-02-01T17:28:45.510Z",
-    "relativeMs": 634,
+    "id": "EVT-0034",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -734,9 +722,9 @@
     }
   },
   {
-    "id": "EVT-0041",
-    "timestamp": "2026-02-01T17:28:45.511Z",
-    "relativeMs": 635,
+    "id": "EVT-0035",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -746,9 +734,345 @@
     }
   },
   {
+    "id": "EVT-0036",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 154,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0037",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0038",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0007",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0039",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 156,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0040",
+    "timestamp": "2026-02-03T23:27:47.201Z",
+    "relativeMs": 675,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0041",
+    "timestamp": "2026-02-03T23:27:47.202Z",
+    "relativeMs": 676,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
     "id": "EVT-0042",
-    "timestamp": "2026-02-01T17:28:45.718Z",
-    "relativeMs": 842,
+    "timestamp": "2026-02-03T23:27:47.202Z",
+    "relativeMs": 676,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 148,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0043",
+    "timestamp": "2026-02-03T23:27:47.202Z",
+    "relativeMs": 676,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0044",
+    "timestamp": "2026-02-03T23:27:47.202Z",
+    "relativeMs": 676,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0009",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0045",
+    "timestamp": "2026-02-03T23:27:47.211Z",
+    "relativeMs": 685,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 157,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0046",
+    "timestamp": "2026-02-03T23:27:47.211Z",
+    "relativeMs": 685,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0047",
+    "timestamp": "2026-02-03T23:27:47.211Z",
+    "relativeMs": 685,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0048",
+    "timestamp": "2026-02-03T23:27:47.211Z",
+    "relativeMs": 685,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 156,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0049",
+    "timestamp": "2026-02-03T23:27:47.211Z",
+    "relativeMs": 685,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0050",
+    "timestamp": "2026-02-03T23:27:47.215Z",
+    "relativeMs": 689,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0051",
+    "timestamp": "2026-02-03T23:27:47.215Z",
+    "relativeMs": 689,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 155,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0052",
+    "timestamp": "2026-02-03T23:27:47.215Z",
+    "relativeMs": 689,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0053",
+    "timestamp": "2026-02-03T23:27:47.215Z",
+    "relativeMs": 689,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0054",
+    "timestamp": "2026-02-03T23:27:47.216Z",
+    "relativeMs": 690,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 155,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0055",
+    "timestamp": "2026-02-03T23:27:47.216Z",
+    "relativeMs": 690,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0056",
+    "timestamp": "2026-02-03T23:27:47.216Z",
+    "relativeMs": 690,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0057",
+    "timestamp": "2026-02-03T23:27:47.216Z",
+    "relativeMs": 690,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 151,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0058",
+    "timestamp": "2026-02-03T23:27:47.216Z",
+    "relativeMs": 690,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0059",
+    "timestamp": "2026-02-03T23:27:47.216Z",
+    "relativeMs": 690,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0008",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0060",
+    "timestamp": "2026-02-03T23:27:47.450Z",
+    "relativeMs": 924,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0010",
@@ -780,9 +1104,9 @@
     }
   },
   {
-    "id": "EVT-0043",
-    "timestamp": "2026-02-01T17:28:45.718Z",
-    "relativeMs": 842,
+    "id": "EVT-0061",
+    "timestamp": "2026-02-03T23:27:47.450Z",
+    "relativeMs": 924,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0010",
@@ -792,9 +1116,9 @@
     }
   },
   {
-    "id": "EVT-0044",
-    "timestamp": "2026-02-01T17:28:45.718Z",
-    "relativeMs": 842,
+    "id": "EVT-0062",
+    "timestamp": "2026-02-03T23:27:47.450Z",
+    "relativeMs": 924,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0011",
@@ -826,9 +1150,9 @@
     }
   },
   {
-    "id": "EVT-0045",
-    "timestamp": "2026-02-01T17:28:45.718Z",
-    "relativeMs": 842,
+    "id": "EVT-0063",
+    "timestamp": "2026-02-03T23:27:47.451Z",
+    "relativeMs": 925,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0012",
@@ -860,9 +1184,9 @@
     }
   },
   {
-    "id": "EVT-0046",
-    "timestamp": "2026-02-01T17:28:45.719Z",
-    "relativeMs": 843,
+    "id": "EVT-0064",
+    "timestamp": "2026-02-03T23:27:47.452Z",
+    "relativeMs": 926,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0011",
@@ -872,14 +1196,14 @@
     }
   },
   {
-    "id": "EVT-0047",
-    "timestamp": "2026-02-01T17:28:45.727Z",
-    "relativeMs": 851,
+    "id": "EVT-0065",
+    "timestamp": "2026-02-03T23:27:47.460Z",
+    "relativeMs": 934,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
-      "name": "rest.put",
+      "name": "rest.get",
       "component": null,
       "context": {
         "ui": {
@@ -906,46 +1230,40 @@
     }
   },
   {
-    "id": "EVT-0048",
-    "timestamp": "2026-02-01T17:28:45.727Z",
-    "relativeMs": 851,
-    "type": "device-guard",
+    "id": "EVT-0066",
+    "timestamp": "2026-02-03T23:27:47.460Z",
+    "relativeMs": 934,
+    "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0049",
-    "timestamp": "2026-02-01T17:28:45.776Z",
-    "relativeMs": 900,
-    "type": "error",
+    "id": "EVT-0067",
+    "timestamp": "2026-02-03T23:27:47.460Z",
+    "relativeMs": 934,
+    "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0013",
     "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0050",
-    "timestamp": "2026-02-01T17:28:45.776Z",
-    "relativeMs": 900,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0013",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0051",
-    "timestamp": "2026-02-01T17:28:45.797Z",
-    "relativeMs": 921,
+    "id": "EVT-0068",
+    "timestamp": "2026-02-03T23:27:47.492Z",
+    "relativeMs": 966,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0012",
@@ -955,9 +1273,51 @@
     }
   },
   {
-    "id": "EVT-0052",
-    "timestamp": "2026-02-01T17:28:46.020Z",
-    "relativeMs": 1144,
+    "id": "EVT-0069",
+    "timestamp": "2026-02-03T23:27:47.536Z",
+    "relativeMs": 1010,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 50,
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0070",
+    "timestamp": "2026-02-03T23:27:47.536Z",
+    "relativeMs": 1010,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "message": "HTTP 503: Service Unavailable",
+      "name": "Error"
+    }
+  },
+  {
+    "id": "EVT-0071",
+    "timestamp": "2026-02-03T23:27:47.537Z",
+    "relativeMs": 1011,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0013",
+    "data": {
+      "status": "error",
+      "error": "HTTP 503: Service Unavailable"
+    }
+  },
+  {
+    "id": "EVT-0072",
+    "timestamp": "2026-02-03T23:27:48.188Z",
+    "relativeMs": 1662,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -989,9 +1349,9 @@
     }
   },
   {
-    "id": "EVT-0053",
-    "timestamp": "2026-02-01T17:28:46.020Z",
-    "relativeMs": 1144,
+    "id": "EVT-0073",
+    "timestamp": "2026-02-03T23:27:48.188Z",
+    "relativeMs": 1662,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1001,28 +1361,93 @@
     }
   },
   {
-    "id": "EVT-0054",
-    "timestamp": "2026-02-01T17:28:46.020Z",
-    "relativeMs": 1144,
+    "id": "EVT-0074",
+    "timestamp": "2026-02-03T23:27:48.188Z",
+    "relativeMs": 1662,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0014",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:33283/v1/info",
+      "url": "http://127.0.0.1:43749/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:33283"
+        "X-C64U-Host": "127.0.0.1:43749"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0055",
-    "timestamp": "2026-02-01T17:28:46.049Z",
-    "relativeMs": 1173,
+    "id": "EVT-0075",
+    "timestamp": "2026-02-03T23:27:48.191Z",
+    "relativeMs": 1665,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "name": "rest.get",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/play",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0076",
+    "timestamp": "2026-02-03T23:27:48.191Z",
+    "relativeMs": 1665,
+    "type": "backend-decision",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
+    }
+  },
+  {
+    "id": "EVT-0077",
+    "timestamp": "2026-02-03T23:27:48.191Z",
+    "relativeMs": 1665,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0015",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:43749/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:43749"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0078",
+    "timestamp": "2026-02-03T23:27:48.225Z",
+    "relativeMs": 1699,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1033,14 +1458,14 @@
           "Device unreachable"
         ]
       },
-      "durationMs": 28,
+      "durationMs": 16,
       "error": "HTTP 503: Service Unavailable"
     }
   },
   {
-    "id": "EVT-0056",
-    "timestamp": "2026-02-01T17:28:46.049Z",
-    "relativeMs": 1173,
+    "id": "EVT-0079",
+    "timestamp": "2026-02-03T23:27:48.225Z",
+    "relativeMs": 1699,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1050,9 +1475,9 @@
     }
   },
   {
-    "id": "EVT-0057",
-    "timestamp": "2026-02-01T17:28:46.052Z",
-    "relativeMs": 1176,
+    "id": "EVT-0080",
+    "timestamp": "2026-02-03T23:27:48.225Z",
+    "relativeMs": 1699,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0014",
@@ -1062,80 +1487,51 @@
     }
   },
   {
-    "id": "EVT-0058",
-    "timestamp": "2026-02-01T17:28:46.295Z",
-    "relativeMs": 1419,
-    "type": "action-start",
+    "id": "EVT-0081",
+    "timestamp": "2026-02-03T23:27:48.235Z",
+    "relativeMs": 1709,
+    "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/play",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "DISCOVERING"
-        }
-      }
+      "status": 503,
+      "body": {
+        "errors": [
+          "Device unreachable"
+        ]
+      },
+      "durationMs": 14,
+      "error": "HTTP 503: Service Unavailable"
     }
   },
   {
-    "id": "EVT-0059",
-    "timestamp": "2026-02-01T17:28:46.295Z",
-    "relativeMs": 1419,
-    "type": "device-guard",
-    "origin": "system",
-    "correlationId": "COR-0015",
-    "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
-    }
-  },
-  {
-    "id": "EVT-0060",
-    "timestamp": "2026-02-01T17:28:46.295Z",
-    "relativeMs": 1419,
+    "id": "EVT-0082",
+    "timestamp": "2026-02-03T23:27:48.235Z",
+    "relativeMs": 1709,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
-      "message": "Device not ready for requests",
+      "message": "HTTP 503: Service Unavailable",
       "name": "Error"
     }
   },
   {
-    "id": "EVT-0061",
-    "timestamp": "2026-02-01T17:28:46.295Z",
-    "relativeMs": 1419,
+    "id": "EVT-0083",
+    "timestamp": "2026-02-03T23:27:48.235Z",
+    "relativeMs": 1709,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
       "status": "error",
-      "error": "Device not ready for requests"
+      "error": "HTTP 503: Service Unavailable"
     }
   },
   {
-    "id": "EVT-0062",
-    "timestamp": "2026-02-01T17:28:46.664Z",
-    "relativeMs": 1788,
+    "id": "EVT-0084",
+    "timestamp": "2026-02-03T23:27:48.873Z",
+    "relativeMs": 2347,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1167,9 +1563,9 @@
     }
   },
   {
-    "id": "EVT-0063",
-    "timestamp": "2026-02-01T17:28:46.664Z",
-    "relativeMs": 1788,
+    "id": "EVT-0085",
+    "timestamp": "2026-02-03T23:27:48.873Z",
+    "relativeMs": 2347,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1179,28 +1575,28 @@
     }
   },
   {
-    "id": "EVT-0064",
-    "timestamp": "2026-02-01T17:28:46.664Z",
-    "relativeMs": 1788,
+    "id": "EVT-0086",
+    "timestamp": "2026-02-03T23:27:48.873Z",
+    "relativeMs": 2347,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:33283/v1/info",
+      "url": "http://127.0.0.1:43749/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:33283"
+        "X-C64U-Host": "127.0.0.1:43749"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0065",
-    "timestamp": "2026-02-01T17:28:46.758Z",
-    "relativeMs": 1882,
+    "id": "EVT-0087",
+    "timestamp": "2026-02-03T23:27:48.923Z",
+    "relativeMs": 2397,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1211,14 +1607,14 @@
           "Device unreachable"
         ]
       },
-      "durationMs": 93,
+      "durationMs": 29,
       "error": "HTTP 503: Service Unavailable"
     }
   },
   {
-    "id": "EVT-0066",
-    "timestamp": "2026-02-01T17:28:46.758Z",
-    "relativeMs": 1882,
+    "id": "EVT-0088",
+    "timestamp": "2026-02-03T23:27:48.923Z",
+    "relativeMs": 2397,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1228,9 +1624,9 @@
     }
   },
   {
-    "id": "EVT-0067",
-    "timestamp": "2026-02-01T17:28:46.763Z",
-    "relativeMs": 1887,
+    "id": "EVT-0089",
+    "timestamp": "2026-02-03T23:27:48.924Z",
+    "relativeMs": 2398,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0016",

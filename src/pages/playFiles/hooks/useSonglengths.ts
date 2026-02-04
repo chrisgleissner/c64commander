@@ -27,6 +27,7 @@ export type SonglengthsFileEntry = {
   name?: string | null;
   sizeBytes?: number | null;
   modifiedAt?: string | null;
+  scope?: 'global' | 'path';
 };
 
 export type SonglengthsSummary = {
@@ -58,7 +59,7 @@ export type UseSonglengthsResult = {
   loadSonglengthsForPath: (
     path: string,
     extraFiles?: SonglengthsFileEntry[],
-  ) => Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>;
+  ) => Promise<{ md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null>;
   applySonglengthsToItems: (
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
@@ -79,13 +80,13 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   const songlengthsCacheRef = useRef(
     new Map<string, {
       signature: string;
-      promise: Promise<{ md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null>;
+      promise: Promise<{ md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null>;
     }>(),
   );
   const songlengthsFileCacheRef = useRef(
     new Map<string, {
       mtime: number;
-      data: { md5ToSeconds: Map<string, number>; pathToSeconds: Map<string, number> } | null;
+      data: { md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null;
     }>(),
   );
 
@@ -153,9 +154,17 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       if (!isSonglengthsFileName(item.label)) return;
       addSonglengthsFile(item.request.file);
     });
-    songlengthsFiles.forEach((entry) => addSonglengthsFile(entry.file, entry.path));
+    songlengthsFiles
+      .filter((entry) => entry.scope !== 'global')
+      .forEach((entry) => addSonglengthsFile(entry.file, entry.path));
     return map;
   }, [playlist, songlengthsFiles]);
+
+  const globalSonglengthsFiles = useMemo(() => (
+    songlengthsFiles
+      .filter((entry) => entry.scope === 'global')
+      .map((entry) => entry.file)
+  ), [songlengthsFiles]);
 
   const activeSonglengthsPath = songlengthsFiles[0]?.path ?? null;
 
@@ -245,9 +254,10 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       if (current === '/') break;
       current = getParentPath(current);
     }
-    if (!files.size) return null;
+    const globalFiles = globalSonglengthsFiles.filter((file) => !files.has(getLocalFilePath(file)));
+    if (!files.size && globalFiles.length === 0) return null;
 
-    const signature = Array.from(files.values())
+    const signature = [...Array.from(files.values()), ...globalFiles]
       .map((file) => `${getLocalFilePath(file)}:${typeof file.lastModified === 'number' ? file.lastModified : 0}`)
       .sort()
       .join('|');
@@ -257,8 +267,8 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     }
 
     const loader = (async () => {
-      const merged = { md5ToSeconds: new Map<string, number>(), pathToSeconds: new Map<string, number>() };
-      const ordered = Array.from(files.values()).reverse();
+      const merged = { md5ToSeconds: new Map<string, number[]>(), pathToSeconds: new Map<string, number[]>() };
+      const ordered = [...Array.from(files.values()).reverse(), ...globalFiles];
       for (const file of ordered) {
         try {
           const filePath = getLocalFilePath(file);
@@ -300,7 +310,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       return;
     }
     const path = normalizeSourcePath(getLocalFilePath(file));
-    setSonglengthsFiles([{ path, file, name: file.name, sizeBytes: file.size }]);
+    setSonglengthsFiles([{ path, file, name: file.name, sizeBytes: file.size, scope: 'global' }]);
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(persistedKey);
     }
@@ -322,6 +332,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
         name: picked.name,
         sizeBytes: picked.sizeBytes ?? null,
         modifiedAt: picked.modifiedAt ?? null,
+        scope: 'global',
       },
     ]);
     if (typeof localStorage !== 'undefined') {
@@ -354,10 +365,18 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   ) => {
     const updated = await Promise.all(
       items.map(async (item) => {
-        if (item.category !== 'sid' || item.request.source !== 'local' || !item.request.file) return item;
-        const filePath = getLocalFilePath(item.request.file);
+        if (item.category !== 'sid') return item;
+        const isLocal = item.request.source === 'local';
+        const filePath = isLocal && item.request.file
+          ? getLocalFilePath(item.request.file)
+          : normalizeLocalPath(item.request.path);
         const songlengths = await loadSonglengthsForPath(filePath, songlengthsOverrides);
-        const resolvedDurationMs = await resolveSonglengthsDurationMs(songlengths, filePath, item.request.file);
+        const resolvedDurationMs = await resolveSonglengthsDurationMs(
+          songlengths,
+          filePath,
+          isLocal ? item.request.file : null,
+          item.request.songNr ?? null,
+        );
         if (resolvedDurationMs === null) return item;
         return { ...item, durationMs: resolvedDurationMs };
       }),

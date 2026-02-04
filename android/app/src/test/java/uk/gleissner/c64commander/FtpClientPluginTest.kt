@@ -1,5 +1,6 @@
 package uk.gleissner.c64commander
 
+import android.util.Base64
 import com.getcapacitor.JSObject
 import com.getcapacitor.PluginCall
 import org.apache.commons.net.ftp.FTPClient
@@ -36,6 +37,39 @@ class FtpClientPluginTest {
     }.`when`(call).reject("host is required")
 
     plugin.listDirectory(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun readFileRejectsMissingHost() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("host is required")
+
+    plugin.readFile(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun readFileRejectsMissingPath() {
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn(null)
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("path is required")
+
+    plugin.readFile(call)
 
     assertTrue(latch.await(2, TimeUnit.SECONDS))
   }
@@ -182,6 +216,46 @@ class FtpClientPluginTest {
       }
     }
     assertTrue(names.none { it == "." || it == ".." })
+
+    server.stop()
+  }
+
+  @Test
+  fun readFileReturnsPayloadMetadata() {
+    val root = tempFolder.newFolder("ftp-root-read")
+    val payload = "HELLO"
+    File(root, "songlengths.md5").writeText(payload)
+
+    val server = MockFtpServer(root, "secret")
+    server.start()
+
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/songlengths.md5")
+
+    val latch = CountDownLatch(1)
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+      resolved = invocation.getArgument(0) as JSObject
+      latch.countDown()
+      null
+    }.`when`(call).resolve(any())
+
+    plugin.readFile(call)
+    assertTrue(latch.await(3, TimeUnit.SECONDS))
+
+    assertNotNull(resolved)
+    val encoded = resolved?.optString("data", "") ?: ""
+    if (encoded.isNotEmpty()) {
+      val decoded = String(Base64.decode(encoded, Base64.DEFAULT), Charsets.UTF_8)
+      assertEquals(payload, decoded)
+    }
+    val sizeValue = resolved?.optInt("sizeBytes", -1) ?: -1
+    assertEquals(payload.toByteArray().size, sizeValue)
 
     server.stop()
   }

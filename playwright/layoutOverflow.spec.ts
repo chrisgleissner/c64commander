@@ -228,7 +228,7 @@ test.describe('Layout overflow safeguards', () => {
     await snap(page, testInfo, 'settings-open');
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole('button', { name: 'Logs' }).click();
+    await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'diagnostics-dialog');
@@ -273,7 +273,7 @@ test.describe('Layout overflow safeguards', () => {
     });
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Logs' }).click();
+    await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'settings-long-log');
@@ -480,7 +480,7 @@ test.describe('Layout overflow safeguards', () => {
       await snap(page, testInfo, `matrix-settings-${viewport.label}`);
       await expectNoHorizontalOverflow(page);
 
-      const logsButton = page.getByRole('button', { name: 'Logs' });
+      const logsButton = page.getByRole('button', { name: /Logs( and Traces)?/i });
       if (await logsButton.isVisible({ timeout: 2000 }).catch(() => false)) {
         await logsButton.click();
         const logsDialog = page.getByRole('dialog');

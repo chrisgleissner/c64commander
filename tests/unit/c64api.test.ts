@@ -390,6 +390,16 @@ describe('c64api', () => {
     expect(clearPasswordMock).toHaveBeenCalled();
   });
 
+  it('avoids localhost fallback when device host is stored', () => {
+    localStorage.setItem('c64u_device_host', 'real-device');
+    updateC64APIConfig('http://localhost');
+    expect(localStorage.getItem('c64u_device_host')).toBe('real-device');
+
+    applyC64APIRuntimeConfig('http://localhost');
+    const snapshot = getC64API().getDeviceHost();
+    expect(snapshot).toBe('real-device');
+  });
+
   it('uploads cartridge files and handles upload failures', async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValueOnce(
@@ -536,27 +546,28 @@ describe('c64api', () => {
     expect(addErrorLogMock).toHaveBeenCalledWith('Drive mount upload failed', expect.any(Object));
   });
 
-  it('uses CapacitorHttp for binary uploads on native platforms', async () => {
+  it('uses fetch for binary uploads on native platforms', async () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({
-      status: 200,
-      data: { errors: [] },
-      headers: {},
-      url: 'http://c64u/v1/drives/a:mount',
-    });
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const api = new C64API('http://c64u');
     await api.mountDriveUpload('a', new Blob(['disk'], { type: 'application/octet-stream' }));
 
-    expect(capacitorRequestMock).toHaveBeenCalledWith(expect.objectContaining({
-      method: 'POST',
-      url: 'http://c64u/v1/drives/a:mount',
-    }));
-    expect(getFetchMock()).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://c64u/v1/drives/a:mount',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(capacitorRequestMock).not.toHaveBeenCalled();
   });
 
   it('covers runner and drive request helpers', async () => {

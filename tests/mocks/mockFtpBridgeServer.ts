@@ -1,4 +1,5 @@
 import * as http from 'node:http';
+import { Writable } from 'node:stream';
 import { Client } from 'basic-ftp';
 
 export type MockFtpBridgeServer = {
@@ -36,6 +37,20 @@ const buildPath = (base: string, name: string) => {
   return normalized.endsWith('/') ? `${normalized}${name}` : `${normalized}/${name}`;
 };
 
+const createBufferSink = () => {
+  const chunks: Buffer[] = [];
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      callback();
+    },
+  });
+  return {
+    stream,
+    getBuffer: () => Buffer.concat(chunks),
+  };
+};
+
 export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> {
   const server = http.createServer(async (req, res) => {
     try {
@@ -46,7 +61,9 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
         return;
       }
 
-      if (req.method !== 'POST' || req.url !== '/v1/ftp/list') {
+      const isList = req.method === 'POST' && req.url === '/v1/ftp/list';
+      const isRead = req.method === 'POST' && req.url === '/v1/ftp/read';
+      if (!isList && !isRead) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Not found' }));
         return;
@@ -56,6 +73,11 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
       if (!payload?.host) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'host is required' }));
+        return;
+      }
+      if (isRead && (!payload.path || payload.path === '')) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'path is required' }));
         return;
       }
 
@@ -71,23 +93,31 @@ export async function createMockFtpBridgeServer(): Promise<MockFtpBridgeServer> 
           secure: false,
         });
 
-        const listPath = payload.path && payload.path !== '' ? payload.path : '/';
-        const items = await client.list(listPath);
-        const entries = items
-          .filter((entry) => entry.name && entry.name !== '.' && entry.name !== '..')
-          .map((entry) => {
-            const isDir = (entry as { isDirectory?: boolean }).isDirectory === true || entry.type === 2;
-            return {
-              name: entry.name,
-              path: buildPath(listPath, entry.name),
-              type: isDir ? 'dir' : 'file',
-              size: entry.size || undefined,
-              modifiedAt: entry.modifiedAt ? entry.modifiedAt.toISOString() : undefined,
-            };
-          });
+        if (isList) {
+          const listPath = payload.path && payload.path !== '' ? payload.path : '/';
+          const items = await client.list(listPath);
+          const entries = items
+            .filter((entry) => entry.name && entry.name !== '.' && entry.name !== '..')
+            .map((entry) => {
+              const isDir = (entry as { isDirectory?: boolean }).isDirectory === true || entry.type === 2;
+              return {
+                name: entry.name,
+                path: buildPath(listPath, entry.name),
+                type: isDir ? 'dir' : 'file',
+                size: entry.size || undefined,
+                modifiedAt: entry.modifiedAt ? entry.modifiedAt.toISOString() : undefined,
+              };
+            });
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ entries }));
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ entries }));
+        } else {
+          const { stream, getBuffer } = createBufferSink();
+          await client.downloadTo(stream, payload.path ?? '/');
+          const buffer = getBuffer();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ data: buffer.toString('base64'), sizeBytes: buffer.length }));
+        }
       } catch (error) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: (error as Error).message || 'FTP bridge error' }));

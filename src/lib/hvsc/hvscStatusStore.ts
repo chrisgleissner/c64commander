@@ -95,20 +95,34 @@ export const applyHvscProgressEventToSummary = (
   lastStage?: string | null,
 ) => {
   const now = new Date().toISOString();
+  const isDownloadComplete =
+    event.stage === 'download'
+    && (
+      (typeof event.percent === 'number' && event.percent >= 100)
+      || (typeof event.downloadedBytes === 'number'
+        && typeof event.totalBytes === 'number'
+        && event.totalBytes > 0
+        && event.downloadedBytes >= event.totalBytes)
+    );
   if (event.stage === 'download') {
+    const finishedAt = isDownloadComplete ? (summary.download.finishedAt ?? now) : summary.download.finishedAt ?? null;
     return {
       ...summary,
       download: {
         ...summary.download,
-        status: 'in-progress',
+        status: isDownloadComplete ? 'success' : 'in-progress',
         startedAt: summary.download.startedAt ?? now,
+        finishedAt,
         durationMs: event.elapsedTimeMs ?? summary.download.durationMs ?? null,
-        sizeBytes: event.totalBytes ?? (event.percent === 100 ? event.downloadedBytes : summary.download.sizeBytes) ?? null,
+        sizeBytes: event.totalBytes
+          ?? (isDownloadComplete ? event.downloadedBytes : summary.download.sizeBytes)
+          ?? null,
         downloadedBytes: event.downloadedBytes ?? summary.download.downloadedBytes ?? null,
         totalBytes: event.totalBytes ?? summary.download.totalBytes ?? null,
         errorCategory: null,
         errorMessage: null,
       },
+      lastUpdatedAt: now,
     };
   }
 

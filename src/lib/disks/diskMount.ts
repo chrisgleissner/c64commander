@@ -134,6 +134,9 @@ export const mountDiskToDrive = async (
 ) => {
   try {
     const mountType = buildDiskMountType(disk.path);
+    if (!mountType) {
+      throw new Error('Unsupported disk image type.');
+    }
     addLog('debug', 'Disk mount request', {
       drive,
       path: disk.path,

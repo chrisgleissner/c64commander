@@ -719,6 +719,15 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       await extractArchiveEntries({
         archiveName: cached,
         buffer: archiveBuffer,
+        onEnumerate: (total) => {
+          emitProgress({
+            stage: 'sid_enumeration',
+            message: `Discovered ${total} files`,
+            archiveName: cached,
+            processedCount: 0,
+            totalCount: total,
+          });
+        },
         onProgress: (processed, total) => {
           emitProgress({ stage: 'archive_extraction', message: `Extracting ${cached}…`, archiveName: cached, processedCount: processed, totalCount: total, percent: total ? Math.round((processed / total) * 100) : undefined });
         },
@@ -800,6 +809,8 @@ export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
   } else {
     cancelTokens.get(cancelToken)!.cancelled = true;
   }
+  updateHvscState({ ingestionState: 'idle', ingestionError: 'Cancelled' });
+  addLog('info', 'HVSC cancel requested', { token: cancelToken });
 };
 
 export const getHvscFolderListing = async (path: string): Promise<HvscFolderListing> => listHvscFolder(path);

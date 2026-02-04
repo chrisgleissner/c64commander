@@ -1,5 +1,6 @@
 import { loadDebugLoggingEnabled } from '@/lib/config/appSettings';
 import { redactExportValue, redactExportText } from '@/lib/diagnostics/exportRedaction';
+import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -68,6 +69,6 @@ export const formatLogsForShare = (
       const message = options.redacted ? redactExportText(entry.message) : entry.message;
       const detailsValue = options.redacted ? redactExportValue(entry.details) : entry.details;
       const details = detailsValue ? `\n${JSON.stringify(detailsValue, null, 2)}` : '';
-      return `[${entry.timestamp}] ${entry.level.toUpperCase()} - ${message}${details}`;
+      return `[${formatLocalTime(entry.timestamp)}] ${entry.level.toUpperCase()} - ${message}${details}`;
     })
     .join('\n\n');

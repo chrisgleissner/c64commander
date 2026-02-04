@@ -1,82 +1,11 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-02-01T17:23:25.162Z",
-    "relativeMs": 23,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/settings",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "DISCOVERING"
-        }
-      }
-    }
-  },
-  {
-    "id": "EVT-0001",
-    "timestamp": "2026-02-01T17:23:25.163Z",
-    "relativeMs": 24,
-    "type": "device-guard",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
-    }
-  },
-  {
-    "id": "EVT-0002",
-    "timestamp": "2026-02-01T17:23:25.163Z",
-    "relativeMs": 24,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0003",
-    "timestamp": "2026-02-01T17:23:25.163Z",
-    "relativeMs": 24,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0000",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0004",
-    "timestamp": "2026-02-01T17:23:25.277Z",
-    "relativeMs": 138,
+    "timestamp": "2026-02-03T23:20:51.575Z",
+    "relativeMs": 120,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0000",
     "data": {
       "name": "change deviceHost",
       "component": "GlobalInteraction",
@@ -105,24 +34,24 @@
     }
   },
   {
-    "id": "EVT-0005",
-    "timestamp": "2026-02-01T17:23:25.277Z",
-    "relativeMs": 138,
+    "id": "EVT-0001",
+    "timestamp": "2026-02-03T23:20:51.575Z",
+    "relativeMs": 120,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0001",
+    "correlationId": "COR-0000",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0006",
-    "timestamp": "2026-02-01T17:23:25.287Z",
-    "relativeMs": 148,
+    "id": "EVT-0002",
+    "timestamp": "2026-02-03T23:20:51.577Z",
+    "relativeMs": 122,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0001",
     "data": {
       "name": "click Save & Connect",
       "component": "GlobalInteraction",
@@ -151,24 +80,24 @@
     }
   },
   {
-    "id": "EVT-0007",
-    "timestamp": "2026-02-01T17:23:25.287Z",
-    "relativeMs": 148,
+    "id": "EVT-0003",
+    "timestamp": "2026-02-03T23:20:51.577Z",
+    "relativeMs": 122,
     "type": "action-end",
     "origin": "user",
-    "correlationId": "COR-0002",
+    "correlationId": "COR-0001",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0008",
-    "timestamp": "2026-02-01T17:23:25.287Z",
-    "relativeMs": 148,
+    "id": "EVT-0004",
+    "timestamp": "2026-02-03T23:20:51.577Z",
+    "relativeMs": 122,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0003",
+    "correlationId": "COR-0002",
     "data": {
       "name": "click Save & Connect",
       "component": "Button",
@@ -197,12 +126,12 @@
     }
   },
   {
-    "id": "EVT-0009",
-    "timestamp": "2026-02-01T17:23:25.287Z",
-    "relativeMs": 148,
+    "id": "EVT-0005",
+    "timestamp": "2026-02-03T23:20:51.577Z",
+    "relativeMs": 122,
     "type": "action-start",
     "origin": "user",
-    "correlationId": "COR-0004",
+    "correlationId": "COR-0003",
     "data": {
       "name": "SettingsPage.anonymousAction",
       "component": "SettingsPage",
@@ -231,9 +160,55 @@
     }
   },
   {
-    "id": "EVT-0010",
-    "timestamp": "2026-02-01T17:23:25.289Z",
-    "relativeMs": 150,
+    "id": "EVT-0006",
+    "timestamp": "2026-02-03T23:20:51.580Z",
+    "relativeMs": 125,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "api.host-change:127.0.0.1:1->127.0.0.1:37429",
+      "component": null,
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "DISCOVERING"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0007",
+    "timestamp": "2026-02-03T23:20:51.607Z",
+    "relativeMs": 152,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-02-03T23:20:51.628Z",
+    "relativeMs": 173,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -265,22 +240,40 @@
     }
   },
   {
-    "id": "EVT-0011",
-    "timestamp": "2026-02-01T17:23:25.296Z",
-    "relativeMs": 157,
-    "type": "device-guard",
+    "id": "EVT-0009",
+    "timestamp": "2026-02-03T23:20:51.628Z",
+    "relativeMs": 173,
+    "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
-      "decision": "block",
-      "reason": "state",
-      "state": "DISCOVERING"
+      "selectedTarget": "external-mock",
+      "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0012",
-    "timestamp": "2026-02-01T17:23:25.297Z",
-    "relativeMs": 158,
+    "id": "EVT-0010",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
+    "type": "rest-request",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "method": "GET",
+      "url": "http://127.0.0.1:37429/v1/info",
+      "normalizedUrl": "/v1/info",
+      "headers": {
+        "Content-Type": "application/json",
+        "X-C64U-Host": "127.0.0.1:37429"
+      },
+      "body": null,
+      "target": "external-mock"
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -312,9 +305,9 @@
     }
   },
   {
-    "id": "EVT-0013",
-    "timestamp": "2026-02-01T17:23:25.297Z",
-    "relativeMs": 158,
+    "id": "EVT-0012",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -324,124 +317,28 @@
     }
   },
   {
-    "id": "EVT-0014",
-    "timestamp": "2026-02-01T17:23:25.297Z",
-    "relativeMs": 158,
+    "id": "EVT-0013",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35293/v1/info",
+      "url": "http://127.0.0.1:37429/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35293"
+        "X-C64U-Host": "127.0.0.1:37429"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0015",
-    "timestamp": "2026-02-01T17:23:25.300Z",
-    "relativeMs": 161,
-    "type": "action-start",
-    "origin": "system",
-    "correlationId": "COR-0007",
-    "data": {
-      "name": "rest.get",
-      "component": null,
-      "context": {
-        "ui": {
-          "route": "/settings",
-          "query": ""
-        },
-        "platform": "web",
-        "featureFlags": {
-          "hvsc_enabled": true
-        },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
-        "device": {
-          "deviceId": null,
-          "connectionState": "DISCOVERING"
-        }
-      }
-    }
-  },
-  {
-    "id": "EVT-0016",
-    "timestamp": "2026-02-01T17:23:25.377Z",
-    "relativeMs": 238,
-    "type": "action-end",
-    "origin": "user",
-    "correlationId": "COR-0004",
-    "data": {
-      "status": "success",
-      "error": null
-    }
-  },
-  {
-    "id": "EVT-0017",
-    "timestamp": "2026-02-01T17:23:25.377Z",
-    "relativeMs": 238,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0005",
-    "data": {
-      "message": "Device not ready for requests",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0018",
-    "timestamp": "2026-02-01T17:23:25.377Z",
-    "relativeMs": 238,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0005",
-    "data": {
-      "status": "error",
-      "error": "Device not ready for requests"
-    }
-  },
-  {
-    "id": "EVT-0019",
-    "timestamp": "2026-02-01T17:23:25.377Z",
-    "relativeMs": 238,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0006",
-    "data": {
-      "status": null,
-      "body": null,
-      "durationMs": 80,
-      "error": "signal is aborted without reason"
-    }
-  },
-  {
-    "id": "EVT-0020",
-    "timestamp": "2026-02-01T17:23:25.377Z",
-    "relativeMs": 238,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0006",
-    "data": {
-      "message": "signal is aborted without reason",
-      "name": "AbortError"
-    }
-  },
-  {
-    "id": "EVT-0021",
-    "timestamp": "2026-02-01T17:23:25.385Z",
-    "relativeMs": 246,
+    "id": "EVT-0014",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0003",
@@ -451,67 +348,74 @@
     }
   },
   {
-    "id": "EVT-0022",
-    "timestamp": "2026-02-01T17:23:25.386Z",
-    "relativeMs": 247,
-    "type": "backend-decision",
-    "origin": "system",
-    "correlationId": "COR-0007",
+    "id": "EVT-0015",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0002",
     "data": {
-      "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "status": "success",
+      "error": null
     }
   },
   {
-    "id": "EVT-0023",
-    "timestamp": "2026-02-01T17:23:25.386Z",
-    "relativeMs": 247,
-    "type": "rest-request",
+    "id": "EVT-0016",
+    "timestamp": "2026-02-03T23:20:51.629Z",
+    "relativeMs": 174,
+    "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0005",
     "data": {
-      "method": "GET",
-      "url": "http://127.0.0.1:35293/v1/info",
-      "normalizedUrl": "/v1/info",
-      "headers": {
-        "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35293"
-      },
+      "status": null,
       "body": null,
-      "target": "external-mock"
+      "durationMs": 1,
+      "error": "signal is aborted without reason"
     }
   },
   {
-    "id": "EVT-0024",
-    "timestamp": "2026-02-01T17:23:25.386Z",
-    "relativeMs": 247,
+    "id": "EVT-0017",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "error",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0005",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError"
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0005",
     "data": {
       "message": "Host unreachable",
       "name": "Error"
     }
   },
   {
-    "id": "EVT-0025",
-    "timestamp": "2026-02-01T17:23:25.386Z",
-    "relativeMs": 247,
+    "id": "EVT-0019",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0006",
+    "correlationId": "COR-0005",
     "data": {
       "status": "error",
       "error": "Host unreachable"
     }
   },
   {
-    "id": "EVT-0026",
-    "timestamp": "2026-02-01T17:23:25.389Z",
-    "relativeMs": 250,
+    "id": "EVT-0020",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0007",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -540,27 +444,27 @@
     }
   },
   {
-    "id": "EVT-0027",
-    "timestamp": "2026-02-01T17:23:25.389Z",
-    "relativeMs": 250,
+    "id": "EVT-0021",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0007",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0028",
-    "timestamp": "2026-02-01T17:23:25.389Z",
-    "relativeMs": 250,
+    "id": "EVT-0022",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0007",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35293/v1/info",
+      "url": "http://127.0.0.1:37429/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -568,12 +472,12 @@
     }
   },
   {
-    "id": "EVT-0029",
-    "timestamp": "2026-02-01T17:23:25.389Z",
-    "relativeMs": 250,
+    "id": "EVT-0023",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0007",
     "data": {
       "status": null,
       "body": null,
@@ -582,36 +486,36 @@
     }
   },
   {
-    "id": "EVT-0030",
-    "timestamp": "2026-02-01T17:23:25.389Z",
-    "relativeMs": 250,
+    "id": "EVT-0024",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "error",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0007",
     "data": {
       "message": "signal is aborted without reason",
       "name": "AbortError"
     }
   },
   {
-    "id": "EVT-0031",
-    "timestamp": "2026-02-01T17:23:25.389Z",
-    "relativeMs": 250,
+    "id": "EVT-0025",
+    "timestamp": "2026-02-03T23:20:51.630Z",
+    "relativeMs": 175,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0008",
+    "correlationId": "COR-0007",
     "data": {
       "status": "error",
       "error": "signal is aborted without reason"
     }
   },
   {
-    "id": "EVT-0032",
-    "timestamp": "2026-02-01T17:23:25.495Z",
-    "relativeMs": 356,
+    "id": "EVT-0026",
+    "timestamp": "2026-02-03T23:20:51.680Z",
+    "relativeMs": 225,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0006",
     "data": {
       "status": 200,
       "body": {
@@ -623,29 +527,29 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 83,
+      "durationMs": 39,
       "error": null
     }
   },
   {
-    "id": "EVT-0033",
-    "timestamp": "2026-02-01T17:23:25.508Z",
-    "relativeMs": 369,
+    "id": "EVT-0027",
+    "timestamp": "2026-02-03T23:20:51.680Z",
+    "relativeMs": 225,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0007",
+    "correlationId": "COR-0006",
     "data": {
       "status": "success",
       "error": null
     }
   },
   {
-    "id": "EVT-0034",
-    "timestamp": "2026-02-01T17:23:25.529Z",
-    "relativeMs": 390,
+    "id": "EVT-0028",
+    "timestamp": "2026-02-03T23:20:51.694Z",
+    "relativeMs": 239,
     "type": "action-start",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0008",
     "data": {
       "name": "rest.get",
       "component": null,
@@ -674,43 +578,43 @@
     }
   },
   {
-    "id": "EVT-0035",
-    "timestamp": "2026-02-01T17:23:25.555Z",
-    "relativeMs": 416,
+    "id": "EVT-0029",
+    "timestamp": "2026-02-03T23:20:51.694Z",
+    "relativeMs": 239,
     "type": "backend-decision",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0008",
     "data": {
       "selectedTarget": "external-mock",
       "reason": "test-mode"
     }
   },
   {
-    "id": "EVT-0036",
-    "timestamp": "2026-02-01T17:23:25.556Z",
-    "relativeMs": 417,
+    "id": "EVT-0030",
+    "timestamp": "2026-02-03T23:20:51.694Z",
+    "relativeMs": 239,
     "type": "rest-request",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0008",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:35293/v1/info",
+      "url": "http://127.0.0.1:37429/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:35293"
+        "X-C64U-Host": "127.0.0.1:37429"
       },
       "body": null,
       "target": "external-mock"
     }
   },
   {
-    "id": "EVT-0037",
-    "timestamp": "2026-02-01T17:23:25.666Z",
-    "relativeMs": 527,
+    "id": "EVT-0031",
+    "timestamp": "2026-02-03T23:20:51.754Z",
+    "relativeMs": 299,
     "type": "rest-response",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0008",
     "data": {
       "status": 200,
       "body": {
@@ -722,17 +626,17 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 106,
+      "durationMs": 46,
       "error": null
     }
   },
   {
-    "id": "EVT-0038",
-    "timestamp": "2026-02-01T17:23:25.666Z",
-    "relativeMs": 527,
+    "id": "EVT-0032",
+    "timestamp": "2026-02-03T23:20:51.754Z",
+    "relativeMs": 299,
     "type": "action-end",
     "origin": "system",
-    "correlationId": "COR-0009",
+    "correlationId": "COR-0008",
     "data": {
       "status": "success",
       "error": null
