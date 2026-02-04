@@ -3,7 +3,7 @@
     "correlationId": "COR-0000",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 260,
+    "durationMs": 95,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -20,7 +20,7 @@
     "correlationId": "COR-0001",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 239,
+    "durationMs": 92,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -37,7 +37,7 @@
     "correlationId": "COR-0002",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 281,
+    "durationMs": 102,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -54,7 +54,7 @@
     "correlationId": "COR-0003",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 294,
+    "durationMs": 104,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -71,7 +71,7 @@
     "correlationId": "COR-0004",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 322,
+    "durationMs": 141,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -88,7 +88,7 @@
     "correlationId": "COR-0005",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 319,
+    "durationMs": 100,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -105,7 +105,7 @@
     "correlationId": "COR-0006",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 437,
+    "durationMs": 126,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -122,7 +122,7 @@
     "correlationId": "COR-0007",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 436,
+    "durationMs": 136,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -139,7 +139,7 @@
     "correlationId": "COR-0008",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 433,
+    "durationMs": 135,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -156,7 +156,7 @@
     "correlationId": "COR-0009",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 306,
+    "durationMs": 95,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -173,7 +173,7 @@
     "correlationId": "COR-0010",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 56,
+    "durationMs": 13,
     "outcome": "error",
     "errorMessage": "Host unreachable",
     "restCount": 1,
@@ -193,16 +193,19 @@
     "correlationId": "COR-0011",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 347,
-    "outcome": "success",
+    "durationMs": 6,
+    "outcome": "error",
+    "errorMessage": "Host unreachable",
     "restCount": 1,
+    "errorCount": 2,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
+        "path": "/v1/info",
         "target": "external-mock",
-        "status": 200
+        "status": "error",
+        "error": "signal is aborted without reason"
       }
     ]
   },
@@ -210,16 +213,19 @@
     "correlationId": "COR-0012",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 345,
-    "outcome": "success",
+    "durationMs": 6,
+    "outcome": "error",
+    "errorMessage": "Host unreachable",
     "restCount": 1,
+    "errorCount": 2,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
+        "path": "/v1/info",
         "target": "external-mock",
-        "status": 200
+        "status": "error",
+        "error": "signal is aborted without reason"
       }
     ]
   },
@@ -227,16 +233,19 @@
     "correlationId": "COR-0013",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 345,
-    "outcome": "success",
+    "durationMs": 6,
+    "outcome": "error",
+    "errorMessage": "Host unreachable",
     "restCount": 1,
+    "errorCount": 2,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
+        "path": "/v1/info",
         "target": "external-mock",
-        "status": 200
+        "status": "error",
+        "error": "signal is aborted without reason"
       }
     ]
   },
@@ -244,16 +253,19 @@
     "correlationId": "COR-0014",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 345,
-    "outcome": "success",
+    "durationMs": 5,
+    "outcome": "error",
+    "errorMessage": "Host unreachable",
     "restCount": 1,
+    "errorCount": 2,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
+        "path": "/v1/info",
         "target": "external-mock",
-        "status": 200
+        "status": "error",
+        "error": "signal is aborted without reason"
       }
     ]
   },
@@ -261,7 +273,7 @@
     "correlationId": "COR-0015",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 44,
+    "durationMs": 4,
     "outcome": "error",
     "errorMessage": "Host unreachable",
     "restCount": 1,
@@ -281,16 +293,19 @@
     "correlationId": "COR-0016",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 317,
-    "outcome": "success",
+    "durationMs": 4,
+    "outcome": "error",
+    "errorMessage": "Host unreachable",
     "restCount": 1,
+    "errorCount": 2,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
+        "path": "/v1/info",
         "target": "external-mock",
-        "status": 200
+        "status": "error",
+        "error": "signal is aborted without reason"
       }
     ]
   },
@@ -298,16 +313,19 @@
     "correlationId": "COR-0017",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 317,
-    "outcome": "success",
+    "durationMs": 3,
+    "outcome": "error",
+    "errorMessage": "Host unreachable",
     "restCount": 1,
+    "errorCount": 2,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
+        "path": "/v1/info",
         "target": "external-mock",
-        "status": 200
+        "status": "error",
+        "error": "signal is aborted without reason"
       }
     ]
   },
@@ -315,14 +333,14 @@
     "correlationId": "COR-0018",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 316,
+    "durationMs": 111,
     "outcome": "success",
     "restCount": 1,
     "effects": [
       {
         "type": "REST",
         "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
+        "path": "/v1/info",
         "target": "external-mock",
         "status": 200
       }
@@ -330,430 +348,37 @@
   },
   {
     "correlationId": "COR-0019",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 316,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0020",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 34,
-    "outcome": "error",
-    "errorMessage": "Host unreachable",
-    "restCount": 1,
-    "errorCount": 2,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": "error",
-        "error": "signal is aborted without reason"
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0021",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 44,
-    "outcome": "error",
-    "errorMessage": "Host unreachable",
-    "restCount": 1,
-    "errorCount": 2,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": "error",
-        "error": "signal is aborted without reason"
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0022",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 301,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0023",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 301,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0024",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 300,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0025",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 299,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0026",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 33,
-    "outcome": "error",
-    "errorMessage": "Host unreachable",
-    "restCount": 1,
-    "errorCount": 2,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": "error",
-        "error": "signal is aborted without reason"
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0027",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 32,
-    "outcome": "error",
-    "errorMessage": "Host unreachable",
-    "restCount": 1,
-    "errorCount": 2,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": "error",
-        "error": "signal is aborted without reason"
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0028",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 302,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0029",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 304,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0030",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 301,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0031",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 301,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0032",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 29,
-    "outcome": "error",
-    "errorMessage": "Host unreachable",
-    "restCount": 1,
-    "errorCount": 2,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": "error",
-        "error": "signal is aborted without reason"
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0033",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 30,
-    "outcome": "error",
-    "errorMessage": "Host unreachable",
-    "restCount": 1,
-    "errorCount": 2,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": "error",
-        "error": "signal is aborted without reason"
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0034",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 295,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%201",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0035",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 295,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20UltiSid%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0036",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 292,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%201",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0037",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 293,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/configs/Audio%20Mixer/Vol%20Socket%202",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0038",
-    "actionName": "rest.get",
-    "origin": "system",
-    "durationMs": 294,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "GET",
-        "path": "/v1/info",
-        "target": "external-mock",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0039",
     "actionName": "click Add items to playlist",
     "origin": "user",
     "durationMs": 1,
     "outcome": "success"
   },
   {
-    "correlationId": "COR-0040",
-    "actionName": "click Add items to playlist",
-    "origin": "user",
-    "durationMs": 50,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0041",
-    "actionName": "click Add file / folder from device",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0042",
-    "actionName": "click Add file / folder from device",
-    "origin": "user",
-    "durationMs": 2,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0043",
+    "correlationId": "COR-0020",
     "actionName": "click input",
     "origin": "user",
-    "durationMs": 2,
+    "durationMs": 4,
     "outcome": "success"
   },
   {
-    "correlationId": "COR-0044",
-    "actionName": "change input",
+    "correlationId": "COR-0021",
+    "actionName": "click Add file / folder from device",
     "origin": "user",
     "durationMs": 0,
     "outcome": "success"
   },
   {
-    "correlationId": "COR-0045",
+    "correlationId": "COR-0022",
     "actionName": "upload LocalInput",
     "origin": "user",
-    "durationMs": 5,
+    "durationMs": 9,
     "outcome": "success"
   },
   {
-    "correlationId": "COR-0046",
-    "actionName": "click Play demo.sid",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0047",
-    "actionName": "click Play demo.sid",
-    "origin": "user",
-    "durationMs": 3,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0048",
+    "correlationId": "COR-0023",
     "actionName": "rest.post",
     "origin": "system",
-    "durationMs": 51,
+    "durationMs": 23,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -767,41 +392,28 @@
     ]
   },
   {
-    "correlationId": "COR-0049",
+    "correlationId": "COR-0024",
     "actionName": "click Add items to playlist",
     "origin": "user",
     "durationMs": 0,
     "outcome": "success"
   },
   {
-    "correlationId": "COR-0050",
-    "actionName": "click Add items to playlist",
-    "origin": "user",
-    "durationMs": 49,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0051",
-    "actionName": "click Add file / folder",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0052",
-    "actionName": "click Button",
-    "origin": "user",
-    "durationMs": 6,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0053",
+    "correlationId": "COR-0025",
     "actionName": "ftp.list",
     "origin": "system",
-    "durationMs": 204,
+    "durationMs": 189,
     "outcome": "success",
+    "restCount": 1,
     "ftpCount": 1,
     "effects": [
+      {
+        "type": "REST",
+        "method": "POST",
+        "path": "/v1/ftp/list",
+        "target": "real-device",
+        "status": 200
+      },
       {
         "type": "FTP",
         "operation": "list",
@@ -812,12 +424,20 @@
     ]
   },
   {
-    "correlationId": "COR-0054",
-    "actionName": "rest.post",
+    "correlationId": "COR-0026",
+    "actionName": "click Add file / folder",
+    "origin": "user",
+    "durationMs": 1,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0027",
+    "actionName": "ftp.list",
     "origin": "system",
-    "durationMs": 158,
+    "durationMs": 152,
     "outcome": "success",
     "restCount": 1,
+    "ftpCount": 1,
     "effects": [
       {
         "type": "REST",
@@ -825,31 +445,7 @@
         "path": "/v1/ftp/list",
         "target": "real-device",
         "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0055",
-    "actionName": "click Open Usb0",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0056",
-    "actionName": "click Open Usb0",
-    "origin": "user",
-    "durationMs": 2,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0057",
-    "actionName": "ftp.list",
-    "origin": "system",
-    "durationMs": 144,
-    "outcome": "success",
-    "ftpCount": 1,
-    "effects": [
+      },
       {
         "type": "FTP",
         "operation": "list",
@@ -860,12 +456,20 @@
     ]
   },
   {
-    "correlationId": "COR-0058",
-    "actionName": "rest.post",
+    "correlationId": "COR-0028",
+    "actionName": "click Open Usb0",
+    "origin": "user",
+    "durationMs": 0,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0029",
+    "actionName": "ftp.list",
     "origin": "system",
-    "durationMs": 135,
+    "durationMs": 127,
     "outcome": "success",
     "restCount": 1,
+    "ftpCount": 1,
     "effects": [
       {
         "type": "REST",
@@ -873,31 +477,7 @@
         "path": "/v1/ftp/list",
         "target": "real-device",
         "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0059",
-    "actionName": "click Open Games",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0060",
-    "actionName": "click Open Games",
-    "origin": "user",
-    "durationMs": 3,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0061",
-    "actionName": "ftp.list",
-    "origin": "system",
-    "durationMs": 144,
-    "outcome": "success",
-    "ftpCount": 1,
-    "effects": [
+      },
       {
         "type": "FTP",
         "operation": "list",
@@ -908,12 +488,20 @@
     ]
   },
   {
-    "correlationId": "COR-0062",
-    "actionName": "rest.post",
+    "correlationId": "COR-0030",
+    "actionName": "click Open Games",
+    "origin": "user",
+    "durationMs": 0,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0031",
+    "actionName": "ftp.list",
     "origin": "system",
-    "durationMs": 136,
+    "durationMs": 155,
     "outcome": "success",
     "restCount": 1,
+    "ftpCount": 1,
     "effects": [
       {
         "type": "REST",
@@ -921,31 +509,7 @@
         "path": "/v1/ftp/list",
         "target": "real-device",
         "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0063",
-    "actionName": "click Open Turrican II",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0064",
-    "actionName": "click Open Turrican II",
-    "origin": "user",
-    "durationMs": 2,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0065",
-    "actionName": "ftp.list",
-    "origin": "system",
-    "durationMs": 158,
-    "outcome": "success",
-    "ftpCount": 1,
-    "effects": [
+      },
       {
         "type": "FTP",
         "operation": "list",
@@ -956,12 +520,41 @@
     ]
   },
   {
-    "correlationId": "COR-0066",
-    "actionName": "rest.post",
+    "correlationId": "COR-0032",
+    "actionName": "click Open Turrican II",
+    "origin": "user",
+    "durationMs": 0,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0033",
+    "actionName": "toggle Select Disk 1.d64 [true]",
+    "origin": "user",
+    "durationMs": 3,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0034",
+    "actionName": "click Select Disk 1.d64",
+    "origin": "user",
+    "durationMs": 0,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0035",
+    "actionName": "click add-items-confirm",
+    "origin": "user",
+    "durationMs": 0,
+    "outcome": "success"
+  },
+  {
+    "correlationId": "COR-0036",
+    "actionName": "ftp.list",
     "origin": "system",
-    "durationMs": 149,
+    "durationMs": 98,
     "outcome": "success",
     "restCount": 1,
+    "ftpCount": 1,
     "effects": [
       {
         "type": "REST",
@@ -969,45 +562,7 @@
         "path": "/v1/ftp/list",
         "target": "real-device",
         "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0067",
-    "actionName": "click Select Disk 1.d64",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0068",
-    "actionName": "toggle Select Disk 1.d64 [true]",
-    "origin": "user",
-    "durationMs": 2,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0069",
-    "actionName": "click add-items-confirm",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0070",
-    "actionName": "click Add to playlist",
-    "origin": "user",
-    "durationMs": 675,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0071",
-    "actionName": "ftp.list",
-    "origin": "system",
-    "durationMs": 139,
-    "outcome": "success",
-    "ftpCount": 1,
-    "effects": [
+      },
       {
         "type": "FTP",
         "operation": "list",
@@ -1018,41 +573,10 @@
     ]
   },
   {
-    "correlationId": "COR-0072",
-    "actionName": "rest.post",
-    "origin": "system",
-    "durationMs": 134,
-    "outcome": "success",
-    "restCount": 1,
-    "effects": [
-      {
-        "type": "REST",
-        "method": "POST",
-        "path": "/v1/ftp/list",
-        "target": "real-device",
-        "status": 200
-      }
-    ]
-  },
-  {
-    "correlationId": "COR-0073",
-    "actionName": "click Play Disk 1.d64",
-    "origin": "user",
-    "durationMs": 0,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0074",
-    "actionName": "click Play Disk 1.d64",
-    "origin": "user",
-    "durationMs": 4,
-    "outcome": "success"
-  },
-  {
-    "correlationId": "COR-0075",
+    "correlationId": "COR-0037",
     "actionName": "rest.put",
     "origin": "system",
-    "durationMs": 32,
+    "durationMs": 13,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -1066,10 +590,10 @@
     ]
   },
   {
-    "correlationId": "COR-0076",
+    "correlationId": "COR-0038",
     "actionName": "rest.put",
     "origin": "system",
-    "durationMs": 30,
+    "durationMs": 10,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -1083,10 +607,10 @@
     ]
   },
   {
-    "correlationId": "COR-0077",
+    "correlationId": "COR-0039",
     "actionName": "rest.get",
     "origin": "system",
-    "durationMs": 35,
+    "durationMs": 6,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -1100,10 +624,10 @@
     ]
   },
   {
-    "correlationId": "COR-0078",
+    "correlationId": "COR-0040",
     "actionName": "rest.put",
     "origin": "system",
-    "durationMs": 32,
+    "durationMs": 9,
     "outcome": "success",
     "restCount": 1,
     "effects": [
@@ -1117,10 +641,10 @@
     ]
   },
   {
-    "correlationId": "COR-0079",
+    "correlationId": "COR-0041",
     "actionName": "rest.put",
     "origin": "system",
-    "durationMs": 29,
+    "durationMs": 8,
     "outcome": "success",
     "restCount": 1,
     "effects": [

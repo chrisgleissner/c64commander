@@ -105,7 +105,17 @@ const traceInteraction = async (action: string, element: Element, event: Event) 
   const label = getMeaningfulLabel(element);
   const name = `${action} ${label}`;
   const context = createActionContext(name, 'user', COMPONENT_NAME);
-  await runWithActionTrace(context, () => undefined);
+  
+  // Set up the context BEFORE the actual handler runs.
+  // We use a setTimeout(0) to keep the context active until AFTER the handler's
+  // synchronous work completes. This includes any fire-and-forget async calls
+  // started synchronously (like `void loadEntries(path)`).
+  await runWithActionTrace(context, async () => {
+    // Wait for all synchronous work from the event handler to complete.
+    // The setTimeout(0) defers until after the current event loop tick,
+    // allowing the handler to execute with the context still active.
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  });
 };
 
 export const registerUserInteractionCapture = () => {
@@ -137,6 +147,8 @@ export const registerUserInteractionCapture = () => {
     void traceInteraction('slide', element, event);
   };
 
+  // Use capture phase so context is set BEFORE React handlers execute.
+  // This allows the async context to propagate to work scheduled by those handlers.
   document.addEventListener('click', onClick, { capture: true });
   document.addEventListener('change', onChange, { capture: true });
   document.addEventListener('pointerup', onPointerUp, { capture: true });

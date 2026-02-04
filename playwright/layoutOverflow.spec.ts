@@ -5,6 +5,7 @@ import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { disableTraceAssertions } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { saveCoverageFromPage } from './withCoverage';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
@@ -257,6 +258,7 @@ test.describe('Layout overflow safeguards', () => {
   });
 
   layoutTest('settings logs handle long error messages without overflow @layout', async ({ page }, testInfo) => {
+    enableGoldenTrace(testInfo);
     await page.addInitScript(() => {
       const payload = [
         {

@@ -5,6 +5,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -66,6 +67,7 @@ test.describe('Settings diagnostics workflows', () => {
   });
 
   test('debug logging toggle records REST calls', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     enableTraceAssertions(testInfo);
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');

@@ -5,6 +5,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, allowVisualOverflow } from './testArtifacts';
 import { enableTraceAssertions } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 test.describe('Config page SID solo routing', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
@@ -85,6 +86,7 @@ test.describe('Config page SID solo routing', () => {
   });
 
   test('solo switch toggles active SID instantly', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     allowVisualOverflow(testInfo, 'Audio mixer solo controls expand beyond viewport');
     await openAudioMixer(page);
     await snap(page, testInfo, 'audio-mixer-open');

@@ -62,7 +62,32 @@ No Action Summary may span multiple correlation IDs.
 
 ---
 
-### 4.2 Required Source Events
+### 4.2 Grouping Depends on Tracing Correctness
+
+Action Summaries are a **pure projection** of trace data. They apply **no post-processing, heuristics, or cleanup logic** to compensate for incorrect tracing.
+
+**Normative clarifications:**
+
+1. **No correlation merging**  
+   Action Summaries MUST NOT merge events from different `correlationId` values, even if they appear semantically related.
+
+2. **No heuristic grouping**  
+   Action Summaries MUST NOT apply timing-based or name-based heuristics to group events that have distinct `correlationId` values.
+
+3. **No deduplication**  
+   If tracing emits duplicate Action Traces for the same user interaction, Action Summaries will faithfully reflect those duplicates. The fix belongs in the tracing layer, not in Action Summary derivation.
+
+4. **Effect grouping is guaranteed by tracing**  
+   Correct grouping of user actions with their effects (REST/FTP operations) is the responsibility of the tracing system. Action Summaries rely strictly on `correlationId` boundaries defined by tracing.
+
+5. **Diagnostic value**  
+   If an Action Summary shows a user action separated from its effects (effects appearing as separate system-origin summaries), this indicates either:
+   - An intentional async pattern where effects run after the user action completes, or
+   - A tracing bug that must be fixed at the source.
+
+---
+
+### 4.3 Required Source Events
 
 For a complete Action Summary, the following events MUST exist:
 

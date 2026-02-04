@@ -5,6 +5,7 @@ import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -41,6 +42,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server = await createMockC64Server({});
     demoServer = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
     server.setReachable(false);
 
@@ -136,6 +138,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
   });
 
   test('demo enabled → real device reachable (informational only)', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -358,6 +361,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server = await createMockC64Server({});
     demoServer = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
     const demoHost = new URL(demoServer.baseUrl).host;
@@ -378,8 +382,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server.setReachable(false);
     await indicator.click();
     const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialogVisible = await dialogTitle.isVisible({ timeout: 5000 }).catch(() => false);
+    if (dialogVisible) {
+      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    }
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();

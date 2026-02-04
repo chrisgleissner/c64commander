@@ -220,7 +220,57 @@ Sequential actions produce sequential correlation IDs.
 
 ---
 
-### 7.2 Action Trace Origins
+### 7.2 Single User Action Trace Per User Intent
+
+A single physical user interaction (e.g., click, tap, key press) MUST produce **at most one** user-origin Action Trace.
+
+**Normative rules:**
+
+1. **No duplicate traces for the same DOM event**  
+   If multiple instrumentation layers exist (e.g., global capture listener and component-level tracing), they MUST NOT both emit Action Traces for the same user interaction.
+
+2. **Global capture as authoritative source**  
+   The global user interaction capture (`userInteractionCapture.ts`) is the authoritative source for user Action Traces. Component-level tracing MUST NOT create additional user Action Traces for interactions already captured globally.
+
+3. **Deduplication via event marking**  
+   The `__c64uTraced` flag on DOM events is used to prevent double-tracing. Once set, subsequent instrumentation layers MUST NOT emit duplicate Action Traces.
+
+4. **Component name indicates capture source**  
+   The `component` field in `action-start.data` indicates which layer captured the trace:
+   - `GlobalInteraction`: captured by global DOM listener
+   - Other values: captured by component-specific instrumentation (rare, used only for specialized components)
+
+---
+
+### 7.3 Action Trace Ownership of Effects
+
+REST and FTP operations that occur **during** an active Action Trace MUST be recorded within that same `correlationId`.
+
+**Normative rules:**
+
+1. **Effect reuse of active action**  
+   When a REST or FTP operation is triggered while an Action Trace is active (i.e., `getActiveAction()` returns non-null), that operation MUST use the active action's `correlationId` and inherit its `origin`.
+
+2. **Implicit actions for standalone effects**  
+   When a REST or FTP operation is triggered with no active Action Trace, an implicit system-origin Action Trace MUST be created for that operation.
+
+3. **No origin downgrade**  
+   REST and FTP events triggered by a user Action Trace MUST retain `origin=user`. The origin MUST NOT be downgraded to `system` simply because internal code executes the operation.
+
+4. **Async context propagation guarantee**  
+   Correlation MUST propagate correctly across all async boundaries, including:
+   - Promise chains (`.then()`, `.catch()`, `.finally()`)
+   - `async`/`await` patterns
+   - Fire-and-forget patterns (`void promise`)
+   - `setTimeout`, `setInterval`, and `queueMicrotask` callbacks
+   
+   **Loss of correlation across async boundaries is a tracing bug**, not acceptable behavior.
+   
+   Implementation note: The tracing system uses async context propagation internally (via `TraceActionContext` as the causal carrier) to ensure that effects scheduled during an action trace retain access to the originating action context, even if they execute after the logical action completes. This is transparent to business logic—no explicit context passing is required.
+
+---
+
+### 7.4 Action Trace Origins
 
 Each Action Trace declares an origin:
 
@@ -573,7 +623,28 @@ Canonical helpers live in [playwright/traceUtils.ts](playwright/traceUtils.ts) a
 
 All ordering assertions are scoped to a single `correlationId`. Tests must never mix events from multiple actions.
 
-### 18.6 Scaling Strategy to 50% Coverage
+### 18.6 `enableTraceAssertions()` vs `enableGoldenTrace()`
+
+Both helpers are opt-ins, but they control different checks:
+
+- `enableTraceAssertions(testInfo)` enables helper-based semantic assertions inside the test (for example `expectRestTraceSequence()` and `expectFtpTraceSequence()`).
+- `enableGoldenTrace(testInfo)` enables end-of-test golden trace eligibility for compare/record flow.
+
+Key differences:
+
+- Scope:
+  - `enableTraceAssertions()` = in-test assertions
+  - `enableGoldenTrace()` = artifact comparison/recording pipeline
+- Registry requirement:
+  - `enableTraceAssertions()` = no golden registry entry required
+  - `enableGoldenTrace()` = requires registration in [playwright/goldenTraceRegistry.ts](playwright/goldenTraceRegistry.ts)
+- Recording behavior:
+  - `enableTraceAssertions()` does not record or compare goldens
+  - `enableGoldenTrace()` participates in recording only when `RECORD_TRACES=1`
+
+Tests may use one or both, depending on intent.
+
+### 18.7 Scaling Strategy to 50% Coverage
 
 Selection criteria:
 
@@ -608,7 +679,20 @@ Rules for when **not** to add trace assertions:
 
 Golden traces capture a deterministic, reviewable baseline of expected traces for local verification and CI parity.
 
-### 19.2 Local Build Integration
+### 19.2 Golden Trace Selection Policy
+
+Golden trace comparison is restricted to an explicit, curated subset of tests.
+
+**Requirements:**
+
+- All Playwright tests still emit runtime traces.
+- Only tests explicitly registered in [playwright/goldenTraceRegistry.ts](playwright/goldenTraceRegistry.ts) compare or record golden traces.
+- Tests must call `enableGoldenTrace(testInfo)` to opt in; missing or mismatched entries fail fast.
+- Recording mode (`RECORD_TRACES=1`) only writes golden traces for registered tests.
+
+This policy ensures golden traces remain intentional, page-representative, and reviewable without forcing every test into the golden set.
+
+### 19.3 Local Build Integration
 
 #### Execution
 
@@ -649,7 +733,7 @@ Each `test-results/evidence/playwright/<testId>/<deviceId>` folder contains:
 | meta.json          | Per test     | Playwright  | No                            | Test identity, project, device, and outcome |
 | app-metadata.json  | Per export   | Tracing     | No                            | App, build, platform, and device context |
 
-### 19.3 Fault-Tolerant Trace Comparison (Essentials Only)
+### 19.4 Fault-Tolerant Trace Comparison (Essentials Only)
 
 Golden comparison intentionally ignores ordering and timing noise. The goal is to verify **essential behavior**:
 for a given user action, the app must issue specific REST/FTP calls and receive specific responses.

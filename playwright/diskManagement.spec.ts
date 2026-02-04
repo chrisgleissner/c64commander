@@ -10,6 +10,7 @@ import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence
 import { clickSourceSelectionButton } from './sourceSelection';
 import { layoutTest, enforceDeviceTestMapping } from './layoutTest';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const getLatestDriveRequest = (
   requests: Array<{ method: string; url: string }>,
@@ -214,6 +215,7 @@ test.describe('Disk management', () => {
   });
 
   test('FTP directory listing shows hierarchy @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');
     await openAddItemsDialog(page);
@@ -359,6 +361,7 @@ test.describe('Disk management', () => {
   });
 
   test('settings changes while disk mounted preserve mounted state @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await seedUltimateTurricanDisks(page);
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
 
@@ -448,6 +451,7 @@ test.describe('Disk management', () => {
   });
 
   test('disk list view all shows full list @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.addInitScript(() => {
       localStorage.setItem('c64u_list_preview_limit', '1');
     });

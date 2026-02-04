@@ -7,6 +7,7 @@ import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -258,6 +259,7 @@ test.describe('Navigation boundaries and edge cases', () => {
   });
 
   test('config reset category applies defaults', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/config');
     await snap(page, testInfo, 'config-open');
 

@@ -4,6 +4,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { saveCoverageFromPage } from './withCoverage';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -101,6 +102,7 @@ test.describe('Config visibility across modes', () => {
   });
 
   test('config remains visible after switching demo → real', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 

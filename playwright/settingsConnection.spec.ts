@@ -5,6 +5,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
@@ -30,6 +31,7 @@ test.describe('Settings connection management', () => {
   });
 
   test('change device host and save reconnects', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected connection failures to non-existent URL' });
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');

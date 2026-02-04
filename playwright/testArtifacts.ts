@@ -3,13 +3,14 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
 import { getTraceAssertionConfig, getTraces, saveTracesFromPage } from './traceUtils';
+import { assertGoldenTraceEligibility } from './goldenTraceRegistry';
 import {
-  compareTraceFiles,
   compareOrPromoteTraceFiles,
   formatTraceErrors,
   resolveGoldenDirForEvidence,
 } from './traceComparison.js';
 import { createEvidenceMetadata } from './evidenceConsolidation';
+import { generateTestId } from './testIdUtils';
 
 const sanitizeLabel = (label: string) =>
   label
@@ -26,29 +27,6 @@ const sanitizeSegment = (value: string) => {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
   return cleaned || 'untitled';
-};
-
-const getTitlePath = (testInfo: TestInfo) => {
-  if (typeof (testInfo as TestInfo & { titlePath?: () => string[] }).titlePath === 'function') {
-    return (testInfo as TestInfo & { titlePath: () => string[] }).titlePath();
-  }
-  return (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [testInfo.title];
-};
-
-const generateTestId = (testInfo: TestInfo): string => {
-  const fileName = path.basename(testInfo.file, '.ts').replace(/\.spec$/, '');
-  const titlePath = getTitlePath(testInfo);
-  
-  const parts = [fileName, ...titlePath].map((part) =>
-    part
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]+/g, '')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-  ).filter(Boolean);
-  
-  return parts.join('--');
 };
 
 const getEvidenceDir = (testInfo: TestInfo) => {
@@ -224,32 +202,35 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
     );
   }
 
-  const goldenDir = resolveGoldenDirForEvidence(evidenceDir);
-  try {
-    const result = await compareOrPromoteTraceFiles(goldenDir, evidenceDir);
-    if (result.promoted) {
-      const relativeGolden = path.relative(process.cwd(), goldenDir);
-      console.warn(`Promoted missing golden trace: ${relativeGolden}`);
-    }
-    if (result.errors.length) {
-      if (result.diff) {
-        const diffPayload = {
-          goldenDir: path.relative(process.cwd(), goldenDir),
-          evidenceDir: path.relative(process.cwd(), evidenceDir),
-          ...result.diff,
-        };
-        await fs.writeFile(
-          path.join(evidenceDir, 'trace.diff.json'),
-          JSON.stringify(diffPayload, null, 2),
-          'utf8',
-        );
+  const goldenStatus = assertGoldenTraceEligibility(testInfo);
+  if (goldenStatus.shouldCompare) {
+    const goldenDir = resolveGoldenDirForEvidence(evidenceDir);
+    try {
+      const result = await compareOrPromoteTraceFiles(goldenDir, evidenceDir);
+      if (result.promoted) {
+        const relativeGolden = path.relative(process.cwd(), goldenDir);
+        console.warn(`Promoted missing golden trace: ${relativeGolden}`);
       }
-      const relativeGolden = path.relative(process.cwd(), goldenDir);
-      throw new Error(formatTraceErrors(result.errors, relativeGolden, result.diff));
+      if (result.errors.length) {
+        if (result.diff) {
+          const diffPayload = {
+            goldenDir: path.relative(process.cwd(), goldenDir),
+            evidenceDir: path.relative(process.cwd(), evidenceDir),
+            ...result.diff,
+          };
+          await fs.writeFile(
+            path.join(evidenceDir, 'trace.diff.json'),
+            JSON.stringify(diffPayload, null, 2),
+            'utf8',
+          );
+        }
+        const relativeGolden = path.relative(process.cwd(), goldenDir);
+        throw new Error(formatTraceErrors(result.errors, relativeGolden, result.diff));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Trace comparison failed: ${message}`);
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Trace comparison failed: ${message}`);
   }
 
   const traceConfig = getTraceAssertionConfig(testInfo);

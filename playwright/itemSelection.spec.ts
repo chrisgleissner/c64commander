@@ -7,6 +7,7 @@ import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
@@ -355,6 +356,7 @@ test.describe('Item Selection Dialog UX', () => {
   });
 
   test('Disks page: Add folder returns to Disks and populates library', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/disks');
     await snap(page, testInfo, 'disks-initial');
 

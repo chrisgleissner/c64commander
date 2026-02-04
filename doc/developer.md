@@ -112,6 +112,10 @@ Key concepts:
 - Numbered screenshots: `01-step.png`, `02-step.png`, etc.
 - Video recording: `video.webm` per test
 - Trace files: `trace.zip` for debugging
+- Trace opt-ins:
+  - `enableTraceAssertions(testInfo)` for in-test semantic trace assertions
+  - `enableGoldenTrace(testInfo)` for curated golden trace compare/record flow (registry-gated)
+  - They are independent; use both when a test needs assertion coverage plus golden regression coverage
 
 Run:
 
