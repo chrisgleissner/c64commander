@@ -4,6 +4,7 @@ import {
   exportTraceZip,
   getTraceEvents,
   persistTracesToSession,
+  replaceTraceEvents,
   resetTraceSession,
   restoreTracesFromSession,
 } from '@/lib/tracing/traceSession';
@@ -17,6 +18,7 @@ export type TraceBridge = {
   resetTraceSession: (eventStart?: number, correlationStart?: number) => void;
   persistTracesToSession: () => void;
   restoreTracesFromSession: () => void;
+  seedTraces?: (events: ReturnType<typeof getTraceEvents>) => void;
 };
 
 declare global {
@@ -51,4 +53,11 @@ export const registerTraceBridge = () => {
     persistTracesToSession,
     restoreTracesFromSession,
   };
+
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') {
+    window.__c64uTracing.seedTraces = (events) => {
+      resetActionTrace();
+      replaceTraceEvents(events);
+    };
+  }
 };

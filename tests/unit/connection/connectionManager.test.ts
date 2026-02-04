@@ -180,6 +180,36 @@ describe('connectionManager', () => {
     }));
   });
 
+  it('does not fall back to demo mode after real connection is sticky', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager, isRealDeviceStickyLockEnabled } =
+      await import('@/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+    expect(isRealDeviceStickyLockEnabled()).toBe(true);
+
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    void discoverConnection('manual');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe('OFFLINE_NO_DEMO');
+    expect(startMockServer).not.toHaveBeenCalled();
+  });
+
   it('accepts healthy probe payload without product field', async () => {
     const { probeOnce } = await import('@/lib/connection/connectionManager');
     localStorage.setItem('c64u_device_host', '127.0.0.1:9999');

@@ -44,6 +44,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
 import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
+import { buildActionSummaries, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { shareTraceZip } from '@/lib/tracing/traceExport';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
@@ -140,10 +141,11 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs' | 'traces'>('errors');
+  const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs' | 'traces' | 'actions'>('errors');
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
+  const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
@@ -498,6 +500,7 @@ export default function SettingsPage() {
   };
 
   const logExportLabel = diagnosticsTab === 'errors' ? 'errors' : 'logs';
+  const isLogTab = diagnosticsTab === 'errors' || diagnosticsTab === 'logs';
 
   const handleConfirmRelaxedMode = () => {
     if (pendingSafetyMode !== 'RELAXED') {
@@ -1485,17 +1488,18 @@ export default function SettingsPage() {
         <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>
-            <DialogDescription>Review logs, errors, and traces. Choose raw or redacted exports.</DialogDescription>
+            <DialogDescription>Review logs, errors, traces, and action summaries. Choose raw or redacted exports.</DialogDescription>
           </DialogHeader>
           <Tabs
             value={diagnosticsTab}
-            onValueChange={(value) => setDiagnosticsTab(value as 'errors' | 'logs' | 'traces')}
+            onValueChange={(value) => setDiagnosticsTab(value as 'errors' | 'logs' | 'traces' | 'actions')}
             className="space-y-3"
           >
-            <TabsList className="grid grid-cols-3 w-full">
+            <TabsList className="grid grid-cols-4 w-full">
               <TabsTrigger value="errors">Errors</TabsTrigger>
               <TabsTrigger value="logs">All logs</TabsTrigger>
               <TabsTrigger value="traces">Traces</TabsTrigger>
+              <TabsTrigger value="actions">Actions</TabsTrigger>
             </TabsList>
             <TabsContent value="errors" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               {errorLogs.length === 0 ? (
@@ -1585,10 +1589,182 @@ export default function SettingsPage() {
                 </>
               )}
             </TabsContent>
+            <TabsContent value="actions" className="space-y-3 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={async () => {
+                    await Promise.resolve(clearTraceEvents());
+                    setTraceEvents([]);
+                    toast({ title: 'Traces cleared' });
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear traces
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(false)}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share / Export
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(true)}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share Redacted
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
+              {actionSummaries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No actions recorded.</p>
+              ) : (
+                actionSummaries
+                  .slice(-100)
+                  .reverse()
+                  .map((summary) => {
+                    const restEffects = summary.effects.filter((effect): effect is RestEffect => effect.type === 'REST');
+                    const ftpEffects = summary.effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
+                    const summaryTime = summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown time';
+                    return (
+                      <details
+                        key={summary.correlationId}
+                        data-testid={`action-summary-${summary.correlationId}`}
+                        className="rounded-lg border border-border p-3"
+                      >
+                        <summary className="cursor-pointer text-sm font-medium flex justify-between items-center gap-3 select-none">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${summary.summaryOrigin === 'HUMAN' ? 'bg-green-500' : 'bg-blue-500'}`}
+                              aria-label={summary.summaryOrigin}
+                            />
+                            <span className="truncate">{summary.actionName}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {summary.restCount > 0 ? (
+                              <span
+                                data-testid={`action-rest-count-${summary.correlationId}`}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white"
+                                aria-label="REST effects"
+                              >
+                                {summary.restCount}
+                              </span>
+                            ) : null}
+                            {summary.ftpCount > 0 ? (
+                              <span
+                                data-testid={`action-ftp-count-${summary.correlationId}`}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-700 text-xs font-semibold text-white"
+                                aria-label="FTP effects"
+                              >
+                                {summary.ftpCount}
+                              </span>
+                            ) : null}
+                            {summary.errorCount > 0 ? (
+                              <span
+                                data-testid={`action-error-count-${summary.correlationId}`}
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white"
+                                aria-label="Errors"
+                              >
+                                {summary.errorCount}
+                              </span>
+                            ) : null}
+                            <span className="text-muted-foreground font-mono text-xs ml-2 shrink-0">
+                              {summaryTime}
+                            </span>
+                            {summary.durationMs !== null ? (
+                              <span className="text-muted-foreground text-xs">{summary.durationMs} ms</span>
+                            ) : null}
+                          </div>
+                        </summary>
+                        <div className="mt-3 space-y-3 text-xs">
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div>
+                              <p className="text-muted-foreground">Correlation</p>
+                              <p className="font-mono">{summary.correlationId}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Action</p>
+                              <p>{summary.actionName}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Origin</p>
+                              <p>{summary.originalOrigin ?? 'unknown'} → {summary.summaryOrigin}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Outcome</p>
+                              <p>{summary.outcome}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Start</p>
+                              <p>{summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">End</p>
+                              <p>{summary.endTimestamp ? formatLocalTime(summary.endTimestamp) : 'Unknown'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Duration</p>
+                              <p>{summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown'}</p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Error</p>
+                              <p className={summary.errorMessage ? 'text-destructive' : ''}>{summary.errorMessage ?? 'None'}</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold">REST Effects</p>
+                            {restEffects.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No REST effects.</p>
+                            ) : (
+                              restEffects.map((effect, index) => (
+                                <div
+                                  key={`${summary.correlationId}-rest-${index}`}
+                                  data-testid={`action-rest-effect-${summary.correlationId}-${index}`}
+                                  className="rounded-md border border-border/70 p-2"
+                                >
+                                  <p className="font-medium">{effect.method} {effect.path}</p>
+                                  <p className="text-muted-foreground">
+                                    target: {effect.target ?? 'unknown'} · status: {effect.status ?? 'unknown'}
+                                    {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
+                                  </p>
+                                  {effect.error ? (
+                                    <p className="text-destructive">error: {effect.error}</p>
+                                  ) : null}
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold">FTP Effects</p>
+                            {ftpEffects.length === 0 ? (
+                              <p className="text-xs text-muted-foreground">No FTP effects.</p>
+                            ) : (
+                              ftpEffects.map((effect, index) => (
+                                <div
+                                  key={`${summary.correlationId}-ftp-${index}`}
+                                  data-testid={`action-ftp-effect-${summary.correlationId}-${index}`}
+                                  className="rounded-md border border-border/70 p-2"
+                                >
+                                  <p className="font-medium">{effect.operation} {effect.path}</p>
+                                  <p className="text-muted-foreground">
+                                    target: {effect.target ?? 'unknown'} · result: {effect.result ?? 'unknown'}
+                                  </p>
+                                  {effect.error ? (
+                                    <p className="text-destructive">error: {effect.error}</p>
+                                  ) : null}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </details>
+                    );
+                  })
+              )}
+            </TabsContent>
           </Tabs>
           <DialogFooter>
             <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              {diagnosticsTab !== 'traces' ? (
+              {isLogTab ? (
                 <div className="flex flex-wrap gap-2 min-w-0">
                   <Button variant="outline" onClick={() => handleShareLogs(false)}>
                     <Share2 className="h-4 w-4 mr-2" />

@@ -1,5 +1,7 @@
+/* @vitest-environment jsdom */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
+import { JSDOM } from 'jsdom';
 import * as toastModule from '@/hooks/use-toast';
 import * as loggingModule from '@/lib/logging';
 import * as platformModule from '@/lib/native/platform';
@@ -14,6 +16,40 @@ const platformState = { platform: 'web', native: false };
 import type { PlaylistItem } from '@/pages/playFiles/types';
 import type { SonglengthsFileEntry } from '@/pages/playFiles/hooks/useSonglengths';
 import { useSonglengths } from '@/pages/playFiles/hooks/useSonglengths';
+
+const ensureStorage = () => {
+  if (typeof localStorage !== 'undefined') return;
+  let store: Record<string, string> = {};
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => (key in store ? store[key] : null),
+      setItem: (key: string, value: string) => {
+        store[key] = String(value);
+      },
+      removeItem: (key: string) => {
+        delete store[key];
+      },
+      clear: () => {
+        store = {};
+      },
+    },
+  });
+};
+
+const ensureDom = (() => {
+  let initialized = false;
+  return () => {
+    if (initialized || typeof document !== 'undefined') return;
+    const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost' });
+    globalThis.window = dom.window as unknown as Window & typeof globalThis;
+    globalThis.document = dom.window.document;
+    globalThis.navigator = dom.window.navigator;
+    globalThis.localStorage = dom.window.localStorage;
+    globalThis.sessionStorage = dom.window.sessionStorage;
+    initialized = true;
+  };
+})();
 
 const toFileList = (file: File): FileList => ({
   0: file,
@@ -32,12 +68,15 @@ const makeTextFile = (path: string, content: string, lastModified = 123) => {
   return file;
 };
 
-const flushPromises = () => new Promise<void>((resolve) => {
-  setTimeout(() => resolve(), 0);
-});
+const flushPromises = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  ensureDom();
+  ensureStorage();
   toastMock = vi.spyOn(toastModule, 'toast').mockImplementation(() => {});
   addErrorLogMock = vi.spyOn(loggingModule, 'addErrorLog').mockImplementation(() => {});
   buildLocalPlayFileFromUriMock = vi.spyOn(fileLibraryUtils, 'buildLocalPlayFileFromUri');
