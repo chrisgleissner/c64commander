@@ -93,7 +93,7 @@ describe('hvscFilesystem', () => {
 
       // @ts-expect-error - mock typing
        vi.mocked(Filesystem.readFile).mockResolvedValue({ data: btoa('MOCK_DATA') }); 
-       const mockDurations = { pathToSeconds: new Map([['/ROOT/MUSIC.sid', 123]]), md5ToSeconds: new Map() };
+      const mockDurations = { pathToSeconds: new Map([['/ROOT/MUSIC.sid', [123]]]), md5ToSeconds: new Map() };
       // @ts-expect-error - mock typing
        vi.mocked(parseSonglengths).mockReturnValue(mockDurations);
        

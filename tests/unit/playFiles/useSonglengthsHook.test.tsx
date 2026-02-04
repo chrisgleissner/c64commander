@@ -1,36 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
+import * as toastModule from '@/hooks/use-toast';
+import * as loggingModule from '@/lib/logging';
+import * as platformModule from '@/lib/native/platform';
+import * as fileLibraryUtils from '@/lib/playback/fileLibraryUtils';
 
-const toastMock = vi.fn();
-const addErrorLogMock = vi.fn();
-const buildLocalPlayFileFromUriMock = vi.fn();
+let toastMock: ReturnType<typeof vi.fn>;
+let addErrorLogMock: ReturnType<typeof vi.fn>;
+let buildLocalPlayFileFromUriMock: ReturnType<typeof vi.fn>;
 
-const platformState = vi.hoisted(() => ({
-  platform: 'web' as string,
-  native: false,
-}));
-
-vi.mock('@/hooks/use-toast', () => ({
-  toast: toastMock,
-}));
-
-vi.mock('@/lib/logging', () => ({
-  addErrorLog: addErrorLogMock,
-  addLog: vi.fn(),
-}));
-
-vi.mock('@/lib/native/platform', () => ({
-  getPlatform: () => platformState.platform,
-  isNativePlatform: () => platformState.native,
-}));
-
-vi.mock('@/lib/playback/fileLibraryUtils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/playback/fileLibraryUtils')>();
-  return {
-    ...actual,
-    buildLocalPlayFileFromUri: buildLocalPlayFileFromUriMock,
-  };
-});
+const platformState = { platform: 'web', native: false };
 
 import type { PlaylistItem } from '@/pages/playFiles/types';
 import type { SonglengthsFileEntry } from '@/pages/playFiles/hooks/useSonglengths';
@@ -47,15 +26,23 @@ const makeTextFile = (path: string, content: string, lastModified = 123) => {
     name: path.split('/').pop() || path,
     webkitRelativePath: path,
     lastModified,
+    size: content.length,
     arrayBuffer: async () => new TextEncoder().encode(content).buffer,
   };
   return file;
 };
 
+const flushPromises = () => new Promise<void>((resolve) => {
+  setTimeout(() => resolve(), 0);
+});
+
 beforeEach(() => {
-  toastMock.mockReset();
-  addErrorLogMock.mockReset();
-  buildLocalPlayFileFromUriMock.mockReset();
+  vi.restoreAllMocks();
+  toastMock = vi.spyOn(toastModule, 'toast').mockImplementation(() => {});
+  addErrorLogMock = vi.spyOn(loggingModule, 'addErrorLog').mockImplementation(() => {});
+  buildLocalPlayFileFromUriMock = vi.spyOn(fileLibraryUtils, 'buildLocalPlayFileFromUri');
+  vi.spyOn(platformModule, 'getPlatform').mockImplementation(() => platformState.platform);
+  vi.spyOn(platformModule, 'isNativePlatform').mockImplementation(() => platformState.native);
   platformState.platform = 'web';
   platformState.native = false;
   localStorage.clear();
@@ -64,8 +51,9 @@ beforeEach(() => {
 describe('useSonglengths', () => {
   it('rejects unsupported songlengths input', () => {
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
+    const unsupported = makeTextFile('/DOCUMENTS/nope.bin', 'x');
     act(() => {
-      result.current.handleSonglengthsInput(toFileList(new File(['x'], 'nope.bin')));
+      result.current.handleSonglengthsInput(toFileList(unsupported as unknown as File));
     });
     expect(toastMock).toHaveBeenCalled();
     expect(result.current.songlengthsFiles).toHaveLength(0);
@@ -77,36 +65,33 @@ describe('useSonglengths', () => {
       uri: 'content://demo',
       name: 'Songlengths.md5',
     }));
-    const file = new File([
-      '; /MUSICIANS/demo.sid\n',
-      'abcdef=0:10\n',
-    ], 'Songlengths.md5');
-    Object.defineProperty(file, 'webkitRelativePath', { value: 'DOCUMENTS/Songlengths.md5' });
+    const file = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabcdef=0:10\n');
 
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
     act(() => {
       result.current.handleSonglengthsInput(toFileList(file));
     });
 
-    await waitFor(() => {
-      expect(result.current.songlengthsSummary.entryCount).toBe(1);
+    await act(async () => {
+      await flushPromises();
     });
+    expect(result.current.songlengthsSummary.entryCount).toBe(1);
     expect(result.current.activeSonglengthsPath).toBe('/DOCUMENTS/Songlengths.md5');
     expect(localStorage.getItem('c64u_songlengths_file:v1')).toBeNull();
   });
 
   it('reports empty songlengths file summary', async () => {
-    const file = new File(['; /demo.sid\n'], 'Songlengths.md5');
-    Object.defineProperty(file, 'webkitRelativePath', { value: 'DOCUMENTS/Songlengths.md5' });
+    const file = makeTextFile('DOCUMENTS/Songlengths.md5', '; /demo.sid\n');
     const { result } = renderHook(() => useSonglengths({ playlist: [] }));
 
     act(() => {
       result.current.handleSonglengthsInput(toFileList(file));
     });
 
-    await waitFor(() => {
-      expect(result.current.songlengthsSummary.error).toMatch(/no entries/i);
+    await act(async () => {
+      await flushPromises();
     });
+    expect(result.current.songlengthsSummary.error).toMatch(/no entries/i);
   });
 
   it('loads songlengths for a path with caching and file-cache reuse', async () => {
@@ -159,11 +144,31 @@ describe('useSonglengths', () => {
     expect(empty).toBeNull();
   });
 
+  it('applies a manually selected songlengths file globally across folders', async () => {
+    const file = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:25\n');
+    const { result } = renderHook(() => useSonglengths({ playlist: [] }));
+
+    act(() => {
+      result.current.handleSonglengthsInput(toFileList(file));
+    });
+
+    const loaded = await result.current.loadSonglengthsForPath('/OTHER/demo.sid');
+    expect(loaded?.pathToSeconds.get('/MUSICIANS/demo.sid')).toEqual([25]);
+
+    const playlistItem: PlaylistItem = {
+      id: 'song',
+      category: 'sid',
+      label: 'demo.sid',
+      path: '/MUSICIANS/demo.sid',
+      request: { source: 'local', path: '/MUSICIANS/demo.sid', songNr: 1 },
+    };
+    const updated = await result.current.applySonglengthsToItems([playlistItem]);
+    expect(updated[0]?.durationMs).toBe(25_000);
+  });
+
   it('prefers Songlengths.md5 over Songlengths.txt when both exist in the same folder', async () => {
-    const txt = new File(['/MUSICIANS/demo.sid 0:10\n'], 'Songlengths.txt');
-    const md5 = new File(['; /MUSICIANS/demo.sid\nabc=0:20\n'], 'Songlengths.md5');
-    Object.defineProperty(txt, 'webkitRelativePath', { value: 'DOCUMENTS/Songlengths.txt' });
-    Object.defineProperty(md5, 'webkitRelativePath', { value: 'DOCUMENTS/Songlengths.md5' });
+    const txt = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:10\n');
+    const md5 = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabc=0:20\n');
 
     const playlist: PlaylistItem[] = [
       {
@@ -222,9 +227,10 @@ describe('useSonglengths', () => {
       initialProps: { playlist: [] as PlaylistItem[] },
     });
 
-    await waitFor(() => {
-      expect(result.current.songlengthsFiles).toHaveLength(1);
+    await act(async () => {
+      await flushPromises();
     });
+    expect(result.current.songlengthsFiles).toHaveLength(1);
 
     act(() => {
       result.current.handleSonglengthsPicked({
@@ -236,9 +242,10 @@ describe('useSonglengths', () => {
       });
     });
 
-    await waitFor(() => {
-      expect(result.current.songlengthsFiles[0]?.uri).toBe('content://picked');
+    await act(async () => {
+      await flushPromises();
     });
+    expect(result.current.songlengthsFiles[0]?.uri).toBe('content://picked');
     expect(localStorage.getItem('c64u_songlengths_file:v1')).toMatch(/content:\/\/picked/);
 
     // Coverage for cache invalidation effect.
@@ -272,9 +279,10 @@ describe('useSonglengths', () => {
         name: 'Songlengths.md5',
       });
     });
-    await waitFor(() => {
-      expect(result.current.songlengthsSummary.error).toMatch(/read failed/i);
+    await act(async () => {
+      await flushPromises();
     });
+    expect(result.current.songlengthsSummary.error).toMatch(/read failed/i);
   });
 
   it('logs persisted selection JSON parse failures', async () => {
@@ -283,9 +291,10 @@ describe('useSonglengths', () => {
     localStorage.setItem('c64u_songlengths_file:v1', '{');
 
     renderHook(() => useSonglengths({ playlist: [] }));
-    await waitFor(() => {
-      expect(addErrorLogMock).toHaveBeenCalled();
+    await act(async () => {
+      await flushPromises();
     });
+    expect(addErrorLogMock).toHaveBeenCalled();
   });
 
   it('rejects unsupported picked file names and merges songlengths entries without duplicates', () => {

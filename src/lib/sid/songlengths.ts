@@ -128,7 +128,8 @@ export const parseSonglengths = (content: string): SonglengthsData => {
     }
 
     // Legacy/non-HVSC format: "<path> <mm:ss[.SSS]> [<mm:ss[.SSS]> ...]"
-    const match = line.match(/^(.+?)\s+((?:\d+:\d{2}(?:\.\d{1,3})?(?:\s+|$))+)$);
+    const legacyLinePattern = new RegExp(String.raw`^(.+?)\s+((?:\d+:\d{2}(?:\.\d{1,3})?(?:\s+|$))+)$`);
+    const match = line.match(legacyLinePattern);
     if (!match) return;
     const path = match[1]?.trim();
     const value = match[2]?.trim();
