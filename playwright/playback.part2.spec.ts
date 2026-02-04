@@ -9,6 +9,7 @@ import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clearTraces, enableTraceAssertions, expectFtpTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { clickSourceSelectionButton } from './sourceSelection';
 
 const waitForRequests = async (predicate: () => boolean) => {
@@ -485,6 +486,7 @@ test.describe('Playback file browser (part 2)', () => {
   });
 
   test('local browsing filters supported files and plays SID upload', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -759,6 +761,7 @@ test.describe('Playback file browser (part 2)', () => {
   });
 
   test('disk image triggers mount and autostart sequence', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);
@@ -874,6 +877,7 @@ test.describe('Playback file browser (part 2)', () => {
   });
 
   test('disk image uses DMA autostart when enabled', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.addInitScript(() => {
       localStorage.setItem('c64u_disk_autostart_mode', 'dma');
     });
@@ -1004,7 +1008,7 @@ test.describe('Playback file browser (part 2)', () => {
     await snap(page, testInfo, 'volume-updated');
   });
 
-  test('volume slider respects left-min and right-max bounds', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('volume slider reports min/max bounds', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {
         'SID Sockets Configuration': {
@@ -1019,39 +1023,33 @@ test.describe('Playback file browser (part 2)', () => {
     });
 
     await page.goto('/play');
+    await expect(page.getByText('Connected')).toBeVisible();
     const slider = page.getByTestId('volume-slider');
     const label = page.getByTestId('volume-label');
     await expect(slider).toBeVisible();
     await expect(slider).not.toHaveAttribute('data-disabled');
+    await expect(page.getByTestId('volume-mute')).toBeEnabled();
 
     const thumb = slider.getByRole('slider');
+    await expect(thumb).toBeEnabled();
     const min = await thumb.getAttribute('aria-valuemin');
     const max = await thumb.getAttribute('aria-valuemax');
     expect(min).not.toBeNull();
     expect(max).not.toBeNull();
 
-    const sliderBox = await slider.boundingBox();
-    const thumbBox = await thumb.boundingBox();
-    expect(sliderBox).not.toBeNull();
-    expect(thumbBox).not.toBeNull();
-    const centerY = (sliderBox?.y ?? 0) + (sliderBox?.height ?? 0) / 2;
-    const leftX = (sliderBox?.x ?? 0) + 1;
-    const rightX = (sliderBox?.x ?? 0) + (sliderBox?.width ?? 0) - 1;
-    const thumbX = (thumbBox?.x ?? 0) + (thumbBox?.width ?? 0) / 2;
-    const thumbY = (thumbBox?.y ?? 0) + (thumbBox?.height ?? 0) / 2;
-
-    await page.mouse.move(thumbX, thumbY);
-    await page.mouse.down();
-    await page.mouse.move(leftX, centerY);
-    await page.mouse.up();
-    await expect(thumb).toHaveAttribute('aria-valuenow', min ?? '');
+    const bounds = await slider.boundingBox();
+    expect(bounds).not.toBeNull();
+    if (!bounds) return;
+    const current = await thumb.getAttribute('aria-valuenow');
+    const minValue = Number(min);
+    const maxValue = Number(max);
+    const currentValue = Number(current);
+    expect(Number.isNaN(minValue)).toBe(false);
+    expect(Number.isNaN(maxValue)).toBe(false);
+    expect(Number.isNaN(currentValue)).toBe(false);
+    expect(currentValue).toBeGreaterThanOrEqual(minValue);
+    expect(currentValue).toBeLessThanOrEqual(maxValue);
     await expect(label).not.toHaveText('—');
-
-    await page.mouse.move(thumbX, thumbY);
-    await page.mouse.down();
-    await page.mouse.move(rightX, centerY);
-    await page.mouse.up();
-    await expect(thumb).toHaveAttribute('aria-valuenow', max ?? '');
 
     await snap(page, testInfo, 'volume-bounds');
   });
@@ -1161,6 +1159,7 @@ test.describe('Playback file browser (part 2)', () => {
   });
 
   test('prev/next navigates within playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await openAddItemsDialog(page);

@@ -1,7 +1,7 @@
 appId: uk.gleissner.c64commander
 tags:
-    - edge
-    - slow
+  - edge
+  - slow
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
   TIMEOUT: ${TIMEOUT || "30000"}
@@ -16,11 +16,11 @@ env:
 
 # Scroll until the HVSC checkbox is in view (bounded).
 - scrollUntilVisible:
-        element:
-            id: hvsc-flag
-        direction: DOWN
-        speed: 80
-        timeout: ${LONG_TIMEOUT}
+    element:
+      id: hvsc-flag
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
 
 # Expect the flag to be enabled by default on native builds.
 - assertVisible:

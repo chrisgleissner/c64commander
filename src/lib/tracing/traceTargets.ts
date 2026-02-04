@@ -1,5 +1,5 @@
 import type { BackendDecisionReason, BackendTarget } from '@/lib/tracing/types';
-import { getConnectionSnapshot } from '@/lib/connection/connectionManager';
+import { getConnectionSnapshot, isRealDeviceStickyLockEnabled } from '@/lib/connection/connectionManager';
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { getActiveMockBaseUrl } from '@/lib/mock/mockServer';
 
@@ -25,6 +25,10 @@ export const resolveBackendTarget = (baseUrl?: string | null): { target: Backend
   const runtimeBaseUrl = normalizeUrl(baseUrl ?? getC64APIConfigSnapshot().baseUrl);
   const activeMockUrl = normalizeUrl(getActiveMockBaseUrl());
   const testBaseUrl = resolveTestBaseUrl();
+
+  if (isRealDeviceStickyLockEnabled()) {
+    return { target: 'real-device', reason: snapshot.state === 'OFFLINE_NO_DEMO' ? 'fallback' : 'reachable' };
+  }
 
   if (snapshot.state === 'DEMO_ACTIVE' || (activeMockUrl && runtimeBaseUrl && runtimeBaseUrl.startsWith(activeMockUrl))) {
     return { target: 'internal-mock', reason: 'demo-mode' };

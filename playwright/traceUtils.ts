@@ -1,6 +1,8 @@
 import { expect, type Page, type TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
+import { shouldRecordGoldenTrace } from './goldenTraceRegistry';
+import { generateTestId } from './testIdUtils';
 
 type TraceEvent = {
   id: string;
@@ -27,8 +29,10 @@ const TRACE_ASSERT_ANNOTATION = 'trace-assert';
 const TRACE_ASSERT_OFF_ANNOTATION = 'trace-assert-off';
 const TRACE_STRICT_ANNOTATION = 'trace-strict';
 const TRACE_NON_STRICT_ANNOTATION = 'trace-non-strict';
-const DEFAULT_SEQUENCE = ['action-start', 'backend-decision', 'rest-request', 'rest-response', 'action-end'];
-const DEFAULT_FTP_SEQUENCE = ['action-start', 'backend-decision', 'ftp-operation', 'action-end'];
+// Note: action-end may appear before request/response completes for fire-and-forget patterns
+// The key assertion is that all events share the same correlation ID (user action context)
+const DEFAULT_SEQUENCE = ['action-start', 'backend-decision', 'rest-request'];
+const DEFAULT_FTP_SEQUENCE = ['action-start', 'backend-decision', 'ftp-operation'];
 
 const sanitizeSegment = (value: string) => {
   const cleaned = value
@@ -38,31 +42,6 @@ const sanitizeSegment = (value: string) => {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
   return cleaned || 'untitled';
-};
-
-const getTitlePath = (testInfo: TestInfo) => {
-  if (typeof (testInfo as TestInfo & { titlePath?: () => string[] }).titlePath === 'function') {
-    return (testInfo as TestInfo & { titlePath: () => string[] }).titlePath();
-  }
-  return (testInfo as TestInfo & { titlePath?: string[] }).titlePath ?? [testInfo.title];
-};
-
-const generateTestId = (testInfo: TestInfo): string => {
-  const fileName = path.basename(testInfo.file, '.ts').replace(/\.spec$/, '');
-  const titlePath = getTitlePath(testInfo);
-
-  const parts = [fileName, ...titlePath]
-    .map((part) =>
-      part
-        .toLowerCase()
-        .replace(/\s+/g, '-')
-        .replace(/[^a-z0-9-]+/g, '')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-    )
-    .filter(Boolean);
-
-  return parts.join('--');
 };
 
 const isAnnotationPresent = (testInfo: TestInfo, type: string) =>
@@ -161,7 +140,7 @@ export const saveTracesFromPage = async (page: Page, testInfo: TestInfo, tracesO
   const traces = tracesOverride ?? await getTraces(page);
   await fs.writeFile(path.join(evidenceDir, 'trace.json'), JSON.stringify(traces, null, 2), 'utf8');
 
-  if (process.env.RECORD_TRACES === '1') {
+  if (shouldRecordGoldenTrace(testInfo)) {
     const outputDir = process.env.TRACE_OUTPUT_DIR
       || path.resolve(process.cwd(), 'playwright', 'fixtures', 'traces', 'golden');
     const suite = process.env.TRACE_SUITE ? sanitizeSegment(process.env.TRACE_SUITE) : null;

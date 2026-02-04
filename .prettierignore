@@ -1,0 +1,9 @@
+android/**/build/**
+coverage/**
+dist/**
+node_modules/**
+playwright-report/**
+test-results/**
+.nyc_output/**
+.tmp/**
+Logs/**

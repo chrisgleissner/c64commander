@@ -4,9 +4,9 @@
 
 appId: uk.gleissner.c64commander
 tags:
-    - slow
-    - file-picker
-    - device
+  - slow
+  - file-picker
+  - device
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
   TIMEOUT: ${TIMEOUT || "30000"}

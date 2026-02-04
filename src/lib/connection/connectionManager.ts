@@ -3,6 +3,7 @@ import {
   applyC64APIConfigFromStorage,
   applyC64APIRuntimeConfig,
   buildBaseUrlFromDeviceHost,
+  getC64APIConfigSnapshot,
   getDeviceHostFromBaseUrl,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
@@ -37,6 +38,28 @@ export type ConnectionSnapshot = Readonly<{
 
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
+
+const isTestProbeEnabled = () => import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
+
+const normalizeUrl = (value?: string | null) => {
+  if (!value) return '';
+  try {
+    return new URL(value).toString();
+  } catch {
+    return value;
+  }
+};
+
+const resolveTestBaseUrl = () => {
+  if (typeof window === 'undefined' || !isTestProbeEnabled()) return null;
+  const win = window as Window & { __c64uExpectedBaseUrl?: string; __c64uMockServerBaseUrl?: string };
+  return normalizeUrl(win.__c64uExpectedBaseUrl ?? win.__c64uMockServerBaseUrl ?? null) || null;
+};
+
+const isRuntimeUsingTestTarget = (runtimeBaseUrl: string) => {
+  const testBaseUrl = resolveTestBaseUrl();
+  return Boolean(testBaseUrl && runtimeBaseUrl.startsWith(testBaseUrl));
+};
 
 const loadPersistedConnectionConfig = async () => {
   const password = await loadStoredPassword();
@@ -152,6 +175,7 @@ let activeDiscovery: { abort: AbortController; cancel: () => void } | null = nul
 let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
 const DEMO_INTERSTITIAL_SESSION_KEY = 'c64u_demo_interstitial_shown';
+let stickyRealDeviceLock = false;
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -165,6 +189,8 @@ const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
 export function getConnectionSnapshot(): ConnectionSnapshot {
   return snapshot;
 }
+
+export const isRealDeviceStickyLockEnabled = () => stickyRealDeviceLock;
 
 export function subscribeConnection(listener: () => void) {
   listeners.add(listener);
@@ -225,6 +251,11 @@ const transitionToRealConnected = async (trigger: DiscoveryTrigger) => {
   logDiscoveryDecision('REAL_CONNECTED', trigger, { mode: 'real' });
   await stopDemoServer();
   await applyC64APIConfigFromStorage();
+  const runtimeBaseUrl = normalizeUrl(getC64APIConfigSnapshot().baseUrl);
+  const activeMockUrl = normalizeUrl(getActiveMockBaseUrl());
+  if (!activeMockUrl && runtimeBaseUrl && !isRuntimeUsingTestTarget(runtimeBaseUrl)) {
+    stickyRealDeviceLock = true;
+  }
   addLog('info', 'Connection switched to real device', { trigger });
 };
 
@@ -243,6 +274,11 @@ const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
   trigger !== 'background' && !demoInterstitialShownThisSession;
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
+  if (stickyRealDeviceLock) {
+    addLog('warn', 'Sticky real-device lock active; skipping demo mode transition', { trigger });
+    await transitionToOfflineNoDemo(trigger);
+    return;
+  }
   cancelActiveDiscovery();
   resetInteractionState('transition-demo-active');
   transitionTo('DEMO_ACTIVE', trigger);
@@ -441,6 +477,7 @@ export async function initializeConnectionManager() {
   applyFuzzModeDefaults();
   await initializeSmokeMode();
   demoInterstitialShownThisSession = sessionStorage.getItem(DEMO_INTERSTITIAL_SESSION_KEY) === '1';
+  stickyRealDeviceLock = false;
   setSnapshot({
     state: 'UNKNOWN',
     lastDiscoveryTrigger: null,

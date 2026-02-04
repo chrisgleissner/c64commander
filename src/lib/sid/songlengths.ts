@@ -1,6 +1,5 @@
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { addErrorLog } from '@/lib/logging';
-import { computeSidMd5 } from '@/lib/sid/sidUtils';
 
 export type SonglengthsData = {
   // Values are 1-based sub-tune durations (index 0 is song #1).
@@ -56,6 +55,7 @@ export const resolveSonglengthsDurationMs = async (
 
   try {
     const buffer = await file.arrayBuffer();
+    const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
     const md5 = await computeSidMd5(buffer);
     const md5Seconds = resolveSonglengthsSeconds(data, path, md5, songNr);
     return md5Seconds !== null ? md5Seconds * 1000 : null;
@@ -106,12 +106,13 @@ export const parseSonglengths = (content: string): SonglengthsData => {
   lines.forEach((raw) => {
     const line = raw.trim();
     if (!line) return;
-    if (line.startsWith(';') || line.startsWith('#')) {
+    const firstChar = line.charCodeAt(0);
+    if (firstChar === 59 || firstChar === 35 || firstChar === 58) {
       const path = line.replace(/^[:;#]+/, '').trim();
       if (path) currentPath = normalizePath(path);
       return;
     }
-    if (line.startsWith('[')) return;
+    if (firstChar === 91) return;
 
     const eqIndex = line.indexOf('=');
     if (eqIndex > 0) {
@@ -128,11 +129,17 @@ export const parseSonglengths = (content: string): SonglengthsData => {
     }
 
     // Legacy/non-HVSC format: "<path> <mm:ss[.SSS]> [<mm:ss[.SSS]> ...]"
-    const legacyLinePattern = new RegExp(String.raw`^(.+?)\s+((?:\d+:\d{2}(?:\.\d{1,3})?(?:\s+|$))+)$`);
-    const match = line.match(legacyLinePattern);
-    if (!match) return;
-    const path = match[1]?.trim();
-    const value = match[2]?.trim();
+    let splitIndex = -1;
+    for (let i = 0; i < line.length; i += 1) {
+      const code = line.charCodeAt(i);
+      if (code === 32 || code === 9) {
+        splitIndex = i;
+        break;
+      }
+    }
+    if (splitIndex <= 0) return;
+    const path = line.slice(0, splitIndex).trim();
+    const value = line.slice(splitIndex + 1).trim();
     if (!path || !value) return;
     const durations = parseDurations(value);
     if (!durations.length) return;

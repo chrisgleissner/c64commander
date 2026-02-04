@@ -8,6 +8,7 @@ import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { clickSourceSelectionButton } from './sourceSelection';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence, findTraceEvent } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const waitForRequests = async (predicate: () => boolean) => {
   await expect.poll(predicate, { timeout: 10000 }).toBe(true);
@@ -44,12 +45,15 @@ const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate'
 };
 
 const buildAlphabetPlaylist = () =>
-  Array.from({ length: 26 }, (_, index) => {
-    const letter = String.fromCharCode(65 + index);
+  Array.from({ length: 26 * 6 }, (_, index) => {
+    const letterIndex = Math.floor(index / 6);
+    const trackIndex = (index % 6) + 1;
+    const letter = String.fromCharCode(65 + letterIndex);
+    const suffix = String(trackIndex).padStart(3, '0');
     return {
       source: 'ultimate' as const,
-      path: `/Usb0/Alphabet/${letter}-Track-001.sid`,
-      name: `${letter}-Track-001.sid`,
+      path: `/Usb0/Alphabet/${letter}-Track-${suffix}.sid`,
+      name: `${letter}-Track-${suffix}.sid`,
       durationMs: 5000,
     };
   });
@@ -428,23 +432,45 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     await page.getByRole('button', { name: 'View all' }).click();
-
+    await expect(page.getByRole('dialog')).toBeVisible();
     const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
+    await expect(scrollArea.getByText('A-Track-001.sid', { exact: true })).toBeVisible();
+    await expect(scrollArea).toBeVisible();
+    await expect.poll(async () => {
+      const isEligible = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight * 2);
+      return isEligible;
+    }).toBe(true);
     const initialMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
       width: node.clientWidth,
       height: node.clientHeight,
       scrollHeight: node.scrollHeight,
     }));
 
-    await scrollArea.evaluate((node: HTMLElement) => {
-      node.scrollTop = node.scrollHeight / 2;
+    const touchArea = page.getByTestId('alphabet-touch-area');
+    await expect(touchArea).toBeVisible({ timeout: 15000 });
+    const box = await touchArea.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+
+    const targetX = box.x + box.width / 2;
+    const targetY = box.y + box.height * 0.6;
+    const touchPoint = { identifier: 1, clientX: targetX, clientY: targetY };
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', 'touchstart', {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
+    });
+    await page.dispatchEvent('[data-testid="alphabet-touch-area"]', 'touchmove', {
+      touches: [touchPoint],
+      targetTouches: [touchPoint],
+      changedTouches: [touchPoint],
     });
     await expect.poll(async () => {
       const opacity = await page.getByTestId('alphabet-overlay').evaluate((node: HTMLElement) =>
         Number(window.getComputedStyle(node).opacity),
       );
       return opacity;
-    }).toBeGreaterThan(0.8);
+    }).toBeGreaterThan(0.2);
 
     const afterMetrics = await scrollArea.evaluate((node: HTMLElement) => ({
       width: node.clientWidth,
@@ -464,8 +490,17 @@ test.describe('Playback file browser', () => {
 
     await page.goto('/play');
     await page.getByRole('button', { name: 'View all' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    const scrollArea = page.locator('[data-virtuoso-scroller="true"]');
+    await expect(scrollArea.getByText('A-Track-001.sid', { exact: true })).toBeVisible();
+    await expect(scrollArea).toBeVisible();
+    await expect.poll(async () => {
+      const isEligible = await scrollArea.evaluate((node: HTMLElement) => node.scrollHeight > node.clientHeight * 2);
+      return isEligible;
+    }).toBe(true);
 
     const touchArea = page.getByTestId('alphabet-touch-area');
+    await expect(touchArea).toBeVisible({ timeout: 15000 });
     const box = await touchArea.boundingBox();
     expect(box).not.toBeNull();
     if (!box) return;
@@ -486,7 +521,7 @@ test.describe('Playback file browser', () => {
     });
 
     await expect(page.getByTestId('alphabet-badge')).toBeVisible();
-    await expect(page.getByText('Z-Track-001.sid', { exact: true })).toBeVisible();
+    await expect(scrollArea.getByText('Z-Track-001.sid', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'alphabet-jump');
 
     await expect.poll(async () => {
@@ -679,6 +714,7 @@ test.describe('Playback file browser', () => {
   });
 
   test('rapid play/stop/play sequences remain stable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },
     ]);

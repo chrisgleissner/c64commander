@@ -21,6 +21,26 @@ cd c64commander
 
 This runs the full build pipeline: dependencies, web build, Capacitor sync, tests, and debug APK.
 
+## Formatting
+
+Repository formatting is standardized with Prettier + ESLint:
+
+```bash
+npm run format
+npm run format:check
+```
+
+The `./build` script runs `npm run format` automatically before build steps (use `--skip-format` to bypass).
+
+VS Code workspace settings in `.vscode/settings.json` enable:
+
+- format on save
+- ESLint fix on save
+- TypeScript/JavaScript: built-in formatter + ESLint fixes
+- YAML and GitHub workflow YAML: Prettier (2-space indent, double quotes)
+- JSON/Markdown: built-in VS Code formatters
+- Kotlin: format on save is enabled; no repo-enforced Kotlin formatter is configured
+
 ## build - One-stop build tool
 
 All common development tasks use `./build`:
@@ -112,6 +132,10 @@ Key concepts:
 - Numbered screenshots: `01-step.png`, `02-step.png`, etc.
 - Video recording: `video.webm` per test
 - Trace files: `trace.zip` for debugging
+- Trace opt-ins:
+  - `enableTraceAssertions(testInfo)` for in-test semantic trace assertions
+  - `enableGoldenTrace(testInfo)` for curated golden trace compare/record flow (registry-gated)
+  - They are independent; use both when a test needs assertion coverage plus golden regression coverage
 
 Run:
 
@@ -588,10 +612,10 @@ test.describe('My feature', () => {
   test('does something', async ({ page }: { page: Page }, testInfo) => {
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'initial-state');
-    
+
     await page.click('[data-testid="my-button"]');
     await attachStepScreenshot(page, testInfo, 'after-click');
-    
+
     await expect(page.locator('[data-testid="result"]')).toBeVisible();
     await attachStepScreenshot(page, testInfo, 'final-state');
   });

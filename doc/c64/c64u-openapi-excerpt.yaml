@@ -20,7 +20,7 @@ components:
           items: { type: string }
     ConfigListResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           properties:
             categories:
@@ -28,12 +28,12 @@ components:
               items: { type: string }
     ConfigCategoryResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           additionalProperties: true
     ConfigItemResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           additionalProperties: true
 security:
@@ -48,7 +48,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigListResponse'
+                $ref: "#/components/schemas/ConfigListResponse"
   /v1/configs/{category}:
     get:
       summary: Get category
@@ -63,7 +63,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigCategoryResponse'
+                $ref: "#/components/schemas/ConfigCategoryResponse"
   /v1/configs/{category}/{item}:
     get:
       summary: Get item details
@@ -82,7 +82,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigItemResponse'
+                $ref: "#/components/schemas/ConfigItemResponse"
     put:
       summary: Update item
       parameters:
@@ -104,5 +104,4 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
+                $ref: "#/components/schemas/ErrorResponse"

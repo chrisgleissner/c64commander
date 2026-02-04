@@ -137,11 +137,13 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
   }, [scrollContainerRef, handleScroll]);
 
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    let container: HTMLElement | null = null;
 
     const updateEligibility = () => {
-      const eligible = container.scrollHeight > container.clientHeight * 2;
+      if (!container) return;
+      const eligible = items.length >= LETTERS.length || container.scrollHeight > container.clientHeight * 1.1;
       setIsEligible(eligible);
       if (!eligible) {
         setVisible(false);
@@ -149,15 +151,25 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
       }
     };
 
-    updateEligibility();
+    const attachObservers = () => {
+      if (cancelled) return;
+      container = scrollContainerRef.current;
+      if (!container) {
+        requestAnimationFrame(attachObservers);
+        return;
+      }
+      updateEligibility();
+      resizeObserver = typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(updateEligibility)
+        : null;
+      resizeObserver?.observe(container);
+      window.addEventListener('resize', updateEligibility);
+    };
 
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(updateEligibility)
-      : null;
-    resizeObserver?.observe(container);
-    window.addEventListener('resize', updateEligibility);
+    attachObservers();
 
     return () => {
+      cancelled = true;
       resizeObserver?.disconnect();
       window.removeEventListener('resize', updateEligibility);
     };

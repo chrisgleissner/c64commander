@@ -1,11 +1,11 @@
 appId: uk.gleissner.c64commander
 tags:
-    - edge
-    - slow
+  - edge
+  - slow
 env:
-    SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-    TIMEOUT: ${TIMEOUT || "30000"}
-    LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/open-play-add-items.yaml
 

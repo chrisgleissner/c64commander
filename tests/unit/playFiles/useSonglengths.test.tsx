@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseSonglengths, resolveSonglengthsDurationMs } from '@/lib/sid/songlengths';
-import { computeSidMd5 } from '@/lib/sid/sidUtils';
+
+vi.mock('@/lib/sid/sidUtils', () => ({
+  computeSidMd5: async () => 'deadbeefdeadbeefdeadbeefdeadbeef',
+}));
 
 describe('songlengths helpers', () => {
   it('resolves duration by path when available', async () => {
@@ -16,8 +19,7 @@ describe('songlengths helpers', () => {
 
   it('resolves duration by md5 fallback when path is missing', async () => {
     const buffer = new Uint8Array([5, 6, 7, 8]).buffer;
-    const md5 = await computeSidMd5(buffer);
-    const data = parseSonglengths(`${md5}=0:42 0:55`);
+    const data = parseSonglengths('deadbeefdeadbeefdeadbeefdeadbeef=0:42 0:55');
     const file = {
       name: 'demo.sid',
       lastModified: Date.now(),

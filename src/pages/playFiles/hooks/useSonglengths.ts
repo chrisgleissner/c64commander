@@ -93,12 +93,12 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   const isAndroid = getPlatform() === 'android' && isNativePlatform();
   const persistedKey = 'c64u_songlengths_file:v1';
 
-  const formatKiB = (bytes: number | null | undefined) => {
+  const formatKiB = useCallback((bytes: number | null | undefined) => {
     if (bytes === null || bytes === undefined || bytes <= 0) return null;
     const kib = bytes / 1024;
     const rounded = kib >= 10 ? kib.toFixed(0) : kib.toFixed(1);
     return `${rounded} KiB`;
-  };
+  }, []);
 
   useEffect(() => {
     songlengthsCacheRef.current.clear();

@@ -14,6 +14,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring, assertNoUiIssues, allowWarnings } from './testArtifacts';
 import { enableTraceAssertions } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { getSourceSelectionButton } from './sourceSelection';
 
 const waitForUiStable = async (page: Page) => {
@@ -163,6 +164,7 @@ test.describe('Home Page Quick Actions', () => {
   });
 
   test('home page displays quick action cards for machine control', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'home-page');
 

@@ -14,6 +14,7 @@ import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
 import { assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { enableTraceAssertions } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { getSourceSelectionButton } from './sourceSelection';
@@ -745,6 +746,7 @@ test.describe('UX Interaction Patterns', () => {
   });
 
   test('no unrestricted filesystem access language @allow-warnings', async ({ page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     testInfo.annotations.push({ type: 'allow-warnings' });
 
     await page.goto('/play');

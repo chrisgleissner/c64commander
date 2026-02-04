@@ -104,6 +104,26 @@ const emitBackendDecision = (origin: TraceOrigin, correlationId: string, target:
 
 export const getTraceEvents = () => [...events];
 
+export const replaceTraceEvents = (nextEvents: TraceEvent[]) => {
+  events = [...nextEvents];
+  eventSizes = [];
+  totalBytes = 0;
+  decisionByCorrelation.clear();
+  errorOnce = new WeakSet<Error>();
+  for (const event of events) {
+    if (event.type === 'backend-decision') {
+      decisionByCorrelation.add(event.correlationId);
+    }
+    const size = estimateEventSize(event);
+    eventSizes.push(size);
+    totalBytes += size;
+  }
+  enforceLimits();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('c64u-traces-updated'));
+  }
+};
+
 const SESSION_STORAGE_KEY = '__c64uPersistedTraces';
 const SESSION_COUNTERS_KEY = '__c64uPersistedTraceCounters';
 

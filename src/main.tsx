@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
+import { installAsyncContextPropagation } from "./lib/tracing/traceActionContextStore";
 import { registerFetchTrace } from "./lib/tracing/fetchTrace";
 import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
 import { primeStoredPassword } from "./lib/secureStorage";
@@ -14,6 +15,8 @@ const loadFonts = () => {
 };
 
 loadFonts();
+// Install async context propagation first - must be before any tracing setup
+installAsyncContextPropagation();
 registerFetchTrace();
 registerUserInteractionCapture();
 void primeStoredPassword();

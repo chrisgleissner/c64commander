@@ -5,11 +5,13 @@ import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { saveCoverageFromPage } from './withCoverage';
 import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+// Seed once per test; allowed base URLs cover both real and demo, so no paired call is required.
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string, demoBaseUrl?: string | null) => {
   await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }: { realBaseUrl: string; demoBaseUrl: string | null }) => {
     (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = realArg;
@@ -29,9 +31,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await demoServer?.close?.().catch(() => {});
+      await demoServer?.close?.().catch(() => { });
       demoServer = null;
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -136,6 +138,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
   });
 
   test('demo enabled → real device reachable (informational only)', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    enableGoldenTrace(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -298,6 +301,8 @@ test.describe('Deterministic Connectivity Simulation', () => {
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
+    await seedUiMocks(page, server.baseUrl);
+
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     const indicator = page.getByTestId('connectivity-indicator');
@@ -358,6 +363,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server = await createMockC64Server({});
     demoServer = await createMockC64Server({});
+    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
 
     const host = new URL(server.baseUrl).host;
     const demoHost = new URL(demoServer.baseUrl).host;
