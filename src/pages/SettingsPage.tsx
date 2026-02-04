@@ -1620,8 +1620,9 @@ export default function SettingsPage() {
                   .slice(-100)
                   .reverse()
                   .map((summary) => {
-                    const restEffects = summary.effects.filter((effect): effect is RestEffect => effect.type === 'REST');
-                    const ftpEffects = summary.effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
+                    const effects = summary.effects ?? [];
+                    const restEffects = effects.filter((effect): effect is RestEffect => effect.type === 'REST');
+                    const ftpEffects = effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
                     const summaryTime = summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown time';
                     return (
                       <details
@@ -1632,8 +1633,8 @@ export default function SettingsPage() {
                         <summary className="cursor-pointer text-sm font-medium flex justify-between items-center gap-3 select-none">
                           <div className="flex items-center gap-2 min-w-0">
                             <span
-                              className={`h-2.5 w-2.5 rounded-full ${summary.summaryOrigin === 'HUMAN' ? 'bg-green-500' : 'bg-blue-500'}`}
-                              aria-label={summary.summaryOrigin}
+                              className={`h-2.5 w-2.5 rounded-full ${summary.origin === 'user' ? 'bg-green-500' : 'bg-blue-500'}`}
+                              aria-label={summary.origin}
                             />
                             <span className="truncate">{summary.actionName}</span>
                           </div>
@@ -1685,7 +1686,9 @@ export default function SettingsPage() {
                             </div>
                             <div>
                               <p className="text-muted-foreground">Origin</p>
-                              <p>{summary.originalOrigin ?? 'unknown'} → {summary.summaryOrigin}</p>
+                              <p>
+                                {summary.originalOrigin ? `${summary.originalOrigin} → ${summary.origin}` : summary.origin}
+                              </p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">Outcome</p>

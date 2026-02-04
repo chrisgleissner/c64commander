@@ -32,95 +32,116 @@ test.describe('Diagnostics Actions tab', () => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'settings-open');
 
+    // Reset trace session - start counters high enough that natural events don't reach seeded IDs
+    // Natural events from navigation will use EVT-0500+, our seeded events use EVT-0900+
     await page.evaluate(() => {
       const tracing = (window as Window & { __c64uTracing?: { resetTraceSession?: (e?: number, c?: number) => void } }).__c64uTracing;
-      tracing?.resetTraceSession?.(0, 0);
+      tracing?.resetTraceSession?.(500, 500);
     });
 
-    const events = [
-      {
-        id: 'EVT-0000',
-        timestamp: '2024-01-01T00:00:00.000Z',
-        relativeMs: 0,
-        type: 'action-start',
-        origin: 'user',
-        correlationId: 'COR-0001',
-        data: { name: 'demo.action' },
-      },
-      {
-        id: 'EVT-0001',
-        timestamp: '2024-01-01T00:00:00.100Z',
-        relativeMs: 100,
-        type: 'rest-request',
-        origin: 'user',
-        correlationId: 'COR-0001',
-        data: {
-          method: 'GET',
-          url: 'http://device/v1/info',
-          normalizedUrl: '/v1/info',
-          headers: {},
-          body: null,
-          target: 'real-device',
+    // Build events with CURRENT timestamps (within retention window)
+    // Using EVT-0900+ to avoid any conflict with natural emissions starting at EVT-0500
+    const events = await page.evaluate(() => {
+      const now = Date.now();
+      return [
+        {
+          id: 'EVT-0900',
+          timestamp: new Date(now).toISOString(),
+          relativeMs: 0,
+          type: 'action-start',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: { name: 'demo.action' },
         },
-      },
-      {
-        id: 'EVT-0002',
-        timestamp: '2024-01-01T00:00:00.150Z',
-        relativeMs: 150,
-        type: 'rest-response',
-        origin: 'user',
-        correlationId: 'COR-0001',
-        data: { status: 200, body: {}, durationMs: 50, error: null },
-      },
-      {
-        id: 'EVT-0003',
-        timestamp: '2024-01-01T00:00:00.200Z',
-        relativeMs: 200,
-        type: 'ftp-operation',
-        origin: 'user',
-        correlationId: 'COR-0001',
-        data: { operation: 'list', path: '/SIDS', result: 'failure', error: 'Denied', target: 'real-device' },
-      },
-      {
-        id: 'EVT-0004',
-        timestamp: '2024-01-01T00:00:00.210Z',
-        relativeMs: 210,
-        type: 'error',
-        origin: 'user',
-        correlationId: 'COR-0001',
-        data: { message: 'FTP failed', name: 'Error' },
-      },
-      {
-        id: 'EVT-0005',
-        timestamp: '2024-01-01T00:00:00.300Z',
-        relativeMs: 300,
-        type: 'action-end',
-        origin: 'user',
-        correlationId: 'COR-0001',
-        data: { status: 'error', error: 'FTP failed' },
-      },
-    ];
+        {
+          id: 'EVT-0901',
+          timestamp: new Date(now + 100).toISOString(),
+          relativeMs: 100,
+          type: 'rest-request',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: {
+            method: 'GET',
+            url: 'http://device/v1/info',
+            normalizedUrl: '/v1/info',
+            headers: {},
+            body: null,
+            target: 'real-device',
+          },
+        },
+        {
+          id: 'EVT-0902',
+          timestamp: new Date(now + 150).toISOString(),
+          relativeMs: 150,
+          type: 'rest-response',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: { status: 200, body: {}, durationMs: 50, error: null },
+        },
+        {
+          id: 'EVT-0903',
+          timestamp: new Date(now + 200).toISOString(),
+          relativeMs: 200,
+          type: 'ftp-operation',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: { operation: 'list', path: '/SIDS', result: 'failure', error: 'Denied', target: 'real-device' },
+        },
+        {
+          id: 'EVT-0904',
+          timestamp: new Date(now + 210).toISOString(),
+          relativeMs: 210,
+          type: 'error',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: { message: 'FTP failed', name: 'Error' },
+        },
+        {
+          id: 'EVT-0905',
+          timestamp: new Date(now + 300).toISOString(),
+          relativeMs: 300,
+          type: 'action-end',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: { status: 'error', error: 'FTP failed' },
+        },
+      ];
+    });
 
+    // Seed traces with await for event to propagate
     await page.evaluate((seedEvents) => {
-      const tracing = (window as Window & { __c64uTracing?: { seedTraces?: (events: any[]) => void } }).__c64uTracing;
-      tracing?.seedTraces?.(seedEvents as any[]);
+      return new Promise<void>((resolve) => {
+        const handler = () => {
+          window.removeEventListener('c64u-traces-updated', handler);
+          setTimeout(resolve, 50);
+        };
+        window.addEventListener('c64u-traces-updated', handler);
+        const tracing = (window as Window & { __c64uTracing?: { seedTraces?: (events: any[]) => void } }).__c64uTracing;
+        tracing?.seedTraces?.(seedEvents as any[]);
+      });
     }, events);
 
+    // Open the diagnostics dialog
     await page.getByRole('button', { name: 'Logs and Traces' }).click();
     await expect(page.getByRole('dialog', { name: 'Diagnostics' })).toBeVisible();
     await snap(page, testInfo, 'diagnostics-open');
 
+    // Navigate to Actions tab
     await page.getByRole('tab', { name: 'Actions' }).click();
-    await expect(page.getByTestId('action-summary-COR-0001')).toBeVisible();
+    
+    // Wait for the actions tab to render and verify action summary is visible
+    await expect(page.getByTestId('action-summary-COR-0900')).toBeVisible();
 
-    await expect(page.getByTestId('action-rest-count-COR-0001')).toHaveText('1');
-    await expect(page.getByTestId('action-ftp-count-COR-0001')).toHaveText('1');
-    await expect(page.getByTestId('action-error-count-COR-0001')).toHaveText('1');
+    // Verify badge counts
+    await expect(page.getByTestId('action-rest-count-COR-0900')).toHaveText('1');
+    await expect(page.getByTestId('action-ftp-count-COR-0900')).toHaveText('1');
+    await expect(page.getByTestId('action-error-count-COR-0900')).toHaveText('1');
     await snap(page, testInfo, 'actions-tab');
 
-    await page.getByTestId('action-summary-COR-0001').locator('summary').click();
-    await expect(page.getByTestId('action-rest-effect-COR-0001-0')).toBeVisible();
-    await expect(page.getByTestId('action-ftp-effect-COR-0001-0')).toBeVisible();
+    // Expand the action details
+    await page.getByTestId('action-summary-COR-0900').locator('summary').click();
+    await expect(page.getByTestId('action-rest-effect-COR-0900-0')).toBeVisible();
+    await expect(page.getByTestId('action-ftp-effect-COR-0900-0')).toBeVisible();
     await snap(page, testInfo, 'actions-expanded');
   });
 });

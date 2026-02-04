@@ -1,0 +1,186 @@
+[
+  {
+    "id": "EVT-0000",
+    "timestamp": "2026-02-04T12:41:33.898Z",
+    "relativeMs": 83,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "name": "click Logs and Traces",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0001",
+    "timestamp": "2026-02-04T12:41:33.898Z",
+    "relativeMs": 83,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0002",
+    "timestamp": "2026-02-04T12:41:33.898Z",
+    "relativeMs": 83,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "name": "click Logs and Traces",
+      "component": "Button",
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-02-04T12:41:33.923Z",
+    "relativeMs": 108,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-02-04T12:41:34.784Z",
+    "relativeMs": 969,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "name": "select Tabs [actions]",
+      "component": "Tabs",
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0005",
+    "timestamp": "2026-02-04T12:41:34.800Z",
+    "relativeMs": 985,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0006",
+    "timestamp": "2026-02-04T12:41:34.801Z",
+    "relativeMs": 986,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0003",
+    "data": {
+      "name": "click Diagnostics",
+      "component": "GlobalInteraction",
+      "context": {
+        "ui": {
+          "route": "/settings",
+          "query": ""
+        },
+        "platform": "web",
+        "featureFlags": {
+          "hvsc_enabled": true
+        },
+        "playback": {
+          "queueLength": 0,
+          "currentIndex": -1,
+          "currentItemId": null,
+          "isPlaying": false,
+          "elapsedMs": 0,
+          "durationMs": null
+        },
+        "device": {
+          "deviceId": null,
+          "connectionState": "READY"
+        }
+      }
+    }
+  },
+  {
+    "id": "EVT-0007",
+    "timestamp": "2026-02-04T12:41:34.801Z",
+    "relativeMs": 986,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  }
+]

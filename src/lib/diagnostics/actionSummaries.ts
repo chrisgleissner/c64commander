@@ -1,7 +1,7 @@
 import type { BackendTarget, TraceEvent, TraceOrigin } from '@/lib/tracing/types';
 
-export type ActionSummaryOrigin = 'HUMAN' | 'MACHINE';
-export type ActionSummaryOutcome = 'SUCCESS' | 'ERROR' | 'BLOCKED' | 'TIMEOUT' | 'INCOMPLETE';
+export type ActionSummaryOrigin = 'user' | 'system';
+export type ActionSummaryOutcome = 'success' | 'error' | 'blocked' | 'timeout' | 'incomplete';
 
 export type RestEffect = {
   type: 'REST';
@@ -10,7 +10,7 @@ export type RestEffect = {
   target: BackendTarget | null;
   status: number | string | null;
   durationMs: number | null;
-  error: string | null;
+  error?: string;
 };
 
 export type FtpEffect = {
@@ -19,7 +19,7 @@ export type FtpEffect = {
   path: string;
   target: BackendTarget | null;
   result: string | null;
-  error: string | null;
+  error?: string;
 };
 
 export type ActionSummaryEffect = RestEffect | FtpEffect;
@@ -27,44 +27,81 @@ export type ActionSummaryEffect = RestEffect | FtpEffect;
 export type ActionSummary = {
   correlationId: string;
   actionName: string;
-  summaryOrigin: ActionSummaryOrigin;
-  originalOrigin: TraceOrigin | null;
+  origin: ActionSummaryOrigin;
+  originalOrigin?: TraceOrigin;
   startTimestamp: string | null;
   endTimestamp: string | null;
   durationMs: number | null;
+  durationMsMissing?: true;
   outcome: ActionSummaryOutcome;
-  errorMessage: string | null;
-  restCount: number;
-  ftpCount: number;
-  errorCount: number;
-  effects: ActionSummaryEffect[];
+  errorMessage?: string;
+  restCount?: number;
+  ftpCount?: number;
+  errorCount?: number;
+  effects?: ActionSummaryEffect[];
   startRelativeMs: number;
 };
 
 const readString = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 const readNumber = (value: unknown): number | null => (typeof value === 'number' ? value : null);
 
-const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => (origin === 'user' ? 'HUMAN' : 'MACHINE');
+const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => (origin === 'user' ? 'user' : 'system');
 
 const resolveOutcome = (status: string | null, isComplete: boolean): ActionSummaryOutcome => {
-  if (!isComplete) return 'INCOMPLETE';
+  if (!isComplete) return 'incomplete';
   switch (status) {
     case 'success':
-      return 'SUCCESS';
+      return 'success';
     case 'error':
-      return 'ERROR';
+      return 'error';
     case 'blocked':
-      return 'BLOCKED';
+      return 'blocked';
     case 'timeout':
-      return 'TIMEOUT';
+      return 'timeout';
     default:
-      return 'INCOMPLETE';
+      return 'incomplete';
   }
 };
 
 const resolveActionName = (actionStart: TraceEvent | undefined, correlationId: string): string => {
   const name = readString(actionStart?.data?.name);
   return name ?? `Action ${correlationId}`;
+};
+
+const toTimestampMs = (timestamp: string | null | undefined): number | null => {
+  if (!timestamp) return null;
+  const value = Date.parse(timestamp);
+  return Number.isNaN(value) ? null : value;
+};
+
+const resolveDurationMs = (
+  startTimestamp: string | null,
+  endTimestamp: string | null,
+  orderedEvents: TraceEvent[],
+  startRelativeMs: number,
+  endRelativeMs: number,
+): { durationMs: number | null; durationMsMissing: boolean } => {
+  const startMs = toTimestampMs(startTimestamp);
+  const endMs = toTimestampMs(endTimestamp);
+  const completionMs = orderedEvents.reduce<number | null>((latest, event) => {
+    if (event.type !== 'rest-response' && event.type !== 'ftp-operation') return latest;
+    const candidate = toTimestampMs(event.timestamp);
+    if (candidate === null) return latest;
+    return latest === null || candidate > latest ? candidate : latest;
+  }, null);
+
+  if (startMs !== null) {
+    const effectiveEnd = completionMs ?? endMs;
+    if (effectiveEnd !== null && effectiveEnd >= startMs) {
+      return { durationMs: effectiveEnd - startMs, durationMsMissing: false };
+    }
+  }
+
+  if (Number.isFinite(startRelativeMs) && Number.isFinite(endRelativeMs) && endRelativeMs >= startRelativeMs) {
+    return { durationMs: endRelativeMs - startRelativeMs, durationMsMissing: false };
+  }
+
+  return { durationMs: null, durationMsMissing: true };
 };
 
 const resolveActionError = (actionEnd: TraceEvent | undefined, errorEvents: TraceEvent[]): string | null => {
@@ -90,6 +127,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       if (!request) return;
       const requestData = request.data as Record<string, unknown>;
       const responseData = event.data as Record<string, unknown>;
+      const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
       restEffects.push({
         type: 'REST',
         method: readString(requestData.method) ?? 'UNKNOWN',
@@ -97,7 +135,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         target: (readString(requestData.target) as BackendTarget | null) ?? null,
         status: readNumber(responseData.status) ?? (endStatus ?? null),
         durationMs: readNumber(responseData.durationMs),
-        error: readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null),
+        ...(error !== null ? { error } : {}),
       });
     }
   });
@@ -111,7 +149,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       target: (readString(requestData.target) as BackendTarget | null) ?? null,
       status: endStatus ?? null,
       durationMs: null,
-      error: endError ?? null,
+      ...(endError !== null ? { error: endError } : {}),
     });
   });
 
@@ -123,13 +161,14 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
     .filter((event) => event.type === 'ftp-operation')
     .map((event) => {
       const data = event.data as Record<string, unknown>;
+      const error = readString(data.error);
       return {
         type: 'FTP',
         operation: readString(data.operation) ?? 'unknown',
         path: readString(data.path) ?? 'unknown',
         target: (readString(data.target) as BackendTarget | null) ?? null,
         result: readString(data.result),
-        error: readString(data.error) ?? null,
+        ...(error !== null ? { error } : {}),
       };
     });
 };
@@ -158,26 +197,41 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const status = readString(actionEnd?.data?.status);
     const outcome = resolveOutcome(status, isComplete);
     const originalOrigin = actionStart?.origin ?? actionEnd?.origin ?? ordered[0]?.origin ?? null;
-    const summaryOrigin = resolveSummaryOrigin(originalOrigin);
+    const origin = resolveSummaryOrigin(originalOrigin);
     const errorCount = errorEvents.length > 0 ? errorEvents.length : status === 'error' ? 1 : 0;
 
     const restEffects = resolveRestEffects(ordered, actionEnd);
     const ftpEffects = resolveFtpEffects(ordered);
+    const effects = [...restEffects, ...ftpEffects];
+    const errorMessage = resolveActionError(actionEnd, errorEvents);
+    const restCount = restRequests.length;
+    const ftpCount = ftpOperations.length;
+
+    const startTimestamp = actionStart?.timestamp ?? ordered[0]?.timestamp ?? null;
+    const endTimestamp = actionEnd?.timestamp ?? ordered[ordered.length - 1]?.timestamp ?? null;
+    const { durationMs, durationMsMissing } = resolveDurationMs(
+      startTimestamp,
+      endTimestamp,
+      ordered,
+      startRelativeMs,
+      endRelativeMs,
+    );
 
     summaries.push({
       correlationId,
       actionName: resolveActionName(actionStart, correlationId),
-      summaryOrigin,
-      originalOrigin,
-      startTimestamp: actionStart?.timestamp ?? ordered[0]?.timestamp ?? null,
-      endTimestamp: actionEnd?.timestamp ?? ordered[ordered.length - 1]?.timestamp ?? null,
-      durationMs: endRelativeMs >= startRelativeMs ? endRelativeMs - startRelativeMs : null,
+      origin,
+      ...(originalOrigin && originalOrigin !== origin ? { originalOrigin } : {}),
+      startTimestamp,
+      endTimestamp,
+      durationMs,
+      ...(durationMsMissing ? { durationMsMissing: true } : {}),
       outcome,
-      errorMessage: resolveActionError(actionEnd, errorEvents),
-      restCount: restRequests.length,
-      ftpCount: ftpOperations.length,
-      errorCount,
-      effects: [...restEffects, ...ftpEffects],
+      ...(errorMessage ? { errorMessage } : {}),
+      ...(restCount > 0 ? { restCount } : {}),
+      ...(ftpCount > 0 ? { ftpCount } : {}),
+      ...(errorCount > 0 ? { errorCount } : {}),
+      ...(effects.length > 0 ? { effects } : {}),
       startRelativeMs,
     });
   });

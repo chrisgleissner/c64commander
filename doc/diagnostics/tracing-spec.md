@@ -248,7 +248,8 @@ Each Action Trace automatically captures:
 - Current index
 - Current item identifier
 - Playing or paused state
-- Elapsed playback time
+- `elapsedMs` (current playback position snapshot)
+- `durationMs` (known total length for the current track, or null when unknown)
 
 ### 8.3 Device Context
 
@@ -256,6 +257,18 @@ Each Action Trace automatically captures:
 - Connection status
 
 No explicit application code is required.
+
+---
+
+### 8.4 Playback Timing Field Derivation
+
+`action-start.data.context.playback.elapsedMs` and `action-start.data.context.playback.durationMs` are captured from the trace context snapshot at action start.
+
+Derivation rules:
+
+- `elapsedMs` is derived from the SID player runtime clock (`now - trackStartedAt`) and reflects "how far into the current track we are" at snapshot time.
+- `durationMs` is derived from current track metadata (if known) and reflects the expected total track length.
+- These values are playback state, not network timing.
 
 ---
 
@@ -353,6 +366,8 @@ Rules:
 - Response immediately follows its request
 - Shares the same `correlationId`
 - Network passwords are redacted
+- `rest-response.data.durationMs` is request latency, measured as `round(max(0, endTime - startTime))` around the REST call.
+- `rest-response.data.durationMs` is unrelated to playback `elapsedMs`/`durationMs` in action context snapshots.
 
 REST calls outside an Action Trace create implicit root Action Traces.
 

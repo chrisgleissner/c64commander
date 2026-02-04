@@ -1,0 +1,342 @@
+[
+  {
+    "id": "EVT-0000",
+    "timestamp": "2026-01-01T00:00:00.000Z",
+    "relativeMs": 0,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "name": "playback.start",
+      "component": "Button",
+      "context": {}
+    }
+  },
+  {
+    "id": "EVT-0001",
+    "timestamp": "2026-01-01T00:00:00.010Z",
+    "relativeMs": 10,
+    "type": "backend-decision",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "selectedTarget": "real-device",
+      "reason": "reachable"
+    }
+  },
+  {
+    "id": "EVT-0002",
+    "timestamp": "2026-01-01T00:00:00.020Z",
+    "relativeMs": 20,
+    "type": "rest-request",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "method": "POST",
+      "url": "http://device/v1/runners/sidplay",
+      "normalizedUrl": "/v1/runners/sidplay",
+      "headers": {},
+      "body": null,
+      "target": "real-device"
+    }
+  },
+  {
+    "id": "EVT-0003",
+    "timestamp": "2026-01-01T00:00:00.150Z",
+    "relativeMs": 150,
+    "type": "rest-response",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": 200,
+      "body": {},
+      "durationMs": 130,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0004",
+    "timestamp": "2026-01-01T00:00:00.160Z",
+    "relativeMs": 160,
+    "type": "ftp-operation",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "operation": "upload",
+      "path": "/Usb0/Music/test.sid",
+      "target": "real-device",
+      "result": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0005",
+    "timestamp": "2026-01-01T00:00:00.200Z",
+    "relativeMs": 200,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0000",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0006",
+    "timestamp": "2026-01-01T00:00:00.300Z",
+    "relativeMs": 300,
+    "type": "action-start",
+    "origin": "automatic",
+    "correlationId": "COR-0001",
+    "data": {
+      "name": "config.refresh",
+      "component": null,
+      "context": {}
+    }
+  },
+  {
+    "id": "EVT-0007",
+    "timestamp": "2026-01-01T00:00:00.310Z",
+    "relativeMs": 310,
+    "type": "rest-request",
+    "origin": "automatic",
+    "correlationId": "COR-0001",
+    "data": {
+      "method": "GET",
+      "url": "http://device/v1/configs",
+      "normalizedUrl": "/v1/configs",
+      "headers": {},
+      "body": null,
+      "target": "real-device"
+    }
+  },
+  {
+    "id": "EVT-0008",
+    "timestamp": "2026-01-01T00:00:00.450Z",
+    "relativeMs": 450,
+    "type": "rest-response",
+    "origin": "automatic",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": 200,
+      "body": {},
+      "durationMs": 140,
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0009",
+    "timestamp": "2026-01-01T00:00:00.460Z",
+    "relativeMs": 460,
+    "type": "action-end",
+    "origin": "automatic",
+    "correlationId": "COR-0001",
+    "data": {
+      "status": "success",
+      "error": null
+    }
+  },
+  {
+    "id": "EVT-0010",
+    "timestamp": "2026-01-01T00:00:00.500Z",
+    "relativeMs": 500,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "name": "disk.mount",
+      "component": "MenuItem",
+      "context": {}
+    }
+  },
+  {
+    "id": "EVT-0011",
+    "timestamp": "2026-01-01T00:00:00.520Z",
+    "relativeMs": 520,
+    "type": "rest-request",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "method": "PUT",
+      "url": "http://device/v1/drives/A/mount",
+      "normalizedUrl": "/v1/drives/A/mount",
+      "headers": {},
+      "body": { "path": "/Usb0/Games/game.d64" },
+      "target": "real-device"
+    }
+  },
+  {
+    "id": "EVT-0012",
+    "timestamp": "2026-01-01T00:00:00.700Z",
+    "relativeMs": 700,
+    "type": "rest-response",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": 500,
+      "body": { "error": "Mount failed" },
+      "durationMs": 180,
+      "error": "Mount failed"
+    }
+  },
+  {
+    "id": "EVT-0013",
+    "timestamp": "2026-01-01T00:00:00.710Z",
+    "relativeMs": 710,
+    "type": "error",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "name": "MountError",
+      "message": "Failed to mount disk: Mount failed"
+    }
+  },
+  {
+    "id": "EVT-0014",
+    "timestamp": "2026-01-01T00:00:00.720Z",
+    "relativeMs": 720,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "error",
+      "error": "Failed to mount disk: Mount failed"
+    }
+  },
+  {
+    "id": "EVT-0015",
+    "timestamp": "2026-01-01T00:00:00.800Z",
+    "relativeMs": 800,
+    "type": "action-start",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "name": "ftp.list",
+      "component": null,
+      "context": {}
+    }
+  },
+  {
+    "id": "EVT-0016",
+    "timestamp": "2026-01-01T00:00:00.820Z",
+    "relativeMs": 820,
+    "type": "ftp-operation",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "operation": "list",
+      "path": "/Usb0/SIDS",
+      "target": "real-device",
+      "result": "failure",
+      "error": "Permission denied"
+    }
+  },
+  {
+    "id": "EVT-0017",
+    "timestamp": "2026-01-01T00:00:00.830Z",
+    "relativeMs": 830,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "name": "FTPError",
+      "message": "FTP list failed: Permission denied"
+    }
+  },
+  {
+    "id": "EVT-0018",
+    "timestamp": "2026-01-01T00:00:00.840Z",
+    "relativeMs": 840,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0003",
+    "data": {
+      "status": "error",
+      "error": "FTP list failed: Permission denied"
+    }
+  },
+  {
+    "id": "EVT-0019",
+    "timestamp": "2026-01-01T00:00:00.900Z",
+    "relativeMs": 900,
+    "type": "action-start",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "name": "config.update",
+      "component": "Slider",
+      "context": {}
+    }
+  },
+  {
+    "id": "EVT-0020",
+    "timestamp": "2026-01-01T00:00:00.920Z",
+    "relativeMs": 920,
+    "type": "rest-request",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "method": "PUT",
+      "url": "http://device/v1/configs/Audio/Volume",
+      "normalizedUrl": "/v1/configs/Audio/Volume",
+      "headers": {},
+      "body": { "value": 80 },
+      "target": "internal-mock"
+    }
+  },
+  {
+    "id": "EVT-0021",
+    "timestamp": "2026-01-01T00:00:01.050Z",
+    "relativeMs": 1050,
+    "type": "rest-response",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": 408,
+      "body": null,
+      "durationMs": 130,
+      "error": "Request timeout"
+    }
+  },
+  {
+    "id": "EVT-0022",
+    "timestamp": "2026-01-01T00:00:01.060Z",
+    "relativeMs": 1060,
+    "type": "action-end",
+    "origin": "user",
+    "correlationId": "COR-0004",
+    "data": {
+      "status": "timeout",
+      "error": "Request timeout"
+    }
+  },
+  {
+    "id": "EVT-0023",
+    "timestamp": "2026-01-01T00:00:01.100Z",
+    "relativeMs": 1100,
+    "type": "action-start",
+    "origin": "automatic",
+    "correlationId": "COR-0005",
+    "data": {
+      "name": "background.poll",
+      "component": null,
+      "context": {}
+    }
+  },
+  {
+    "id": "EVT-0024",
+    "timestamp": "2026-01-01T00:00:01.120Z",
+    "relativeMs": 1120,
+    "type": "rest-request",
+    "origin": "automatic",
+    "correlationId": "COR-0005",
+    "data": {
+      "method": "GET",
+      "url": "http://device/v1/status",
+      "normalizedUrl": "/v1/status",
+      "headers": {},
+      "body": null,
+      "target": "real-device"
+    }
+  }
+]

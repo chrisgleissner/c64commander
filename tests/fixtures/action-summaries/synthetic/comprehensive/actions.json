@@ -1,0 +1,122 @@
+[
+  {
+    "correlationId": "COR-0000",
+    "actionName": "playback.start",
+    "origin": "user",
+    "durationMs": 160,
+    "outcome": "success",
+    "restCount": 1,
+    "ftpCount": 1,
+    "effects": [
+      {
+        "type": "REST",
+        "method": "POST",
+        "path": "/v1/runners/sidplay",
+        "target": "real-device",
+        "status": 200
+      },
+      {
+        "type": "FTP",
+        "operation": "upload",
+        "path": "/Usb0/Music/test.sid",
+        "target": "real-device",
+        "result": "success"
+      }
+    ]
+  },
+  {
+    "correlationId": "COR-0001",
+    "actionName": "config.refresh",
+    "origin": "system",
+    "originalOrigin": "automatic",
+    "durationMs": 150,
+    "outcome": "success",
+    "restCount": 1,
+    "effects": [
+      {
+        "type": "REST",
+        "method": "GET",
+        "path": "/v1/configs",
+        "target": "real-device",
+        "status": 200
+      }
+    ]
+  },
+  {
+    "correlationId": "COR-0002",
+    "actionName": "disk.mount",
+    "origin": "user",
+    "durationMs": 200,
+    "outcome": "error",
+    "errorMessage": "Failed to mount disk: Mount failed",
+    "restCount": 1,
+    "errorCount": 1,
+    "effects": [
+      {
+        "type": "REST",
+        "method": "PUT",
+        "path": "/v1/drives/A/mount",
+        "target": "real-device",
+        "status": 500,
+        "error": "Mount failed"
+      }
+    ]
+  },
+  {
+    "correlationId": "COR-0003",
+    "actionName": "ftp.list",
+    "origin": "system",
+    "durationMs": 20,
+    "outcome": "error",
+    "errorMessage": "FTP list failed: Permission denied",
+    "ftpCount": 1,
+    "errorCount": 1,
+    "effects": [
+      {
+        "type": "FTP",
+        "operation": "list",
+        "path": "/Usb0/SIDS",
+        "target": "real-device",
+        "result": "failure",
+        "error": "Permission denied"
+      }
+    ]
+  },
+  {
+    "correlationId": "COR-0004",
+    "actionName": "config.update",
+    "origin": "user",
+    "durationMs": 150,
+    "outcome": "timeout",
+    "errorMessage": "Request timeout",
+    "restCount": 1,
+    "effects": [
+      {
+        "type": "REST",
+        "method": "PUT",
+        "path": "/v1/configs/Audio/Volume",
+        "target": "internal-mock",
+        "status": 408,
+        "error": "Request timeout"
+      }
+    ]
+  },
+  {
+    "correlationId": "COR-0005",
+    "actionName": "background.poll",
+    "origin": "system",
+    "originalOrigin": "automatic",
+    "durationMs": 20,
+    "outcome": "incomplete",
+    "restCount": 1,
+    "effects": [
+      {
+        "type": "REST",
+        "method": "GET",
+        "path": "/v1/status",
+        "target": "real-device",
+        "status": null
+      }
+    ]
+  }
+]

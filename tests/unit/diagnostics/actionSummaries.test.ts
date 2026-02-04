@@ -94,11 +94,14 @@ describe('buildActionSummaries', () => {
 
     const first = summaries[0];
     expect(first.correlationId).toBe('COR-0001');
-    expect(first.summaryOrigin).toBe('HUMAN');
+    expect(first.origin).toBe('user');
+    expect(first.originalOrigin).toBeUndefined();
+    expect(first.durationMs).toBeGreaterThanOrEqual(0);
+    expect(first.durationMsMissing).toBeUndefined();
     expect(first.restCount).toBe(1);
     expect(first.ftpCount).toBe(1);
     expect(first.errorCount).toBe(1);
-    expect(first.outcome).toBe('ERROR');
+    expect(first.outcome).toBe('error');
 
     const restEffect = first.effects.find((effect) => effect.type === 'REST');
     expect(restEffect).toBeDefined();
@@ -111,10 +114,13 @@ describe('buildActionSummaries', () => {
 
     const second = summaries[1];
     expect(second.correlationId).toBe('COR-0002');
-    expect(second.summaryOrigin).toBe('MACHINE');
-    expect(second.outcome).toBe('INCOMPLETE');
+    expect(second.origin).toBe('system');
+    expect(second.originalOrigin).toBe('automatic');
+    expect(second.durationMs).toBeGreaterThanOrEqual(0);
+    expect(second.durationMsMissing).toBeUndefined();
+    expect(second.outcome).toBe('incomplete');
     expect(second.restCount).toBe(1);
-    expect(second.ftpCount).toBe(0);
-    expect(second.errorCount).toBe(0);
+    expect(second.ftpCount).toBeUndefined();
+    expect(second.errorCount).toBeUndefined();
   });
 });

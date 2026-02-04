@@ -61,17 +61,47 @@ Implement (or verify existing implementation of) sticky real-device connectivity
 - [x] Playwright test: Actions tab visible and reachable (playwright/diagnosticsActions.spec.ts).
 - [x] Playwright test: badge counts and expanded details for seeded trace fixture.
 
-## Phase 5: Verification
+## Phase 5: Golden Action Fixture Tests
+
+### Goal
+Add unit tests comparing trace→action conversion against golden action fixtures for regression detection.
+
+### Design Decisions
+- Converter: `buildActionSummaries` in `src/lib/diagnostics/actionSummaries.ts`
+- Organic trace: `playwright/fixtures/traces/golden/playbackpart2--playbackpart2spects--playback-file-browser-part-2--end-to-end-add-browse-and-play-local-remote/android-phone/trace.json`
+  - 7463 lines, 5 FTP ops, 16 error events, multiple REST calls
+- Synthetic trace: custom fixture covering HUMAN/MACHINE origins, error paths, incomplete actions
+- Fixture location: `tests/fixtures/action-summaries/`
 
 ### Actions
-- [ ] Run unit tests (npm run test).
-- [ ] Run lint (npm run lint).
-- [ ] Run build (npm run build).
-- [ ] Run any required e2e tests (npm run test:e2e).
-- [ ] Run full build helper (./build) and fix failures.
+- [x] Create fixture directory structure:
+  - `tests/fixtures/action-summaries/organic/playbackpart2--playbackpart2spects--playback-file-browser-part-2--end-to-end-add-browse-and-play-local-remote/android-phone/`
+  - `tests/fixtures/action-summaries/synthetic/comprehensive/`
+- [x] Create synthetic trace.json covering:
+  - HUMAN origin mapping
+  - MACHINE origin mapping
+  - REST effect derivation
+  - FTP effect derivation
+  - Error counting logic
+  - Incomplete action (missing action-end)
+- [x] Implement `normalizeActionSummaries` function for deterministic comparison
+- [x] Implement organic test: load trace.json → convert → compare to actions.json
+- [x] Implement synthetic test: load synthetic trace → convert → compare to actions.json
+- [x] Implement UPDATE_GOLDENS=1 env var mechanism
+- [x] Generate initial golden actions.json files
+- [x] Add README.md documenting update procedure
+
+## Phase 6: Verification
+
+### Actions
+- [x] Run unit tests (npm run test).
+- [x] Run lint (npm run lint).
+- [x] Run build (npm run build).
+- [x] Run any required e2e tests (npm run test:e2e).
+- [x] Run full build helper (./build) and fix failures.
 
 ### Verification
-- [ ] All tests pass.
-- [ ] Lint/typecheck pass.
-- [ ] Build passes.
+- [x] All tests pass (619 unit + 1 E2E passed).
+- [x] Lint/typecheck pass.
+- [x] Build passes.
 - [ ] CI green on default branch.
