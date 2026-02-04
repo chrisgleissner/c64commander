@@ -36,7 +36,10 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 
 - format on save
 - ESLint fix on save
-- Prettier as default formatter for TS/YAML/JSON/Markdown
+- TypeScript/JavaScript: built-in formatter + ESLint fixes
+- YAML and GitHub workflow YAML: Prettier (2-space indent, double quotes)
+- JSON/Markdown: built-in VS Code formatters
+- Kotlin: format on save is enabled; no repo-enforced Kotlin formatter is configured
 
 ## build - One-stop build tool
 

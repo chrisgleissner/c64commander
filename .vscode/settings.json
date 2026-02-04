@@ -19,6 +19,7 @@
     "**/.github/workflows/*.yml": "yaml"
   },
   "files.trimTrailingWhitespace": true,
+  "prettier.requireConfig": true,
   "java.configuration.updateBuildConfiguration": "automatic",
   "java.import.gradle.enabled": true,
   "java.import.gradle.wrapper.enabled": true,
@@ -27,19 +28,48 @@
     "android/app/src/test/java",
     "android/app/src/androidTest/java"
   ],
-  "yaml.format.enable": true,
-  "yaml.format.singleQuote": false,
-  "yaml.format.printWidth": 120,
-  "yaml.format.proseWrap": "preserve",
+  "[javascript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.formatOnSave": true
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features",
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features",
+    "editor.formatOnSave": true
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "vscode.markdown-language-features",
+    "editor.formatOnSave": true
+  },
+  "[kotlin]": {
+    "editor.formatOnSave": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
   "[github-actions-workflow]": {
-    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
     "editor.insertSpaces": true,
     "editor.tabSize": 2
   },
   "[yaml]": {
-    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
     "editor.insertSpaces": true,
