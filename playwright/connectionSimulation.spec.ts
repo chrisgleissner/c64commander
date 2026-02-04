@@ -43,7 +43,6 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server = await createMockC64Server({});
     demoServer = await createMockC64Server({});
     await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
-    await seedRoutingExpectations(page, server.baseUrl, demoServer.baseUrl);
     server.setReachable(false);
 
     const host = new URL(server.baseUrl).host;
@@ -300,6 +299,8 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.removeItem('c64u_has_password');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
+
+    await seedUiMocks(page, server.baseUrl);
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
