@@ -21,6 +21,23 @@ cd c64commander
 
 This runs the full build pipeline: dependencies, web build, Capacitor sync, tests, and debug APK.
 
+## Formatting
+
+Repository formatting is standardized with Prettier + ESLint:
+
+```bash
+npm run format
+npm run format:check
+```
+
+The `./build` script runs `npm run format` automatically before build steps (use `--skip-format` to bypass).
+
+VS Code workspace settings in `.vscode/settings.json` enable:
+
+- format on save
+- ESLint fix on save
+- Prettier as default formatter for TS/YAML/JSON/Markdown
+
 ## build - One-stop build tool
 
 All common development tasks use `./build`:
@@ -592,10 +609,10 @@ test.describe('My feature', () => {
   test('does something', async ({ page }: { page: Page }, testInfo) => {
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'initial-state');
-    
+
     await page.click('[data-testid="my-button"]');
     await attachStepScreenshot(page, testInfo, 'after-click');
-    
+
     await expect(page.locator('[data-testid="result"]')).toBeVisible();
     await attachStepScreenshot(page, testInfo, 'final-state');
   });
