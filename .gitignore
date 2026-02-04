@@ -44,6 +44,7 @@ test-results/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 
 # Android signing
 *.keystore

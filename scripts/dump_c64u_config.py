@@ -23,6 +23,17 @@ from urllib.request import Request, urlopen
 import yaml
 
 
+class _DoubleQuotedDumper(yaml.SafeDumper):
+    pass
+
+
+def _double_quoted_str_representer(dumper: yaml.Dumper, value: str) -> yaml.ScalarNode:
+    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style='"')
+
+
+_DoubleQuotedDumper.add_representer(str, _double_quoted_str_representer)
+
+
 def _fetch_json(
     url: str,
     headers: dict[str, str],
@@ -268,7 +279,14 @@ def main() -> int:
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(snapshot, handle, sort_keys=False, default_flow_style=False)
+        yaml.dump(
+            snapshot,
+            handle,
+            Dumper=_DoubleQuotedDumper,
+            sort_keys=False,
+            default_flow_style=False,
+            allow_unicode=True,
+        )
 
     print(f"Wrote {output_path}")
     return 0

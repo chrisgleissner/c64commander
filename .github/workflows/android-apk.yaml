@@ -630,17 +630,17 @@ jobs:
           set -ex
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
-          
+
           # Ensure AVD directory exists
           mkdir -p "$ANDROID_AVD_HOME"
           echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME"
-          
+
           echo "=== Installing Android SDK components ==="
           sdkmanager "platform-tools" "emulator" "platforms;android-${ANDROID_API_LEVEL}" "${ANDROID_SYSTEM_IMAGE}"
-          
+
           echo "=== Listing existing AVDs ==="
           avdmanager list avd || true
-          
+
           echo "=== Creating AVD if needed ==="
           if ! avdmanager list avd | grep -q "Name: ${ANDROID_AVD_NAME}"; then
             echo "Creating AVD: ${ANDROID_AVD_NAME}"
@@ -649,7 +649,7 @@ jobs:
           else
             echo "AVD ${ANDROID_AVD_NAME} already exists"
           fi
-          
+
           echo "=== Verifying AVD exists ==="
           avdmanager list avd
           ls -la "$ANDROID_AVD_HOME" || true
@@ -657,14 +657,14 @@ jobs:
             echo "ERROR: AVD ${ANDROID_AVD_NAME} was not created!"
             exit 1
           fi
-          
+
           echo "=== Starting emulator in background ==="
           mkdir -p test-results/maestro
           nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
           EMULATOR_PID=$!
           echo $EMULATOR_PID > test-results/maestro/emulator.pid
           echo "Emulator started with PID: $EMULATOR_PID"
-          
+
           # Give emulator a moment to start and check if it's still running
           sleep 3
           if ! kill -0 $EMULATOR_PID 2>/dev/null; then

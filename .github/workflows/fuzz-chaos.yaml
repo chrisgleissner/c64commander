@@ -2,13 +2,13 @@ name: Chaos Fuzz (Nightly)
 
 on:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       time_budget:
-        description: 'Fuzz time budget (e.g., 10m, 2h)'
+        description: "Fuzz time budget (e.g., 10m, 2h)"
         required: false
-        default: '2h'
+        default: "2h"
 
 jobs:
   fuzz:
@@ -40,7 +40,7 @@ jobs:
       - name: Run chaos fuzz
         env:
           FUZZ_RUN_MODE: ci
-          VITE_FUZZ_MODE: '1'
+          VITE_FUZZ_MODE: "1"
         run: |
           SEED=$(date -u +%Y%m%d)
           TIME_BUDGET="${{ github.event.inputs.time_budget || '2h' }}"

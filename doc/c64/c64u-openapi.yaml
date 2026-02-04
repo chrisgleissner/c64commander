@@ -32,7 +32,7 @@ components:
             type: string
     VersionResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           required:
             - version
@@ -41,7 +41,7 @@ components:
               type: string
     InfoResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           properties:
             product:
@@ -59,7 +59,7 @@ components:
               type: string
     ConfigListResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           properties:
             categories:
@@ -68,19 +68,19 @@ components:
                 type: string
     ConfigCategoryResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           additionalProperties:
             type: object
     ConfigItemResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           additionalProperties:
             type: object
     MemoryReadJson:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           properties:
             data:
@@ -95,7 +95,7 @@ components:
                     maximum: 255
     MemoryDebugResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           required:
             - value
@@ -105,7 +105,7 @@ components:
               description: Hex string read from $D7FF.
     DriveListResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           properties:
             drives:
@@ -140,7 +140,7 @@ components:
                             type: string
     FileInfoResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
         - type: object
           properties:
             files:
@@ -157,10 +157,10 @@ components:
               additionalProperties: true
     MachineActionResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
     RunnerActionResponse:
       allOf:
-        - $ref: '#/components/schemas/ErrorResponse'
+        - $ref: "#/components/schemas/ErrorResponse"
 security:
   - NetworkPassword: []
 paths:
@@ -169,12 +169,12 @@ paths:
       summary: Get API version
       description: Returns the firmware-defined REST API semantic version.
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VersionResponse'
+                $ref: "#/components/schemas/VersionResponse"
               examples:
                 live:
                   value:
@@ -188,12 +188,12 @@ paths:
         versions, hostname). Available on Ultimate firmware 3.12 and newer. On
         earlier releases the endpoint responds with HTTP 404.
       responses:
-        '200':
+        "200":
           description: Successful response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InfoResponse'
+                $ref: "#/components/schemas/InfoResponse"
               examples:
                 live:
                   value:
@@ -219,12 +219,12 @@ paths:
             type: integer
             minimum: 0
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
     post:
       summary: Play uploaded SID
       description: >
@@ -259,12 +259,12 @@ paths:
               required:
                 - file
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
 
   /v1/runners:modplay:
     put:
@@ -276,12 +276,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
     post:
       summary: Play uploaded MOD
       requestBody:
@@ -292,12 +292,12 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
   /v1/runners:load_prg:
     put:
       summary: Load PRG from filesystem
@@ -308,12 +308,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
     post:
       summary: Load uploaded PRG
       requestBody:
@@ -324,12 +324,12 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
   /v1/runners:run_prg:
     put:
       summary: Run PRG from filesystem
@@ -340,12 +340,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
     post:
       summary: Run uploaded PRG
       requestBody:
@@ -356,12 +356,12 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
   /v1/runners:run_crt:
     put:
       summary: Run cartridge from filesystem
@@ -372,12 +372,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
     post:
       summary: Run uploaded cartridge
       requestBody:
@@ -388,24 +388,24 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RunnerActionResponse'
+                $ref: "#/components/schemas/RunnerActionResponse"
   /v1/configs:
     get:
       summary: List configuration categories
       description: Enumerates top-level configuration pages as displayed in the
         Ultimate menu. Supports wildcard queries via URL encoding.
       responses:
-        '200':
+        "200":
           description: Categories returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigListResponse'
+                $ref: "#/components/schemas/ConfigListResponse"
               examples:
                 live:
                   value:
@@ -441,12 +441,12 @@ paths:
               additionalProperties:
                 type: object
       responses:
-        '200':
+        "200":
           description: Update applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/configs/{category}:
     get:
       summary: Inspect category
@@ -460,12 +460,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Category returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigCategoryResponse'
+                $ref: "#/components/schemas/ConfigCategoryResponse"
               examples:
                 drive_a:
                   summary: Drive A Settings (firmware 3.12a)
@@ -500,12 +500,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Item returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigItemResponse'
+                $ref: "#/components/schemas/ConfigItemResponse"
     put:
       summary: Update configuration item
       parameters:
@@ -525,102 +525,102 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Update applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/configs:load_from_flash:
     put:
       summary: Load configuration from flash
       responses:
-        '200':
+        "200":
           description: Loaded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/configs:save_to_flash:
     put:
       summary: Save configuration to flash
       responses:
-        '200':
+        "200":
           description: Saved
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/configs:reset_to_default:
     put:
       summary: Reset configuration to defaults
       responses:
-        '200':
+        "200":
           description: Reset complete
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/machine:reset:
     put:
       summary: Soft reset machine
       responses:
-        '200':
+        "200":
           description: Reset triggered
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:reboot:
     put:
       summary: Reboot machine
       responses:
-        '200':
+        "200":
           description: Reboot triggered
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:pause:
     put:
       summary: Pause machine via DMA
       responses:
-        '200':
+        "200":
           description: Pause applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:resume:
     put:
       summary: Resume machine from pause
       responses:
-        '200':
+        "200":
           description: Resume applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:poweroff:
     put:
       summary: Power off machine
       responses:
-        '200':
+        "200":
           description: Power off requested
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:menu_button:
     put:
       summary: Toggle Ultimate menu button
       responses:
-        '200':
+        "200":
           description: Button event queued
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:writemem:
     put:
       summary: Write memory via query data
@@ -638,12 +638,12 @@ paths:
             type: string
           description: Hex string representing bytes (≤ 128 bytes).
       responses:
-        '200':
+        "200":
           description: Write applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
     post:
       summary: Write memory via binary payload
       parameters:
@@ -661,12 +661,12 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Write applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MachineActionResponse'
+                $ref: "#/components/schemas/MachineActionResponse"
   /v1/machine:readmem:
     get:
       summary: Read memory
@@ -687,12 +687,12 @@ paths:
             minimum: 1
             maximum: 4096
       responses:
-        '200':
+        "200":
           description: Memory data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemoryReadJson'
+                $ref: "#/components/schemas/MemoryReadJson"
             application/octet-stream:
               schema:
                 type: string
@@ -706,12 +706,12 @@ paths:
     get:
       summary: Read debug register
       responses:
-        '200':
+        "200":
           description: Register value
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemoryDebugResponse'
+                $ref: "#/components/schemas/MemoryDebugResponse"
     put:
       summary: Write debug register
       parameters:
@@ -722,24 +722,24 @@ paths:
             type: string
             description: Hexadecimal value to write.
       responses:
-        '200':
+        "200":
           description: Updated register value
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MemoryDebugResponse'
+                $ref: "#/components/schemas/MemoryDebugResponse"
   /v1/drives:
     get:
       summary: List internal drives
       description: Returns current Ultimate-managed drives, images, and service
         devices (SoftIEC, printer emulation).
       responses:
-        '200':
+        "200":
           description: Drive information
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DriveListResponse'
+                $ref: "#/components/schemas/DriveListResponse"
               examples:
                 live:
                   value:
@@ -795,12 +795,12 @@ paths:
             type: string
             enum: [readwrite, readonly, unlinked]
       responses:
-        '200':
+        "200":
           description: Mount complete
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       summary: Mount uploaded disk image
       parameters:
@@ -827,12 +827,12 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Mount complete
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/drives/{drive}:reset:
     put:
       summary: Reset drive
@@ -843,12 +843,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Reset complete
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/drives/{drive}:remove:
     put:
       summary: Remove mounted image
@@ -859,12 +859,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Removal complete
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/drives/{drive}:on:
     put:
       summary: Power on drive
@@ -875,12 +875,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Drive powered on
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/drives/{drive}:off:
     put:
       summary: Power off drive
@@ -891,12 +891,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Drive powered off
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/drives/{drive}:load_rom:
     put:
       summary: Load ROM from filesystem
@@ -912,12 +912,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: ROM loaded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
     post:
       summary: Load ROM from upload
       parameters:
@@ -934,12 +934,12 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: ROM loaded
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/drives/{drive}:set_mode:
     put:
       summary: Set drive mode
@@ -956,12 +956,12 @@ paths:
             type: string
             enum: [1541, 1571, 1581]
       responses:
-        '200':
+        "200":
           description: Mode updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/streams/{stream}:start:
     put:
       summary: Start data stream
@@ -979,12 +979,12 @@ paths:
             type: string
           description: Target IP address with optional port (ip[:port]).
       responses:
-        '200':
+        "200":
           description: Stream started
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/streams/{stream}:stop:
     put:
       summary: Stop data stream
@@ -996,12 +996,12 @@ paths:
             type: string
             enum: [video, audio, debug]
       responses:
-        '200':
+        "200":
           description: Stream stopped
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/files/{path}:info:
     get:
       summary: Inspect file metadata
@@ -1012,12 +1012,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Metadata returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FileInfoResponse'
+                $ref: "#/components/schemas/FileInfoResponse"
               examples:
                 live:
                   value:
@@ -1046,12 +1046,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Image created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/files/{path}:create_d71:
     put:
       summary: Create D71 image
@@ -1066,12 +1066,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Image created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/files/{path}:create_d81:
     put:
       summary: Create D81 image
@@ -1086,12 +1086,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Image created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"
   /v1/files/{path}:create_dnp:
     put:
       summary: Create DNP image
@@ -1113,9 +1113,9 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Image created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ErrorResponse"

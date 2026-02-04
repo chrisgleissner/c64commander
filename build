@@ -22,6 +22,7 @@ RUN_SCREENSHOTS_ONLY=false
 RUN_FUZZ=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
+RUN_FORMAT=true
 PLAYWRIGHT_DEVICES=""
 APK_PATH=""
 DEVICE_ID=""
@@ -88,6 +89,7 @@ Options:
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
   
   --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
+  --skip-format         Skip repository auto-formatting before build steps
   --skip-install        Skip npm install
   --skip-build          Skip npm run cap:build
   --skip-tests          Skip npm test
@@ -285,6 +287,10 @@ while [[ $# -gt 0 ]]; do
       RUN_INSTALL=false
       shift
       ;;
+    --skip-format)
+      RUN_FORMAT=false
+      shift
+      ;;
     --skip-build)
       RUN_BUILD=false
       shift
@@ -438,6 +444,11 @@ fi
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
   (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
+fi
+
+if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then
+  log "Formatting repository"
+  (cd "$ROOT_DIR" && npm run format)
 fi
 
 if [[ "$RUN_BUILD" == "true" ]]; then
