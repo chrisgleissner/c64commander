@@ -12,6 +12,8 @@ import {
   FileText,
   Cpu,
   Play,
+  Search,
+  X,
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import { C64_DEFAULTS, getDeviceHostFromBaseUrl } from '@/lib/c64api';
@@ -145,11 +147,18 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>('error-logs');
+  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>('actions');
+  const [diagnosticsFilters, setDiagnosticsFilters] = useState<Record<DiagnosticsTabKey, string>>({
+    'error-logs': '',
+    logs: '',
+    traces: '',
+    actions: '',
+  });
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
   const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
+  const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? '';
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
@@ -343,6 +352,74 @@ export default function SettingsPage() {
       setSafBusy(false);
     }
   };
+
+  const normalizeDiagnosticsFilter = (value: string) => value.trim().toLowerCase();
+
+  const matchesDiagnosticsFilter = (filterText: string, fields: Array<string | null | undefined>) => {
+    const normalized = normalizeDiagnosticsFilter(filterText);
+    if (!normalized) return true;
+    const haystack = fields.filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(normalized);
+  };
+
+  const filteredErrorLogs = useMemo(() => {
+    const filterText = diagnosticsFilters['error-logs'] ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return errorLogs;
+    return errorLogs.filter((entry) =>
+      matchesDiagnosticsFilter(filterText, [
+        entry.message,
+        formatLocalTime(entry.timestamp),
+        JSON.stringify(entry.details ?? null),
+        entry.id,
+      ]),
+    );
+  }, [diagnosticsFilters, errorLogs]);
+
+  const filteredLogs = useMemo(() => {
+    const filterText = diagnosticsFilters.logs ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return logs;
+    return logs.filter((entry) =>
+      matchesDiagnosticsFilter(filterText, [
+        entry.message,
+        entry.level,
+        formatLocalTime(entry.timestamp),
+        JSON.stringify(entry.details ?? null),
+        entry.id,
+      ]),
+    );
+  }, [diagnosticsFilters, logs]);
+
+  const filteredTraces = useMemo(() => {
+    const filterText = diagnosticsFilters.traces ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return traceEvents;
+    return traceEvents.filter((entry) =>
+      matchesDiagnosticsFilter(filterText, [
+        getTraceTitle(entry),
+        formatLocalTime(entry.timestamp),
+        JSON.stringify(entry),
+        entry.id,
+      ]),
+    );
+  }, [diagnosticsFilters, traceEvents]);
+
+  const filteredActions = useMemo(() => {
+    const filterText = diagnosticsFilters.actions ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
+    return actionSummaries.filter((summary) => {
+      const summaryTime = summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown time';
+      const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
+      return matchesDiagnosticsFilter(filterText, [
+        summary.actionName,
+        summary.correlationId,
+        summary.origin,
+        summary.originalOrigin,
+        summary.outcome,
+        summaryTime,
+        durationLabel,
+        JSON.stringify(summary),
+      ]);
+    });
+  }, [actionSummaries, diagnosticsFilters]);
 
   const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
     const data =
@@ -1430,9 +1507,38 @@ export default function SettingsPage() {
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            <Button variant="outline" size="sm" onClick={() => void handleShareDiagnostics()}>
-              Share / Export
-            </Button>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Filter entries..."
+              value={activeDiagnosticsFilter}
+              onChange={(event) =>
+                setDiagnosticsFilters((prev) => ({
+                  ...prev,
+                  [diagnosticsTab]: event.target.value,
+                }))
+              }
+              className="pl-9 pr-9 h-9"
+              data-testid="diagnostics-filter-input"
+            />
+            {activeDiagnosticsFilter ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setDiagnosticsFilters((prev) => ({
+                    ...prev,
+                    [diagnosticsTab]: '',
+                  }))
+                }
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                aria-label="Clear filter"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
           </div>
           <Tabs
             value={diagnosticsTab}
@@ -1440,16 +1546,27 @@ export default function SettingsPage() {
             className="space-y-3"
           >
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="error-logs">Error Logs</TabsTrigger>
+              <TabsTrigger value="error-logs">Errors</TabsTrigger>
               <TabsTrigger value="logs">Logs</TabsTrigger>
               <TabsTrigger value="traces">Traces</TabsTrigger>
               <TabsTrigger value="actions">Actions</TabsTrigger>
             </TabsList>
-            <TabsContent value="error-logs" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              {errorLogs.length === 0 ? (
+            <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total errors: {errorLogs.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleShareDiagnostics()}
+                  data-testid="diagnostics-share-errors"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredErrorLogs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No error logs recorded.</p>
               ) : (
-                errorLogs.map((entry) => (
+                filteredErrorLogs.map((entry) => (
                   <div key={entry.id} className="rounded-lg border border-border p-3">
                     <p className="text-sm font-medium">{entry.message}</p>
                     <p className="text-xs text-muted-foreground">{formatLocalTime(entry.timestamp)}</p>
@@ -1462,11 +1579,22 @@ export default function SettingsPage() {
                 ))
               )}
             </TabsContent>
-            <TabsContent value="logs" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              {logs.length === 0 ? (
+            <TabsContent value="logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleShareDiagnostics()}
+                  data-testid="diagnostics-share-logs"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredLogs.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No logs recorded.</p>
               ) : (
-                logs.map((entry) => (
+                filteredLogs.map((entry) => (
                   <div key={entry.id} className="rounded-lg border border-border p-3">
                     <p className="text-sm font-medium">{entry.message}</p>
                     <p className="text-xs text-muted-foreground">
@@ -1481,18 +1609,28 @@ export default function SettingsPage() {
                 ))
               )}
             </TabsContent>
-            <TabsContent value="traces" className="space-y-3 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
-              {traceEvents.length === 0 ? (
+            <TabsContent value="traces" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleShareDiagnostics()}
+                  data-testid="diagnostics-share-traces"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredTraces.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No traces recorded.</p>
               ) : (
                 <>
-                  {traceEvents.length > 100 && (
+                  {filteredTraces.length > 100 && (
                     <p className="text-xs text-muted-foreground font-medium text-amber-600">
                       Showing last 100 events. Export for full history.
                     </p>
                   )}
-                  {traceEvents
+                  {filteredTraces
                     .slice(-100)
                     .reverse()
                     .map((entry) => (
@@ -1511,12 +1649,22 @@ export default function SettingsPage() {
                 </>
               )}
             </TabsContent>
-            <TabsContent value="actions" className="space-y-3 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
-              {actionSummaries.length === 0 ? (
+            <TabsContent value="actions" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleShareDiagnostics()}
+                  data-testid="diagnostics-share-actions"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredActions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No actions recorded.</p>
               ) : (
-                actionSummaries
+                filteredActions
                   .slice(-100)
                   .reverse()
                   .map((summary) => {

@@ -75,7 +75,7 @@ export default function HomePage() {
   const appVersion = __APP_VERSION__ || '';
   const gitSha = __GIT_SHA__ || '';
   const buildTime = __BUILD_TIME__ || '';
-  
+
   const formatBuildTime = (isoString: string) => {
     if (!isoString) return '—';
     try {
@@ -198,11 +198,12 @@ export default function HomePage() {
             <img
               src="/c64commander.png"
               alt="C64 Commander"
-              className="h-9 w-9 rounded-md"
+              className="h-9 w-auto rounded-md shrink-0 object-contain"
+              data-testid="home-header-logo"
             />
             <div className="min-w-0">
-              <h1 className="c64-header text-xl text-primary truncate">C64 Commander</h1>
-              <p className="text-xs text-muted-foreground truncate">Controller</p>
+              <h1 className="c64-header text-xl truncate" data-testid="home-header-title">HOME</h1>
+              <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="home-header-subtitle">C64 Controller</p>
             </div>
           </div>
         }
@@ -251,7 +252,7 @@ export default function HomePage() {
                 </p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="bg-muted/50 rounded-lg p-2">
                 <span className="text-muted-foreground text-xs">Firmware</span>

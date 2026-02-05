@@ -56,6 +56,8 @@ test.describe('Settings diagnostics workflows', () => {
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'dialog-open');
 
+    await dialog.getByRole('tab', { name: 'Logs', exact: true }).click();
+
     // Check if logs are shown (they may not be if not loaded from storage)
     const logText = await dialog.getByText(/Test error 1|Test info 1|No entries|empty/i).first().isVisible({ timeout: 3000 }).catch(() => false);
     if (logText) {
@@ -105,7 +107,7 @@ test.describe('Settings diagnostics workflows', () => {
     await snap(page, testInfo, 'dialog-open');
 
     await expect(page.getByRole('button', { name: /Clear All/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Share\s*\/\s*Export/i })).toBeVisible();
+    await expect(page.getByTestId('diagnostics-share-actions')).toBeVisible();
   });
 
   test('clear all diagnostics empties log storage', async ({ page }: { page: Page }, testInfo: TestInfo) => {

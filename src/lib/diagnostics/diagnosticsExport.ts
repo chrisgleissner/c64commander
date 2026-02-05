@@ -6,6 +6,30 @@ import { addErrorLog } from '@/lib/logging';
 
 export type DiagnosticsExportTab = 'error-logs' | 'logs' | 'traces' | 'actions';
 
+type DiagnosticsShareOverridePayload = {
+    filename: string;
+    tab: DiagnosticsExportTab;
+    data: unknown;
+    zipData: Uint8Array;
+};
+
+type DiagnosticsShareOverride = (payload: DiagnosticsShareOverridePayload) => Promise<void> | void;
+
+type DiagnosticsShareOverrideWindow = Window & { __c64uDiagnosticsShareOverride?: DiagnosticsShareOverride };
+
+const isTestProbeEnabled = () => {
+    try {
+        return import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
+    } catch {
+        return false;
+    }
+};
+
+const getShareOverride = (): DiagnosticsShareOverride | null => {
+    if (typeof window === 'undefined' || !isTestProbeEnabled()) return null;
+    return (window as DiagnosticsShareOverrideWindow).__c64uDiagnosticsShareOverride ?? null;
+};
+
 const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -53,6 +77,17 @@ const downloadDiagnosticsZip = (filename: string, tab: DiagnosticsExportTab, dat
 
 export const shareDiagnosticsZip = async (tab: DiagnosticsExportTab, data: unknown) => {
     const filename = `c64commander-diagnostics-${tab}.zip`;
+    const override = getShareOverride();
+    if (override) {
+        try {
+            const zipData = buildDiagnosticsZipData(tab, data);
+            await override({ filename, tab, data, zipData });
+            return;
+        } catch (error) {
+            addErrorLog('Diagnostics share override failed', { error: (error as Error).message });
+            throw error;
+        }
+    }
     if (Capacitor.isNativePlatform()) {
         try {
             const blob = buildDiagnosticsZipBlob(tab, data);

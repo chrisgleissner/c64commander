@@ -186,7 +186,8 @@ This document provides a comprehensive inventory of all user-facing interactions
 |-----|-------|---------|------------|---------------|-----------|-------|
 | Button | "Diagnostics" | Open diagnostics overlay | **LOW** | ✅ FULL | settingsDiagnostics.spec.ts:41 | Debug tool |
 | Button | "Clear All" | Clear all diagnostics data | **MEDIUM** | ✅ FULL | settingsDiagnostics.spec.ts:133 | Maintenance |
-| Button | "Share / Export" | Share active tab ZIP export | **MEDIUM** | ✅ FULL | settingsDiagnostics.spec.ts:117 | Support tool |
+| Input | "Filter entries" | Filter active diagnostics tab | **MEDIUM** | ✅ FULL | homeDiagnosticsOverlay.spec.ts | Scoped filtering |
+| Button | "Share" | Share active tab ZIP export | **MEDIUM** | ✅ FULL | homeDiagnosticsOverlay.spec.ts | Support tool |
 
 ### 4.4 Playback Settings
 

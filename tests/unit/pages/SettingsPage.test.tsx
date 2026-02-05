@@ -437,7 +437,7 @@ describe('SettingsPage', () => {
     const dialog = await screen.findByRole('dialog');
     const tabLabels = within(dialog).getAllByRole('tab').map((tab) => tab.textContent);
 
-    expect(tabLabels).toEqual(['Error Logs', 'Logs', 'Traces', 'Actions']);
+    expect(tabLabels).toEqual(['Errors', 'Logs', 'Traces', 'Actions']);
   });
 
   it('opens diagnostics on Actions tab when requested', async () => {
@@ -459,11 +459,77 @@ describe('SettingsPage', () => {
     const dialog = await screen.findByRole('dialog');
 
     expect(within(dialog).getByRole('button', { name: /clear all/i })).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /share\s*\/\s*export/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /share\s*\/\s*export/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /clear logs/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /clear traces/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /share redacted/i })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: /email/i })).not.toBeInTheDocument();
+  });
+
+  it('filters diagnostics entries per tab and restores on clear', async () => {
+    vi.mocked(getErrorLogs).mockReturnValue([
+      { id: 'err-1', message: 'Disk error', timestamp: '2024-01-01T00:00:00.000Z', details: { code: 'E-1' } },
+      { id: 'err-2', message: 'Network failure', timestamp: '2024-01-01T00:00:01.000Z', details: { code: 'E-2' } },
+    ] as any);
+    vi.mocked(getLogs).mockReturnValue([
+      { id: 'log-1', level: 'info', message: 'Connection ready', timestamp: '2024-01-01T00:00:02.000Z' },
+    ] as any);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+
+    const errorsTab = within(dialog).getByRole('tab', { name: /^Errors$/i });
+    fireEvent.mouseDown(errorsTab);
+    fireEvent.click(errorsTab);
+    await waitFor(() => expect(errorsTab).toHaveAttribute('aria-selected', 'true'));
+
+    const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
+    fireEvent.change(filterInput, { target: { value: 'network' } });
+    expect(await within(dialog).findByText('Network failure')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Disk error')).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /clear filter/i }));
+    expect(await within(dialog).findByText('Disk error')).toBeInTheDocument();
+
+    const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
+    fireEvent.mouseDown(logsTab);
+    fireEvent.click(logsTab);
+    await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
+    expect(within(dialog).getByTestId('diagnostics-filter-input')).toHaveValue('');
+    expect(await within(dialog).findByText('Connection ready')).toBeInTheDocument();
+  });
+
+  it('filters diagnostics entries case-insensitively across timestamps and details', async () => {
+    vi.mocked(getLogs).mockReturnValue([
+      {
+        id: 'log-1',
+        level: 'info',
+        message: 'System boot',
+        timestamp: '2024-01-01T01:02:03.004Z',
+        details: { note: 'MiXeDCase' },
+      },
+    ] as any);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+    const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
+    fireEvent.mouseDown(logsTab);
+    fireEvent.click(logsTab);
+    await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
+
+    const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
+    fireEvent.change(filterInput, { target: { value: 'mixedcase' } });
+    expect(await within(dialog).findByText('System boot')).toBeInTheDocument();
+
+    fireEvent.change(filterInput, { target: { value: '01:02:03.004' } });
+    expect(await within(dialog).findByText('System boot')).toBeInTheDocument();
+
+    fireEvent.change(filterInput, { target: { value: 'missing' } });
+    expect(within(dialog).queryByText('System boot')).not.toBeInTheDocument();
   });
 
   it('clears diagnostics after confirmation', async () => {
@@ -475,6 +541,10 @@ describe('SettingsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
     const dialog = await screen.findByRole('dialog');
+    const errorsTab = within(dialog).getByRole('tab', { name: /^Errors$/i });
+    fireEvent.mouseDown(errorsTab);
+    fireEvent.click(errorsTab);
+    await waitFor(() => expect(errorsTab).toHaveAttribute('aria-selected', 'true'));
     expect(await within(dialog).findByText('Error entry')).toBeInTheDocument();
 
     const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
@@ -698,7 +768,7 @@ describe('SettingsPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
-    fireEvent.click(await within(dialog).findByRole('button', { name: /share\s*\/\s*export/i }));
+    fireEvent.click(await within(dialog).findByTestId('diagnostics-share-traces'));
 
     expect(shareDiagnosticsZip).toHaveBeenCalledWith('traces', expect.any(Array));
 
@@ -706,7 +776,7 @@ describe('SettingsPage', () => {
       throw new Error('export failed');
     });
 
-    fireEvent.click(await within(dialog).findByRole('button', { name: /share\s*\/\s*export/i }));
+    fireEvent.click(await within(dialog).findByTestId('diagnostics-share-traces'));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({

@@ -186,7 +186,7 @@ test.describe('UI coverage', () => {
 
   test('home and disks pages render', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'C64 Commander' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'HOME' })).toBeVisible();
     await snap(page, testInfo, 'home-open');
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
