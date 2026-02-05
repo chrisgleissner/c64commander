@@ -1224,7 +1224,7 @@
     "origin": "user",
     "correlationId": "COR-0011",
     "data": {
-      "name": "click Logs and Traces",
+      "name": "click Diagnostics",
       "component": "GlobalInteraction",
       "context": {
         "ui": {

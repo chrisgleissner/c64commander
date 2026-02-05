@@ -68,6 +68,13 @@ export default {
           green: "hsl(var(--c64-green))",
           red: "hsl(var(--c64-red))",
         },
+        diagnostics: {
+          user: "hsl(var(--diag-user))",
+          system: "hsl(var(--diag-system))",
+          rest: "hsl(var(--diag-rest))",
+          ftp: "hsl(var(--diag-ftp))",
+          error: "hsl(var(--diag-error))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",

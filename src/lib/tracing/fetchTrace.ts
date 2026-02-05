@@ -1,4 +1,5 @@
 import { getActiveAction, runWithImplicitAction } from '@/lib/tracing/actionTrace';
+import { decrementRestInFlight, incrementRestInFlight } from '@/lib/diagnostics/diagnosticsActivity';
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
 import type { TraceActionContext } from '@/lib/tracing/types';
 
@@ -107,6 +108,7 @@ export const registerFetchTrace = () => {
     url: string,
     method: string,
   ): Promise<Response> => {
+    incrementRestInFlight();
     const headers = extractHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     recordRestRequest(action, {
       method,
@@ -174,6 +176,8 @@ export const registerFetchTrace = () => {
       });
       recordTraceError(action, traceError ?? new Error('Request failed'));
       throw error;
+    } finally {
+      decrementRestInFlight();
     }
   };
 

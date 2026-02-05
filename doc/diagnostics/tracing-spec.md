@@ -512,8 +512,8 @@ Settings → Diagnostics → Traces
 
 ### 17.3 Controls
 
-- Clear Traces
-- Share / Export
+- Clear All (error logs, logs, traces, actions)
+- Share / Export (active tab scope)
 
 ---
 

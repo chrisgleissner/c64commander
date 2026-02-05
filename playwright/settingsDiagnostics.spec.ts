@@ -20,7 +20,7 @@ test.describe('Settings diagnostics workflows', () => {
     await seedUiMocks(page, server.baseUrl);
 
     await page.addInitScript(() => {
-      window.addEventListener('c64u-logs-updated', () => {});
+      window.addEventListener('c64u-logs-updated', () => { });
 
       const logs = [
         { id: 'log-1', timestamp: new Date().toISOString(), level: 'error', message: 'Test error 1', details: {} },
@@ -45,8 +45,7 @@ test.describe('Settings diagnostics workflows', () => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-    // The button says "Logs and Traces" under the Diagnostics section
-      const diagnosticsButton = page.getByRole('button', { name: /Logs( and Traces)?/i });
+    const diagnosticsButton = page.getByRole('button', { name: 'Diagnostics', exact: true });
     await expect(diagnosticsButton).toBeVisible();
     await snap(page, testInfo, 'diagnostics-button-visible');
 
@@ -83,12 +82,12 @@ test.describe('Settings diagnostics workflows', () => {
     await refreshButton.click();
     await snap(page, testInfo, 'refresh-clicked');
 
-      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: /Diagnostics|Logs/i });
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'diagnostics-open');
 
-    await dialog.getByRole('tab', { name: 'All logs' }).click();
+    await dialog.getByRole('tab', { name: 'Logs', exact: true }).click();
     const apiRequestEntry = dialog.getByText('C64 API request', { exact: true }).first();
     await expect(apiRequestEntry).toBeVisible();
     await expect(apiRequestEntry.locator('xpath=..')).toContainText(/DEBUG/i);
@@ -98,92 +97,31 @@ test.describe('Settings diagnostics workflows', () => {
     expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
   });
 
-  test('share diagnostics copies to clipboard', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('diagnostics action bar is available', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     await snap(page, testInfo, 'dialog-open');
 
-    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-
-    const shareButton = page.getByRole('button', { name: /Share|Copy/i }).first();
-    const buttonVisible = await shareButton.isVisible({ timeout: 2000 }).catch(() => false);
-    
-    if (buttonVisible) {
-      await shareButton.click();
-      await snap(page, testInfo, 'share-clicked');
-
-      const toastVisible = await page.getByText(/Copied.*clipboard/i).first().isVisible({ timeout: 5000 }).catch(() => false);
-      if (toastVisible) {
-        await snap(page, testInfo, 'clipboard-toast');
-      }
-
-      const clipboardText = await page.evaluate(async () => {
-        try {
-          return await navigator.clipboard.readText();
-        } catch {
-          return null;
-        }
-      });
-
-      if (clipboardText && clipboardText.length > 0) {
-        await snap(page, testInfo, 'clipboard-has-content');
-      } else {
-        await snap(page, testInfo, 'clipboard-read-not-available');
-      }
-    } else {
-      await snap(page, testInfo, 'share-button-not-found');
-    }
+    await expect(page.getByRole('button', { name: /Clear All/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Share\s*\/\s*Export/i })).toBeVisible();
   });
 
-  test('email diagnostics opens mailto link', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('clear all diagnostics empties log storage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/settings');
     await snap(page, testInfo, 'settings-open');
 
-      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     await snap(page, testInfo, 'dialog-open');
 
-    const emailButton = page.getByRole('button', { name: /Email|Send email/i });
-    
-    if (await emailButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const navigationPromise = page.waitForEvent('popup').catch(() => null);
-      
-      await emailButton.click();
-      await snap(page, testInfo, 'email-clicked');
+    const clearButton = page.getByRole('button', { name: /Clear All/i });
 
-      const popup = await navigationPromise;
-      
-      if (popup) {
-        const url = popup.url();
-        expect(url).toContain('mailto:');
-        await snap(page, testInfo, 'mailto-opened');
-        await popup.close();
-      } else {
-        const currentUrl = page.url();
-        if (currentUrl.startsWith('mailto:')) {
-          await snap(page, testInfo, 'mailto-navigation');
-        } else {
-          await snap(page, testInfo, 'email-action-taken');
-        }
-      }
-    } else {
-      await snap(page, testInfo, 'email-button-not-found');
-    }
-  });
-
-  test('clear logs empties log storage', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await page.goto('/settings');
-    await snap(page, testInfo, 'settings-open');
-
-      await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
-    await snap(page, testInfo, 'dialog-open');
-
-    const clearButton = page.getByRole('button', { name: /Clear|Clear logs/i });
-    
     if (await clearButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       const beforeLogs = await page.evaluate(() => localStorage.getItem('c64u_app_logs'));
       await clearButton.click();
+      const confirm = page.getByRole('alertdialog', { name: /Clear diagnostics/i });
+      await confirm.getByRole('button', { name: /Clear/i }).click();
       await snap(page, testInfo, 'clear-clicked');
 
       await expect
@@ -194,7 +132,7 @@ test.describe('Settings diagnostics workflows', () => {
 
       // Logs should be empty or at least the clear button was clicked
       await snap(page, testInfo, 'clear-attempted');
-      
+
       const emptyStateVisible = await page.getByText(/No entries|empty|cleared/i).first().isVisible({ timeout: 3000 }).catch(() => false);
       if (emptyStateVisible) {
         await snap(page, testInfo, 'empty-state-shown');

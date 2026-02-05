@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from '@/pages/SettingsPage';
 import { reportUserError } from '@/lib/uiErrors';
@@ -7,7 +8,7 @@ import { discoverConnection } from '@/lib/connection/connectionManager';
 import { toast } from '@/hooks/use-toast';
 import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { shareTraceZip } from '@/lib/tracing/traceExport';
+import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import {
   saveAutomaticDemoModeEnabled,
   saveBackgroundRediscoveryIntervalMs,
@@ -116,8 +117,18 @@ vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
 }));
 
+const renderSettingsPage = () => render(
+  <MemoryRouter>
+    <SettingsPage />
+  </MemoryRouter>,
+);
+
 vi.mock('@/lib/uiErrors', () => ({
   reportUserError: vi.fn(),
+}));
+
+vi.mock('@/lib/diagnostics/diagnosticsExport', () => ({
+  shareDiagnosticsZip: vi.fn(),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -164,9 +175,7 @@ vi.mock('@/hooks/useActionTrace', () => ({
   useActionTrace: () => Object.assign(<T extends (...args: any[]) => any>(fn: T) => fn, { scope: async () => undefined }),
 }));
 
-vi.mock('@/lib/tracing/traceExport', () => ({
-  shareTraceZip: vi.fn(),
-}));
+vi.mock('@/lib/tracing/traceExport', () => ({}));
 
 vi.mock('@/lib/config/settingsTransfer', () => ({
   exportSettingsJson: vi.fn(() => '{"version":1}'),
@@ -213,7 +222,7 @@ beforeEach(() => {
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(getTraceEvents).mockReturnValue([]);
-  vi.mocked(shareTraceZip).mockReset();
+  vi.mocked(shareDiagnosticsZip).mockReset();
 });
 
 describe('SettingsPage', () => {
@@ -232,7 +241,7 @@ describe('SettingsPage', () => {
   it('saves connection settings and triggers discovery', async () => {
     vi.mocked(discoverConnection).mockResolvedValue(undefined);
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('button', { name: /save & connect/i }));
 
@@ -244,7 +253,7 @@ describe('SettingsPage', () => {
   });
 
   it('orders core sections and places network timing under Device Safety', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((node) => node.textContent ?? '');
     const appearanceIndex = headings.indexOf('Appearance');
@@ -282,7 +291,7 @@ describe('SettingsPage', () => {
   it('reports connection save errors', async () => {
     vi.mocked(discoverConnection).mockRejectedValue(new Error('Boom'));
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('button', { name: /save & connect/i }));
 
@@ -296,7 +305,7 @@ describe('SettingsPage', () => {
   it('toggles HVSC download feature flag and persists', () => {
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByTestId('hvsc-toggle'));
 
@@ -305,7 +314,7 @@ describe('SettingsPage', () => {
   });
 
   it('persists demo mode and debug logging toggles', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('checkbox', { name: /automatic demo mode/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /enable debug logging/i }));
@@ -315,7 +324,7 @@ describe('SettingsPage', () => {
   });
 
   it('saves discovery window inputs on blur', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const startupInput = screen.getByLabelText(/startup discovery window/i);
     const backgroundInput = screen.getByLabelText(/background rediscovery interval/i);
@@ -330,7 +339,7 @@ describe('SettingsPage', () => {
   });
 
   it('commits list preview limit changes', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const input = screen.getByLabelText(/list preview limit/i);
     fireEvent.change(input, { target: { value: '75' } });
@@ -340,7 +349,7 @@ describe('SettingsPage', () => {
   });
 
   it('changes theme when selecting a new option', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('button', { name: /dark/i }));
 
@@ -355,7 +364,7 @@ describe('SettingsPage', () => {
       entries: [{ name: 'Root', path: '/', type: 'dir' }],
     });
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
 
@@ -373,29 +382,8 @@ describe('SettingsPage', () => {
     expect(screen.getByText(/dir: \//i)).toBeInTheDocument();
   });
 
-  it('opens share via email', async () => {
-    const originalLocation = window.location;
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      writable: true,
-      value: { href: '' },
-    });
-
-    render(<SettingsPage />);
-
-    fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /email errors/i }));
-
-    expect(window.location.href).toMatch(/^mailto:/);
-
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: originalLocation,
-    });
-  });
-
   it('enables developer mode after repeated taps', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const aboutCard = screen.getByRole('button', { name: /about/i });
     for (let i = 0; i < 7; i += 1) {
@@ -405,51 +393,12 @@ describe('SettingsPage', () => {
     expect(mockEnableDeveloperMode).toHaveBeenCalled();
   });
 
-  it('reports share failures to the user', async () => {
-    const originalShare = Object.getOwnPropertyDescriptor(navigator, 'share');
-    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-
-    Object.defineProperty(navigator, 'share', {
-      configurable: true,
-      value: undefined,
-    });
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {
-        writeText: vi.fn().mockRejectedValue(new Error('Clipboard blocked')),
-      },
-    });
-
-    render(<SettingsPage />);
-
-    fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /share errors/i }));
-
-    await waitFor(() => {
-      expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'LOG_SHARE',
-      }));
-    });
-
-    if (originalShare) {
-      Object.defineProperty(navigator, 'share', originalShare);
-    } else {
-      delete (navigator as Navigator & { share?: unknown }).share;
-    }
-
-    if (originalClipboard) {
-      Object.defineProperty(navigator, 'clipboard', originalClipboard);
-    } else {
-      delete (navigator as Navigator & { clipboard?: unknown }).clipboard;
-    }
-  });
-
   it('reports missing SAF permissions before enumeration', async () => {
     vi.mocked(FolderPicker.getPersistedUris).mockResolvedValue({
       uris: [{ uri: '' }],
     });
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
 
@@ -476,23 +425,59 @@ describe('SettingsPage', () => {
       lastProbeFailedAtMs: null,
     };
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     expect(screen.getByText(/real device detected during probe/i)).toBeInTheDocument();
   });
 
-  it('clears logs and traces from diagnostics dialog', async () => {
+  it('shows diagnostics tabs in required order', async () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+    const tabLabels = within(dialog).getAllByRole('tab').map((tab) => tab.textContent);
+
+    expect(tabLabels).toEqual(['Error Logs', 'Logs', 'Traces', 'Actions']);
+  });
+
+  it('opens diagnostics on Actions tab when requested', async () => {
+    renderSettingsPage();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('c64u-diagnostics-open-request', { detail: { tab: 'actions' } }));
+    });
+
+    const dialog = await screen.findByRole('dialog');
+    const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
+    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+  });
+
+  it('renders a single diagnostics action bar', async () => {
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByRole('button', { name: /clear all/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /share\s*\/\s*export/i })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /clear logs/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /clear traces/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /share redacted/i })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /email/i })).not.toBeInTheDocument();
+  });
+
+  it('clears diagnostics after confirmation', async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
       { id: 'err-1', message: 'Error entry', timestamp: Date.now(), details: { boom: true } },
     ] as any);
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
-    fireEvent.click(screen.getByRole('button', { name: /logs/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
     const dialog = await screen.findByRole('dialog');
     expect(await within(dialog).findByText('Error entry')).toBeInTheDocument();
 
-    const logsTab = within(dialog).getByRole('tab', { name: /all logs/i });
+    const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
     await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
@@ -509,46 +494,215 @@ describe('SettingsPage', () => {
     fireEvent.click(tracesTab);
     await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
     vi.mocked(getTraceEvents).mockReturnValue([
-      { id: 'trace-1', type: 'rest', origin: 'user' },
+      {
+        id: 'trace-1',
+        timestamp: new Date().toISOString(),
+        relativeMs: 0,
+        type: 'rest-request',
+        origin: 'user',
+        correlationId: 'COR-0000',
+        data: { method: 'GET', url: '/v1/info' },
+      },
     ] as any);
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
-    expect(await within(dialog).findByText(/rest · user/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/REST GET/i)).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /clear traces/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /clear all/i }));
+    const confirm = await screen.findByRole('alertdialog', { name: /clear diagnostics/i });
+    expect(confirm).toHaveTextContent(
+      'This will permanently clear all error logs, logs, traces, and actions. This cannot be undone.',
+    );
+    fireEvent.click(within(confirm).getByRole('button', { name: /clear/i }));
+
     expect(clearTraceEvents).toHaveBeenCalled();
-    await waitFor(() => {
-      expect(toast).toHaveBeenCalledWith({ title: 'Traces cleared' });
-    });
-
-    fireEvent.click(within(dialog).getByRole('button', { name: /clear logs/i }));
     expect(clearLogs).toHaveBeenCalled();
-    expect(toast).toHaveBeenCalledWith({ title: 'Logs cleared' });
+    expect(toast).toHaveBeenCalledWith({ title: 'Diagnostics cleared' });
   });
 
-  it('exports traces and reports export failures', async () => {
-    vi.mocked(shareTraceZip).mockImplementation(() => undefined);
+  it('requires confirmation to clear diagnostics', async () => {
+    renderSettingsPage();
 
-    render(<SettingsPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
 
-    fireEvent.click(screen.getByRole('button', { name: /logs/i }));
+    fireEvent.click(within(dialog).getByRole('button', { name: /clear all/i }));
+    const confirm = await screen.findByRole('alertdialog', { name: /clear diagnostics/i });
+    fireEvent.click(within(confirm).getByRole('button', { name: /cancel/i }));
+
+    expect(clearTraceEvents).not.toHaveBeenCalled();
+    expect(clearLogs).not.toHaveBeenCalled();
+  });
+
+  it('renders action indicators with semantic colors', async () => {
+    const base = new Date('2024-01-01T00:00:00.000Z').getTime();
+    vi.mocked(getTraceEvents).mockReturnValue([
+      {
+        id: 'evt-1',
+        timestamp: new Date(base).toISOString(),
+        relativeMs: 0,
+        type: 'action-start',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { name: 'Play song', component: 'Test', context: {} },
+      },
+      {
+        id: 'evt-2',
+        timestamp: new Date(base + 10).toISOString(),
+        relativeMs: 10,
+        type: 'rest-request',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { method: 'GET', url: '/v1/info', normalizedUrl: '/v1/info', headers: {}, body: null, target: 'real-device' },
+      },
+      {
+        id: 'evt-3',
+        timestamp: new Date(base + 25).toISOString(),
+        relativeMs: 25,
+        type: 'rest-response',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { status: 200, durationMs: 15, error: null },
+      },
+      {
+        id: 'evt-4',
+        timestamp: new Date(base + 40).toISOString(),
+        relativeMs: 40,
+        type: 'ftp-operation',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { operation: 'list', path: '/', result: 'success', target: 'real-device' },
+      },
+      {
+        id: 'evt-5',
+        timestamp: new Date(base + 50).toISOString(),
+        relativeMs: 50,
+        type: 'error',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { message: 'Boom' },
+      },
+      {
+        id: 'evt-6',
+        timestamp: new Date(base + 60).toISOString(),
+        relativeMs: 60,
+        type: 'action-end',
+        origin: 'user',
+        correlationId: 'COR-0001',
+        data: { status: 'success', error: null },
+      },
+    ] as any);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+    const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
+    fireEvent.mouseDown(actionsTab);
+    fireEvent.click(actionsTab);
+    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-traces-updated'));
+    });
+
+    const summary = await within(dialog).findByTestId('action-summary-COR-0001');
+    expect(within(summary).getByLabelText('user')).toHaveClass('bg-diagnostics-user');
+    expect(within(summary).getByTestId('action-rest-count-COR-0001')).toHaveClass('text-diagnostics-rest');
+    expect(within(summary).getByTestId('action-ftp-count-COR-0001')).toHaveClass('text-diagnostics-ftp');
+    expect(within(summary).getByTestId('action-error-count-COR-0001')).toHaveClass('text-diagnostics-error');
+    expect(within(summary).getByText(/\d+\sms/, { selector: 'div' })).toBeInTheDocument();
+  });
+
+  it('uses shared renderer for traces and actions', async () => {
+    const base = new Date('2024-01-01T00:00:00.000Z').getTime();
+    vi.mocked(getTraceEvents).mockReturnValue([
+      {
+        id: 'trace-1',
+        timestamp: new Date(base).toISOString(),
+        relativeMs: 0,
+        type: 'rest-request',
+        origin: 'user',
+        correlationId: 'COR-0100',
+        data: { method: 'GET', url: '/v1/info' },
+      },
+      {
+        id: 'trace-2',
+        timestamp: new Date(base + 10).toISOString(),
+        relativeMs: 10,
+        type: 'action-start',
+        origin: 'user',
+        correlationId: 'COR-0100',
+        data: { name: 'Inspect', component: 'Test', context: {} },
+      },
+      {
+        id: 'trace-3',
+        timestamp: new Date(base + 20).toISOString(),
+        relativeMs: 20,
+        type: 'action-end',
+        origin: 'user',
+        correlationId: 'COR-0100',
+        data: { status: 'success', error: null },
+      },
+    ] as any);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-traces-updated'));
+    });
+
+    const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
+    fireEvent.mouseDown(tracesTab);
+    fireEvent.click(tracesTab);
+    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+
+    const traceItem = await within(dialog).findByTestId('trace-item-trace-1');
+    expect(traceItem.querySelector('[class*="grid-cols-[minmax(0,1fr)_auto]"]')).toBeTruthy();
+
+    const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
+    fireEvent.mouseDown(actionsTab);
+    fireEvent.click(actionsTab);
+    await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
+
+    const actionItem = await within(dialog).findByTestId('action-summary-COR-0100');
+    expect(actionItem.querySelector('[class*="grid-cols-[minmax(0,1fr)_auto]"]')).toBeTruthy();
+  });
+
+  it('exports active diagnostics tab and reports failures', async () => {
+    vi.mocked(shareDiagnosticsZip).mockImplementation(() => undefined);
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Diagnostics' }));
     const dialog = await screen.findByRole('dialog');
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
     fireEvent.mouseDown(tracesTab);
     fireEvent.click(tracesTab);
     await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
     vi.mocked(getTraceEvents).mockReturnValue([
-      { id: 'trace-1', type: 'rest', origin: 'user' },
+      {
+        id: 'trace-1',
+        timestamp: new Date().toISOString(),
+        relativeMs: 0,
+        type: 'rest-request',
+        origin: 'user',
+        correlationId: 'COR-0000',
+        data: { method: 'GET', url: '/v1/info' },
+      },
     ] as any);
     await act(async () => {
       window.dispatchEvent(new Event('c64u-traces-updated'));
     });
     fireEvent.click(await within(dialog).findByRole('button', { name: /share\s*\/\s*export/i }));
 
-    expect(shareTraceZip).toHaveBeenCalled();
+    expect(shareDiagnosticsZip).toHaveBeenCalledWith('traces', expect.any(Array));
 
-    vi.mocked(shareTraceZip).mockImplementation(() => {
+    vi.mocked(shareDiagnosticsZip).mockImplementation(() => {
       throw new Error('export failed');
     });
 
@@ -556,52 +710,15 @@ describe('SettingsPage', () => {
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
-        operation: 'TRACE_EXPORT',
+        operation: 'DIAGNOSTICS_EXPORT',
       }));
     });
-  });
-
-  it('shares diagnostics via clipboard when share is unavailable', async () => {
-    const originalShare = Object.getOwnPropertyDescriptor(navigator, 'share');
-    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-
-    Object.defineProperty(navigator, 'share', {
-      configurable: true,
-      value: undefined,
-    });
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: { writeText },
-    });
-
-    render(<SettingsPage />);
-
-    fireEvent.click(screen.getByRole('button', { name: /logs/i }));
-    fireEvent.click(screen.getByRole('button', { name: /share errors/i }));
-
-    await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith('payload');
-      expect(toast).toHaveBeenCalledWith({ title: 'Copied errors to clipboard' });
-    });
-
-    if (originalShare) {
-      Object.defineProperty(navigator, 'share', originalShare);
-    } else {
-      delete (navigator as Navigator & { share?: unknown }).share;
-    }
-
-    if (originalClipboard) {
-      Object.defineProperty(navigator, 'clipboard', originalClipboard);
-    } else {
-      delete (navigator as Navigator & { clipboard?: unknown }).clipboard;
-    }
   });
 
   it('requires confirmation when switching into relaxed safety mode', async () => {
     const saveSpy = vi.spyOn(deviceSafetySettings, 'saveDeviceSafetyMode');
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const trigger = screen.getAllByRole('combobox')[1];
     fireEvent.change(trigger, { target: { value: 'RELAXED' } });
@@ -628,7 +745,7 @@ describe('SettingsPage', () => {
     Object.defineProperty(URL, 'createObjectURL', { value: createObjectURL, configurable: true });
     Object.defineProperty(URL, 'revokeObjectURL', { value: revokeObjectURL, configurable: true });
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     fireEvent.click(screen.getByRole('button', { name: /export settings/i }));
 
@@ -645,7 +762,7 @@ describe('SettingsPage', () => {
       value: vi.fn(async () => '{"version":1}'),
     });
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
@@ -663,7 +780,7 @@ describe('SettingsPage', () => {
       value: vi.fn(async () => '{"version":1}'),
     });
 
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: buildFileList(file) } });
@@ -676,7 +793,7 @@ describe('SettingsPage', () => {
   });
 
   it('enables debug logging when switching to troubleshooting mode', () => {
-    render(<SettingsPage />);
+    renderSettingsPage();
 
     const trigger = screen.getAllByRole('combobox')[1];
     fireEvent.change(trigger, { target: { value: 'TROUBLESHOOTING' } });

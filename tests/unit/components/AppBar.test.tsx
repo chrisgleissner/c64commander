@@ -1,0 +1,47 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { AppBar } from '@/components/AppBar';
+
+const navigateMock = vi.fn();
+
+vi.mock('react-router-dom', () => ({
+    useNavigate: () => navigateMock,
+    useLocation: () => ({ pathname: '/play' }),
+}));
+
+const requestDiagnosticsOpen = vi.fn();
+
+vi.mock('@/lib/diagnostics/diagnosticsOverlay', () => ({
+    requestDiagnosticsOpen: (...args: unknown[]) => requestDiagnosticsOpen(...args),
+}));
+
+vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+    DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
+        <button type="button" data-testid="diagnostics-activity-indicator" onClick={onClick} />
+    ),
+}));
+
+vi.mock('@/components/ConnectivityIndicator', () => ({
+    ConnectivityIndicator: () => <div data-testid="connectivity-indicator" />,
+}));
+
+describe('AppBar', () => {
+    it('opens diagnostics actions when activity indicator is clicked', () => {
+        render(<AppBar title="Test" />);
+
+        fireEvent.click(screen.getByTestId('diagnostics-activity-indicator'));
+
+        expect(requestDiagnosticsOpen).toHaveBeenCalledWith('actions');
+        expect(navigateMock).toHaveBeenCalledWith('/settings');
+    });
+
+    it('renders activity indicator before connectivity indicator', () => {
+        render(<AppBar title="Test" />);
+
+        const activity = screen.getByTestId('diagnostics-activity-indicator');
+        const connectivity = screen.getByTestId('connectivity-indicator');
+
+        const position = activity.compareDocumentPosition(connectivity);
+        expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+});

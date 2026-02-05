@@ -35,10 +35,10 @@ Key relationships:
 
 ## 3. Terminology
 
-- **Action Summary**  
+- **Action Summary**
   A derived, condensed representation of a single Action Trace, produced by aggregating all trace events sharing the same `correlationId`.
 
-- **Effect**  
+- **Effect**
   A summarized representation of an external interaction (REST or FTP) caused by an Action Trace.
 
 - **Origin**
@@ -68,19 +68,19 @@ Action Summaries are a **pure projection** of trace data. They apply **no post-p
 
 **Normative clarifications:**
 
-1. **No correlation merging**  
+1. **No correlation merging**
    Action Summaries MUST NOT merge events from different `correlationId` values, even if they appear semantically related.
 
-2. **No heuristic grouping**  
+2. **No heuristic grouping**
    Action Summaries MUST NOT apply timing-based or name-based heuristics to group events that have distinct `correlationId` values.
 
-3. **No deduplication**  
+3. **No deduplication**
    If tracing emits duplicate Action Traces for the same user interaction, Action Summaries will faithfully reflect those duplicates. The fix belongs in the tracing layer, not in Action Summary derivation.
 
-4. **Effect grouping is guaranteed by tracing**  
+4. **Effect grouping is guaranteed by tracing**
    Correct grouping of user actions with their effects (REST/FTP operations) is the responsibility of the tracing system. Action Summaries rely strictly on `correlationId` boundaries defined by tracing.
 
-5. **Diagnostic value**  
+5. **Diagnostic value**
    If an Action Summary shows a user action separated from its effects (effects appearing as separate system-origin summaries), this indicates either:
    - An intentional async pattern where effects run after the user action completes, or
    - A tracing bug that must be fixed at the source.
@@ -279,7 +279,7 @@ Actions
 Example:
 
 ```text
-Errors | Logs | Traces | Actions
+Error Logs | Logs | Traces | Actions
 ```
 
 ---
@@ -290,15 +290,15 @@ Errors | Logs | Traces | Actions
 
 | Origin | Visual Style       |
 | ------ | ------------------ |
-| user   | Green              |
-| system | Blue               |
+| user   | Muted green        |
+| system | Muted blue         |
 
 #### Effect-level Indicators
 
 | Effect Type | Color  |
 | ----------- | ------ |
-| rest        | Green  |
-| ftp         | Yellow |
+| rest        | Muted purple |
+| ftp         | Muted amber  |
 
 ---
 

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ConfigBrowserPage from '@/pages/ConfigBrowserPage';
@@ -59,6 +60,12 @@ vi.mock('@/lib/uiErrors', () => ({
   reportUserError: vi.fn(),
 }));
 
+const renderConfigBrowserPage = () => render(
+  <MemoryRouter>
+    <ConfigBrowserPage />
+  </MemoryRouter>,
+);
+
 vi.mock('@/lib/c64api', () => ({
   getC64API: vi.fn(),
 }));
@@ -87,7 +94,7 @@ describe('ConfigBrowserPage', () => {
     setupDefaultMocks();
     mockUseC64Connection.mockReturnValue({ status: { isConnected: false } });
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     expect(screen.getByText(/not connected/i)).toBeInTheDocument();
   });
@@ -99,7 +106,7 @@ describe('ConfigBrowserPage', () => {
       isLoading: false,
     });
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.change(screen.getByPlaceholderText(/search categories/i), { target: { value: 'clock' } });
 
@@ -114,7 +121,7 @@ describe('ConfigBrowserPage', () => {
       isLoading: false,
     });
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.change(screen.getByPlaceholderText(/search categories/i), { target: { value: 'missing' } });
 
@@ -128,7 +135,7 @@ describe('ConfigBrowserPage', () => {
       isLoading: false,
     });
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     expect(screen.getByText(/no categories available/i)).toBeInTheDocument();
   });
@@ -157,7 +164,7 @@ describe('ConfigBrowserPage', () => {
       refetch,
     }));
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
 
@@ -193,7 +200,7 @@ describe('ConfigBrowserPage', () => {
       refetch,
     }));
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
 
@@ -229,7 +236,7 @@ describe('ConfigBrowserPage', () => {
       refetch,
     }));
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /general/i }));
     fireEvent.click(await screen.findByRole('button', { name: /update demo option/i }));
@@ -263,7 +270,7 @@ describe('ConfigBrowserPage', () => {
       refetch,
     }));
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /clock settings/i }));
     fireEvent.click(await screen.findByRole('button', { name: /sync clock/i }));
@@ -294,7 +301,7 @@ describe('ConfigBrowserPage', () => {
       refetch,
     }));
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /clock settings/i }));
     fireEvent.click(await screen.findByRole('button', { name: /sync clock/i }));
@@ -328,7 +335,7 @@ describe('ConfigBrowserPage', () => {
     }));
     vi.mocked(resolveAudioMixerResetValue).mockResolvedValue('0 dB');
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
     fireEvent.click(await screen.findByRole('button', { name: /reset/i }));
@@ -359,7 +366,7 @@ describe('ConfigBrowserPage', () => {
       refetch,
     }));
 
-    render(<ConfigBrowserPage />);
+    renderConfigBrowserPage();
 
     fireEvent.click(screen.getByRole('button', { name: /audio mixer/i }));
     fireEvent.click(await screen.findByRole('button', { name: /refresh/i }));

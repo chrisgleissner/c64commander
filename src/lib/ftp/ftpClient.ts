@@ -1,4 +1,5 @@
 import { addErrorLog } from '@/lib/logging';
+import { decrementFtpInFlight, incrementFtpInFlight } from '@/lib/diagnostics/diagnosticsActivity';
 import { FtpClient, type FtpEntry, type FtpListOptions, type FtpReadOptions } from '@/lib/native/ftpClient';
 import { getActiveAction, runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordFtpOperation, recordTraceError } from '@/lib/tracing/traceSession';
@@ -16,6 +17,7 @@ const executeFtpList = async (
   normalizedPath: string,
   intent: InteractionIntent,
 ): Promise<FtpListResult> => {
+  incrementFtpInFlight();
   return withFtpInteraction({
     action,
     operation: 'list',
@@ -46,6 +48,8 @@ const executeFtpList = async (
       });
       recordTraceError(action, err);
       throw error;
+    } finally {
+      decrementFtpInFlight();
     }
   });
 };
@@ -74,6 +78,7 @@ const executeFtpRead = async (
   path: string,
   intent: InteractionIntent,
 ): Promise<{ data: string; sizeBytes?: number }> => {
+  incrementFtpInFlight();
   return withFtpInteraction({
     action,
     operation: 'read',
@@ -104,6 +109,8 @@ const executeFtpRead = async (
       });
       recordTraceError(action, err);
       throw error;
+    } finally {
+      decrementFtpInFlight();
     }
   });
 };

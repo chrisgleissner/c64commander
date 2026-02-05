@@ -56,6 +56,13 @@
     --c64-green: 145 50% 45%;
     --c64-red: 0 65% 50%;
 
+    /* Diagnostics semantic colors (muted C64-inspired) */
+    --diag-user: 142 28% 40%;
+    --diag-system: 210 25% 50%;
+    --diag-rest: 265 30% 55%;
+    --diag-ftp: 35 45% 48%;
+    --diag-error: 0 55% 50%;
+
     /* Sidebar */
     --sidebar-background: 230 25% 12%;
     --sidebar-foreground: 220 15% 92%;
@@ -116,6 +123,13 @@
     --c64-brown: 25 25% 45%;
     --c64-green: 145 45% 50%;
     --c64-red: 0 55% 55%;
+
+    /* Diagnostics semantic colors (muted C64-inspired) */
+    --diag-user: 142 30% 45%;
+    --diag-system: 210 30% 60%;
+    --diag-rest: 265 35% 62%;
+    --diag-ftp: 35 50% 55%;
+    --diag-error: 0 60% 60%;
 
     /* Sidebar dark */
     --sidebar-background: 237 35% 8%;
@@ -183,7 +197,7 @@
 
   /* Retro button style */
   .c64-button {
-    @apply relative font-mono font-medium uppercase tracking-wider px-4 py-2 
+    @apply relative font-mono font-medium uppercase tracking-wider px-4 py-2
            bg-primary text-primary-foreground rounded-md
            shadow-[0_4px_0_0_hsl(var(--c64-dark-blue))]
            active:translate-y-1 active:shadow-none
@@ -205,19 +219,19 @@
 
   /* Config item card */
   .config-card {
-    @apply bg-card border border-border rounded-lg p-4 
+    @apply bg-card border border-border rounded-lg p-4
            hover:border-primary/50 transition-colors;
   }
 
   /* Category header */
   .category-header {
-    @apply flex items-center gap-2 font-mono text-sm font-semibold 
+    @apply flex items-center gap-2 font-mono text-sm font-semibold
            text-muted-foreground uppercase tracking-wider;
   }
 
   /* Value display */
   .value-badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-md 
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-md
            bg-secondary text-secondary-foreground font-mono text-sm;
   }
 

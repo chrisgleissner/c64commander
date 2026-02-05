@@ -187,8 +187,8 @@ test.describe('Settings connection management', () => {
       'Play and Disk',
       'Config',
       'HVSC Library',
-      'About',
       'Device Safety',
+      'About',
     ]);
   });
 });

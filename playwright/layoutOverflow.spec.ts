@@ -229,7 +229,7 @@ test.describe('Layout overflow safeguards', () => {
     await snap(page, testInfo, 'settings-open');
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'diagnostics-dialog');
@@ -275,7 +275,7 @@ test.describe('Layout overflow safeguards', () => {
     });
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'settings-long-log');
