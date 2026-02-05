@@ -200,6 +200,11 @@ export default function SettingsPage() {
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === 'android';
 
+  const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
+    setLogsDialogOpen(open);
+    setDiagnosticsOverlayActive(open);
+  }, []);
+
   useEffect(() => {
     setPasswordInput(password);
   }, [password]);
@@ -294,21 +299,20 @@ export default function SettingsPage() {
       const detail = (event as CustomEvent).detail as { tab?: DiagnosticsTabKey } | undefined;
       if (!detail?.tab) return;
       setDiagnosticsTab(detail.tab);
-      setLogsDialogOpen(true);
+      setDiagnosticsDialogOpen(true);
     };
     const pending = consumeDiagnosticsOpenRequest();
     if (pending) {
       setDiagnosticsTab(pending);
-      setLogsDialogOpen(true);
+      setDiagnosticsDialogOpen(true);
     }
     window.addEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
     return () => window.removeEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
-  }, []);
+  }, [setDiagnosticsDialogOpen]);
 
   useEffect(() => {
-    setDiagnosticsOverlayActive(logsDialogOpen);
     return () => setDiagnosticsOverlayActive(false);
-  }, [logsDialogOpen]);
+  }, []);
 
   const refreshSafPermissions = async () => {
     if (!isAndroid) return;
@@ -796,7 +800,7 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Button
               variant="outline"
-              onClick={() => setLogsDialogOpen(true)}
+              onClick={() => setDiagnosticsDialogOpen(true)}
               data-diagnostics-open-trigger="true"
             >
               <FileText className="h-4 w-4 mr-2" />
@@ -1491,7 +1495,7 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
+      <Dialog open={logsDialogOpen} onOpenChange={setDiagnosticsDialogOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>

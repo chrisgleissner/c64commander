@@ -21,6 +21,9 @@ export const withDiagnosticsTraceOverride = async <T>(fn: () => Promise<T> | T):
 
 export const isDiagnosticsTraceOverrideActive = () => traceOverrideDepth > 0;
 
+export const shouldSuppressDiagnosticsSideEffects = () =>
+    overlayActive && traceOverrideDepth === 0;
+
 export const subscribeDiagnosticsOverlay = (listener: (active: boolean) => void) => {
     listeners.add(listener);
     return () => listeners.delete(listener);

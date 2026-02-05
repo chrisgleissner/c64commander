@@ -14,8 +14,7 @@ import {
   resetActionContextStore,
 } from '@/lib/tracing/traceActionContextStore';
 import {
-  isDiagnosticsOverlayActive,
-  isDiagnosticsTraceOverrideActive,
+  shouldSuppressDiagnosticsSideEffects,
   withDiagnosticsTraceOverride,
 } from '@/lib/diagnostics/diagnosticsOverlayState';
 
@@ -43,7 +42,7 @@ export const resetActionTrace = () => {
  * @returns The result of fn
  */
 export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
-  const suppress = isDiagnosticsOverlayActive() && !isDiagnosticsTraceOverrideActive();
+  const suppress = shouldSuppressDiagnosticsSideEffects();
   return runWithActionContext(context, async () => {
     if (!suppress) {
       recordActionStart(context);

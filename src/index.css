@@ -170,7 +170,7 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased overflow-x-hidden;
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   :where(p, span, a, button, label, li, td, th) {

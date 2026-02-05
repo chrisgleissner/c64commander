@@ -12,7 +12,7 @@ import type {
 import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
 import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from '@/lib/tracing/traceIds';
-import { isDiagnosticsOverlayActive, isDiagnosticsTraceOverrideActive } from '@/lib/diagnostics/diagnosticsOverlayState';
+import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
 const MAX_EVENT_COUNT = 25_000;
@@ -40,8 +40,7 @@ const estimateEventSize = (event: TraceEvent) => {
 };
 
 const shouldSuppressTraceEvent = (type: TraceEventType) => {
-  if (!isDiagnosticsOverlayActive()) return false;
-  if (isDiagnosticsTraceOverrideActive()) return false;
+  if (!shouldSuppressDiagnosticsSideEffects()) return false;
   if (type === 'error') return false;
   return true;
 };
