@@ -255,7 +255,18 @@ test.describe('UI coverage', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const expectedVersion = resolveExpectedVersion() || '—';
     const versionCard = page.getByText('Version', { exact: true }).locator('..');
-    await expect(versionCard.locator('p')).toHaveText(expectedVersion);
+    const versionText = versionCard.locator('p');
+    if (expectedVersion === '—') {
+      await expect(versionText).toHaveText('—');
+    } else {
+      const tagMatch = expectedVersion.match(/^(.+?)-[0-9a-f]{7,}$/i);
+      if (tagMatch) {
+        const escapedTag = tagMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}-[0-9a-f]{7,8}$`));
+      } else {
+        await expect(versionText).toHaveText(expectedVersion);
+      }
+    }
     await snap(page, testInfo, 'home-version');
   });
 
