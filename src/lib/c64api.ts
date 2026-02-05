@@ -86,7 +86,7 @@ const extractRequestBody = (body: unknown) => {
       type: 'blob',
       sizeBytes: body.size,
       mimeType: body.type || null,
-      source: 'android-local',
+      source: 'blob',
     };
   }
   if (body instanceof ArrayBuffer) {
