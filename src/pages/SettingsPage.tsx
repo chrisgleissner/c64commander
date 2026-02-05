@@ -69,6 +69,7 @@ import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
+import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
 import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -127,6 +128,8 @@ export default function SettingsPage() {
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const trace = useActionTrace('SettingsPage');
+  const buildInfo = getBuildInfo();
+  const buildInfoRows = getBuildInfoRows(buildInfo);
 
   const setHvscEnabledAndPersist = (enabled: boolean) => {
     void setHvscEnabled(enabled);
@@ -684,13 +687,13 @@ export default function SettingsPage() {
                 value={deviceHostInput}
                 onChange={(e) => setDeviceHostInput(e.target.value)}
                 placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-                className="font-mono"
+                className="font-sans"
               />
               <p className="text-xs text-muted-foreground">
                 Hostname or IP from the C64 menu.
               </p>
               <p className="text-xs text-muted-foreground">
-                Currently using: <span className="font-mono break-all">{runtimeDeviceHost}</span>
+                Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
                 {isDemoActive ? ' (Demo mock)' : ''}
               </p>
               {isDemoActive ? (
@@ -715,7 +718,7 @@ export default function SettingsPage() {
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="Optional"
-                className="font-mono"
+                className="font-sans"
               />
               <p className="text-xs text-muted-foreground">
                 Network password from the C64 manual, if defined
@@ -1454,13 +1457,17 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">App Version</span>
-              <span className="font-mono">1.0.0</span>
-            </div>
-            <div className="flex justify-between">
+            {buildInfoRows.map((row) => (
+              <div key={row.testId} className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="font-semibold text-right break-words" data-testid={row.testId}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-start justify-between gap-3">
               <span className="text-muted-foreground">REST API</span>
-              <span className="font-mono">v0.1</span>
+              <span className="font-semibold">v0.1</span>
             </div>
             {isDeveloperModeEnabled ? (
               <div className="text-xs font-semibold text-success">Developer mode enabled</div>
@@ -1732,7 +1739,7 @@ export default function SettingsPage() {
                           <div className="grid gap-2 sm:grid-cols-2">
                             <div>
                               <p className="text-muted-foreground">Correlation</p>
-                              <p className="font-mono">{summary.correlationId}</p>
+                              <p className="font-semibold break-words">{summary.correlationId}</p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">Action</p>

@@ -198,7 +198,7 @@ export const HvscControls = ({
           </div>
         </div>
         {hvscCurrentFile && (
-          <p className="text-[11px] text-muted-foreground truncate">Current: {hvscCurrentFile}</p>
+          <p className="text-[11px] text-muted-foreground break-words whitespace-normal">Current: {hvscCurrentFile}</p>
         )}
       </div>
     )}
@@ -237,11 +237,11 @@ export const HvscControls = ({
               <Button
                 variant={folder === selectedHvscFolder ? 'secondary' : 'outline'}
                 size="sm"
-                className="flex-1 justify-start min-w-0"
+                className="flex-1 justify-start min-w-0 whitespace-normal items-start"
                 onClick={() => onSelectFolder(folder)}
               >
                 <FolderOpen className="h-4 w-4 mr-1 shrink-0" />
-                <span className="truncate">{folder}</span>
+                <span className="break-words whitespace-normal">{folder}</span>
               </Button>
               <Button
                 variant="default"

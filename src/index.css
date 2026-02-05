@@ -188,19 +188,19 @@
   }
 
   .font-sans {
-    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-family: 'Inter', 'Arial', ui-sans-serif, system-ui, sans-serif;
   }
 }
 
 @layer components {
   /* C64 styled header */
   .c64-header {
-    @apply font-mono font-bold tracking-wide uppercase;
+    @apply font-sans font-semibold tracking-wide uppercase;
   }
 
   /* Retro button style */
   .c64-button {
-    @apply relative font-mono font-medium uppercase tracking-wider px-4 py-2
+    @apply relative font-sans font-medium uppercase tracking-wider px-4 py-2
            bg-primary text-primary-foreground rounded-md
            shadow-[0_4px_0_0_hsl(var(--c64-dark-blue))]
            active:translate-y-1 active:shadow-none
@@ -228,14 +228,14 @@
 
   /* Category header */
   .category-header {
-    @apply flex items-center gap-2 font-mono text-sm font-semibold
+    @apply flex items-center gap-2 font-sans text-sm font-semibold
            text-muted-foreground uppercase tracking-wider;
   }
 
   /* Value display */
   .value-badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-md
-           bg-secondary text-secondary-foreground font-mono text-sm;
+           bg-secondary text-secondary-foreground font-sans text-sm;
   }
 
   /* Quick action button */

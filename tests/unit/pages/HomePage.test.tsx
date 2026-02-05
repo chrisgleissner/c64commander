@@ -240,8 +240,8 @@ describe('HomePage SID status', () => {
     );
 
     expect(screen.getByText('Version').nextSibling?.textContent).toContain('—');
-    expect(screen.getByText('Git').nextSibling?.textContent).toContain('—');
-    expect(screen.getByText('Build').nextSibling?.textContent).toContain('—');
+    expect(screen.getByText(/Git/i).nextSibling?.textContent).toContain('—');
+    expect(screen.getByText(/Build/i).nextSibling?.textContent).toContain('—');
     expect(screen.getByText(/unable to connect to c64 ultimate/i)).toBeTruthy();
   });
 
@@ -273,7 +273,7 @@ describe('HomePage SID status', () => {
 
     expect(screen.getByText('1.2.3')).toBeTruthy();
     expect(screen.getByText('deadbeef')).toBeTruthy();
-    expect(screen.getByText('2024-03-20 12:34')).toBeTruthy();
+    expect(screen.getByText('2024-03-20 12:34:00 UTC')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'C64U' })).toBeTruthy();
     expect(screen.getByText('c64u.local')).toBeTruthy();
     expect(screen.getByText('disk.d64')).toBeTruthy();

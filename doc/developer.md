@@ -32,6 +32,10 @@ npm run format:check
 
 The `./build` script runs `npm run format` automatically before build steps (use `--skip-format` to bypass).
 
+## UI typography stability
+
+Root cause (resolved): the app bar and several UI labels used the `font-mono` class, but JetBrains Mono is not bundled. When styles re-applied after interactions, browsers swapped to the default monospace fallback, causing visible font shifts and header height changes. The fix standardizes UI labels/values on the sans-serif stack (`Inter` → `Arial` → system) and removes monospace usage from standard UI elements.
+
 VS Code workspace settings in `.vscode/settings.json` enable:
 
 - format on save

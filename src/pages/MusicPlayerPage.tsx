@@ -270,10 +270,10 @@ export default function MusicPlayerPage() {
   const hvscProgressPercent = calculateHvscProgress(hvscProcessedCount, hvscTotalCount, hvscProgress);
   const hvscProgressVisible = Boolean(
     hvscLoading ||
-      hvscStage ||
-      hvscProcessedCount !== null ||
-      hvscTotalCount !== null ||
-      hvscProgressPercent !== null,
+    hvscStage ||
+    hvscProcessedCount !== null ||
+    hvscTotalCount !== null ||
+    hvscProgressPercent !== null,
   );
   const hvscInlineError = hvscErrorMessage ||
     (!hvscLoading && hvscStatus?.ingestionState === 'error' ? hvscStatus.ingestionError : null);
@@ -806,7 +806,7 @@ export default function MusicPlayerPage() {
                     )}
                   </div>
                   {hvscCurrentFile && (
-                    <p className="text-[11px] text-muted-foreground truncate">
+                    <p className="text-[11px] text-muted-foreground break-words whitespace-normal">
                       Current: {hvscCurrentFile}
                     </p>
                   )}
@@ -868,11 +868,11 @@ export default function MusicPlayerPage() {
                   <Button
                     key={folder.path}
                     variant={folder.path === selectedHvscFolder ? 'secondary' : 'outline'}
-                    className="justify-start min-w-0"
+                    className="justify-start min-w-0 whitespace-normal items-start"
                     onClick={() => setSelectedHvscFolder(folder.path)}
                   >
                     <Folder className="h-4 w-4 mr-2 shrink-0" />
-                    <span className="truncate">{folder.path}</span>
+                    <span className="break-words whitespace-normal">{folder.path}</span>
                   </Button>
                 ))}
               </div>
@@ -888,7 +888,7 @@ export default function MusicPlayerPage() {
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                 {hvscSongs.slice(0, 80).map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-xs text-muted-foreground break-words whitespace-normal">
                       {entry.path}
                     </div>
                     <Button
@@ -977,11 +977,11 @@ export default function MusicPlayerPage() {
                   <Button
                     key={folder.path}
                     variant={folder.path === selectedLocalFolder ? 'secondary' : 'outline'}
-                    className="justify-start min-w-0"
+                    className="justify-start min-w-0 whitespace-normal items-start"
                     onClick={() => setSelectedLocalFolder(folder.path)}
                   >
                     <Folder className="h-4 w-4 mr-2 shrink-0" />
-                    <span className="truncate">{folder.path}</span>
+                    <span className="break-words whitespace-normal">{folder.path}</span>
                   </Button>
                 ))}
               </div>
@@ -997,7 +997,7 @@ export default function MusicPlayerPage() {
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                 {localSongs.slice(0, 80).map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground truncate">
+                    <div className="text-xs text-muted-foreground break-words whitespace-normal">
                       {entry.path}
                     </div>
                     <Button

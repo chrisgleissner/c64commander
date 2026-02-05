@@ -45,7 +45,7 @@ export const DiagnosticsListItem = ({
                         ) : null}
                         <span className="min-w-0 break-words whitespace-normal">{title}</span>
                     </div>
-                    <span className="text-muted-foreground font-mono text-xs tabular-nums text-right shrink-0">
+                    <span className="text-muted-foreground text-xs font-semibold tabular-nums text-right shrink-0">
                         {timestamp}
                     </span>
                 </div>
@@ -54,7 +54,7 @@ export const DiagnosticsListItem = ({
                         <div className={cn('min-w-0 flex flex-wrap items-center gap-2', showOrigin ? 'pl-5' : undefined)}>
                             {secondaryLeft}
                         </div>
-                        <div className="text-muted-foreground font-mono tabular-nums text-right shrink-0">
+                        <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
                             {secondaryRight}
                         </div>
                     </div>

@@ -885,14 +885,13 @@ export const HomeDiskManager = () => {
             <div key={key} className="config-card space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-sm">{buildDriveLabel(key)}</span>
+                  <span className="font-semibold text-sm">{buildDriveLabel(key)}</span>
                   <span className="text-xs text-muted-foreground">#{info?.bus_id ?? '—'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
-                      powerEnabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                    }`}
+                    className={`text-xs px-2 py-0.5 rounded-full ${powerEnabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                      }`}
                   >
                     {powerEnabled ? 'ON' : 'OFF'}
                   </span>
@@ -903,7 +902,7 @@ export const HomeDiskManager = () => {
               <div className="flex items-center justify-between gap-2 min-w-0">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-muted-foreground">Mounted disk</p>
-                  <p className="text-sm font-medium truncate max-w-full">
+                  <p className="text-sm font-medium break-words whitespace-normal max-w-full">
                     {mountedLabel}
                   </p>
                   {mountedDisk?.group ? (
@@ -1013,11 +1012,11 @@ export const HomeDiskManager = () => {
         type="file"
         multiple
         className="hidden"
-          onChange={wrapUserEvent((event) => {
+        onChange={wrapUserEvent((event) => {
           const selected = event.currentTarget.files ? Array.from(event.currentTarget.files) : [];
           void handleLocalSourceInput(selected.length ? selected : null);
           event.currentTarget.value = '';
-          }, 'upload', 'FileInput', { type: 'file' }, 'FileInput')}
+        }, 'upload', 'FileInput', { type: 'file' }, 'FileInput')}
       />
 
       <Dialog open={Boolean(activeDrive)} onOpenChange={(open) => !open && setActiveDrive(null)}>
@@ -1126,7 +1125,7 @@ export const HomeDiskManager = () => {
                       className="flex items-center gap-2"
                     >
                       <span className={cn('h-2 w-2 rounded-full border', option.color.chip)} aria-hidden="true" />
-                      <span className={cn(option.color.text, 'truncate max-w-[180px]')}>
+                      <span className={cn(option.color.text, 'max-w-[180px] break-words whitespace-normal')}>
                         {option.name}
                       </span>
                       <span className="text-[10px] text-muted-foreground">({option.count})</span>

@@ -158,13 +158,13 @@ const DiskRow = ({
         <div className="min-w-0">
           <button
             type="button"
-            className="text-sm font-medium text-left hover:underline truncate max-w-full"
+            className="text-sm font-medium text-left hover:underline break-words whitespace-normal max-w-full"
             onClick={wrapUserEvent(() => onMount?.(disk), 'click', 'Disk', { title: disk.name }, 'DiskRow')}
             disabled={isDimmed || disableActions}
           >
             {highlightText(disk.name, filter)}
           </button>
-          <div className="text-[11px] text-muted-foreground truncate">
+          <div className="text-[11px] text-muted-foreground break-words whitespace-normal">
             {highlightText(disk.path, filter)}
           </div>
           {disk.group ? (
@@ -173,7 +173,7 @@ const DiskRow = ({
                 className={cn('h-2 w-2 rounded-full border', groupColor?.chip)}
                 aria-hidden="true"
               />
-              <span className={cn(groupColor?.text, 'truncate min-w-0')}>
+              <span className={cn(groupColor?.text, 'break-words whitespace-normal min-w-0')}>
                 Group: {highlightText(disk.group, filter)}
               </span>
             </div>

@@ -417,17 +417,24 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
   const windowMs = loadStartupDiscoveryWindowMs();
+  let windowExpired = false;
+  const handleWindowExpiry = async () => {
+    if (cancelled) return;
+    cancelled = true;
+    globalThis.clearInterval(probeTimer);
+    cancelActiveDiscovery();
+    if (autoDemoEnabled) {
+      await transitionToDemoActive(trigger);
+    } else {
+      await transitionToOfflineNoDemo(trigger);
+    }
+  };
   const windowTimer = globalThis.setTimeout(() => {
     void (async () => {
       if (cancelled) return;
-      cancelled = true;
-      globalThis.clearInterval(probeTimer);
-      cancelActiveDiscovery();
-      if (autoDemoEnabled) {
-        await transitionToDemoActive(trigger);
-      } else {
-        await transitionToOfflineNoDemo(trigger);
-      }
+      windowExpired = true;
+      if (probeInFlight) return;
+      await handleWindowExpiry();
     })();
   }, windowMs);
 
@@ -449,6 +456,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       globalThis.clearInterval(probeTimer);
       await transitionToRealConnected(trigger);
     } else {
+      if (windowExpired) {
+        await handleWindowExpiry();
+        return;
+      }
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
       if (isSmokeModeEnabled()) {
         console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));

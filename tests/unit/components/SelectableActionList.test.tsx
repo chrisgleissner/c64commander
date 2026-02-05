@@ -96,6 +96,35 @@ describe('SelectableActionList view-all wrapping', () => {
     expect(within(list).getByText('Bravo.sid')).toBeInTheDocument();
   });
 
+  it('renders long titles with wrapping classes', () => {
+    const items: ActionListItem[] = [
+      {
+        id: 'track-1',
+        title: 'A/very/long/path/that/should/wrap/without/ellipsis/or/truncation.sid',
+        selected: false,
+        actionLabel: 'Play',
+        onAction: vi.fn(),
+      },
+    ];
+
+    render(
+      <SelectableActionList
+        title="Playlist"
+        items={items}
+        emptyLabel="Empty"
+        selectedCount={0}
+        allSelected={false}
+        onToggleSelectAll={vi.fn()}
+        maxVisible={10}
+      />,
+    );
+
+    const title = screen.getByText(/A\/very\/long\/path/);
+    expect(title.className).toContain('whitespace-normal');
+    expect(title.className).toContain('break-words');
+    expect(title.className).not.toContain('truncate');
+  });
+
   it('hides headers when no items match and restores after clearing filter', () => {
     const items: ActionListItem[] = [
       {

@@ -562,7 +562,7 @@ export default function ConfigBrowserPage() {
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar
-        title="Configuration"
+        title="Config"
         subtitle={
           <span>
             {categoriesData?.categories.length || 0} categories

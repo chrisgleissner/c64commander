@@ -78,7 +78,7 @@ export const PlaybackSettingsPanel = ({
       {songlengthsName ? (
         <button
           type="button"
-          className="text-xs font-mono text-primary hover:underline text-left break-all"
+          className="text-xs font-semibold text-primary hover:underline text-left break-all"
           onClick={onChooseSonglengthsFile}
         >
           {songlengthsName}

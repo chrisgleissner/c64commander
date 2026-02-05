@@ -9,6 +9,7 @@ import {
   Home,
   Disc,
   Sliders,
+  Activity,
 } from 'lucide-react';
 import { AppBar } from '@/components/AppBar';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
@@ -28,21 +29,20 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          This app controls your <strong>C64 Ultimate</strong> device via its REST API.
-          Make sure your device is:
+          C64 Commander connects to your <strong>C64 Ultimate</strong> over the REST API. Stay on the same network and
+          make sure the device is reachable.
         </p>
-        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>Running firmware 3.11 or later</li>
-          <li>Connected to your local network</li>
-          <li>Accessible from this device (same network)</li>
-        </ul>
-        <p className="font-medium">Quick Setup:</p>
+        <p className="font-medium">Connect in 4 steps:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-          <li>Go to <strong>Settings</strong> tab</li>
-          <li>Enter your C64U's hostname or IP address</li>
-          <li>If network password is set (firmware 3.12+), enter it</li>
-          <li>Tap <strong>Save & Connect</strong></li>
+          <li>Open <strong>Settings</strong> → <strong>Connection</strong>.</li>
+          <li>Enter the C64U hostname or IP address.</li>
+          <li>Enter the network password if your device uses one.</li>
+          <li>Tap <strong>Save & Connect</strong>.</li>
         </ol>
+        <p className="text-muted-foreground">
+          Use the C64U status pill in the header to see connection state and tap it to force a new discovery.
+          If no device is found, Demo Mode can be offered for exploration.
+        </p>
       </div>
     ),
   },
@@ -53,58 +53,89 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          The Home page shows your device info, machine controls, and a minimal drive summary.
+          Home is the operational dashboard: device info, machine controls, and quick configuration actions.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Reset</strong> - Soft reset the C64</li>
-          <li><strong>Reboot</strong> - Full reboot with cartridge re-init</li>
-          <li><strong>Menu</strong> - Toggle Ultimate menu (like the button)</li>
-          <li><strong>Pause/Resume</strong> - Stop/start CPU via DMA</li>
-          <li><strong>Power Off</strong> - Shut down the machine</li>
+          <li><strong>Reset / Reboot</strong> control the C64U CPU and system state.</li>
+          <li><strong>Menu</strong> toggles the Ultimate menu (same as the hardware button).</li>
+          <li><strong>Pause / Resume</strong> stops or restarts the CPU via DMA.</li>
+          <li><strong>Power Off</strong> shuts down the machine.</li>
         </ul>
-        <p className="font-medium">Configuration Actions:</p>
+        <p className="font-medium">Config actions:</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Save</strong> - Save current config to flash</li>
-          <li><strong>Load</strong> - Restore config from flash</li>
-          <li><strong>Reset</strong> - Reset to factory defaults</li>
+          <li><strong>Save</strong> stores current settings to flash.</li>
+          <li><strong>Load</strong> restores the saved flash configuration.</li>
+          <li><strong>Reset</strong> returns settings to defaults.</li>
         </ul>
         <p className="text-muted-foreground">
-          Drive summary shows Drive A and Drive B status with the mounted image name.
+          The drive summary provides quick status and the currently mounted image for Drive A/B.
         </p>
       </div>
     ),
   },
   {
     id: 'play',
-    title: 'Play',
+    title: 'Play Files',
     icon: Play,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Browse and play files from local storage or the C64 Ultimate.
+          Use Play to find files, build a playlist, and control playback. Supported file types include SID, PRG, and CRT.
         </p>
+        <p className="font-medium">Find and play files:</p>
+        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+          <li>Open <strong>Play</strong> and tap <strong>Add items</strong>.</li>
+          <li>Pick a source: <strong>C64 Ultimate</strong>, <strong>This device</strong>, or <strong>HVSC</strong> (if enabled).</li>
+          <li>Browse folders, select files or folders, then confirm.</li>
+          <li>Use <strong>Play</strong> on the playlist or a single item.</li>
+        </ol>
+        <p className="font-medium">Playback controls:</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Play SID/PRG/CRT</strong> from local or Ultimate storage</li>
-          <li><strong>Upload files</strong> directly to the device</li>
-          <li><strong>HVSC controls</strong> appear when enabled in Settings</li>
+          <li>Play, pause, stop, next/previous track, and shuffle/repeat toggles.</li>
+          <li>SID duration controls and song number selection for multi-song SID files.</li>
+          <li>Optional songlengths support to auto-fill durations when available.</li>
         </ul>
       </div>
     ),
   },
   {
     id: 'disks',
-    title: 'Disks',
+    title: 'Disks & Drives',
     icon: Disc,
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Manage drives and disk images in one place.
+          The Disks page manages drive state and your disk collection.
+        </p>
+        <p className="font-medium">Find and mount disks:</p>
+        <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+          <li>Open <strong>Disks</strong>.</li>
+          <li>In the Drive cards, tap <strong>Mount…</strong> for Drive A or B.</li>
+          <li>Choose a disk from the collection or add one first.</li>
+        </ol>
+        <p className="font-medium">Add disks to the collection:</p>
+        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <li>Tap <strong>Add disks</strong> and pick a source (C64U, local device, or FTP source).</li>
+          <li>Use <strong>View all</strong> to search and manage large collections.</li>
+          <li>Disk entries show size, date, and allow rename or delete actions.</li>
+        </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'disk-swapping',
+    title: 'Swapping Disks',
+    icon: Disc,
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>
+          Disk swapping is designed for multi-disk titles.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>Mount and eject disk images</li>
-          <li>Enable/disable Drive A & B</li>
-          <li>Rotate disks in a group</li>
-          <li>Import from local storage or the Ultimate</li>
+          <li><strong>Set group</strong> assigns disks to a rotation group.</li>
+          <li><strong>Prev / Next</strong> on a drive cycles through the assigned group.</li>
+          <li>Use <strong>Mount…</strong> to swap directly to a specific disk.</li>
+          <li><strong>Eject</strong> clears a mounted disk before inserting another image.</li>
         </ul>
       </div>
     ),
@@ -116,13 +147,13 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Browse and modify <strong>all</strong> configuration settings on your C64U.
-          Settings are auto-discovered from the device at runtime.
+          Config exposes all C64U categories and items. Use search to find settings quickly.
         </p>
-        <p className="text-muted-foreground">
-          Audio Mixer includes solo toggles for the two physical SID sockets and two UltiSID chips.
-          Changes apply immediately but are not saved to flash automatically.
-        </p>
+        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <li>Changes apply immediately to the device.</li>
+          <li>Use Home → <strong>Save</strong> to persist changes to flash.</li>
+          <li>Audio Mixer includes SID socket and UltiSID controls with solo support.</li>
+        </ul>
       </div>
     ),
   },
@@ -133,14 +164,37 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Configure connection details, appearance, diagnostics, and internal testing options.
+          Settings controls connection details, appearance, and advanced behavior.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Connection</strong> - Hostname/IP and password</li>
-          <li><strong>Appearance</strong> - Light/dark/system theme</li>
-          <li><strong>Diagnostics</strong> - Logs and error reports</li>
-          <li><strong>Developer</strong> - HVSC and internal testing controls</li>
+          <li><strong>Connection</strong> stores host/IP and password.</li>
+          <li><strong>Appearance</strong> switches between light, dark, and system themes.</li>
+          <li><strong>Play</strong> options include playlist preview limits and HVSC enablement.</li>
+          <li><strong>Device safety</strong> guards concurrency and retry behavior.</li>
         </ul>
+      </div>
+    ),
+  },
+  {
+    id: 'diagnostics',
+    title: 'Diagnostics',
+    icon: Activity,
+    content: (
+      <div className="space-y-3 text-sm">
+        <p>
+          Diagnostics helps you inspect activity and share support data. Open it from Settings or the header activity
+          indicator.
+        </p>
+        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+          <li><strong>Actions</strong> summarizes user operations with REST/FTP counts and outcomes.</li>
+          <li><strong>Traces</strong> lists individual REST/FTP requests with timing and status details.</li>
+          <li><strong>Logs</strong> captures app logs and device communication events.</li>
+          <li><strong>Errors</strong> collects error reports with context for debugging.</li>
+        </ul>
+        <p className="text-muted-foreground">
+          Use the per-tab filter to narrow results, <strong>Clear</strong> to reset local logs, and <strong>Share</strong> to
+          export a diagnostic bundle.
+        </p>
       </div>
     ),
   },
@@ -195,7 +249,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
 export default function DocsPage() {
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
-      <AppBar title="Documentation" subtitle="How to use this app" />
+      <AppBar title="Docs" subtitle="How to use this app" />
 
       <main className="container py-6 space-y-4">
         {docSections.map((section, index) => (

@@ -67,7 +67,7 @@ export const usePlaylistListItems = ({
       items.push({
         id: item.id,
         title: item.label,
-        titleClassName: 'line-clamp-2 whitespace-normal break-words block',
+        titleClassName: 'whitespace-normal break-words block',
         meta: (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <FileOriginIcon

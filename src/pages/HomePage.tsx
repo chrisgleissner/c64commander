@@ -36,6 +36,7 @@ import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { buildSidStatusEntries } from '@/lib/config/sidStatus';
 import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from '@/lib/config/configItems';
 import { useActionTrace } from '@/hooks/useActionTrace';
+import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -72,24 +73,8 @@ export default function HomePage() {
   const [renameValues, setRenameValues] = useState<Record<string, string>>({});
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
-  const appVersion = __APP_VERSION__ || '';
-  const gitSha = __GIT_SHA__ || '';
-  const buildTime = __BUILD_TIME__ || '';
-
-  const formatBuildTime = (isoString: string) => {
-    if (!isoString) return '—';
-    try {
-      const date = new Date(isoString);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      return `${year}-${month}-${day} ${hours}:${minutes}`;
-    } catch {
-      return isoString;
-    }
-  };
+  const buildInfo = getBuildInfo();
+  const buildInfoRows = getBuildInfoRows(buildInfo);
 
   const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
@@ -214,23 +199,17 @@ export default function HomePage() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-card border border-border rounded-xl p-3"
+          className="bg-card border border-border rounded-xl p-2"
         >
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            <div className="bg-muted/50 rounded-lg p-2">
-              <span className="text-muted-foreground">Version</span>
-              <p className="font-mono font-medium truncate">{appVersion || '—'}</p>
-            </div>
-            <div className="bg-muted/50 rounded-lg p-2">
-              <span className="text-muted-foreground">Git</span>
-              <p className="font-mono font-medium truncate">
-                {gitSha ? gitSha.slice(0, 8) : '—'}
-              </p>
-            </div>
-            <div className="bg-muted/50 rounded-lg p-2">
-              <span className="text-muted-foreground">Build</span>
-              <p className="font-mono font-medium text-sm">{formatBuildTime(buildTime)}</p>
-            </div>
+          <div className="grid grid-cols-3 gap-2 text-[11px]">
+            {buildInfoRows.map((row) => (
+              <div key={row.testId} className="bg-muted/50 rounded-lg px-2 py-1.5">
+                <span className="text-muted-foreground">{row.label}</span>
+                <p className="font-semibold text-foreground break-words" data-testid={row.testId}>
+                  {row.value}
+                </p>
+              </div>
+            ))}
           </div>
         </motion.div>
 
@@ -239,36 +218,36 @@ export default function HomePage() {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-xl p-4"
+            className="bg-card border border-border rounded-xl p-3"
           >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <span className="font-mono text-primary font-bold text-lg">64</span>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <span className="text-primary font-semibold text-base">64</span>
               </div>
-              <div>
-                <h2 className="font-mono font-bold">{status.deviceInfo.product}</h2>
-                <p className="text-sm text-muted-foreground">
+              <div className="min-w-0">
+                <h2 className="font-semibold truncate">{status.deviceInfo.product}</h2>
+                <p className="text-sm text-muted-foreground truncate">
                   {status.deviceInfo.hostname}
                 </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="bg-muted/50 rounded-lg p-2">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
                 <span className="text-muted-foreground text-xs">Firmware</span>
-                <p className="font-mono font-medium">{status.deviceInfo.firmware_version}</p>
+                <p className="font-semibold">{status.deviceInfo.firmware_version}</p>
               </div>
-              <div className="bg-muted/50 rounded-lg p-2">
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
                 <span className="text-muted-foreground text-xs">FPGA</span>
-                <p className="font-mono font-medium">{status.deviceInfo.fpga_version}</p>
+                <p className="font-semibold">{status.deviceInfo.fpga_version}</p>
               </div>
-              <div className="bg-muted/50 rounded-lg p-2">
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
                 <span className="text-muted-foreground text-xs">Core</span>
-                <p className="font-mono font-medium">{status.deviceInfo.core_version}</p>
+                <p className="font-semibold">{status.deviceInfo.core_version}</p>
               </div>
-              <div className="bg-muted/50 rounded-lg p-2">
+              <div className="bg-muted/50 rounded-lg px-2 py-1.5">
                 <span className="text-muted-foreground text-xs">ID</span>
-                <p className="font-mono font-medium">{status.deviceInfo.unique_id}</p>
+                <p className="font-semibold break-words">{status.deviceInfo.unique_id}</p>
               </div>
             </div>
           </motion.div>
@@ -349,13 +328,13 @@ export default function HomePage() {
               onClick={wrapUserEvent(() => navigate('/disks'), 'click', 'DriveTile', { title: 'Drive A' }, 'DriveTile')}
               aria-label="Open Disks"
             >
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
                 <span className="font-medium shrink-0">Drive A:</span>
                 <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
                   {driveA?.enabled ? 'ON' : 'OFF'}
                 </span>
                 <span className="shrink-0">–</span>
-                <span className="font-medium truncate min-w-0">
+                <span className="font-medium break-words whitespace-normal min-w-0">
                   {driveA?.enabled ? driveA?.image_file || '—' : '—'}
                 </span>
               </div>
