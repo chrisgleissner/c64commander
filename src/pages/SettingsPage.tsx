@@ -101,14 +101,6 @@ import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
-import {
-  clearFtpBridgeUrl,
-  clearStoredFtpPort,
-  getFtpBridgeUrl,
-  getStoredFtpPort,
-  setFtpBridgeUrl,
-  setStoredFtpPort,
-} from '@/lib/ftp/ftpConfig';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -185,8 +177,6 @@ export default function SettingsPage() {
   const devTapTimestamps = useRef<number[]>([]);
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === 'android';
-  const [ftpPortInput, setFtpPortInput] = useState(String(getStoredFtpPort()));
-  const [ftpBridgeUrlInput, setFtpBridgeUrlInput] = useState(getFtpBridgeUrl());
 
   useEffect(() => {
     setPasswordInput(password);
@@ -457,28 +447,6 @@ export default function SettingsPage() {
     setProbeTimeoutInput(String(clamped / 1000));
   };
 
-  const commitFtpPort = () => {
-    const parsed = Number(ftpPortInput);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      clearStoredFtpPort();
-      setFtpPortInput(String(getStoredFtpPort()));
-      return;
-    }
-    setStoredFtpPort(Math.round(parsed));
-    setFtpPortInput(String(getStoredFtpPort()));
-  };
-
-  const commitFtpBridgeUrl = () => {
-    const trimmed = ftpBridgeUrlInput.trim();
-    if (!trimmed) {
-      clearFtpBridgeUrl();
-      setFtpBridgeUrlInput(getFtpBridgeUrl());
-      return;
-    }
-    setFtpBridgeUrl(trimmed);
-    setFtpBridgeUrlInput(getFtpBridgeUrl());
-  };
-
   const commitDeviceSafetyMode = (mode: DeviceSafetyMode) => {
     if (mode === 'RELAXED' && deviceSafetyMode !== 'RELAXED') {
       setPendingSafetyMode(mode);
@@ -698,47 +666,6 @@ export default function SettingsPage() {
 
           </div>
 
-          <div className="space-y-4 rounded-lg border border-border/70 p-3">
-            <div className="space-y-1">
-              <Label className="font-medium">FTP Connection</Label>
-              <p className="text-xs text-muted-foreground">
-                Override FTP port or bridge URL when troubleshooting non-standard setups.
-              </p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="ftp-port" className="text-sm">FTP port</Label>
-                <Input
-                  id="ftp-port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  step={1}
-                  value={ftpPortInput}
-                  onChange={(event) => setFtpPortInput(event.target.value)}
-                  onBlur={commitFtpPort}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitFtpPort();
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ftp-bridge-url" className="text-sm">FTP bridge URL</Label>
-                <Input
-                  id="ftp-bridge-url"
-                  value={ftpBridgeUrlInput}
-                  onChange={(event) => setFtpBridgeUrlInput(event.target.value)}
-                  onBlur={commitFtpBridgeUrl}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitFtpBridgeUrl();
-                  }}
-                  placeholder="https://bridge.example"
-                  className="font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
           <div className="flex gap-2 pt-2">
             <Button
               onClick={handleSaveConnection}
@@ -885,27 +812,6 @@ export default function SettingsPage() {
                   }
                 }}
               />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="config-write-interval" className="font-medium">
-                  Config write spacing
-                </Label>
-                <span className="text-xs text-muted-foreground">{configWriteIntervalMs} ms</span>
-              </div>
-              <Slider
-                id="config-write-interval"
-                min={0}
-                max={2000}
-                step={100}
-                value={[configWriteIntervalMs]}
-                onValueChange={(value) => setConfigWriteIntervalMs(clampConfigWriteIntervalMs(value[0] ?? 0))}
-                onValueCommit={(value) => saveConfigWriteIntervalMs(value[0] ?? 0)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum delay between consecutive config write calls. Default 500 ms.
-              </p>
             </div>
           </div>
         </motion.div>
@@ -1094,54 +1000,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* 7. About */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
-          onClick={handleDeveloperTap}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              handleDeveloperTap();
-            }
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Info className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">About</h2>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">App Version</span>
-              <span className="font-mono">1.0.0</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">REST API</span>
-              <span className="font-mono">v0.1</span>
-            </div>
-            {isDeveloperModeEnabled ? (
-              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
-            ) : null}
-          </div>
-
-          <a
-            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ultimate REST API Documentation
-          </a>
-        </motion.div>
-
-        {/* Last. Device Safety */}
+        {/* 7. Device Safety */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1246,16 +1105,14 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border border-border/70 p-3 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <Label className="font-medium">Advanced Controls</Label>
-                <p className="text-xs text-muted-foreground">
-                  Fine-tune device protection. Changes apply immediately.
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label className="font-medium">Advanced Controls</Label>
+              <p className="text-xs text-muted-foreground">
+                Fine-tuned device protection changes apply immediately.
+              </p>
               <Button
-                variant="outline"
-                size="sm"
+                variant="default"
+                className="w-full"
                 onClick={() => {
                   resetDeviceSafetyOverrides();
                   refreshDeviceSafetyState();
@@ -1263,6 +1120,31 @@ export default function SettingsPage() {
               >
                 Reset to mode defaults
               </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="config-write-interval" className="text-sm">Config write spacing (ms)</Label>
+              <Input
+                id="config-write-interval"
+                type="number"
+                min={0}
+                max={2000}
+                step={100}
+                value={configWriteIntervalMs}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isFinite(parsed)) {
+                    setConfigWriteIntervalMs(clampConfigWriteIntervalMs(parsed));
+                  }
+                }}
+                onBlur={() => saveConfigWriteIntervalMs(configWriteIntervalMs)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') saveConfigWriteIntervalMs(configWriteIntervalMs);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum delay between consecutive config write calls. Default 500 ms.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -1465,6 +1347,53 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </motion.div>
+
+        {/* Last. About */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
+          onClick={handleDeveloperTap}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              handleDeveloperTap();
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Info className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">About</h2>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">App Version</span>
+              <span className="font-mono">1.0.0</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">REST API</span>
+              <span className="font-mono">v0.1</span>
+            </div>
+            {isDeveloperModeEnabled ? (
+              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
+            ) : null}
+          </div>
+
+          <a
+            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ultimate REST API Documentation
+          </a>
         </motion.div>
       </main>
 

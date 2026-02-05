@@ -39,7 +39,46 @@ const extractBody = (body: BodyInit | null | undefined) => {
     }
   }
   if (body instanceof FormData) {
-    return '[form-data]';
+    // Provide structured summary of FormData for diagnostics
+    const fields: Array<{
+      name: string;
+      type: 'file' | 'text';
+      fileName?: string;
+      sizeBytes?: number;
+      mimeType?: string;
+    }> = [];
+    body.forEach((value, name) => {
+      if (typeof File !== 'undefined' && value instanceof File) {
+        fields.push({
+          name,
+          type: 'file',
+          fileName: value.name,
+          sizeBytes: value.size,
+          mimeType: value.type || undefined,
+        });
+      } else if (typeof Blob !== 'undefined' && value instanceof Blob) {
+        fields.push({
+          name,
+          type: 'file',
+          sizeBytes: value.size,
+          mimeType: value.type || undefined,
+        });
+      } else {
+        fields.push({
+          name,
+          type: 'text',
+        });
+      }
+    });
+    return { type: 'form-data', fields };
+  }
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    return {
+      type: 'blob',
+      sizeBytes: body.size,
+      mimeType: body.type || null,
+      source: 'android-local',
+    };
   }
   return '[body]';
 };

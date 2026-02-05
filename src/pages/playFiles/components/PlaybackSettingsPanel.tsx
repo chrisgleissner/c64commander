@@ -87,10 +87,9 @@ export const PlaybackSettingsPanel = ({
         <p className="text-xs text-muted-foreground">Not selected.</p>
       )}
       {songlengthsName && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
-        <div className="text-[11px] text-muted-foreground space-y-0.5">
-          {songlengthsSizeLabel ? <p>Size: {songlengthsSizeLabel}</p> : null}
-          {songlengthsEntryCount !== null ? <p>Entries: {songlengthsEntryCount}</p> : null}
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          ({songlengthsSizeLabel ? songlengthsSizeLabel : null}{songlengthsSizeLabel && songlengthsEntryCount !== null ? ', ' : null}{songlengthsEntryCount !== null ? `${songlengthsEntryCount} Entries` : null})
+        </p>
       ) : null}
       {songlengthsError ? (
         <p className="text-xs text-destructive">{songlengthsError}</p>
