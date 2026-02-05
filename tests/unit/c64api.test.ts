@@ -87,6 +87,10 @@ const getFetchMock = () => fetchMock as unknown as ReturnType<typeof vi.fn>;
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
+  buildErrorLogDetails: vi.fn((error: Error, details?: Record<string, unknown>) => ({
+    ...details,
+    error: error.message,
+  })),
 }));
 
 vi.mock('@capacitor/core', () => ({

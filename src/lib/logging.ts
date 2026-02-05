@@ -13,8 +13,8 @@ export type LogEntry = {
   details?: unknown;
 };
 
-const MAX_STACK_LINES = 20;
-const MAX_STACK_CHARS = 2000;
+const MAX_STACK_LINES = 30;
+const MAX_STACK_CHARS = 3000;
 
 const LOG_KEY = 'c64u_app_logs';
 const MAX_LOGS = 500;

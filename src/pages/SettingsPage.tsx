@@ -119,10 +119,10 @@ import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/co
 import { useConnectionState } from '@/hooks/useConnectionState';
 
 const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
-  debug: 'DEBUG',
+  debug: 'DBG',
   info: 'INFO',
   warn: 'WARN',
-  error: 'ERROR',
+  error: 'ERR',
 };
 
 const LOG_LEVEL_CLASSES: Record<LogLevel, string> = {
