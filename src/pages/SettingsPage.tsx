@@ -124,7 +124,7 @@ export default function SettingsPage() {
       });
     }
   };
-  
+
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
   const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
@@ -563,16 +563,15 @@ export default function SettingsPage() {
             {themeOptions.map((option) => {
               const Icon = option.icon;
               const isActive = theme === option.value;
-            
+
               return (
                 <button
                   key={option.value}
                   onClick={wrapUserEvent(() => setTheme(option.value), 'select', 'ThemeSelector', { title: option.label }, 'ThemeOption')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-                    isActive 
-                      ? 'border-primary bg-primary/5' 
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${isActive
+                      ? 'border-primary bg-primary/5'
                       : 'border-border hover:border-muted-foreground'
-                  }`}
+                    }`}
                 >
                   <Icon className={`h-6 w-6 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                   <span className={`text-sm ${isActive ? 'font-medium' : ''}`}>
@@ -688,13 +687,12 @@ export default function SettingsPage() {
           </div>
 
           {/* Connection Status */}
-          <div className={`p-3 rounded-lg text-sm break-words ${
-            status.isConnected 
-              ? 'bg-success/10 text-success' 
+          <div className={`p-3 rounded-lg text-sm break-words ${status.isConnected
+              ? 'bg-success/10 text-success'
               : status.isConnecting
                 ? 'bg-muted text-muted-foreground'
                 : 'bg-destructive/10 text-destructive'
-          }`}>
+            }`}>
             {status.isConnecting ? (
               'Connecting...'
             ) : status.isConnected ? (

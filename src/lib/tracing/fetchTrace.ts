@@ -187,7 +187,7 @@ export const registerFetchTrace = () => {
           : String(input);
     const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toString().toUpperCase();
     const suppress = Boolean(init && '__c64uTraceSuppressed' in init && init.__c64uTraceSuppressed);
-    
+
     if (!suppress && shouldTraceUrl(url)) {
       // If there's an active user action, record REST within that context
       const activeAction = getActiveAction();
