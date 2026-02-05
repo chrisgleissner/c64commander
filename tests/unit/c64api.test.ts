@@ -10,7 +10,6 @@ import {
 } from '@/lib/c64api';
 import { clearPassword as clearStoredPassword, setPassword as storePassword } from '@/lib/secureStorage';
 import { addErrorLog, addLog } from '@/lib/logging';
-import { CapacitorHttp } from '@capacitor/core';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
@@ -124,7 +123,6 @@ vi.mock('@/lib/secureStorage', () => ({
 
 const addErrorLogMock = addErrorLog as unknown as ReturnType<typeof vi.fn>;
 const addLogMock = addLog as unknown as ReturnType<typeof vi.fn>;
-const capacitorRequestMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
 const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
 const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
@@ -137,7 +135,6 @@ describe('c64api', () => {
     localStorage.clear();
     addErrorLogMock.mockReset();
     addLogMock.mockReset();
-    capacitorRequestMock.mockReset();
     fuzzEnabledMock.mockReset();
     fuzzSafeMock.mockReset();
     smokeEnabledMock.mockReset();
@@ -276,23 +273,24 @@ describe('c64api', () => {
     expect(addErrorLogMock).toHaveBeenCalledWith('Smoke mode blocked mutating request', expect.any(Object));
   });
 
-  it('uses CapacitorHttp on native platforms', async () => {
+  it('uses patched fetch on native platforms', async () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({
-      status: 200,
-      data: JSON.stringify({ errors: [] }),
-      headers: {},
-      url: 'http://c64u/v1/info',
-    });
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const api = new C64API('http://c64u');
     const result = await api.getInfo();
     expect(result.errors).toEqual([]);
-    expect(capacitorRequestMock).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it('does not persist runtime config updates', async () => {
@@ -317,22 +315,24 @@ describe('c64api', () => {
     expect(localStorage.getItem('c64u_base_url')).toBeNull();
   });
 
-  it('handles CapacitorHttp non-string payloads', async () => {
+  it('handles non-string payloads on native platforms', async () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = true;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({
-      status: 200,
-      data: { errors: [] },
-      headers: {},
-      url: 'http://c64u/v1/version',
-    });
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const api = new C64API('http://c64u');
     const result = await api.getVersion();
     expect(result.errors).toEqual([]);
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it('logs parse failures for invalid json responses', async () => {
@@ -353,12 +353,13 @@ describe('c64api', () => {
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = {
       isNativePlatform: () => true,
     };
-    capacitorRequestMock.mockResolvedValue({
-      status: 400,
-      data: { errors: ['bad'] },
-      headers: {},
-      url: 'http://c64u/v1/info',
-    });
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: ['bad'] }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     const api = new C64API('http://c64u');
     await expect(api.getInfo()).rejects.toThrow('HTTP 400');
@@ -567,7 +568,6 @@ describe('c64api', () => {
       'http://c64u/v1/drives/a:mount',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(capacitorRequestMock).not.toHaveBeenCalled();
   });
 
   it('covers runner and drive request helpers', async () => {

@@ -15,6 +15,25 @@
 
 ---
 
+## Investigation: FTP Performance (ADD Operations)
+
+**Status:** Pending investigation
+
+**Question:** Are FTP file transfers unnecessarily occurring when using ADD mode to populate the device filesystem?
+
+**Investigation Steps:**
+- [ ] 1. Review FTP tracing output during ADD operations
+- [ ] 2. Check if files are being transferred when they already exist on device
+- [ ] 3. Profile FTP connection setup/teardown overhead
+- [ ] 4. Document findings and propose optimizations if needed
+
+**Relevant Files:**
+- `src/lib/ftp/ftpClient.ts` - FTP client implementation
+- `src/lib/ftp/ftpTransfer.ts` - FTP transfer logic
+- `playwright/ftpPerformance.spec.ts` - Performance tests
+
+---
+
 ## Previous Mission: Async Context Propagation for Tracing (Option A)
 
 **Objective:** Eliminate the "fire-and-forget async boundary limitation" by implementing async context propagation so that ALL REST and FTP calls remain causally correlated to the originating user action, even across fire-and-forget async boundaries.
@@ -180,11 +199,11 @@ The async effects (REST/FTP calls) happen AFTER the action ends, so they create 
 
 **Problem 1: Duplicate User Action Traces**
 - Global capture runs during DOM capture phase (first)
-- Button component runs during React event handling (second)  
+- Button component runs during React event handling (second)
 - Both create independent traces because `__c64uTraced` flag is checked at different times
 
 **Problem 2: Detached REST/FTP Effects**
-- `fetchTrace.ts` line 71: uses `runWithImplicitAction('rest.${method}', ...)` 
+- `fetchTrace.ts` line 71: uses `runWithImplicitAction('rest.${method}', ...)`
 - `ftpClient.ts` line 18: uses `runWithImplicitAction('ftp.list', ...)`
 - `runWithImplicitAction` always creates a NEW action with `origin: 'system'`
 - It ignores the active user action even though `getActiveAction()` exists
@@ -202,7 +221,7 @@ The async effects (REST/FTP calls) happen AFTER the action ends, so they create 
 - Remove `wrapUserEvent` from Button component
 - GlobalInteraction will be the single source of user interaction traces
 
-### Step 2: Fix Effect Correlation  
+### Step 2: Fix Effect Correlation
 - Modify `fetchTrace.ts` to check `getActiveAction()` first
 - If active action exists, record REST within that correlation
 - Same for `ftpClient.ts`

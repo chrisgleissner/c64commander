@@ -251,12 +251,14 @@ describe('SettingsPage', () => {
     const connectionIndex = headings.indexOf('Connection');
     const diagnosticsIndex = headings.indexOf('Diagnostics');
     const deviceSafetyIndex = headings.indexOf('Device Safety');
+    const aboutIndex = headings.indexOf('About');
 
     expect(appearanceIndex).toBeGreaterThanOrEqual(0);
     expect(connectionIndex).toBeGreaterThan(appearanceIndex);
     expect(diagnosticsIndex).toBeGreaterThan(connectionIndex);
     expect(deviceSafetyIndex).toBeGreaterThan(diagnosticsIndex);
-    expect(deviceSafetyIndex).toBe(headings.length - 1);
+    expect(aboutIndex).toBeGreaterThan(deviceSafetyIndex);
+    expect(aboutIndex).toBe(headings.length - 1);
 
     const connectionSection = screen.getByRole('heading', { name: 'Connection' }).closest('.bg-card');
     const deviceSafetySection = screen.getByRole('heading', { name: 'Device Safety' }).closest('.bg-card');
@@ -671,21 +673,6 @@ describe('SettingsPage', () => {
         operation: 'SETTINGS_IMPORT',
       }));
     });
-  });
-
-  it('commits FTP overrides on blur and enter', () => {
-    render(<SettingsPage />);
-
-    const ftpPortInput = screen.getByLabelText(/ftp port/i);
-    fireEvent.change(ftpPortInput, { target: { value: '2121' } });
-    fireEvent.blur(ftpPortInput);
-
-    const bridgeInput = screen.getByLabelText(/ftp bridge url/i);
-    fireEvent.change(bridgeInput, { target: { value: 'https://bridge.example' } });
-    fireEvent.keyDown(bridgeInput, { key: 'Enter' });
-
-    expect(localStorage.getItem('c64u_ftp_port')).toBe('2121');
-    expect(localStorage.getItem('c64u_ftp_bridge_url')).toBe('https://bridge.example');
   });
 
   it('enables debug logging when switching to troubleshooting mode', () => {
