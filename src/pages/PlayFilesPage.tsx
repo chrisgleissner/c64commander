@@ -989,12 +989,12 @@ export default function PlayFilesPage() {
           sourceId: entry.sourceId ?? null,
           file: entry.source === 'local'
             ? resolveLocalRuntimeFile(entry.sourceId ?? '', normalizedPath)
-              || (localEntry?.uri
-                ? buildLocalPlayFileFromUri(entry.name, normalizedPath, localEntry.uri, parseModifiedAt(localEntry.modifiedAt))
-                : undefined)
-              || (localTreeUri
-                ? buildLocalPlayFileFromTree(entry.name, normalizedPath, localTreeUri, parseModifiedAt(localEntry?.modifiedAt))
-                : undefined)
+            || (localEntry?.uri
+              ? buildLocalPlayFileFromUri(entry.name, normalizedPath, localEntry.uri, parseModifiedAt(localEntry.modifiedAt))
+              : undefined)
+            || (localTreeUri
+              ? buildLocalPlayFileFromTree(entry.name, normalizedPath, localTreeUri, parseModifiedAt(localEntry?.modifiedAt))
+              : undefined)
             : entry.source === 'hvsc'
               ? buildHvscLocalPlayFile(normalizedPath, entry.name)
               : undefined,
@@ -1626,7 +1626,7 @@ export default function PlayFilesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/95">
+    <div className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-[var(--app-bar-height)]">
       <AppBar
         title="Play Files"
         subtitle={status.isConnected ? 'Connected' : status.isConnecting ? 'Connecting…' : 'Offline'}

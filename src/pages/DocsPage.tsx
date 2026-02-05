@@ -194,7 +194,7 @@ function DocSectionCard({ section }: { section: DocSection }) {
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar title="Documentation" subtitle="How to use this app" />
 
       <main className="container py-6 space-y-4">

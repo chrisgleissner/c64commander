@@ -70,12 +70,12 @@ function CategorySection({
 
   const items = useMemo<ConfigListItem[]>(() => {
     if (!categoryData) return [];
-    
+
     const catData = categoryData[categoryName] as any;
     if (!catData || typeof catData !== 'object') return [];
 
     const itemsData = (catData as any).items ?? catData;
-    
+
     return Object.entries(itemsData)
       .filter(([key]) => key !== 'errors')
       .map(([name, config]) => ({
@@ -553,14 +553,14 @@ export default function ConfigBrowserPage() {
   const filteredCategories = useMemo(() => {
     if (!categoriesData?.categories) return [];
     if (!searchQuery) return categoriesData.categories;
-    
+
     return categoriesData.categories.filter((cat) =>
       cat.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [categoriesData?.categories, searchQuery]);
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar
         title="Configuration"
         subtitle={

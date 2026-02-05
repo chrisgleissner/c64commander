@@ -13,6 +13,11 @@ import {
   exitCurrentActionContext,
   resetActionContextStore,
 } from '@/lib/tracing/traceActionContextStore';
+import {
+  isDiagnosticsOverlayActive,
+  isDiagnosticsTraceOverrideActive,
+  withDiagnosticsTraceOverride,
+} from '@/lib/diagnostics/diagnosticsOverlayState';
 
 /**
  * Get the currently active action context from the async context store.
@@ -38,16 +43,29 @@ export const resetActionTrace = () => {
  * @returns The result of fn
  */
 export const runWithActionTrace = async <T>(context: TraceActionContext, fn: () => Promise<T> | T): Promise<T> => {
+  const suppress = isDiagnosticsOverlayActive() && !isDiagnosticsTraceOverrideActive();
   return runWithActionContext(context, async () => {
-    recordActionStart(context);
+    if (!suppress) {
+      recordActionStart(context);
+    }
     try {
       const result = await fn();
-      recordActionEnd(context, null);
+      if (!suppress) {
+        recordActionEnd(context, null);
+      }
       return result;
     } catch (error) {
       const err = error as Error;
-      recordTraceError(context, err);
-      recordActionEnd(context, err);
+      if (suppress) {
+        await withDiagnosticsTraceOverride(async () => {
+          recordActionStart(context);
+          recordTraceError(context, err);
+          recordActionEnd(context, err);
+        });
+      } else {
+        recordTraceError(context, err);
+        recordActionEnd(context, err);
+      }
       throw error;
     } finally {
       // Exit the context when the action completes

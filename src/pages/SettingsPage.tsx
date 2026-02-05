@@ -62,6 +62,7 @@ import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListIte
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
+import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from '@/lib/diagnostics/diagnosticsOverlayState';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
@@ -303,6 +304,11 @@ export default function SettingsPage() {
     window.addEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
     return () => window.removeEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
   }, []);
+
+  useEffect(() => {
+    setDiagnosticsOverlayActive(logsDialogOpen);
+    return () => setDiagnosticsOverlayActive(false);
+  }, [logsDialogOpen]);
 
   const refreshSafPermissions = async () => {
     if (!isAndroid) return;
@@ -611,7 +617,7 @@ export default function SettingsPage() {
   });
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <main className="container py-6 space-y-6">
@@ -788,7 +794,11 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-4">
-            <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
+            <Button
+              variant="outline"
+              onClick={() => setLogsDialogOpen(true)}
+              data-diagnostics-open-trigger="true"
+            >
               <FileText className="h-4 w-4 mr-2" />
               Diagnostics
             </Button>
@@ -1557,7 +1567,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void handleShareDiagnostics()}
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-errors"
                 >
                   Share
@@ -1585,7 +1595,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void handleShareDiagnostics()}
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-logs"
                 >
                   Share
@@ -1615,7 +1625,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void handleShareDiagnostics()}
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-traces"
                 >
                   Share
@@ -1655,7 +1665,7 @@ export default function SettingsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void handleShareDiagnostics()}
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
                   data-testid="diagnostics-share-actions"
                 >
                   Share

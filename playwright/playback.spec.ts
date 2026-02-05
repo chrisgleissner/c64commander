@@ -363,7 +363,7 @@ test.describe('Playback file browser', () => {
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
       expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
-    
+
     // Verify list is populated
     await expect(page.getByText('Track_0001.sid').first()).toBeVisible();
 

@@ -44,6 +44,7 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
             onClick={onClick}
             aria-label="Open diagnostics"
             data-testid="diagnostics-activity-indicator"
+            data-diagnostics-open-trigger="true"
         >
             <IndicatorDot
                 colorClass="bg-diagnostics-rest"

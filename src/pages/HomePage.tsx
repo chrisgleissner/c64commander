@@ -190,7 +190,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar
         title="C64 Commander"
         leading={

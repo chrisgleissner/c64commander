@@ -78,6 +78,9 @@ const isFallbackInteractive = (element: Element) => {
   return typeof tabIndex === 'number' && tabIndex >= 0;
 };
 
+const isDiagnosticsOpenTrigger = (element: Element) =>
+  typeof element.closest === 'function' && element.closest('[data-diagnostics-open-trigger="true"]');
+
 const findInteractiveTarget = (event: Event) => {
   const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
   for (const candidate of path) {
@@ -99,6 +102,7 @@ const findInteractiveTarget = (event: Event) => {
 const traceInteraction = async (action: string, element: Element, event: Event) => {
   // Avoid double-tracing when a component wrapper already captured the interaction.
   if ((event as any).__c64uTraced) return;
+  if (isDiagnosticsOpenTrigger(element)) return;
 
   (event as any).__c64uTraced = true;
 

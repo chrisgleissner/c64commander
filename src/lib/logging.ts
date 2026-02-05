@@ -1,6 +1,7 @@
 import { loadDebugLoggingEnabled } from '@/lib/config/appSettings';
 import { redactExportValue, redactExportText } from '@/lib/diagnostics/exportRedaction';
 import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
+import { isDiagnosticsOverlayActive, isDiagnosticsTraceOverrideActive } from '@/lib/diagnostics/diagnosticsOverlayState';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -34,6 +35,7 @@ const writeLogs = (logs: LogEntry[]) => {
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
+  if (isDiagnosticsOverlayActive() && !isDiagnosticsTraceOverrideActive() && level !== 'error') return;
   if (level === 'debug' && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {
     id: buildId(),

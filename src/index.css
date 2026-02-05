@@ -72,6 +72,9 @@
     --sidebar-accent-foreground: 220 15% 92%;
     --sidebar-border: 228 20% 18%;
     --sidebar-ring: 228 35% 57%;
+
+    /* App bar layout */
+    --app-bar-height: 88px;
   }
 
   main {

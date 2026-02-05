@@ -314,4 +314,166 @@ test.describe('Home header and diagnostics overlay', () => {
             expect(entries.some((entry) => entry.correlationId === 'COR-9200')).toBeTruthy();
         });
     });
+
+    test('app header and footer remain fixed during scroll on core pages', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+        const paths = ['/', '/play', '/disks', '/config', '/settings', '/docs'];
+
+        for (const path of paths) {
+            await page.goto(path, { waitUntil: 'domcontentloaded' });
+
+            await page.evaluate(() => {
+                if (document.getElementById('test-scroll-spacer')) return;
+                const spacer = document.createElement('div');
+                spacer.id = 'test-scroll-spacer';
+                spacer.style.height = '2000px';
+                spacer.style.width = '1px';
+                document.body.appendChild(spacer);
+            });
+
+            const header = page.locator('header');
+            const footer = page.locator('nav.tab-bar');
+
+            await expect(header).toBeVisible();
+            await expect(footer).toBeVisible();
+
+            const [headerBefore, footerBefore] = await Promise.all([
+                header.boundingBox(),
+                footer.boundingBox(),
+            ]);
+
+            await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+            await page.waitForTimeout(100);
+
+            const [headerAfter, footerAfter, scrollY] = await Promise.all([
+                header.boundingBox(),
+                footer.boundingBox(),
+                page.evaluate(() => window.scrollY),
+            ]);
+
+            expect(scrollY).toBeGreaterThan(0);
+
+            const headerDelta = Math.abs((headerAfter?.y ?? 0) - (headerBefore?.y ?? 0));
+            const footerDelta = Math.abs((footerAfter?.y ?? 0) - (footerBefore?.y ?? 0));
+            const headerHeightDelta = Math.abs((headerAfter?.height ?? 0) - (headerBefore?.height ?? 0));
+
+            expect(headerDelta).toBeLessThanOrEqual(0.5);
+            expect(footerDelta).toBeLessThanOrEqual(0.5);
+            expect(headerHeightDelta).toBeLessThanOrEqual(0.5);
+
+            await snap(page, testInfo, `fixed-header-${path.replace('/', '') || 'home'}`);
+        }
+    });
+
+    test('diagnostics overlay suppresses traces until share/error and restores after close', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+        await page.addInitScript(() => {
+            (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = [];
+            (window as Window & { __c64uDiagnosticsShareOverride?: (payload: any) => void }).__c64uDiagnosticsShareOverride = (payload) => {
+                const list = (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads ?? [];
+                list.push({
+                    ...payload,
+                    zipData: Array.from(payload.zipData ?? []),
+                });
+                (window as Window & { __c64uDiagnosticsSharePayloads?: unknown[] }).__c64uDiagnosticsSharePayloads = list;
+            };
+        });
+
+        await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+
+        await page.evaluate(() => {
+            window.__c64uTracing?.resetTraceSession?.(0, 0);
+            localStorage.setItem('c64u_app_logs', JSON.stringify([]));
+
+            const now = Date.now();
+            const events: TraceEvent[] = [];
+            events.push({
+                id: 'EVT-9300',
+                timestamp: new Date(now).toISOString(),
+                relativeMs: 0,
+                type: 'action-start',
+                origin: 'user',
+                correlationId: 'COR-9300',
+                data: { name: 'seed.action' },
+            });
+            events.push({
+                id: 'EVT-9301',
+                timestamp: new Date(now + 10).toISOString(),
+                relativeMs: 10,
+                type: 'action-end',
+                origin: 'user',
+                correlationId: 'COR-9300',
+                data: { status: 'success', error: null },
+            });
+            for (let i = 0; i < 120; i += 1) {
+                events.push({
+                    id: `EVT-93${String(i).padStart(2, '0')}`,
+                    timestamp: new Date(now + 20 + i).toISOString(),
+                    relativeMs: 20 + i,
+                    type: 'rest-response',
+                    origin: 'user',
+                    correlationId: 'COR-9300',
+                    data: { status: 200, durationMs: 12, error: null },
+                });
+            }
+            window.__c64uTracing?.seedTraces?.(events);
+        });
+
+        const getTraceCount = () => page.evaluate(() => window.__c64uTracing?.getTraces?.().length ?? 0);
+        const getLogCount = () =>
+            page.evaluate(() => {
+                const raw = localStorage.getItem('c64u_app_logs');
+                return raw ? JSON.parse(raw).length : 0;
+            });
+
+        const beforeOpenTraces = await getTraceCount();
+
+        await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
+        const dialog = page.getByRole('dialog', { name: /Diagnostics/i });
+        await expect(dialog).toBeVisible();
+
+        const afterOpenTraces = await getTraceCount();
+        expect(afterOpenTraces).toBe(beforeOpenTraces);
+
+        const baselineLogs = await getLogCount();
+        const baselineTraces = await getTraceCount();
+
+        await dialog.getByRole('tab', { name: /^Logs$/i }).click();
+        await dialog.getByRole('tab', { name: /^Traces$/i }).click();
+
+        const tracesPanel = dialog.locator('[role="tabpanel"][data-state="active"]');
+        await tracesPanel.evaluate((panel: HTMLElement) => {
+            panel.scrollTop = panel.scrollHeight;
+        });
+
+        const traceItem = dialog.locator('[data-testid^="trace-item-"]').first();
+        await traceItem.click();
+        await traceItem.click();
+
+        await dialog.getByRole('tab', { name: /^Actions$/i }).click();
+        const actionItem = dialog.locator('[data-testid^="action-summary-"]').first();
+        await actionItem.click();
+        await actionItem.click();
+
+        expect(await getTraceCount()).toBe(baselineTraces);
+        expect(await getLogCount()).toBe(baselineLogs);
+
+        await dialog.getByRole('tab', { name: /^Traces$/i }).click();
+        await dialog.getByTestId('diagnostics-share-traces').click();
+        await expect.poll(getTraceCount).toBeGreaterThan(baselineTraces);
+
+        const tracesAfterShare = await getTraceCount();
+        await page.evaluate(() => {
+            const error = new Error('Diagnostics overlay error');
+            window.dispatchEvent(new ErrorEvent('error', { message: error.message, error }));
+        });
+        await expect.poll(getTraceCount).toBeGreaterThan(tracesAfterShare);
+        await expect.poll(getLogCount).toBeGreaterThan(baselineLogs);
+
+        await dialog.getByRole('button', { name: /Close/i }).click();
+
+        const tracesAfterClose = await getTraceCount();
+        await page.getByRole('button', { name: 'Home' }).click();
+        await expect.poll(getTraceCount).toBeGreaterThan(tracesAfterClose);
+
+        await snap(page, testInfo, 'diagnostics-suppression');
+    });
 });
