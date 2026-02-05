@@ -12,10 +12,12 @@ export type BuildInfo = {
     buildTimeUtc: string;
 };
 
+const BUILD_TIME_PLACEHOLDER = '2026-01-01 12:00:00 UTC';
+
 export const formatBuildTimeUtc = (isoString: string) => {
-    if (!isoString) return '—';
+    if (!isoString) return BUILD_TIME_PLACEHOLDER;
     const date = new Date(isoString);
-    if (Number.isNaN(date.getTime())) return '—';
+    if (Number.isNaN(date.getTime())) return BUILD_TIME_PLACEHOLDER;
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');

@@ -177,7 +177,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar
-        title="C64 Commander"
+        title="Home"
         leading={
           <div className="flex items-center gap-3 min-w-0">
             <img
@@ -187,7 +187,7 @@ export default function HomePage() {
               data-testid="home-header-logo"
             />
             <div className="min-w-0">
-              <h1 className="c64-header text-xl truncate" data-testid="home-header-title">HOME</h1>
+              <h1 className="c64-header text-xl truncate" data-testid="home-header-title">Home</h1>
               <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="home-header-subtitle">C64 Controller</p>
             </div>
           </div>

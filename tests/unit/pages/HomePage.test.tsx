@@ -241,7 +241,7 @@ describe('HomePage SID status', () => {
 
     expect(screen.getByText('Version').nextSibling?.textContent).toContain('—');
     expect(screen.getByText(/Git/i).nextSibling?.textContent).toContain('—');
-    expect(screen.getByText(/Build/i).nextSibling?.textContent).toContain('—');
+    expect(screen.getByText(/Build/i).nextSibling?.textContent).toContain('2026-01-01 12:00:00 UTC');
     expect(screen.getByText(/unable to connect to c64 ultimate/i)).toBeTruthy();
   });
 

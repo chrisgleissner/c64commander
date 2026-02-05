@@ -88,47 +88,47 @@ export const PlaybackControlsCard = ({
       <div className="grid grid-cols-4 gap-2">
         <Button
           variant="outline"
-          size="sm"
-          className="min-w-[96px] justify-center"
+          size="icon"
           onClick={onPrevious}
           disabled={!canTransport || !hasPrev}
           data-testid="playlist-prev"
+          aria-label="Previous"
+          title="Previous"
         >
-          <SkipBack className="h-4 w-4 mr-1" />
-          Prev
+          <SkipBack className="h-4 w-4" />
         </Button>
         <Button
           variant={isPlaying ? 'destructive' : 'default'}
-          size="sm"
-          className="min-w-[96px] justify-center"
+          size="icon"
           onClick={isPlaying ? onStop : onPlay}
           disabled={!hasPlaylist || isPlaylistLoading}
           data-testid="playlist-play"
+          aria-label={isPlaying ? 'Stop' : 'Play'}
+          title={isPlaying ? 'Stop' : 'Play'}
         >
-          {isPlaying ? <Square className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-          {isPlaying ? 'Stop' : 'Play'}
+          {isPlaying ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
         <Button
           variant="outline"
-          size="sm"
-          className="min-w-[96px] justify-center"
+          size="icon"
           onClick={onPauseResume}
           disabled={!canPause || isPlaylistLoading}
           data-testid="playlist-pause"
+          aria-label={isPaused ? 'Resume' : 'Pause'}
+          title={isPaused ? 'Resume' : 'Pause'}
         >
-          {isPaused ? <Play className="h-4 w-4 mr-1" /> : <Pause className="h-4 w-4 mr-1" />}
-          {isPaused ? 'Resume' : 'Pause'}
+          {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
         </Button>
         <Button
           variant="outline"
-          size="sm"
-          className="min-w-[96px] justify-center"
+          size="icon"
           onClick={onNext}
           disabled={!canTransport || !hasNext}
           data-testid="playlist-next"
+          aria-label="Next"
+          title="Next"
         >
-          <SkipForward className="h-4 w-4 mr-1" />
-          Next
+          <SkipForward className="h-4 w-4" />
         </Button>
       </div>
       <div className="space-y-2">

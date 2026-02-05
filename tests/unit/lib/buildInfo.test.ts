@@ -8,8 +8,8 @@ describe('buildInfo', () => {
     });
 
     it('returns placeholders for missing or invalid input', () => {
-        expect(formatBuildTimeUtc('')).toBe('—');
-        expect(formatBuildTimeUtc('not-a-date')).toBe('—');
+        expect(formatBuildTimeUtc('')).toBe('2026-01-01 12:00:00 UTC');
+        expect(formatBuildTimeUtc('not-a-date')).toBe('2026-01-01 12:00:00 UTC');
     });
 
     it('builds version and sha labels', () => {

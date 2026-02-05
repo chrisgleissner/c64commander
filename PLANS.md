@@ -1,11 +1,32 @@
-# PLANS.md - Authoritative Execution Plan
+# PLANS.md - UX Consistency Updates
 
-## Current Mission: Docs Overhaul + Header Labels + Screenshots
+## Goal
+Deliver the requested UX consistency changes across diagnostics, config, selection controls, playback transport, and build info.
 
-### Execution Plan (Do NOT merge or skip steps)
+## Non-goals
+- No new features beyond the specified UX changes.
+- No redesign of machine control hierarchy (Power Off remains destructive; reset/reboot unchanged).
+- No API or data model changes.
 
-- [x] 1. Update AppBar titles for Config and Docs to shortened labels.
-- [x] 2. Rewrite Docs page content to match current app structure and workflows (Play, Disks, Config, Settings, Diagnostics).
-- [x] 3. Run unit/lint/build/e2e and full build steps; fix failures.
-- [x] 4. Regenerate all screenshots and verify visual expectations are met.
-- [x] 5. Confirm PLANS.md is fully checked off.
+## Plan
+- [ ] Update diagnostics entries to default-collapsed rows across tabs.
+- [ ] Show level/message/timestamp (with truncation) for error/log rows.
+- [ ] Apply log level color coding.
+- [ ] Strengthen diagnostics active tab styling.
+- [ ] Reduce config category row padding.
+- [ ] Tighten config header-to-first-control spacing.
+- [ ] Bind disk list item count with “Select all”.
+- [ ] Replace Build Time placeholder with fixed timestamp.
+- [ ] Convert playback transport controls to icon-only, fixed four-slot layout.
+- [ ] Verify machine controls hierarchy remains unchanged.
+
+## Verification
+- [ ] Diagnostics rows collapsed by default in Errors/Logs/Traces/Actions.
+- [ ] Diagnostics rows show level/message/timestamp and truncate safely.
+- [ ] Log levels are color-coded in light/dark themes.
+- [ ] Diagnostics active tab is visually distinct.
+- [ ] Config category density and spacing reduced as specified.
+- [ ] Disk list count and Select all appear bound together.
+- [ ] Build Time shows “2025-01-01 12:00:00 UTC” when placeholder.
+- [ ] Playback transport shows 4 icon-only buttons with correct enabled/disabled states.
+- [ ] Machine controls hierarchy preserved.

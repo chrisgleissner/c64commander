@@ -25,13 +25,13 @@ tags:
 - takeScreenshot: settings-tab
 - tapOn: "Config"
 - extendedWaitUntil:
-    visible: "Configuration"
+    visible: "Config"
     timeout: ${SHORT_TIMEOUT}
-- assertVisible: "Configuration"
+- assertVisible: "Config"
 - takeScreenshot: config-tab
 - tapOn: "Home"
 - extendedWaitUntil:
-    visible: "C64 Commander"
+    visible: "Home"
     timeout: ${SHORT_TIMEOUT}
-- assertVisible: "C64 Commander"
+- assertVisible: "Home"
 - takeScreenshot: home-tab

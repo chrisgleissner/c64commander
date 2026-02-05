@@ -43,7 +43,7 @@ test.describe('Home header and diagnostics overlay', () => {
         const title = page.getByTestId('home-header-title');
         const subtitle = page.getByTestId('home-header-subtitle');
         await expect(logo).toBeVisible();
-        await expect(title).toHaveText('HOME');
+        await expect(title).toHaveText(/home/i);
         await expect(subtitle).toHaveText('C64 Controller');
 
         const ratios = await logo.evaluate((img: HTMLImageElement) => ({

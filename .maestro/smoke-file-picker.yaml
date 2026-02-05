@@ -59,7 +59,7 @@ env:
 
 # Verify we're back in the app - check for any of the main UI elements
 - extendedWaitUntil:
-    visible: "C64 Commander"
+    visible: "Home"
     timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     visible: "Play"

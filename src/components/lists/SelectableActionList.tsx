@@ -393,10 +393,10 @@ export const SelectableActionList = ({
 
       {showSelectionControls ? (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
-          <span className="text-muted-foreground min-w-0 break-words">
-            {filteredItems.length ? `${filteredItems.length} items` : emptyLabel}
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-muted-foreground min-w-0 break-words">
+              {filteredItems.length ? `${filteredItems.length} items` : emptyLabel}
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -408,19 +408,19 @@ export const SelectableActionList = ({
             >
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
-            {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onRemoveSelected}
-                className="text-destructive hover:text-destructive max-w-full whitespace-normal"
-                id={removeSelectedId}
-                data-testid={removeSelectedId}
-              >
-                {removeSelectedLabel}
-              </Button>
-            ) : null}
           </div>
+          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRemoveSelected}
+              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
+              id={removeSelectedId}
+              data-testid={removeSelectedId}
+            >
+              {removeSelectedLabel}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

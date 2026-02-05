@@ -16,14 +16,14 @@ tags:
     timeout: ${SHORT_TIMEOUT}
 - tapOn: "Home"
 - extendedWaitUntil:
-    visible: "C64 Commander"
+    visible: "Home"
     timeout: ${SHORT_TIMEOUT}
 - runFlow:
     when:
       visible: "Continue in Demo Mode"
     file: continue-demo.yaml
 - extendedWaitUntil:
-    visible: "C64 Commander"
+    visible: "Home"
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: home

@@ -513,7 +513,7 @@ test.describe('Playback file browser (part 2)', () => {
     await snap(page, testInfo, 'sid-playback-requested');
 
     const stopButton = page.getByTestId('playlist-play');
-    await expect(stopButton).toContainText('Stop');
+    await expect(stopButton).toHaveAttribute('aria-label', 'Stop');
     await snap(page, testInfo, 'sid-playing');
     await stopButton.click();
     await waitForRequests(() =>
@@ -792,7 +792,7 @@ test.describe('Playback file browser (part 2)', () => {
 
     const rebootAfterPlay = server.requests.filter((req) => req.url.startsWith('/v1/machine:reboot')).length;
     const stopButton = page.getByTestId('playlist-play');
-    await expect(stopButton).toContainText('Stop');
+    await expect(stopButton).toHaveAttribute('aria-label', 'Stop');
     await snap(page, testInfo, 'disk-playing');
     await stopButton.click();
     await waitForRequests(() =>
@@ -1227,13 +1227,13 @@ test.describe('Playback file browser (part 2)', () => {
       server.requests.some((req) => req.url.startsWith('/v1/drives/a:mount')),
     );
     await snap(page, testInfo, 'play-started');
-    await expect(playButton).toContainText('Stop');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await expect(pauseButton).toBeEnabled();
     await pauseButton.click();
-    await expect(pauseButton).toContainText('Resume');
+    await expect(pauseButton).toHaveAttribute('aria-label', 'Resume');
     await snap(page, testInfo, 'paused');
     await playButton.click();
-    await expect(playButton).toContainText('Play');
+    await expect(playButton).toHaveAttribute('aria-label', 'Play');
     await snap(page, testInfo, 'stopped');
 
     const after = await Promise.all([

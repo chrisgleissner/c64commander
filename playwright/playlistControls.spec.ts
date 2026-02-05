@@ -282,14 +282,14 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'last-track-playing');
 
     const playButton = page.getByTestId('playlist-play');
-    await expect(playButton).toContainText(/Stop|Playing/i);
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await snap(page, testInfo, 'playback-active');
 
     const nextButton = page.getByTestId('playlist-next');
     await expect(nextButton).toBeDisabled();
     await snap(page, testInfo, 'next-disabled');
 
-    await expect(playButton).toContainText(/Stop|Playing/i);
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await snap(page, testInfo, 'playback-still-active');
   });
 });

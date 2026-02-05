@@ -368,7 +368,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
       const label = await playButtonAfter.textContent();
       if (label && label.toLowerCase().includes('stop')) {
         await playButtonAfter.click();
-        await expect(playButtonAfter).toContainText('Play');
+        await expect(playButtonAfter).toHaveAttribute('aria-label', 'Play');
       }
       await playButtonAfter.click();
       await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);

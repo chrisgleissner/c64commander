@@ -487,18 +487,18 @@ describe('SettingsPage', () => {
 
     const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
     fireEvent.change(filterInput, { target: { value: 'network' } });
-    expect(await within(dialog).findByText('Network failure')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('Network failure')).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText('Disk error')).not.toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole('button', { name: /clear filter/i }));
-    expect(await within(dialog).findByText('Disk error')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('Disk error')).length).toBeGreaterThan(0);
 
     const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
     fireEvent.click(logsTab);
     await waitFor(() => expect(logsTab).toHaveAttribute('aria-selected', 'true'));
     expect(within(dialog).getByTestId('diagnostics-filter-input')).toHaveValue('');
-    expect(await within(dialog).findByText('Connection ready')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('Connection ready')).length).toBeGreaterThan(0);
   });
 
   it('filters diagnostics entries case-insensitively across timestamps and details', async () => {
@@ -523,10 +523,10 @@ describe('SettingsPage', () => {
 
     const filterInput = within(dialog).getByTestId('diagnostics-filter-input');
     fireEvent.change(filterInput, { target: { value: 'mixedcase' } });
-    expect(await within(dialog).findByText('System boot')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('System boot')).length).toBeGreaterThan(0);
 
     fireEvent.change(filterInput, { target: { value: '01:02:03.004' } });
-    expect(await within(dialog).findByText('System boot')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('System boot')).length).toBeGreaterThan(0);
 
     fireEvent.change(filterInput, { target: { value: 'missing' } });
     expect(within(dialog).queryByText('System boot')).not.toBeInTheDocument();
@@ -545,7 +545,7 @@ describe('SettingsPage', () => {
     fireEvent.mouseDown(errorsTab);
     fireEvent.click(errorsTab);
     await waitFor(() => expect(errorsTab).toHaveAttribute('aria-selected', 'true'));
-    expect(await within(dialog).findByText('Error entry')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('Error entry')).length).toBeGreaterThan(0);
 
     const logsTab = within(dialog).getByRole('tab', { name: /^Logs$/i });
     fireEvent.mouseDown(logsTab);
@@ -557,7 +557,7 @@ describe('SettingsPage', () => {
     await act(async () => {
       window.dispatchEvent(new Event('c64u-logs-updated'));
     });
-    expect(await within(dialog).findByText('Log entry')).toBeInTheDocument();
+    expect((await within(dialog).findAllByText('Log entry')).length).toBeGreaterThan(0);
 
     const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
     fireEvent.mouseDown(tracesTab);

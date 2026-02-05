@@ -53,7 +53,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
+import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs, type LogLevel } from '@/lib/logging';
 import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
 import { buildActionSummaries, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
@@ -117,6 +117,23 @@ import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
+
+const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
+  debug: 'DEBUG',
+  info: 'INFO',
+  warn: 'WARN',
+  error: 'ERROR',
+};
+
+const LOG_LEVEL_CLASSES: Record<LogLevel, string> = {
+  debug: 'text-muted-foreground',
+  info: 'text-primary',
+  warn: 'text-amber-600',
+  error: 'text-destructive',
+};
+
+const diagnosticsTabTriggerClass =
+  'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -1567,10 +1584,10 @@ export default function SettingsPage() {
             className="space-y-3"
           >
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="error-logs">Errors</TabsTrigger>
-              <TabsTrigger value="logs">Logs</TabsTrigger>
-              <TabsTrigger value="traces">Traces</TabsTrigger>
-              <TabsTrigger value="actions">Actions</TabsTrigger>
+              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>Errors</TabsTrigger>
+              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>Logs</TabsTrigger>
+              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>Traces</TabsTrigger>
+              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>Actions</TabsTrigger>
             </TabsList>
             <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               <div className="flex items-center justify-between gap-2">
@@ -1588,15 +1605,31 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">No error logs recorded.</p>
               ) : (
                 filteredErrorLogs.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border border-border p-3">
-                    <p className="text-sm font-medium">{entry.message}</p>
-                    <p className="text-xs text-muted-foreground">{formatLocalTime(entry.timestamp)}</p>
-                    {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
+                  <details key={entry.id} className="rounded-lg border border-border p-3">
+                    <summary className="cursor-pointer select-none">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm font-medium">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-[11px] font-semibold uppercase tracking-wide ${LOG_LEVEL_CLASSES[entry.level]}`}>
+                            {LOG_LEVEL_LABELS[entry.level]}
+                          </span>
+                          <span className="min-w-0 truncate text-sm">{entry.message}</span>
+                        </div>
+                        <span className="text-muted-foreground text-xs font-semibold tabular-nums text-right shrink-0">
+                          {formatLocalTime(entry.timestamp)}
+                        </span>
+                      </div>
+                    </summary>
+                    <div className="mt-3 space-y-2 text-xs">
+                      <p className="text-sm font-medium text-foreground break-words whitespace-normal">
+                        {entry.message}
+                      </p>
+                      {entry.details && (
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </details>
                 ))
               )}
             </TabsContent>
@@ -1616,17 +1649,31 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">No logs recorded.</p>
               ) : (
                 filteredLogs.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border border-border p-3">
-                    <p className="text-sm font-medium">{entry.message}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {entry.level.toUpperCase()} · {formatLocalTime(entry.timestamp)}
-                    </p>
-                    {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
+                  <details key={entry.id} className="rounded-lg border border-border p-3">
+                    <summary className="cursor-pointer select-none">
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm font-medium">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`text-[11px] font-semibold uppercase tracking-wide ${LOG_LEVEL_CLASSES[entry.level]}`}>
+                            {LOG_LEVEL_LABELS[entry.level]}
+                          </span>
+                          <span className="min-w-0 truncate text-sm">{entry.message}</span>
+                        </div>
+                        <span className="text-muted-foreground text-xs font-semibold tabular-nums text-right shrink-0">
+                          {formatLocalTime(entry.timestamp)}
+                        </span>
+                      </div>
+                    </summary>
+                    <div className="mt-3 space-y-2 text-xs">
+                      <p className="text-sm font-medium text-foreground break-words whitespace-normal">
+                        {entry.message}
+                      </p>
+                      {entry.details && (
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </details>
                 ))
               )}
             </TabsContent>

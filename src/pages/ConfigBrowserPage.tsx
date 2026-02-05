@@ -411,7 +411,7 @@ function CategorySection({
     >
       <button
         onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'ConfigSection', { title: categoryName }, 'ConfigHeader')}
-        className="w-full flex items-center justify-between p-4 text-left"
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-muted">
@@ -435,8 +435,8 @@ function CategorySection({
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="border-t border-border px-4 pb-2">
-              <div className="flex items-center justify-between gap-2 py-3" data-testid="config-group-actions">
+            <div className="border-t border-border px-4 pt-2 pb-3">
+              <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
                 <div className="flex items-center gap-2">
                   {categoryName === 'Audio Mixer' && (
                     <Button

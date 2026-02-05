@@ -58,7 +58,7 @@ env:
 
 # Verify we're back in the app - use optional assertions for resilience
 - extendedWaitUntil:
-    visible: "C64 Commander"
+    visible: "Home"
     timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     visible: "Play"

@@ -630,10 +630,10 @@ test.describe('HVSC Play page', () => {
     await expect(page.getByTestId('playlist-list').getByText('10_Orbyte.sid', { exact: true })).toBeVisible();
 
     const playButton = page.getByTestId('playlist-play');
-    const playLabel = (await playButton.textContent()) ?? '';
+    const playLabel = (await playButton.getAttribute('aria-label')) ?? '';
     if (/stop/i.test(playLabel)) {
       await playButton.click();
-      await expect(playButton).toContainText('Play');
+      await expect(playButton).toHaveAttribute('aria-label', 'Play');
     }
     await playButton.click();
 
