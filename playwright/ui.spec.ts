@@ -23,7 +23,8 @@ const resolveExpectedVersion = () => {
     process.env.GIT_SHA ||
     process.env.GITHUB_SHA ||
     runGit(['rev-parse', 'HEAD']);
-  const gitShaShort = gitSha ? gitSha.slice(0, 8) : '';
+  const fullGitSha = gitSha && gitSha.length < 8 ? runGit(['rev-parse', 'HEAD']) : gitSha;
+  const gitShaShort = fullGitSha ? fullGitSha.slice(0, 8) : '';
   const exactTag =
     (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) ||
     runGit(['describe', '--tags', '--exact-match']);

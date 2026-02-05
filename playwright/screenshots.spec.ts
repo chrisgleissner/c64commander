@@ -394,7 +394,7 @@ test.describe('App screenshots', () => {
   test('capture configuration screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowVisualOverflow(testInfo, 'Audio mixer controls overflow on narrow screenshot viewport.');
     await page.goto('/config');
-    await expect(page.getByRole('heading', { name: 'Configuration' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Config' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -513,7 +513,7 @@ test.describe('App screenshots', () => {
 
   test('capture docs screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/docs');
-    await expect(page.getByRole('heading', { name: 'Documentation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Docs' })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'docs/01-overview.png');
@@ -528,14 +528,15 @@ test.describe('App screenshots', () => {
       await expect(page.getByText(contentSnippet)).toHaveCount(0);
     };
 
-    await openDocSection('Getting Started', 'Quick Setup:', 'docs/02-getting-started.png');
-    await openDocSection('Home', 'Configuration Actions:', 'docs/03-home.png');
-    await openDocSection('Play', 'Browse and play files from local storage or the C64 Ultimate.', 'docs/04-play.png');
-    await openDocSection('Disks', 'Manage drives and disk images in one place.', 'docs/05-disks.png');
-    await openDocSection('Config', 'Browse and modify', 'docs/06-config.png');
-    await openDocSection('Settings', 'Configure connection details', 'docs/07-settings.png');
+    await openDocSection('Getting Started', 'Connect in 4 steps:', 'docs/02-getting-started.png');
+    await openDocSection('Home', 'Config actions:', 'docs/03-home.png');
+    await openDocSection('Play Files', 'Use Play to find files', 'docs/04-play.png');
+    await openDocSection('Disks & Drives', 'manages drive state', 'docs/05-disks.png');
+    await openDocSection('Swapping Disks', 'Disk swapping is designed', 'docs/06-disk-swapping.png');
+    await openDocSection('Config', 'Config exposes all C64U categories', 'docs/07-config.png');
+    await openDocSection('Settings', 'Settings controls connection details', 'docs/08-settings.png');
 
-    await scrollAndCapture(page, testInfo, page.getByText('External Resources', { exact: true }), 'docs/08-external-resources.png');
+    await scrollAndCapture(page, testInfo, page.getByText('External Resources', { exact: true }), 'docs/09-external-resources.png');
   });
 
   test('capture demo mode play screenshot', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {

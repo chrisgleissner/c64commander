@@ -22,42 +22,210 @@ C64 Commander is an Android app that connects to a C64 Ultimate on your local ne
 
 ## Screenshots
 
+### Home
+
+Track device status at a glance, control the machine and drives, and access quick configuration actions.
+
 <table>
   <tr>
     <td>
-      <img src="doc/img/app/home/01-overview-light.png" alt="Home" width="480"/>
+      <img src="doc/img/app/home/01-overview-light.png" alt="Home overview (Light)" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/home/02-overview-dark.png" alt="Home (Dark)" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/play/01-playback-controls.png" alt="Play" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/disks/02-disk-list.png" alt="Disks" width="480"/>
+      <img src="doc/img/app/home/02-overview-dark.png" alt="Home overview (Dark)" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/config/01-categories.png" alt="Configuration" width="480"/>
+      <img src="doc/img/app/home/03-machine-controls.png" alt="Home machine controls" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/config/03-audio-mixer.png" alt="Configuration Expanded" width="480"/>
+      <img src="doc/img/app/home/04-drives-sid.png" alt="Home drives and SID" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/settings/01-appearance.png" alt="Settings" width="480"/>
+      <img src="doc/img/app/home/05-config-actions.png" alt="Home configuration actions" width="480"/>
+    </td>
+    <td></td>
+  </tr>
+</table>
+
+### Play
+
+Control SID playback, adjust playback settings, manage playlists, and explore HVSC playback modes.
+
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app/play/01-playback-controls.png" alt="Play playback controls" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/docs/01-overview.png" alt="Documentation" width="480"/>
+      <img src="doc/img/app/play/02-playback-settings.png" alt="Play playback settings" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/play/03-playlist.png" alt="Play playlist" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/play/04-hvsc-controls.png" alt="Play HVSC controls" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/play/05-demo-mode.png" alt="Play demo mode" width="480"/>
+    </td>
+    <td></td>
+  </tr>
+</table>
+
+### Disks
+
+Monitor drive status, mount images, and browse your disk collections.
+
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app/disks/01-drive-status.png" alt="Disks drive status" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/disks/02-disk-list.png" alt="Disks list" width="480"/>
     </td>
   </tr>
 </table>
 
-Full screenshot set (including diagnostics and expanded panels) lives under `doc/img/app/`.
+### Configuration
+
+Browse configuration categories, tune audio and SID settings, and edit drive-specific options.
+
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/config/02-u64-specific.png" alt="Configuration U64 specific" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/config/03-audio-mixer.png" alt="Configuration audio mixer" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/config/04-ultisid.png" alt="Configuration UltiSID" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/config/05-drive-settings.png" alt="Configuration drive settings" width="480"/>
+    </td>
+    <td></td>
+  </tr>
+</table>
+
+### Settings
+
+Adjust appearance, connections, diagnostics, playback defaults, HVSC library access, and device safety.
+
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app/settings/01-appearance.png" alt="Settings appearance" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/settings/02-connection.png" alt="Settings connection" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/settings/03-diagnostics.png" alt="Settings diagnostics" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/settings/04-play-disk.png" alt="Settings play and disk" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/settings/05-config.png" alt="Settings configuration" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/settings/06-hvsc-library.png" alt="Settings HVSC library" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/settings/07-device-safety.png" alt="Settings device safety" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/settings/08-about.png" alt="Settings about" width="480"/>
+    </td>
+  </tr>
+</table>
+
+### Docs
+
+Read in-app documentation, getting started guides, and per-page walkthroughs with external references.
+
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app/docs/01-overview.png" alt="Docs overview" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/docs/02-getting-started.png" alt="Docs getting started" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/docs/03-home.png" alt="Docs home" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/docs/04-play.png" alt="Docs play" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/docs/05-disks.png" alt="Docs disks" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/docs/06-config.png" alt="Docs configuration" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/docs/07-settings.png" alt="Docs settings" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/docs/08-external-resources.png" alt="Docs external resources" width="480"/>
+    </td>
+  </tr>
+</table>
+
+### Diagnostics
+
+Trigger diagnostic actions, inspect traces, review logs, and triage errors.
+
+<table>
+  <tr>
+    <td>
+      <img src="doc/img/app/diagnostics/01-actions-expanded.png" alt="Diagnostics actions" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/diagnostics/02-traces-expanded.png" alt="Diagnostics traces" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/diagnostics/03-logs.png" alt="Diagnostics logs" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/diagnostics/04-errors.png" alt="Diagnostics errors" width="480"/>
+    </td>
+  </tr>
+</table>
+
+Full screenshot set lives under `doc/img/app/`.
 
 ## Install the APK on your Android phone
 

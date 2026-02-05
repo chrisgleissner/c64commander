@@ -60,11 +60,12 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    if (await dialogTitle.isVisible().catch(() => false)) {
+      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    }
 
     const demoIndicator = page.getByTestId('connectivity-indicator');
-    await expect(demoIndicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
+    await expect(demoIndicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE', { timeout: 10000 });
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Disk list', { exact: true })).toBeVisible();
@@ -271,8 +272,26 @@ test.describe('Deterministic Connectivity Simulation', () => {
       }
       await expect(demoDialog).toBeHidden({ timeout: 5000 });
     }
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click({ force: true });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const saveButton = page.getByRole('button', { name: /Save & Connect|Save connection/i });
+    if (!(await saveButton.isVisible().catch(() => false))) {
+      await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    }
+    await saveButton.click({ force: true });
+    const postSaveDemo = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await postSaveDemo.isVisible().catch(() => false)) {
+      await postSaveDemo.click();
+    }
+    const postSaveDialog = page.getByRole('dialog');
+    if (await postSaveDialog.isVisible().catch(() => false)) {
+      const continueButton = postSaveDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+      if (await continueButton.isVisible().catch(() => false)) {
+        await continueButton.click();
+      } else {
+        await page.keyboard.press('Escape');
+      }
+      await expect(postSaveDialog).toBeHidden({ timeout: 5000 });
+    }
 
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');

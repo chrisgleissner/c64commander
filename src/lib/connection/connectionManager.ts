@@ -384,7 +384,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   if (trigger === 'background') {
     if (snapshot.state !== 'DEMO_ACTIVE' && snapshot.state !== 'OFFLINE_NO_DEMO') return;
     const abort = new AbortController();
-    activeDiscovery = { abort, cancel: () => {} };
+    activeDiscovery = { abort, cancel: () => { } };
     setSnapshot({ lastDiscoveryTrigger: trigger });
     const ok = await probeOnce({ signal: abort.signal });
     setSnapshot({ lastProbeAtMs: Date.now() });
@@ -502,7 +502,7 @@ export async function initializeConnectionManager() {
   updateDeviceConnectionState('UNKNOWN');
 
   // Ensure outcomes never persist across cold starts.
-  await stopDemoServer().catch(() => {});
+  await stopDemoServer().catch(() => { });
   await applyC64APIConfigFromStorage();
 }
 
