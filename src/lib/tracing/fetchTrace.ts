@@ -78,7 +78,7 @@ const extractBody = (body: BodyInit | null | undefined) => {
       type: 'blob',
       sizeBytes: body.size,
       mimeType: body.type || null,
-      source: 'android-local',
+      source: 'blob',
     };
   }
   return '[body]';
