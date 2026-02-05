@@ -370,14 +370,15 @@ describe('c64api', () => {
     expect(addErrorLogMock).toHaveBeenCalled();
   });
 
-  it('updates config and dispatches connection change', () => {
+  it('updates config and dispatches connection change', async () => {
     const handler = vi.fn();
     window.addEventListener('c64u-connection-change', handler as EventListener);
 
     updateC64APIConfig('http://host', 'pw', 'host');
+    await storePasswordMock.mock.results[0]?.value;
     expect(localStorage.getItem('c64u_base_url')).toBeNull();
     expect(localStorage.getItem('c64u_password')).toBeNull();
-    expect(localStorage.getItem('c64u_has_password')).toBe('1');
+    expect(storePasswordMock).toHaveBeenCalledWith('pw');
     expect(localStorage.getItem('c64u_device_host')).toBe('host');
     expect(storePasswordMock).toHaveBeenCalledWith('pw');
     expect(handler).toHaveBeenCalled();

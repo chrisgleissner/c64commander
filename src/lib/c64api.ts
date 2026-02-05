@@ -7,7 +7,7 @@ import {
   hasStoredPasswordFlag,
   setPassword as storePassword,
 } from '@/lib/secureStorage';
-import { addErrorLog, addLog } from '@/lib/logging';
+import { addErrorLog, addLog, buildErrorLogDetails } from '@/lib/logging';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
@@ -367,7 +367,8 @@ export class C64API {
     try {
       return await response.clone().json() as T;
     } catch (error) {
-      addErrorLog('C64 API parse failed', { error: (error as Error).message });
+      const err = error as Error;
+      addErrorLog('C64 API parse failed', buildErrorLogDetails(err));
       return { errors: [] } as T;
     }
   }
@@ -455,23 +456,23 @@ export class C64API {
 
       try {
         if (shouldBlockSmokeMutation(method)) {
-          addErrorLog('Smoke mode blocked mutating request', {
+          addErrorLog('Smoke mode blocked mutating request', buildErrorLogDetails(new Error('Smoke mode blocked mutating request'), {
             path,
             url,
             method,
             baseUrl,
             deviceHost: this.deviceHost,
-          });
+          }));
           console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url }));
           throw new Error('Smoke mode blocked mutating request');
         }
         if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
-          addErrorLog('Fuzz mode blocked real device request', {
+          addErrorLog('Fuzz mode blocked real device request', buildErrorLogDetails(new Error('Fuzz mode blocked request'), {
             path,
             url,
             baseUrl,
             deviceHost: this.deviceHost,
-          });
+          }));
           const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
           blocked.__fuzzBlocked = true;
           throw blocked;
@@ -546,13 +547,13 @@ export class C64API {
           recordTraceError(action, error as Error);
         }
         if (!fuzzBlocked) {
-          addErrorLog('C64 API request failed', {
+          addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
             path,
             url,
             error: normalizedError,
             rawError: rawMessage,
             errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
-          });
+          }));
         }
         if (isAbort || isNetworkFailure) {
           throw new Error(resolveHostErrorMessage(rawMessage));
@@ -631,6 +632,10 @@ export class C64API {
         const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
         recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
         recordTraceError(action, error as Error);
+        addErrorLog('C64 API upload failed', buildErrorLogDetails(error as Error, {
+          url,
+          error: rawMessage,
+        }));
         if (isAbort || isNetworkFailure) {
           throw new Error(resolveHostErrorMessage(rawMessage));
         }
@@ -813,7 +818,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('Memory DMA write failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('Memory DMA write failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 
@@ -884,7 +892,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('Drive mount upload failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('Drive mount upload failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 
@@ -967,7 +978,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('SID upload failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('SID upload failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 
@@ -1008,7 +1022,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('MOD upload failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('MOD upload failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 
@@ -1049,7 +1066,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('PRG upload failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('PRG upload failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 
@@ -1090,7 +1110,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('PRG upload failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('PRG upload failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 
@@ -1131,7 +1154,10 @@ export class C64API {
 
     if (!response.ok) {
       const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('CRT upload failed', { status: response.status, statusText: response.statusText });
+      addErrorLog('CRT upload failed', buildErrorLogDetails(error, {
+        status: response.status,
+        statusText: response.statusText,
+      }));
       throw error;
     }
 

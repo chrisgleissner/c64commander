@@ -13,6 +13,9 @@ export type LogEntry = {
   details?: unknown;
 };
 
+const MAX_STACK_LINES = 20;
+const MAX_STACK_CHARS = 2000;
+
 const LOG_KEY = 'c64u_app_logs';
 const MAX_LOGS = 500;
 
@@ -52,6 +55,26 @@ export const addLog = (level: LogLevel, message: string, details?: unknown) => {
 export const addErrorLog = (message: string, details?: unknown) => {
   addLog('error', message, details);
 };
+
+const trimStack = (stack?: string | null) => {
+  if (!stack) return null;
+  let lines = stack.split('\n');
+  if (lines.length > MAX_STACK_LINES) {
+    lines = [...lines.slice(0, MAX_STACK_LINES), '... (stack truncated)'];
+  }
+  let result = lines.join('\n');
+  if (result.length > MAX_STACK_CHARS) {
+    result = `${result.slice(0, MAX_STACK_CHARS)}... (stack truncated)`;
+  }
+  return result;
+};
+
+export const buildErrorLogDetails = (error: Error, details: Record<string, unknown> = {}) => ({
+  ...details,
+  error: typeof details.error === 'string' ? details.error : error.message,
+  errorName: error.name,
+  errorStack: trimStack(error.stack),
+});
 
 export const getLogs = (): LogEntry[] => readLogs();
 
