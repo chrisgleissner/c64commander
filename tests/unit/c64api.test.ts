@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CapacitorHttp } from '@capacitor/core';
 import {
   C64API,
   getC64API,
@@ -129,12 +130,14 @@ const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.f
 const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
 const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
+const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
 
 describe('c64api', () => {
   beforeEach(() => {
     localStorage.clear();
     addErrorLogMock.mockReset();
     addLogMock.mockReset();
+    capacitorHttpMock.mockReset();
     fuzzEnabledMock.mockReset();
     fuzzSafeMock.mockReset();
     smokeEnabledMock.mockReset();
@@ -291,6 +294,7 @@ describe('c64api', () => {
     const result = await api.getInfo();
     expect(result.errors).toEqual([]);
     expect(fetchMock).toHaveBeenCalled();
+    expect(capacitorHttpMock).not.toHaveBeenCalled();
   });
 
   it('does not persist runtime config updates', async () => {

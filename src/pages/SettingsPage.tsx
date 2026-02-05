@@ -1213,7 +1213,7 @@ export default function SettingsPage() {
                 Fine-tuned device protection changes apply immediately.
               </p>
               <Button
-                variant="default"
+                variant="outline"
                 className="w-full"
                 onClick={() => {
                   resetDeviceSafetyOverrides();
