@@ -108,6 +108,7 @@ Notes:
 - `--screenshots-only` skips unit tests, E2E tests, and Android builds.
 - `--test-e2e` runs Playwright without screenshots.
 - `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
+- Screenshot output is organized under `doc/img/app/<page>/<section>.png` for easy browsing.
 
 ## Test architecture
 
