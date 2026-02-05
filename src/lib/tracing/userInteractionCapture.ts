@@ -109,7 +109,7 @@ const traceInteraction = async (action: string, element: Element, event: Event) 
   const label = getMeaningfulLabel(element);
   const name = `${action} ${label}`;
   const context = createActionContext(name, 'user', COMPONENT_NAME);
-  
+
   // Set up the context BEFORE the actual handler runs.
   // We use a setTimeout(0) to keep the context active until AFTER the handler's
   // synchronous work completes. This includes any fire-and-forget async calls
