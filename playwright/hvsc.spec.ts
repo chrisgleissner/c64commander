@@ -171,7 +171,7 @@ test.describe('HVSC Play page', () => {
         window.__hvscMock__ = {
           addListener: (_event: string, listener: (event: any) => void) => {
             listeners.push(listener);
-            return { remove: async () => {} };
+            return { remove: async () => { } };
           },
           getHvscStatus: async () => ({
             installedBaselineVersion: state.installedBaselineVersion,

@@ -68,7 +68,7 @@ test.describe('Playlist controls and advanced features', () => {
     // (HVSC has folder filter, but general playlist filtering not implemented)
     const playlistItems = page.locator('[data-playlist-item], [data-testid="playlist-item"]');
     const itemCount = await playlistItems.count().catch(() => 0);
-    
+
     // Should have items from local folder
     expect(itemCount).toBeGreaterThan(0);
     await snap(page, testInfo, 'items-shown-unfiltered');
@@ -262,7 +262,7 @@ test.describe('Playlist controls and advanced features', () => {
     const prevButton = page.getByTestId('playlist-prev');
     await expect(prevButton).toBeVisible();
     await expect(prevButton).toBeDisabled();
-    
+
     const initialHighlight = await page.getByTestId('playlist-item').first().getAttribute('data-playing');
     await snap(page, testInfo, 'prev-disabled');
 
