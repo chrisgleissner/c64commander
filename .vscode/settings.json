@@ -75,5 +75,6 @@
     "editor.insertSpaces": true,
     "editor.tabSize": 2
   },
-  "vitest.configFile": "vitest.config.ts"
+  "vitest.configFile": "vitest.config.ts",
+  "bun.test.enable": false
 }
