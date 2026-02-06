@@ -262,6 +262,12 @@ test.describe('Deterministic Connectivity Simulation', () => {
       const demoContinue = page.getByRole('button', { name: /continue in demo mode/i });
       const demoDialog = page.getByRole('dialog', { name: /demo mode/i });
 
+      try {
+        await demoDialog.waitFor({ state: 'visible', timeout: 1500 });
+      } catch (error) {
+        console.warn('Demo interstitial did not appear before continuing', error);
+      }
+
       if (await demoContinue.isVisible()) {
         await demoContinue.click();
         await expect(demoDialog).toBeHidden({ timeout: 5000 });
