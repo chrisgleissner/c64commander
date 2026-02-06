@@ -1,104 +1,63 @@
-# PLANS.md - UX Consistency Updates
+# PLANS.md - Full Green Gates Execution
 
 ## Goal
-Deliver the requested UX consistency changes across diagnostics, config, selection controls, playback transport, and build info.
+Achieve green local build, tests, screenshots, and CI for the C64 Commander Android app without skipping or weakening any tests.
 
-## Non-goals
-- No new features beyond the specified UX changes.
-- No redesign of machine control hierarchy (Power Off remains destructive; reset/reboot unchanged).
-- No API or data model changes.
+## Non-negotiables
+- Follow ./build exactly as the authoritative local pipeline.
+- Do not disable, skip, or relax any test.
+- Fix root causes and re-run affected phases.
 
-## Plan
-- [x] Update diagnostics entries to default-collapsed rows across tabs.
-- [x] Show level/message/timestamp (with truncation) for error/log rows.
-- [x] Apply log level color coding.
-- [x] Strengthen diagnostics active tab styling.
-- [x] Reduce config category row padding.
-- [x] Tighten config header-to-first-control spacing.
-- [x] Bind disk list item count with “Select all”.
-- [x] Replace Build Time placeholder with fixed timestamp.
-- [x] Convert playback transport controls to icon-only, fixed four-slot layout.
-- [x] Verify machine controls hierarchy remains unchanged.
+## Execution Plan
 
-## Verification
-- [x] Diagnostics rows collapsed by default in Errors/Logs/Traces/Actions.
-- [x] Diagnostics rows show level/message/timestamp and truncate safely.
-- [x] Log levels are color-coded in light/dark themes.
-- [x] Diagnostics active tab is visually distinct.
-- [x] Config category density and spacing reduced as specified.
-- [x] Disk list count and Select all appear bound together.
-- [x] Build Time shows “2025-01-01 12:00:00 UTC” when placeholder.
-- [x] Playback transport shows 4 icon-only buttons with correct enabled/disabled states.
-- [x] Machine controls hierarchy preserved.
+### 1) Environment Validation
+- [x] Capture toolchain versions: `node -v`, `npm -v`, `java -version`, `./android/gradlew --version`.
+- [x] Confirm Android SDK + emulator availability (if required): `adb version`, `adb devices` (no devices attached).
+- [x] Confirm Playwright dependencies: `npx playwright install` (installed after `--check` failed).
+- [x] Confirm Maestro gating command: `npm run maestro:gating` (see `doc/testing/maestro.md`).
 
----
+### 2) Local Build Phase (Authoritative)
+- [x] Run `./build` (default pipeline: install, format, cap build, unit tests, Playwright E2E without screenshots, Android JVM tests, debug APK).
+- [x] Verify outputs: `dist/` exists, Android debug APK generated, no errors.
 
-# PLANS.md - Green Local + CI Build
+### 3) Test Phases
+- [x] Unit tests: `npm test` (already included in `./build`; re-run only if needed after fixes).
+- [x] Playwright E2E: `npx playwright test --grep-invert @screenshots` (already included in `./build`).
+- [x] Android JVM tests: `cd android && ./gradlew test` (already included in `./build`).
+- [ ] Maestro tests: `npm run maestro:gating`.
 
-## Goal
-Get a green local build (unit, Playwright, Maestro, Android) and a green CI build with refreshed screenshots.
+### 4) Screenshot Regeneration
+- [ ] Run `./build --screenshots` to regenerate `doc/img` screenshots.
+- [ ] Verify screenshot artifacts are updated and deterministic.
 
-## Non-goals
-- No feature work beyond fixing tests/builds.
-- No refactors unrelated to failures.
+### 5) CI Phase
+- [ ] Push changes to the current branch.
+- [ ] Trigger CI and confirm all jobs are green.
+- [ ] If CI fails, record failure, fix root cause, and rerun the affected phase locally before retriggering CI.
 
-## Plan
-- [ ] Identify failing commit from CI run 21731474317 and diff against current branch.
-- [ ] Run local test suite: unit, Playwright, Maestro, Android JVM.
-- [ ] Fix root causes for any failures and update screenshots/traces as required.
-- [ ] Re-run full local verification: lint, test, Playwright, Maestro, build.
-- [ ] Push changes and confirm CI is green.
+### 6) Completion Gates
+- [ ] Local `./build` is green.
+- [ ] Unit, Playwright, Android JVM, and Maestro tests are green.
+- [ ] Screenshots regenerated and validated.
+- [ ] CI pipeline is fully green.
 
-## Verification
-- [ ] `npm run lint` passes locally.
-- [ ] `npm run test` passes locally.
-- [ ] `npm run test:e2e` passes locally with updated screenshots/traces.
-- [ ] Maestro flows pass locally.
-- [ ] `npm run build` passes locally.
-- [ ] Android JVM tests pass locally (`cd android && ./gradlew test`).
-- [ ] CI run is green with updated screenshots.
+## Failure Handling
+- [ ] Record failure details and logs here.
+- [x] 2026-02-06: `npx playwright install --check` failed with "unknown option --check". Installed browsers via `npx playwright install`.
+- [x] 2026-02-06: `./build` failed during `npm test` with `SecurityError: localStorage is not available for opaque origins` in `tests/unit/c64api.test.ts` and `tests/unit/playFiles/useSonglengthsHook.test.tsx`.
+- [x] 2026-02-06: Fixed JSDOM localStorage setup to avoid opaque-origin errors in `tests/setup.ts`.
+- [x] 2026-02-06: `./build` failed during `npm test` with `ReferenceError: MouseEvent is not defined` in `tests/setup.ts`.
+- [x] 2026-02-06: Added MouseEvent polyfill before PointerEvent in `tests/setup.ts`.
+- [x] 2026-02-06: `./build` failed during `npm test` with `FormData.append: Expected value ("Blob {}") to be an instance of Blob` in `tests/unit/c64api.test.ts`.
+- [x] 2026-02-06: Avoided overriding Node's global `Blob` to keep `FormData`/`Blob` instances compatible in `tests/setup.ts`.
+- [x] 2026-02-06: `./build` failed during Playwright E2E with `debug logging toggle records REST calls` expecting `DEBUG` but UI rendered `DBG` in diagnostics logs.
+- [x] 2026-02-06: Updated diagnostics log label to `DEBUG` in `src/pages/SettingsPage.tsx`.
+- [x] 2026-02-06: `./build` Playwright E2E failed due to port 4173 already in use. Stopped the blocking process and re-ran.
+- [ ] Re-run only the failing phase, then re-run `./build` if required.
 
----
-
-# PLANS.md - CI Regression Isolation and Forward Reapplication
-
-## Reference Build
-- [x] Capture run URL and timestamp: https://github.com/chrisgleissner/c64commander/actions/runs/21730870307 (started 2026-02-05T22:26:30Z, completed 2026-02-05T22:39:38Z)
-- [x] Record workflow name and job list: Build Android APK; jobs = Web | Build (coverage), Web | Unit tests (coverage), Android | Tests + Coverage, Android | Maestro gating, Web | Screenshots, Web | E2E (sharded) (1-8), Android | Packaging, Web | Coverage + evidence merge, Release | Attach APK/AAB.
-
-## Last Known Good Commit
-- [x] Record commit SHA from reference build: ae5076518cf586235db894e34a158d1f57135daa
-- [x] Record commit timestamp: 2026-02-05T22:26:25+00:00
-
-## First Failing Commit
-- [x] Identify next commit after last known good: 616dd3c205e9918a75b12215b42d20b118063a20
-- [x] Confirm it is the first failing build: Build Android APK run 21731474317 failed for 616dd3c205e9918a75b12215b42d20b118063a20.
-- [x] Record failing commit SHA and timestamp: 616dd3c205e9918a75b12215b42d20b118063a20 at 2026-02-05T22:49:18+00:00
-
-## Diff Preservation
-- [x] Generate full diff between last known good and current HEAD.
-- [x] Save diff to ci-regression-diff.patch (read-only reference).
-- [x] Commit diff file.
-
-## Reapplication Steps
-- [x] Reset branch to last known good commit.
-- [ ] Reapply changes in smallest logical units.
-- [ ] On first failure, rollback the offending change and mark excluded.
-- [ ] Continue until all safe changes are reapplied.
-
-## Change Classification
-- [x] UX/UI only: diagnostics/config/play screenshots under doc/img; Settings log level labels + button variant; PlaybackSettingsPanel songlength metadata display.
-- [x] Explicitly requested fix: manual SID playback script + docs entry; local playback path validation.
-- [x] Internal refactor: logging error detail builder and structured error logging updates in C64 API, FTP, disk import.
-- [x] Test-related change: unit test updates for logging + C64 API; tests/setup JSDOM + vitest compat; test probe env detection in platform + trace targets.
-- [x] Risky/unrelated: none identified yet.
-
-## Test Gates
-- [ ] Run full unit tests after each reapplication.
-- [ ] Record pass/fail status after each step.
-- [ ] Stop immediately on first regression.
-
-## Final Verification
-- [ ] Run full local test suite (lint, unit, e2e, build, Android JVM).
-- [ ] Push branch and confirm CI is green.
-- [ ] Create final clean commit with summary and exclusions.
+## Execution Log
+- [x] Environment validation started.
+- [x] Local build started.
+- [x] Tests started.
+- [ ] Screenshots started.
+- [ ] CI started.

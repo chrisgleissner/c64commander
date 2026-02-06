@@ -92,7 +92,7 @@ test.describe('Settings diagnostics workflows', () => {
     await dialog.getByRole('tab', { name: 'Logs', exact: true }).click();
     const apiRequestEntry = dialog.getByText('C64 API request', { exact: true }).first();
     await expect(apiRequestEntry).toBeVisible();
-    await expect(apiRequestEntry.locator('xpath=..')).toContainText(/DEBUG/i);
+    await expect(apiRequestEntry.locator('xpath=..')).toContainText(/DBG/i);
     await snap(page, testInfo, 'debug-log-entry');
 
     const { requestEvent } = await expectRestTraceSequence(page, testInfo, '/v1/info');

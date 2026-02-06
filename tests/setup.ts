@@ -2,19 +2,105 @@ import "@testing-library/jest-dom";
 import { JSDOM } from "jsdom";
 import { vi } from "vitest";
 
+const createMemoryStorage = (): Storage => {
+  let store = new Map<string, string>();
+  return {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store = new Map();
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key) ?? null : null;
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value));
+    },
+  };
+};
+
+const ensureLocalStorage = () => {
+  if (typeof (globalThis as { localStorage?: Storage }).localStorage !== "undefined") return;
+  let storage: Storage | undefined;
+  let shouldOverrideWindow = false;
+
+  if (typeof window !== "undefined") {
+    const descriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    if (descriptor?.get) {
+      try {
+        storage = descriptor.get.call(window) as Storage;
+      } catch (error) {
+        shouldOverrideWindow = true;
+        console.warn("LocalStorage access failed in tests; falling back to memory storage.", error);
+      }
+    } else if (descriptor?.value) {
+      storage = descriptor.value as Storage;
+    }
+  }
+
+  if (!storage) {
+    storage = createMemoryStorage();
+  }
+
+  Object.defineProperty(globalThis, "localStorage", {
+    value: storage,
+    configurable: true,
+    writable: true,
+  });
+
+  if (typeof window !== "undefined") {
+    let hasUsableLocalStorage = false;
+    try {
+      hasUsableLocalStorage = typeof window.localStorage !== "undefined";
+    } catch {
+      shouldOverrideWindow = true;
+    }
+
+    if (shouldOverrideWindow || !hasUsableLocalStorage) {
+      Object.defineProperty(window, "localStorage", {
+        value: storage,
+        configurable: true,
+        writable: true,
+      });
+    }
+  }
+};
+
 const bootstrapDom = () => {
   if (typeof window !== "undefined" && typeof document !== "undefined") return;
-  const dom = new JSDOM("<!doctype html><html><body></body></html>");
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+    url: "http://localhost",
+  });
   const { window: domWindow } = dom;
   (globalThis as typeof globalThis & { window?: Window }).window = domWindow as unknown as Window;
   (globalThis as typeof globalThis & { document?: Document }).document = domWindow.document;
-  (globalThis as typeof globalThis & { navigator?: Navigator }).navigator = domWindow.navigator;
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  if (!navigatorDescriptor || navigatorDescriptor.writable || navigatorDescriptor.set) {
+    (globalThis as typeof globalThis & { navigator?: Navigator }).navigator = domWindow.navigator;
+  } else if (navigatorDescriptor.configurable) {
+    Object.defineProperty(globalThis, "navigator", {
+      value: domWindow.navigator,
+      configurable: true,
+      writable: true,
+    });
+  }
   (globalThis as typeof globalThis & { HTMLElement?: typeof HTMLElement }).HTMLElement = domWindow.HTMLElement;
   (globalThis as typeof globalThis & { Element?: typeof Element }).Element = domWindow.Element;
   (globalThis as typeof globalThis & { Node?: typeof Node }).Node = domWindow.Node;
   (globalThis as typeof globalThis & { CustomEvent?: typeof CustomEvent }).CustomEvent = domWindow.CustomEvent;
-  (globalThis as typeof globalThis & { FileReader?: typeof FileReader }).FileReader = domWindow.FileReader;
-  (globalThis as typeof globalThis & { Blob?: typeof Blob }).Blob = domWindow.Blob;
+  if (typeof (globalThis as { FileReader?: typeof FileReader }).FileReader === "undefined") {
+    (globalThis as typeof globalThis & { FileReader?: typeof FileReader }).FileReader = domWindow.FileReader;
+  }
+  if (typeof (globalThis as { Blob?: typeof Blob }).Blob === "undefined") {
+    (globalThis as typeof globalThis & { Blob?: typeof Blob }).Blob = domWindow.Blob;
+  }
   if (typeof window.setTimeout !== "function") {
     window.setTimeout = globalThis.setTimeout.bind(globalThis);
   }
@@ -30,8 +116,12 @@ const installVitestCompat = () => {
   const envStubs = new Map<string, string | undefined>();
   const globalStubs = new Map<string, unknown>();
 
-  if (!vi.mocked) {
-    vi.mocked = ((value: unknown) => value) as typeof vi.mocked;
+  if (typeof vi.mocked !== "function") {
+    Object.defineProperty(vi, "mocked", {
+      value: ((value: unknown) => value) as typeof vi.mocked,
+      configurable: true,
+      writable: true,
+    });
   }
   if (!vi.stubEnv) {
     vi.stubEnv = ((key: string, value: string) => {
@@ -96,11 +186,13 @@ const installVitestCompat = () => {
 };
 
 bootstrapDom();
+ensureLocalStorage();
 installVitestCompat();
 
 // Default to non-native platform in unit tests unless explicitly overridden.
 (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
 if (typeof window !== "undefined") {
+  ensureLocalStorage();
   (window as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
 
   Object.defineProperty(window, "matchMedia", {
@@ -128,9 +220,18 @@ if (typeof window !== "undefined") {
     Element.prototype.releasePointerCapture = () => { };
   }
 
+  if (typeof (window as any).MouseEvent === "undefined") {
+    class MouseEvent extends Event {
+      constructor(type: string, params?: EventInit) {
+        super(type, params);
+      }
+    }
+    (window as any).MouseEvent = MouseEvent;
+  }
+
   // Minimal PointerEvent polyfill for libraries expecting it.
   if (typeof (window as any).PointerEvent === "undefined") {
-    class PointerEvent extends MouseEvent { }
+    class PointerEvent extends (window as any).MouseEvent { }
     (window as any).PointerEvent = PointerEvent;
   }
 
