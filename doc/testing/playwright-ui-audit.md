@@ -1,7 +1,7 @@
 # Playwright UI Coverage Audit - Full Click-Path Inventory
 
-**Audit Date**: 2026-01-21  
-**Status**: In Progress  
+**Audit Date**: 2026-01-21
+**Status**: In Progress
 **Goal**: Achieve comprehensive E2E coverage with evidence for all high-value UI paths
 
 ---
@@ -193,10 +193,9 @@
 | theme-light-btn | Button | Light | Sets light theme | N/A | **MISSING** |
 | theme-dark-btn | Button | Dark | Sets dark theme | N/A | **MISSING** |
 | theme-system-btn | Button | System | Sets system theme | N/A | **MISSING** |
-| diagnostics-btn | Button | Diagnostics | Opens logs dialog | N/A | **MISSING** |
-| share-diagnostics-btn | Button | Share | Shares logs via clipboard/share API | Share unavailable | **MISSING** |
-| email-diagnostics-btn | Button | Email | Opens mailto with logs | N/A | **MISSING** |
-| clear-logs-btn | Button | Clear logs | Clears all logs | N/A | **MISSING** |
+| diagnostics-btn | Button | Diagnostics | Opens diagnostics overlay | N/A | **MISSING** |
+| share-export-btn | Button | Share / Export | Shares active tab ZIP export | Share unavailable | **MISSING** |
+| clear-all-diagnostics-btn | Button | Clear All | Clears all diagnostics | Confirmation required | **MISSING** |
 | about-btn | Button | About | Shows build info | 7 taps → dev mode | featureFlags.spec.ts |
 | dev-mode-toggle | Checkbox | Developer mode | Toggles dev features | N/A | featureFlags.spec.ts |
 | hvsc-flag-toggle | Checkbox | Enable HVSC downloads | Toggles HVSC feature | N/A | featureFlags.spec.ts |
@@ -211,9 +210,8 @@
 | SP-2 | Change password → save → verify stored | HIGH | Password in localStorage | 0 (MISSING) |
 | SP-3 | Invalid URL → save → verify error | HIGH | Error toast shown | 0 (MISSING) |
 | SP-4 | Change theme → verify applied | MEDIUM | Theme class updated | 0 (MISSING) |
-| SP-5 | Open diagnostics → share → verify clipboard | MEDIUM | Logs copied | 0 (MISSING) |
-| SP-6 | Open diagnostics → email → verify mailto | MEDIUM | mailto link opened | 0 (MISSING) |
-| SP-7 | Clear logs → verify empty | MEDIUM | Logs cleared | 0 (MISSING) |
+| SP-5 | Open diagnostics → share / export → verify action | MEDIUM | Share triggered | 0 (MISSING) |
+| SP-6 | Clear all diagnostics → confirm → verify empty | MEDIUM | Diagnostics cleared | 0 (MISSING) |
 | SP-8 | Tap About 7 times → verify dev mode | HIGH | Dev mode enabled | 3 (featureFlags.spec.ts) |
 | SP-9 | Enable HVSC flag → verify controls shown | HIGH | HVSC UI visible | 3 (featureFlags.spec.ts) |
 | SP-10 | Disable HVSC flag → verify controls hidden | HIGH | HVSC UI hidden | 3 (featureFlags.spec.ts) |

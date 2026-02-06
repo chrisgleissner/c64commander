@@ -1,4 +1,5 @@
 import { getActiveAction, runWithImplicitAction } from '@/lib/tracing/actionTrace';
+import { decrementRestInFlight, incrementRestInFlight } from '@/lib/diagnostics/diagnosticsActivity';
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
 import type { TraceActionContext } from '@/lib/tracing/types';
 
@@ -39,7 +40,46 @@ const extractBody = (body: BodyInit | null | undefined) => {
     }
   }
   if (body instanceof FormData) {
-    return '[form-data]';
+    // Provide structured summary of FormData for diagnostics
+    const fields: Array<{
+      name: string;
+      type: 'file' | 'text';
+      fileName?: string;
+      sizeBytes?: number;
+      mimeType?: string;
+    }> = [];
+    body.forEach((value, name) => {
+      if (typeof File !== 'undefined' && value instanceof File) {
+        fields.push({
+          name,
+          type: 'file',
+          fileName: value.name,
+          sizeBytes: value.size,
+          mimeType: value.type || undefined,
+        });
+      } else if (typeof Blob !== 'undefined' && value instanceof Blob) {
+        fields.push({
+          name,
+          type: 'file',
+          sizeBytes: value.size,
+          mimeType: value.type || undefined,
+        });
+      } else {
+        fields.push({
+          name,
+          type: 'text',
+        });
+      }
+    });
+    return { type: 'form-data', fields };
+  }
+  if (typeof Blob !== 'undefined' && body instanceof Blob) {
+    return {
+      type: 'blob',
+      sizeBytes: body.size,
+      mimeType: body.type || null,
+      source: 'blob',
+    };
   }
   return '[body]';
 };
@@ -68,6 +108,7 @@ export const registerFetchTrace = () => {
     url: string,
     method: string,
   ): Promise<Response> => {
+    incrementRestInFlight();
     const headers = extractHeaders(init?.headers ?? (input instanceof Request ? input.headers : undefined));
     recordRestRequest(action, {
       method,
@@ -135,6 +176,8 @@ export const registerFetchTrace = () => {
       });
       recordTraceError(action, traceError ?? new Error('Request failed'));
       throw error;
+    } finally {
+      decrementRestInFlight();
     }
   };
 
@@ -148,7 +191,7 @@ export const registerFetchTrace = () => {
           : String(input);
     const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toString().toUpperCase();
     const suppress = Boolean(init && '__c64uTraceSuppressed' in init && init.__c64uTraceSuppressed);
-    
+
     if (!suppress && shouldTraceUrl(url)) {
       // If there's an active user action, record REST within that context
       const activeAction = getActiveAction();

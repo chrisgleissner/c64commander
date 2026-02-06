@@ -65,8 +65,8 @@ const useAdaptiveLabelLayout = (label: string, widgetMinWidth: number) => {
   useEffect(() => {
     const observer = typeof ResizeObserver !== 'undefined'
       ? new ResizeObserver(() => {
-          measureLayout();
-        })
+        measureLayout();
+      })
       : null;
     if (observer) {
       if (containerRef.current) observer.observe(containerRef.current);
@@ -429,7 +429,7 @@ export function ConfigItemRow({
           <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
             {name}
           </span>
-          <span className="text-xs text-muted-foreground font-mono" data-testid={valueTestId}>
+          <span className="text-xs text-muted-foreground font-semibold" data-testid={valueTestId}>
             {currentLabel}
           </span>
         </div>
@@ -528,7 +528,7 @@ export function ConfigItemRow({
             lastCommittedRef.current = nextValue;
             onValueChange(nextValue);
           }}
-          className="font-mono"
+          className="font-sans"
         />
         {(isLoading || isItemLoading) && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>

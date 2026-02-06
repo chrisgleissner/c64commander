@@ -1,4 +1,5 @@
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, buildErrorLogDetails } from '@/lib/logging';
+import { decrementFtpInFlight, incrementFtpInFlight } from '@/lib/diagnostics/diagnosticsActivity';
 import { FtpClient, type FtpEntry, type FtpListOptions, type FtpReadOptions } from '@/lib/native/ftpClient';
 import { getActiveAction, runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordFtpOperation, recordTraceError } from '@/lib/tracing/traceSession';
@@ -16,6 +17,7 @@ const executeFtpList = async (
   normalizedPath: string,
   intent: InteractionIntent,
 ): Promise<FtpListResult> => {
+  incrementFtpInFlight();
   return withFtpInteraction({
     action,
     operation: 'list',
@@ -33,11 +35,10 @@ const executeFtpList = async (
       return { path: normalizedPath, entries: response.entries };
     } catch (error) {
       const err = error as Error;
-      addErrorLog('FTP listing failed', {
+      addErrorLog('FTP listing failed', buildErrorLogDetails(err, {
         host: ftpOptions.host,
         path: normalizedPath,
-        error: err.message,
-      });
+      }));
       recordFtpOperation(action, {
         operation: 'list',
         path: normalizedPath,
@@ -46,6 +47,8 @@ const executeFtpList = async (
       });
       recordTraceError(action, err);
       throw error;
+    } finally {
+      decrementFtpInFlight();
     }
   });
 };
@@ -74,6 +77,7 @@ const executeFtpRead = async (
   path: string,
   intent: InteractionIntent,
 ): Promise<{ data: string; sizeBytes?: number }> => {
+  incrementFtpInFlight();
   return withFtpInteraction({
     action,
     operation: 'read',
@@ -91,11 +95,10 @@ const executeFtpRead = async (
       return response;
     } catch (error) {
       const err = error as Error;
-      addErrorLog('FTP file read failed', {
+      addErrorLog('FTP file read failed', buildErrorLogDetails(err, {
         host: ftpOptions.host,
         path,
-        error: err.message,
-      });
+      }));
       recordFtpOperation(action, {
         operation: 'read',
         path,
@@ -104,6 +107,8 @@ const executeFtpRead = async (
       });
       recordTraceError(action, err);
       throw error;
+    } finally {
+      decrementFtpInFlight();
     }
   });
 };

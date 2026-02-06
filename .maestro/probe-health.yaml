@@ -11,7 +11,7 @@ tags:
 - launchApp
 
 # Step 2: Verify main UI is visible (app title)
-- assertVisible: "C64 Commander"
+- assertVisible: "Home"
 
 # Step 3: Take a screenshot to prove UI is rendered
 - takeScreenshot: probe-health-home
@@ -26,6 +26,6 @@ tags:
 - tapOn: "Home"
 
 # Step 7: Final verification
-- assertVisible: "C64 Commander"
+- assertVisible: "Home"
 
 - takeScreenshot: probe-health-complete

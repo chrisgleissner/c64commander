@@ -32,6 +32,32 @@ npm run format:check
 
 The `./build` script runs `npm run format` automatically before build steps (use `--skip-format` to bypass).
 
+## Manual SID playback (local file)
+
+If you need to validate the exact local SID upload/playback path without launching the full app UI, use the
+manual playback script:
+
+```bash
+scripts/manual-play-sid.sh /path/to/song.sid
+```
+
+Optional inputs:
+
+```bash
+export C64U_HOST=192.168.1.50
+export C64U_PASSWORD=your-password
+scripts/manual-play-sid.sh /path/to/song.sid --song 1 --duration-ms 180000
+```
+
+Notes:
+- `C64U_HOST`, `C64U_DEVICE_HOST`, or `C64U_BASE_URL` control the target device.
+- `C64U_PASSWORD` is optional.
+- `--song` and `--duration-ms` (or `C64U_SONGNR` / `C64U_DURATION_MS`) are optional.
+
+## UI typography stability
+
+Root cause (resolved): the app bar and several UI labels used the `font-mono` class, but JetBrains Mono is not bundled. When styles re-applied after interactions, browsers swapped to the default monospace fallback, causing visible font shifts and header height changes. The fix standardizes UI labels/values on the sans-serif stack (`Inter` → `Arial` → system) and removes monospace usage from standard UI elements.
+
 VS Code workspace settings in `.vscode/settings.json` enable:
 
 - format on save
@@ -108,6 +134,7 @@ Notes:
 - `--screenshots-only` skips unit tests, E2E tests, and Android builds.
 - `--test-e2e` runs Playwright without screenshots.
 - `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
+- Screenshot output is organized under `doc/img/app/<page>/<section>.png` for easy browsing.
 
 ## Test architecture
 

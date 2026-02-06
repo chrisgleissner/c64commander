@@ -143,28 +143,28 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             <DropdownMenuContent align="start">
               {item.menuItems?.length
                 ? item.menuItems.map((entry, index) => {
-                    if (entry.type === 'separator') return <DropdownMenuSeparator key={`sep-${index}`} />;
-                    if (entry.type === 'label') {
-                      return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
-                    }
-                    if (entry.type === 'info') {
-                      return (
-                        <DropdownMenuItem key={`info-${index}`} disabled>
-                          {entry.label}: {entry.value}
-                        </DropdownMenuItem>
-                      );
-                    }
+                  if (entry.type === 'separator') return <DropdownMenuSeparator key={`sep-${index}`} />;
+                  if (entry.type === 'label') {
+                    return <DropdownMenuLabel key={`label-${index}`}>{entry.label}</DropdownMenuLabel>;
+                  }
+                  if (entry.type === 'info') {
                     return (
-                      <DropdownMenuItem
-                        key={`action-${index}`}
-                        onSelect={entry.onSelect}
-                        disabled={entry.disabled}
-                        className={entry.destructive ? 'text-destructive focus:text-destructive' : undefined}
-                      >
-                        {entry.label}
+                      <DropdownMenuItem key={`info-${index}`} disabled>
+                        {entry.label}: {entry.value}
                       </DropdownMenuItem>
                     );
-                  })
+                  }
+                  return (
+                    <DropdownMenuItem
+                      key={`action-${index}`}
+                      onSelect={entry.onSelect}
+                      disabled={entry.disabled}
+                      className={entry.destructive ? 'text-destructive focus:text-destructive' : undefined}
+                    >
+                      {entry.label}
+                    </DropdownMenuItem>
+                  );
+                })
                 : null}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -182,7 +182,9 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
             }, 'click', 'ActionListTitle', { title: item.title }, 'TitleButton')}
             disabled={item.isDimmed || item.disableActions}
           >
-            <span className={cn('min-w-0', item.titleClassName ?? 'truncate')}>{item.title}</span>
+            <span className={cn(item.titleClassName, 'min-w-0 break-words whitespace-normal')}>
+              {item.title}
+            </span>
             {item.titleSuffix ? (
               <span className="text-xs text-muted-foreground tabular-nums shrink-0">{item.titleSuffix}</span>
             ) : null}
@@ -263,7 +265,7 @@ export const SelectableActionList = ({
   const [viewAllFilterText, setViewAllFilterText] = useState('');
   const viewAllScrollRef = useRef<HTMLDivElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  
+
   const filterWithHeaders = useCallback((query: string) => {
     const trimmed = query.trim();
     if (!trimmed) return items;
@@ -304,7 +306,7 @@ export const SelectableActionList = ({
 
   const selectionToggleId = listTestId ? `${listTestId}-toggle-select-all` : undefined;
   const removeSelectedId = listTestId ? `${listTestId}-remove-selected` : undefined;
-  
+
   const { visibleItems, hasMore } = useMemo(() => {
     const totalItems = filteredItems.reduce((count, item) => (item.variant === 'header' ? count : count + 1), 0);
     const list: ActionListItem[] = [];
@@ -391,34 +393,34 @@ export const SelectableActionList = ({
 
       {showSelectionControls ? (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs min-w-0">
-          <span className="text-muted-foreground min-w-0 break-words">
-            {filteredItems.length ? `${filteredItems.length} items` : emptyLabel}
-          </span>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
+            <span className="text-muted-foreground min-w-0 break-words">
+              {filteredItems.length ? `${filteredItems.length} items` : emptyLabel}
+            </span>
             <Button
               variant="outline"
               size="sm"
               onClick={onToggleSelectAll}
               disabled={!items.length}
-              className="max-w-full truncate"
+              className="max-w-full whitespace-normal"
               id={selectionToggleId}
               data-testid={selectionToggleId}
             >
               {allSelected ? deselectAllLabel : selectAllLabel}
             </Button>
-            {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onRemoveSelected}
-                className="text-destructive hover:text-destructive max-w-full truncate"
-                id={removeSelectedId}
-                data-testid={removeSelectedId}
-              >
-                {removeSelectedLabel}
-              </Button>
-            ) : null}
           </div>
+          {removeSelectedLabel && selectedCount > 0 && onRemoveSelected ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRemoveSelected}
+              className="text-destructive hover:text-destructive max-w-full whitespace-normal"
+              id={removeSelectedId}
+              data-testid={removeSelectedId}
+            >
+              {removeSelectedLabel}
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -488,7 +490,7 @@ export const SelectableActionList = ({
                   )}
                 </div>
               </div>
-              <AlphabetScrollbar 
+              <AlphabetScrollbar
                 items={viewAllFilteredItems.filter(item => item.variant !== 'header').map(item => ({ title: item.title, id: item.id }))}
                 scrollContainerRef={viewAllScrollRef}
                 onScrollToIndex={(index) => {

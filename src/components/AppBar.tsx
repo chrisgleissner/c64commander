@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ConnectivityIndicator } from '@/components/ConnectivityIndicator';
+import { DiagnosticsActivityIndicator } from '@/components/DiagnosticsActivityIndicator';
+import { requestDiagnosticsOpen } from '@/lib/diagnostics/diagnosticsOverlay';
 
 type Props = {
   title: ReactNode;
@@ -9,8 +13,49 @@ type Props = {
 };
 
 export function AppBar({ title, subtitle, leading, children }: Props) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const headerRef = useRef<HTMLElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return;
+    const element = headerRef.current;
+    if (!element) return;
+
+    const updateHeight = () => {
+      const nextHeight = element.offsetHeight;
+      if (!Number.isFinite(nextHeight) || nextHeight <= 0) return;
+      document.documentElement.style.setProperty('--app-bar-height', `${nextHeight}px`);
+    };
+
+    updateHeight();
+
+    let observer: ResizeObserver | null = null;
+    if ('ResizeObserver' in window) {
+      observer = new ResizeObserver(() => updateHeight());
+      observer.observe(element);
+    } else {
+      window.addEventListener('resize', updateHeight);
+    }
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, []);
+
+  const handleDiagnosticsOpen = () => {
+    requestDiagnosticsOpen('actions');
+    if (location.pathname !== '/settings') {
+      navigate('/settings');
+    }
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border">
+    <header
+      ref={headerRef}
+      className="fixed top-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border pt-safe"
+    >
       <div className="container py-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -25,7 +70,10 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
               </>
             )}
           </div>
-          <ConnectivityIndicator />
+          <div className="flex items-center gap-3">
+            <DiagnosticsActivityIndicator onClick={handleDiagnosticsOpen} />
+            <ConnectivityIndicator />
+          </div>
         </div>
         {children ? <div className="min-w-0">{children}</div> : null}
       </div>

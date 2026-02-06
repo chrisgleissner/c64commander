@@ -777,7 +777,19 @@ export default function PlayFilesPage() {
   const playItem = useCallback(
     async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean }) => {
       if (item.request.source === 'local' && !item.request.file) {
-        throw new Error('Local file unavailable. Re-add it to the playlist.');
+        const sourceId = item.sourceId;
+        const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
+        if (treeUri) {
+          const normalizedPath = normalizeSourcePath(item.path);
+          item.request.file = buildLocalPlayFileFromTree(item.label, normalizedPath, treeUri);
+        }
+        const localEntry = sourceId ? localEntriesBySourceId.get(sourceId)?.get(normalizeSourcePath(item.path)) : null;
+        if (!item.request.file && localEntry?.uri) {
+          item.request.file = buildLocalPlayFileFromUri(item.label, normalizeSourcePath(item.path), localEntry.uri);
+        }
+        if (!item.request.file) {
+          throw new Error('Local file unavailable. Re-add it to the playlist.');
+        }
       }
       let durationOverride: number | undefined;
       let subsongCount: number | undefined;
@@ -838,7 +850,7 @@ export default function PlayFilesPage() {
       setIsPlaying(true);
       setIsPaused(false);
     },
-    [durationFallbackMs, ensurePlaybackConnection, reportUserError, resolveSidMetadata],
+    [durationFallbackMs, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, reportUserError, resolveSidMetadata],
   );
 
   const playlistItemDuration = useCallback(
@@ -989,12 +1001,12 @@ export default function PlayFilesPage() {
           sourceId: entry.sourceId ?? null,
           file: entry.source === 'local'
             ? resolveLocalRuntimeFile(entry.sourceId ?? '', normalizedPath)
-              || (localEntry?.uri
-                ? buildLocalPlayFileFromUri(entry.name, normalizedPath, localEntry.uri, parseModifiedAt(localEntry.modifiedAt))
-                : undefined)
-              || (localTreeUri
-                ? buildLocalPlayFileFromTree(entry.name, normalizedPath, localTreeUri, parseModifiedAt(localEntry?.modifiedAt))
-                : undefined)
+            || (localEntry?.uri
+              ? buildLocalPlayFileFromUri(entry.name, normalizedPath, localEntry.uri, parseModifiedAt(localEntry.modifiedAt))
+              : undefined)
+            || (localTreeUri
+              ? buildLocalPlayFileFromTree(entry.name, normalizedPath, localTreeUri, parseModifiedAt(localEntry?.modifiedAt))
+              : undefined)
             : entry.source === 'hvsc'
               ? buildHvscLocalPlayFile(normalizedPath, entry.name)
               : undefined,
@@ -1626,7 +1638,7 @@ export default function PlayFilesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/95">
+    <div className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-[var(--app-bar-height)]">
       <AppBar
         title="Play Files"
         subtitle={status.isConnected ? 'Connected' : status.isConnecting ? 'Connecting…' : 'Offline'}

@@ -26,13 +26,12 @@ export function ConnectionBadge({ status, compact = false }: ConnectionBadgeProp
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
-        isConnected 
-          ? 'bg-success/10 text-success' 
-          : isConnecting 
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${isConnected
+          ? 'bg-success/10 text-success'
+          : isConnecting
             ? 'bg-muted text-muted-foreground'
             : 'bg-destructive/10 text-destructive'
-      }`}
+        }`}
     >
       {isConnecting ? (
         <>
@@ -42,7 +41,7 @@ export function ConnectionBadge({ status, compact = false }: ConnectionBadgeProp
       ) : isConnected ? (
         <>
           <Wifi className="h-4 w-4" />
-          <span className="font-mono text-xs">{deviceInfo?.hostname || 'Connected'}</span>
+          <span className="font-semibold text-xs">{deviceInfo?.hostname || 'Connected'}</span>
         </>
       ) : (
         <>

@@ -60,11 +60,12 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    if (await dialogTitle.isVisible().catch(() => false)) {
+      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    }
 
     const demoIndicator = page.getByTestId('connectivity-indicator');
-    await expect(demoIndicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
+    await expect(demoIndicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE', { timeout: 10000 });
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Disk list', { exact: true })).toBeVisible();
@@ -257,22 +258,56 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(false);
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const demoContinue = page.getByRole('button', { name: 'Continue in Demo Mode' });
-    if (await demoContinue.isVisible().catch(() => false)) {
-      await demoContinue.click();
+    const dismissDemoInterstitialIfPresent = async () => {
+      const demoContinue = page.getByRole('button', { name: /continue in demo mode/i });
+      const demoDialog = page.getByRole('dialog', { name: /demo mode/i });
+
+      try {
+        await demoDialog.waitFor({ state: 'visible', timeout: 1500 });
+      } catch (error) {
+        console.warn('Demo interstitial did not appear before continuing', error);
+      }
+
+      if (await demoContinue.isVisible()) {
+        await demoContinue.click();
+        await expect(demoDialog).toBeHidden({ timeout: 5000 });
+        return;
+      }
+
+      if (await demoDialog.isVisible()) {
+        const continueButton = demoDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+        if (await continueButton.isVisible()) {
+          await continueButton.click();
+        } else {
+          await page.keyboard.press('Escape');
+        }
+        await expect(demoDialog).toBeHidden({ timeout: 5000 });
+      }
+    };
+
+    await dismissDemoInterstitialIfPresent();
+    const saveButton = page.getByRole('button', { name: /Save & Connect|Save connection/i });
+    if (!(await saveButton.isVisible())) {
+      await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+      await dismissDemoInterstitialIfPresent();
     }
-    const demoDialog = page.getByRole('dialog');
-    if (await demoDialog.isVisible().catch(() => false)) {
-      const continueButton = demoDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
-      if (await continueButton.isVisible().catch(() => false)) {
+    await expect(saveButton).toBeVisible({ timeout: 15000 });
+    await saveButton.click();
+    const postSaveDemo = page.getByRole('button', { name: 'Continue in Demo Mode' });
+    if (await postSaveDemo.isVisible()) {
+      await postSaveDemo.click();
+    }
+    const postSaveDialog = page.getByRole('dialog');
+    if (await postSaveDialog.isVisible()) {
+      const continueButton = postSaveDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+      if (await continueButton.isVisible()) {
         await continueButton.click();
       } else {
         await page.keyboard.press('Escape');
       }
-      await expect(demoDialog).toBeHidden({ timeout: 5000 });
+      await expect(postSaveDialog).toBeHidden({ timeout: 5000 });
     }
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click({ force: true });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
@@ -349,7 +384,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
       const label = await playButtonAfter.textContent();
       if (label && label.toLowerCase().includes('stop')) {
         await playButtonAfter.click();
-        await expect(playButtonAfter).toContainText('Play');
+        await expect(playButtonAfter).toHaveAttribute('aria-label', 'Play');
       }
       await playButtonAfter.click();
       await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);

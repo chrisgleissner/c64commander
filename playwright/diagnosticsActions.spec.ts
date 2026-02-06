@@ -125,7 +125,7 @@ test.describe('Diagnostics Actions tab', () => {
     }, events);
 
     // Open the diagnostics dialog
-    await page.getByRole('button', { name: 'Logs and Traces' }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Diagnostics' })).toBeVisible();
     await snap(page, testInfo, 'diagnostics-open');
 
@@ -136,9 +136,9 @@ test.describe('Diagnostics Actions tab', () => {
     await expect(page.getByTestId('action-summary-COR-0900')).toBeVisible();
 
     // Verify badge counts
-    await expect(page.getByTestId('action-rest-count-COR-0900')).toHaveText('1');
-    await expect(page.getByTestId('action-ftp-count-COR-0900')).toHaveText('1');
-    await expect(page.getByTestId('action-error-count-COR-0900')).toHaveText('1');
+    await expect(page.getByTestId('action-rest-count-COR-0900')).toHaveText('REST×1');
+    await expect(page.getByTestId('action-ftp-count-COR-0900')).toHaveText('FTP×1');
+    await expect(page.getByTestId('action-error-count-COR-0900')).toHaveText('ERR×1');
     await snap(page, testInfo, 'actions-tab');
 
     // Expand the action details

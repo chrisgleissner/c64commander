@@ -103,6 +103,54 @@ describe('localSourcesStore', () => {
     expect(result?.source.android?.treeUri).toBe('content://tree/primary%3AMusic');
   });
 
+  it('keeps rootPath as / for SAF sources regardless of rootName', async () => {
+    platformState.value = 'android';
+    platformState.native = true;
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: 'content://tree/primary%3AMusic%2FDemos',
+      rootName: 'Demos',
+      permissionPersisted: true,
+    });
+
+    const result = await createLocalSourceFromPicker(null);
+    expect(result?.source.rootPath).toBe('/');
+    expect(result?.source.rootName).toBe('Demos');
+  });
+
+  it('defaults rootPath to / when rootName is empty', async () => {
+    platformState.value = 'android';
+    platformState.native = true;
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: 'content://tree/primary%3AMusic',
+      rootName: '',
+      permissionPersisted: true,
+    });
+
+    const result = await createLocalSourceFromPicker(null);
+    expect(result?.source.rootPath).toBe('/');
+  });
+
+  it('persists and restores SAF source with treeUri across save/load', async () => {
+    platformState.value = 'android';
+    platformState.native = true;
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: 'content://tree/primary%3AMusic',
+      rootName: 'SID Collection',
+      permissionPersisted: true,
+    });
+
+    const result = await createLocalSourceFromPicker(null);
+    expect(result).not.toBeNull();
+    saveLocalSources([result!.source]);
+
+    const loaded = loadLocalSources();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].android?.treeUri).toBe('content://tree/primary%3AMusic');
+    expect(loaded[0].rootPath).toBe('/');
+    expect(loaded[0].rootName).toBe('SID Collection');
+    expect(loaded[0].id).toBe(result!.source.id);
+  });
+
   it('rejects picker payloads with file listings on android', async () => {
     platformState.value = 'android';
     platformState.native = true;

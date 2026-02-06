@@ -46,8 +46,16 @@ export const PlaybackSettingsPanel = ({
   subsongCount,
   onSelectSong,
   onCloseSongPicker,
-}: PlaybackSettingsPanelProps) => (
-  <>
+}: PlaybackSettingsPanelProps) => {
+  const songlengthsMetadata = [
+    songlengthsSizeLabel,
+    songlengthsEntryCount !== null ? `${songlengthsEntryCount} Entries` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  return (
+    <>
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">Default duration</p>
       <div className="flex items-center gap-3 min-w-0">
@@ -78,7 +86,7 @@ export const PlaybackSettingsPanel = ({
       {songlengthsName ? (
         <button
           type="button"
-          className="text-xs font-mono text-primary hover:underline text-left break-all"
+          className="text-xs font-semibold text-primary hover:underline text-left break-all"
           onClick={onChooseSonglengthsFile}
         >
           {songlengthsName}
@@ -87,10 +95,9 @@ export const PlaybackSettingsPanel = ({
         <p className="text-xs text-muted-foreground">Not selected.</p>
       )}
       {songlengthsName && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
-        <div className="text-[11px] text-muted-foreground space-y-0.5">
-          {songlengthsSizeLabel ? <p>Size: {songlengthsSizeLabel}</p> : null}
-          {songlengthsEntryCount !== null ? <p>Entries: {songlengthsEntryCount}</p> : null}
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          ({songlengthsMetadata})
+        </p>
       ) : null}
       {songlengthsError ? (
         <p className="text-xs text-destructive">{songlengthsError}</p>
@@ -161,5 +168,6 @@ export const PlaybackSettingsPanel = ({
         </div>
       ) : null}
     </div>
-  </>
-);
+    </>
+  );
+};

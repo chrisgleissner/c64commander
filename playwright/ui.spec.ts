@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Page, TestInfo } from '@playwright/test';
@@ -11,20 +11,32 @@ import { enableTraceAssertions } from './traceUtils';
 import { saveCoverageFromPage } from './withCoverage';
 import { clickSourceSelectionButton } from './sourceSelection';
 
+const runGit = (args: string[]) => {
+  const result = spawnSync('git', args, { encoding: 'utf-8' });
+  return result.status === 0 ? result.stdout.trim() : '';
+};
+
 const resolveExpectedVersion = () => {
   const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || '';
+  const gitSha =
+    process.env.VITE_GIT_SHA ||
+    process.env.GIT_SHA ||
+    process.env.GITHUB_SHA ||
+    runGit(['rev-parse', 'HEAD']);
+  const fullGitSha = gitSha && gitSha.length < 8 ? runGit(['rev-parse', 'HEAD']) : gitSha;
+  const gitShaShort = fullGitSha ? fullGitSha.slice(0, 8) : '';
+  const exactTag =
+    (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) ||
+    runGit(['describe', '--tags', '--exact-match']);
+  const latestTag = exactTag || runGit(['describe', '--tags', '--abbrev=0']);
+
+  if (latestTag) {
+    if (exactTag) return latestTag;
+    if (gitShaShort) return `${latestTag}-${gitShaShort}`;
+    return latestTag;
+  }
+
   if (envVersion) return envVersion;
-  if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME) {
-    return process.env.GITHUB_REF_NAME;
-  }
-  try {
-    const tag = execSync('git describe --tags --exact-match', { stdio: ['ignore', 'pipe', 'ignore'] })
-      .toString()
-      .trim();
-    if (tag) return tag;
-  } catch {
-    // ignore
-  }
   const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')) as { version?: string };
   return pkg.version || '';
 };
@@ -186,7 +198,7 @@ test.describe('UI coverage', () => {
 
   test('home and disks pages render', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'C64 Commander' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'HOME' })).toBeVisible();
     await snap(page, testInfo, 'home-open');
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
@@ -243,7 +255,18 @@ test.describe('UI coverage', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const expectedVersion = resolveExpectedVersion() || '—';
     const versionCard = page.getByText('Version', { exact: true }).locator('..');
-    await expect(versionCard.locator('p')).toHaveText(expectedVersion);
+    const versionText = versionCard.locator('p');
+    if (expectedVersion === '—') {
+      await expect(versionText).toHaveText('—');
+    } else {
+      const tagMatch = expectedVersion.match(/^(.+?)-[0-9a-f]{7,}$/i);
+      if (tagMatch) {
+        const escapedTag = tagMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}-[0-9a-f]{7,8}$`));
+      } else {
+        await expect(versionText).toHaveText(expectedVersion);
+      }
+    }
     await snap(page, testInfo, 'home-version');
   });
 
@@ -358,7 +381,7 @@ test.describe('UI coverage', () => {
     await snap(page, testInfo, 'settings-open');
 
     await page.goto('/docs', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Documentation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Docs' })).toBeVisible();
     await snap(page, testInfo, 'docs-open');
   });
 });

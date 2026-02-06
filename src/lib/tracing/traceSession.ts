@@ -12,6 +12,7 @@ import type {
 import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
 import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from '@/lib/tracing/traceIds';
+import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
 
 const RETENTION_WINDOW_MS = 30 * 60 * 1000;
 const MAX_EVENT_COUNT = 25_000;
@@ -36,6 +37,12 @@ const estimateEventSize = (event: TraceEvent) => {
     console.warn('Failed to estimate event size:', error);
     return 0;
   }
+};
+
+const shouldSuppressTraceEvent = (type: TraceEventType) => {
+  if (!shouldSuppressDiagnosticsSideEffects()) return false;
+  if (type === 'error') return false;
+  return true;
 };
 
 const dropOldest = () => {
@@ -72,6 +79,7 @@ const appendEvent = <T extends Record<string, unknown>>(
   correlationId: string,
   data: T,
 ) => {
+  if (shouldSuppressTraceEvent(type)) return;
   const nowMs = Date.now();
   evictExpired(nowMs);
   const event: TraceEvent<T> = {

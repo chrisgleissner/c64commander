@@ -2488,7 +2488,25 @@
       "headers": {
         "X-C64U-Host": "127.0.0.1:41569"
       },
-      "body": "[form-data]",
+      "body": {
+        "type": "form-data",
+        "fields": [
+          {
+            "name": "file",
+            "type": "file",
+            "fileName": "demo.sid",
+            "sizeBytes": 3,
+            "mimeType": "audio/prs.sid"
+          },
+          {
+            "name": "file",
+            "type": "file",
+            "fileName": "songlengths.ssl",
+            "sizeBytes": 2,
+            "mimeType": "application/octet-stream"
+          }
+        ]
+      },
       "target": "external-mock"
     }
   },

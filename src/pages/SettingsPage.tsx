@@ -10,13 +10,13 @@ import {
   ExternalLink,
   Info,
   FileText,
-  Share2,
-  Trash2,
   Cpu,
   Play,
+  Search,
+  X,
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
-import { C64_DEFAULTS, getDeviceHostFromBaseUrl } from '@/lib/c64api';
+import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from '@/lib/c64api';
 import { AppBar } from '@/components/AppBar';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,17 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { reportUserError } from '@/lib/uiErrors';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,18 +53,25 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addErrorLog, addLog, clearLogs, formatLogsForShare, getErrorLogs, getLogs } from '@/lib/logging';
-import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
+import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
+import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
 import { buildActionSummaries, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
-import { shareTraceZip } from '@/lib/tracing/traceExport';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
+import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
+import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
+import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
+import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
+import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
+import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from '@/lib/diagnostics/diagnosticsOverlayState';
+import { resolveActionSeverity, resolveLogSeverity, resolveTraceSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
+import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
 import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -101,14 +119,9 @@ import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
-import {
-  clearFtpBridgeUrl,
-  clearStoredFtpPort,
-  getFtpBridgeUrl,
-  getStoredFtpPort,
-  setFtpBridgeUrl,
-  setStoredFtpPort,
-} from '@/lib/ftp/ftpConfig';
+
+const diagnosticsTabTriggerClass =
+  'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -120,6 +133,8 @@ export default function SettingsPage() {
   const { value: isHvscEnabled, setValue: setHvscEnabled } = useFeatureFlag('hvsc_enabled');
   const { limit: listPreviewLimit, setLimit: setListPreviewLimit } = useListPreviewLimit();
   const trace = useActionTrace('SettingsPage');
+  const buildInfo = getBuildInfo();
+  const buildInfoRows = getBuildInfoRows(buildInfo);
 
   const setHvscEnabledAndPersist = (enabled: boolean) => {
     void setHvscEnabled(enabled);
@@ -132,7 +147,7 @@ export default function SettingsPage() {
       });
     }
   };
-  
+
   const [passwordInput, setPasswordInput] = useState(password);
   const [deviceHostInput, setDeviceHostInput] = useState(deviceHost);
   const runtimeDeviceHost = getDeviceHostFromBaseUrl(runtimeBaseUrl);
@@ -141,11 +156,18 @@ export default function SettingsPage() {
   const lastProbeFailedAtMs = connectionSnapshot.lastProbeFailedAtMs;
   const [isSaving, setIsSaving] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
-  const [diagnosticsTab, setDiagnosticsTab] = useState<'errors' | 'logs' | 'traces' | 'actions'>('errors');
+  const [diagnosticsTab, setDiagnosticsTab] = useState<DiagnosticsTabKey>('actions');
+  const [diagnosticsFilters, setDiagnosticsFilters] = useState<Record<DiagnosticsTabKey, string>>({
+    'error-logs': '',
+    logs: '',
+    traces: '',
+    actions: '',
+  });
   const [logs, setLogs] = useState(getLogs());
   const [errorLogs, setErrorLogs] = useState(getErrorLogs());
   const [traceEvents, setTraceEvents] = useState(getTraceEvents());
   const actionSummaries = useMemo(() => buildActionSummaries(traceEvents), [traceEvents]);
+  const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? '';
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
@@ -185,16 +207,23 @@ export default function SettingsPage() {
   const devTapTimestamps = useRef<number[]>([]);
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === 'android';
-  const [ftpPortInput, setFtpPortInput] = useState(String(getStoredFtpPort()));
-  const [ftpBridgeUrlInput, setFtpBridgeUrlInput] = useState(getFtpBridgeUrl());
+
+  const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
+    setLogsDialogOpen(open);
+    setDiagnosticsOverlayActive(open);
+  }, []);
 
   useEffect(() => {
     setPasswordInput(password);
   }, [password]);
 
   useEffect(() => {
+    if (isDemoActive) {
+      setDeviceHostInput(resolveDeviceHostFromStorage());
+      return;
+    }
     setDeviceHostInput(deviceHost);
-  }, [deviceHost]);
+  }, [deviceHost, isDemoActive]);
 
   useEffect(() => {
     dismissDemoInterstitial();
@@ -277,19 +306,25 @@ export default function SettingsPage() {
     return () => window.removeEventListener('c64u-device-safety-updated', handler);
   }, [refreshDeviceSafetyState]);
 
-  const logsPayload = useMemo(() => formatLogsForShare(logs), [logs]);
-  const logsRedactedPayload = useMemo(() => formatLogsForShare(logs, { redacted: true }), [logs]);
-  const errorsPayload = useMemo(() => formatLogsForShare(errorLogs), [errorLogs]);
-  const errorsRedactedPayload = useMemo(() => formatLogsForShare(errorLogs, { redacted: true }), [errorLogs]);
-  const resolveLogPayload = useCallback(
-    (redacted: boolean) => {
-      if (diagnosticsTab === 'errors') {
-        return redacted ? errorsRedactedPayload : errorsPayload;
-      }
-      return redacted ? logsRedactedPayload : logsPayload;
-    },
-    [diagnosticsTab, errorsPayload, errorsRedactedPayload, logsPayload, logsRedactedPayload],
-  );
+  useEffect(() => {
+    const handleDiagnosticsRequest = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { tab?: DiagnosticsTabKey } | undefined;
+      if (!detail?.tab) return;
+      setDiagnosticsTab(detail.tab);
+      setDiagnosticsDialogOpen(true);
+    };
+    const pending = consumeDiagnosticsOpenRequest();
+    if (pending) {
+      setDiagnosticsTab(pending);
+      setDiagnosticsDialogOpen(true);
+    }
+    window.addEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
+    return () => window.removeEventListener('c64u-diagnostics-open-request', handleDiagnosticsRequest);
+  }, [setDiagnosticsDialogOpen]);
+
+  useEffect(() => {
+    return () => setDiagnosticsOverlayActive(false);
+  }, []);
 
   const refreshSafPermissions = async () => {
     if (!isAndroid) return;
@@ -340,27 +375,88 @@ export default function SettingsPage() {
     }
   };
 
-  const handleShareLogs = trace(async function handleShareLogs(redacted: boolean) {
-    const label = diagnosticsTab === 'errors' ? 'errors' : 'logs';
-    const content = resolveLogPayload(redacted) || 'No entries recorded.';
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `C64 Commander ${redacted ? 'redacted ' : ''}${label}`,
-          text: content,
-        });
-        return;
-      }
-    } catch (error) {
-      addErrorLog('Share failed', { error: (error as Error).message });
-    }
+  const normalizeDiagnosticsFilter = (value: string) => value.trim().toLowerCase();
 
+  const matchesDiagnosticsFilter = (filterText: string, fields: Array<string | null | undefined>) => {
+    const normalized = normalizeDiagnosticsFilter(filterText);
+    if (!normalized) return true;
+    const haystack = fields.filter(Boolean).join(' ').toLowerCase();
+    return haystack.includes(normalized);
+  };
+
+  const filteredErrorLogs = useMemo(() => {
+    const filterText = diagnosticsFilters['error-logs'] ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return errorLogs;
+    return errorLogs.filter((entry) =>
+      matchesDiagnosticsFilter(filterText, [
+        entry.message,
+        formatDiagnosticsTimestamp(entry.timestamp),
+        JSON.stringify(entry.details ?? null),
+        entry.id,
+      ]),
+    );
+  }, [diagnosticsFilters, errorLogs]);
+
+  const filteredLogs = useMemo(() => {
+    const filterText = diagnosticsFilters.logs ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return logs;
+    return logs.filter((entry) =>
+      matchesDiagnosticsFilter(filterText, [
+        entry.message,
+        entry.level,
+        formatDiagnosticsTimestamp(entry.timestamp),
+        JSON.stringify(entry.details ?? null),
+        entry.id,
+      ]),
+    );
+  }, [diagnosticsFilters, logs]);
+
+  const filteredTraces = useMemo(() => {
+    const filterText = diagnosticsFilters.traces ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return traceEvents;
+    return traceEvents.filter((entry) =>
+      matchesDiagnosticsFilter(filterText, [
+        getTraceTitle(entry),
+        formatDiagnosticsTimestamp(entry.timestamp),
+        JSON.stringify(entry),
+        entry.id,
+      ]),
+    );
+  }, [diagnosticsFilters, traceEvents]);
+
+  const filteredActions = useMemo(() => {
+    const filterText = diagnosticsFilters.actions ?? '';
+    if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
+    return actionSummaries.filter((summary) => {
+      const summaryTime = formatDiagnosticsTimestamp(summary.startTimestamp);
+      const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
+      return matchesDiagnosticsFilter(filterText, [
+        summary.actionName,
+        summary.correlationId,
+        summary.origin,
+        summary.originalOrigin,
+        summary.outcome,
+        summaryTime,
+        durationLabel,
+        JSON.stringify(summary),
+      ]);
+    });
+  }, [actionSummaries, diagnosticsFilters]);
+
+  const handleShareDiagnostics = trace(async function handleShareDiagnostics() {
+    const data =
+      diagnosticsTab === 'error-logs'
+        ? errorLogs
+        : diagnosticsTab === 'logs'
+          ? logs
+          : diagnosticsTab === 'traces'
+            ? traceEvents
+            : actionSummaries;
     try {
-      await navigator.clipboard.writeText(content);
-      toast({ title: `Copied ${redacted ? 'redacted ' : ''}${label} to clipboard` });
+      await shareDiagnosticsZip(diagnosticsTab, data);
     } catch (error) {
       reportUserError({
-        operation: 'LOG_SHARE',
+        operation: 'DIAGNOSTICS_EXPORT',
         title: 'Unable to share',
         description: (error as Error).message,
         error,
@@ -368,27 +464,15 @@ export default function SettingsPage() {
     }
   });
 
-  const handleEmailLogs = trace(function handleEmailLogs(redacted: boolean) {
-    const label = diagnosticsTab === 'errors' ? 'errors' : 'logs';
-    const address = ['apps', 'gleissner.uk'].join('@');
-    const subject = encodeURIComponent('C64 Commander diagnostics');
-    const body = encodeURIComponent(resolveLogPayload(redacted) || 'No entries recorded.');
-    window.location.href = `mailto:${address}?subject=${subject}&body=${body}`;
-    addLog('info', 'Diagnostics email prepared', { redacted, label });
-  });
-
-  const handleExportTraces = trace(async function handleExportTraces(redacted: boolean) {
-    try {
-      await shareTraceZip('c64commander-traces.zip', { redacted });
-    } catch (error) {
-      reportUserError({
-        operation: 'TRACE_EXPORT',
-        title: 'Error',
-        description: (error as Error).message,
-        error,
-      });
-    }
-  });
+  const handleClearAllDiagnostics = () => {
+    clearLogs();
+    clearTraceEvents();
+    resetDiagnosticsActivity();
+    setLogs([]);
+    setErrorLogs([]);
+    setTraceEvents([]);
+    toast({ title: 'Diagnostics cleared' });
+  };
 
   const handleSaveConnection = trace(async function handleSaveConnection() {
     setIsSaving(true);
@@ -457,28 +541,6 @@ export default function SettingsPage() {
     setProbeTimeoutInput(String(clamped / 1000));
   };
 
-  const commitFtpPort = () => {
-    const parsed = Number(ftpPortInput);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      clearStoredFtpPort();
-      setFtpPortInput(String(getStoredFtpPort()));
-      return;
-    }
-    setStoredFtpPort(Math.round(parsed));
-    setFtpPortInput(String(getStoredFtpPort()));
-  };
-
-  const commitFtpBridgeUrl = () => {
-    const trimmed = ftpBridgeUrlInput.trim();
-    if (!trimmed) {
-      clearFtpBridgeUrl();
-      setFtpBridgeUrlInput(getFtpBridgeUrl());
-      return;
-    }
-    setFtpBridgeUrl(trimmed);
-    setFtpBridgeUrlInput(getFtpBridgeUrl());
-  };
-
   const commitDeviceSafetyMode = (mode: DeviceSafetyMode) => {
     if (mode === 'RELAXED' && deviceSafetyMode !== 'RELAXED') {
       setPendingSafetyMode(mode);
@@ -499,8 +561,6 @@ export default function SettingsPage() {
     refreshDeviceSafetyState();
   };
 
-  const logExportLabel = diagnosticsTab === 'errors' ? 'errors' : 'logs';
-  const isLogTab = diagnosticsTab === 'errors' || diagnosticsTab === 'logs';
 
   const handleConfirmRelaxedMode = () => {
     if (pendingSafetyMode !== 'RELAXED') {
@@ -573,7 +633,7 @@ export default function SettingsPage() {
   });
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar title="Settings" subtitle="Connection & appearance" />
 
       <main className="container py-6 space-y-6">
@@ -595,16 +655,15 @@ export default function SettingsPage() {
             {themeOptions.map((option) => {
               const Icon = option.icon;
               const isActive = theme === option.value;
-            
+
               return (
                 <button
                   key={option.value}
                   onClick={wrapUserEvent(() => setTheme(option.value), 'select', 'ThemeSelector', { title: option.label }, 'ThemeOption')}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-                    isActive 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
+                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${isActive
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border hover:border-muted-foreground'
+                    }`}
                 >
                   <Icon className={`h-6 w-6 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
                   <span className={`text-sm ${isActive ? 'font-medium' : ''}`}>
@@ -637,13 +696,13 @@ export default function SettingsPage() {
                 value={deviceHostInput}
                 onChange={(e) => setDeviceHostInput(e.target.value)}
                 placeholder={C64_DEFAULTS.DEFAULT_DEVICE_HOST}
-                className="font-mono"
+                className="font-sans"
               />
               <p className="text-xs text-muted-foreground">
                 Hostname or IP from the C64 menu.
               </p>
               <p className="text-xs text-muted-foreground">
-                Currently using: <span className="font-mono break-all">{runtimeDeviceHost}</span>
+                Currently using: <span className="font-sans break-all">{runtimeDeviceHost}</span>
                 {isDemoActive ? ' (Demo mock)' : ''}
               </p>
               {isDemoActive ? (
@@ -668,7 +727,7 @@ export default function SettingsPage() {
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="Optional"
-                className="font-mono"
+                className="font-sans"
               />
               <p className="text-xs text-muted-foreground">
                 Network password from the C64 manual, if defined
@@ -698,47 +757,6 @@ export default function SettingsPage() {
 
           </div>
 
-          <div className="space-y-4 rounded-lg border border-border/70 p-3">
-            <div className="space-y-1">
-              <Label className="font-medium">FTP Connection</Label>
-              <p className="text-xs text-muted-foreground">
-                Override FTP port or bridge URL when troubleshooting non-standard setups.
-              </p>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="ftp-port" className="text-sm">FTP port</Label>
-                <Input
-                  id="ftp-port"
-                  type="number"
-                  min={1}
-                  max={65535}
-                  step={1}
-                  value={ftpPortInput}
-                  onChange={(event) => setFtpPortInput(event.target.value)}
-                  onBlur={commitFtpPort}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitFtpPort();
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ftp-bridge-url" className="text-sm">FTP bridge URL</Label>
-                <Input
-                  id="ftp-bridge-url"
-                  value={ftpBridgeUrlInput}
-                  onChange={(event) => setFtpBridgeUrlInput(event.target.value)}
-                  onBlur={commitFtpBridgeUrl}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') commitFtpBridgeUrl();
-                  }}
-                  placeholder="https://bridge.example"
-                  className="font-mono"
-                />
-              </div>
-            </div>
-          </div>
-
           <div className="flex gap-2 pt-2">
             <Button
               onClick={handleSaveConnection}
@@ -761,13 +779,12 @@ export default function SettingsPage() {
           </div>
 
           {/* Connection Status */}
-          <div className={`p-3 rounded-lg text-sm break-words ${
-            status.isConnected 
-              ? 'bg-success/10 text-success' 
-              : status.isConnecting
-                ? 'bg-muted text-muted-foreground'
-                : 'bg-destructive/10 text-destructive'
-          }`}>
+          <div className={`p-3 rounded-lg text-sm break-words ${status.isConnected
+            ? 'bg-success/10 text-success'
+            : status.isConnecting
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-destructive/10 text-destructive'
+            }`}>
             {status.isConnecting ? (
               'Connecting...'
             ) : status.isConnected ? (
@@ -793,9 +810,13 @@ export default function SettingsPage() {
           </div>
 
           <div className="space-y-4">
-            <Button variant="outline" onClick={() => setLogsDialogOpen(true)}>
+            <Button
+              variant="outline"
+              onClick={() => setDiagnosticsDialogOpen(true)}
+              data-diagnostics-open-trigger="true"
+            >
               <FileText className="h-4 w-4 mr-2" />
-              Logs and Traces
+              Diagnostics
             </Button>
 
             <div className="flex items-start justify-between gap-3 min-w-0">
@@ -885,27 +906,6 @@ export default function SettingsPage() {
                   }
                 }}
               />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="config-write-interval" className="font-medium">
-                  Config write spacing
-                </Label>
-                <span className="text-xs text-muted-foreground">{configWriteIntervalMs} ms</span>
-              </div>
-              <Slider
-                id="config-write-interval"
-                min={0}
-                max={2000}
-                step={100}
-                value={[configWriteIntervalMs]}
-                onValueChange={(value) => setConfigWriteIntervalMs(clampConfigWriteIntervalMs(value[0] ?? 0))}
-                onValueCommit={(value) => saveConfigWriteIntervalMs(value[0] ?? 0)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Minimum delay between consecutive config write calls. Default 500 ms.
-              </p>
             </div>
           </div>
         </motion.div>
@@ -1094,54 +1094,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* 7. About */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
-          onClick={handleDeveloperTap}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              handleDeveloperTap();
-            }
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Info className="h-5 w-5 text-primary" />
-            </div>
-            <h2 className="font-medium">About</h2>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">App Version</span>
-              <span className="font-mono">1.0.0</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">REST API</span>
-              <span className="font-mono">v0.1</span>
-            </div>
-            {isDeveloperModeEnabled ? (
-              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
-            ) : null}
-          </div>
-
-          <a
-            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-primary hover:underline"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Ultimate REST API Documentation
-          </a>
-        </motion.div>
-
-        {/* Last. Device Safety */}
+        {/* 7. Device Safety */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1246,16 +1199,14 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border border-border/70 p-3 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="space-y-1">
-                <Label className="font-medium">Advanced Controls</Label>
-                <p className="text-xs text-muted-foreground">
-                  Fine-tune device protection. Changes apply immediately.
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label className="font-medium">Advanced Controls</Label>
+              <p className="text-xs text-muted-foreground">
+                Fine-tuned device protection changes apply immediately.
+              </p>
               <Button
                 variant="outline"
-                size="sm"
+                className="w-full"
                 onClick={() => {
                   resetDeviceSafetyOverrides();
                   refreshDeviceSafetyState();
@@ -1263,6 +1214,31 @@ export default function SettingsPage() {
               >
                 Reset to mode defaults
               </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="config-write-interval" className="text-sm">Config write spacing (ms)</Label>
+              <Input
+                id="config-write-interval"
+                type="number"
+                min={0}
+                max={2000}
+                step={100}
+                value={configWriteIntervalMs}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isFinite(parsed)) {
+                    setConfigWriteIntervalMs(clampConfigWriteIntervalMs(parsed));
+                  }
+                }}
+                onBlur={() => saveConfigWriteIntervalMs(configWriteIntervalMs)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') saveConfigWriteIntervalMs(configWriteIntervalMs);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Minimum delay between consecutive config write calls. Default 500 ms.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -1466,6 +1442,57 @@ export default function SettingsPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Last. About */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-card border border-border rounded-xl p-4 space-y-4 cursor-pointer"
+          onClick={handleDeveloperTap}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              handleDeveloperTap();
+            }
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Info className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="font-medium">About</h2>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            {buildInfoRows.map((row) => (
+              <div key={row.testId} className="flex items-start justify-between gap-3">
+                <span className="text-muted-foreground">{row.label}</span>
+                <span className="font-semibold text-right break-words" data-testid={row.testId}>
+                  {row.value}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-muted-foreground">REST API</span>
+              <span className="font-semibold">v0.1</span>
+            </div>
+            {isDeveloperModeEnabled ? (
+              <div className="text-xs font-semibold text-success">Developer mode enabled</div>
+            ) : null}
+          </div>
+
+          <a
+            href="https://1541u-documentation.readthedocs.io/en/latest/api/api_calls.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ultimate REST API Documentation
+          </a>
+        </motion.div>
       </main>
 
       <Dialog open={relaxedWarningOpen} onOpenChange={(open) => !open && handleCancelRelaxedMode()}>
@@ -1484,201 +1511,263 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={logsDialogOpen} onOpenChange={setLogsDialogOpen}>
+      <Dialog open={logsDialogOpen} onOpenChange={setDiagnosticsDialogOpen}>
         <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>
-            <DialogDescription>Review logs, errors, traces, and action summaries. Choose raw or redacted exports.</DialogDescription>
+            <DialogDescription>Review error logs, logs, traces, and action summaries.</DialogDescription>
           </DialogHeader>
+          <div className="flex flex-wrap gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">Clear All</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear diagnostics</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently clear all error logs, logs, traces, and actions. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearAllDiagnostics} className="bg-destructive text-destructive-foreground">
+                    Clear
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Filter entries..."
+              value={activeDiagnosticsFilter}
+              onChange={(event) =>
+                setDiagnosticsFilters((prev) => ({
+                  ...prev,
+                  [diagnosticsTab]: event.target.value,
+                }))
+              }
+              className="pl-9 pr-9 h-9"
+              data-testid="diagnostics-filter-input"
+            />
+            {activeDiagnosticsFilter ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  setDiagnosticsFilters((prev) => ({
+                    ...prev,
+                    [diagnosticsTab]: '',
+                  }))
+                }
+                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                aria-label="Clear filter"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
           <Tabs
             value={diagnosticsTab}
-            onValueChange={(value) => setDiagnosticsTab(value as 'errors' | 'logs' | 'traces' | 'actions')}
+            onValueChange={(value) => setDiagnosticsTab(value as DiagnosticsTabKey)}
             className="space-y-3"
           >
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="errors">Errors</TabsTrigger>
-              <TabsTrigger value="logs">All logs</TabsTrigger>
-              <TabsTrigger value="traces">Traces</TabsTrigger>
-              <TabsTrigger value="actions">Actions</TabsTrigger>
+              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>Errors</TabsTrigger>
+              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>Logs</TabsTrigger>
+              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>Traces</TabsTrigger>
+              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>Actions</TabsTrigger>
             </TabsList>
-            <TabsContent value="errors" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              {errorLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No errors recorded.</p>
-              ) : (
-                errorLogs.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border border-border p-3">
-                    <p className="text-sm font-medium">{entry.message}</p>
-                    <p className="text-xs text-muted-foreground">{formatLocalTime(entry.timestamp)}</p>
-                    {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                ))
-              )}
-            </TabsContent>
-            <TabsContent value="logs" className="space-y-2 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              {logs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No logs recorded.</p>
-              ) : (
-                logs.map((entry) => (
-                  <div key={entry.id} className="rounded-lg border border-border p-3">
-                    <p className="text-sm font-medium">{entry.message}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {entry.level.toUpperCase()} · {formatLocalTime(entry.timestamp)}
-                    </p>
-                    {entry.details && (
-                      <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
-                        {JSON.stringify(entry.details, null, 2)}
-                      </pre>
-                    )}
-                  </div>
-                ))
-              )}
-            </TabsContent>
-            <TabsContent value="traces" className="space-y-3 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              <div className="flex flex-wrap gap-2">
+            <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total errors: {errorLogs.length}</p>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
-                  onClick={async () => {
-                    await Promise.resolve(clearTraceEvents());
-                    setTraceEvents([]);
-                    toast({ title: 'Traces cleared' });
-                  }}
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                  data-testid="diagnostics-share-errors"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear traces
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(false)}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share / Export
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(true)}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share Redacted
+                  Share
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
-              {traceEvents.length === 0 ? (
+              {filteredErrorLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No error logs recorded.</p>
+              ) : (
+                filteredErrorLogs.map((entry) => (
+                  <DiagnosticsListItem
+                    key={entry.id}
+                    testId={`error-log-${entry.id}`}
+                    mode="log"
+                    severity={resolveLogSeverity(entry.level)}
+                    title={entry.message}
+                    timestamp={entry.timestamp}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground break-words whitespace-normal">
+                        {entry.message}
+                      </p>
+                      {entry.details && (
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </DiagnosticsListItem>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total logs: {logs.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                  data-testid="diagnostics-share-logs"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No logs recorded.</p>
+              ) : (
+                filteredLogs.map((entry) => (
+                  <DiagnosticsListItem
+                    key={entry.id}
+                    testId={`log-entry-${entry.id}`}
+                    mode="log"
+                    severity={resolveLogSeverity(entry.level)}
+                    title={entry.message}
+                    timestamp={entry.timestamp}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-foreground break-words whitespace-normal">
+                        {entry.message}
+                      </p>
+                      {entry.details && (
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                          {JSON.stringify(entry.details, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  </DiagnosticsListItem>
+                ))
+              )}
+            </TabsContent>
+            <TabsContent value="traces" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total traces: {traceEvents.length}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                  data-testid="diagnostics-share-traces"
+                >
+                  Share
+                </Button>
+              </div>
+              {filteredTraces.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No traces recorded.</p>
               ) : (
                 <>
-                  {traceEvents.length > 100 && (
+                  {filteredTraces.length > 100 && (
                     <p className="text-xs text-muted-foreground font-medium text-amber-600">
                       Showing last 100 events. Export for full history.
                     </p>
                   )}
-                  {traceEvents
+                  {filteredTraces
                     .slice(-100)
                     .reverse()
                     .map((entry) => (
-                      <details key={entry.id} className="rounded-lg border border-border p-3">
-                        <summary className="cursor-pointer text-sm font-medium flex justify-between items-center select-none">
-                          <span>{getTraceTitle(entry)}</span>
-                          <span className="text-muted-foreground font-mono text-xs ml-2 shrink-0">
-                            {formatLocalTime(entry.timestamp)}
-                          </span>
-                        </summary>
-                        <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                      <DiagnosticsListItem
+                        key={entry.id}
+                        testId={`trace-item-${entry.id}`}
+                        mode="trace"
+                        severity={resolveTraceSeverity(entry)}
+                        title={getTraceTitle(entry)}
+                        timestamp={entry.timestamp}
+                      >
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                           {JSON.stringify(entry, null, 2)}
                         </pre>
-                      </details>
+                      </DiagnosticsListItem>
                     ))}
                 </>
               )}
             </TabsContent>
-            <TabsContent value="actions" className="space-y-3 max-h-[calc(100dvh-22rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
-              <div className="flex flex-wrap gap-2">
+            <TabsContent value="actions" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
-                  onClick={async () => {
-                    await Promise.resolve(clearTraceEvents());
-                    setTraceEvents([]);
-                    toast({ title: 'Traces cleared' });
-                  }}
+                  onClick={() => void withDiagnosticsTraceOverride(handleShareDiagnostics)}
+                  data-testid="diagnostics-share-actions"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear traces
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(false)}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share / Export
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => void handleExportTraces(true)}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share Redacted
+                  Share
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Total action summaries: {actionSummaries.length}</p>
-              {actionSummaries.length === 0 ? (
+              {filteredActions.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No actions recorded.</p>
               ) : (
-                actionSummaries
+                filteredActions
                   .slice(-100)
                   .reverse()
                   .map((summary) => {
                     const effects = summary.effects ?? [];
                     const restEffects = effects.filter((effect): effect is RestEffect => effect.type === 'REST');
                     const ftpEffects = effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
-                    const summaryTime = summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown time';
+                    const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
+                    const hasEffects = Boolean(summary.restCount || summary.ftpCount || summary.errorCount);
                     return (
-                      <details
+                      <DiagnosticsListItem
                         key={summary.correlationId}
-                        data-testid={`action-summary-${summary.correlationId}`}
-                        className="rounded-lg border border-border p-3"
+                        testId={`action-summary-${summary.correlationId}`}
+                        mode="action"
+                        severity={resolveActionSeverity(summary.outcome)}
+                        title={summary.actionName}
+                        timestamp={summary.startTimestamp}
+                        origin={summary.origin}
+                        secondaryLeft={
+                          hasEffects ? (
+                            <>
+                              {summary.restCount ? (
+                                <span
+                                  data-testid={`action-rest-count-${summary.correlationId}`}
+                                  className="text-diagnostics-rest text-xs font-medium"
+                                >
+                                  REST×{summary.restCount}
+                                </span>
+                              ) : null}
+                              {summary.ftpCount ? (
+                                <span
+                                  data-testid={`action-ftp-count-${summary.correlationId}`}
+                                  className="text-diagnostics-ftp text-xs font-medium"
+                                >
+                                  FTP×{summary.ftpCount}
+                                </span>
+                              ) : null}
+                              {summary.errorCount ? (
+                                <span
+                                  data-testid={`action-error-count-${summary.correlationId}`}
+                                  className="text-diagnostics-error text-xs font-medium"
+                                >
+                                  ERR×{summary.errorCount}
+                                </span>
+                              ) : null}
+                            </>
+                          ) : null
+                        }
+                        secondaryRight={durationLabel}
                       >
-                        <summary className="cursor-pointer text-sm font-medium flex justify-between items-center gap-3 select-none">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${summary.origin === 'user' ? 'bg-green-500' : 'bg-blue-500'}`}
-                              aria-label={summary.origin}
-                            />
-                            <span className="truncate">{summary.actionName}</span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {summary.restCount > 0 ? (
-                              <span
-                                data-testid={`action-rest-count-${summary.correlationId}`}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white"
-                                aria-label="REST effects"
-                              >
-                                {summary.restCount}
-                              </span>
-                            ) : null}
-                            {summary.ftpCount > 0 ? (
-                              <span
-                                data-testid={`action-ftp-count-${summary.correlationId}`}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-amber-700 text-xs font-semibold text-white"
-                                aria-label="FTP effects"
-                              >
-                                {summary.ftpCount}
-                              </span>
-                            ) : null}
-                            {summary.errorCount > 0 ? (
-                              <span
-                                data-testid={`action-error-count-${summary.correlationId}`}
-                                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white"
-                                aria-label="Errors"
-                              >
-                                {summary.errorCount}
-                              </span>
-                            ) : null}
-                            <span className="text-muted-foreground font-mono text-xs ml-2 shrink-0">
-                              {summaryTime}
-                            </span>
-                            {summary.durationMs !== null ? (
-                              <span className="text-muted-foreground text-xs">{summary.durationMs} ms</span>
-                            ) : null}
-                          </div>
-                        </summary>
-                        <div className="mt-3 space-y-3 text-xs">
+                        <div className="space-y-3 text-xs">
                           <div className="grid gap-2 sm:grid-cols-2">
                             <div>
                               <p className="text-muted-foreground">Correlation</p>
-                              <p className="font-mono">{summary.correlationId}</p>
+                              <p className="font-semibold break-words">{summary.correlationId}</p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">Action</p>
@@ -1696,11 +1785,11 @@ export default function SettingsPage() {
                             </div>
                             <div>
                               <p className="text-muted-foreground">Start</p>
-                              <p>{summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown'}</p>
+                              <DiagnosticsTimestamp value={summary.startTimestamp} className="text-muted-foreground" />
                             </div>
                             <div>
                               <p className="text-muted-foreground">End</p>
-                              <p>{summary.endTimestamp ? formatLocalTime(summary.endTimestamp) : 'Unknown'}</p>
+                              <DiagnosticsTimestamp value={summary.endTimestamp} className="text-muted-foreground" />
                             </div>
                             <div>
                               <p className="text-muted-foreground">Duration</p>
@@ -1708,7 +1797,7 @@ export default function SettingsPage() {
                             </div>
                             <div>
                               <p className="text-muted-foreground">Error</p>
-                              <p className={summary.errorMessage ? 'text-destructive' : ''}>{summary.errorMessage ?? 'None'}</p>
+                              <p className={summary.errorMessage ? 'text-diagnostics-error' : ''}>{summary.errorMessage ?? 'None'}</p>
                             </div>
                           </div>
 
@@ -1729,7 +1818,7 @@ export default function SettingsPage() {
                                     {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
                                   </p>
                                   {effect.error ? (
-                                    <p className="text-destructive">error: {effect.error}</p>
+                                    <p className="text-diagnostics-error">error: {effect.error}</p>
                                   ) : null}
                                 </div>
                               ))
@@ -1752,58 +1841,19 @@ export default function SettingsPage() {
                                     target: {effect.target ?? 'unknown'} · result: {effect.result ?? 'unknown'}
                                   </p>
                                   {effect.error ? (
-                                    <p className="text-destructive">error: {effect.error}</p>
+                                    <p className="text-diagnostics-error">error: {effect.error}</p>
                                   ) : null}
                                 </div>
                               ))
                             )}
                           </div>
                         </div>
-                      </details>
+                      </DiagnosticsListItem>
                     );
                   })
               )}
             </TabsContent>
           </Tabs>
-          <DialogFooter>
-            <div className="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              {isLogTab ? (
-                <div className="flex flex-wrap gap-2 min-w-0">
-                  <Button variant="outline" onClick={() => handleShareLogs(false)}>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share {logExportLabel}
-                  </Button>
-                  <Button variant="outline" onClick={() => handleShareLogs(true)}>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share redacted {logExportLabel}
-                  </Button>
-                  <Button variant="outline" onClick={() => handleEmailLogs(false)}>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Email {logExportLabel}
-                  </Button>
-                  <Button variant="outline" onClick={() => handleEmailLogs(true)}>
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Email redacted {logExportLabel}
-                  </Button>
-                </div>
-              ) : (
-                <div />
-              )}
-              <div className="flex flex-wrap gap-2 min-w-0">
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    clearLogs();
-                    toast({ title: 'Logs cleared' });
-                  }}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Clear logs
-                </Button>
-                <Button variant="outline" onClick={() => setLogsDialogOpen(false)}>Close</Button>
-              </div>
-            </div>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -3,7 +3,12 @@ import { getConnectionSnapshot, isRealDeviceStickyLockEnabled } from '@/lib/conn
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { getActiveMockBaseUrl } from '@/lib/mock/mockServer';
 
-const isTestProbeEnabled = () => import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
+const isTestProbeEnabled = () => {
+  const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
+  if (env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  return false;
+};
 
 const normalizeUrl = (value?: string | null) => {
   if (!value) return '';

@@ -38,7 +38,7 @@ test.describe('Settings connection management', () => {
 
     const urlInput = page.locator('#deviceHost');
     await expect(urlInput).toBeVisible();
-    
+
     const originalUrl = await urlInput.inputValue();
     await snap(page, testInfo, 'original-url');
 
@@ -72,7 +72,7 @@ test.describe('Settings connection management', () => {
     await snap(page, testInfo, 'save-attempted');
 
     const hasError = await page.getByText(/invalid|error|failed/i).first().isVisible({ timeout: 2000 }).catch(() => false);
-    
+
     if (hasError) {
       await snap(page, testInfo, 'validation-shown');
     } else {
@@ -187,8 +187,8 @@ test.describe('Settings connection management', () => {
       'Play and Disk',
       'Config',
       'HVSC Library',
-      'About',
       'Device Safety',
+      'About',
     ]);
   });
 });

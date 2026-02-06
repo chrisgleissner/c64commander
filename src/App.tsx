@@ -26,6 +26,8 @@ import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from '@/components/TraceContextBridge';
+import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
+import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +117,16 @@ const App = () => (
 const GlobalErrorListener = () => {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
+      const activeAction = getActiveAction();
+      const error = event.error instanceof Error ? event.error : new Error(event.message || 'Window error');
+      if (activeAction) {
+        recordTraceError(activeAction, error);
+      } else {
+        const context = createActionContext('Window error', 'system', 'GlobalErrorListener');
+        recordActionStart(context);
+        recordTraceError(context, error);
+        recordActionEnd(context, error);
+      }
       addErrorLog('Window error', {
         message: event.message,
         filename: event.filename,
@@ -124,6 +136,16 @@ const GlobalErrorListener = () => {
       });
     };
     const handleRejection = (event: PromiseRejectionEvent) => {
+      const activeAction = getActiveAction();
+      const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason ?? 'Unhandled rejection'));
+      if (activeAction) {
+        recordTraceError(activeAction, error);
+      } else {
+        const context = createActionContext('Unhandled promise rejection', 'system', 'GlobalErrorListener');
+        recordActionStart(context);
+        recordTraceError(context, error);
+        recordActionEnd(context, error);
+      }
       addErrorLog('Unhandled promise rejection', {
         reason: event.reason,
       });

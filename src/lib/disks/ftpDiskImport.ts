@@ -1,6 +1,6 @@
 import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, buildErrorLogDetails } from '@/lib/logging';
 import type { DiskEntry } from './diskTypes';
 import { createDiskEntry, getLeafFolderName, isDiskImagePath, normalizeDiskPath } from './diskTypes';
 import { assignDiskGroupsByPrefix } from './diskGrouping';
@@ -67,7 +67,8 @@ export const importFtpFolder = async (options: {
   try {
     await walkFtpFolder(options, options.path, disks);
   } catch (error) {
-    addErrorLog('FTP disk import failed', { path: options.path, error: (error as Error).message });
+    const err = error as Error;
+    addErrorLog('FTP disk import failed', buildErrorLogDetails(err, { path: options.path }));
     throw error;
   }
   return disks;

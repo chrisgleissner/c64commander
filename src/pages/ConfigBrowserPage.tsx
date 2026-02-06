@@ -70,12 +70,12 @@ function CategorySection({
 
   const items = useMemo<ConfigListItem[]>(() => {
     if (!categoryData) return [];
-    
+
     const catData = categoryData[categoryName] as any;
     if (!catData || typeof catData !== 'object') return [];
 
     const itemsData = (catData as any).items ?? catData;
-    
+
     return Object.entries(itemsData)
       .filter(([key]) => key !== 'errors')
       .map(([name, config]) => ({
@@ -411,7 +411,7 @@ function CategorySection({
     >
       <button
         onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'ConfigSection', { title: categoryName }, 'ConfigHeader')}
-        className="w-full flex items-center justify-between p-4 text-left"
+        className="w-full flex items-center justify-between px-4 py-3 text-left"
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-muted">
@@ -435,8 +435,8 @@ function CategorySection({
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
-            <div className="border-t border-border px-4 pb-2">
-              <div className="flex items-center justify-between gap-2 py-3" data-testid="config-group-actions">
+            <div className="border-t border-border px-4 pt-2 pb-3">
+              <div className="flex items-center justify-between gap-2 py-2" data-testid="config-group-actions">
                 <div className="flex items-center gap-2">
                   {categoryName === 'Audio Mixer' && (
                     <Button
@@ -553,16 +553,16 @@ export default function ConfigBrowserPage() {
   const filteredCategories = useMemo(() => {
     if (!categoriesData?.categories) return [];
     if (!searchQuery) return categoriesData.categories;
-    
+
     return categoriesData.categories.filter((cat) =>
       cat.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [categoriesData?.categories, searchQuery]);
 
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar
-        title="Configuration"
+        title="Config"
         subtitle={
           <span>
             {categoriesData?.categories.length || 0} categories

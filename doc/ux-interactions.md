@@ -4,8 +4,8 @@
 
 This document provides a comprehensive inventory of all user-facing interactions (CTAs - Call To Actions) and multi-step user flows in C64 Commander. Each interaction is classified by importance and mapped to test coverage.
 
-**Last Updated**: 2026-01-21  
-**Total CTAs Documented**: TBD  
+**Last Updated**: 2026-01-21
+**Total CTAs Documented**: TBD
 **Test Coverage Target**: 100%
 
 ---
@@ -184,10 +184,10 @@ This document provides a comprehensive inventory of all user-facing interactions
 
 | CTA | Label | Purpose | Importance | Test Coverage | Test File | Notes |
 |-----|-------|---------|------------|---------------|-----------|-------|
-| Button | "Share diagnostics" | Copy logs to clipboard | **MEDIUM** | ✅ FULL | settingsDiagnostics.spec.ts:65 | Support tool |
-| Button | "Email diagnostics" | Open mailto with logs | **MEDIUM** | ✅ FULL | settingsDiagnostics.spec.ts:104 | Support tool |
-| Button | "Clear logs" | Delete log history | **LOW** | ✅ FULL | settingsDiagnostics.spec.ts:139 | Maintenance |
-| Button | "View logs" | Expand log viewer | **LOW** | ❌ NONE | - | Debug tool |
+| Button | "Diagnostics" | Open diagnostics overlay | **LOW** | ✅ FULL | settingsDiagnostics.spec.ts:41 | Debug tool |
+| Button | "Clear All" | Clear all diagnostics data | **MEDIUM** | ✅ FULL | settingsDiagnostics.spec.ts:133 | Maintenance |
+| Input | "Filter entries" | Filter active diagnostics tab | **MEDIUM** | ✅ FULL | homeDiagnosticsOverlay.spec.ts | Scoped filtering |
+| Button | "Share" | Share active tab ZIP export | **MEDIUM** | ✅ FULL | homeDiagnosticsOverlay.spec.ts | Support tool |
 
 ### 4.4 Playback Settings
 
@@ -271,7 +271,7 @@ This document provides a comprehensive inventory of all user-facing interactions
 | Flow | Steps | Importance | Test Coverage | Test File | Notes |
 |------|-------|------------|---------------|-----------|-------|
 | **Check HVSC updates** | 1. Navigate to Play<br>2. Click "Check for updates"<br>3. Review status | **LOW** | ✅ FULL | hvsc.spec.ts:133 | Maintenance |
-| **Share diagnostics** | 1. Navigate to Settings<br>2. Click "Share diagnostics"<br>3. Paste elsewhere | **LOW** | ✅ FULL | settingsDiagnostics.spec.ts:65 | Support tool |
+| **Share / Export diagnostics** | 1. Navigate to Settings<br>2. Click "Diagnostics"<br>3. Click "Share / Export" | **LOW** | ✅ FULL | settingsDiagnostics.spec.ts:117 | Support tool |
 | **Manage app configs** | 1. Click "Manage"<br>2. Browse saved configs<br>3. Rename/Delete as needed | **LOW** | ✅ FULL | homeConfigManagement.spec.ts:180,220 | Config management |
 
 ---
@@ -411,5 +411,5 @@ This document should be updated when:
 - Test coverage changes
 - UX flows are refactored
 
-**Document Owner**: Development Team  
+**Document Owner**: Development Team
 **Review Frequency**: Every sprint / Before major releases

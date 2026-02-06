@@ -229,7 +229,7 @@ test.describe('Layout overflow safeguards', () => {
     await snap(page, testInfo, 'settings-open');
     await expectNoHorizontalOverflow(page);
 
-    await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'diagnostics-dialog');
@@ -275,7 +275,7 @@ test.describe('Layout overflow safeguards', () => {
     });
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /Logs( and Traces)?/i }).click();
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'settings-long-log');
@@ -495,6 +495,18 @@ test.describe('Layout overflow safeguards', () => {
       await page.goto('/config', { waitUntil: 'domcontentloaded' });
       await snap(page, testInfo, `matrix-config-${viewport.label}`);
       await expectNoHorizontalOverflow(page);
+    }
+  });
+
+  test('AppBar header has safe-area top padding on all pages', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const routes = ['/', '/play', '/disks', '/config', '/settings'];
+    for (const route of routes) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      const header = page.locator('header').first();
+      await expect(header).toBeVisible();
+      const hasSafeClass = await header.evaluate((el: HTMLElement) => el.classList.contains('pt-safe'));
+      expect(hasSafeClass, `header on ${route} should have pt-safe class`).toBe(true);
+      await snap(page, testInfo, `safe-area-${route.replace('/', 'root').replace(/\//g, '-')}`);
     }
   });
 });

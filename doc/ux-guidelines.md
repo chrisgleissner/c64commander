@@ -231,7 +231,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 
 - Connection settings (IP, Port, Mock mode)
 - Appearance settings (Theme selection)
-- Diagnostics (Share logs, Email logs, Clear logs)
+- Diagnostics (Clear All, Share / Export)
 - About section (with secret developer mode activation)
 
 **Config Browser Page (ConfigBrowserPage.tsx)**

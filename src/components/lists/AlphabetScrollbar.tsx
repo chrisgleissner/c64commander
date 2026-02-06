@@ -60,7 +60,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
           ? CSS.escape(targetItem.id)
           : targetItem.id.replace(/"/g, '\\"');
         const targetRow = container.querySelector(`[data-row-id="${safeId}"]`) as HTMLElement | null;
-        
+
         if (targetRow) {
           targetRow.scrollIntoView({ block: 'start', behavior: 'smooth' });
         }
@@ -207,7 +207,7 @@ export function AlphabetScrollbar({ items, scrollContainerRef, onLetterSelect, o
               <div
                 key={letter}
                 className={cn(
-                  'text-xs font-mono font-semibold leading-none py-0.5 px-1 rounded transition-colors',
+                  'text-xs font-semibold leading-none py-0.5 px-1 rounded transition-colors',
                   activeLetter === letter
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground'

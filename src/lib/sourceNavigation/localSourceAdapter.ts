@@ -29,7 +29,9 @@ const buildFileList = (source: LocalSourceRecord) =>
 const toSourceEntryPath = (relativePath: string) => normalizeSourcePath(relativePath);
 
 const resolveRootPath = (source: LocalSourceRecord) => {
-  if (source.android?.treeUri) return '/';
+  if (source.android?.treeUri) {
+    return '/';
+  }
   const normalizedRoot = normalizeSourcePath(source.rootPath || '/');
   const entries = requireLocalSourceEntries(source, 'localSourceAdapter.resolveRootPath');
   if (!entries.length || normalizedRoot === '/') return '/';

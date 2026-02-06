@@ -4,7 +4,7 @@ import { AppBar } from '@/components/AppBar';
 
 export default function DisksPage() {
   return (
-    <div className="min-h-screen pb-24">
+    <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
       <AppBar title="Disks" subtitle="Drive control & disk library" />
 
       <main className="container py-6 space-y-6">

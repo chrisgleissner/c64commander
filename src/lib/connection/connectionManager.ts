@@ -271,7 +271,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
-  trigger !== 'background' && !demoInterstitialShownThisSession;
+  (trigger === 'startup' || trigger === 'manual') && !demoInterstitialShownThisSession;
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   if (stickyRealDeviceLock) {
@@ -384,7 +384,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   if (trigger === 'background') {
     if (snapshot.state !== 'DEMO_ACTIVE' && snapshot.state !== 'OFFLINE_NO_DEMO') return;
     const abort = new AbortController();
-    activeDiscovery = { abort, cancel: () => {} };
+    activeDiscovery = { abort, cancel: () => { } };
     setSnapshot({ lastDiscoveryTrigger: trigger });
     const ok = await probeOnce({ signal: abort.signal });
     setSnapshot({ lastProbeAtMs: Date.now() });
@@ -417,17 +417,24 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
 
   const windowMs = loadStartupDiscoveryWindowMs();
+  let windowExpired = false;
+  const handleWindowExpiry = async () => {
+    if (cancelled) return;
+    cancelled = true;
+    globalThis.clearInterval(probeTimer);
+    cancelActiveDiscovery();
+    if (autoDemoEnabled) {
+      await transitionToDemoActive(trigger);
+    } else {
+      await transitionToOfflineNoDemo(trigger);
+    }
+  };
   const windowTimer = globalThis.setTimeout(() => {
     void (async () => {
       if (cancelled) return;
-      cancelled = true;
-      globalThis.clearInterval(probeTimer);
-      cancelActiveDiscovery();
-      if (autoDemoEnabled) {
-        await transitionToDemoActive(trigger);
-      } else {
-        await transitionToOfflineNoDemo(trigger);
-      }
+      windowExpired = true;
+      if (probeInFlight) return;
+      await handleWindowExpiry();
     })();
   }, windowMs);
 
@@ -449,6 +456,10 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       globalThis.clearInterval(probeTimer);
       await transitionToRealConnected(trigger);
     } else {
+      if (windowExpired) {
+        await handleWindowExpiry();
+        return;
+      }
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
       if (isSmokeModeEnabled()) {
         console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
@@ -491,7 +502,7 @@ export async function initializeConnectionManager() {
   updateDeviceConnectionState('UNKNOWN');
 
   // Ensure outcomes never persist across cold starts.
-  await stopDemoServer().catch(() => {});
+  await stopDemoServer().catch(() => { });
   await applyC64APIConfigFromStorage();
 }
 

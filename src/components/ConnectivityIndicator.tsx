@@ -60,8 +60,9 @@ export function ConnectivityIndicator({ className }: Props) {
 
       {isDemo ? (
         <span
-          className="flex flex-col leading-none font-mono font-bold text-[10px] uppercase tracking-wide"
+          className="flex flex-col leading-none font-semibold text-[10px] uppercase tracking-wide"
           style={{ color: demoColor }}
+          data-testid="connection-status-label"
         >
           <span>C64U</span>
           <span>DEMO</span>
@@ -69,9 +70,10 @@ export function ConnectivityIndicator({ className }: Props) {
       ) : (
         <span
           className={cn(
-            'text-xs font-mono font-semibold uppercase tracking-wide',
+            'text-xs font-semibold uppercase tracking-wide',
             isReal ? 'text-success' : 'text-muted-foreground',
           )}
+          data-testid="connection-status-label"
         >
           C64U
         </span>

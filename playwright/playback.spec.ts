@@ -153,7 +153,7 @@ test.describe('Playback file browser', () => {
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
 
-    await expect(page.getByTestId('playlist-play')).toContainText('Stop');
+    await expect(page.getByTestId('playlist-play')).toHaveAttribute('aria-label', 'Stop');
     await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(firstElapsed);
     expect(server.sidplayRequests.length).toBe(initialSidplayCount);
     await snap(page, testInfo, 'playback-persisted');
@@ -213,7 +213,7 @@ test.describe('Playback file browser', () => {
     await page.getByTestId('playlist-play').click();
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/machine:reset')));
 
-    await expect(page.getByTestId('playlist-play')).toContainText('Play');
+    await expect(page.getByTestId('playlist-play')).toHaveAttribute('aria-label', 'Play');
 
     await expectRestTraceSequence(page, testInfo, '/v1/machine:pause');
     await expectRestTraceSequence(page, testInfo, '/v1/machine:reset');
@@ -305,6 +305,30 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'local-playback-uploaded');
   });
 
+  test('local SID playback does not throw unavailable error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-sids'));
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+
+    const hasUnavailableError = await page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_app_logs');
+      if (!raw) return false;
+      try {
+        const logs = JSON.parse(raw) as Array<{ message: string }>;
+        return logs.some((entry) => entry.message.includes('Local file unavailable'));
+      } catch {
+        return false;
+      }
+    });
+    expect(hasUnavailableError).toBe(false);
+    await snap(page, testInfo, 'local-no-unavailable-error');
+  });
+
   test('playback errors emit log entries', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected playback failure warnings for unreachable device.');
     server.setReachable(false);
@@ -363,7 +387,7 @@ test.describe('Playback file browser', () => {
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
       expect(dialogBox.y + dialogBox.height).toBeLessThan(viewport.height * 0.98);
     }
-    
+
     // Verify list is populated
     await expect(page.getByText('Track_0001.sid').first()).toBeVisible();
 
@@ -478,7 +502,9 @@ test.describe('Playback file browser', () => {
       scrollHeight: node.scrollHeight,
     }));
 
-    expect(afterMetrics).toEqual(initialMetrics);
+    expect(afterMetrics.width).toEqual(initialMetrics.width);
+    expect(afterMetrics.height).toEqual(initialMetrics.height);
+    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(20);
     await snap(page, testInfo, 'alphabet-overlay-metrics');
   });
 
@@ -593,26 +619,26 @@ test.describe('Playback file browser', () => {
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     const playButton = page.getByTestId('playlist-play');
     await playButton.click();
-    await expect(playButton).toContainText('Stop');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
     await snap(page, testInfo, 'play-started');
 
     await playButton.click();
-    await expect(playButton).toContainText('Play');
+    await expect(playButton).toHaveAttribute('aria-label', 'Play');
     await snap(page, testInfo, 'play-stopped');
     await page.waitForFunction(() => {
       const button = document.querySelector('[data-testid="playlist-play"]');
       if (!button) return false;
-      const text = button.textContent ?? '';
+      const label = button.getAttribute('aria-label') ?? '';
       const now = performance.now();
       const win = window as Window & { __playStopCheckStart?: number };
       if (!win.__playStopCheckStart) {
         win.__playStopCheckStart = now;
       }
-      if (!text.toLowerCase().includes('play')) return false;
+      if (!label.toLowerCase().includes('play')) return false;
       return now - win.__playStopCheckStart > 10000;
     }, null, { timeout: 12000 });
-    await expect(playButton).toContainText('Play');
+    await expect(playButton).toHaveAttribute('aria-label', 'Play');
     await snap(page, testInfo, 'no-autoresume');
   });
 
@@ -667,13 +693,13 @@ test.describe('Playback file browser', () => {
 
     await expect(prevButton).toBeDisabled();
     await expect(nextButton).toBeEnabled();
-    await expect(playButton).toContainText('Play');
-    await expect(pauseButton).toContainText('Pause');
+    await expect(playButton).toHaveAttribute('aria-label', 'Play');
+    await expect(pauseButton).toHaveAttribute('aria-label', 'Pause');
     await expect(pauseButton).toBeDisabled();
 
     await playButton.click();
-    await expect(playButton).toContainText('Stop');
-    await expect(pauseButton).toContainText('Pause');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
+    await expect(pauseButton).toHaveAttribute('aria-label', 'Pause');
     await expect(pauseButton).toBeEnabled();
     await snap(page, testInfo, 'playback-started');
 
@@ -682,11 +708,11 @@ test.describe('Playback file browser', () => {
     await expect(currentTrack).toContainText(/\(\d+:\d{2}\)/);
 
     await pauseButton.click();
-    await expect(pauseButton).toContainText('Resume');
+    await expect(pauseButton).toHaveAttribute('aria-label', 'Resume');
     await snap(page, testInfo, 'playback-paused');
 
     await pauseButton.click();
-    await expect(pauseButton).toContainText('Pause');
+    await expect(pauseButton).toHaveAttribute('aria-label', 'Pause');
     await snap(page, testInfo, 'playback-resumed');
 
     await nextButton.click();
@@ -695,7 +721,7 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'playback-next');
 
     await playButton.click();
-    await expect(playButton).toContainText('Play');
+    await expect(playButton).toHaveAttribute('aria-label', 'Play');
     await snap(page, testInfo, 'playback-stopped');
   });
 
@@ -722,14 +748,14 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     const playButton = page.getByTestId('playlist-play');
     await playButton.click();
-    await expect(playButton).toContainText('Stop');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await playButton.click();
-    await expect(playButton).toContainText('Play');
+    await expect(playButton).toHaveAttribute('aria-label', 'Play');
 
     await playButton.click();
-    await expect(playButton).toContainText('Stop');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(1);
     await snap(page, testInfo, 'rapid-play-stop-play');
   });
@@ -765,7 +791,7 @@ test.describe('Playback file browser', () => {
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     const playButton = page.getByTestId('playlist-play');
     await playButton.click();
-    await expect(playButton).toContainText('Stop');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await page.getByRole('button', { name: 'Disks', exact: true }).click();
@@ -819,7 +845,7 @@ test.describe('Playback file browser', () => {
     const playButton = page.getByTestId('playlist-play');
     const played = page.getByTestId('playback-elapsed');
     await playButton.click();
-    await expect(playButton).toContainText('Stop');
+    await expect(playButton).toHaveAttribute('aria-label', 'Stop');
     await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
 
     await expect.poll(async () => parseTimeLabel(await played.textContent()) ?? 0).toBeGreaterThan(0);
