@@ -57,3 +57,41 @@ Get a green local build (unit, Playwright, Maestro, Android) and a green CI buil
 - [ ] `npm run build` passes locally.
 - [ ] Android JVM tests pass locally (`cd android && ./gradlew test`).
 - [ ] CI run is green with updated screenshots.
+
+---
+
+# PLANS.md - CI Regression Isolation and Forward Reapplication
+
+## Reference Build
+- [x] Capture run URL and timestamp: https://github.com/chrisgleissner/c64commander/actions/runs/21730870307 (started 2026-02-05T22:26:30Z, completed 2026-02-05T22:39:38Z)
+- [x] Record workflow name and job list: Build Android APK; jobs = Web | Build (coverage), Web | Unit tests (coverage), Android | Tests + Coverage, Android | Maestro gating, Web | Screenshots, Web | E2E (sharded) (1-8), Android | Packaging, Web | Coverage + evidence merge, Release | Attach APK/AAB.
+
+## Last Known Good Commit
+- [x] Record commit SHA from reference build: ae5076518cf586235db894e34a158d1f57135daa
+- [x] Record commit timestamp: 2026-02-05T22:26:25+00:00
+
+## First Failing Commit
+- [x] Identify next commit after last known good: 616dd3c205e9918a75b12215b42d20b118063a20
+- [x] Confirm it is the first failing build: Build Android APK run 21731474317 failed for 616dd3c205e9918a75b12215b42d20b118063a20.
+- [x] Record failing commit SHA and timestamp: 616dd3c205e9918a75b12215b42d20b118063a20 at 2026-02-05T22:49:18+00:00
+
+## Diff Preservation
+- [ ] Generate full diff between last known good and current HEAD.
+- [ ] Save diff to ci-regression-diff.patch (read-only reference).
+- [ ] Commit diff file.
+
+## Reapplication Steps
+- [ ] Reset branch to last known good commit.
+- [ ] Reapply changes in smallest logical units.
+- [ ] On first failure, rollback the offending change and mark excluded.
+- [ ] Continue until all safe changes are reapplied.
+
+## Test Gates
+- [ ] Run full unit tests after each reapplication.
+- [ ] Record pass/fail status after each step.
+- [ ] Stop immediately on first regression.
+
+## Final Verification
+- [ ] Run full local test suite (lint, unit, e2e, build, Android JVM).
+- [ ] Push branch and confirm CI is green.
+- [ ] Create final clean commit with summary and exclusions.
