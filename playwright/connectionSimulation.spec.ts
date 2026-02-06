@@ -258,34 +258,44 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(false);
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
-    const demoContinue = page.getByRole('button', { name: 'Continue in Demo Mode' });
-    if (await demoContinue.isVisible().catch(() => false)) {
-      await demoContinue.click();
-    }
-    const demoDialog = page.getByRole('dialog');
-    if (await demoDialog.isVisible().catch(() => false)) {
-      const continueButton = demoDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
-      if (await continueButton.isVisible().catch(() => false)) {
-        await continueButton.click();
-      } else {
-        await page.keyboard.press('Escape');
+    const dismissDemoInterstitialIfPresent = async () => {
+      const demoContinue = page.getByRole('button', { name: /continue in demo mode/i });
+      const demoDialog = page.getByRole('dialog', { name: /demo mode/i });
+
+      if (await demoContinue.isVisible()) {
+        await demoContinue.click();
+        await expect(demoDialog).toBeHidden({ timeout: 5000 });
+        return;
       }
-      await expect(demoDialog).toBeHidden({ timeout: 5000 });
-    }
+
+      if (await demoDialog.isVisible()) {
+        const continueButton = demoDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+        if (await continueButton.isVisible()) {
+          await continueButton.click();
+        } else {
+          await page.keyboard.press('Escape');
+        }
+        await expect(demoDialog).toBeHidden({ timeout: 5000 });
+      }
+    };
+
+    await dismissDemoInterstitialIfPresent();
     const saveButton = page.getByRole('button', { name: /Save & Connect|Save connection/i });
-    if (!(await saveButton.isVisible().catch(() => false))) {
+    if (!(await saveButton.isVisible())) {
       await page.goto('/settings', { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+      await dismissDemoInterstitialIfPresent();
     }
-    await saveButton.click({ force: true });
+    await expect(saveButton).toBeVisible({ timeout: 15000 });
+    await saveButton.click();
     const postSaveDemo = page.getByRole('button', { name: 'Continue in Demo Mode' });
-    if (await postSaveDemo.isVisible().catch(() => false)) {
+    if (await postSaveDemo.isVisible()) {
       await postSaveDemo.click();
     }
     const postSaveDialog = page.getByRole('dialog');
-    if (await postSaveDialog.isVisible().catch(() => false)) {
+    if (await postSaveDialog.isVisible()) {
       const continueButton = postSaveDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
-      if (await continueButton.isVisible().catch(() => false)) {
+      if (await continueButton.isVisible()) {
         await continueButton.click();
       } else {
         await page.keyboard.press('Escape');
