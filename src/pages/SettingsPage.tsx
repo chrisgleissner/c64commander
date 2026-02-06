@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useC64Connection } from '@/hooks/useC64Connection';
-import { C64_DEFAULTS, getDeviceHostFromBaseUrl } from '@/lib/c64api';
+import { C64_DEFAULTS, getDeviceHostFromBaseUrl, resolveDeviceHostFromStorage } from '@/lib/c64api';
 import { AppBar } from '@/components/AppBar';
 import { useThemeContext } from '@/components/ThemeProvider';
 import { Input } from '@/components/ui/input';
@@ -53,16 +53,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs, type LogLevel } from '@/lib/logging';
-import { formatLocalTime } from '@/lib/diagnostics/timeFormat';
+import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
+import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
 import { buildActionSummaries, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
+import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from '@/lib/diagnostics/diagnosticsOverlayState';
+import { resolveActionSeverity, resolveLogSeverity, resolveTraceSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { useFeatureFlag } from '@/hooks/useFeatureFlags';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
@@ -117,20 +119,6 @@ import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
-
-const LOG_LEVEL_LABELS: Record<LogLevel, string> = {
-  debug: 'DBG',
-  info: 'INFO',
-  warn: 'WARN',
-  error: 'ERR',
-};
-
-const LOG_LEVEL_CLASSES: Record<LogLevel, string> = {
-  debug: 'text-muted-foreground',
-  info: 'text-primary',
-  warn: 'text-amber-600',
-  error: 'text-destructive',
-};
 
 const diagnosticsTabTriggerClass =
   'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
@@ -230,8 +218,12 @@ export default function SettingsPage() {
   }, [password]);
 
   useEffect(() => {
+    if (isDemoActive) {
+      setDeviceHostInput(resolveDeviceHostFromStorage());
+      return;
+    }
     setDeviceHostInput(deviceHost);
-  }, [deviceHost]);
+  }, [deviceHost, isDemoActive]);
 
   useEffect(() => {
     dismissDemoInterstitial();
@@ -398,7 +390,7 @@ export default function SettingsPage() {
     return errorLogs.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
         entry.message,
-        formatLocalTime(entry.timestamp),
+        formatDiagnosticsTimestamp(entry.timestamp),
         JSON.stringify(entry.details ?? null),
         entry.id,
       ]),
@@ -412,7 +404,7 @@ export default function SettingsPage() {
       matchesDiagnosticsFilter(filterText, [
         entry.message,
         entry.level,
-        formatLocalTime(entry.timestamp),
+        formatDiagnosticsTimestamp(entry.timestamp),
         JSON.stringify(entry.details ?? null),
         entry.id,
       ]),
@@ -425,7 +417,7 @@ export default function SettingsPage() {
     return traceEvents.filter((entry) =>
       matchesDiagnosticsFilter(filterText, [
         getTraceTitle(entry),
-        formatLocalTime(entry.timestamp),
+        formatDiagnosticsTimestamp(entry.timestamp),
         JSON.stringify(entry),
         entry.id,
       ]),
@@ -436,7 +428,7 @@ export default function SettingsPage() {
     const filterText = diagnosticsFilters.actions ?? '';
     if (!normalizeDiagnosticsFilter(filterText)) return actionSummaries;
     return actionSummaries.filter((summary) => {
-      const summaryTime = summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown time';
+      const summaryTime = formatDiagnosticsTimestamp(summary.startTimestamp);
       const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
       return matchesDiagnosticsFilter(filterText, [
         summary.actionName,
@@ -1605,21 +1597,15 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">No error logs recorded.</p>
               ) : (
                 filteredErrorLogs.map((entry) => (
-                  <details key={entry.id} className="rounded-lg border border-border p-3">
-                    <summary className="cursor-pointer select-none">
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm font-medium">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`text-[11px] font-semibold uppercase tracking-wide ${LOG_LEVEL_CLASSES[entry.level]}`}>
-                            {LOG_LEVEL_LABELS[entry.level]}
-                          </span>
-                          <span className="min-w-0 truncate text-sm">{entry.message}</span>
-                        </div>
-                        <span className="text-muted-foreground text-xs font-semibold tabular-nums text-right shrink-0">
-                          {formatLocalTime(entry.timestamp)}
-                        </span>
-                      </div>
-                    </summary>
-                    <div className="mt-3 space-y-2 text-xs">
+                  <DiagnosticsListItem
+                    key={entry.id}
+                    testId={`error-log-${entry.id}`}
+                    mode="log"
+                    severity={resolveLogSeverity(entry.level)}
+                    title={entry.message}
+                    timestamp={entry.timestamp}
+                  >
+                    <div className="space-y-2">
                       <p className="text-sm font-medium text-foreground break-words whitespace-normal">
                         {entry.message}
                       </p>
@@ -1629,7 +1615,7 @@ export default function SettingsPage() {
                         </pre>
                       )}
                     </div>
-                  </details>
+                  </DiagnosticsListItem>
                 ))
               )}
             </TabsContent>
@@ -1649,21 +1635,15 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground">No logs recorded.</p>
               ) : (
                 filteredLogs.map((entry) => (
-                  <details key={entry.id} className="rounded-lg border border-border p-3">
-                    <summary className="cursor-pointer select-none">
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 text-sm font-medium">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`text-[11px] font-semibold uppercase tracking-wide ${LOG_LEVEL_CLASSES[entry.level]}`}>
-                            {LOG_LEVEL_LABELS[entry.level]}
-                          </span>
-                          <span className="min-w-0 truncate text-sm">{entry.message}</span>
-                        </div>
-                        <span className="text-muted-foreground text-xs font-semibold tabular-nums text-right shrink-0">
-                          {formatLocalTime(entry.timestamp)}
-                        </span>
-                      </div>
-                    </summary>
-                    <div className="mt-3 space-y-2 text-xs">
+                  <DiagnosticsListItem
+                    key={entry.id}
+                    testId={`log-entry-${entry.id}`}
+                    mode="log"
+                    severity={resolveLogSeverity(entry.level)}
+                    title={entry.message}
+                    timestamp={entry.timestamp}
+                  >
+                    <div className="space-y-2">
                       <p className="text-sm font-medium text-foreground break-words whitespace-normal">
                         {entry.message}
                       </p>
@@ -1673,7 +1653,7 @@ export default function SettingsPage() {
                         </pre>
                       )}
                     </div>
-                  </details>
+                  </DiagnosticsListItem>
                 ))
               )}
             </TabsContent>
@@ -1706,10 +1686,11 @@ export default function SettingsPage() {
                         key={entry.id}
                         testId={`trace-item-${entry.id}`}
                         mode="trace"
+                        severity={resolveTraceSeverity(entry)}
                         title={getTraceTitle(entry)}
-                        timestamp={formatLocalTime(entry.timestamp)}
+                        timestamp={entry.timestamp}
                       >
-                        <pre className="mt-2 text-xs whitespace-pre text-muted-foreground overflow-x-auto">
+                        <pre className="text-xs whitespace-pre text-muted-foreground overflow-x-auto">
                           {JSON.stringify(entry, null, 2)}
                         </pre>
                       </DiagnosticsListItem>
@@ -1739,7 +1720,6 @@ export default function SettingsPage() {
                     const effects = summary.effects ?? [];
                     const restEffects = effects.filter((effect): effect is RestEffect => effect.type === 'REST');
                     const ftpEffects = effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
-                    const summaryTime = summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown time';
                     const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
                     const hasEffects = Boolean(summary.restCount || summary.ftpCount || summary.errorCount);
                     return (
@@ -1747,8 +1727,9 @@ export default function SettingsPage() {
                         key={summary.correlationId}
                         testId={`action-summary-${summary.correlationId}`}
                         mode="action"
+                        severity={resolveActionSeverity(summary.outcome)}
                         title={summary.actionName}
-                        timestamp={summaryTime}
+                        timestamp={summary.startTimestamp}
                         origin={summary.origin}
                         secondaryLeft={
                           hasEffects ? (
@@ -1804,11 +1785,11 @@ export default function SettingsPage() {
                             </div>
                             <div>
                               <p className="text-muted-foreground">Start</p>
-                              <p>{summary.startTimestamp ? formatLocalTime(summary.startTimestamp) : 'Unknown'}</p>
+                              <DiagnosticsTimestamp value={summary.startTimestamp} className="text-muted-foreground" />
                             </div>
                             <div>
                               <p className="text-muted-foreground">End</p>
-                              <p>{summary.endTimestamp ? formatLocalTime(summary.endTimestamp) : 'Unknown'}</p>
+                              <DiagnosticsTimestamp value={summary.endTimestamp} className="text-muted-foreground" />
                             </div>
                             <div>
                               <p className="text-muted-foreground">Duration</p>

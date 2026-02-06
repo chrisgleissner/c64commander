@@ -468,8 +468,8 @@ describe('SettingsPage', () => {
 
   it('filters diagnostics entries per tab and restores on clear', async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
-      { id: 'err-1', message: 'Disk error', timestamp: '2024-01-01T00:00:00.000Z', details: { code: 'E-1' } },
-      { id: 'err-2', message: 'Network failure', timestamp: '2024-01-01T00:00:01.000Z', details: { code: 'E-2' } },
+      { id: 'err-1', level: 'error', message: 'Disk error', timestamp: '2024-01-01T00:00:00.000Z', details: { code: 'E-1' } },
+      { id: 'err-2', level: 'error', message: 'Network failure', timestamp: '2024-01-01T00:00:01.000Z', details: { code: 'E-2' } },
     ] as any);
     vi.mocked(getLogs).mockReturnValue([
       { id: 'log-1', level: 'info', message: 'Connection ready', timestamp: '2024-01-01T00:00:02.000Z' },
@@ -534,7 +534,7 @@ describe('SettingsPage', () => {
 
   it('clears diagnostics after confirmation', async () => {
     vi.mocked(getErrorLogs).mockReturnValue([
-      { id: 'err-1', message: 'Error entry', timestamp: Date.now(), details: { boom: true } },
+      { id: 'err-1', level: 'error', message: 'Error entry', timestamp: Date.now(), details: { boom: true } },
     ] as any);
 
     renderSettingsPage();
@@ -732,7 +732,7 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
 
     const traceItem = await within(dialog).findByTestId('trace-item-trace-1');
-    expect(traceItem.querySelector('[class*="grid-cols-[minmax(0,1fr)_auto]"]')).toBeTruthy();
+    expect(traceItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
 
     const actionsTab = within(dialog).getByRole('tab', { name: /actions/i });
     fireEvent.mouseDown(actionsTab);
@@ -740,7 +740,7 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(actionsTab).toHaveAttribute('aria-selected', 'true'));
 
     const actionItem = await within(dialog).findByTestId('action-summary-COR-0100');
-    expect(actionItem.querySelector('[class*="grid-cols-[minmax(0,1fr)_auto]"]')).toBeTruthy();
+    expect(actionItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
   });
 
   it('exports active diagnostics tab and reports failures', async () => {

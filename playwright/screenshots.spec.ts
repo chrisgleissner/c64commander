@@ -501,11 +501,21 @@ test.describe('App screenshots', () => {
     await logsTab.click();
     await expect(dialog.getByText('Total logs:')).toBeVisible();
     await captureScreenshot(page, testInfo, 'diagnostics/03-logs.png');
+    const logEntry = dialog.getByTestId('log-entry-log-1');
+    await expect(logEntry).toBeVisible();
+    await logEntry.locator('summary').click();
+    await expect(logEntry).toHaveJSProperty('open', true);
+    await captureScreenshot(page, testInfo, 'diagnostics/03-logs-expanded.png');
 
     const errorsTab = dialog.getByRole('tab', { name: 'Errors' });
     await errorsTab.click();
     await expect(dialog.getByText('Total errors:')).toBeVisible();
     await captureScreenshot(page, testInfo, 'diagnostics/04-errors.png');
+    const errorEntry = dialog.getByTestId('error-log-log-3');
+    await expect(errorEntry).toBeVisible();
+    await errorEntry.locator('summary').click();
+    await expect(errorEntry).toHaveJSProperty('open', true);
+    await captureScreenshot(page, testInfo, 'diagnostics/04-errors-expanded.png');
 
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
