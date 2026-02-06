@@ -782,6 +782,82 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'skipped-to-last');
   });
 
+  test('auto-advance triggers once per track transition without cascades', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-1.sid', name: 'track-1.sid', durationMs: 1200 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-2.sid', name: 'track-2.sid', durationMs: 20000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-3.sid', name: 'track-3.sid', durationMs: 20000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+    await expect(page.getByTestId('playback-current-track')).toContainText('track-1.sid');
+
+    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+    await expect(page.getByTestId('playback-current-track')).toContainText('track-2.sid');
+    await expect(page.getByTestId('playlist-item').filter({ hasText: 'track-2.sid' }).first()).toHaveAttribute('data-playing', 'true');
+
+    await page.waitForTimeout(2000);
+    expect(server.sidplayRequests.length).toBe(2);
+    await snap(page, testInfo, 'auto-advance-single-shot');
+  });
+
+  test('user next cancels old-track auto-advance and transitions immediately', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-1.sid', name: 'track-1.sid', durationMs: 1200 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-2.sid', name: 'track-2.sid', durationMs: 20000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-3.sid', name: 'track-3.sid', durationMs: 20000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+
+    await page.getByTestId('playlist-next').click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+    await expect(page.getByTestId('playback-current-track')).toContainText('track-2.sid');
+
+    await page.waitForTimeout(1800);
+    expect(server.sidplayRequests.length).toBe(2);
+    await snap(page, testInfo, 'user-next-cancels-old-auto');
+  });
+
+  test('playlist row highlight follows confirmed playback and clears on transition failure', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected error toast when forced next-track sidplay request fails.');
+    let sidplayCount = 0;
+    await page.route('**/v1/runners:sidplay**', async (route) => {
+      sidplayCount += 1;
+      if (sidplayCount >= 2) {
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'forced sidplay failure' }),
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-1.sid', name: 'track-1.sid', durationMs: 20000 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-2.sid', name: 'track-2.sid', durationMs: 20000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+    await expect(page.getByTestId('playlist-item').filter({ hasText: 'track-1.sid' }).first()).toHaveAttribute('data-playing', 'true');
+    await expect(page.getByTestId('playlist-item').filter({ hasText: 'track-2.sid' }).first()).toHaveAttribute('data-playing', 'false');
+
+    await page.getByTestId('playlist-next').click();
+    await expect.poll(() => page.getByTestId('playlist-play').getAttribute('aria-label')).toBe('Play');
+    await expect(page.getByText('Playback next failed', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('playlist-item').filter({ hasText: 'track-1.sid' }).first()).toHaveAttribute('data-playing', 'false');
+    await expect(page.getByTestId('playlist-item').filter({ hasText: 'track-2.sid' }).first()).toHaveAttribute('data-playing', 'false');
+    await snap(page, testInfo, 'playing-row-cleared-on-failure');
+  });
+
   test('playback persists across navigation while active', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedPlaylistStorage(page, [
       { source: 'ultimate' as const, path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 8000 },

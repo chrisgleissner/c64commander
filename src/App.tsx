@@ -26,6 +26,7 @@ import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from '@/components/TraceContextBridge';
+import { GlobalDiagnosticsOverlay } from '@/components/diagnostics/GlobalDiagnosticsOverlay';
 import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 
@@ -76,6 +77,7 @@ const AppRoutes = () => (
     <RouteRefresher />
     <DebugStartupLogger />
     <TraceContextBridge />
+    <GlobalDiagnosticsOverlay />
     <ConnectionController />
     <DemoModeInterstitial />
     <Routes>

@@ -39,13 +39,14 @@ import {
 } from '@/lib/config/configItems';
 import {
   buildEnabledSidMuteUpdates,
-  buildEnabledSidRestoreUpdates,
   buildEnabledSidUnmuteUpdates,
+  buildEnabledSidRestoreUpdates,
   buildEnabledSidVolumeSnapshot,
   buildEnabledSidVolumeUpdates,
   buildSidEnablement,
   buildSidVolumeSteps,
   filterEnabledSidVolumeItems,
+  type SidEnablement,
 } from '@/lib/config/sidVolumeControl';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { FolderPicker } from '@/lib/native/folderPicker';
@@ -89,6 +90,18 @@ import {
 
 
 export default function PlayFilesPage() {
+  type SidMuteSnapshot = {
+    volumes: Record<string, string | number>;
+    enablement: SidEnablement;
+  };
+
+  type AutoAdvanceGuard = {
+    trackInstanceId: number;
+    dueAtMs: number;
+    autoFired: boolean;
+    userCancelled: boolean;
+  };
+
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const updateConfigBatch = useC64UpdateConfigBatch();
@@ -228,8 +241,8 @@ export default function PlayFilesPage() {
   const trackStartedAtRef = useRef<number | null>(null);
   const playedClockRef = useRef(new PlaybackClock());
   const addItemsStartedAtRef = useRef<number | null>(null);
-  const manualMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
-  const pauseMuteSnapshotRef = useRef<Record<string, string | number> | null>(null);
+  const manualMuteSnapshotRef = useRef<SidMuteSnapshot | null>(null);
+  const pauseMuteSnapshotRef = useRef<SidMuteSnapshot | null>(null);
   const volumeSessionSnapshotRef = useRef<Record<string, string | number> | null>(null);
   const volumeSessionActiveRef = useRef(false);
   const previousVolumeIndexRef = useRef<number | null>(null);
@@ -239,6 +252,9 @@ export default function PlayFilesPage() {
   const reshuffleTimerRef = useRef<number | null>(null);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
   const hasHydratedPlaylistRef = useRef(false);
+  const playTransitionQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const trackInstanceIdRef = useRef(0);
+  const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -261,6 +277,35 @@ export default function PlayFilesPage() {
     }
     return defaultVolumeIndex;
   }, [defaultVolumeIndex, volumeSteps]);
+
+  const captureSidMuteSnapshot = useCallback((items: typeof sidVolumeItems, enablement: SidEnablement) => ({
+    volumes: buildEnabledSidVolumeSnapshot(items, enablement),
+    enablement: { ...enablement },
+  }), [buildEnabledSidVolumeSnapshot]);
+
+  const snapshotToUpdates = useCallback((
+    snapshot: SidMuteSnapshot | null | undefined,
+    currentItems?: typeof sidVolumeItems,
+  ) => {
+    if (!snapshot) return {};
+    const updates = buildEnabledSidUnmuteUpdates(snapshot.volumes, sidEnablement);
+    if (!currentItems?.length) return updates;
+    const allowedNames = new Set(currentItems.map((item) => item.name));
+    return Object.fromEntries(
+      Object.entries(updates).filter(([name]) => allowedNames.has(name)),
+    );
+  }, [buildEnabledSidUnmuteUpdates, sidEnablement]);
+
+  const enqueuePlayTransition = useCallback(async <T,>(task: () => Promise<T>) => {
+    const run = playTransitionQueueRef.current.then(task, task);
+    playTransitionQueueRef.current = run.then(() => undefined, () => undefined);
+    return run;
+  }, []);
+
+  const cancelAutoAdvance = useCallback(() => {
+    if (!autoAdvanceGuardRef.current) return;
+    autoAdvanceGuardRef.current.userCancelled = true;
+  }, []);
 
   const withTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs: number, operation: string) => {
     let timeoutId: number | null = null;
@@ -417,7 +462,7 @@ export default function PlayFilesPage() {
       setVolumeMuted(true);
       const snapshot = manualMuteSnapshotRef.current;
       const snapshotIndices = snapshot
-        ? Object.values(snapshot).map((value) => resolveVolumeIndex(value))
+        ? Object.values(snapshot.volumes).map((value) => resolveVolumeIndex(value))
         : [];
       const muteIndices = muteValues.map((value) => resolveVolumeIndex(value));
       const muteCounts = new Map<number, number>();
@@ -452,6 +497,7 @@ export default function PlayFilesPage() {
   useEffect(() => {
     if (playlist.length > 0) return;
     playedClockRef.current.reset();
+    autoAdvanceGuardRef.current = null;
     setPlayedMs(0);
   }, [playlist.length]);
 
@@ -460,6 +506,7 @@ export default function PlayFilesPage() {
     const now = Date.now();
     playedClockRef.current.stop(now, true);
     trackStartedAtRef.current = null;
+    autoAdvanceGuardRef.current = null;
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
 
@@ -552,8 +599,21 @@ export default function PlayFilesPage() {
     if (pending.isPlaying && !pending.isPaused) {
       trackStartedAtRef.current = now - Math.max(0, pending.elapsedMs);
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), now);
+      if (typeof pending.durationMs === 'number' && pending.durationMs > 0) {
+        const restoredTrackInstanceId = trackInstanceIdRef.current + 1;
+        trackInstanceIdRef.current = restoredTrackInstanceId;
+        autoAdvanceGuardRef.current = {
+          trackInstanceId: restoredTrackInstanceId,
+          dueAtMs: (trackStartedAtRef.current ?? now) + pending.durationMs,
+          autoFired: false,
+          userCancelled: false,
+        };
+      } else {
+        autoAdvanceGuardRef.current = null;
+      }
     } else {
       trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
       playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
     }
     pendingPlaybackRestoreRef.current = null;
@@ -775,82 +835,99 @@ export default function PlayFilesPage() {
 
 
   const playItem = useCallback(
-    async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean }) => {
-      if (item.request.source === 'local' && !item.request.file) {
-        const sourceId = item.sourceId;
-        const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
-        if (treeUri) {
-          const normalizedPath = normalizeSourcePath(item.path);
-          item.request.file = buildLocalPlayFileFromTree(item.label, normalizedPath, treeUri);
+    async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean; playlistIndex?: number }) => {
+      return enqueuePlayTransition(async () => {
+        if (item.request.source === 'local' && !item.request.file) {
+          const sourceId = item.sourceId;
+          const treeUri = sourceId ? localSourceTreeUris.get(sourceId) : null;
+          if (treeUri) {
+            const normalizedPath = normalizeSourcePath(item.path);
+            item.request.file = buildLocalPlayFileFromTree(item.label, normalizedPath, treeUri);
+          }
+          const localEntry = sourceId ? localEntriesBySourceId.get(sourceId)?.get(normalizeSourcePath(item.path)) : null;
+          if (!item.request.file && localEntry?.uri) {
+            item.request.file = buildLocalPlayFileFromUri(item.label, normalizeSourcePath(item.path), localEntry.uri);
+          }
+          if (!item.request.file) {
+            throw new Error('Local file unavailable. Re-add it to the playlist.');
+          }
         }
-        const localEntry = sourceId ? localEntriesBySourceId.get(sourceId)?.get(normalizeSourcePath(item.path)) : null;
-        if (!item.request.file && localEntry?.uri) {
-          item.request.file = buildLocalPlayFileFromUri(item.label, normalizeSourcePath(item.path), localEntry.uri);
+        let durationOverride: number | undefined;
+        let subsongCount: number | undefined;
+        if (item.category === 'sid' && item.request.source === 'local') {
+          const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
+          durationOverride = metadata.durationMs;
+          subsongCount = metadata.subsongCount;
+          if (!metadata.readable) {
+            throw new Error('Local file unavailable. Re-add it to the playlist.');
+          }
         }
-        if (!item.request.file) {
-          throw new Error('Local file unavailable. Re-add it to the playlist.');
+        try {
+          await ensurePlaybackConnection();
+        } catch (error) {
+          reportUserError({
+            operation: 'PLAYBACK_CONNECT',
+            title: 'Connection failed',
+            description: (error as Error).message,
+            error,
+            context: {
+              item: item.label,
+            },
+          });
+          throw error;
         }
-      }
-      let durationOverride: number | undefined;
-      let subsongCount: number | undefined;
-      if (item.category === 'sid' && item.request.source === 'local') {
-        const metadata = await resolveSidMetadata(item.request.file, item.request.songNr ?? null);
-        durationOverride = metadata.durationMs;
-        subsongCount = metadata.subsongCount;
-        if (!metadata.readable) {
-          throw new Error('Local file unavailable. Re-add it to the playlist.');
+        const api = getC64API();
+        if (isSongCategory(item.category)) {
+          setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
+        } else {
+          setCurrentSubsongCount(null);
         }
-      }
-      try {
-        await ensurePlaybackConnection();
-      } catch (error) {
-        reportUserError({
-          operation: 'PLAYBACK_CONNECT',
-          title: 'Connection failed',
-          description: (error as Error).message,
-          error,
-          context: {
-            item: item.label,
-          },
-        });
-        throw error;
-      }
-      const api = getC64API();
-      if (isSongCategory(item.category)) {
-        setCurrentSubsongCount(subsongCount ?? item.subsongCount ?? null);
-      } else {
-        setCurrentSubsongCount(null);
-      }
-      const request: PlayRequest = durationOverride
-        ? { ...item.request, durationMs: durationOverride }
-        : item.request;
-      const plan = buildPlayPlan(request);
-      const shouldReboot = options?.rebootBeforePlay ?? item.category === 'disk';
-      const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
-      const resolvedDurationBase = durationOverride ?? item.durationMs;
-      const resolvedDuration = isSongCategory(item.category)
-        ? resolvedDurationBase ?? durationFallbackMs
-        : resolvedDurationBase;
-      setElapsedMs(0);
-      setDurationMs(resolvedDuration);
-      await executePlayPlan(api, plan, executionOptions);
-      const now = Date.now();
-      trackStartedAtRef.current = now;
-      playedClockRef.current.start(now, true);
-      setPlayedMs(playedClockRef.current.current(now));
-      if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
-        setPlaylist((prev) =>
-          prev.map((entry) =>
-            entry.id === item.id
-              ? { ...entry, durationMs: resolvedDuration, subsongCount: subsongCount ?? entry.subsongCount }
-              : entry,
-          ),
-        );
-      }
-      setIsPlaying(true);
-      setIsPaused(false);
+        const request: PlayRequest = durationOverride
+          ? { ...item.request, durationMs: durationOverride }
+          : item.request;
+        const plan = buildPlayPlan(request);
+        const shouldReboot = options?.rebootBeforePlay ?? item.category === 'disk';
+        const executionOptions = shouldReboot ? { rebootBeforeMount: true } : undefined;
+        const resolvedDurationBase = durationOverride ?? item.durationMs;
+        const resolvedDuration = isSongCategory(item.category)
+          ? resolvedDurationBase ?? durationFallbackMs
+          : resolvedDurationBase;
+        setElapsedMs(0);
+        setDurationMs(resolvedDuration);
+        await executePlayPlan(api, plan, executionOptions);
+        const now = Date.now();
+        const nextTrackInstanceId = trackInstanceIdRef.current + 1;
+        trackInstanceIdRef.current = nextTrackInstanceId;
+        trackStartedAtRef.current = now;
+        playedClockRef.current.start(now, true);
+        setPlayedMs(playedClockRef.current.current(now));
+        if (isSongCategory(item.category) && typeof resolvedDuration === 'number') {
+          autoAdvanceGuardRef.current = {
+            trackInstanceId: nextTrackInstanceId,
+            dueAtMs: now + resolvedDuration,
+            autoFired: false,
+            userCancelled: false,
+          };
+        } else {
+          autoAdvanceGuardRef.current = null;
+        }
+        if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
+          setPlaylist((prev) =>
+            prev.map((entry) =>
+              entry.id === item.id
+                ? { ...entry, durationMs: resolvedDuration, subsongCount: subsongCount ?? entry.subsongCount }
+                : entry,
+            ),
+          );
+        }
+        if (typeof options?.playlistIndex === 'number' && options.playlistIndex >= 0) {
+          setCurrentIndex(options.playlistIndex);
+        }
+        setIsPlaying(true);
+        setIsPaused(false);
+      });
     },
-    [durationFallbackMs, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, reportUserError, resolveSidMetadata],
+    [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, reportUserError, resolveSidMetadata],
   );
 
   const playlistItemDuration = useCallback(
@@ -890,12 +967,13 @@ export default function PlayFilesPage() {
     setSongPickerOpen(false);
     setIsPlaylistLoading(true);
     try {
-      await playItem(nextItem);
+      cancelAutoAdvance();
+      await playItem(nextItem, { playlistIndex: currentIndex });
       setPlaylist((prev) => prev.map((item, index) => (index === currentIndex ? nextItem : item)));
     } finally {
       setIsPlaylistLoading(false);
     }
-  }, [currentIndex, currentItem, knownSubsongCount, playItem]);
+  }, [cancelAutoAdvance, currentIndex, currentItem, knownSubsongCount, playItem]);
 
   useEffect(() => {
     if (!isSongPlaying && songPickerOpen) {
@@ -962,6 +1040,7 @@ export default function PlayFilesPage() {
         setElapsedMs(0);
         setDurationMs(undefined);
         trackStartedAtRef.current = null;
+        autoAdvanceGuardRef.current = null;
       }
       setCurrentIndex((prevIndex) => {
         if (prevIndex < 0) return prevIndex;
@@ -1144,11 +1223,10 @@ export default function PlayFilesPage() {
       const extras = prev.filter((item) => !baseIds.has(item.id));
       return extras.length ? [...resolvedItems, ...extras] : resolvedItems;
     });
-    setCurrentIndex(startIndex);
     setIsPlaylistLoading(true);
     setIsPaused(false);
     try {
-      await playItem(resolvedItems[startIndex]);
+      await playItem(resolvedItems[startIndex], { playlistIndex: startIndex });
     } catch (error) {
       reportUserError({
         operation: 'PLAYBACK_START',
@@ -1162,6 +1240,7 @@ export default function PlayFilesPage() {
       setIsPlaying(false);
       setIsPaused(false);
       trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
     } finally {
       setIsPlaylistLoading(false);
     }
@@ -1174,7 +1253,8 @@ export default function PlayFilesPage() {
         await startPlaylist(playlist, 0);
         return;
       }
-      await playItem(playlist[currentIndex]);
+      cancelAutoAdvance();
+      await playItem(playlist[currentIndex], { playlistIndex: currentIndex });
     } catch (error) {
       reportUserError({
         operation: 'PLAYBACK_START',
@@ -1186,7 +1266,7 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }), [currentIndex, playItem, playlist, reportUserError, startPlaylist, trace]);
+  }), [cancelAutoAdvance, currentIndex, playItem, playlist, reportUserError, startPlaylist, trace]);
 
   const handleStop = useCallback(trace(async function handleStop() {
     if (!isPlaying && !isPaused) return;
@@ -1228,6 +1308,7 @@ export default function PlayFilesPage() {
     setDurationMs(undefined);
     setCurrentSubsongCount(null);
     trackStartedAtRef.current = null;
+    autoAdvanceGuardRef.current = null;
   }), [currentIndex, isPaused, isPlaying, playlist, reportUserError, restoreVolumeOverrides, withTimeout, trace]);
 
   useEffect(() => {
@@ -1247,13 +1328,13 @@ export default function PlayFilesPage() {
     const api = getC64API();
     try {
       if (isPaused) {
-        const resumeItems = await resolveEnabledSidVolumeItems();
+        const resumeItems = await resolveEnabledSidVolumeItems(true);
         const resumeSnapshot = pauseMuteSnapshotRef.current;
         const wasMuted = resumeSnapshot && resumeItems.length
-          ? resumeItems.every((item) => resumeSnapshot[item.name] === resolveAudioMixerMuteValue(item.options))
+          ? resumeItems.every((item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options))
           : false;
         if (pauseMuteSnapshotRef.current && resumeItems.length) {
-          await applyAudioMixerUpdates(pauseMuteSnapshotRef.current, 'Resume');
+          await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), 'Resume');
         }
         await withTimeout(api.machineResume(), 3000, 'Resume');
         pauseMuteSnapshotRef.current = null;
@@ -1263,10 +1344,15 @@ export default function PlayFilesPage() {
         trackStartedAtRef.current = now - elapsedMs;
         playedClockRef.current.resume(now);
         setPlayedMs(playedClockRef.current.current(now));
+        if (autoAdvanceGuardRef.current && typeof durationMs === 'number') {
+          autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
+          autoAdvanceGuardRef.current.autoFired = false;
+          autoAdvanceGuardRef.current.userCancelled = false;
+        }
       } else {
         const pauseItems = await resolveEnabledSidVolumeItems();
         if (pauseItems.length) {
-          pauseMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(pauseItems, sidEnablement);
+          pauseMuteSnapshotRef.current = captureSidMuteSnapshot(pauseItems, sidEnablement);
         }
         await withTimeout(api.machinePause(), 3000, 'Pause');
         if (pauseItems.length) {
@@ -1290,7 +1376,7 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, buildEnabledSidVolumeSnapshot, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, withTimeout, trace]);
+  }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, durationMs, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, withTimeout, trace]);
 
   const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
     if (!volumeSteps.length || !sidVolumeItems.length) return;
@@ -1331,9 +1417,12 @@ export default function PlayFilesPage() {
       const snapshot = manualMuteSnapshotRef.current;
       const target = volumeSteps[nextIndex]?.option;
       if (snapshot && target) {
-        manualMuteSnapshotRef.current = Object.fromEntries(
-          Object.keys(snapshot).map((key) => [key, target]),
-        );
+        manualMuteSnapshotRef.current = {
+          ...snapshot,
+          volumes: Object.fromEntries(
+            Object.keys(snapshot.volumes).map((key) => [key, target]),
+          ),
+        };
       }
       return;
     }
@@ -1348,9 +1437,12 @@ export default function PlayFilesPage() {
       const snapshot = manualMuteSnapshotRef.current;
       const target = volumeSteps[nextIndex]?.option;
       if (snapshot && target) {
-        manualMuteSnapshotRef.current = Object.fromEntries(
-          Object.keys(snapshot).map((key) => [key, target]),
-        );
+        manualMuteSnapshotRef.current = {
+          ...snapshot,
+          volumes: Object.fromEntries(
+            Object.keys(snapshot.volumes).map((key) => [key, target]),
+          ),
+        };
       }
       return;
     }
@@ -1368,13 +1460,13 @@ export default function PlayFilesPage() {
     if (!volumeMuted) {
       previousVolumeIndexRef.current = volumeIndex;
       await ensureVolumeSessionSnapshot();
-      manualMuteSnapshotRef.current = buildEnabledSidVolumeSnapshot(items, sidEnablement);
+      manualMuteSnapshotRef.current = captureSidMuteSnapshot(items, sidEnablement);
       setVolumeMuted(true);
       await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(items, sidEnablement), 'Mute');
       return;
     }
     const snapshot = manualMuteSnapshotRef.current;
-    let updates = buildEnabledSidUnmuteUpdates(snapshot, sidEnablement);
+    let updates = snapshotToUpdates(snapshot, items);
     if (!Object.keys(updates).length) {
       const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
       const target = volumeSteps[fallbackIndex]?.option;
@@ -1389,12 +1481,12 @@ export default function PlayFilesPage() {
     manualMuteSnapshotRef.current = null;
   }, [
     applyAudioMixerUpdates,
-    buildEnabledSidUnmuteUpdates,
-    buildEnabledSidVolumeSnapshot,
     buildEnabledSidVolumeUpdates,
+    captureSidMuteSnapshot,
     ensureVolumeSessionSnapshot,
     resolveEnabledSidVolumeItems,
     sidEnablement,
+    snapshotToUpdates,
     volumeIndex,
     volumeMuted,
     volumeSteps,
@@ -1428,8 +1520,17 @@ export default function PlayFilesPage() {
   }, [durationInput, durationSeconds]);
 
 
-  const handleNext = useCallback(async () => {
+  const handleNext = useCallback(async (source: 'auto' | 'user' = 'user', expectedTrackInstanceId?: number) => {
     if (!playlist.length) return;
+    if (source === 'auto') {
+      const guard = autoAdvanceGuardRef.current;
+      if (!guard || guard.autoFired || guard.userCancelled) return;
+      if (typeof expectedTrackInstanceId === 'number' && guard.trackInstanceId !== expectedTrackInstanceId) return;
+      guard.autoFired = true;
+    } else {
+      cancelAutoAdvance();
+    }
+
     const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
@@ -1439,37 +1540,75 @@ export default function PlayFilesPage() {
       if (!repeatEnabled) {
         playedClockRef.current.pause(Date.now());
         setIsPlaying(false);
+        setIsPaused(false);
+        autoAdvanceGuardRef.current = null;
         return;
       }
       nextIndex = 0;
     }
-    setCurrentIndex(nextIndex);
+
     const nextItem = playlist[nextIndex];
     const shouldReboot = currentItem?.category === 'disk' || nextItem?.category === 'disk';
-    await playItem(nextItem, { rebootBeforePlay: shouldReboot });
-    setIsPaused(false);
-  }, [currentIndex, playItem, playlist, repeatEnabled]);
+    try {
+      await playItem(nextItem, { rebootBeforePlay: shouldReboot, playlistIndex: nextIndex });
+      setIsPaused(false);
+    } catch (error) {
+      reportUserError({
+        operation: 'PLAYBACK_NEXT',
+        title: 'Playback next failed',
+        description: (error as Error).message,
+        error,
+        context: {
+          currentIndex,
+          nextIndex,
+          source,
+        },
+      });
+      setIsPlaying(false);
+      setIsPaused(false);
+      trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
+    }
+  }, [cancelAutoAdvance, currentIndex, playItem, playlist, repeatEnabled, reportUserError]);
 
   const handlePrevious = useCallback(async () => {
     if (!playlist.length) return;
+    cancelAutoAdvance();
     const now = Date.now();
     playedClockRef.current.pause(now);
     setPlayedMs(playedClockRef.current.current(now));
     const currentItem = playlist[currentIndex];
     const prevIndex = Math.max(0, currentIndex - 1);
-    setCurrentIndex(prevIndex);
     const prevItem = playlist[prevIndex];
     const shouldReboot = currentItem?.category === 'disk' || prevItem?.category === 'disk';
-    await playItem(prevItem, { rebootBeforePlay: shouldReboot });
-    setIsPaused(false);
-  }, [currentIndex, playItem, playlist]);
+    try {
+      await playItem(prevItem, { rebootBeforePlay: shouldReboot, playlistIndex: prevIndex });
+      setIsPaused(false);
+    } catch (error) {
+      reportUserError({
+        operation: 'PLAYBACK_PREVIOUS',
+        title: 'Playback previous failed',
+        description: (error as Error).message,
+        error,
+        context: {
+          currentIndex,
+          prevIndex,
+        },
+      });
+      setIsPlaying(false);
+      setIsPaused(false);
+      trackStartedAtRef.current = null;
+      autoAdvanceGuardRef.current = null;
+    }
+  }, [cancelAutoAdvance, currentIndex, playItem, playlist, reportUserError]);
 
   useEffect(() => {
-    if (!isPlaying || currentDurationMs === undefined) return;
-    if (elapsedMs >= currentDurationMs) {
-      void handleNext();
-    }
-  }, [currentDurationMs, elapsedMs, handleNext, isPlaying]);
+    if (!isPlaying || isPaused) return;
+    const guard = autoAdvanceGuardRef.current;
+    if (!guard || guard.autoFired || guard.userCancelled) return;
+    if (Date.now() < guard.dueAtMs) return;
+    void handleNext('auto', guard.trackInstanceId);
+  }, [elapsedMs, handleNext, isPaused, isPlaying]);
 
   const reshufflePlaylist = useCallback((items: PlaylistItem[], lockedIndex: number) => {
     if (items.length < 2) return items;
@@ -1621,6 +1760,9 @@ export default function PlayFilesPage() {
     () => playlist.filter((item) => playlistTypeFilters.includes(item.category)),
     [playlist, playlistTypeFilters],
   );
+  const currentPlayingItemId = (isPlaying || isPaused) && currentIndex >= 0
+    ? playlist[currentIndex]?.id ?? null
+    : null;
 
   const playlistListItems = usePlaylistListItems({
     filteredPlaylist,
@@ -1635,6 +1777,7 @@ export default function PlayFilesPage() {
     formatBytes,
     formatDate,
     getParentPath,
+    currentPlayingItemId,
   });
 
   return (

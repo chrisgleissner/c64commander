@@ -7,23 +7,26 @@ tags:
   - subflow
 ---
 - launchApp
-- runFlow:
-    when:
-      visible: "Continue in Demo Mode"
-    file: continue-demo.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue in Demo Mode"
+          file: continue-demo.yaml
+      - tapOn:
+          text: "Continue in Demo Mode"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            id: "tab-home"
+          timeout: ${TIMEOUT}
+- tapOn:
+    id: "tab-home"
 - extendedWaitUntil:
-    visible: "Home"
-    timeout: ${SHORT_TIMEOUT}
-- tapOn: "Home"
-- extendedWaitUntil:
-    visible: "Home"
-    timeout: ${SHORT_TIMEOUT}
-- runFlow:
-    when:
-      visible: "Continue in Demo Mode"
-    file: continue-demo.yaml
-- extendedWaitUntil:
-    visible: "Home"
-    timeout: ${SHORT_TIMEOUT}
+    visible:
+      id: "tab-home"
+    timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: home

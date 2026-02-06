@@ -257,17 +257,19 @@ test.describe('Playlist controls and advanced features', () => {
     await snap(page, testInfo, 'playlist-ready');
 
     await page.getByTestId('playlist-item').first().getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByTestId('playlist-play')).toHaveAttribute('aria-label', 'Stop');
+    await expect
+      .poll(() => page.getByTestId('playlist-item').first().getAttribute('data-playing'))
+      .toBe('true');
+    await expect(page.getByTestId('playlist-item').nth(1)).toHaveAttribute('data-playing', 'false');
     await snap(page, testInfo, 'first-track-playing');
 
     const prevButton = page.getByTestId('playlist-prev');
     await expect(prevButton).toBeVisible();
     await expect(prevButton).toBeDisabled();
-
-    const initialHighlight = await page.getByTestId('playlist-item').first().getAttribute('data-playing');
     await snap(page, testInfo, 'prev-disabled');
-
-    const currentHighlight = await page.getByTestId('playlist-item').first().getAttribute('data-playing');
-    expect(currentHighlight).toBe(initialHighlight);
+    await expect(page.getByTestId('playlist-item').first()).toHaveAttribute('data-playing', 'true');
+    await expect(page.getByTestId('playlist-item').nth(1)).toHaveAttribute('data-playing', 'false');
     await snap(page, testInfo, 'still-at-first');
   });
 

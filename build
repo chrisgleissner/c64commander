@@ -15,6 +15,9 @@ RUN_SCREENSHOTS=false
 RUN_TEST_UNIT=false
 RUN_TEST_E2E=false
 RUN_TEST_E2E_CI=false
+RUN_TEST_MAESTRO_CI=false
+RUN_TEST_MAESTRO_ALL=false
+RUN_TEST_MAESTRO_TAGS=false
 RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
@@ -41,6 +44,7 @@ C64U_HOST_SET=false
 RECORD_TRACES=false
 TRACE_OUTPUT_DIR=""
 TRACE_SUITE=""
+MAESTRO_TAGS=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 
@@ -66,6 +70,9 @@ Options:
   --test                Run unit tests only (vitest)
   --test-e2e            Run E2E tests only (Playwright, no screenshots)
   --test-e2e-ci         Run full CI mirror (screenshots + e2e + validation)
+  --test-maestro-ci     Run Maestro CI flows (ci-critical tag)
+  --test-maestro-all    Run all Maestro flows (ignores excludeTags)
+  --test-maestro-tags <tags> Run Maestro flows by tags (+include/-exclude)
   --validate-evidence   Validate Playwright evidence structure
   --coverage            Run unit + e2e coverage (slower)
   --record-traces       Record golden traces during Playwright runs
@@ -87,7 +94,7 @@ Options:
   --fuzz-min-session-steps N Minimum steps per session (default 200)
   --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
-  
+
   --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
   --skip-format         Skip repository auto-formatting before build steps
   --skip-install        Skip npm install
@@ -171,6 +178,57 @@ while [[ $# -gt 0 ]]; do
       RUN_APK=false
       RUN_TEST=false
       shift
+      ;;
+    --test-maestro-ci)
+      RUN_TEST_MAESTRO_CI=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
+      RUN_APK=true
+      RUN_TEST=false
+      RUN_TEST_UNIT=false
+      RUN_TEST_E2E=false
+      RUN_TEST_E2E_CI=false
+      RUN_VALIDATE_EVIDENCE=false
+      RUN_COVERAGE=false
+      RUN_ANDROID_TESTS=false
+      RUN_ANDROID_COVERAGE=false
+      shift
+      ;;
+    --test-maestro-all)
+      RUN_TEST_MAESTRO_ALL=true
+      RUN_BUILD=true
+      RUN_INSTALL=true
+      RUN_APK=true
+      RUN_TEST=false
+      RUN_TEST_UNIT=false
+      RUN_TEST_E2E=false
+      RUN_TEST_E2E_CI=false
+      RUN_VALIDATE_EVIDENCE=false
+      RUN_COVERAGE=false
+      RUN_ANDROID_TESTS=false
+      RUN_ANDROID_COVERAGE=false
+      shift
+      ;;
+    --test-maestro-tags)
+      if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
+        RUN_TEST_MAESTRO_TAGS=true
+        MAESTRO_TAGS="$2"
+        RUN_BUILD=true
+        RUN_INSTALL=true
+        RUN_APK=true
+        RUN_TEST=false
+        RUN_TEST_UNIT=false
+        RUN_TEST_E2E=false
+        RUN_TEST_E2E_CI=false
+        RUN_VALIDATE_EVIDENCE=false
+        RUN_COVERAGE=false
+        RUN_ANDROID_TESTS=false
+        RUN_ANDROID_COVERAGE=false
+        shift 2
+      else
+        echo "Error: --test-maestro-tags requires a value" >&2
+        exit 1
+      fi
       ;;
     --validate-evidence)
       RUN_VALIDATE_EVIDENCE=true
@@ -386,6 +444,9 @@ if [[ "$RUN_SCREENSHOTS_ONLY" == "true" ]]; then
   RUN_TEST_UNIT=false
   RUN_TEST_E2E=false
   RUN_TEST_E2E_CI=false
+  RUN_TEST_MAESTRO_CI=false
+  RUN_TEST_MAESTRO_ALL=false
+  RUN_TEST_MAESTRO_TAGS=false
   RUN_VALIDATE_EVIDENCE=false
   RUN_COVERAGE=false
   RUN_ANDROID_TESTS=false
@@ -473,9 +534,9 @@ if [[ "$RUN_TEST" == "true" ]]; then
   (cd "$ROOT_DIR" && npm test)
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
-    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npm run test:e2e)
+    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e)
   else
-    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npx playwright test --grep-invert @screenshots)
+    (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots)
   fi
   (cd "$ROOT_DIR/android" && ./gradlew test --warning-mode none)
   if [[ "$RUN_ANDROID_TESTS" == "true" ]]; then
@@ -491,13 +552,13 @@ fi
 if [[ "$RUN_TEST_E2E" == "true" ]]; then
   log "Running E2E tests"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npx playwright test --grep-invert @screenshots)
+  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots)
 fi
 
 if [[ "$RUN_TEST_E2E_CI" == "true" ]]; then
   log "Running CI mirror (screenshots + E2E + validation)"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
-  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" npm run test:e2e:ci)
+  (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npm run test:e2e:ci)
 fi
 
 if [[ "$RUN_VALIDATE_EVIDENCE" == "true" ]]; then
@@ -527,7 +588,7 @@ if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
     VITE_GIT_SHA="screenshots" \
     VITE_BUILD_TIME="1970-01-01T00:00:00Z" \
     SOURCE_DATE_EPOCH="0" \
-    PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-2}" \
+    PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" \
     npm run screenshots)
 fi
 
@@ -552,6 +613,27 @@ fi
 if [[ "$RUN_APK" == "true" ]]; then
   log "Building debug APK"
   (cd "$ROOT_DIR" && npm run android:apk -- --warning-mode none)
+fi
+
+if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "$RUN_TEST_MAESTRO_TAGS" == "true" ]]; then
+  log "Running Maestro tests"
+  MAESTRO_MODE=""
+  if [[ "$RUN_TEST_MAESTRO_CI" == "true" ]]; then
+    MAESTRO_MODE="ci"
+  elif [[ "$RUN_TEST_MAESTRO_ALL" == "true" ]]; then
+    MAESTRO_MODE="all"
+  else
+    MAESTRO_MODE="tags"
+  fi
+  MAESTRO_APK_PATH="${APK_PATH:-$APK_DEFAULT}"
+  MAESTRO_ARGS=(--mode "$MAESTRO_MODE" --apk-path "$MAESTRO_APK_PATH" --c64u-target "$C64U_TARGET" --c64u-host "$C64U_HOST")
+  if [[ -n "$DEVICE_ID" ]]; then
+    MAESTRO_ARGS+=(--device-id "$DEVICE_ID")
+  fi
+  if [[ "$RUN_TEST_MAESTRO_TAGS" == "true" ]]; then
+    MAESTRO_ARGS+=(--tags "$MAESTRO_TAGS")
+  fi
+  (cd "$ROOT_DIR" && bash scripts/run-maestro.sh "${MAESTRO_ARGS[@]}")
 fi
 
 if [[ "$RUN_SMOKE_ANDROID_EMULATOR" == "true" ]]; then

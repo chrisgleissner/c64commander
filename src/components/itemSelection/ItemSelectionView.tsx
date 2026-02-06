@@ -1,4 +1,4 @@
-import { ArrowUp, Folder, FolderOpen, RefreshCw } from 'lucide-react';
+import { ArrowUp, ChevronRight, Folder, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { PathWrap } from '@/components/PathWrap';
@@ -92,31 +92,49 @@ export const ItemSelectionView = ({
         {entries.map((entry) => {
           const isSelected = selection.has(entry.path);
           const canSelect = entry.type === 'file' || showFolderSelect;
+          const isFolder = entry.type === 'dir';
+          const canNavigateFolder = isFolder && !isLoading;
           return (
-            <div key={entry.path} className="flex items-center justify-between gap-2 min-w-0" data-testid="source-entry-row">
-              <div className="flex items-center gap-2 min-w-0">
+            <div
+              key={entry.path}
+              className="flex items-center gap-2 min-w-0 border-b border-border/50 py-2"
+              data-testid="source-entry-row"
+              data-entry-type={entry.type}
+              role={isFolder ? 'button' : undefined}
+              tabIndex={isFolder ? 0 : undefined}
+              aria-label={isFolder ? `Open ${entry.name}` : undefined}
+              aria-disabled={isFolder && isLoading ? 'true' : undefined}
+              onClick={() => {
+                if (!canNavigateFolder) return;
+                onOpen(entry.path);
+              }}
+              onKeyDown={(event) => {
+                if (!canNavigateFolder) return;
+                if (event.target !== event.currentTarget) return;
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  onOpen(entry.path);
+                }
+              }}
+            >
+              <div className="shrink-0">
                 <Checkbox
                   checked={isSelected}
                   onCheckedChange={() => canSelect && onToggleSelect(entry)}
+                  onClick={(event) => event.stopPropagation()}
                   disabled={!canSelect}
                   aria-label={`Select ${entry.name}`}
                 />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
-                </div>
               </div>
-              {entry.type === 'dir' && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => onOpen(entry.path)}
-                  aria-label={`Open ${entry.name}`}
-                >
-                  <FolderOpen className="h-4 w-4 mr-1" />
-                  Open
-                </Button>
-              )}
+              <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                {isFolder ? (
+                  <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                ) : (
+                  <span className="h-4 w-4 shrink-0" aria-hidden="true" />
+                )}
+                <p className="text-sm font-medium break-words whitespace-normal">{entry.name}</p>
+              </div>
+              {isFolder ? <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" /> : null}
             </div>
           );
         })}

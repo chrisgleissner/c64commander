@@ -51,6 +51,7 @@ export type ActionListItem = {
   subtitleTestId?: string;
   showMenu?: boolean;
   showSelection?: boolean;
+  isPlaying?: boolean;
 };
 
 export type SelectableActionListProps = {
@@ -98,11 +99,18 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
   const selectionTestId = rowTestId ? `${rowTestId}-select-${sanitizeForTestId(item.title)}` : undefined;
   const actionMenuTestId = rowTestId ? `${rowTestId}-actions-${sanitizeForTestId(item.title)}` : undefined;
 
+  const isPlaying = Boolean(item.isPlaying);
   return (
     <div
       className={cn(
         'flex items-center gap-2 py-2 px-1 rounded-md min-w-0 max-w-full',
-        item.isDimmed ? 'opacity-40' : 'hover:bg-muted/40',
+        item.isDimmed
+          ? 'opacity-40'
+          : isPlaying
+            ? 'bg-primary/10 ring-1 ring-primary/35 hover:bg-primary/15'
+            : item.selected
+              ? 'bg-muted/50 hover:bg-muted/60'
+              : 'hover:bg-muted/40',
       )}
       onClick={(event) => {
         if (!item.onRowClick) return;
@@ -112,6 +120,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
       }}
       data-testid={rowTestId}
       data-row-id={item.id}
+      data-playing={isPlaying ? 'true' : 'false'}
     >
       <div className="flex items-center gap-1 shrink-0">
         {item.showSelection !== false ? (
@@ -206,9 +215,12 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
       </div>
       <div className="flex flex-col gap-1 shrink-0">
         <Button
-          variant="ghost"
+          variant={isPlaying ? 'secondary' : 'ghost'}
           size="icon"
-          className="h-9 w-9 min-h-[44px] min-w-[44px]"
+          className={cn(
+            'h-9 w-9 min-h-[44px] min-w-[44px]',
+            isPlaying ? 'text-primary border border-primary/30' : null,
+          )}
           onClick={(event) => {
             event.stopPropagation();
             item.onAction?.();

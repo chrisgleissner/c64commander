@@ -43,13 +43,17 @@ describe('ItemSelectionView', () => {
     const checkboxes = screen.getAllByRole('checkbox');
     fireEvent.click(checkboxes[0]);
 
-    fireEvent.click(screen.getByRole('button', { name: /open/i }));
+    const openDemosRow = screen.getByRole('button', { name: /open demos/i });
+    fireEvent.click(openDemosRow);
+    fireEvent.keyDown(openDemosRow, { key: 'Enter' });
 
     expect(onNavigateRoot).toHaveBeenCalledTimes(1);
     expect(onNavigateUp).toHaveBeenCalledTimes(1);
     expect(onRefresh).toHaveBeenCalledTimes(1);
     expect(onToggleSelect).toHaveBeenCalledWith(entries[0]);
-    expect(onOpen).toHaveBeenCalledWith(entries[1].path);
+    expect(onOpen).toHaveBeenNthCalledWith(1, entries[1].path);
+    expect(onOpen).toHaveBeenNthCalledWith(2, entries[1].path);
+    expect(screen.queryByRole('button', { name: /^open$/i })).not.toBeInTheDocument();
   });
 
   it('disables selection and navigation at root when loading', () => {
@@ -82,7 +86,10 @@ describe('ItemSelectionView', () => {
     fireEvent.click(checkbox);
 
     expect(onToggleSelect).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /open/i }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    const openDemosRow = screen.getByRole('button', { name: /open demos/i });
+    expect(openDemosRow).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(openDemosRow);
+    fireEvent.keyDown(openDemosRow, { key: 'Enter' });
+    expect(onOpen).not.toHaveBeenCalled();
   });
 });

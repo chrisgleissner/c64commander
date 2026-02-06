@@ -58,10 +58,12 @@ env:
 
 # Verify we're back in the app - use optional assertions for resilience
 - extendedWaitUntil:
-    visible: "Home"
+    visible:
+      id: "tab-home"
     timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
-    visible: "Play"
+    visible:
+      id: "tab-play"
     timeout: ${SHORT_TIMEOUT}
 
 - takeScreenshot: playlist-return

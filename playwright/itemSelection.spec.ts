@@ -35,7 +35,7 @@ const openRemoteFolder = async (container: Page, name: string) => {
   await waitForFtpIdle(container);
   await expect(container.getByText(name, { exact: true })).toBeVisible({ timeout: 10000 });
   const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
-  await row.getByRole('button', { name: 'Open' }).click();
+  await row.click();
 };
 
 const selectEntryCheckbox = async (container: Page, name: string) => {
@@ -183,11 +183,11 @@ test.describe('Item Selection Dialog UX', () => {
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await waitForFtpIdle(dialog);
     await snap(page, testInfo, 'c64u-browser-opened');
+    await expect(dialog.getByRole('button', { name: /^Open$/i })).toHaveCount(0);
 
-    // Find and select a folder checkbox (row with Open button)
+    // Find and select a folder checkbox row.
     const firstFolderRow = page
-      .locator('[data-testid="source-entry-row"]')
-      .filter({ has: page.getByRole('button', { name: 'Open' }) })
+      .locator('[data-testid="source-entry-row"][data-entry-type="dir"]')
       .first();
     const checkbox = firstFolderRow.getByRole('checkbox').first();
     await checkbox.click();
@@ -199,6 +199,34 @@ test.describe('Item Selection Dialog UX', () => {
     await expect(confirmButton).toBeEnabled();
     
     await snap(page, testInfo, 'confirm-button-visible');
+  });
+
+  test('folder row tap navigates and checkbox selection does not navigate', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    const dialog = page.getByRole('dialog');
+    await clickSourceSelectionButton(dialog, 'C64 Ultimate');
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
+
+    const usbRow = dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first();
+    await usbRow.getByRole('checkbox').click();
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByText('Games', { exact: true })).toHaveCount(0);
+    await snap(page, testInfo, 'folder-checkbox-selected-no-navigation');
+
+    await usbRow.click();
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'folder-row-navigation');
+
+    await ensureRemoteRoot(dialog);
+    const usbRowKeyboard = dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first();
+    await usbRowKeyboard.focus();
+    await page.keyboard.press('Enter');
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'folder-row-keyboard-navigation');
   });
 
   test('Play page: C64 Ultimate full flow adds items', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -228,10 +256,9 @@ test.describe('Item Selection Dialog UX', () => {
       return data.operation === 'list' && (data.path ?? '').includes('/Usb0');
     });
 
-    // Select a folder (row with Open action)
+    // Select a folder row.
     const firstCheckbox = page
-      .locator('[data-testid="source-entry-row"]')
-      .filter({ has: page.getByRole('button', { name: 'Open' }) })
+      .locator('[data-testid="source-entry-row"][data-entry-type="dir"]')
       .first()
       .getByRole('checkbox');
     await firstCheckbox.click();
@@ -315,10 +342,9 @@ test.describe('Item Selection Dialog UX', () => {
       await snap(page, testInfo, 'usb2-opened');
     }
 
-    // Select a disk folder (row with Open action)
+    // Select a disk folder row.
     const firstCheckbox = page
-      .locator('[data-testid="source-entry-row"]')
-      .filter({ has: page.getByRole('button', { name: 'Open' }) })
+      .locator('[data-testid="source-entry-row"][data-entry-type="dir"]')
       .first()
       .getByRole('checkbox');
     await firstCheckbox.click();

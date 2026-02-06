@@ -8,7 +8,8 @@ env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Play"
+- tapOn:
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Play Files"
     timeout: ${SHORT_TIMEOUT}

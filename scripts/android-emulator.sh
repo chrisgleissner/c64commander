@@ -124,13 +124,13 @@ check_prereqs() {
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
 
-  if [[ ! -x "/dev/kvm" ]]; then
-    missing+=("kvm")
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Missing prerequisites: ${missing[*]}" >&2
+    return 1
   fi
 
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    echo "Missing prerequisites: ${missing[*]}"
-    return 1
+  if [[ ! -x "/dev/kvm" ]]; then
+    echo "Warning: /dev/kvm not accessible; continuing without KVM acceleration." >&2
   fi
 
   return 0
@@ -220,6 +220,16 @@ wait_for_boot() {
 
 install_apk() {
   local apk_path="$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk"
+  if [[ ! -f "$apk_path" ]]; then
+    local debug_dir="$ROOT_DIR/android/app/build/outputs/apk/debug"
+    if [[ -d "$debug_dir" ]]; then
+      apk_path=$(ls -1 "$debug_dir"/*.apk 2>/dev/null | sort | head -n 1)
+    fi
+  fi
+  if [[ -z "$apk_path" || ! -f "$apk_path" ]]; then
+    echo "APK not found under $ROOT_DIR/android/app/build/outputs/apk/debug" >&2
+    exit 1
+  fi
   local emulator_id
   emulator_id="$(get_emulator_id)"
   if [[ -z "$emulator_id" ]]; then
