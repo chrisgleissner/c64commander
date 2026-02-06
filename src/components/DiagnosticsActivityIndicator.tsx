@@ -18,7 +18,7 @@ const IndicatorDot = ({ colorClass, count, animate, testId, ariaLabel }: Indicat
     return (
         <span
             className={cn(
-                'relative inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-[8px] font-semibold leading-none',
+                'relative inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold leading-none',
                 colorClass,
                 animate ? 'animate-pulse-soft' : null,
             )}
@@ -46,20 +46,24 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
             data-testid="diagnostics-activity-indicator"
             data-diagnostics-open-trigger="true"
         >
-            <IndicatorDot
-                colorClass="bg-diagnostics-rest"
-                count={restCount}
-                animate={restActive}
-                testId="diagnostics-activity-rest"
-                ariaLabel="REST activity"
-            />
-            <IndicatorDot
-                colorClass="bg-diagnostics-ftp"
-                count={ftpCount}
-                animate={ftpActive}
-                testId="diagnostics-activity-ftp"
-                ariaLabel="FTP activity"
-            />
+            {restCount > 0 ? (
+                <IndicatorDot
+                    colorClass="bg-diagnostics-rest"
+                    count={restCount}
+                    animate={restActive}
+                    testId="diagnostics-activity-rest"
+                    ariaLabel="REST activity"
+                />
+            ) : null}
+            {ftpCount > 0 ? (
+                <IndicatorDot
+                    colorClass="bg-diagnostics-ftp"
+                    count={ftpCount}
+                    animate={ftpActive}
+                    testId="diagnostics-activity-ftp"
+                    ariaLabel="FTP activity"
+                />
+            ) : null}
             {errorCount > 0 ? (
                 <IndicatorDot
                     colorClass="bg-diagnostics-error"

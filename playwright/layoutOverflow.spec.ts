@@ -497,4 +497,16 @@ test.describe('Layout overflow safeguards', () => {
       await expectNoHorizontalOverflow(page);
     }
   });
+
+  test('AppBar header has safe-area top padding on all pages', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const routes = ['/', '/play', '/disks', '/config', '/settings'];
+    for (const route of routes) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      const header = page.locator('header').first();
+      await expect(header).toBeVisible();
+      const hasSafeClass = await header.evaluate((el: HTMLElement) => el.classList.contains('pt-safe'));
+      expect(hasSafeClass, `header on ${route} should have pt-safe class`).toBe(true);
+      await snap(page, testInfo, `safe-area-${route.replace('/', 'root').replace(/\//g, '-')}`);
+    }
+  });
 });

@@ -71,7 +71,23 @@ test.describe('Home header and diagnostics overlay', () => {
         ]);
         expect((diagnosticsBox?.x ?? 0) + (diagnosticsBox?.width ?? 0)).toBeLessThan(connectivityBox?.x ?? Number.MAX_SAFE_INTEGER);
 
+        await page.addInitScript(() => {
+            const now = Date.now();
+            type TraceEvent = { id: string; timestamp: string; relativeMs: number; type: string; origin: string; correlationId: string; data: Record<string, unknown> };
+            (window as Window & { __c64uSeedTraces?: TraceEvent[] }).__c64uSeedTraces = [
+                { id: 'EVT-dot-1', timestamp: new Date(now).toISOString(), relativeMs: 0, type: 'rest-response', origin: 'user', correlationId: 'COR-dot-1', data: { status: 200, durationMs: 5, error: null } },
+                { id: 'EVT-dot-2', timestamp: new Date(now + 5).toISOString(), relativeMs: 5, type: 'ftp-operation', origin: 'user', correlationId: 'COR-dot-2', data: { operation: 'list', path: '/', result: 'success', target: 'real-device' } },
+            ];
+        });
         await page.goto('/', { waitUntil: 'domcontentloaded' });
+        await page.evaluate(() => {
+            const tracing = (window as Window & {
+                __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
+                __c64uSeedTraces?: TraceEvent[];
+            }).__c64uTracing;
+            const seed = (window as Window & { __c64uSeedTraces?: TraceEvent[] }).__c64uSeedTraces ?? [];
+            tracing?.seedTraces?.(seed);
+        });
         const restDot = page.getByTestId('diagnostics-activity-rest');
         const ftpDot = page.getByTestId('diagnostics-activity-ftp');
         await expect(restDot).toBeVisible();

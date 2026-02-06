@@ -1,8 +1,7 @@
-# PLANS.md — Vitest Environment Stabilisation
+# PLANS.md — Local File Playback, System UI Overlap, Indicator Icons
 
 ## Goal
-Establish industry-grade Vitest environment configuration with proper Node/jsdom separation,
-clean setup files, VS Code/CLI parity, and fully green test gates.
+Fix local SID/SIT playback, Android status bar overlap, and indicator icon UX.
 
 ## Non-negotiables
 - Follow `./build` as the authoritative local pipeline.
@@ -11,41 +10,71 @@ clean setup files, VS Code/CLI parity, and fully green test gates.
 
 ---
 
-## 1. Setup File Hygiene
-- [x] Remove `bootstrapDom()` — vitest's jsdom environment provides window/document; manual JSDOM creation is redundant and fragile.
-- [x] Remove `installVitestCompat()` — vitest 3.2.4 natively provides `vi.mocked`, `vi.stubEnv`, `vi.stubGlobal`, `vi.setSystemTime`, `vi.runAllTimersAsync`.
-- [x] Rewrite `tests/setup.ts`: shared logic + jsdom polyfills guarded by `typeof window !== 'undefined'`.
-- [x] Ensure Node-env tests receive no DOM globals from setupFiles.
-- [x] Ensure `__C64U_NATIVE_OVERRIDE__` is set only when `window` exists.
+## Part A — Local File Playback Failure
 
-## 2. Environment Separation
-- [x] Keep `jsdom` as default environment (majority of tests need it).
-- [x] Add `environmentMatchGlobs` in `vitest.config.ts` for pure-Node test patterns.
-- [x] Verify existing `@vitest-environment` per-file directives are correct.
-- [x] Confirm no service-level test depends on jsdom.
-- [x] Confirm no DOM test relies on Node-only globals.
+### Root Cause Analysis
 
-## 3. VS Code / CLI Parity
-- [x] Add `vitest.configFile` setting to `.vscode/settings.json` pointing to `vitest.config.ts`.
-- [x] Verify `npm test`, `npx vitest`, and VS Code Test Explorer use identical configuration.
+**Folder grouping "/" bug**: `createLocalSourceFromPicker` in `localSourcesStore.ts`
+hardcodes `rootPath: '/'` for SAF sources regardless of the `rootName` received
+from the Android picker. Fix: use `buildRootPath(rootName)` consistently.
 
-## 4. Capacitor / Platform Mocking
-- [x] Verify `__C64U_NATIVE_OVERRIDE__` is platform-safe (guarded by window check).
-- [x] Ensure Capacitor HTTP mock behaves deterministically in both environments.
+**Playback failure "Local file unavailable"**: Two interrelated issues:
+1. `playItem()` in `PlayFilesPage.tsx` pre-checks `item.request.file` and throws
+   before attempting lazy resolution. After playlist hydration from localStorage,
+   a race condition can leave `file` undefined when `localSourceTreeUris` is empty
+   during first render.
+2. No fallback resolution at play time: if the file ref is missing, the code does
+   not attempt to rebuild it from the persisted sourceId + treeUri.
 
-## 5. Test Execution Gates
-- [x] Unit tests: `npm test` — 116 files, 668 tests, all pass.
-- [x] Playwright E2E: `npx playwright test --grep-invert @screenshots` — 302 tests, all pass.
-- [x] Maestro tests: requires Android emulator (not available locally; runs in CI).
-- [x] Build: `npm run build` — succeeds.
+Fix: Add lazy file resolution in `playItem` that looks up the treeUri from
+`localSourceTreeUris` and builds a file reference on-demand if
+`item.request.file` is undefined.
 
-## 6. Screenshot Regeneration
-- [x] Run `npm run screenshots` to regenerate screenshots — 8 tests, 40 screenshots regenerated.
-- [x] Verify screenshot artifacts under `doc/img/` are updated.
+### Tasks
 
-## 7. Final Verification
-- [x] `./build --skip-apk` completes green (install, format, build, unit tests, Playwright E2E, Android JVM tests).
-- [x] PLANS.md fully checked off.
+- [ ] A1: Fix `rootPath` in `createLocalSourceFromPicker` to use `buildRootPath(rootName)`
+- [ ] A2: Add lazy file resolution in `playItem` for local sources without file ref
+- [ ] A3: Add unit tests for persistence correctness (rootPath, sourceId, treeUri)
+- [ ] A4: Add unit test: hydration produces valid file ref when treeUri is available
+- [ ] A5: Add unit test: playback router blob correctness matches scripts/ uploader
+- [ ] A6: Add Playwright test: local file playback path does not throw unavailable error
+
+## Part B — Android System UI Overlap
+
+### Root Cause Analysis
+
+`AppBar.tsx` header uses `fixed top-0` positioning without accounting for
+`env(safe-area-inset-top)`. The CSS already has a `.pt-safe` utility class.
+
+Fix: Add `padding-top: env(safe-area-inset-top)` to the AppBar header element.
+
+### Tasks
+
+- [ ] B1: Add safe-area top padding to AppBar header
+- [ ] B2: Add/update Playwright test verifying top UI does not overlap status bar
+
+## Part C — Indicator Icons UX
+
+### Root Cause Analysis
+
+`DiagnosticsActivityIndicator` always renders REST and FTP dots even at count 0.
+Error dot is already conditionally hidden. Dots are `h-3.5 w-3.5` (~14px).
+
+Fix: Conditionally render REST/FTP dots like error dot. Increase size ~40%.
+
+### Tasks
+
+- [ ] C1: Conditionally hide REST dot when restCount == 0
+- [ ] C2: Conditionally hide FTP dot when ftpCount == 0
+- [ ] C3: Increase indicator dot size by ~40% (h-3.5 -> h-5, w-3.5 -> w-5, text)
+- [ ] C4: Update existing tests for new conditional visibility behavior
+
+## Verification
+
+- [ ] V1: `npm run test` green
+- [ ] V2: `npm run lint` green
+- [ ] V3: `npm run build` green
+- [ ] V4: Full `./build` green
 
 ---
 

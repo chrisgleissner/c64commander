@@ -54,7 +54,7 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
   return (
     <header
       ref={headerRef}
-      className="fixed top-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border"
+      className="fixed top-0 left-0 right-0 z-40 bg-background/80 backdrop-blur-lg border-b border-border pt-safe"
     >
       <div className="container py-4 space-y-3">
         <div className="flex items-center justify-between gap-3">

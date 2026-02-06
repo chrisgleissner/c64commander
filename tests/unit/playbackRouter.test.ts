@@ -226,4 +226,50 @@ describe('playbackRouter', () => {
   it('throws on unsupported formats', () => {
     expect(() => buildPlayPlan({ source: 'local', path: 'demo.txt' })).toThrow('Unsupported');
   });
+
+  it('local SID blob upload sends correct bytes matching the file content', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44, 0x00, 0x02]); // PSID header stub
+    const file = {
+      name: 'test.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => sidBytes.buffer.slice(0),
+    };
+    const plan = buildPlayPlan({ source: 'local', path: '/test.sid', file });
+    await executePlayPlan(api as any, plan);
+    expect(api.playSidUpload).toHaveBeenCalledTimes(1);
+    const blob = api.playSidUpload.mock.calls[0][0] as Blob;
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.size).toBe(sidBytes.byteLength);
+  });
+
+  it('local SID blob upload content length matches original file size', async () => {
+    const api = createApiMock();
+    const content = new Uint8Array(1024);
+    content.fill(0x42);
+    const file = new File([content], 'large.sid', { type: 'application/octet-stream' });
+    const plan = buildPlayPlan({ source: 'local', path: '/large.sid', file });
+    await executePlayPlan(api as any, plan);
+    const blob = api.playSidUpload.mock.calls[0][0] as Blob;
+    expect(blob.size).toBe(1024);
+  });
+
+  it('local file arrayBuffer is stable across repeated reads', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
+    const file = {
+      name: 'stable.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => sidBytes.buffer,
+    };
+    const plan = buildPlayPlan({ source: 'local', path: '/stable.sid', file });
+    await executePlayPlan(api as any, plan);
+    // Second execution with same file
+    await executePlayPlan(api as any, plan);
+    const blob1 = api.playSidUpload.mock.calls[0][0] as Blob;
+    const blob2 = api.playSidUpload.mock.calls[1][0] as Blob;
+    const bytes1 = new Uint8Array(await new Response(blob1).arrayBuffer());
+    const bytes2 = new Uint8Array(await new Response(blob2).arrayBuffer());
+    expect(bytes1).toEqual(bytes2);
+  });
 });

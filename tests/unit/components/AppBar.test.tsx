@@ -44,4 +44,11 @@ describe('AppBar', () => {
         const position = activity.compareDocumentPosition(connectivity);
         expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
+
+    it('applies pt-safe class for Android status bar inset', () => {
+        const { container } = render(<AppBar title="Test" />);
+
+        const header = container.querySelector('header');
+        expect(header).toHaveClass('pt-safe');
+    });
 });

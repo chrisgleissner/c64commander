@@ -17,7 +17,7 @@ vi.mock('@/hooks/useDiagnosticsActivity', () => ({
 }));
 
 describe('DiagnosticsActivityIndicator', () => {
-    it('renders REST/FTP indicators and hides error when empty', () => {
+    it('hides all indicators when all counts are zero', () => {
         mockActivity.snapshot = {
             restCount: 0,
             ftpCount: 0,
@@ -28,8 +28,8 @@ describe('DiagnosticsActivityIndicator', () => {
 
         render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
 
-        expect(screen.getByTestId('diagnostics-activity-rest')).toBeInTheDocument();
-        expect(screen.getByTestId('diagnostics-activity-ftp')).toBeInTheDocument();
+        expect(screen.queryByTestId('diagnostics-activity-rest')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('diagnostics-activity-ftp')).not.toBeInTheDocument();
         expect(screen.queryByTestId('diagnostics-activity-error')).not.toBeInTheDocument();
     });
 
@@ -56,6 +56,54 @@ describe('DiagnosticsActivityIndicator', () => {
         expect(rest).toHaveTextContent('2');
         expect(ftp).toHaveTextContent('1');
         expect(error).toHaveTextContent('3');
+    });
+
+    it('shows only REST indicator when only REST count is non-zero', () => {
+        mockActivity.snapshot = {
+            restCount: 5,
+            ftpCount: 0,
+            errorCount: 0,
+            restInFlight: 0,
+            ftpInFlight: 0,
+        };
+
+        render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
+
+        expect(screen.getByTestId('diagnostics-activity-rest')).toBeInTheDocument();
+        expect(screen.queryByTestId('diagnostics-activity-ftp')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('diagnostics-activity-error')).not.toBeInTheDocument();
+    });
+
+    it('shows only FTP indicator when only FTP count is non-zero', () => {
+        mockActivity.snapshot = {
+            restCount: 0,
+            ftpCount: 3,
+            errorCount: 0,
+            restInFlight: 0,
+            ftpInFlight: 0,
+        };
+
+        render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
+
+        expect(screen.queryByTestId('diagnostics-activity-rest')).not.toBeInTheDocument();
+        expect(screen.getByTestId('diagnostics-activity-ftp')).toBeInTheDocument();
+        expect(screen.queryByTestId('diagnostics-activity-error')).not.toBeInTheDocument();
+    });
+
+    it('renders indicator dots at increased size (h-5 w-5)', () => {
+        mockActivity.snapshot = {
+            restCount: 1,
+            ftpCount: 1,
+            errorCount: 1,
+            restInFlight: 0,
+            ftpInFlight: 0,
+        };
+
+        render(<DiagnosticsActivityIndicator onClick={() => undefined} />);
+
+        const rest = screen.getByTestId('diagnostics-activity-rest');
+        expect(rest).toHaveClass('h-5');
+        expect(rest).toHaveClass('w-5');
     });
 
     it('invokes click handler', () => {

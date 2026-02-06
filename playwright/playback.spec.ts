@@ -305,6 +305,30 @@ test.describe('Playback file browser', () => {
     await snap(page, testInfo, 'local-playback-uploaded');
   });
 
+  test('local SID playback does not throw unavailable error', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    await addLocalFolder(page, path.resolve('playwright/fixtures/local-play-sids'));
+    await expect(page.getByTestId('playlist-item')).toHaveCount(2);
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.sidplayRequests.length > 0);
+
+    const hasUnavailableError = await page.evaluate(() => {
+      const raw = localStorage.getItem('c64u_app_logs');
+      if (!raw) return false;
+      try {
+        const logs = JSON.parse(raw) as Array<{ message: string }>;
+        return logs.some((entry) => entry.message.includes('Local file unavailable'));
+      } catch {
+        return false;
+      }
+    });
+    expect(hasUnavailableError).toBe(false);
+    await snap(page, testInfo, 'local-no-unavailable-error');
+  });
+
   test('playback errors emit log entries', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected playback failure warnings for unreachable device.');
     server.setReachable(false);
