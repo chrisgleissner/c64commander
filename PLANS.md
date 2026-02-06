@@ -86,6 +86,13 @@ Get a green local build (unit, Playwright, Maestro, Android) and a green CI buil
 - [ ] On first failure, rollback the offending change and mark excluded.
 - [ ] Continue until all safe changes are reapplied.
 
+## Change Classification
+- [x] UX/UI only: diagnostics/config/play screenshots under doc/img; Settings log level labels + button variant; PlaybackSettingsPanel songlength metadata display.
+- [x] Explicitly requested fix: manual SID playback script + docs entry; local playback path validation.
+- [x] Internal refactor: logging error detail builder and structured error logging updates in C64 API, FTP, disk import.
+- [x] Test-related change: unit test updates for logging + C64 API; tests/setup JSDOM + vitest compat; test probe env detection in platform + trace targets.
+- [x] Risky/unrelated: none identified yet.
+
 ## Test Gates
 - [ ] Run full unit tests after each reapplication.
 - [ ] Record pass/fail status after each step.
