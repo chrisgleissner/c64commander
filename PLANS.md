@@ -76,9 +76,9 @@ Get a green local build (unit, Playwright, Maestro, Android) and a green CI buil
 - [x] Record failing commit SHA and timestamp: 616dd3c205e9918a75b12215b42d20b118063a20 at 2026-02-05T22:49:18+00:00
 
 ## Diff Preservation
-- [ ] Generate full diff between last known good and current HEAD.
-- [ ] Save diff to ci-regression-diff.patch (read-only reference).
-- [ ] Commit diff file.
+- [x] Generate full diff between last known good and current HEAD.
+- [x] Save diff to ci-regression-diff.patch (read-only reference).
+- [x] Commit diff file.
 
 ## Reapplication Steps
 - [ ] Reset branch to last known good commit.
