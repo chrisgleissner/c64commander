@@ -81,7 +81,7 @@ Get a green local build (unit, Playwright, Maestro, Android) and a green CI buil
 - [x] Commit diff file.
 
 ## Reapplication Steps
-- [ ] Reset branch to last known good commit.
+- [x] Reset branch to last known good commit.
 - [ ] Reapply changes in smallest logical units.
 - [ ] On first failure, rollback the offending change and mark excluded.
 - [ ] Continue until all safe changes are reapplied.
