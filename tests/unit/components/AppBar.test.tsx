@@ -6,7 +6,6 @@ const navigateMock = vi.fn();
 
 vi.mock('react-router-dom', () => ({
     useNavigate: () => navigateMock,
-    useLocation: () => ({ pathname: '/play' }),
 }));
 
 const requestDiagnosticsOpen = vi.fn();
@@ -32,7 +31,7 @@ describe('AppBar', () => {
         fireEvent.click(screen.getByTestId('diagnostics-activity-indicator'));
 
         expect(requestDiagnosticsOpen).toHaveBeenCalledWith('actions');
-        expect(navigateMock).toHaveBeenCalledWith('/settings');
+        expect(navigateMock).not.toHaveBeenCalled();
     });
 
     it('renders activity indicator before connectivity indicator', () => {

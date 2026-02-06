@@ -24,8 +24,8 @@ const ensureRemoteRoot = async (page: Page) => {
 };
 
 const openRemoteFolder = async (page: Page, name: string) => {
-  const row = page.getByText(name, { exact: true }).locator('..').locator('..').locator('..');
-  await row.getByRole('button', { name: 'Open' }).click();
+  const row = page.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  await row.click();
 };
 
 test.describe('Navigation boundaries and edge cases', () => {

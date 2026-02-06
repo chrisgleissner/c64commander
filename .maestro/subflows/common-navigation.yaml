@@ -5,31 +5,44 @@ env:
 tags:
   - subflow
 ---
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue in Demo Mode"
+          file: continue-demo.yaml
+      - tapOn:
+          text: "Continue in Demo Mode"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            id: "tab-play"
+          timeout: ${TIMEOUT}
 - tapOn:
-    text: "Continue in Demo Mode"
-    optional: true
-- extendedWaitUntil:
-    visible: "Play"
-    timeout: ${TIMEOUT}
-- tapOn: "Play"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Play Files"
     timeout: ${TIMEOUT}
 - assertVisible: "Play Files"
 - takeScreenshot: play-tab
-- tapOn: "Settings"
+- tapOn:
+    id: "tab-settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Settings"
 - takeScreenshot: settings-tab
-- tapOn: "Config"
+- tapOn:
+    id: "tab-config"
 - extendedWaitUntil:
     visible: "Config"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Config"
 - takeScreenshot: config-tab
-- tapOn: "Home"
+- tapOn:
+    id: "tab-home"
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}

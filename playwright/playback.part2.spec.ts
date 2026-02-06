@@ -29,8 +29,8 @@ const selectEntryCheckbox = async (container: Page | Locator, name: string) => {
 };
 
 const openRemoteFolder = async (container: Page | Locator, name: string) => {
-  const row = container.getByText(name, { exact: true }).locator('..').locator('..').locator('..');
-  await row.getByRole('button', { name: 'Open' }).click();
+  const row = container.locator('[data-testid="source-entry-row"]', { hasText: name }).first();
+  await row.click();
 };
 
 const ensureRemoteRoot = async (container: Page | Locator) => {

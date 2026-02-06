@@ -48,7 +48,8 @@ env:
     text: "Continue in Demo Mode"
     optional: true
 - extendedWaitUntil:
-    visible: "Home"
+    visible:
+      id: "tab-home"
     timeout: ${SHORT_TIMEOUT}
 
 - takeScreenshot: picker-cancelled

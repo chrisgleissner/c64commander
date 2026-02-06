@@ -307,10 +307,10 @@ test.describe('UI coverage', () => {
     await ensureRemoteRoot(page);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'c64u-root');
-    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Disk 1.d64', { exact: true }).locator('..').locator('..').getByRole('checkbox').click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Games' }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Turrican II' }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Disk 1.d64' }).first().getByRole('checkbox').click();
     await page.getByTestId('add-items-confirm').click();
     await expect(page.getByTestId('add-items-progress')).toBeVisible();
     await snap(page, testInfo, 'progress-visible');
@@ -333,13 +333,13 @@ test.describe('UI coverage', () => {
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
-    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first().click();
     await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
-    await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Games' }).first().click();
     await expect(dialog.getByText('Turrican II', { exact: true })).toBeVisible();
-    await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Turrican II' }).first().click();
     await expect(dialog.getByText('Disk 1.d64', { exact: true })).toBeVisible();
-    await dialog.getByText('Disk 1.d64', { exact: true }).locator('..').locator('..').getByRole('checkbox').click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Disk 1.d64' }).first().getByRole('checkbox').click();
     await snap(page, testInfo, 'selection-made');
 
     await page.getByTestId('add-items-filter').fill('Disk');
@@ -362,9 +362,9 @@ test.describe('UI coverage', () => {
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await ensureRemoteRoot(page);
-    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Games', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Turrican II', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Games' }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Turrican II' }).first().click();
     await snap(page, testInfo, 'deep-folder');
 
     const hasOverflow = await page.evaluate(

@@ -1,18 +1,14 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { toast } from '@/hooks/use-toast';
 import { addLog } from '@/lib/logging';
-import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { reportUserError } from '@/lib/uiErrors';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { getPlayCategory } from '@/lib/playback/fileTypes';
 import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
-import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
-import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
-import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import type { AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
@@ -190,20 +186,11 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
 
       const playlistItems: PlaylistItem[] = [];
       let discoveredSonglengths: SonglengthsFileEntry[] | undefined;
-      if (source.type === 'local' || source.type === 'ultimate') {
-        const isUltimateSource = source.type === 'ultimate';
+      if (source.type === 'local') {
         const treeUri = localSourceTreeUris.get(source.id);
         const entriesMap = localEntriesBySourceId.get(source.id);
         const knownSonglengths = new Set(songlengthsFiles.map((entry) => entry.path));
         const discovered: SonglengthsFileEntry[] = [];
-        const base64ToArrayBuffer = (base64: string) => {
-          const binary = atob(base64);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i += 1) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-          return bytes.buffer;
-        };
         const addSonglengthsEntry = (path: string, file?: LocalPlayFile) => {
           if (!file) return;
           const normalizedPath = normalizeSourcePath(path);
@@ -214,23 +201,6 @@ export const createAddFileSelectionsHandler = (deps: AddFileSelectionsDeps) => {
         const resolveSonglengthsFile = (entryPath: string, entryName: string, modifiedAt?: string | null) => {
           const normalizedPath = normalizeSourcePath(entryPath);
           const lastModified = parseModifiedAt(modifiedAt);
-          if (isUltimateSource) {
-            return {
-              name: entryName,
-              webkitRelativePath: normalizedPath,
-              lastModified: lastModified ?? Date.now(),
-              arrayBuffer: async () => {
-                const { deviceHost, password } = getC64APIConfigSnapshot();
-                const response = await readFtpFile({
-                  host: normalizeFtpHost(deviceHost),
-                  port: getStoredFtpPort(),
-                  password: password ?? '',
-                  path: normalizedPath,
-                });
-                return base64ToArrayBuffer(response.data);
-              },
-            } as LocalPlayFile;
-          }
           const entry = entriesMap?.get(normalizedPath);
           return resolveLocalRuntimeFile(source.id, normalizedPath)
             || (entry?.uri

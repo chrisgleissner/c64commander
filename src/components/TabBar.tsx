@@ -23,10 +23,13 @@ export function TabBar() {
         {tabs.map((tab) => {
           const isActive = location.pathname === tab.path;
           const Icon = tab.icon;
+          const tabId = `tab-${tab.label.toLowerCase().replace(/\s+/g, '-')}`;
 
           return (
             <button
               key={tab.path}
+              id={tabId}
+              data-testid={tabId}
               onClick={wrapUserEvent(() => navigate(tab.path), 'click', 'Tab', { title: tab.label }, 'Tab')}
               className={`tab-item touch-none ${isActive ? 'active' : ''}`}
             >

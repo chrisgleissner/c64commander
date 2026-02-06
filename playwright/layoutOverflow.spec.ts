@@ -209,13 +209,11 @@ test.describe('Layout overflow safeguards', () => {
     const dialog = page.getByRole('dialog');
     await expectDialogWithinViewport(page, dialog);
     await expect(dialog.getByText('Usb0', { exact: true })).toBeVisible();
-    await dialog.getByText('Usb0', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Long-Names-For-Overflow-Testing', { exact: true }).locator('..').locator('..').locator('..').getByRole('button', { name: 'Open' }).click();
-    await dialog.getByText('Super-Long-Folder-Name-That-Is-Definitely-Too-Wide-For-Mobile-Viewports-And-Should-Wrap', { exact: true })
-      .locator('..')
-      .locator('..')
-      .locator('..')
-      .getByRole('button', { name: 'Open' })
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first().click();
+    await dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Long-Names-For-Overflow-Testing' }).first().click();
+    await dialog
+      .locator('[data-testid="source-entry-row"]', { hasText: 'Super-Long-Folder-Name-That-Is-Definitely-Too-Wide-For-Mobile-Viewports-And-Should-Wrap' })
+      .first()
       .click();
     await snap(page, testInfo, 'ftp-long-names');
     await expectNoHorizontalOverflow(page);

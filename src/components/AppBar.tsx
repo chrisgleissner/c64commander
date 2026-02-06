@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { useLayoutEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { ConnectivityIndicator } from '@/components/ConnectivityIndicator';
 import { DiagnosticsActivityIndicator } from '@/components/DiagnosticsActivityIndicator';
 import { requestDiagnosticsOpen } from '@/lib/diagnostics/diagnosticsOverlay';
@@ -13,8 +12,6 @@ type Props = {
 };
 
 export function AppBar({ title, subtitle, leading, children }: Props) {
-  const navigate = useNavigate();
-  const location = useLocation();
   const headerRef = useRef<HTMLElement | null>(null);
 
   useLayoutEffect(() => {
@@ -46,9 +43,6 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
 
   const handleDiagnosticsOpen = () => {
     requestDiagnosticsOpen('actions');
-    if (location.pathname !== '/settings') {
-      navigate('/settings');
-    }
   };
 
   return (
@@ -80,4 +74,3 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
     </header>
   );
 }
-

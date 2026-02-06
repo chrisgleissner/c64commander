@@ -7,5 +7,6 @@ tags:
 - tapOn:
     text: "Continue in Demo Mode"
 - extendedWaitUntil:
-    visible: "Home"
+    visible:
+      id: "tab-home"
     timeout: ${SHORT_TIMEOUT}

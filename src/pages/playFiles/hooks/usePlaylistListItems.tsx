@@ -18,6 +18,7 @@ export type PlaylistListItemsOptions = {
   formatBytes: (value?: number | null) => string;
   formatDate: (value?: string | null) => string;
   getParentPath: (value: string) => string;
+  currentPlayingItemId: string | null;
 };
 
 export const usePlaylistListItems = ({
@@ -33,6 +34,7 @@ export const usePlaylistListItems = ({
   formatBytes,
   formatDate,
   getParentPath,
+  currentPlayingItemId,
 }: PlaylistListItemsOptions) =>
   useMemo(() => {
     const items: ActionListItem[] = [];
@@ -81,6 +83,7 @@ export const usePlaylistListItems = ({
           </div>
         ),
         selected: selectedPlaylistIds.has(item.id),
+        isPlaying: currentPlayingItemId === item.id,
         onSelectToggle: (selected) => handlePlaylistSelect(item, selected),
         menuItems,
         actionLabel: 'Play',
@@ -104,4 +107,5 @@ export const usePlaylistListItems = ({
     playlistItemDuration,
     selectedPlaylistIds,
     startPlaylist,
+    currentPlayingItemId,
   ]);

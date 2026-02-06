@@ -16,6 +16,43 @@ const decodeZip = (zipData: number[]) => {
     return Object.fromEntries(Object.entries(files).map(([name, data]) => [name, strFromU8(data)]));
 };
 
+const seedActivityDots = async (page: Page) => {
+    await page.evaluate(() => {
+        const now = Date.now();
+        const events: TraceEvent[] = [
+            {
+                id: `EVT-rest-${now}`,
+                timestamp: new Date(now).toISOString(),
+                relativeMs: 0,
+                type: 'rest-response',
+                origin: 'user',
+                correlationId: `COR-rest-${now}`,
+                data: { status: 200, durationMs: 10, error: null },
+            },
+            {
+                id: `EVT-ftp-${now}`,
+                timestamp: new Date(now + 10).toISOString(),
+                relativeMs: 10,
+                type: 'ftp-operation',
+                origin: 'user',
+                correlationId: `COR-ftp-${now}`,
+                data: { operation: 'list', path: '/', result: 'success', target: 'real-device' },
+            },
+            {
+                id: `EVT-error-${now}`,
+                timestamp: new Date(now + 20).toISOString(),
+                relativeMs: 20,
+                type: 'error',
+                origin: 'user',
+                correlationId: `COR-error-${now}`,
+                data: { message: 'Test error', name: 'Error' },
+            },
+        ];
+        const tracing = (window as Window & { __c64uTracing?: { seedTraces?: (items: TraceEvent[]) => void } }).__c64uTracing;
+        tracing?.seedTraces?.(events);
+    });
+};
+
 test.describe('Home header and diagnostics overlay', () => {
     let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -157,6 +194,38 @@ test.describe('Home header and diagnostics overlay', () => {
             await expect(actionsTab).toHaveAttribute('aria-selected', 'true');
             await snap(page, testInfo, `diagnostics-open-${await indicator.getAttribute('data-testid')}`);
             await dialog.getByRole('button', { name: 'Close' }).click();
+        }
+    });
+
+    test('status indicators open diagnostics as modal without navigation or scroll jump', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+        for (const route of ['/play', '/docs']) {
+            await page.goto(route, { waitUntil: 'domcontentloaded' });
+            await seedActivityDots(page);
+            const existingDialog = page.getByRole('dialog', { name: /Diagnostics/i });
+            if (await existingDialog.isVisible().catch(() => false)) {
+                await existingDialog.getByRole('button', { name: 'Close' }).click();
+                await expect(existingDialog).toBeHidden();
+            }
+            await expect(page.getByTestId('diagnostics-activity-rest')).toBeVisible();
+
+            await page.evaluate(() => window.scrollTo(0, 480));
+            const before = await page.evaluate(() => ({ path: window.location.pathname, scrollY: Math.round(window.scrollY) }));
+
+            await page.getByTestId('diagnostics-activity-rest').click();
+            const dialog = page.getByRole('dialog', { name: /Diagnostics/i });
+            await expect(dialog).toBeVisible();
+
+            const whileOpenPath = await page.evaluate(() => window.location.pathname);
+            expect(whileOpenPath).toBe(before.path);
+            await snap(page, testInfo, `diagnostics-modal-open-${route.replace('/', '')}`);
+
+            await dialog.getByRole('button', { name: 'Close' }).click();
+            await expect(dialog).toBeHidden();
+
+            const after = await page.evaluate(() => ({ path: window.location.pathname, scrollY: Math.round(window.scrollY) }));
+            expect(after.path).toBe(before.path);
+            expect(after.scrollY).toBe(before.scrollY);
+            await snap(page, testInfo, `diagnostics-modal-closed-${route.replace('/', '')}`);
         }
     });
 

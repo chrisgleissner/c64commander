@@ -26,6 +26,16 @@ Use tags to control which tests run on CI versus locally:
 
 The script `run-maestro-gating.sh` automatically uses `ci-critical` filter when `CI=true`.
 
+### Build helper flags
+
+Use the repo build helper to run Maestro flows locally with consistent filtering:
+
+- `./build --test-maestro-ci` runs flows tagged `ci-critical` (CI parity).
+- `./build --test-maestro-all` runs all flows, ignoring `excludeTags`.
+- `./build --test-maestro-tags "+device,+file-picker,-slow"` runs with tag filters.
+
+Tag filters are comma-separated. Prefix `+` to include and `-` to exclude. Unprefixed tags are treated as includes.
+
 ### Use env defaults for config-like values
 
 Define config-like constants (app id, timeouts, fixture names, screenshot names) in `env` with fallbacks. Use the variables in commands so values can be overridden by CI or local runs.
