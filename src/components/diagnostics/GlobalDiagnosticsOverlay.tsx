@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { reportUserError } from '@/lib/uiErrors';
-import { addLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
+import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
@@ -217,7 +217,6 @@ export const GlobalDiagnosticsOverlay = () => {
     setLogs([]);
     setErrorLogs([]);
     setTraceEvents([]);
-    addLog('info', 'Diagnostics cleared from global overlay');
     toast({ title: 'Diagnostics cleared' });
   };
 

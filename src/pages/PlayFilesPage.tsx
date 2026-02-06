@@ -39,6 +39,7 @@ import {
 } from '@/lib/config/configItems';
 import {
   buildEnabledSidMuteUpdates,
+  buildEnabledSidUnmuteUpdates,
   buildEnabledSidRestoreUpdates,
   buildEnabledSidVolumeSnapshot,
   buildEnabledSidVolumeUpdates,
@@ -282,10 +283,18 @@ export default function PlayFilesPage() {
     enablement: { ...enablement },
   }), [buildEnabledSidVolumeSnapshot]);
 
-  const snapshotToUpdates = useCallback((snapshot: SidMuteSnapshot | null | undefined) => {
+  const snapshotToUpdates = useCallback((
+    snapshot: SidMuteSnapshot | null | undefined,
+    currentItems?: typeof sidVolumeItems,
+  ) => {
     if (!snapshot) return {};
-    return { ...snapshot.volumes };
-  }, []);
+    const updates = buildEnabledSidUnmuteUpdates(snapshot.volumes, sidEnablement);
+    if (!currentItems?.length) return updates;
+    const allowedNames = new Set(currentItems.map((item) => item.name));
+    return Object.fromEntries(
+      Object.entries(updates).filter(([name]) => allowedNames.has(name)),
+    );
+  }, [buildEnabledSidUnmuteUpdates, sidEnablement]);
 
   const enqueuePlayTransition = useCallback(async <T,>(task: () => Promise<T>) => {
     const run = playTransitionQueueRef.current.then(task, task);
@@ -1319,13 +1328,13 @@ export default function PlayFilesPage() {
     const api = getC64API();
     try {
       if (isPaused) {
-        const resumeItems = await resolveEnabledSidVolumeItems();
+        const resumeItems = await resolveEnabledSidVolumeItems(true);
         const resumeSnapshot = pauseMuteSnapshotRef.current;
         const wasMuted = resumeSnapshot && resumeItems.length
           ? resumeItems.every((item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options))
           : false;
         if (pauseMuteSnapshotRef.current && resumeItems.length) {
-          await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current), 'Resume');
+          await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), 'Resume');
         }
         await withTimeout(api.machineResume(), 3000, 'Resume');
         pauseMuteSnapshotRef.current = null;
@@ -1457,7 +1466,7 @@ export default function PlayFilesPage() {
       return;
     }
     const snapshot = manualMuteSnapshotRef.current;
-    let updates = snapshotToUpdates(snapshot);
+    let updates = snapshotToUpdates(snapshot, items);
     if (!Object.keys(updates).length) {
       const fallbackIndex = previousVolumeIndexRef.current ?? volumeIndex;
       const target = volumeSteps[fallbackIndex]?.option;

@@ -219,6 +219,14 @@ test.describe('Item Selection Dialog UX', () => {
     await waitForFtpIdle(dialog);
     await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'folder-row-navigation');
+
+    await ensureRemoteRoot(dialog);
+    const usbRowKeyboard = dialog.locator('[data-testid="source-entry-row"]', { hasText: 'Usb0' }).first();
+    await usbRowKeyboard.focus();
+    await page.keyboard.press('Enter');
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByText('Games', { exact: true })).toBeVisible();
+    await snap(page, testInfo, 'folder-row-keyboard-navigation');
   });
 
   test('Play page: C64 Ultimate full flow adds items', async ({ page }: { page: Page }, testInfo: TestInfo) => {

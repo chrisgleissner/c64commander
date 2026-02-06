@@ -1008,6 +1008,60 @@ test.describe('Playback file browser (part 2)', () => {
     await snap(page, testInfo, 'volume-updated');
   });
 
+  test('unmute skips SID volumes disabled while muted', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+          'SID Socket 2': 'Disabled',
+        },
+        'SID Addressing': {
+          'UltiSID 1 Address': 'Unmapped',
+          'UltiSID 2 Address': '$D420',
+        },
+        'Audio Mixer': {
+          'Vol Socket 1': '+6 dB',
+          'Vol UltiSid 2': '+6 dB',
+        },
+      },
+    });
+
+    await page.goto('/play');
+    const muteButton = page.getByTestId('volume-mute');
+    await expect(muteButton).toBeVisible();
+
+    const muteUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await muteButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > muteUpdateCount,
+    );
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1']?.value).toBe('OFF');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2']?.value).toBe('OFF');
+
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Disabled',
+          'SID Socket 2': 'Disabled',
+        },
+      },
+    });
+
+    const unmuteUpdateCount = server.requests.filter(
+      (req) => req.method === 'POST' && req.url.startsWith('/v1/configs'),
+    ).length;
+    await muteButton.click();
+    await waitForRequests(() =>
+      server.requests.filter((req) => req.method === 'POST' && req.url.startsWith('/v1/configs')).length > unmuteUpdateCount,
+    );
+
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol Socket 1']?.value).toBe('OFF');
+    await expect.poll(() => server.getState()['Audio Mixer']['Vol UltiSid 2']?.value).toBe('+6 dB');
+    await snap(page, testInfo, 'unmute-skips-disabled-sid');
+  });
+
   test('volume slider reports min/max bounds', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.request.post(`${server.baseUrl}/v1/configs`, {
       data: {

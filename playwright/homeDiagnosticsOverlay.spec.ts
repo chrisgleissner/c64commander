@@ -288,6 +288,7 @@ test.describe('Home header and diagnostics overlay', () => {
 
         await dialog.getByRole('tab', { name: /^Logs$/i }).click();
         await expect(dialog.getByText('Seed log')).toHaveCount(0);
+        await expect(dialog.getByText('Diagnostics cleared from global overlay')).toHaveCount(0);
 
         await dialog.getByRole('tab', { name: /^Traces$/i }).click();
         await expect(dialog.locator('[data-testid="trace-item-EVT-9100"]')).toHaveCount(0);
