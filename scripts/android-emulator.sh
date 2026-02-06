@@ -124,13 +124,13 @@ check_prereqs() {
     command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
   done
 
-  if [[ ! -x "/dev/kvm" ]]; then
-    missing+=("kvm")
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Missing prerequisites: ${missing[*]}" >&2
+    return 1
   fi
 
-  if [[ ${#missing[@]} -gt 0 ]]; then
-    echo "Missing prerequisites: ${missing[*]}"
-    return 1
+  if [[ ! -x "/dev/kvm" ]]; then
+    echo "Warning: /dev/kvm not accessible; continuing without KVM acceleration." >&2
   fi
 
   return 0
