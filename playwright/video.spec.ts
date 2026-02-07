@@ -249,6 +249,8 @@ test.describe('App video tour', () => {
     let server: Awaited<ReturnType<typeof createMockC64Server>>;
     let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
 
+    test.setTimeout(5 * 60 * 1000);
+
     test.use({
         locale: 'en-US',
         timezoneId: 'UTC',

@@ -64,16 +64,21 @@ const scrollAndCapture = async (page: Page, testInfo: TestInfo, locator: ReturnT
   await captureScreenshot(page, testInfo, relativePath);
 };
 
-const scrollHeadingIntoView = async (page: Page, locator: ReturnType<Page['locator']>) => {
+const getAppBarOffset = async (page: Page) => page.evaluate(() => {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--app-bar-height');
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+});
+
+const scrollHeadingIntoView = async (page: Page, locator: ReturnType<Page['locator']>, extraOffset = 12) => {
   await locator.scrollIntoViewIfNeeded();
-  const offset = await page.evaluate(() => {
-    const raw = getComputedStyle(document.documentElement).getPropertyValue('--app-bar-height');
-    const parsed = Number.parseFloat(raw);
-    return Number.isFinite(parsed) ? parsed : 0;
-  });
-  if (offset > 0) {
-    await page.evaluate((value) => window.scrollBy(0, -value - 8), offset);
-  }
+  const offset = await getAppBarOffset(page);
+  const targetY = await locator.evaluate((node, payload) => {
+    const rect = node.getBoundingClientRect();
+    const desired = rect.top + window.scrollY - payload.offset - payload.extraOffset;
+    return desired < 0 ? 0 : desired;
+  }, { offset, extraOffset });
+  await page.evaluate((value) => window.scrollTo(0, value), targetY);
 };
 
 const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: string) => {
@@ -117,9 +122,10 @@ const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
     if (!label) continue;
     const slug = sanitizeSegment(label);
     const order = orderMap.get(slug) ?? index + 1;
-    await button.scrollIntoViewIfNeeded();
+    await scrollHeadingIntoView(page, button);
     await button.click();
     await page.waitForTimeout(150);
+    await scrollHeadingIntoView(page, button);
     await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, '0')}-${slug}.png`);
     await button.click();
     await page.waitForTimeout(100);
@@ -142,9 +148,10 @@ const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
     if (!label) continue;
     const slug = sanitizeSegment(label);
     const order = orderMap.get(slug) ?? index + 1;
-    await toggle.scrollIntoViewIfNeeded();
+    await scrollHeadingIntoView(page, toggle);
     await toggle.click();
     await page.waitForTimeout(150);
+    await scrollHeadingIntoView(page, toggle);
     await captureScreenshot(page, testInfo, `config/sections/${String(order).padStart(2, '0')}-${slug}.png`);
     await toggle.click();
     await page.waitForTimeout(100);
