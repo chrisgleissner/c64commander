@@ -59,11 +59,16 @@ AUTH ON was not executed in this run because the device is configured for AUTH O
 ## SAFE vs STRESS Coverage
 
 SAFE mode (AUTH OFF) executed:
-- REST: /v1/version, /v1/info, /v1/configs, and a reversible config write + restore.
+- REST: /v1/version, /v1/info, /v1/configs, /v1/drives, reversible config write + restore.
+- REST concurrency probes: /v1/configs and mixed GETs (version/info/drives/configs).
 - FTP: PWD, MKD, CWD, LIST, MLSD; the session later timed out (see below).
 - Mixed: REST GET /v1/version while FTP LIST.
 
-STRESS mode not executed.
+STRESS mode (AUTH OFF) executed:
+- REST: /v1/machine:reset, /v1/files/{path}:create_d64, /v1/drives/{drive}:mount, /v1/drives/{drive}:remove.
+- FTP: same basic command sweep as SAFE.
+
+SID/PRG runner scenarios were skipped (no file paths supplied).
 
 SAFE coverage is partial; endpoints not executed in SAFE are listed under Known Unknowns.
 
@@ -75,11 +80,22 @@ REST cooldowns (SAFE, AUTH OFF):
 
 | Operation | p50 | p90 | p99 | minDelayMs | recommendedDelayMs | maxDelayMs |
 | --- | --- | --- | --- | --- | --- | --- |
-| GET /v1/version | 12 | 12 | 12 | 12 | 12 | 12 |
-| GET /v1/info | 16 | 16 | 16 | 16 | 16 | 16 |
-| GET /v1/configs | 17 | 17 | 17 | 17 | 17 | 17 |
-| PUT /v1/configs/{category}/{item} | 15 | 15 | 15 | 15 | 15 | 15 |
-| PUT /v1/configs/{category}/{item} restore | 22 | 22 | 22 | 22 | 22 | 22 |
+| GET /v1/version | 11 | 35 | 35 | 11 | 35 | 35 |
+| GET /v1/info | 19 | 25 | 25 | 19 | 25 | 25 |
+| GET /v1/configs | 26 | 47 | 47 | 26 | 47 | 47 |
+| GET /v1/drives | 25 | 34 | 34 | 25 | 34 | 34 |
+| PUT /v1/configs/{category}/{item} | 13 | 13 | 13 | 13 | 13 | 13 |
+| PUT /v1/configs/{category}/{item} restore | 24 | 24 | 24 | 24 | 24 | 24 |
+
+REST cooldowns (STRESS, AUTH OFF):
+
+| Operation | p50 | p90 | p99 | minDelayMs | recommendedDelayMs | maxDelayMs |
+| --- | --- | --- | --- | --- | --- | --- |
+| PUT /v1/machine:reset | 34 | 34 | 34 | 34 | 34 | 34 |
+| GET /v1/version (post-reset) | 20 | 20 | 20 | 20 | 20 | 20 |
+| PUT /v1/files/{path}:create_d64 | 181 | 181 | 181 | 181 | 181 | 181 |
+| PUT /v1/drives/{drive}:mount | 739 | 739 | 739 | 739 | 739 | 739 |
+| PUT /v1/drives/{drive}:remove | 112 | 112 | 112 | 112 | 112 | 112 |
 
 FTP cooldowns (SAFE, AUTH OFF):
 
@@ -97,6 +113,10 @@ Observed (SAFE run settings):
 - REST max in-flight configured: 2
 - FTP max sessions configured: 1
 - Mixed max in-flight configured: 2
+
+Observations:
+- REST /v1/configs concurrent: no failures, max latency 47ms (SAFE), 28ms (STRESS).
+- REST mixed concurrent: no failures, max latency 35ms (SAFE), 36ms (STRESS).
 
 No hard firmware limits were observed beyond TCP listen backlogs. See ftpd.cc and httpd.cc for server entry points.
 
@@ -120,6 +140,12 @@ A mixed scenario (REST GET /v1/version + FTP LIST) completed without errors. No 
 - FTP MKD returned 553 (directory may already exist or permissions denied), but CWD succeeded.
 - FTP session timed out after MLSD; MLST and subsequent write commands did not complete in this run.
 
+## Notable STRESS Run Observations
+
+- Machine reset completed and /v1/version responded within 20ms post-reset.
+- Created /USB2/Test/interface-harness.d64, then mounted and removed on drive A.
+- FTP control session timed out after MLSD, consistent with SAFE behavior.
+
 ## Reproduction Commands
 
 SAFE AUTH OFF:
@@ -128,6 +154,12 @@ SAFE AUTH OFF:
 npm install
 npx tsc -p scripts/c64u-interface-contract/tsconfig.json
 node scripts/c64u-interface-contract/dist/run.js --config scripts/c64u-interface-contract/config.safe.authoff.json
+```
+
+Via build helper (SAFE/AUTH OFF):
+
+```bash
+./build --interface-test --interface-test-mode safe --interface-test-auth off --skip-tests --skip-build --skip-apk
 ```
 
 Auth comparison (when AUTH ON is available):
@@ -146,15 +178,21 @@ node scripts/c64u-interface-contract/dist/compare.js --left <run-auth-on> --righ
 ## Known Unknowns
 
 - AUTH ON run has not been executed (device configured for AUTH OFF).
-- STRESS mode data is not available.
-- Many REST endpoints remain unmeasured in SAFE mode (drives, files, streams, machine operations).
+- Many REST endpoints remain unmeasured in SAFE mode (streams, machine operations beyond reset).
 - FTP PORT mode behavior and large transfer performance are not yet measured.
 - Conflict matrix and cross-protocol contention under load are not measured.
+- SID and PRG runner endpoints remain unmeasured (no file paths provided).
 
 ## Run Metadata
 
 SAFE AUTH OFF run:
-- Run ID: 20260207-155809-SAFE-OFF
+- Run ID: 20260207-170209-SAFE-OFF
 - OpenAPI SHA256: e11763d2a1c6ec0da51c6805cf05fdeb5674c59bbecce44fa9800430391190dc
 - Firmware SHA1: b831b01f97859b02f3f52f003efb88d474648dec
-- Repo SHA1: 74cfcf3ac4bb4aba5b1ca1a64b15fc10e2dafaf8
+- Repo SHA1: 160e30140993c368aca50e704f0ae146f2d06d94
+
+STRESS AUTH OFF run:
+- Run ID: 20260207-170255-STRESS-OFF
+- OpenAPI SHA256: e11763d2a1c6ec0da51c6805cf05fdeb5674c59bbecce44fa9800430391190dc
+- Firmware SHA1: b831b01f97859b02f3f52f003efb88d474648dec
+- Repo SHA1: 160e30140993c368aca50e704f0ae146f2d06d94

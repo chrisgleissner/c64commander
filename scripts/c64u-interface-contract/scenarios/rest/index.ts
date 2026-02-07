@@ -3,6 +3,7 @@ import { Semaphore } from "../../lib/concurrency.js";
 import { delay } from "../../lib/timing.js";
 import type { HarnessConfig } from "../../lib/config.js";
 import type { LogEventInput } from "../../lib/logging.js";
+import { FtpClient } from "../../lib/ftpClient.js";
 
 export type RestScenarioContext = {
     rest: RestClient;
@@ -27,6 +28,10 @@ export type ConcurrencyObservation = {
 
 const SAFE_CATEGORY_BLOCKLIST = ["network", "wifi", "modem", "drive", "http", "ftp", "telnet", "hostname", "password"];
 const SAFE_ITEM_BLOCKLIST = ["password", "hostname", "ip", "mac", "dns", "gateway", "ssid", "token"];
+const DISK_EXTENSIONS = [".d64", ".d71", ".d81", ".dnp", ".g64"];
+const SID_EXTENSIONS = [".sid"];
+const PRG_EXTENSIONS = [".prg"];
+const mediaDiscoveryCache = new Map<string, string | null>();
 
 export function buildRestScenarios(): RestScenario[] {
     return [
@@ -357,12 +362,23 @@ export function buildRestScenarios(): RestScenario[] {
                     log({ kind: "rest", op: "drives.mount", status: "skipped", reason: "diskImagePath not set" });
                     return;
                 }
+                const resolvedPath = await resolveMediaFilePath({
+                    basePath: media.diskImagePath,
+                    extensions: DISK_EXTENSIONS,
+                    config,
+                    log,
+                    label: "disk image"
+                });
+                if (!resolvedPath) {
+                    log({ kind: "rest", op: "drives.mount", status: "skipped", reason: "no disk image found" });
+                    return;
+                }
                 const drive = media.diskDrive ?? "a";
                 const mountResp = await request({
                     method: "PUT",
                     url: `/v1/drives/${drive}:mount`,
                     params: {
-                        image: media.diskImagePath,
+                        image: resolvedPath,
                         type: media.diskType,
                         mode: media.diskMode
                     }
@@ -372,7 +388,7 @@ export function buildRestScenarios(): RestScenario[] {
                     op: "PUT /v1/drives/{drive}:mount",
                     status: mountResp.status,
                     latencyMs: mountResp.latencyMs,
-                    details: { correlationId: mountResp.correlationId, drive }
+                    details: { correlationId: mountResp.correlationId, drive, image: resolvedPath }
                 });
 
                 await delay(200);
@@ -398,17 +414,28 @@ export function buildRestScenarios(): RestScenario[] {
                     log({ kind: "rest", op: "runners.sidplay", status: "skipped", reason: "sidFilePath not set" });
                     return;
                 }
+                const resolvedPath = await resolveMediaFilePath({
+                    basePath: media.sidFilePath,
+                    extensions: SID_EXTENSIONS,
+                    config,
+                    log,
+                    label: "sid file"
+                });
+                if (!resolvedPath) {
+                    log({ kind: "rest", op: "runners.sidplay", status: "skipped", reason: "no sid file found" });
+                    return;
+                }
                 const response = await request({
                     method: "PUT",
                     url: "/v1/runners:sidplay",
-                    params: { file: media.sidFilePath, songnr: media.sidSongNr }
+                    params: { file: resolvedPath, songnr: media.sidSongNr }
                 });
                 log({
                     kind: "rest",
                     op: "PUT /v1/runners:sidplay",
                     status: response.status,
                     latencyMs: response.latencyMs,
-                    details: { correlationId: response.correlationId }
+                    details: { correlationId: response.correlationId, file: resolvedPath }
                 });
             }
         },
@@ -424,22 +451,198 @@ export function buildRestScenarios(): RestScenario[] {
                     log({ kind: "rest", op: "runners.prg", status: "skipped", reason: "prgFilePath not set" });
                     return;
                 }
+                const resolvedPath = await resolveMediaFilePath({
+                    basePath: media.prgFilePath,
+                    extensions: PRG_EXTENSIONS,
+                    config,
+                    log,
+                    label: "prg file"
+                });
+                if (!resolvedPath) {
+                    log({ kind: "rest", op: "runners.prg", status: "skipped", reason: "no prg file found" });
+                    return;
+                }
                 const action = media.prgAction ?? "run";
                 const response = await request({
                     method: "PUT",
                     url: action === "load" ? "/v1/runners:load_prg" : "/v1/runners:run_prg",
-                    params: { file: media.prgFilePath }
+                    params: { file: resolvedPath }
                 });
                 log({
                     kind: "rest",
                     op: `PUT /v1/runners:${action}_prg`,
                     status: response.status,
                     latencyMs: response.latencyMs,
-                    details: { correlationId: response.correlationId }
+                    details: { correlationId: response.correlationId, file: resolvedPath }
                 });
             }
         }
     ];
+}
+
+function hasMatchingExtension(value: string, extensions: string[]): boolean {
+    const lower = value.toLowerCase();
+    return extensions.some((ext) => lower.endsWith(ext));
+}
+
+async function resolveMediaFilePath({
+    basePath,
+    extensions,
+    config,
+    log,
+    label
+}: {
+    basePath: string;
+    extensions: string[];
+    config: HarnessConfig;
+    log: (event: LogEventInput) => void;
+    label: string;
+}): Promise<string | null> {
+    if (!basePath.trim()) {
+        return null;
+    }
+    if (hasMatchingExtension(basePath, extensions)) {
+        return basePath;
+    }
+    const cacheKey = `${label}:${basePath.toLowerCase()}`;
+    if (mediaDiscoveryCache.has(cacheKey)) {
+        return mediaDiscoveryCache.get(cacheKey) ?? null;
+    }
+
+    const client = new FtpClient({
+        host: new URL(config.baseUrl).hostname,
+        port: 21,
+        user: "anonymous",
+        password: config.auth === "ON" ? config.password || "" : "",
+        mode: config.ftpMode,
+        timeoutMs: config.timeouts.ftpTimeoutMs
+    });
+
+    try {
+        await client.connect();
+        log({ kind: "ftp", op: "discover.connect", details: { sessionId: client.sessionId, label, basePath } });
+        const resolved = await findFirstMatchingFile(client, basePath, extensions);
+        if (!resolved) {
+            log({ kind: "ftp", op: "discover.search", status: "not-found", details: { label, basePath } });
+        } else {
+            log({ kind: "ftp", op: "discover.search", status: "found", details: { label, basePath, resolved } });
+        }
+        mediaDiscoveryCache.set(cacheKey, resolved ?? null);
+        return resolved ?? null;
+    } catch (error) {
+        log({
+            kind: "ftp",
+            op: "discover.error",
+            status: "error",
+            details: { label, basePath, message: String(error) }
+        });
+        mediaDiscoveryCache.set(cacheKey, null);
+        return null;
+    } finally {
+        await client.close();
+    }
+}
+
+type MlsdEntry = { name: string; type: "dir" | "file" };
+
+async function findFirstMatchingFile(client: FtpClient, rootPath: string, extensions: string[]): Promise<string | null> {
+    const queue: string[] = [normalizeFtpPath(rootPath)];
+    const visited = new Set<string>();
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || visited.has(current)) {
+            continue;
+        }
+        visited.add(current);
+
+        const { result, data } = await client.mlsd(current);
+        if (result.response.code >= 400) {
+            throw new Error(`FTP MLSD failed for ${current}: ${result.response.code} ${result.response.message}`);
+        }
+
+        const entries = parseMlsdEntries(data);
+        const ordered = entries.sort((a, b) => a.name.localeCompare(b.name));
+
+        for (const entry of ordered) {
+            const entryPath = joinFtpPath(current, entry.name);
+            if (entry.type === "file" && hasMatchingExtension(entry.name, extensions)) {
+                return entryPath;
+            }
+            if (entry.type === "dir") {
+                queue.push(entryPath);
+            }
+        }
+    }
+
+    return null;
+}
+
+function parseMlsdEntries(data: string): MlsdEntry[] {
+    const entries: MlsdEntry[] = [];
+    for (const line of data.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            continue;
+        }
+        const entry = parseMlsdLine(trimmed);
+        if (!entry) {
+            continue;
+        }
+        if (entry.name === "." || entry.name === "..") {
+            continue;
+        }
+        entries.push(entry);
+    }
+    return entries;
+}
+
+function parseMlsdLine(line: string): MlsdEntry | null {
+    const separatorIndex = line.indexOf(" ");
+    if (separatorIndex <= 0) {
+        return null;
+    }
+    const facts = line.slice(0, separatorIndex).split(";");
+    const name = line.slice(separatorIndex + 1).trim();
+    if (!name) {
+        return null;
+    }
+    let type = "";
+    for (const fact of facts) {
+        if (!fact) {
+            continue;
+        }
+        const [key, value] = fact.split("=");
+        if (key?.toLowerCase() === "type") {
+            type = (value ?? "").toLowerCase();
+            break;
+        }
+    }
+    if (type === "dir" || type === "cdir" || type === "pdir") {
+        return { name, type: "dir" };
+    }
+    if (type === "file") {
+        return { name, type: "file" };
+    }
+    return null;
+}
+
+function joinFtpPath(base: string, name: string): string {
+    if (base.endsWith("/")) {
+        return `${base}${name}`;
+    }
+    if (base === "/") {
+        return `/${name}`;
+    }
+    return `${base}/${name}`;
+}
+
+function normalizeFtpPath(value: string): string {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return "/";
+    }
+    return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
 }
 
 function isBlockedCategory(name: string): boolean {

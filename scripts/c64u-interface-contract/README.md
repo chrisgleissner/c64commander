@@ -74,6 +74,9 @@ Some REST endpoints require real filesystem paths. Provide them via the optional
 
 If a path is omitted, the corresponding scenario is skipped.
 
+If a path points at a directory, the harness will crawl that subtree over FTP and pick the first matching file
+(`.d64`, `.d71`, `.d81`, `.dnp`, `.g64` for disks; `.sid` for SID; `.prg` for PRG).
+
 Machine reset is guarded by `allowMachineReset` (defaults to false).
 
 ## Concurrency Stress
