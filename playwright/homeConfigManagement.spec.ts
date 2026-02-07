@@ -279,7 +279,8 @@ test.describe('Home page app config management', () => {
     await page.goto('/');
     const sidGroup = page.getByTestId('home-sid-status');
     await expect(sidGroup).toBeVisible();
-    await expect(sidGroup.getByTestId('sid-status-label')).toHaveText('SID');
+    await expect(sidGroup.getByTestId('sid-status-label')).toContainText('SID');
+    await expect(sidGroup.getByRole('button', { name: 'Reset' })).toBeVisible();
     await expect(sidGroup.locator('[data-testid="sid-status-dot"]')).toHaveCount(0);
     await expect(sidGroup).toContainText('SID Socket 1');
     await expect(sidGroup).toContainText('ON');

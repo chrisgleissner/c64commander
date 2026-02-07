@@ -1,7 +1,7 @@
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder } from 'lucide-react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -19,7 +19,9 @@ import { getC64API } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { cn } from '@/lib/utils';
+import { QuickActionCard } from '@/components/QuickActionCard';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
+import { resetConnectedDrives } from '@/lib/disks/resetDrives';
 import { createDiskEntry, getDiskFolderPath, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { assignDiskGroupsByPrefix } from '@/lib/disks/diskGrouping';
 import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
@@ -110,6 +112,7 @@ export const HomeDiskManager = () => {
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
+  const [resetDrivesPending, setResetDrivesPending] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
     status: 'idle',
@@ -381,6 +384,29 @@ export const HomeDiskManager = () => {
       });
     } finally {
       setDrivePowerPending((prev) => ({ ...prev, [drive]: false }));
+    }
+  });
+
+  const handleResetDrives = trace(async () => {
+    if (!status.isConnected || resetDrivesPending) return;
+    setResetDrivesPending(true);
+    try {
+      await resetConnectedDrives(api, drivesData ?? null);
+      toast({
+        title: 'Drives reset',
+        description: 'All connected drives were reset.',
+      });
+      setDriveErrors((prev) => ({ ...prev, a: '', b: '' }));
+      await queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
+    } catch (error) {
+      reportUserError({
+        operation: 'RESET_DRIVES',
+        title: 'Drive reset failed',
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setResetDrivesPending(false);
     }
   });
 
@@ -1009,6 +1035,16 @@ export const HomeDiskManager = () => {
           <span className="w-1.5 h-1.5 rounded-full bg-primary" />
           Drives
         </h3>
+        <div className="max-w-[180px]">
+          <QuickActionCard
+            icon={RotateCcw}
+            label="Reset Drives"
+            compact
+            onClick={() => void handleResetDrives()}
+            disabled={!status.isConnected || resetDrivesPending}
+            loading={resetDrivesPending}
+          />
+        </div>
         <div className="grid gap-3">
           {driveRows.map(({ key, mounted, mountedDisk, canRotate, mountedLabel, busId, driveType, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending }) => (
             <div key={key} className="config-card space-y-2">

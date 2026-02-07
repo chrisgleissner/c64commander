@@ -7,9 +7,13 @@ const {
   mockNavigate,
   toastSpy,
   reportUserErrorSpy,
+  c64ApiMockRef,
   sidSocketsPayloadRef,
   sidAddressingPayloadRef,
+  audioMixerPayloadRef,
   streamPayloadRef,
+  driveASettingsPayloadRef,
+  driveBSettingsPayloadRef,
   statusPayloadRef,
   drivesPayloadRef,
   machineControlPayloadRef,
@@ -18,9 +22,19 @@ const {
   mockNavigate: vi.fn(),
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
+  c64ApiMockRef: {
+    current: {
+      setConfigValue: vi.fn().mockResolvedValue({}),
+      resetDrive: vi.fn().mockResolvedValue({}),
+      writeMemory: vi.fn().mockResolvedValue({}),
+    },
+  },
   sidSocketsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   sidAddressingPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  audioMixerPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   streamPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  driveASettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  driveBSettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   statusPayloadRef: {
     current: {
       isConnected: true,
@@ -83,6 +97,12 @@ vi.mock('@/components/ThemeProvider', () => ({
   }),
 }));
 
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 vi.mock('@/hooks/useC64Connection', () => ({
   useC64Connection: () => ({
     status: statusPayloadRef.current,
@@ -97,8 +117,17 @@ vi.mock('@/hooks/useC64Connection', () => ({
     if (category === 'SID Addressing') {
       return { data: sidAddressingPayloadRef.current };
     }
+    if (category === 'Audio Mixer') {
+      return { data: audioMixerPayloadRef.current };
+    }
     if (category === 'Data Streams') {
       return { data: streamPayloadRef.current };
+    }
+    if (category === 'Drive A Settings') {
+      return { data: driveASettingsPayloadRef.current };
+    }
+    if (category === 'Drive B Settings') {
+      return { data: driveBSettingsPayloadRef.current };
     }
     return { data: null };
   },
@@ -121,13 +150,25 @@ vi.mock('@/lib/uiErrors', () => ({
   reportUserError: reportUserErrorSpy,
 }));
 
+vi.mock('@/lib/c64api', () => ({
+  getC64API: () => c64ApiMockRef.current,
+}));
+
 beforeEach(() => {
   mockNavigate.mockReset();
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
   sidSocketsPayloadRef.current = undefined;
   sidAddressingPayloadRef.current = undefined;
+  audioMixerPayloadRef.current = undefined;
   streamPayloadRef.current = undefined;
+  driveASettingsPayloadRef.current = undefined;
+  driveBSettingsPayloadRef.current = undefined;
+  c64ApiMockRef.current = {
+    setConfigValue: vi.fn().mockResolvedValue({}),
+    resetDrive: vi.fn().mockResolvedValue({}),
+    writeMemory: vi.fn().mockResolvedValue({}),
+  };
   statusPayloadRef.current = {
     isConnected: true,
     isConnecting: false,
@@ -253,10 +294,84 @@ describe('HomePage SID status', () => {
     expect(within(streamSection).getByText('Debug')).toBeTruthy();
     expect(within(streamSection).getAllByText('ON').length).toBe(2);
     expect(within(streamSection).getAllByText('OFF').length).toBe(1);
-    expect(within(streamSection).getByText('239.0.1.64')).toBeTruthy();
-    expect(within(streamSection).getByText('239.0.1.66')).toBeTruthy();
-    expect(within(streamSection).getByText('11000')).toBeTruthy();
-    expect(within(streamSection).getByText('11002')).toBeTruthy();
+    expect(within(streamSection).getByDisplayValue('239.0.1.64')).toBeTruthy();
+    expect(within(streamSection).getByDisplayValue('239.0.1.66')).toBeTruthy();
+    expect(within(streamSection).getByDisplayValue('11000')).toBeTruthy();
+    expect(within(streamSection).getByDisplayValue('11002')).toBeTruthy();
+  });
+
+  it('resets all connected drives from Home drives section', async () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, image_file: 'disk-a.d64' } },
+        { b: { enabled: true } },
+      ],
+    };
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
+
+    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(2));
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('a');
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('b');
+  });
+
+  it('writes SID silence registers when SID reset is pressed', async () => {
+    sidAddressingPayloadRef.current = {
+      'SID Addressing': {
+        items: {
+          'SID Socket 1 Address': { selected: '$D400' },
+          'SID Socket 2 Address': { selected: 'Unmapped' },
+          'UltiSID 1 Address': { selected: '$D420' },
+          'UltiSID 2 Address': { selected: 'Unmapped' },
+        },
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    const sidSection = screen.getByTestId('home-sid-status');
+    fireEvent.click(within(sidSection).getByRole('button', { name: 'Reset' }));
+
+    await waitFor(() => expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledTimes(20));
+    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D404', new Uint8Array([0]));
+    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D424', new Uint8Array([0]));
+  });
+
+  it('rejects invalid stream host input safely', async () => {
+    streamPayloadRef.current = {
+      'Data Streams': {
+        items: {
+          'Stream VIC to': { selected: '239.0.1.64:11000' },
+          'Stream Audio to': { selected: 'off' },
+          'Stream Debug to': { selected: '239.0.1.66:11002' },
+        },
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    const ipInput = screen.getByTestId('home-stream-ip-vic');
+    fireEvent.change(ipInput, { target: { value: 'bad host!' } });
+    fireEvent.blur(ipInput);
+
+    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'STREAM_VALIDATE',
+    })));
+    expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalled();
   });
 
   it('shows build info placeholders and offline message when disconnected', () => {
@@ -344,7 +459,7 @@ describe('HomePage SID status', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Reset$/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Reset$/ })[0]);
     await waitFor(() => expect(machineControlPayloadRef.current.reset.mutateAsync).toHaveBeenCalled());
     expect(toastSpy).toHaveBeenCalledWith({ title: 'Machine reset' });
 

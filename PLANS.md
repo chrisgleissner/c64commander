@@ -1,74 +1,98 @@
-# PLANS.md - Disks/Home REST Configuration, Streams, and RAM Control
+# PLANS.md - Home/Disks Interactivity, SID Silencing, and Import UX Coverage
 
 ## Execution Contract
 - Status legend: `[ ] pending`, `[-] in progress`, `[x] completed`.
 - Loop per phase: `plan -> implement -> targeted tests -> verify -> update this file`.
-- REST is the source of truth for all new read/write behavior in this scope.
-- No test weakening, no skipped failures, no bypasses.
+- Scope locked to requested areas only: import UX/screenshots, drive reset, SID info+reset, Home interactivity, unit/E2E/screenshot coverage.
+- No silent exception handling; all caught errors must be reported or rethrown with context.
+- No test weakening/skipping.
 
 ## Phase 0 - Baseline and Scope Lock
-- [x] Confirm current Disks/Home implementations, REST endpoints, and existing tests.
-- [x] Define concrete data contracts for:
-  - Drive Bus ID + Drive Type (REST-backed read/write)
-  - Streams (REST-backed read-only ON/OFF + IP + port)
-  - RAM actions (freeze/dump/load/reboot-clear)
-  - RAM dump folder persistence and picker flow
+- [x] Confirm current behavior and impacted modules for:
+  - Home `Drives`, `SID`, `Streams`
+  - Disks page drive controls
+  - Item import UX (Play + Disks)
+  - Existing screenshot and Playwright flows
+- [x] Define concrete contracts:
+  - Global drive reset behavior and failure semantics
+  - SID metadata mapping (volume/pan/address + ordering)
+  - SID silence write plan (register offsets + per-SID error aggregation)
+  - Home interaction rules (toggle/select/input + validation)
 - [x] Verification:
-  - Captured impacted files and test suites before edits.
+  - Impacted files + tests captured before edits.
 
-## Phase 1 - REST/API and Persistence Foundations
-- [x] Add/extend REST client methods needed for stream and RAM workflows.
-- [x] Implement RAM operations service with explicit retry handling, chunked reads/writes, and fail-fast error context.
-- [x] Implement RAM dump folder persistence store and native/web picker adapters.
-- [x] Extend Android FolderPicker plugin + TS bindings as needed to support writing RAM dumps to selected SAF folder.
+## Phase 1 - Core Logic: Drive Reset + SID Mapping + SID Silence
+- [x] Implement global drive reset service that resets all connected drives in one action and reports partial failures with context.
+- [x] Implement SID metadata mapping helpers for ordered rows:
+  1. SID Socket 1
+  2. SID Socket 2
+  3. UltiSID 1
+  4. UltiSID 2
+  with formatted `Volume`, `Pan`, `Address`.
+- [x] Implement SID silence operation service:
+  - CTRL writes at offsets `$04`, `$0B`, `$12` -> `0x00`
+  - MODE/VOL write at `$18` -> `0x00`
+  - AD/SR writes at `$05/$06`, `$0C/$0D`, `$13/$14` -> `0x00`
+  - Apply per configured SID base address; continue on per-SID failure; aggregate/report failures.
 - [x] Verification:
-  - Targeted unit tests passed:
-    - `tests/unit/ramOperations.test.ts`
-    - `tests/unit/ramDumpFolderStore.test.ts`
-    - `tests/unit/ramDumpStorage.test.ts`
-  - Android Kotlin compile check passed with Gradle fallback from daemon to non-daemon mode.
+  - New/updated unit tests for drive reset service, SID mapping, SID silence writes pass.
 
-## Phase 2 - Disks Page Drive Bus/Type UX (REST-Driven)
-- [x] Add compact Drive Type indicator immediately right of Bus ID in each drive row.
-- [x] Make Bus ID and Drive Type configurable inline via dropdowns (no modal/navigation).
-- [x] Wire dropdown writes through REST; update UI only after success; on failure keep prior value and surface error.
-- [x] Disable affected controls while requests are in-flight and preserve stable layout.
-- [x] Ensure no regression to mount/eject/power/group workflows.
+## Phase 2 - UI Wiring: Home + Disks
+- [x] Add `Reset Drives` button on Disks page (global action).
+- [x] Add `Reset Drives` button in Home `Drives` section (global action).
+- [x] Expand Home `SID` section:
+  - Show per-SID `Volume`, `Pan`, `Address` in required order.
+  - Add `Reset` button wired to SID silence service.
+- [x] Implement Home interactivity in groups `Drives`, `SID`, `Streams`:
+  - 2-value settings use toggle interactions.
+  - finite >2 settings use dropdown interactions.
+  - free-form settings use input interactions.
+  - Writes are REST-backed, reflect updates immediately after success, and report failures.
+  - Invalid inputs are validated and rejected with explicit user-visible errors.
 - [x] Verification:
-  - Targeted `HomeDiskManager` suites all passed (base, UI, dialogs, extended).
+  - Updated Home/Disks unit tests pass for wiring, REST calls, and error paths.
 
-## Phase 3 - Home Page Streams + Machine Controls Rework
-- [x] Add `Streams` section below SID using REST-backed config values for VIC/Audio/Debug ON/OFF + IP + port.
-- [x] Rework Machine Control layout to compact 4-column grid with 3-row footprint and 9 buttons.
-- [x] Keep existing machine semantics and add:
-  - Reboot (Clear RAM)
-  - Save RAM
-  - Load RAM
-- [x] Enforce in-flight disabling and atomic UI behavior for RAM/reboot-clear flows.
-- [x] Add RAM dump folder UI near Machine controls, including first-save folder prompt and change-folder action.
-- [x] Visually separate Power Off and guard accidental activation.
-- [x] Resize Config group action cards to match machine control density.
+## Phase 3 - Import UX and Screenshot Coverage
+- [x] Ensure import interstitial explicitly presents both choices:
+  - Local file import
+  - C64U file import
+- [x] Ensure local and C64U picker flows are reachable via normal Play flow.
+- [x] Add/extend Playwright coverage for:
+  - import interstitial
+  - local file picker flow
+  - C64U file picker flow
+- [x] Add reproducible screenshots (at least one each) for:
+  - toggle interaction
+  - dropdown interaction
+  - input field interaction
+  - local file picker
+  - C64U file picker
+  - import interstitial
+  - SID reset interaction (post-silence)
 - [x] Verification:
-  - Added/updated tests:
-    - `tests/unit/pages/HomePage.test.tsx`
-    - `tests/unit/pages/HomePage.ramActions.test.tsx`
-    - `tests/unit/streamStatus.test.ts`
-  - Re-ran targeted Disks/Home/RAM suites successfully.
+  - Screenshot files generated under `doc/img/app/**` and linked to deterministic Playwright flows.
 
-## Phase 4 - Full Verification and Build/CI Parity
-- [x] Run full web checks:
+## Phase 4 - E2E + Full Validation
+- [x] Add/extend Playwright tests for:
+  - Home toggle/dropdown/input interactions
+  - Reset Drives (Home + Disks)
+  - SID Reset invocation and no regressions to SID metadata controls
+  - Import flow coverage requested above
+- [x] Run targeted suites for changed areas.
+- [x] Run full local checks:
   - `npm run test`
   - `npm run lint`
   - `npm run build`
-- [x] Run local helper build for CI parity:
+  - `npm run test:e2e`
   - `./build`
-- [x] Validate touched docs remain accurate and update docs only if behavior changes require it.
-- [x] Final pass for error handling consistency (no silent catches).
+- [x] Verification:
+  - All tests pass locally.
+  - CI-equivalent local flow passes (`./build`).
 
 ## Progress Log
-- 2026-02-07: Re-initialized plan for requested Disks/Home REST UI + RAM operations scope.
-- 2026-02-07: Phase 0 completed (scoped affected modules: `HomePage`, `HomeDiskManager`, `useC64Connection`, `c64api`, `FolderPicker` bridge, and related unit tests).
-- 2026-02-07: Phase 1 completed. Added RAM operation service + RAM dump storage/persistence modules; extended Android `FolderPicker` with `writeFileToTree`; added targeted unit tests and verified Android Kotlin compilation.
-- 2026-02-07: Phase 2 completed. Added REST-backed inline Drive Bus ID/Type controls in `HomeDiskManager`, with retry + error handling and in-flight disabling.
-- 2026-02-07: Phase 3 completed. Added Home Streams section, compact 9-button machine control grid, RAM actions/folder management, and guarded Power Off flow; updated Home-page tests and UX documentation notes.
-- 2026-02-07: Phase 4 completed. Verified `npm run test`, `npm run lint`, `npm run build`, and `./build` all pass. `./build` Playwright run passed (`312` tests) and Android Gradle tasks completed successfully via Kotlin non-daemon fallback after known JDK 25 daemon incompatibility warnings.
+- 2026-02-07: Plan re-initialized for requested Home/Disks/SID/import scope and verification constraints.
+- 2026-02-07: Added core services for global drive reset, SID detail mapping, and deterministic SID silence register writes with unit coverage.
+- 2026-02-07: Wired Home + Disks UI for Reset Drives, SID Reset, ordered SID volume/pan/address display, and REST-backed Drives/SID/Streams interactions.
+- 2026-02-07: Added import interstitial and picker test ids; expanded Playwright coverage for Home interactivity + import flows.
+- 2026-02-07: Captured deterministic screenshots for toggle/dropdown/input, SID reset post-state, and import interstitial/local/C64U pickers under `doc/img/app/**`.
+- 2026-02-07: Verification complete locally via `npm run screenshots`, `npm run test`, `npm run lint`, `npm run build`, `npm run test:e2e`, and `./build` (all passing).

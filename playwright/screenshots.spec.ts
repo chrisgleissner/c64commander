@@ -7,6 +7,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 // Load full YAML config for tests
 import '../tests/mocks/setupMockConfigForTests';
 import { seedUiMocks } from './uiMocks';
+import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import {
   allowVisualOverflow,
   assertNoUiIssues,
@@ -309,6 +310,28 @@ const installStableStorage = async (page: Page) => {
   );
 };
 
+const installLocalSourceSeed = async (page: Page) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('c64u_local_sources:v1', JSON.stringify([
+      {
+        id: 'seed-local-source',
+        name: 'Seed Local',
+        rootName: 'Local',
+        rootPath: '/Local/',
+        createdAt: '2024-03-20T12:00:00.000Z',
+        entries: [
+          {
+            name: 'seed.sid',
+            relativePath: 'Local/seed.sid',
+            sizeBytes: 1024,
+            modifiedAt: '2024-03-20T12:00:00.000Z',
+          },
+        ],
+      },
+    ]));
+  });
+};
+
 const installListPreviewLimit = async (page: Page, limit: number) => {
   await page.addInitScript(({ listLimit }) => {
     localStorage.setItem('c64u_list_preview_limit', String(listLimit));
@@ -324,15 +347,18 @@ const seedDiagnosticsTraces = async (page: Page) => {
 
 test.describe('App screenshots', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
+  let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
 
   test.use({ locale: 'en-US', timezoneId: 'UTC' });
 
   test.beforeAll(async () => {
     // Use default YAML config (no initial state) to show all categories
+    ftpServers = await startFtpTestServers();
     server = await createMockC64Server();
   });
 
   test.afterAll(async () => {
+    await ftpServers.close();
     await server.close();
   });
 
@@ -340,6 +366,12 @@ test.describe('App screenshots', () => {
     disableTraceAssertions(testInfo, 'Visual-only screenshots; trace assertions disabled.');
     await startStrictUiMonitoring(page, testInfo);
     await installFixedClock(page);
+    await seedFtpConfig(page, {
+      host: ftpServers.ftpServer.host,
+      port: ftpServers.ftpServer.port,
+      bridgeUrl: ftpServers.bridgeServer.baseUrl,
+      password: '',
+    });
     await seedUiMocks(page, server.baseUrl);
     await installStableStorage(page);
     await page.setViewportSize({ width: 360, height: 800 });
@@ -369,6 +401,29 @@ test.describe('App screenshots', () => {
     await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Machine' }), 'home/03-machine-controls.png');
     await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Drives' }), 'home/04-drives-sid.png');
     await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Config' }), 'home/05-config-actions.png');
+  });
+
+  test('capture home interaction screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/');
+
+    await page.getByTestId('home-stream-toggle-audio').click();
+    await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/01-toggle.png');
+
+    await page.getByTestId('home-drive-type-a').click();
+    await captureScreenshot(page, testInfo, 'home/interactions/02-dropdown.png');
+    await page.keyboard.press('Escape');
+
+    const streamInput = page.getByTestId('home-stream-ip-vic');
+    await streamInput.click();
+    await streamInput.fill('239.0.1.90');
+    await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/03-input.png');
+    await streamInput.press('Enter');
+
+    await page.getByTestId('home-sid-status').getByRole('button', { name: 'Reset' }).click();
+    await expect.poll(() =>
+      server.requests.filter((req) => req.method === 'PUT' && req.url.startsWith('/v1/machine:writemem')).length,
+    ).toBeGreaterThan(0);
+    await scrollAndCapture(page, testInfo, page.getByTestId('home-sid-status'), 'home/sid/01-reset-post-silence.png');
   });
 
   test('capture disks screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -449,6 +504,29 @@ test.describe('App screenshots', () => {
 
     await expect(page.getByTestId('hvsc-controls')).toBeVisible();
     await scrollAndCapture(page, testInfo, page.getByTestId('hvsc-controls'), 'play/04-hvsc-controls.png');
+  });
+
+  test('capture import flow screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await installLocalSourceSeed(page);
+    await page.goto('/play');
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByTestId('import-selection-interstitial')).toBeVisible();
+    await captureScreenshot(page, testInfo, 'play/import/01-import-interstitial.png');
+
+    await dialog.getByTestId('import-option-c64u').click();
+    await expect(dialog.getByTestId('c64u-file-picker')).toBeVisible();
+    await captureScreenshot(page, testInfo, 'play/import/02-c64u-file-picker.png');
+
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    const localDialog = page.getByRole('dialog');
+    await localDialog.getByTestId('browse-source-seed-local-source').click();
+    await expect(localDialog.getByTestId('local-file-picker')).toBeVisible();
+    await captureScreenshot(page, testInfo, 'play/import/03-local-file-picker.png');
   });
 
   test('capture settings screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {

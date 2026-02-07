@@ -68,6 +68,28 @@ const registerMockDirectoryPicker = async (page: Page, options: { folderName: st
   }, options);
 };
 
+const seedLocalSource = async (page: Page) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('c64u_local_sources:v1', JSON.stringify([
+      {
+        id: 'seed-local-source',
+        name: 'Seed Local',
+        rootName: 'Local',
+        rootPath: '/Local/',
+        createdAt: '2024-03-20T12:00:00.000Z',
+        entries: [
+          {
+            name: 'seed.sid',
+            relativePath: 'Local/seed.sid',
+            sizeBytes: 1024,
+            modifiedAt: '2024-03-20T12:00:00.000Z',
+          },
+        ],
+      },
+    ]));
+  });
+};
+
 test.describe('Item Selection Dialog UX', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
   let ftpServers: Awaited<ReturnType<typeof startFtpTestServers>>;
@@ -146,6 +168,41 @@ test.describe('Item Selection Dialog UX', () => {
       
       await snap(page, testInfo, 'modal-sizing-verified');
     }
+  });
+
+  test('import interstitial shows local and C64U options', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByTestId('import-selection-interstitial')).toBeVisible();
+    await expect(dialog.getByTestId('import-option-local')).toBeVisible();
+    await expect(dialog.getByTestId('import-option-c64u')).toBeVisible();
+    await snap(page, testInfo, 'import-interstitial');
+  });
+
+  test('C64U file picker is reachable from interstitial', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByTestId('import-option-c64u').click();
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByTestId('c64u-file-picker')).toBeVisible();
+    await snap(page, testInfo, 'c64u-file-picker');
+  });
+
+  test('local file picker is reachable from playlist flow', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedLocalSource(page);
+    await page.goto('/play');
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
+    await dialog.getByTestId('browse-source-seed-local-source').click();
+    await expect(dialog.getByTestId('local-file-picker')).toBeVisible();
+    await expect(dialog.getByText('seed.sid')).toBeVisible();
+    await snap(page, testInfo, 'local-file-picker');
   });
 
   test('add items modal content is scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {

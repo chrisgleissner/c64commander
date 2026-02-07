@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   RotateCcw,
   Power,
@@ -23,6 +24,13 @@ import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,11 +42,14 @@ import { toast } from '@/hooks/use-toast';
 import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
-import { buildSidStatusEntries } from '@/lib/config/sidStatus';
 import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/config/configItems';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
-import { buildStreamStatusEntries } from '@/lib/config/streamStatus';
+import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { buildSidControlEntries } from '@/lib/config/sidDetails';
+import { buildStreamConfigValue, buildStreamControlEntries, validateStreamHost, validateStreamPort } from '@/lib/config/homeStreams';
+import { resetConnectedDrives } from '@/lib/disks/resetDrives';
+import { buildSidSilenceTargets, silenceSidTargets } from '@/lib/sid/sidSilence';
 import {
   FULL_RAM_SIZE_BYTES,
   clearRamAndReboot,
@@ -54,11 +65,40 @@ import {
 } from '@/lib/machine/ramDumpStorage';
 import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from '@/lib/config/ramDumpFolderStore';
 
+const DRIVE_A_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
+const DRIVE_B_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
+const SID_AUDIO_ITEMS = [
+  'Vol Socket 1',
+  'Vol Socket 2',
+  'Vol UltiSid 1',
+  'Vol UltiSid 2',
+  'Pan Socket 1',
+  'Pan Socket 2',
+  'Pan UltiSID 1',
+  'Pan UltiSID 2',
+] as const;
+const HOME_SID_ADDRESSING_ITEMS = [
+  ...SID_ADDRESSING_ITEMS,
+  'SID Socket 1 Address',
+  'SID Socket 2 Address',
+] as const;
+
 export default function HomePage() {
   const api = getC64API();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
+  const { data: driveASettingsCategory } = useC64ConfigItems(
+    'Drive A Settings',
+    [...DRIVE_A_HOME_ITEMS],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: driveBSettingsCategory } = useC64ConfigItems(
+    'Drive B Settings',
+    [...DRIVE_B_HOME_ITEMS],
+    status.isConnected || status.isConnecting,
+  );
   const { data: sidSocketsCategory } = useC64ConfigItems(
     'SID Sockets Configuration',
     SID_SOCKETS_ITEMS,
@@ -66,7 +106,12 @@ export default function HomePage() {
   );
   const { data: sidAddressingCategory } = useC64ConfigItems(
     'SID Addressing',
-    SID_ADDRESSING_ITEMS,
+    [...HOME_SID_ADDRESSING_ITEMS],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: audioMixerCategory } = useC64ConfigItems(
+    'Audio Mixer',
+    [...SID_AUDIO_ITEMS],
     status.isConnected || status.isConnecting,
   );
   const { data: streamCategory } = useC64ConfigItems(
@@ -98,13 +143,24 @@ export default function HomePage() {
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
   const [folderTaskPending, setFolderTaskPending] = useState(false);
   const [powerOffArmed, setPowerOffArmed] = useState(false);
+  const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
+  const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
+  const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string }>>({});
 
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
-  const streamStatusEntries = useMemo(
-    () => buildStreamStatusEntries(streamCategory as Record<string, unknown> | undefined),
+  const streamControlEntries = useMemo(
+    () => buildStreamControlEntries(streamCategory as Record<string, unknown> | undefined),
     [streamCategory],
   );
+  const sidControlEntries = useMemo(
+    () => buildSidControlEntries(
+      audioMixerCategory as Record<string, unknown> | undefined,
+      sidAddressingCategory as Record<string, unknown> | undefined,
+    ),
+    [audioMixerCategory, sidAddressingCategory],
+  );
+  const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
   const machineTaskBusy = machineTaskId !== null;
 
   const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
@@ -143,6 +199,21 @@ export default function HomePage() {
     return () => window.clearTimeout(timeout);
   }, [powerOffArmed]);
 
+  useEffect(() => {
+    setStreamDrafts((previous) => {
+      const next = { ...previous };
+      streamControlEntries.forEach((entry) => {
+        if (configWritePending[`Data Streams::${entry.itemName}`]) return;
+        next[entry.key] = {
+          enabled: entry.enabled,
+          ip: entry.ip,
+          port: entry.port,
+        };
+      });
+      return next;
+    });
+  }, [configWritePending, streamControlEntries]);
+
   const runMachineTask = trace(async function runMachineTask(
     taskId: string,
     task: () => Promise<void>,
@@ -167,6 +238,78 @@ export default function HomePage() {
       });
     } finally {
       setMachineTaskId(null);
+    }
+  });
+
+  const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
+
+  const readItemValue = (payload: unknown, categoryName: string, itemName: string) => {
+    const record = payload as Record<string, unknown> | undefined;
+    const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+    const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+    if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
+    return normalizeConfigItem(items[itemName]).value;
+  };
+
+  const readItemOptions = (payload: unknown, categoryName: string, itemName: string) => {
+    const record = payload as Record<string, unknown> | undefined;
+    const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+    const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+    if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return [];
+    return normalizeConfigItem(items[itemName]).options ?? [];
+  };
+
+  const resolveConfigValue = (
+    payload: unknown,
+    category: string,
+    itemName: string,
+    fallback: string | number,
+  ) => {
+    const override = configOverrides[buildConfigKey(category, itemName)];
+    if (override !== undefined) return override;
+    const value = readItemValue(payload, category, itemName);
+    return value === undefined ? fallback : value;
+  };
+
+  const updateConfigValue = trace(async function updateConfigValue(
+    category: string,
+    itemName: string,
+    value: string | number,
+    operation: string,
+    successTitle: string,
+  ) {
+    const key = buildConfigKey(category, itemName);
+    const previousValue = configOverrides[key];
+    setConfigOverrides((previous) => ({ ...previous, [key]: value }));
+    setConfigWritePending((previous) => ({ ...previous, [key]: true }));
+    try {
+      await api.setConfigValue(category, itemName, value);
+      toast({ title: successTitle });
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey)
+          && query.queryKey[0] === 'c64-config-items'
+          && query.queryKey[1] === category,
+      });
+    } catch (error) {
+      setConfigOverrides((previous) => {
+        const next = { ...previous };
+        if (previousValue === undefined) {
+          delete next[key];
+        } else {
+          next[key] = previousValue;
+        }
+        return next;
+      });
+      reportUserError({
+        operation,
+        title: 'Update failed',
+        description: (error as Error).message,
+        error,
+        context: { category, itemName, value },
+      });
+    } finally {
+      setConfigWritePending((previous) => ({ ...previous, [key]: false }));
     }
   });
 
@@ -247,6 +390,137 @@ export default function HomePage() {
     await handleAction(() => controls.powerOff.mutateAsync(), 'Powering off...');
   });
 
+  const handleResetDrives = trace(async function handleResetDrives() {
+    await runMachineTask(
+      'reset-drives',
+      async () => {
+        await resetConnectedDrives(api, drivesData ?? null);
+        await queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
+      },
+      'Drives reset',
+      'All connected drives were reset.',
+    );
+  });
+
+  const handleDriveToggle = trace(async function handleDriveToggle(drive: 'a' | 'b') {
+    const category = drive === 'a' ? 'Drive A Settings' : 'Drive B Settings';
+    const currentValue = resolveConfigValue(
+      drive === 'a' ? driveASettingsCategory : driveBSettingsCategory,
+      category,
+      'Drive',
+      'Disabled',
+    );
+    const options = readItemOptions(
+      drive === 'a' ? driveASettingsCategory : driveBSettingsCategory,
+      category,
+      'Drive',
+    );
+    if (options.length !== 2) return;
+    const normalizedCurrent = String(currentValue).trim().toLowerCase();
+    const [firstOption, secondOption] = options;
+    const nextValue = normalizedCurrent === String(firstOption).trim().toLowerCase() ? secondOption : firstOption;
+    await updateConfigValue(
+      category,
+      'Drive',
+      nextValue,
+      'HOME_DRIVE_TOGGLE',
+      `Drive ${drive.toUpperCase()} ${String(nextValue).toLowerCase()}`,
+    );
+  });
+
+  const handleSidReset = trace(async function handleSidReset() {
+    await runMachineTask(
+      'sid-reset',
+      async () => {
+        await silenceSidTargets(api, sidSilenceTargets);
+      },
+      'SID reset complete',
+      'All configured SID chips were silenced.',
+    );
+  });
+
+  const handleStreamToggle = trace(async function handleStreamToggle(key: 'vic' | 'audio' | 'debug') {
+    const entry = streamControlEntries.find((value) => value.key === key);
+    if (!entry) return;
+    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+    const next = { ...current, enabled: !current.enabled };
+    setStreamDrafts((previous) => ({ ...previous, [key]: next }));
+    if (next.enabled) {
+      const hostError = validateStreamHost(next.ip);
+      const portError = validateStreamPort(next.port);
+      if (hostError || portError) {
+        reportUserError({
+          operation: 'STREAM_VALIDATE',
+          title: 'Invalid stream target',
+          description: hostError ?? portError ?? 'Invalid stream target',
+          context: { stream: key, ip: next.ip, port: next.port },
+        });
+        setStreamDrafts((previous) => ({ ...previous, [key]: current }));
+        return;
+      }
+    }
+    await updateConfigValue(
+      'Data Streams',
+      entry.itemName,
+      buildStreamConfigValue(next.enabled, next.ip, next.port),
+      'HOME_STREAM_TOGGLE',
+      `${entry.label} stream ${next.enabled ? 'enabled' : 'disabled'}`,
+    );
+  });
+
+  const handleStreamFieldChange = (key: 'vic' | 'audio' | 'debug', field: 'ip' | 'port', value: string) => {
+    setStreamDrafts((previous) => ({
+      ...previous,
+      [key]: {
+        ...(previous[key] ?? { enabled: false, ip: '', port: '' }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleStreamCommit = trace(async function handleStreamCommit(key: 'vic' | 'audio' | 'debug') {
+    const entry = streamControlEntries.find((value) => value.key === key);
+    if (!entry) return;
+    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+    if (current.enabled) {
+      const hostError = validateStreamHost(current.ip);
+      if (hostError) {
+        reportUserError({
+          operation: 'STREAM_VALIDATE',
+          title: 'Invalid stream host',
+          description: hostError,
+          context: { stream: key, ip: current.ip },
+        });
+        setStreamDrafts((previous) => ({
+          ...previous,
+          [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+        }));
+        return;
+      }
+      const portError = validateStreamPort(current.port);
+      if (portError) {
+        reportUserError({
+          operation: 'STREAM_VALIDATE',
+          title: 'Invalid stream port',
+          description: portError,
+          context: { stream: key, port: current.port },
+        });
+        setStreamDrafts((previous) => ({
+          ...previous,
+          [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+        }));
+        return;
+      }
+    }
+    await updateConfigValue(
+      'Data Streams',
+      entry.itemName,
+      buildStreamConfigValue(current.enabled, current.ip, current.port),
+      'HOME_STREAM_UPDATE',
+      `${entry.label} stream updated`,
+    );
+  });
+
   const handleSaveToApp = trace(async function handleSaveToApp() {
     const trimmed = saveName.trim();
     if (!trimmed) {
@@ -311,60 +585,38 @@ export default function HomePage() {
     ),
     [sidAddressingCategory, sidSocketsCategory],
   );
-  const sidStatusEntries = useMemo(() => buildSidStatusEntries(sidEnablement), [sidEnablement]);
-  const sidStatusMap = useMemo(
-    () => new Map(sidStatusEntries.map((entry) => [entry.key, entry])),
-    [sidStatusEntries],
-  );
+  const sidStatusMap = useMemo(() => new Map([
+    ['socket1', sidEnablement.socket1],
+    ['socket2', sidEnablement.socket2],
+    ['ultiSid1', sidEnablement.ultiSid1],
+    ['ultiSid2', sidEnablement.ultiSid2],
+  ]), [sidEnablement]);
 
-  const renderSidStatus = (key: keyof typeof sidEnablement) => {
-    const entry = sidStatusMap.get(key);
-    if (!entry) return null;
-    const enabled = entry.enabled;
-    const statusLabel = enabled === undefined ? '—' : enabled ? 'ON' : 'OFF';
-    const statusClass = enabled === true
-      ? 'text-success'
-      : 'text-muted-foreground';
-    return (
-      <div key={entry.key} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
-        <span className="text-xs font-medium text-foreground">{entry.label}</span>
-        <span className={`text-xs font-semibold ${statusClass}`}>{statusLabel}</span>
-      </div>
-    );
-  };
-
-  const renderStreamStatus = () => (
-    <div className="space-y-2" data-testid="home-stream-status">
-      <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-        <span>Streams</span>
-      </div>
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="space-y-2">
-          {streamStatusEntries.map((entry) => (
-            <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-foreground">{entry.label}</span>
-                <span className={entry.state === 'ON' ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
-                  {entry.state}
-                </span>
-              </div>
-              <div className="mt-1 grid grid-cols-2 gap-2 text-[11px]">
-                <div>
-                  <span className="text-muted-foreground">IP</span>
-                  <p className="font-medium break-words">{entry.ip}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Port</span>
-                  <p className="font-medium break-words">{entry.port}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  const driveSettingsRows: Array<{
+    key: 'a' | 'b';
+    category: 'Drive A Settings' | 'Drive B Settings';
+    driveValue: string;
+    typeValue: string;
+    typeOptions: string[];
+    busValue: string;
+    busOptions: string[];
+  }> = ['a', 'b'].map((driveKey) => {
+    const category = driveKey === 'a' ? 'Drive A Settings' : 'Drive B Settings';
+    const payload = driveKey === 'a' ? driveASettingsCategory : driveBSettingsCategory;
+    const info = driveKey === 'a' ? driveA : driveB;
+    const typeOptions = readItemOptions(payload, category, 'Drive Type').map((option) => String(option));
+    const rawBusOptions = readItemOptions(payload, category, 'Drive Bus ID').map((option) => String(option));
+    const busOptions = rawBusOptions.length ? rawBusOptions : ['8', '9', '10', '11'];
+    return {
+      key: driveKey,
+      category,
+      driveValue: String(resolveConfigValue(payload, category, 'Drive', info?.enabled ? 'Enabled' : 'Disabled')),
+      typeValue: String(resolveConfigValue(payload, category, 'Drive Type', info?.type ?? '1541')),
+      typeOptions,
+      busValue: String(resolveConfigValue(payload, category, 'Drive Bus ID', info?.bus_id ?? (driveKey === 'a' ? 8 : 9))),
+      busOptions,
+    };
+  });
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -569,45 +821,303 @@ export default function HomePage() {
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Drives
           </h3>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <button
-              type="button"
-              className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
-              onClick={wrapUserEvent(() => navigate('/disks'), 'click', 'DriveTile', { title: 'Drive A' }, 'DriveTile')}
-              aria-label="Open Disks"
-            >
-              <div className="flex flex-wrap items-center gap-2 min-w-0">
-                <span className="font-medium shrink-0">Drive A:</span>
-                <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
-                  {driveA?.enabled ? 'ON' : 'OFF'}
-                </span>
-                <span className="font-medium break-words whitespace-normal min-w-0">
-                  {driveADiskLabel}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-medium shrink-0">Drive B:</span>
-                <span className={driveB?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
-                  {driveB?.enabled ? 'ON' : 'OFF'}
-                </span>
-              </div>
-            </button>
-            <div className="space-y-3">
-              <div className="space-y-2" data-testid="home-sid-status">
-                <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
+              <button
+                type="button"
+                className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
+                onClick={wrapUserEvent(() => navigate('/disks'), 'click', 'DriveTile', { title: 'Drive A' }, 'DriveTile')}
+                aria-label="Open Disks"
+              >
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <span className="font-medium shrink-0">Drive A:</span>
+                  <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
+                    {driveA?.enabled ? 'ON' : 'OFF'}
+                  </span>
+                  <span className="font-medium break-words whitespace-normal min-w-0">
+                    {driveADiskLabel}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-medium shrink-0">Drive B:</span>
+                  <span className={driveB?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
+                    {driveB?.enabled ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+              </button>
+              <QuickActionCard
+                icon={RotateCcw}
+                label="Reset Drives"
+                compact
+                onClick={() => void handleResetDrives()}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={machineTaskId === 'reset-drives'}
+              />
+            </div>
+
+            <div className="bg-card border border-border rounded-xl p-4 space-y-3" data-testid="home-drive-controls">
+              {driveSettingsRows.map((row) => {
+                const toggleKey = buildConfigKey(row.category, 'Drive');
+                const typeKey = buildConfigKey(row.category, 'Drive Type');
+                const busKey = buildConfigKey(row.category, 'Drive Bus ID');
+                return (
+                  <div key={row.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">Drive {row.key.toUpperCase()}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleDriveToggle(row.key)}
+                        disabled={!status.isConnected || Boolean(configWritePending[toggleKey])}
+                        data-testid={`home-drive-toggle-${row.key}`}
+                      >
+                        {row.driveValue}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Drive Type</span>
+                        <Select
+                          value={row.typeValue}
+                          onValueChange={(value) =>
+                            void updateConfigValue(
+                              row.category,
+                              'Drive Type',
+                              value,
+                              'HOME_DRIVE_TYPE',
+                              `Drive ${row.key.toUpperCase()} type updated`,
+                            )}
+                          disabled={!status.isConnected || Boolean(configWritePending[typeKey])}
+                        >
+                          <SelectTrigger data-testid={`home-drive-type-${row.key}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {row.typeOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Drive Bus ID</span>
+                        <Select
+                          value={row.busValue}
+                          onValueChange={(value) =>
+                            void updateConfigValue(
+                              row.category,
+                              'Drive Bus ID',
+                              Number(value),
+                              'HOME_DRIVE_BUS',
+                              `Drive ${row.key.toUpperCase()} bus ID updated`,
+                            )}
+                          disabled={!status.isConnected || Boolean(configWritePending[busKey])}
+                        >
+                          <SelectTrigger data-testid={`home-drive-bus-${row.key}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {row.busOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2" data-testid="home-sid-status">
+              <div className="flex items-center justify-between gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
+                <span className="flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                   <span>SID</span>
-                </div>
-                <div className="bg-card border border-border rounded-xl p-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    {renderSidStatus('socket1')}
-                    {renderSidStatus('socket2')}
-                    {renderSidStatus('ultiSid1')}
-                    {renderSidStatus('ultiSid2')}
-                  </div>
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleSidReset()}
+                  disabled={!status.isConnected || machineTaskBusy}
+                >
+                  Reset
+                </Button>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="space-y-3">
+                  {sidControlEntries.map((entry) => {
+                    const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
+                    const panKey = buildConfigKey('Audio Mixer', entry.panItem);
+                    const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
+                    const statusValue = sidStatusMap.get(entry.key);
+                    const statusLabel = statusValue === undefined ? '—' : statusValue ? 'ON' : 'OFF';
+                    const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
+                    const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
+                    const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
+                    const selectedVolume = volumeOptions.find((option) => option.trim() === entry.volume) ?? entry.volume;
+                    const selectedPan = panOptions.find((option) => option.trim() === entry.pan) ?? entry.pan;
+                    const selectedAddress = addressOptions.find((option) => option.trim() === entry.address) ?? entry.address;
+                    return (
+                      <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 p-3 space-y-2" data-testid={`home-sid-entry-${entry.key}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold">{entry.label}</span>
+                          <span className={statusValue ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
+                            {statusLabel}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Volume</span>
+                            <Select
+                              value={selectedVolume}
+                              onValueChange={(value) =>
+                                void updateConfigValue(
+                                  'Audio Mixer',
+                                  entry.volumeItem,
+                                  value,
+                                  'HOME_SID_VOLUME',
+                                  `${entry.label} volume updated`,
+                                )}
+                              disabled={!status.isConnected || Boolean(configWritePending[volumeKey])}
+                            >
+                              <SelectTrigger data-testid={`home-sid-volume-${entry.key}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {volumeOptions.map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option.trim()}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Pan</span>
+                            <Select
+                              value={selectedPan}
+                              onValueChange={(value) =>
+                                void updateConfigValue(
+                                  'Audio Mixer',
+                                  entry.panItem,
+                                  value,
+                                  'HOME_SID_PAN',
+                                  `${entry.label} pan updated`,
+                                )}
+                              disabled={!status.isConnected || Boolean(configWritePending[panKey])}
+                            >
+                              <SelectTrigger data-testid={`home-sid-pan-${entry.key}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {panOptions.map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Address</span>
+                            <Select
+                              value={selectedAddress}
+                              onValueChange={(value) =>
+                                void updateConfigValue(
+                                  'SID Addressing',
+                                  entry.addressItem,
+                                  value,
+                                  'HOME_SID_ADDRESS',
+                                  `${entry.label} address updated`,
+                                )}
+                              disabled={!status.isConnected || Boolean(configWritePending[addressKey])}
+                            >
+                              <SelectTrigger data-testid={`home-sid-address-${entry.key}`}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {addressOptions.map((option) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              {renderStreamStatus()}
+            </div>
+
+            <div className="space-y-2" data-testid="home-stream-status">
+              <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                <span>Streams</span>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="space-y-2">
+                  {streamControlEntries.map((entry) => {
+                    const draft = streamDrafts[entry.key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+                    const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
+                    return (
+                      <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-foreground">{entry.label}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void handleStreamToggle(entry.key)}
+                            disabled={!status.isConnected || pending}
+                            data-testid={`home-stream-toggle-${entry.key}`}
+                          >
+                            {draft.enabled ? 'ON' : 'OFF'}
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 text-[11px]">
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground">IP</span>
+                            <Input
+                              value={draft.ip}
+                              onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
+                              onBlur={() => void handleStreamCommit(entry.key)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  void handleStreamCommit(entry.key);
+                                }
+                              }}
+                              disabled={!status.isConnected || pending || !draft.enabled}
+                              data-testid={`home-stream-ip-${entry.key}`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-muted-foreground">Port</span>
+                            <Input
+                              value={draft.port}
+                              onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
+                              onBlur={() => void handleStreamCommit(entry.key)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                  void handleStreamCommit(entry.key);
+                                }
+                              }}
+                              disabled={!status.isConnected || pending || !draft.enabled}
+                              data-testid={`home-stream-port-${entry.key}`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         </motion.div>

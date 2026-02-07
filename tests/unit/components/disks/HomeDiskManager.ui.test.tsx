@@ -91,6 +91,7 @@ describe('HomeDiskManager UI & Interactions', () => {
     const mockApi = {
         driveOn: vi.fn(),
         driveOff: vi.fn(),
+        resetDrive: vi.fn(),
         mountDisk: vi.fn(),
         unmountDrive: vi.fn(),
         getBaseUrl: () => 'http://mock-host',
@@ -142,6 +143,18 @@ describe('HomeDiskManager UI & Interactions', () => {
             // Should revert to 'Turn Off' visually after error? 
             // The state optimistic update happens, then catch block reverts it.
             expect(toggleBtn).not.toBeDisabled(); 
+        });
+    });
+
+    it('resets all connected drives from disks page control', async () => {
+        render(<HomeDiskManager />);
+        fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
+        await waitFor(() => {
+            expect(mockApi.resetDrive).toHaveBeenCalledWith('a');
+            expect(mockApi.resetDrive).toHaveBeenCalledWith('b');
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+                title: 'Drives reset',
+            }));
         });
     });
 

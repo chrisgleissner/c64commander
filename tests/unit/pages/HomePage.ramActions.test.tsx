@@ -108,6 +108,12 @@ vi.mock('@/lib/config/ramDumpFolderStore', () => ({
   loadRamDumpFolderConfig: () => null,
 }));
 
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
+  }),
+}));
+
 describe('HomePage RAM actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
