@@ -1,12 +1,13 @@
 import type { HarnessConfig } from "../../lib/config.js";
 import { RestClient } from "../../lib/restClient.js";
 import { FtpClient } from "../../lib/ftpClient.js";
+import type { LogEventInput } from "../../lib/logging.js";
 
 export type MixedScenarioContext = {
     rest: RestClient;
     request: RestClient["request"];
     config: HarnessConfig;
-    log: (event: Record<string, unknown>) => void;
+    log: (event: LogEventInput) => void;
 };
 
 export type MixedScenario = {

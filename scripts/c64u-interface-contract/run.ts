@@ -9,16 +9,10 @@ import { buildMixedScenarios } from "./scenarios/mixed/index.js";
 import { HealthMonitor } from "./lib/health.js";
 import { LatencyTracker, deriveCooldown, delay } from "./lib/timing.js";
 import { SchemaValidator, schemaPath } from "./lib/schema.js";
+import type { LogEventInput } from "./lib/logging.js";
 import yaml from "js-yaml";
 
-type LogEvent = {
-    timestamp: string;
-    kind: string;
-    op: string;
-    status?: number | string;
-    latencyMs?: number;
-    details?: Record<string, unknown>;
-};
+type LogEvent = LogEventInput & { timestamp: string };
 
 const args = parseArgs(process.argv.slice(2));
 const config = loadConfig(args.configPath);
@@ -33,7 +27,7 @@ fs.mkdirSync(latestRoot, { recursive: true });
 const logStream = fs.createWriteStream(path.join(runRoot, "logs.ndjson"), { flags: "a" });
 const latencyMap = new Map<string, { kind: "REST" | "FTP"; tracker: LatencyTracker }>();
 
-const log = (event: Omit<LogEvent, "timestamp">) => {
+const log = (event: LogEventInput) => {
     const payload: LogEvent = { timestamp: new Date().toISOString(), ...event };
     logStream.write(`${JSON.stringify(payload)}\n`);
     if (event.latencyMs !== undefined && (event.kind === "rest" || event.kind === "ftp")) {

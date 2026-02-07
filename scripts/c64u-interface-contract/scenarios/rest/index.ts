@@ -1,12 +1,13 @@
 import { RestClient } from "../../lib/restClient.js";
 import { delay } from "../../lib/timing.js";
 import type { HarnessConfig } from "../../lib/config.js";
+import type { LogEventInput } from "../../lib/logging.js";
 
 export type RestScenarioContext = {
     rest: RestClient;
     request: RestClient["request"];
     config: HarnessConfig;
-    log: (event: Record<string, unknown>) => void;
+    log: (event: LogEventInput) => void;
 };
 
 export type RestScenario = {

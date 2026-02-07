@@ -1,16 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
-import Ajv from "ajv";
+import Ajv, { type ErrorObject } from "ajv";
 import addFormats from "ajv-formats";
 
 export type SchemaValidationResult = { valid: boolean; errors?: string[] };
 
+type AjvLike = {
+    compile: (schema: unknown) => {
+        (data: unknown): boolean;
+        errors?: ErrorObject[];
+    };
+};
+
 export class SchemaValidator {
-    private readonly ajv: Ajv;
+    private readonly ajv: AjvLike;
 
     constructor() {
-        this.ajv = new Ajv({ allErrors: true, strict: true });
-        addFormats(this.ajv);
+        const AjvCtor = Ajv as unknown as new (opts?: unknown) => AjvLike;
+        this.ajv = new AjvCtor({ allErrors: true, strict: true });
+        const addFormatsFn = addFormats as unknown as (ajv: AjvLike) => void;
+        addFormatsFn(this.ajv);
     }
 
     validate(schemaPath: string, data: unknown): SchemaValidationResult {
@@ -19,7 +28,7 @@ export class SchemaValidator {
         const valid = validate(data);
         return {
             valid: Boolean(valid),
-            errors: validate.errors?.map((err) => `${err.instancePath} ${err.message}`)
+            errors: validate.errors?.map((err: ErrorObject) => `${err.instancePath} ${err.message}`)
         };
     }
 }

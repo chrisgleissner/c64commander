@@ -58,9 +58,23 @@ export class RestClient {
         return {
             status: response.status,
             data: response.data,
-            headers: response.headers,
+            headers: normalizeHeaders(response.headers),
             latencyMs,
             correlationId
         };
     }
+}
+
+function normalizeHeaders(headers: Record<string, unknown>): Record<string, string | string[] | undefined> {
+    const normalized: Record<string, string | string[] | undefined> = {};
+    for (const [key, value] of Object.entries(headers)) {
+        if (typeof value === "string" || Array.isArray(value)) {
+            normalized[key] = value as string | string[];
+        } else if (value === undefined || value === null) {
+            normalized[key] = undefined;
+        } else {
+            normalized[key] = String(value);
+        }
+    }
+    return normalized;
 }
