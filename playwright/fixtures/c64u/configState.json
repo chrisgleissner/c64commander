@@ -187,6 +187,18 @@
       ]
     }
   },
+  "Data Streams": {
+    "Stream Audio to": {
+      "value": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "Stream VIC to": {
+      "value": "239.0.1.90:11000"
+    }
+  },
   "Drive A Settings": {
     "Drive Type": {
       "value": "1541",

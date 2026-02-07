@@ -4,6 +4,7 @@
     "auth": "ON",
     "password": "changeme",
     "ftpMode": "PASV",
+    "ftpPort": 21,
     "outputDir": "test-results/contract",
     "concurrency": {
         "restMaxInFlight": 2,

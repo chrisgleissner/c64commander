@@ -20,7 +20,7 @@ export type MixedScenario = {
 function makeFtpClient(config: HarnessConfig): FtpClient {
     return new FtpClient({
         host: new URL(config.baseUrl).hostname,
-        port: 21,
+        port: config.ftpPort ?? 21,
         user: "anonymous",
         password: config.auth === "ON" ? config.password || "" : "",
         mode: config.ftpMode,

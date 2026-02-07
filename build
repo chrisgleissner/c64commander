@@ -342,6 +342,7 @@ run_contract_test() {
   export CONTRACT_TEST_SID_SONGNR
   export CONTRACT_TEST_PRG_PATH
   export CONTRACT_TEST_PRG_ACTION
+  export CONTRACT_TEST_TARGET="$C64U_TARGET"
 
   node --input-type=module - "$config_path" <<'NODE'
 import fs from 'node:fs';
@@ -352,6 +353,7 @@ const cfg = {
   mode: process.env.CONTRACT_TEST_MODE_UPPER,
   auth: process.env.CONTRACT_TEST_AUTH_UPPER,
   ftpMode: 'PASV',
+  ftpPort: 21,
   outputDir: 'test-results/contract',
   concurrency: { restMaxInFlight: 2, ftpMaxSessions: 1, mixedMaxInFlight: 2 },
   pacing: { restMinDelayMs: 100, ftpMinDelayMs: 100 },
@@ -405,8 +407,6 @@ NODE
     echo "Contract test harness failed (tsc=${tsc_status}, run=${run_status})" >&2
     harness_status=1
   fi
-
-  contract_test_teardown "$base_url" "$auth"
 
   if [[ "$harness_status" -ne 0 ]]; then
     exit 1

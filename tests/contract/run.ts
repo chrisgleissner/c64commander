@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { loadConfig } from "./lib/config.js";
+import { startContractMockServers, type ContractMockServers } from "./mockServers.js";
 import { RestClient } from "./lib/restClient.js";
 import { buildRestScenarios } from "./scenarios/rest/index.js";
 import { buildFtpScenarios } from "./scenarios/ftp/index.js";
@@ -16,7 +17,16 @@ type LogEvent = LogEventInput & { timestamp: string };
 type ConcurrencyObservation = { scope: string; maxInFlight: number; failureMode: string; notes?: string };
 
 const args = parseArgs(process.argv.slice(2));
-const config = loadConfig(args.configPath);
+let config = loadConfig(args.configPath);
+let mockServers: ContractMockServers | null = null;
+if (process.env.CONTRACT_TEST_TARGET?.toLowerCase() === "mock") {
+    mockServers = await startContractMockServers();
+    config = {
+        ...config,
+        baseUrl: mockServers.baseUrl,
+        ftpPort: mockServers.ftpPort,
+    };
+}
 
 const runId = `${formatTimestamp(new Date())}-${config.mode}-${config.auth}`;
 const runRoot = path.join(process.cwd(), config.outputDir, "runs", runId);
@@ -203,6 +213,9 @@ try {
         await rebootAndRecover(restClient, config);
     } finally {
         logStream.end();
+        if (mockServers) {
+            await mockServers.close();
+        }
     }
 }
 

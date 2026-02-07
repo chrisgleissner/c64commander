@@ -14,6 +14,7 @@ export const ConfigSchema = z
         auth: AuthSchema,
         password: z.string().optional(),
         ftpMode: FtpModeSchema,
+        ftpPort: z.number().int().min(1).max(65535).optional(),
         outputDir: z.string(),
         concurrency: z.object({
             restMaxInFlight: z.number().int().min(1),
@@ -80,6 +81,7 @@ export const DefaultConfig: HarnessConfig = {
     auth: "OFF",
     password: "",
     ftpMode: "PASV",
+    ftpPort: 21,
     outputDir: "test-results/contract",
     concurrency: {
         restMaxInFlight: 2,

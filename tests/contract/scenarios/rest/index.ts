@@ -516,7 +516,7 @@ async function resolveMediaFilePath({ basePath, extensions, config, log, label }
     if (hasMatchingExtension(basePath, extensions)) return basePath;
     const cacheKey = `${label}:${basePath.toLowerCase()}`;
     if (mediaDiscoveryCache.has(cacheKey)) return mediaDiscoveryCache.get(cacheKey) ?? null;
-    const client = new FtpClient({ host: new URL(config.baseUrl).hostname, port: 21, user: "anonymous", password: config.auth === "ON" ? config.password || "" : "", mode: config.ftpMode, timeoutMs: config.timeouts.ftpTimeoutMs });
+    const client = new FtpClient({ host: new URL(config.baseUrl).hostname, port: config.ftpPort ?? 21, user: "anonymous", password: config.auth === "ON" ? config.password || "" : "", mode: config.ftpMode, timeoutMs: config.timeouts.ftpTimeoutMs });
     try {
         await client.connect();
         const resolved = await findFirstMatchingFile(client, basePath, extensions);
