@@ -45,10 +45,10 @@ Strict loop: plan -> execute -> verify. Do not proceed to the next phase until t
 - [ ] Collect outputs and confirm recovery behavior.
 
 ## Phase 5: Reporting and Integration Guidance
-- [ ] Write report: doc/c64/interface-contract.md with required tables and references.
-- [ ] Document SAFE vs STRESS coverage and excluded endpoints with rationale.
-- [ ] Provide reproduction commands.
-- [ ] Provide integration guidance and optional loader feature flag.
+- [x] Write report: doc/c64/interface-contract.md with required tables and references.
+- [x] Document SAFE vs STRESS coverage and excluded endpoints with rationale.
+- [x] Provide reproduction commands.
+- [x] Provide integration guidance and optional loader feature flag.
 
 ## Phase 6: Verification
 - [x] Validate all output JSON files against schemas.
@@ -61,3 +61,6 @@ Strict loop: plan -> execute -> verify. Do not proceed to the next phase until t
 - [x] npm install (lockfile sync after adding Ajv, ajv-formats, @types/js-yaml)
 - [x] npx tsc -p scripts/c64u-interface-contract/tsconfig.json
 - [x] node scripts/c64u-interface-contract/dist/run.js --config scripts/c64u-interface-contract/config.safe.authoff.json
+- [ ] vitest run (via runTests tool) FAILED: localStorage not defined in connectionManager tests; alias @/lib/* not resolved in hvsc and deviceInteraction tests.
+- [x] npm run lint
+- [x] npm run build (warning: Module "url" externalized for browser compatibility)
