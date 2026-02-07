@@ -168,7 +168,7 @@ export const clearRamAndReboot = async (api: C64API) => {
     rebooted = true;
     paused = false;
   } catch (error) {
-    operationError = asError(error, 'Reboot (Clr Mem) failed');
+    operationError = asError(error, 'Reboot (Clear RAM) failed');
   } finally {
     if (paused && !rebooted) {
       try {
@@ -184,12 +184,12 @@ export const clearRamAndReboot = async (api: C64API) => {
   }
 
   if (operationError && resumeFailure) {
-    throw new Error(`Reboot (Clr Mem) failed: ${operationError.message}; resume failed: ${resumeFailure.message}`);
+    throw new Error(`Reboot (Clear RAM) failed: ${operationError.message}; resume failed: ${resumeFailure.message}`);
   }
   if (operationError) {
-    throw new Error(`Reboot (Clr Mem) failed: ${operationError.message}`);
+    throw new Error(`Reboot (Clear RAM) failed: ${operationError.message}`);
   }
   if (resumeFailure) {
-    throw new Error(`Reboot (Clr Mem) failed while resuming: ${resumeFailure.message}`);
+    throw new Error(`Reboot (Clear RAM) failed while resuming: ${resumeFailure.message}`);
   }
 };

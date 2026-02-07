@@ -41,7 +41,7 @@
 - [x] Add `Streams` section below SID using REST-backed config values for VIC/Audio/Debug ON/OFF + IP + port.
 - [x] Rework Machine Control layout to compact 4-column grid with 3-row footprint and 9 buttons.
 - [x] Keep existing machine semantics and add:
-  - Reboot (Clr Mem)
+  - Reboot (Clear RAM)
   - Save RAM
   - Load RAM
 - [x] Enforce in-flight disabling and atomic UI behavior for RAM/reboot-clear flows.

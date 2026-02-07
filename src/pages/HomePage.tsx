@@ -503,7 +503,7 @@ export default function HomePage() {
               />
               <QuickActionCard
                 icon={RotateCcw}
-                label="Reboot (Clr Mem)"
+                label="Reboot (Clear RAM)"
                 compact
                 onClick={() => void handleRebootClearMemory()}
                 disabled={!status.isConnected || machineTaskBusy}

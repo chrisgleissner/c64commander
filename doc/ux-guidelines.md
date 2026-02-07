@@ -224,7 +224,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 
 - Compact machine control grid (4-column layout) with:
   - Reset, Reboot, Menu, Pause, Resume
-  - Reboot (Clr Mem), Save RAM, Load RAM
+  - Reboot (Clear RAM), Save RAM, Load RAM
   - Power Off with accidental-tap protection
 - RAM dump folder panel (current folder + Change Folder)
 - Configuration quick actions sized to match machine control cards

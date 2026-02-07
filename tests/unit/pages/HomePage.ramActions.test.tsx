@@ -139,7 +139,7 @@ describe('HomePage RAM actions', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /reboot \(clr mem\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /reboot \(Clear RAM\)/i }));
 
     await waitFor(() => expect(clearRamAndRebootSpy).toHaveBeenCalledTimes(1));
     expect(toastSpy).toHaveBeenCalledWith({
