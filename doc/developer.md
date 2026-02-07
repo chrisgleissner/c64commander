@@ -54,6 +54,26 @@ Notes:
 - `C64U_PASSWORD` is optional.
 - `--song` and `--duration-ms` (or `C64U_SONGNR` / `C64U_DURATION_MS`) are optional.
 
+## HVSC duplicate file name scan
+
+To list HVSC file name frequencies from `songlengths.txt`/`Songlengths.txt`:
+
+```bash
+python3 scripts/hvsc_filename_frequency.py /path/to/HVSC
+```
+
+To print only duplicate file names:
+
+```bash
+python3 scripts/hvsc_filename_frequency.py /path/to/HVSC --duplicates-only
+```
+
+The script also accepts a direct Songlengths file path:
+
+```bash
+python3 scripts/hvsc_filename_frequency.py /path/to/HVSC/DOCUMENTS/Songlengths.md5 --duplicates-only
+```
+
 ## UI typography stability
 
 Root cause (resolved): the app bar and several UI labels used the `font-mono` class, but JetBrains Mono is not bundled. When styles re-applied after interactions, browsers swapped to the default monospace fallback, causing visible font shifts and header height changes. The fix standardizes UI labels/values on the sans-serif stack (`Inter` → `Arial` → system) and removes monospace usage from standard UI elements.

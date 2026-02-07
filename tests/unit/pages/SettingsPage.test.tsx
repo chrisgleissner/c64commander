@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SettingsPage from '@/pages/SettingsPage';
 import { reportUserError } from '@/lib/uiErrors';
@@ -92,6 +92,12 @@ vi.mock('@/components/ThemeProvider', () => ({
   }),
 }));
 
+vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+  ),
+}));
+
 vi.mock('@/hooks/useDeveloperMode', () => ({
   useDeveloperMode: () => ({
     isDeveloperModeEnabled: false,
@@ -117,10 +123,25 @@ vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
 }));
 
+const buildRouter = (ui: JSX.Element) => createMemoryRouter(
+  [{ path: '*', element: ui }],
+  {
+    initialEntries: ['/'],
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
+  },
+);
+
 const renderSettingsPage = () => render(
-  <MemoryRouter>
-    <SettingsPage />
-  </MemoryRouter>,
+  <RouterProvider
+    router={buildRouter(<SettingsPage />)}
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}
+  />,
 );
 
 vi.mock('@/lib/uiErrors', () => ({

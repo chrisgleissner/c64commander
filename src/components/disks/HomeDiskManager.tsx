@@ -1,16 +1,17 @@
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder } from 'lucide-react';
+import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
-import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { useActionTrace } from '@/hooks/useActionTrace';
@@ -32,12 +33,40 @@ import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore'
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
+import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import {
+  buildBusIdOptions,
+  buildTypeOptions,
+  normalizeDriveDevices,
+  type DriveDeviceClass,
+} from '@/lib/drives/driveDevices';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
 type DriveKey = (typeof DRIVE_KEYS)[number];
 
 const buildDriveLabel = (key: DriveKey) => `Drive ${key.toUpperCase()}`;
+const DRIVE_CONFIG_CATEGORY: Record<DriveKey, string> = {
+  a: 'Drive A Settings',
+  b: 'Drive B Settings',
+};
+const DRIVE_BUS_ID_ITEM = 'Drive Bus ID';
+const DRIVE_TYPE_ITEM = 'Drive Type';
+const DRIVE_BUS_ID_DEFAULTS = [8, 9, 10, 11] as const;
+const DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'] as const;
+const DRIVE_DEFAULT_BUS_ID: Record<DriveKey, number> = { a: 8, b: 9 };
+const DRIVE_DEFAULT_TYPE = '1541';
+const SOFT_IEC_DEFAULT_PATH_ITEM = 'Default Path';
+const SOFT_IEC_DEFAULT_PATH_FALLBACK = '/USB0/';
+const SOFT_IEC_BUS_ID_DEFAULTS = Array.from({ length: 23 }, (_, index) => index + 8);
+const ROW1_CONTROL_CLASS = 'h-9 w-14 rounded-md px-0 text-xs font-semibold';
+const INLINE_META_SELECT_CLASS = 'h-7 border-transparent bg-transparent px-1.5 text-xs shadow-none focus:ring-1 focus:ring-ring data-[state=open]:border-border data-[state=open]:bg-background';
+const SOFT_IEC_CONTROL = {
+  class: 'SOFT_IEC_DRIVE' as DriveDeviceClass,
+  category: 'SoftIEC Drive Settings',
+  enabledItem: 'IEC Drive',
+  busItem: 'Soft Drive Bus ID',
+};
 
 const buildDrivePath = (path?: string | null, file?: string | null) => {
   if (!file) return null;
@@ -45,9 +74,10 @@ const buildDrivePath = (path?: string | null, file?: string | null) => {
   return base.endsWith('/') ? `${base}${file}` : `${base}/${file}`;
 };
 
-const DiskIndicator = ({ mounted }: { mounted: boolean }) => (
-  <Disc className={`h-4 w-4 ${mounted ? 'text-success' : 'text-muted-foreground'}`} />
-);
+const normalizeDirectoryPath = (value: string) => {
+  const normalized = normalizeSourcePath(value || '/');
+  return normalized.endsWith('/') ? normalized : `${normalized}/`;
+};
 
 const LocationIcon = ({ location }: { location: DiskEntry['location'] }) => (
   <FileOriginIcon
@@ -98,7 +128,9 @@ export const HomeDiskManager = () => {
   const [mountedByDrive, setMountedByDrive] = useState<Record<string, string>>({});
   const [drivePowerOverride, setDrivePowerOverride] = useState<Record<string, boolean>>({});
   const [drivePowerPending, setDrivePowerPending] = useState<Record<string, boolean>>({});
+  const [driveResetPending, setDriveResetPending] = useState<Record<string, boolean>>({});
   const [browserOpen, setBrowserOpen] = useState(false);
+  const [softIecDirectoryBrowserOpen, setSoftIecDirectoryBrowserOpen] = useState(false);
   const [addItemsProgress, setAddItemsProgress] = useState<AddItemsProgressState>({
     status: 'idle',
     count: 0,
@@ -132,6 +164,36 @@ export const HomeDiskManager = () => {
 
   const api = getC64API();
   const queryClient = useQueryClient();
+  const [driveConfigPending, setDriveConfigPending] = useState<Record<DriveKey, boolean>>({ a: false, b: false });
+  const [softIecConfigPending, setSoftIecConfigPending] = useState(false);
+  const refreshDrivesFromDevice = useCallback(async () => {
+    await queryClient.fetchQuery({
+      queryKey: ['c64-drives'],
+      queryFn: () => api.getDrives(),
+      staleTime: 0,
+    });
+  }, [api, queryClient]);
+  const { data: driveAConfig } = useC64ConfigItems(
+    DRIVE_CONFIG_CATEGORY.a,
+    [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: driveBConfig } = useC64ConfigItems(
+    DRIVE_CONFIG_CATEGORY.b,
+    [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: softIecConfig } = useC64ConfigItems(
+    SOFT_IEC_CONTROL.category,
+    [SOFT_IEC_CONTROL.busItem, SOFT_IEC_DEFAULT_PATH_ITEM],
+    status.isConnected || status.isConnecting,
+  );
+
+  const normalizedDriveModel = useMemo(
+    () => normalizeDriveDevices(drivesData ?? null),
+    [drivesData],
+  );
+  const softIecDevice = normalizedDriveModel.devices.find((entry) => entry.class === SOFT_IEC_CONTROL.class) ?? null;
 
   const localSourcesById = useMemo(
     () => new Map(localSources.map((source) => [source.id, source])),
@@ -146,6 +208,10 @@ export const HomeDiskManager = () => {
       { label: 'This device', sources: localGroupSources },
     ];
   }, [localSources]);
+  const softIecDirectorySourceGroups: SourceGroup[] = useMemo(() => {
+    const ultimateSource = createUltimateSourceLocation();
+    return [{ label: 'C64 Ultimate', sources: [ultimateSource] }];
+  }, []);
 
   useEffect(() => {
     setSelectedDiskIds((prev) => {
@@ -160,18 +226,21 @@ export const HomeDiskManager = () => {
     setDrivePowerOverride((prev) => {
       let changed = false;
       const next = { ...prev };
-      DRIVE_KEYS.forEach((drive) => {
-        const info = drivesData.drives.find((entry) => entry[drive])?.[drive];
-        if (info?.enabled === undefined) return;
-        const override = next[drive];
-        if (override !== undefined && override === info.enabled) {
-          delete next[drive];
+      const actualStates: Record<string, boolean | undefined> = {
+        a: normalizedDriveModel.devices.find((entry) => entry.class === 'PHYSICAL_DRIVE_A')?.enabled,
+        b: normalizedDriveModel.devices.find((entry) => entry.class === 'PHYSICAL_DRIVE_B')?.enabled,
+        softiec: normalizedDriveModel.devices.find((entry) => entry.class === SOFT_IEC_CONTROL.class)?.enabled,
+      };
+      Object.entries(actualStates).forEach(([key, actual]) => {
+        if (typeof actual !== 'boolean') return;
+        if (next[key] !== undefined && next[key] === actual) {
+          delete next[key];
           changed = true;
         }
       });
       return changed ? next : prev;
     });
-  }, [drivesData?.drives]);
+  }, [drivesData?.drives, normalizedDriveModel.devices]);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -326,38 +395,68 @@ export const HomeDiskManager = () => {
     }
   });
 
-  const handleToggleDrivePower = trace(async (drive: DriveKey, targetEnabled: boolean) => {
+  const handleToggleDrivePower = trace(async (
+    driveKey: string,
+    driveLabel: string,
+    targetEnabled: boolean,
+    errorKey: string,
+  ) => {
     if (!status.isConnected) return;
-    setDrivePowerPending((prev) => ({ ...prev, [drive]: true }));
-    setDrivePowerOverride((prev) => ({ ...prev, [drive]: targetEnabled }));
+    setDrivePowerPending((prev) => ({ ...prev, [errorKey]: true }));
+    setDrivePowerOverride((prev) => ({ ...prev, [errorKey]: targetEnabled }));
     try {
       if (targetEnabled) {
-        await api.driveOn(drive);
+        await api.driveOn(driveKey);
       } else {
-        await api.driveOff(drive);
+        await api.driveOff(driveKey);
       }
-      setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+      setDriveErrors((prev) => ({ ...prev, [errorKey]: '' }));
       toast({
         title: targetEnabled ? 'Drive powered on' : 'Drive powered off',
-        description: `${buildDriveLabel(drive)} ${targetEnabled ? 'enabled' : 'disabled'}.`,
+        description: `${driveLabel} ${targetEnabled ? 'enabled' : 'disabled'}.`,
       });
       queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
     } catch (error) {
       setDrivePowerOverride((prev) => {
         const next = { ...prev };
-        delete next[drive];
+        delete next[errorKey];
         return next;
       });
-      setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
+      setDriveErrors((prev) => ({ ...prev, [errorKey]: (error as Error).message }));
       reportUserError({
         operation: 'DRIVE_POWER',
         title: 'Drive power toggle failed',
         description: (error as Error).message,
         error,
-        context: { drive, targetEnabled },
+        context: { driveKey, driveLabel, targetEnabled },
       });
     } finally {
-      setDrivePowerPending((prev) => ({ ...prev, [drive]: false }));
+      setDrivePowerPending((prev) => ({ ...prev, [errorKey]: false }));
+    }
+  });
+
+  const handleResetDrive = trace(async (driveKey: string, driveLabel: string, errorKey: string) => {
+    if (!status.isConnected || driveResetPending[errorKey]) return;
+    setDriveResetPending((prev) => ({ ...prev, [errorKey]: true }));
+    try {
+      await api.resetDrive(driveKey);
+      await refreshDrivesFromDevice();
+      setDriveErrors((prev) => ({ ...prev, [errorKey]: '' }));
+      toast({
+        title: `${driveLabel} reset`,
+        description: `${driveLabel} was reset.`,
+      });
+    } catch (error) {
+      setDriveErrors((prev) => ({ ...prev, [errorKey]: (error as Error).message }));
+      reportUserError({
+        operation: 'RESET_DRIVES',
+        title: 'Drive reset failed',
+        description: (error as Error).message,
+        error,
+        context: { driveKey, driveLabel },
+      });
+    } finally {
+      setDriveResetPending((prev) => ({ ...prev, [errorKey]: false }));
     }
   });
 
@@ -372,6 +471,193 @@ export const HomeDiskManager = () => {
     const disk = diskLibrary.disks.find((entry) => entry.location === 'ultimate' && entry.path === fullPath);
     return disk?.id ?? null;
   };
+
+  const withRetry = async <T,>(operation: string, run: () => Promise<T>, attempts = 2) => {
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await run();
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt >= attempts) break;
+        addErrorLog('Drive config update retry', {
+          operation,
+          attempt,
+          attempts,
+          error: lastError.message,
+        });
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 120);
+        });
+      }
+    }
+    throw new Error(`${operation} failed: ${lastError?.message ?? 'unknown error'}`);
+  };
+
+  const getCategoryConfigValue = (payload: unknown, categoryName: string, itemName: string) => {
+    const record = payload as Record<string, unknown> | undefined;
+    const categoryBlock = record?.[categoryName] as Record<string, unknown> | undefined;
+    const itemsBlock = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+    if (!itemsBlock || !Object.prototype.hasOwnProperty.call(itemsBlock, itemName)) return undefined;
+    return normalizeConfigItem(itemsBlock[itemName]).value;
+  };
+
+  const getDriveConfigValue = (payload: unknown, drive: DriveKey, itemName: string) =>
+    getCategoryConfigValue(payload, DRIVE_CONFIG_CATEGORY[drive], itemName);
+
+  const parseBusId = (value: unknown) => {
+    const numeric = typeof value === 'number' ? value : Number(String(value ?? '').trim());
+    if (!Number.isInteger(numeric)) return null;
+    return numeric;
+  };
+
+  const parseDriveType = (value: unknown) => {
+    const normalized = String(value ?? '').trim();
+    return normalized.length ? normalized : null;
+  };
+
+  const resolveDriveBusId = (drive: DriveKey, payload: unknown, fallbackInfo?: { bus_id?: number }) => {
+    const fromConfig = parseBusId(getDriveConfigValue(payload, drive, DRIVE_BUS_ID_ITEM));
+    if (fromConfig !== null) return fromConfig;
+    const fromDriveInfo = parseBusId(fallbackInfo?.bus_id);
+    if (fromDriveInfo !== null) return fromDriveInfo;
+    return DRIVE_DEFAULT_BUS_ID[drive];
+  };
+
+  const resolveDriveType = (drive: DriveKey, payload: unknown, fallbackInfo?: { type?: string }) => {
+    const fromConfig = parseDriveType(getDriveConfigValue(payload, drive, DRIVE_TYPE_ITEM));
+    if (fromConfig) return fromConfig;
+    const fromDriveInfo = parseDriveType(fallbackInfo?.type);
+    if (fromDriveInfo) return fromDriveInfo;
+    return DRIVE_DEFAULT_TYPE;
+  };
+
+  const resolveSoftIecDefaultPath = (payload: unknown, fallbackPath?: string | null) => {
+    const fromConfig = String(
+      getCategoryConfigValue(payload, SOFT_IEC_CONTROL.category, SOFT_IEC_DEFAULT_PATH_ITEM)
+      ?? '',
+    ).trim();
+    if (fromConfig.length) return normalizeDirectoryPath(fromConfig);
+    if (fallbackPath && fallbackPath.trim()) return normalizeDirectoryPath(fallbackPath);
+    return SOFT_IEC_DEFAULT_PATH_FALLBACK;
+  };
+
+  const handleDriveConfigUpdate = trace(async (
+    drive: DriveKey,
+    itemName: string,
+    value: string | number,
+    successTitle: string,
+    successDescription: string,
+  ) => {
+    if (!status.isConnected) return;
+    setDriveConfigPending((prev) => ({ ...prev, [drive]: true }));
+    try {
+      const category = DRIVE_CONFIG_CATEGORY[drive];
+      await withRetry(
+        `${buildDriveLabel(drive)} ${itemName} update`,
+        () => api.setConfigValue(category, itemName, value),
+      );
+      setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+      toast({ title: successTitle, description: successDescription });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            Array.isArray(query.queryKey)
+            && query.queryKey[0] === 'c64-config-items'
+            && query.queryKey[1] === category,
+        }),
+        queryClient.invalidateQueries({ queryKey: ['c64-drives'] }),
+      ]);
+    } catch (error) {
+      setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
+      reportUserError({
+        operation: 'DRIVE_CONFIG_UPDATE',
+        title: 'Drive setting update failed',
+        description: (error as Error).message,
+        error,
+        context: { drive, itemName, value },
+      });
+    } finally {
+      setDriveConfigPending((prev) => ({ ...prev, [drive]: false }));
+    }
+  });
+
+  const handleSoftIecConfigUpdate = trace(async (
+    itemName: 'IEC Drive' | 'Soft Drive Bus ID' | 'Default Path',
+    value: string | number,
+    successTitle: string,
+    successDescription: string,
+  ) => {
+    if (!status.isConnected) return false;
+    setSoftIecConfigPending(true);
+    try {
+      await withRetry(
+        `Soft IEC ${itemName} update`,
+        () => api.setConfigValue(SOFT_IEC_CONTROL.category, itemName, value),
+      );
+      setDriveErrors((prev) => ({ ...prev, softiec: '' }));
+      toast({ title: successTitle, description: successDescription });
+      await Promise.all([
+        refreshDrivesFromDevice(),
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            Array.isArray(query.queryKey)
+            && query.queryKey[0] === 'c64-config-items'
+            && query.queryKey[1] === SOFT_IEC_CONTROL.category,
+        }),
+      ]);
+      return true;
+    } catch (error) {
+      setDriveErrors((prev) => ({ ...prev, softiec: (error as Error).message }));
+      reportUserError({
+        operation: 'SOFT_IEC_CONFIG_UPDATE',
+        title: 'Soft IEC setting update failed',
+        description: (error as Error).message,
+        error,
+        context: { itemName, value },
+      });
+      return false;
+    } finally {
+      setSoftIecConfigPending(false);
+    }
+  });
+
+  const handleSoftIecDirectorySelect = trace(async (source: SourceLocation, selections: SelectedItem[]) => {
+    if (!status.isConnected) {
+      reportUserError({
+        operation: 'SOFT_IEC_CONFIG_UPDATE',
+        title: 'Offline',
+        description: 'Connect to select a default directory.',
+      });
+      return false;
+    }
+    if (source.type !== 'ultimate') {
+      reportUserError({
+        operation: 'SOFT_IEC_CONFIG_UPDATE',
+        title: 'Unsupported source',
+        description: 'Default Path must be selected from C64 Ultimate storage.',
+      });
+      return false;
+    }
+
+    const directorySelection = selections.find((selection) => selection.type === 'dir');
+    if (!directorySelection) {
+      reportUserError({
+        operation: 'SOFT_IEC_CONFIG_UPDATE',
+        title: 'Select directory',
+        description: 'Choose a folder. File selection is not supported for Default Path.',
+      });
+      return false;
+    }
+
+    const directoryPath = normalizeDirectoryPath(directorySelection.path);
+    return handleSoftIecConfigUpdate(
+      SOFT_IEC_DEFAULT_PATH_ITEM,
+      directoryPath,
+      'Soft IEC default path updated',
+      `Default Path set to ${directoryPath}`,
+    );
+  });
 
   const handleRotate = trace(async (drive: DriveKey, direction: 1 | -1) => {
     const currentId = resolveMountedDiskId(drive);
@@ -842,6 +1128,11 @@ export const HomeDiskManager = () => {
 
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
+    const driveConfigPayload = key === 'a' ? driveAConfig : driveBConfig;
+    const busId = resolveDriveBusId(key, driveConfigPayload, info);
+    const driveType = resolveDriveType(key, driveConfigPayload, info);
+    const busOptions = buildBusIdOptions([...DRIVE_BUS_ID_DEFAULTS], busId);
+    const driveTypeOptions = buildTypeOptions([...DRIVE_TYPE_DEFAULTS], driveType);
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === 'boolean';
@@ -856,22 +1147,49 @@ export const HomeDiskManager = () => {
       ? diskLibrary.disks.filter((disk) => disk.group === mountedDisk.group).length
       : 0;
     const canRotate = Boolean(mountedDisk?.group && groupSize > 1);
-    const mountedLabel = forcedEmpty ? '--' : mountedDisk?.name || info?.image_file || '--';
+    const mountedDiskName = forcedEmpty ? null : mountedDisk?.name || info?.image_file || null;
+    const mountedLabel = mountedDiskName ?? 'No disk mounted';
 
     return {
       key,
+      driveLabel: buildDriveLabel(key),
       info,
       mounted,
       mountedDisk,
       canRotate,
       mountedLabel,
+      busId,
+      busOptions,
+      driveType,
+      driveTypeOptions,
       powerEnabled,
       hasPowerState,
       powerLabel,
       powerTarget,
       powerPending,
+      configPending: Boolean(driveConfigPending[key]),
+      resetPending: Boolean(driveResetPending[key]),
+      errorMessage: driveErrors[key] || '',
     };
   });
+
+  const softIecConfigBusId = parseBusId(getCategoryConfigValue(softIecConfig, SOFT_IEC_CONTROL.category, SOFT_IEC_CONTROL.busItem));
+  const softIecBusId = softIecConfigBusId ?? softIecDevice?.busId ?? 11;
+  const softIecBusOptions = buildBusIdOptions([...SOFT_IEC_BUS_ID_DEFAULTS], softIecBusId);
+  const softIecDefaultPath = resolveSoftIecDefaultPath(
+    softIecConfig,
+    softIecDevice?.partitions?.[0]?.path ?? null,
+  );
+  const softIecMounted = Boolean(softIecDevice?.imageFile);
+  const softIecMountedLabel = softIecDevice?.imageFile ?? 'No disk mounted';
+  const softIecPowerEnabled = drivePowerOverride.softiec ?? softIecDevice?.enabled ?? false;
+  const softIecHasPowerState = typeof softIecPowerEnabled === 'boolean';
+  const softIecPowerLabel = softIecPowerEnabled ? 'Turn Off' : 'Turn On';
+  const softIecPowerTarget = !softIecPowerEnabled;
+  const softIecResetPending = Boolean(driveResetPending.softiec);
+  const softIecPowerPending = Boolean(drivePowerPending.softiec);
+  const softIecEndpointKey = softIecDevice?.endpointKey ?? 'softiec';
+  const softIecErrorMessage = driveErrors.softiec || (softIecDevice?.lastError ? 'Service error reported.' : '');
 
   return (
     <div className="space-y-6">
@@ -881,84 +1199,273 @@ export const HomeDiskManager = () => {
           Drives
         </h3>
         <div className="grid gap-3">
-          {driveRows.map(({ key, info, mounted, mountedDisk, canRotate, mountedLabel, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending }) => (
-            <div key={key} className="config-card space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm">{buildDriveLabel(key)}</span>
-                  <span className="text-xs text-muted-foreground">#{info?.bus_id ?? '—'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${powerEnabled ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      }`}
+          {driveRows.map(({ key, driveLabel, mounted, mountedDisk, canRotate, mountedLabel, busId, busOptions, driveType, driveTypeOptions, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending, resetPending, errorMessage }) => (
+            <div key={key} className="config-card space-y-2" data-testid={`drive-card-${key}`}>
+              <div className="flex min-w-0 items-baseline justify-between gap-2">
+                <span className="truncate text-sm font-semibold">{driveLabel}</span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    variant={powerEnabled ? 'secondary' : 'outline'}
+                    size="sm"
+                    className={ROW1_CONTROL_CLASS}
+                    onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
+                    disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
+                    data-testid={`drive-status-toggle-${key}`}
                   >
                     {powerEnabled ? 'ON' : 'OFF'}
-                  </span>
-                  <DiskIndicator mounted={mounted} />
+                  </Button>
+                  <Button
+                    variant={mounted ? 'secondary' : 'outline'}
+                    size="sm"
+                    className={ROW1_CONTROL_CLASS}
+                    onClick={() => {
+                      if (mounted) {
+                        void handleEject(key);
+                      } else {
+                        setActiveDrive(key);
+                      }
+                    }}
+                    disabled={!status.isConnected || configPending}
+                    data-testid={`drive-mount-toggle-${key}`}
+                    aria-label={`${driveLabel} ${mounted ? 'Eject disk' : 'Mount disk'}`}
+                  >
+                    <Disc className={cn('h-4 w-4', mounted ? 'text-success' : 'text-muted-foreground')} />
+                  </Button>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2 min-w-0">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted-foreground">Mounted disk</p>
-                  <p className="text-sm font-medium break-words whitespace-normal max-w-full">
-                    {mountedLabel}
-                  </p>
+              <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+                <span className="shrink-0">Bus ID</span>
+                <Select
+                  value={String(busId)}
+                  onValueChange={(value) =>
+                    void handleDriveConfigUpdate(
+                      key,
+                      DRIVE_BUS_ID_ITEM,
+                      Number(value),
+                      'Drive Bus ID updated',
+                      `${driveLabel} now uses device #${value}.`,
+                    )}
+                  disabled={!status.isConnected || configPending}
+                >
+                  <SelectTrigger
+                    className={cn(INLINE_META_SELECT_CLASS, 'w-[76px] min-w-[76px]')}
+                    aria-label={`${driveLabel} Bus ID`}
+                    data-testid={`drive-bus-select-${key}`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {busOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        #{option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">•</span>
+                <span className="shrink-0">Drive Type</span>
+                <Select
+                  value={driveType}
+                  onValueChange={(value) =>
+                    void handleDriveConfigUpdate(
+                      key,
+                      DRIVE_TYPE_ITEM,
+                      value,
+                      'Drive Type updated',
+                      `${driveLabel} switched to ${value} mode.`,
+                    )}
+                  disabled={!status.isConnected || configPending}
+                >
+                  <SelectTrigger
+                    className={cn(INLINE_META_SELECT_CLASS, 'w-[80px] min-w-[80px]')}
+                    aria-label={`${driveLabel} Drive Type`}
+                    data-testid={`drive-type-select-${key}`}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {driveTypeOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <p className="truncate text-xs text-muted-foreground">{mountedLabel}</p>
                   {mountedDisk?.group ? (
-                    <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground min-w-0">
-                      <span
-                        className={cn('h-2 w-2 rounded-full border', pickDiskGroupColor(mountedDisk.group).chip)}
-                        aria-hidden="true"
-                      />
-                      <span className={cn(pickDiskGroupColor(mountedDisk.group).text, 'break-words min-w-0')}>
-                        Group: {mountedDisk.group}
-                      </span>
+                    <span className={cn('h-2 w-2 shrink-0 rounded-full border', pickDiskGroupColor(mountedDisk.group).chip)} aria-hidden="true" />
+                  ) : null}
+                  {mountedDisk?.group ? (
+                    <span className={cn(pickDiskGroupColor(mountedDisk.group).text, 'truncate text-[11px]')}>{mountedDisk.group}</span>
+                  ) : null}
+                  {canRotate ? (
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => void handleRotate(key, -1)}
+                        disabled={!status.isConnected || configPending}
+                        aria-label={`${driveLabel} previous disk`}
+                      >
+                        <ArrowRightLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => void handleRotate(key, 1)}
+                        disabled={!status.isConnected || configPending}
+                        aria-label={`${driveLabel} next disk`}
+                      >
+                        <ArrowLeftRight className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {mounted && (
-                    <Button variant="outline" size="sm" onClick={() => void handleEject(key)} disabled={!status.isConnected}>
-                      Eject
-                    </Button>
-                  )}
-                  <Button variant="default" size="sm" onClick={() => setActiveDrive(key)} disabled={!status.isConnected}>
-                    Mount…
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => void handleResetDrive(key, driveLabel, key)}
+                    disabled={!status.isConnected || resetPending || configPending}
+                    aria-label={`Reset ${driveLabel}`}
+                    data-testid={`drive-reset-${key}`}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
+                    disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
+                    data-testid={`drive-power-toggle-${key}`}
+                  >
+                    {powerLabel}
                   </Button>
                 </div>
               </div>
 
-              {canRotate && (
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void handleRotate(key, -1)} disabled={!status.isConnected}>
-                    <ArrowRightLeft className="h-4 w-4 mr-1" />
-                    Prev
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => void handleRotate(key, 1)} disabled={!status.isConnected}>
-                    <ArrowLeftRight className="h-4 w-4 mr-1" />
-                    Next
-                  </Button>
-                </div>
-              )}
-
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleToggleDrivePower(key, powerTarget)}
-                  disabled={!status.isConnected || !hasPowerState || powerPending}
-                  data-testid={`drive-power-toggle-${key}`}
-                >
-                  {powerLabel}
-                </Button>
-              </div>
-
-              {driveErrors[key] ? (
-                <p className="text-xs text-destructive">{driveErrors[key]}</p>
+              {errorMessage ? (
+                <p className="text-xs text-destructive">{errorMessage}</p>
               ) : null}
             </div>
           ))}
+
+          <div className="config-card space-y-2" data-testid="drive-soft-iec-row">
+            <div className="flex min-w-0 items-baseline justify-between gap-2">
+              <span className="truncate text-sm font-semibold">Soft IEC Drive</span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button
+                  variant={softIecPowerEnabled ? 'secondary' : 'outline'}
+                  size="sm"
+                  className={ROW1_CONTROL_CLASS}
+                  onClick={() =>
+                    void handleSoftIecConfigUpdate(
+                      'IEC Drive',
+                      softIecPowerEnabled ? 'Disabled' : 'Enabled',
+                      softIecPowerEnabled ? 'Soft IEC disabled' : 'Soft IEC enabled',
+                      softIecPowerEnabled ? 'Soft IEC drive turned off.' : 'Soft IEC drive turned on.',
+                    )}
+                  disabled={!status.isConnected || !softIecHasPowerState || softIecConfigPending}
+                  data-testid="drive-status-toggle-soft-iec"
+                >
+                  {softIecPowerEnabled ? 'ON' : 'OFF'}
+                </Button>
+                <Button
+                  variant={softIecMounted ? 'secondary' : 'outline'}
+                  size="sm"
+                  className={ROW1_CONTROL_CLASS}
+                  onClick={() => setSoftIecDirectoryBrowserOpen(true)}
+                  disabled={!status.isConnected || softIecConfigPending}
+                  data-testid="drive-mount-toggle-soft-iec"
+                  aria-label="Soft IEC Drive select directory"
+                >
+                  <Disc className={cn('h-4 w-4', softIecMounted ? 'text-success' : 'text-muted-foreground')} />
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs text-muted-foreground">
+              <span className="shrink-0">Bus ID</span>
+              <Select
+                value={String(softIecBusId)}
+                onValueChange={(value) =>
+                  void handleSoftIecConfigUpdate(
+                    'Soft Drive Bus ID',
+                    Number(value),
+                    'Soft IEC bus ID updated',
+                    `Soft IEC now uses device #${value}.`,
+                  )}
+                disabled={!status.isConnected || softIecConfigPending}
+              >
+                <SelectTrigger
+                  className={cn(INLINE_META_SELECT_CLASS, 'w-[76px] min-w-[76px]')}
+                  data-testid="drive-bus-select-soft-iec"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {softIecBusOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      #{option}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">•</span>
+              <span className="shrink-0">Default Path</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 min-w-0 max-w-full justify-start px-1.5 text-xs font-medium"
+                onClick={() => setSoftIecDirectoryBrowserOpen(true)}
+                disabled={!status.isConnected || softIecConfigPending}
+                data-testid="drive-default-path-select-soft-iec"
+                aria-label="Select directory for Soft IEC Default Path"
+              >
+                <span className="truncate">Select directory ({softIecDefaultPath})</span>
+              </Button>
+            </div>
+
+            <div className="flex min-w-0 items-center justify-between gap-2">
+              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{softIecMountedLabel}</p>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => void handleResetDrive(softIecEndpointKey, 'Soft IEC Drive', 'softiec')}
+                  disabled={!status.isConnected || softIecResetPending || softIecConfigPending}
+                  aria-label="Reset Soft IEC Drive"
+                  data-testid="drive-reset-soft-iec"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-8 px-3 text-xs"
+                  onClick={() => void handleToggleDrivePower(softIecEndpointKey, 'Soft IEC Drive', softIecPowerTarget, 'softiec')}
+                  disabled={!status.isConnected || !softIecHasPowerState || softIecPowerPending || softIecConfigPending}
+                  data-testid="drive-power-toggle-soft-iec"
+                >
+                  {softIecPowerLabel}
+                </Button>
+              </div>
+            </div>
+
+            {softIecErrorMessage ? (
+              <p className="text-xs text-destructive">{softIecErrorMessage}</p>
+            ) : null}
+          </div>
         </div>
       </section>
 
@@ -1054,7 +1561,7 @@ export const HomeDiskManager = () => {
             <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {driveRows.map(({ key, info, mounted }) => (
+            {driveRows.map(({ key, busId, driveType, mounted, configPending }) => (
               <Button
                 key={key}
                 variant="outline"
@@ -1062,10 +1569,10 @@ export const HomeDiskManager = () => {
                   if (!activeDisk) return;
                   void handleMountDisk(key, activeDisk).finally(() => setActiveDisk(null));
                 }}
-                disabled={!status.isConnected}
+                disabled={!status.isConnected || configPending}
               >
                 <HardDrive className="h-4 w-4 mr-2" />
-                {buildDriveLabel(key)} (#{info?.bus_id ?? '—'}) {mounted ? '• mounted' : ''}
+                {buildDriveLabel(key)} (#{busId}, {driveType}) {mounted ? '• mounted' : ''}
               </Button>
             ))}
           </div>
@@ -1089,6 +1596,19 @@ export const HomeDiskManager = () => {
         onAutoConfirmStart={handleAutoConfirmStart}
         autoConfirmLocalSource={false}
         onCancelScan={cancelAddItemsScan}
+      />
+      <ItemSelectionDialog
+        open={softIecDirectoryBrowserOpen}
+        onOpenChange={setSoftIecDirectoryBrowserOpen}
+        title="Soft IEC Default Path"
+        confirmLabel="Select directory"
+        sourceGroups={softIecDirectorySourceGroups}
+        onAddLocalSource={async () => null}
+        onConfirm={handleSoftIecDirectorySelect}
+        filterEntry={() => false}
+        allowFolderSelection
+        isConfirming={softIecConfigPending}
+        autoConfirmLocalSource={false}
       />
 
       {!browserOpen ? (

@@ -254,15 +254,15 @@ test.describe('UI coverage', () => {
   test('home page shows resolved version', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const expectedVersion = resolveExpectedVersion() || '—';
-    const versionCard = page.getByText('Version', { exact: true }).locator('..');
-    const versionText = versionCard.locator('p');
+    const versionText = page.getByTestId('home-system-version');
     if (expectedVersion === '—') {
       await expect(versionText).toHaveText('—');
     } else {
       const tagMatch = expectedVersion.match(/^(.+?)-[0-9a-f]{7,}$/i);
       if (tagMatch) {
         const escapedTag = tagMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}-[0-9a-f]{7,8}$`));
+        // Accept SHA-style suffixes and branch/build suffixes produced by CI metadata.
+        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}-[0-9a-z][0-9a-z-]{3,20}$`, 'i'));
       } else {
         await expect(versionText).toHaveText(expectedVersion);
       }

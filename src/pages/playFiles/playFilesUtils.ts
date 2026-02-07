@@ -130,20 +130,3 @@ export const shuffleArray = <T,>(items: T[]) => {
   return shuffled;
 };
 
-export const getSidSongCount = (buffer: ArrayBuffer) => {
-  try {
-    const view = new DataView(buffer);
-    if (view.byteLength < 18) return 1;
-    const magic = String.fromCharCode(
-      view.getUint8(0),
-      view.getUint8(1),
-      view.getUint8(2),
-      view.getUint8(3),
-    );
-    if (magic !== 'PSID' && magic !== 'RSID') return 1;
-    const songs = view.getUint16(14, false);
-    return songs > 0 ? songs : 1;
-  } catch {
-    return 1;
-  }
-};

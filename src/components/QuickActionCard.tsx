@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { LucideIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface QuickActionCardProps {
   icon: LucideIcon;
@@ -9,6 +10,9 @@ interface QuickActionCardProps {
   variant?: 'default' | 'danger' | 'success';
   disabled?: boolean;
   loading?: boolean;
+  compact?: boolean;
+  className?: string;
+  dataTestId?: string;
 }
 
 export function QuickActionCard({
@@ -19,6 +23,9 @@ export function QuickActionCard({
   variant = 'default',
   disabled = false,
   loading = false,
+  compact = false,
+  className,
+  dataTestId,
 }: QuickActionCardProps) {
   const variantClasses = {
     default: 'hover:border-primary hover:bg-primary/5',
@@ -31,22 +38,29 @@ export function QuickActionCard({
       whileTap={{ scale: 0.95 }}
       onClick={onClick}
       disabled={disabled || loading}
-      className={`quick-action ${variantClasses[variant]} ${
-        disabled ? 'opacity-50 cursor-not-allowed' : ''
-      }`}
+      data-testid={dataTestId}
+      className={cn(
+        'quick-action',
+        compact ? 'gap-1.5 p-2.5 min-h-[86px]' : null,
+        variantClasses[variant],
+        disabled ? 'opacity-50 cursor-not-allowed' : null,
+        className,
+      )}
     >
-      <div className={`p-2 rounded-lg ${
-        variant === 'danger' 
-          ? 'bg-destructive/10 text-destructive' 
+      <div className={cn(
+        compact ? 'p-1.5' : 'p-2',
+        'rounded-lg',
+        variant === 'danger'
+          ? 'bg-destructive/10 text-destructive'
           : variant === 'success'
             ? 'bg-success/10 text-success'
-            : 'bg-primary/10 text-primary'
-      }`}>
-        <Icon className={`h-6 w-6 ${loading ? 'animate-pulse' : ''}`} />
+            : 'bg-primary/10 text-primary',
+      )}>
+        <Icon className={cn(compact ? 'h-5 w-5' : 'h-6 w-6', loading ? 'animate-pulse' : null)} />
       </div>
-      <span className="font-medium text-sm">{label}</span>
+      <span className={cn('font-medium', compact ? 'text-xs leading-tight' : 'text-sm')}>{label}</span>
       {description && (
-        <span className="text-xs text-muted-foreground">{description}</span>
+        <span className={cn('text-muted-foreground', compact ? 'text-[11px] leading-tight' : 'text-xs')}>{description}</span>
       )}
     </motion.button>
   );

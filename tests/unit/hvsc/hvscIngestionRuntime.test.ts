@@ -17,6 +17,7 @@ import { fetchLatestHvscVersions } from '@/lib/hvsc/hvscReleaseService';
 import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from '@/lib/hvsc/hvscFilesystem';
 import { deleteLibraryFile, resetLibraryRoot, resetSonglengthsCache, writeLibraryFile, readCachedArchiveMarker } from '@/lib/hvsc/hvscFilesystem';
 import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
+import { addLog } from '@/lib/logging';
 
 if (!(vi as typeof vi & { mocked?: <T>(value: T) => T }).mocked) {
   (vi as typeof vi & { mocked: <T>(value: T) => T }).mocked = (value) => value;
@@ -237,6 +238,17 @@ describe('hvscIngestionRuntime', () => {
     expect(writeLibraryFile).toHaveBeenCalled();
     expect(deleteLibraryFile).toHaveBeenCalledWith('/demo.sid');
     expect(resetSonglengthsCache).toHaveBeenCalled();
+    const transitions = vi.mocked(addLog).mock.calls
+      .filter((call) => call[1] === 'HVSC pipeline transition')
+      .map((call) => (call[2] as { toState?: string })?.toState);
+    expect(transitions).toEqual([
+      'DOWNLOADING',
+      'DOWNLOADED',
+      'EXTRACTING',
+      'EXTRACTED',
+      'INGESTING',
+      'READY',
+    ]);
   });
 
   it('downloads archives via fetch when cache is missing', async () => {

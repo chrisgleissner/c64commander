@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
-import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
 import { getC64API } from '@/lib/c64api';
 import { toast } from '@/hooks/use-toast';
@@ -37,6 +37,7 @@ vi.mock('@/lib/uiErrors');
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 vi.mock('@/lib/disks/diskMount', () => ({
@@ -91,6 +92,7 @@ describe('HomeDiskManager UI & Interactions', () => {
     const mockApi = {
         driveOn: vi.fn(),
         driveOff: vi.fn(),
+        resetDrive: vi.fn(),
         mountDisk: vi.fn(),
         unmountDrive: vi.fn(),
         getBaseUrl: () => 'http://mock-host',
@@ -113,6 +115,7 @@ describe('HomeDiskManager UI & Interactions', () => {
         (useC64Drives as any).mockReturnValue({
             data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
         });
+        (useC64ConfigItems as any).mockReturnValue({ data: undefined });
     });
 
     it('renders drive power toggle and handles error', async () => {
@@ -141,6 +144,17 @@ describe('HomeDiskManager UI & Interactions', () => {
             // Should revert to 'Turn Off' visually after error? 
             // The state optimistic update happens, then catch block reverts it.
             expect(toggleBtn).not.toBeDisabled(); 
+        });
+    });
+
+    it('resets an individual drive from its card control', async () => {
+        render(<HomeDiskManager />);
+        fireEvent.click(screen.getByTestId('drive-reset-a'));
+        await waitFor(() => {
+            expect(mockApi.resetDrive).toHaveBeenCalledWith('a');
+            expect(toast).toHaveBeenCalledWith(expect.objectContaining({
+                title: 'Drive A reset',
+            }));
         });
     });
 
@@ -316,7 +330,7 @@ describe('HomeDiskManager UI & Interactions', () => {
 
         mockApi.unmountDrive.mockRejectedValueOnce(new Error('Eject failed'));
 
-        const ejectBtn = screen.getByRole('button', { name: 'Eject' });
+        const ejectBtn = screen.getByRole('button', { name: 'Drive A Eject disk' });
         fireEvent.click(ejectBtn);
 
          await waitFor(() => {

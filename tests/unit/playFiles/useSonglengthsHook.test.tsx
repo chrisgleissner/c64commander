@@ -240,6 +240,33 @@ describe('useSonglengths', () => {
     expect(updated[0]?.durationMs).toBe(25_000);
   });
 
+  it('reprocesses playlist durations after selecting a new songlengths file', async () => {
+    const first = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:25\n');
+    const second = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabcd=0:45\n');
+    const playlistItem: PlaylistItem = {
+      id: 'song',
+      category: 'sid',
+      label: 'demo.sid',
+      path: '/MUSICIANS/demo.sid',
+      request: { source: 'local', path: '/MUSICIANS/demo.sid', songNr: 1 },
+    };
+
+    const { result } = renderUseSonglengths([playlistItem]);
+    act(() => {
+      result.current?.handleSonglengthsInput(toFileList(first));
+    });
+
+    const firstPass = await result.current?.applySonglengthsToItems([playlistItem]);
+    expect(firstPass?.[0]?.durationMs).toBe(25_000);
+
+    act(() => {
+      result.current?.handleSonglengthsInput(toFileList(second));
+    });
+
+    const secondPass = await result.current?.applySonglengthsToItems([playlistItem]);
+    expect(secondPass?.[0]?.durationMs).toBe(45_000);
+  });
+
   it('prefers Songlengths.md5 over Songlengths.txt when both exist in the same folder', async () => {
     const txt = makeTextFile('DOCUMENTS/Songlengths.txt', '/MUSICIANS/demo.sid 0:10\n');
     const md5 = makeTextFile('DOCUMENTS/Songlengths.md5', '; /MUSICIANS/demo.sid\nabc=0:20\n');

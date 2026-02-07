@@ -103,6 +103,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
     setQueryData: vi.fn(),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 
@@ -142,6 +143,7 @@ const useC64DrivesMock = {
 vi.mock('@/hooks/useC64Connection', () => ({
   useC64Connection: () => useC64ConnectionMock,
   useC64Drives: () => useC64DrivesMock,
+  useC64ConfigItems: () => ({ data: undefined }),
 }));
 
 const mockAddSourceFromPicker = vi.fn();
@@ -279,15 +281,15 @@ describe('HomeDiskManager Extended', () => {
         fireEvent.click(within(dialog).getByText(/Drive A/));
 
         await waitFor(() => {
-            expect(screen.getByText('Eject')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Drive A Eject disk' })).toBeInTheDocument();
         });
 
-        const ejectBtn = screen.getByText('Eject');
+        const ejectBtn = screen.getByRole('button', { name: 'Drive A Eject disk' });
         fireEvent.click(ejectBtn);
 
         await waitFor(() => {
             expect(mockUnmountDrive).toHaveBeenCalledWith('a');
-            expect(screen.queryByText('Eject')).not.toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Drive A Mount disk' })).toBeInTheDocument();
         });
     });
 
@@ -316,11 +318,11 @@ describe('HomeDiskManager Extended', () => {
         fireEvent.click(within(dialog).getByText(/Drive A/));
 
         await waitFor(() => {
-             expect(screen.getByText('Next')).toBeInTheDocument();
-             expect(screen.getByText('Prev')).toBeInTheDocument();
+             expect(screen.getByRole('button', { name: 'Drive A next disk' })).toBeInTheDocument();
+             expect(screen.getByRole('button', { name: 'Drive A previous disk' })).toBeInTheDocument();
         });
 
-        fireEvent.click(screen.getByText('Next'));
+        fireEvent.click(screen.getByRole('button', { name: 'Drive A next disk' }));
 
         await waitFor(() => {
             expect(mockMountDisk).toHaveBeenCalledWith('a', '/disk2.d64', 'd64', 'readwrite');

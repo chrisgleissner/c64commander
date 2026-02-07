@@ -412,6 +412,7 @@ function CategorySection({
       <button
         onClick={wrapUserEvent(() => setIsOpen(!isOpen), 'toggle', 'ConfigSection', { title: categoryName }, 'ConfigHeader')}
         className="w-full flex items-center justify-between px-4 py-3 text-left"
+        data-testid={`config-category-${categoryName.toLowerCase().replace(/\s+/g, '-')}`}
       >
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-muted">

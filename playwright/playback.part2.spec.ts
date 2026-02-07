@@ -17,7 +17,9 @@ const waitForRequests = async (predicate: () => boolean) => {
 };
 
 const openAddItemsDialog = async (page: Page) => {
-  await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+  const addButton = page.getByRole('button', { name: /Add items|Add more items/i });
+  await expect(addButton).toBeVisible({ timeout: 30000 });
+  await addButton.click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 

@@ -6,10 +6,12 @@ import { buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import {
   countSonglengthsEntries,
-  parseSonglengths,
-  resolveSonglengthsDurationMs,
-  resolveSonglengthsSeconds,
 } from '@/lib/sid/songlengths';
+import {
+  InMemoryTextBackend,
+  SongLengthServiceFacade,
+  type InMemorySongLengthSnapshot,
+} from '@/lib/songlengths';
 import {
   collectSonglengthsSearchPaths,
   DOCUMENTS_FOLDER,
@@ -64,8 +66,19 @@ export type UseSonglengthsResult = {
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
   ) => Promise<PlaylistItem[]>;
+  resolveSonglengthDurationMsForPath: (
+    path: string,
+    file?: LocalPlayFile | null,
+    songNr?: number | null,
+    songlengthsOverrides?: SonglengthsFileEntry[],
+  ) => Promise<number | null>;
   mergeSonglengthsFiles: (entries: SonglengthsFileEntry[]) => void;
   collectSonglengthsCandidates: (paths: string[]) => string[];
+};
+
+type SonglengthsResolverBundle = {
+  service: SongLengthServiceFacade;
+  snapshot: InMemorySongLengthSnapshot;
 };
 
 export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengthsResult => {
@@ -80,13 +93,13 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
   const songlengthsCacheRef = useRef(
     new Map<string, {
       signature: string;
-      promise: Promise<{ md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null>;
+      promise: Promise<SonglengthsResolverBundle | null>;
     }>(),
   );
   const songlengthsFileCacheRef = useRef(
     new Map<string, {
       mtime: number;
-      data: { md5ToSeconds: Map<string, number[]>; pathToSeconds: Map<string, number[]> } | null;
+      content: string | null;
     }>(),
   );
 
@@ -195,8 +208,10 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
         ? entry.file.size
         : entry.sizeBytes ?? buffer.byteLength;
       const text = new TextDecoder().decode(new Uint8Array(buffer));
-      const parsed = parseSonglengths(text);
-      const entryCount = countSonglengthsEntries(parsed);
+      const backend = new InMemoryTextBackend();
+      const service = new SongLengthServiceFacade(backend, { serviceId: 'play-songlengths-summary' });
+      await service.loadOnColdStart(path, async () => [{ path, content: text }], 'play-songlengths');
+      const entryCount = countSonglengthsEntries(backend.exportSnapshot());
       if (!entryCount) {
         setSonglengthsSummary({
           fileName,
@@ -229,7 +244,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     void summarizeSonglengthsFile(songlengthsFiles[0] ?? null);
   }, [songlengthsFiles, summarizeSonglengthsFile]);
 
-  const loadSonglengthsForPath = useCallback(async (
+  const loadSonglengthBundleForPath = useCallback(async (
     path: string,
     extraFiles?: SonglengthsFileEntry[],
   ) => {
@@ -267,27 +282,24 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     }
 
     const loader = (async () => {
-      const merged = { md5ToSeconds: new Map<string, number[]>(), pathToSeconds: new Map<string, number[]>() };
       const ordered = [...Array.from(files.values()).reverse(), ...globalFiles];
+      const sourceFiles: Array<{ path: string; content: string }> = [];
       for (const file of ordered) {
         try {
           const filePath = getLocalFilePath(file);
           const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
           const cachedEntry = songlengthsFileCacheRef.current.get(filePath);
-          if (cachedEntry && cachedEntry.mtime === mtime && cachedEntry.data) {
-            cachedEntry.data.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
-            cachedEntry.data.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
+          if (cachedEntry && cachedEntry.mtime === mtime && cachedEntry.content !== null) {
+            sourceFiles.push({ path: filePath, content: cachedEntry.content });
             continue;
           }
           const content = await readLocalText(file);
-          const parsed = parseSonglengths(content);
-          songlengthsFileCacheRef.current.set(filePath, { mtime, data: parsed });
-          parsed.pathToSeconds.forEach((value, key) => merged.pathToSeconds.set(key, value));
-          parsed.md5ToSeconds.forEach((value, key) => merged.md5ToSeconds.set(key, value));
+          songlengthsFileCacheRef.current.set(filePath, { mtime, content });
+          sourceFiles.push({ path: filePath, content });
         } catch (error) {
           const filePath = getLocalFilePath(file);
           const mtime = typeof file.lastModified === 'number' ? file.lastModified : 0;
-          songlengthsFileCacheRef.current.set(filePath, { mtime, data: null });
+          songlengthsFileCacheRef.current.set(filePath, { mtime, content: null });
           addErrorLog('Failed to read or parse songlengths file', {
             filePath,
             mtime,
@@ -295,12 +307,47 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
           });
         }
       }
-      return merged;
+      if (!sourceFiles.length) {
+        const backend = new InMemoryTextBackend();
+        const service = new SongLengthServiceFacade(backend, { serviceId: 'play-songlengths' });
+        return { service, snapshot: backend.exportSnapshot() };
+      }
+
+      const backend = new InMemoryTextBackend({
+        onRejectedLine: ({ sourceFile, line, raw, reason }) => {
+          addErrorLog('Songlengths line rejected', {
+            sourceFile,
+            line,
+            raw,
+            reason,
+          });
+        },
+        onAmbiguous: ({ fileName, partialPath, candidateCount, candidates }) => {
+          addErrorLog('Songlengths ambiguity detected', {
+            fileName,
+            partialPath,
+            candidateCount,
+            candidates,
+          });
+        },
+      });
+      const service = new SongLengthServiceFacade(backend, { serviceId: 'play-songlengths' });
+      const stats = await service.loadOnColdStart(cacheKey, async () => sourceFiles, 'play-songlengths');
+      if (stats.status !== 'ready') return null;
+      return { service, snapshot: backend.exportSnapshot() };
     })();
 
     songlengthsCacheRef.current.set(cacheKey, { signature, promise: loader });
     return loader;
   }, [readLocalText, songlengthsFilesByDir]);
+
+  const loadSonglengthsForPath = useCallback(async (
+    path: string,
+    extraFiles?: SonglengthsFileEntry[],
+  ) => {
+    const bundle = await loadSonglengthBundleForPath(path, extraFiles);
+    return bundle?.snapshot ?? null;
+  }, [loadSonglengthBundleForPath]);
 
   const handleSonglengthsInput = useCallback((files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -359,6 +406,44 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     });
   }, []);
 
+  const resolveDurationMsWithFacade = useCallback(async (
+    service: SongLengthServiceFacade,
+    path: string,
+    file?: LocalPlayFile | null,
+    songNr?: number | null,
+  ) => {
+    const normalizedPath = normalizeLocalPath(path || '/');
+    const fileName = normalizedPath.split('/').pop() ?? null;
+    const resolvedByPath = service.resolveDurationSeconds({
+      virtualPath: normalizedPath,
+      fileName,
+      songNr: songNr ?? null,
+    });
+    if (resolvedByPath.durationSeconds !== null) {
+      return resolvedByPath.durationSeconds * 1000;
+    }
+    if (!file) return null;
+    try {
+      const buffer = await file.arrayBuffer();
+      const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
+      const md5 = await computeSidMd5(buffer);
+      const resolvedByMd5 = service.resolveDurationSeconds({
+        virtualPath: normalizedPath,
+        fileName,
+        md5,
+        songNr: songNr ?? null,
+      });
+      return resolvedByMd5.durationSeconds !== null ? resolvedByMd5.durationSeconds * 1000 : null;
+    } catch (error) {
+      addErrorLog('Failed to resolve songlength via facade md5 fallback', {
+        path: normalizedPath,
+        songNr: songNr ?? null,
+        error: (error as Error).message,
+      });
+      return null;
+    }
+  }, []);
+
   const applySonglengthsToItems = useCallback(async (
     items: PlaylistItem[],
     songlengthsOverrides?: SonglengthsFileEntry[],
@@ -370,9 +455,10 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
         const filePath = isLocal && item.request.file
           ? getLocalFilePath(item.request.file)
           : normalizeLocalPath(item.request.path);
-        const songlengths = await loadSonglengthsForPath(filePath, songlengthsOverrides);
-        const resolvedDurationMs = await resolveSonglengthsDurationMs(
-          songlengths,
+        const bundle = await loadSonglengthBundleForPath(filePath, songlengthsOverrides);
+        if (!bundle) return item;
+        const resolvedDurationMs = await resolveDurationMsWithFacade(
+          bundle.service,
           filePath,
           isLocal ? item.request.file : null,
           item.request.songNr ?? null,
@@ -382,7 +468,18 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
       }),
     );
     return updated;
-  }, [loadSonglengthsForPath]);
+  }, [loadSonglengthBundleForPath, resolveDurationMsWithFacade]);
+
+  const resolveSonglengthDurationMsForPath = useCallback(async (
+    path: string,
+    file?: LocalPlayFile | null,
+    songNr?: number | null,
+    songlengthsOverrides?: SonglengthsFileEntry[],
+  ) => {
+    const bundle = await loadSonglengthBundleForPath(path, songlengthsOverrides);
+    if (!bundle) return null;
+    return resolveDurationMsWithFacade(bundle.service, path, file ?? null, songNr ?? null);
+  }, [loadSonglengthBundleForPath, resolveDurationMsWithFacade]);
 
   const collectSonglengthsCandidates = useCallback((paths: string[]) => {
     return collectSonglengthsSearchPaths(paths);
@@ -396,6 +493,7 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     handleSonglengthsPicked,
     loadSonglengthsForPath,
     applySonglengthsToItems,
+    resolveSonglengthDurationMsForPath,
     mergeSonglengthsFiles,
     collectSonglengthsCandidates,
   };

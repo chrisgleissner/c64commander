@@ -1,24 +1,45 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import HomePage from '../../../src/pages/HomePage';
 
 const {
-  mockNavigate,
   toastSpy,
   reportUserErrorSpy,
+  c64ApiMockRef,
+  queryClientMockRef,
   sidSocketsPayloadRef,
   sidAddressingPayloadRef,
+  audioMixerPayloadRef,
+  streamPayloadRef,
+  driveASettingsPayloadRef,
+  driveBSettingsPayloadRef,
   statusPayloadRef,
   drivesPayloadRef,
   machineControlPayloadRef,
   appConfigStatePayloadRef,
 } = vi.hoisted(() => ({
-  mockNavigate: vi.fn(),
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
+  c64ApiMockRef: {
+    current: {
+      setConfigValue: vi.fn().mockResolvedValue({}),
+      resetDrive: vi.fn().mockResolvedValue({}),
+      writeMemory: vi.fn().mockResolvedValue({}),
+    },
+  },
+  queryClientMockRef: {
+    current: {
+      invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      fetchQuery: vi.fn().mockResolvedValue(undefined),
+    },
+  },
   sidSocketsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   sidAddressingPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  audioMixerPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  streamPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  driveASettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  driveBSettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   statusPayloadRef: {
     current: {
       isConnected: true,
@@ -35,7 +56,7 @@ const {
   },
   drivesPayloadRef: {
     current: {
-      drives: [] as Array<{ a?: { enabled: boolean; image_file?: string }; b?: { enabled: boolean } }>,
+      drives: [] as Array<Record<string, { enabled?: boolean; image_file?: string; bus_id?: number; type?: string }>>,
     },
   },
   machineControlPayloadRef: {
@@ -66,19 +87,44 @@ const {
   },
 }));
 
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
-});
-
 vi.mock('@/components/ThemeProvider', () => ({
   useThemeContext: () => ({
     theme: 'light',
     setTheme: vi.fn(),
   }),
+}));
+
+vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+  ),
+}));
+
+const buildRouter = (ui: JSX.Element) => createMemoryRouter(
+  [{ path: '*', element: ui }],
+  {
+    initialEntries: ['/'],
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
+  },
+);
+
+const renderWithRouter = (ui: JSX.Element) => render(
+  <RouterProvider
+    router={buildRouter(ui)}
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}
+  />,
+);
+
+const renderHomePage = () => renderWithRouter(<HomePage />);
+
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => queryClientMockRef.current,
 }));
 
 vi.mock('@/hooks/useC64Connection', () => ({
@@ -88,12 +134,25 @@ vi.mock('@/hooks/useC64Connection', () => ({
   useC64Drives: () => ({
     data: drivesPayloadRef.current,
   }),
+  useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   useC64ConfigItems: (category: string) => {
     if (category === 'SID Sockets Configuration') {
       return { data: sidSocketsPayloadRef.current };
     }
     if (category === 'SID Addressing') {
       return { data: sidAddressingPayloadRef.current };
+    }
+    if (category === 'Audio Mixer') {
+      return { data: audioMixerPayloadRef.current };
+    }
+    if (category === 'Data Streams') {
+      return { data: streamPayloadRef.current };
+    }
+    if (category === 'Drive A Settings') {
+      return { data: driveASettingsPayloadRef.current };
+    }
+    if (category === 'Drive B Settings') {
+      return { data: driveBSettingsPayloadRef.current };
     }
     return { data: null };
   },
@@ -116,12 +175,28 @@ vi.mock('@/lib/uiErrors', () => ({
   reportUserError: reportUserErrorSpy,
 }));
 
+vi.mock('@/lib/c64api', () => ({
+  getC64API: () => c64ApiMockRef.current,
+}));
+
 beforeEach(() => {
-  mockNavigate.mockReset();
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
+  queryClientMockRef.current = {
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
+  };
   sidSocketsPayloadRef.current = undefined;
   sidAddressingPayloadRef.current = undefined;
+  audioMixerPayloadRef.current = undefined;
+  streamPayloadRef.current = undefined;
+  driveASettingsPayloadRef.current = undefined;
+  driveBSettingsPayloadRef.current = undefined;
+  c64ApiMockRef.current = {
+    setConfigValue: vi.fn().mockResolvedValue({}),
+    resetDrive: vi.fn().mockResolvedValue({}),
+    writeMemory: vi.fn().mockResolvedValue({}),
+  };
   statusPayloadRef.current = {
     isConnected: true,
     isConnecting: false,
@@ -156,6 +231,11 @@ beforeEach(() => {
 });
 
 describe('HomePage SID status', () => {
+  it('renders the Home subtitle as C64 Commander', () => {
+    renderHomePage();
+    expect(screen.getByTestId('home-header-subtitle').textContent).toBe('C64 Commander');
+  });
+
   it('renders SID layout and updates on config changes', () => {
     (globalThis as any).__BUILD_TIME__ = new Date().toISOString();
     sidSocketsPayloadRef.current = {
@@ -175,11 +255,7 @@ describe('HomePage SID status', () => {
       },
     };
 
-    const { rerender } = render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    const { rerender } = renderHomePage();
 
     expect(screen.getByTestId('sid-status-label').textContent).toContain('SID');
     const sidSocket1 = screen.getByText('SID Socket 1');
@@ -212,15 +288,204 @@ describe('HomePage SID status', () => {
     };
 
     rerender(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
     );
 
     expect(screen.getByText('SID Socket 1').parentElement?.textContent ?? '').toContain('OFF');
     expect(screen.getByText('SID Socket 2').parentElement?.textContent ?? '').toContain('ON');
     expect(screen.getByText('UltiSID 1').parentElement?.textContent ?? '').toContain('ON');
     expect(screen.getByText('UltiSID 2').parentElement?.textContent ?? '').toContain('OFF');
+  });
+
+  it('renders compact stream rows with side-by-side IP and port from Data Streams config', () => {
+    streamPayloadRef.current = {
+      'Data Streams': {
+        items: {
+          'Stream VIC to': { selected: '239.0.1.64:11000' },
+          'Stream Audio to': { selected: 'off' },
+          'Stream Debug to': { selected: '239.0.1.66' },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    const streamSection = screen.getByTestId('home-stream-status');
+    expect(within(streamSection).getByTestId('stream-status-label').textContent).toContain('Streams');
+    expect(within(streamSection).getAllByTestId(/^home-stream-row-/)).toHaveLength(3);
+    expect(within(streamSection).getByText('VIC')).toBeTruthy();
+    expect(within(streamSection).getByText('AUDIO')).toBeTruthy();
+    expect(within(streamSection).getByText('DEBUG')).toBeTruthy();
+    expect(within(streamSection).getAllByText('ON').length).toBe(2);
+    expect(within(streamSection).getAllByText('OFF').length).toBe(1);
+    expect(within(streamSection).queryByTestId('home-stream-ip-vic')).toBeNull();
+    expect(within(streamSection).getByTestId('home-stream-ip-display-vic').textContent).toBe('239.0.1.64');
+    expect(within(streamSection).getByTestId('home-stream-port-display-vic').textContent).toBe('11000');
+    expect(within(streamSection).getByTestId('home-stream-ip-display-debug').textContent).toBe('239.0.1.66');
+    expect(within(streamSection).getByTestId('home-stream-port-display-debug').textContent).toBe('11002');
+  });
+
+  it('resets all connected drives from Home drives section', async () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, image_file: 'disk-a.d64' } },
+        { b: { enabled: true } },
+        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation' } },
+      ],
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
+
+    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(3));
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('a');
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('b');
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('softiec');
+    expect(queryClientMockRef.current.fetchQuery).toHaveBeenCalled();
+  });
+
+  it('resets printer only from Home printer section', async () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, image_file: 'disk-a.d64' } },
+        { b: { enabled: true } },
+        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation' } },
+        { 'Printer Emulation': { enabled: true, bus_id: 4 } },
+      ],
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Printer' }));
+
+    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(1));
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('printer');
+    expect(queryClientMockRef.current.fetchQuery).toHaveBeenCalled();
+  });
+
+  it('writes SID silence registers when SID reset is pressed', async () => {
+    sidAddressingPayloadRef.current = {
+      'SID Addressing': {
+        items: {
+          'SID Socket 1 Address': { selected: '$D400' },
+          'SID Socket 2 Address': { selected: 'Unmapped' },
+          'UltiSID 1 Address': { selected: '$D420' },
+          'UltiSID 2 Address': { selected: 'Unmapped' },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    const sidSection = screen.getByTestId('home-sid-status');
+    fireEvent.click(within(sidSection).getByRole('button', { name: 'Reset' }));
+
+    await waitFor(() => expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledTimes(20));
+    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D404', new Uint8Array([0]));
+    expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D424', new Uint8Array([0]));
+  });
+
+  it('rejects invalid stream host input safely', async () => {
+    streamPayloadRef.current = {
+      'Data Streams': {
+        items: {
+          'Stream VIC to': { selected: '239.0.1.64:11000' },
+          'Stream Audio to': { selected: 'off' },
+          'Stream Debug to': { selected: '239.0.1.66:11002' },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
+    const ipInput = screen.getByTestId('home-stream-ip-vic');
+    fireEvent.change(ipInput, { target: { value: 'bad host!' } });
+    fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
+
+    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'STREAM_VALIDATE',
+    })));
+    expect(screen.getByTestId('home-stream-error-vic').textContent).toContain('Enter a valid IPv4 address or host name');
+    expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalled();
+  });
+
+  it('supports inline stream edit with explicit confirm', async () => {
+    streamPayloadRef.current = {
+      'Data Streams': {
+        items: {
+          'Stream VIC to': { selected: '239.0.1.64:11000' },
+          'Stream Audio to': { selected: '239.0.1.65:11001' },
+          'Stream Debug to': { selected: 'off' },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
+    fireEvent.change(screen.getByTestId('home-stream-ip-vic'), { target: { value: '239.0.1.90' } });
+    fireEvent.change(screen.getByTestId('home-stream-port-vic'), { target: { value: '12000' } });
+    fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
+
+    await waitFor(() => expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+      'Data Streams',
+      'Stream VIC to',
+      '239.0.1.90:12000',
+    ));
+    expect(screen.queryByTestId('home-stream-ip-vic')).toBeNull();
+  });
+
+  it('renders compact drives rows and supports dropdown interaction', async () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, bus_id: 8, type: '1541' } },
+        { b: { enabled: true, bus_id: 9, type: '1571' } },
+        { 'IEC Drive': { enabled: false, bus_id: 11, type: 'DOS emulation' } },
+      ],
+    };
+    driveASettingsPayloadRef.current = {
+      'Drive A Settings': {
+        items: {
+          Drive: { selected: 'Enabled' },
+          'Drive Bus ID': { selected: '8', options: ['8', '9', '10', '11'] },
+          'Drive Type': { selected: '1541', options: ['1541', '1571', '1581'] },
+        },
+      },
+    };
+    driveBSettingsPayloadRef.current = {
+      'Drive B Settings': {
+        items: {
+          Drive: { selected: 'Enabled' },
+          'Drive Bus ID': { selected: '9', options: ['8', '9', '10', '11'] },
+          'Drive Type': { selected: '1571', options: ['1541', '1571', '1581'] },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    const drivesGroup = screen.getByTestId('home-drives-group');
+    expect(within(drivesGroup).getByTestId('home-drive-row-a')).toBeTruthy();
+    expect(within(drivesGroup).getByTestId('home-drive-row-b')).toBeTruthy();
+    expect(within(drivesGroup).getByTestId('home-drive-row-soft-iec')).toBeTruthy();
+
+    const driveBusSelect = screen.getByTestId('home-drive-bus-a');
+    fireEvent.click(driveBusSelect);
+    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
+    fireEvent.keyDown(document.activeElement ?? driveBusSelect, { key: 'Escape' });
+
+    const driveTypeSelect = screen.getByTestId('home-drive-type-a');
+    fireEvent.click(driveTypeSelect);
+    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
+    fireEvent.keyDown(document.activeElement ?? driveTypeSelect, { key: 'Escape' });
   });
 
   it('shows build info placeholders and offline message when disconnected', () => {
@@ -233,15 +498,16 @@ describe('HomePage SID status', () => {
       deviceInfo: null,
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
-    expect(screen.getByText('Version').nextSibling?.textContent).toContain('—');
-    expect(screen.getByText(/Git/i).nextSibling?.textContent).toContain('—');
-    expect(screen.getByText(/Build/i).nextSibling?.textContent).toContain('2026-01-01 12:00:00 UTC');
+    const systemInfo = screen.getByTestId('home-system-info');
+    fireEvent.click(systemInfo);
+
+    expect(screen.getByTestId('home-system-version').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-device').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-git').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-build-time').textContent).toContain('2026-01-01 12:00:00 UTC');
     expect(screen.getByText(/unable to connect to c64 ultimate/i)).toBeTruthy();
   });
 
@@ -265,31 +531,41 @@ describe('HomePage SID status', () => {
     (globalThis as any).__GIT_SHA__ = 'deadbeefcafefeed';
     (globalThis as any).__BUILD_TIME__ = '2024-03-20T12:34:00.000Z';
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
-    expect(screen.getByText('1.2.3')).toBeTruthy();
-    expect(screen.getByText('deadbeef')).toBeTruthy();
-    expect(screen.getByText('2024-03-20 12:34:00 UTC')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'C64U' })).toBeTruthy();
-    expect(screen.getByText('c64u.local')).toBeTruthy();
-    expect(screen.getByText('disk.d64')).toBeTruthy();
+    const systemInfo = screen.getByTestId('home-system-info');
+    fireEvent.click(systemInfo);
+
+    expect(screen.getByTestId('home-system-version').textContent).toContain('1.2.3');
+    expect(screen.getByTestId('home-system-device').textContent).toContain('c64u.local');
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain('1.0.0');
+    expect(screen.getByTestId('home-system-git').textContent).toContain('deadbeef');
+    expect(screen.getByTestId('home-system-build-time').textContent).toContain('2024-03-20 12:34:00 UTC');
+    expect(screen.getByTestId('home-drive-summary').textContent).toContain('disk.d64');
+  });
+
+  it('shows "No disk" on Home when drive A has no mounted image', () => {
+    statusPayloadRef.current = {
+      isConnected: true,
+      isConnecting: false,
+      deviceInfo: null,
+    };
+    drivesPayloadRef.current = {
+      drives: [{ a: { enabled: true }, b: { enabled: true } }],
+    };
+
+    renderHomePage();
+
+    expect(screen.getAllByText('No disk mounted').length).toBeGreaterThan(0);
   });
 
   it('handles machine actions and reports errors', async () => {
     const menuError = new Error('menu failed');
     machineControlPayloadRef.current.menuButton.mutateAsync = vi.fn().mockRejectedValue(menuError);
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Reset$/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /^Reset$/ })[0]);
     await waitFor(() => expect(machineControlPayloadRef.current.reset.mutateAsync).toHaveBeenCalled());
     expect(toastSpy).toHaveBeenCalledWith({ title: 'Machine reset' });
 
@@ -300,6 +576,40 @@ describe('HomePage SID status', () => {
       title: 'Error',
       context: { action: 'Menu toggled' },
     });
+  });
+
+  it('requires explicit confirmation before power off', async () => {
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
+    expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/cannot be powered on again via software/i)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
+    expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^power off$/i }));
+    await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
+  });
+
+  it('renders exactly eight machine controls with one pause-resume control', async () => {
+    renderHomePage();
+
+    const machineControls = screen.getByTestId('home-machine-controls');
+    expect(within(machineControls).getAllByRole('button')).toHaveLength(8);
+    expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
+    expect(within(machineControls).queryByRole('button', { name: /^resume$/i })).toBeNull();
+
+    fireEvent.click(within(machineControls).getByRole('button', { name: /^pause$/i }));
+
+    await waitFor(() => expect(machineControlPayloadRef.current.pause.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(within(machineControls).queryByRole('button', { name: /^pause$/i })).toBeNull();
+    expect(within(machineControls).getAllByRole('button', { name: /^resume$/i })).toHaveLength(1);
+
+    fireEvent.click(within(machineControls).getByRole('button', { name: /^resume$/i }));
+    await waitFor(() => expect(machineControlPayloadRef.current.resume.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
   });
 
   it('manages app configs via dialogs', async () => {
@@ -313,11 +623,7 @@ describe('HomePage SID status', () => {
       hasChanges: true,
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /revert changes/i }));
     await waitFor(() => expect(appConfigStatePayloadRef.current.revertToInitial).toHaveBeenCalled());

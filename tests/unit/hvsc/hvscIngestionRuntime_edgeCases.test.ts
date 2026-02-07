@@ -132,6 +132,39 @@ describe('hvscIngestionRuntime Edge Cases', () => {
              await expect(installOrUpdateHvsc('token-fail')).rejects.toThrow('Total fail');
              expect(deleteCachedArchive).toHaveBeenCalled();
         });
+
+        it('recovers on restart after an interrupted download', async () => {
+             vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+                 baselineVersion: 10,
+                 updateVersion: 10,
+                 baseUrl: 'http://foo'
+             });
+             vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+                 await onEntry('HVSC/C64Music/DEMO.sid', new Uint8Array([1, 2, 3]));
+             });
+
+             globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection lost'));
+             await expect(installOrUpdateHvsc('token-interrupt')).rejects.toThrow('Connection lost');
+             expect(deleteCachedArchive).toHaveBeenCalled();
+
+             globalThis.fetch = vi.fn()
+               .mockResolvedValueOnce({
+                 ok: true,
+                 status: 200,
+                 statusText: 'OK',
+                 headers: { get: () => '3' },
+               } as any)
+               .mockResolvedValueOnce({
+                 ok: true,
+                 status: 200,
+                 statusText: 'OK',
+                 headers: { get: () => '3' },
+                 body: null,
+                 arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+               } as any);
+
+             await expect(installOrUpdateHvsc('token-interrupt-retry')).resolves.toBeDefined();
+        });
     });
 
     describe('Cancellation', () => {
@@ -185,5 +218,92 @@ describe('hvscIngestionRuntime Edge Cases', () => {
          await installOrUpdateHvsc('token-md5');
          
          expect(writeLibraryFile).toHaveBeenCalledWith('/DOCUMENTS/Songlengths.md5', expect.anything());
+    });
+
+    it('recovers on restart after extraction failure', async () => {
+         vi.mocked(fetchLatestHvscVersions).mockResolvedValue({ baselineVersion: 10, updateVersion: 10, baseUrl: '' });
+         globalThis.fetch = vi.fn()
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+           } as any)
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+             body: null,
+             arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+           } as any);
+         vi.mocked(extractArchiveEntries).mockRejectedValueOnce(new Error('Corrupt archive'));
+
+         await expect(installOrUpdateHvsc('token-corrupt')).rejects.toThrow('Corrupt archive');
+
+         vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+           await onEntry('HVSC/C64Music/DEMO.sid', new Uint8Array([1, 2, 3]));
+         });
+         globalThis.fetch = vi.fn()
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+           } as any)
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+             body: null,
+             arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+           } as any);
+
+         await expect(installOrUpdateHvsc('token-corrupt-retry')).resolves.toBeDefined();
+    });
+
+    it('recovers on restart after ingestion write failure', async () => {
+         vi.mocked(fetchLatestHvscVersions).mockResolvedValue({ baselineVersion: 10, updateVersion: 10, baseUrl: '' });
+         globalThis.fetch = vi.fn()
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+           } as any)
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+             body: null,
+             arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+           } as any);
+         vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+             await onEntry('HVSC/C64Music/DEMO.sid', new Uint8Array([1, 2, 3]));
+         });
+         vi.mocked(writeLibraryFile).mockRejectedValueOnce(new Error('Write failed'));
+
+         await expect(installOrUpdateHvsc('token-write-fail')).rejects.toThrow('Write failed');
+
+         vi.mocked(writeLibraryFile).mockResolvedValue(undefined);
+         globalThis.fetch = vi.fn()
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+           } as any)
+           .mockResolvedValueOnce({
+             ok: true,
+             status: 200,
+             statusText: 'OK',
+             headers: { get: () => '10' },
+             body: null,
+             arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+           } as any);
+
+         await expect(installOrUpdateHvsc('token-write-fail-retry')).resolves.toBeDefined();
     });
 });

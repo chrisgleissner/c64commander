@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ConfigBrowserPage from '@/pages/ConfigBrowserPage';
@@ -21,6 +21,12 @@ vi.mock('@/components/ThemeProvider', () => ({
     theme: 'light',
     setTheme: vi.fn(),
   }),
+}));
+
+vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+  ),
 }));
 
 vi.mock('@/hooks/useC64Connection', () => ({
@@ -60,10 +66,25 @@ vi.mock('@/lib/uiErrors', () => ({
   reportUserError: vi.fn(),
 }));
 
+const buildRouter = (ui: JSX.Element) => createMemoryRouter(
+  [{ path: '*', element: ui }],
+  {
+    initialEntries: ['/'],
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
+  },
+);
+
 const renderConfigBrowserPage = () => render(
-  <MemoryRouter>
-    <ConfigBrowserPage />
-  </MemoryRouter>,
+  <RouterProvider
+    router={buildRouter(<ConfigBrowserPage />)}
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}
+  />,
 );
 
 vi.mock('@/lib/c64api', () => ({

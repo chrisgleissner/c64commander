@@ -111,10 +111,100 @@ export async function createMockC64Server(
   const yamlState = Object.keys(initial).length === 0 ? await buildStateFromYaml() : {};
   const defaults = Object.keys(initial).length === 0 ? yamlState : normalizeInitialState(initial);
   let state: CategoryState = clone(defaults);
-  const driveState: Record<'a' | 'b', { enabled: boolean; bus_id: number; type: string; image_file?: string; image_path?: string }> = {
+  const driveState: Record<
+    'a' | 'b' | 'softiec' | 'printer',
+    {
+      enabled: boolean;
+      bus_id: number;
+      type?: string;
+      image_file?: string;
+      image_path?: string;
+      last_error?: string;
+      partitions?: Array<{ id: number; path: string }>;
+    }
+  > = {
     a: { enabled: true, bus_id: 8, type: '1541' },
     b: { enabled: true, bus_id: 9, type: '1541' },
+    softiec: {
+      enabled: false,
+      bus_id: 11,
+      type: 'DOS emulation',
+      last_error: '73,U64IEC ULTIMATE DOS V1.1,00,00',
+      partitions: [{ id: 0, path: '/USB0/' }],
+    },
+    printer: { enabled: false, bus_id: 4 },
   };
+
+  const toDriveStateKey = (value: string): keyof typeof driveState | null => {
+    const normalized = decodeURIComponent(value).trim().toLowerCase();
+    if (normalized === 'a' || normalized === 'b' || normalized === 'softiec' || normalized === 'printer') {
+      return normalized;
+    }
+    if (normalized === 'iec drive' || normalized === 'soft iec drive') return 'softiec';
+    if (normalized === 'printer emulation') return 'printer';
+    return null;
+  };
+
+  const parseEnabledValue = (value: unknown) => String(value ?? '').trim().toLowerCase() === 'enabled';
+  const parseNumericValue = (value: unknown) => {
+    const numeric = Number(String(value ?? '').trim());
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  const syncDriveStateFromConfig = (category: string, item: string, value: unknown) => {
+    if (category === 'Drive A Settings') {
+      if (item === 'Drive') driveState.a.enabled = parseEnabledValue(value);
+      if (item === 'Drive Bus ID') {
+        const numeric = parseNumericValue(value);
+        if (numeric !== null) driveState.a.bus_id = numeric;
+      }
+      if (item === 'Drive Type') driveState.a.type = String(value);
+    }
+    if (category === 'Drive B Settings') {
+      if (item === 'Drive') driveState.b.enabled = parseEnabledValue(value);
+      if (item === 'Drive Bus ID') {
+        const numeric = parseNumericValue(value);
+        if (numeric !== null) driveState.b.bus_id = numeric;
+      }
+      if (item === 'Drive Type') driveState.b.type = String(value);
+    }
+    if (category === 'SoftIEC Drive Settings') {
+      if (item === 'IEC Drive') driveState.softiec.enabled = parseEnabledValue(value);
+      if (item === 'Soft Drive Bus ID') {
+        const numeric = parseNumericValue(value);
+        if (numeric !== null) driveState.softiec.bus_id = numeric;
+      }
+    }
+    if (category === 'Printer Settings') {
+      if (item === 'IEC printer') driveState.printer.enabled = parseEnabledValue(value);
+      if (item === 'Bus ID') {
+        const numeric = parseNumericValue(value);
+        if (numeric !== null) driveState.printer.bus_id = numeric;
+      }
+    }
+  };
+
+  const syncAllDriveStateFromConfig = () => {
+    const pairs: Array<[string, string]> = [
+      ['Drive A Settings', 'Drive'],
+      ['Drive A Settings', 'Drive Bus ID'],
+      ['Drive A Settings', 'Drive Type'],
+      ['Drive B Settings', 'Drive'],
+      ['Drive B Settings', 'Drive Bus ID'],
+      ['Drive B Settings', 'Drive Type'],
+      ['SoftIEC Drive Settings', 'IEC Drive'],
+      ['SoftIEC Drive Settings', 'Soft Drive Bus ID'],
+      ['Printer Settings', 'IEC printer'],
+      ['Printer Settings', 'Bus ID'],
+    ];
+    pairs.forEach(([category, item]) => {
+      const value = state[category]?.[item]?.value;
+      if (value === undefined) return;
+      syncDriveStateFromConfig(category, item, value);
+    });
+  };
+
+  syncAllDriveStateFromConfig();
   const sockets = new Set<import('node:net').Socket>();
 
   const server = http.createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -196,6 +286,13 @@ export async function createMockC64Server(
         drives: [
           { a: { ...driveState.a } },
           { b: { ...driveState.b } },
+          { 'IEC Drive': { ...driveState.softiec } },
+          {
+            'Printer Emulation': {
+              enabled: driveState.printer.enabled,
+              bus_id: driveState.printer.bus_id,
+            },
+          },
         ],
         errors: [],
       });
@@ -210,12 +307,6 @@ export async function createMockC64Server(
         '/v1/machine:resume',
         '/v1/machine:poweroff',
         '/v1/machine:menu_button',
-        '/v1/drives/a:off',
-        '/v1/drives/b:off',
-        '/v1/drives/a:on',
-        '/v1/drives/b:on',
-        '/v1/drives/a:reset',
-        '/v1/drives/b:reset',
         '/v1/configs:save_to_flash',
         '/v1/configs:load_from_flash',
         '/v1/configs:reset_to_default',
@@ -223,23 +314,36 @@ export async function createMockC64Server(
     ) {
       if (parsed.pathname === '/v1/configs:reset_to_default') {
         state = clone(defaults);
+        syncAllDriveStateFromConfig();
       }
-      if (parsed.pathname === '/v1/drives/a:on') {
-        driveState.a.enabled = true;
+      return sendJson(200, { errors: [] });
+    }
+
+    const drivePowerOrResetMatch = parsed.pathname.match(/^\/v1\/drives\/([^/]+):(on|off|reset)$/);
+    if (method === 'PUT' && drivePowerOrResetMatch) {
+      const driveKey = toDriveStateKey(drivePowerOrResetMatch[1]);
+      if (!driveKey) {
+        return sendJson(404, { errors: ['Drive not found'] });
       }
-      if (parsed.pathname === '/v1/drives/b:on') {
-        driveState.b.enabled = true;
+      const action = drivePowerOrResetMatch[2];
+      if (action === 'on') {
+        driveState[driveKey].enabled = true;
       }
-      if (parsed.pathname === '/v1/drives/a:off') {
-        driveState.a.enabled = false;
+      if (action === 'off') {
+        driveState[driveKey].enabled = false;
       }
-      if (parsed.pathname === '/v1/drives/b:off') {
-        driveState.b.enabled = false;
+      if (action === 'reset' && driveKey === 'softiec') {
+        delete driveState.softiec.last_error;
       }
       return sendJson(200, { errors: [] });
     }
 
     if (method === 'PUT' && parsed.pathname.match(/^\/v1\/drives\/[ab]:set_mode$/)) {
+      const driveKey = parsed.pathname.includes('/a:') ? 'a' : 'b';
+      const mode = parsed.searchParams.get('mode');
+      if (mode) {
+        driveState[driveKey].type = mode;
+      }
       return sendJson(200, { errors: [] });
     }
 
@@ -323,6 +427,7 @@ export async function createMockC64Server(
             Object.entries(items).forEach(([item, value]) => {
               const current = state[category][item] ?? { value };
               state[category][item] = { ...current, value };
+              syncDriveStateFromConfig(category, item, value);
             });
           });
           sendJson(200, { errors: [] });
@@ -363,6 +468,7 @@ export async function createMockC64Server(
         if (!state[category]) state[category] = {};
         const current = state[category][item] ?? { value };
         state[category][item] = { ...current, value };
+        syncDriveStateFromConfig(category, item, value);
         return sendJson(200, { errors: [] });
       }
 

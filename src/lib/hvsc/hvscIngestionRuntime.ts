@@ -20,6 +20,7 @@ import {
 } from './hvscFilesystem';
 import { loadHvscState, markUpdateApplied, updateHvscState, isUpdateApplied } from './hvscStateStore';
 import { updateHvscStatusSummaryFromEvent } from './hvscStatusStore';
+import { reloadHvscSonglengthsOnConfigChange } from './hvscSongLengthService';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
 import { addErrorLog, addLog } from '@/lib/logging';
 
@@ -27,6 +28,66 @@ const listeners = new Set<(event: HvscProgressEvent) => void>();
 const cancelTokens = new Map<string, { cancelled: boolean }>();
 
 let summaryLastStage: string | null = null;
+
+type HvscPipelineState =
+  | 'IDLE'
+  | 'DOWNLOADING'
+  | 'DOWNLOADED'
+  | 'EXTRACTING'
+  | 'EXTRACTED'
+  | 'INGESTING'
+  | 'READY';
+
+const hvscPipelineTransitions: Record<HvscPipelineState, HvscPipelineState[]> = {
+  IDLE: ['DOWNLOADING'],
+  DOWNLOADING: ['DOWNLOADED'],
+  DOWNLOADED: ['EXTRACTING'],
+  EXTRACTING: ['EXTRACTED'],
+  EXTRACTED: ['INGESTING'],
+  INGESTING: ['READY'],
+  READY: [],
+};
+
+const createArchivePipelineStateMachine = (params: {
+  archiveName: string;
+  archiveType: 'baseline' | 'update';
+  archiveVersion: number;
+}) => {
+  let state: HvscPipelineState = 'IDLE';
+  const transition = (next: HvscPipelineState, details: Record<string, unknown> = {}) => {
+    const allowed = hvscPipelineTransitions[state];
+    if (!allowed.includes(next)) {
+      const error = new Error(`Illegal HVSC pipeline transition ${state} -> ${next}`);
+      addErrorLog('HVSC pipeline transition violation', {
+        archiveName: params.archiveName,
+        archiveType: params.archiveType,
+        archiveVersion: params.archiveVersion,
+        fromState: state,
+        toState: next,
+        details,
+        error: {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        },
+      });
+      throw error;
+    }
+    addLog('info', 'HVSC pipeline transition', {
+      archiveName: params.archiveName,
+      archiveType: params.archiveType,
+      archiveVersion: params.archiveVersion,
+      fromState: state,
+      toState: next,
+      details,
+    });
+    state = next;
+  };
+  return {
+    transition,
+    current: () => state,
+  };
+};
 
 const emit = (event: HvscProgressEvent) => {
   const lastStage = summaryLastStage;
@@ -294,6 +355,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
   let currentArchiveType: 'baseline' | 'update' | null = null;
   let currentArchiveVersion: number | null = null;
   let currentArchiveComplete = false;
+  let currentPipelineState: HvscPipelineState | null = null;
   let baselineInstalled: number | null = null;
   try {
     const { baselineVersion, updateVersion, baseUrl } = await fetchLatestHvscVersions();
@@ -340,6 +402,12 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       currentArchiveType = plan.type;
       currentArchiveVersion = plan.version;
       currentArchiveComplete = false;
+      const pipeline = createArchivePipelineStateMachine({
+        archiveName,
+        archiveType: plan.type,
+        archiveVersion: plan.version,
+      });
+      currentPipelineState = pipeline.current();
       emitProgress({
         stage: 'archive_discovery',
         message: `Preparing ${plan.type === 'baseline' ? 'HVSC' : 'update'} ${plan.version}`,
@@ -355,6 +423,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         ingestionState: plan.type === 'baseline' ? 'installing' : 'updating',
         ingestionError: null,
       });
+      pipeline.transition('DOWNLOADING', { cached: Boolean(cached) });
+      currentPipelineState = pipeline.current();
       if (!cached) {
         emitProgress({ stage: 'download', message: `Downloading ${archiveName}…`, archiveName, percent: 0 });
         await deleteCachedArchive(archivePath);
@@ -483,6 +553,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           });
         }
       }
+      pipeline.transition('DOWNLOADED', { cached: Boolean(cached) });
+      currentPipelineState = pipeline.current();
 
       ensureNotCancelled(cancelToken);
       const archiveData = await Filesystem.readFile({
@@ -503,6 +575,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       }
 
       const deletions: string[] = [];
+      pipeline.transition('EXTRACTING');
+      currentPipelineState = pipeline.current();
       emitProgress({ stage: 'archive_extraction', message: `Extracting ${archiveName}…`, archiveName });
 
       await extractArchiveEntries({
@@ -565,7 +639,11 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           });
         },
       });
+      pipeline.transition('EXTRACTED');
+      currentPipelineState = pipeline.current();
 
+      pipeline.transition('INGESTING', { deletionCount: deletions.length });
+      currentPipelineState = pipeline.current();
       if (deletions.length) {
         for (const path of deletions) {
           try {
@@ -577,6 +655,18 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       }
 
       resetSonglengthsCache();
+      try {
+        await reloadHvscSonglengthsOnConfigChange();
+      } catch (error) {
+        addErrorLog('HVSC songlengths reload failed after ingestion', {
+          archiveName,
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+      }
       updateHvscState({
         installedBaselineVersion: baselineInstalled,
         installedVersion: plan.version,
@@ -586,6 +676,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       if (plan.type === 'update') {
         markUpdateApplied(plan.version, 'success');
       }
+      pipeline.transition('READY');
+      currentPipelineState = pipeline.current();
       emitProgress({ stage: 'complete', message: `${archiveName} indexed`, archiveName, percent: 100 });
     }
 
@@ -599,6 +691,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       archiveName: currentArchive ?? undefined,
       archiveType: currentArchiveType,
       archiveVersion: currentArchiveVersion,
+      pipelineState: currentPipelineState,
       error: {
         name: (error as Error).name,
         message: (error as Error).message,
@@ -628,6 +721,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
   let currentArchive: string | null = null;
   let currentArchiveType: 'baseline' | 'update' | null = null;
   let currentArchiveVersion: number | null = null;
+  let currentPipelineState: HvscPipelineState | null = null;
   let baselineInstalled: number | null = null;
   try {
     const cache = await getCacheStatusInternal();
@@ -685,11 +779,19 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       currentArchive = cached;
       currentArchiveType = plan.type;
       currentArchiveVersion = plan.version;
+      const pipeline = createArchivePipelineStateMachine({
+        archiveName: cached,
+        archiveType: plan.type,
+        archiveVersion: plan.version,
+      });
+      currentPipelineState = pipeline.current();
       emitProgress({ stage: 'archive_discovery', message: `Preparing cached ${cached}`, archiveName: cached, processedCount: index + 1, totalCount: plans.length });
 
       const cacheDir = getHvscCacheDir();
       const archiveData = await Filesystem.readFile({ directory: Directory.Data, path: `${cacheDir}/${cached}` });
       const archiveBuffer = base64ToUint8(archiveData.data);
+      pipeline.transition('DOWNLOADING', { cached: true });
+      currentPipelineState = pipeline.current();
 
       try {
         const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${cached}` });
@@ -704,6 +806,8 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       } catch {
         emitProgress({ stage: 'download', message: `Using cached ${cached}`, archiveName: cached, percent: 100 });
       }
+      pipeline.transition('DOWNLOADED', { cached: true });
+      currentPipelineState = pipeline.current();
 
       if (plan.type === 'baseline') {
         updateHvscState({ ingestionState: 'installing', ingestionError: null });
@@ -714,6 +818,8 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       }
 
       const deletions: string[] = [];
+      pipeline.transition('EXTRACTING');
+      currentPipelineState = pipeline.current();
       emitProgress({ stage: 'archive_extraction', message: `Extracting ${cached}…`, archiveName: cached });
 
       await extractArchiveEntries({
@@ -758,7 +864,11 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
           emitProgress({ stage: 'sid_metadata_parsing', message: `Parsed ${virtualPath}`, archiveName: cached, currentFile: virtualPath });
         },
       });
+      pipeline.transition('EXTRACTED');
+      currentPipelineState = pipeline.current();
 
+      pipeline.transition('INGESTING', { deletionCount: deletions.length });
+      currentPipelineState = pipeline.current();
       if (deletions.length) {
         for (const path of deletions) {
           try {
@@ -770,6 +880,18 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       }
 
       resetSonglengthsCache();
+      try {
+        await reloadHvscSonglengthsOnConfigChange();
+      } catch (error) {
+        addErrorLog('HVSC songlengths reload failed after cached ingest', {
+          archiveName: cached,
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+      }
       updateHvscState({
         installedBaselineVersion: baselineInstalled,
         installedVersion: plan.version,
@@ -779,6 +901,8 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       if (plan.type === 'update') {
         markUpdateApplied(plan.version, 'success');
       }
+      pipeline.transition('READY');
+      currentPipelineState = pipeline.current();
       emitProgress({ stage: 'complete', message: `${cached} indexed`, archiveName: cached, percent: 100 });
     }
 
@@ -789,6 +913,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       archiveName: currentArchive ?? undefined,
       archiveType: currentArchiveType,
       archiveVersion: currentArchiveVersion,
+      pipelineState: currentPipelineState,
       error: {
         name: (error as Error).name,
         message: (error as Error).message,

@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -21,17 +22,110 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import yaml
+from yaml.dumper import SafeDumper as PySafeDumper
 
 
-class _DoubleQuotedDumper(yaml.SafeDumper):
-    pass
+class _IndentedDumper(PySafeDumper):
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        super().increase_indent(flow, indentless=False)
 
 
-def _double_quoted_str_representer(dumper: yaml.Dumper, value: str) -> yaml.ScalarNode:
-    return dumper.represent_scalar("tag:yaml.org,2002:str", value, style='"')
+def _convert_single_quoted_scalars(yaml_text: str) -> str:
+    lines = yaml_text.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "" or "'" not in stripped:
+            continue
+
+        key_match = re.match(r"^(\s*)'((?:[^']|'{2})*)'(\s*:\s*)$", line)
+        if key_match:
+            prefix, key, suffix = key_match.groups()
+            key = key.replace("''", "'").replace('"', r'\\"')
+            lines[index] = f"{prefix}\"{key}\"{suffix}"
+            continue
+
+        mapping_match = re.match(r"^(\s*[^:#]+:\s*)'((?:[^']|'{2})*)'(\s*)$", line)
+        if mapping_match:
+            prefix, value, suffix = mapping_match.groups()
+            value = value.replace("''", "'").replace('"', r'\\"')
+            lines[index] = f"{prefix}\"{value}\"{suffix}"
+            continue
+
+        list_match = re.match(r"^(\s*-\s*)'((?:[^']|'{2})*)'(\s*)$", line)
+        if list_match:
+            prefix, value, suffix = list_match.groups()
+            value = value.replace("''", "'").replace('"', r'\\"')
+            lines[index] = f"{prefix}\"{value}\"{suffix}"
+
+    return "\n".join(lines) + "\n"
 
 
-_DoubleQuotedDumper.add_representer(str, _double_quoted_str_representer)
+def _quote_mapping_values_with_spaces(yaml_text: str) -> str:
+    lines = yaml_text.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "" or stripped.startswith("-"):
+            continue
+
+        mapping_match = re.match(r"^(\s*[^:#]+:\s*)([^'\"\[\{].*?)(\s*)$", line)
+        if not mapping_match:
+            continue
+
+        prefix, value, suffix = mapping_match.groups()
+        value = value.strip()
+        if value == "":
+            continue
+        if value.startswith("\"") or value.startswith("'"):
+            continue
+        if not re.search(r"[A-Za-z]", value):
+            continue
+        if re.match(r"^[+-]?\d", value):
+            continue
+        if " " not in value:
+            continue
+
+        escaped = value.replace("\"", r"\\\"")
+        lines[index] = f"{prefix}\"{escaped}\"{suffix}"
+
+    return "\n".join(lines) + "\n"
+
+
+def _indent_sequences(yaml_text: str) -> str:
+    lines = yaml_text.splitlines()
+    line_count = len(lines)
+    i = 0
+
+    while i < line_count:
+        line = lines[i]
+        if line.strip() == "":
+            i += 1
+            continue
+
+        if line.rstrip().endswith(":"):
+            base_indent = line[: len(line) - len(line.lstrip())]
+            j = i + 1
+            while j < line_count and lines[j].strip() == "":
+                j += 1
+            if j < line_count and lines[j].lstrip().startswith("- "):
+                item_indent = lines[j][: len(lines[j]) - len(lines[j].lstrip())]
+                if len(item_indent) == len(base_indent):
+                    k = j
+                    while k < line_count:
+                        candidate = lines[k]
+                        if candidate.strip() == "":
+                            break
+                        if not candidate.lstrip().startswith("- "):
+                            break
+                        candidate_indent = candidate[: len(candidate) - len(candidate.lstrip())]
+                        if len(candidate_indent) != len(item_indent):
+                            break
+                        lines[k] = "  " + candidate
+                        k += 1
+                    i = k
+                    continue
+        i += 1
+
+    return "\n".join(lines) + "\n"
 
 
 def _fetch_json(
@@ -225,7 +319,11 @@ def main() -> int:
         headers["X-Password"] = args.password
 
     base_url = args.base_url.rstrip("/")
+    script_root = Path(__file__).resolve().parent
+    repo_root = script_root.parent
     output_path = Path(args.output)
+    if not output_path.is_absolute():
+        output_path = repo_root / output_path
 
     config_list = _fetch_json(
         f"{base_url}/v1/configs",
@@ -278,15 +376,19 @@ def main() -> int:
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    yaml_text = yaml.dump(
+        snapshot,
+        Dumper=_IndentedDumper,
+        sort_keys=False,
+        default_flow_style=False,
+        allow_unicode=True,
+        indent=2,
+    )
+    yaml_text = _quote_mapping_values_with_spaces(
+        _convert_single_quoted_scalars(_indent_sequences(yaml_text))
+    )
     with output_path.open("w", encoding="utf-8") as handle:
-        yaml.dump(
-            snapshot,
-            handle,
-            Dumper=_DoubleQuotedDumper,
-            sort_keys=False,
-            default_flow_style=False,
-            allow_unicode=True,
-        )
+        handle.write(yaml_text)
 
     print(f"Wrote {output_path}")
     return 0

@@ -47,6 +47,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 
@@ -86,6 +87,7 @@ const useC64DrivesMock = {
 vi.mock('@/hooks/useC64Connection', () => ({
   useC64Connection: () => useC64ConnectionMock,
   useC64Drives: () => useC64DrivesMock,
+  useC64ConfigItems: () => ({ data: undefined }),
 }));
 
 const mockAddSourceFromPicker = vi.fn();
@@ -160,6 +162,7 @@ describe('HomeDiskManager', () => {
         vi.clearAllMocks();
         // Reset hooks return values
         useC64ConnectionMock.status = { isConnected: true, deviceInfo: { unique_id: 'test-device' } };
+        useC64DrivesMock.data = mockDrivesData as any;
         useDiskLibraryMock.disks = [
             { id: 'local/disk1.d64', name: 'disk1.d64', path: '/disk1.d64', location: 'local' },
             { id: 'ultimate/disk2.d64', name: 'disk2.d64', path: '/disk2.d64', location: 'ultimate' },
@@ -175,8 +178,24 @@ describe('HomeDiskManager', () => {
         renderComponent();
         expect(screen.getByText('Drive A')).toBeInTheDocument();
         expect(screen.getByText('Drive B')).toBeInTheDocument();
+        expect(screen.queryByText(/^Printer$/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /reset printer/i })).not.toBeInTheDocument();
+        expect(screen.getAllByText('No disk mounted').length).toBeGreaterThan(0);
         expect(screen.getByText('disk1.d64')).toBeInTheDocument();
         expect(screen.getByText('disk2.d64')).toBeInTheDocument();
+    });
+
+    it('shows mounted disk label with name when disk is present', () => {
+        useC64DrivesMock.data = {
+          drives: [
+            { a: { bus_id: 8, enabled: true, image_file: 'mounted-demo.d64', image_path: '/' } },
+            { b: { bus_id: 9, enabled: true } },
+          ],
+        } as any;
+
+        renderComponent();
+
+        expect(screen.getByText('mounted-demo.d64')).toBeInTheDocument();
     });
 
     it('handles mount flow', async () => {

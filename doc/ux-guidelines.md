@@ -222,10 +222,14 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 
 **Home Page (HomePage.tsx)**
 
-- Quick action cards for machine control (Reset, Menu, Pause, Resume, Power Off)
-- Configuration quick actions (Apply, Save, Load, Revert, Manage)
+- Compact machine control grid (4-column layout) with:
+  - Reset, Reboot, Menu, Pause, Resume
+  - Reboot (Clear RAM), Save RAM, Load RAM
+  - Power Off with accidental-tap protection
+- RAM dump folder panel (current folder + Change Folder)
+- Configuration quick actions sized to match machine control cards
 - Drive status cards with navigation to Disks page
-- Current configuration display
+- SID status and Streams status (VIC/Audio/Debug ON/OFF + target IP/port)
 
 **Settings Page (SettingsPage.tsx)**
 

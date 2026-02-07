@@ -14,3 +14,9 @@ export const SID_ADDRESSING_ITEMS = [
   'UltiSID 1 Address',
   'UltiSID 2 Address',
 ];
+
+export const STREAM_ITEMS = [
+  'Stream VIC to',
+  'Stream Audio to',
+  'Stream Debug to',
+];

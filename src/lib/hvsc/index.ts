@@ -12,12 +12,14 @@ export {
   checkForHvscUpdates,
   getHvscCacheStatus,
   getHvscDurationByMd5Seconds,
+  getHvscDurationsByMd5Seconds,
   getHvscFolderListing,
   getHvscSong,
   getHvscStatus,
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  resolveHvscSonglength,
 } from './hvscService';
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
 export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from './hvscRootLocator';

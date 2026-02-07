@@ -3,6 +3,7 @@ package uk.gleissner.c64commander
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.DocumentsContract
 import androidx.activity.result.ActivityResult
 import androidx.documentfile.provider.DocumentFile
@@ -18,6 +19,18 @@ import java.util.concurrent.Executors
 class FolderPickerPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
 
+  private fun parseStringArray(call: PluginCall, key: String): List<String> {
+    val source = call.getArray(key) ?: return emptyList()
+    val values = mutableListOf<String>()
+    for (index in 0 until source.length()) {
+      val value = source.opt(index)?.toString()?.trim()
+      if (!value.isNullOrEmpty()) {
+        values.add(value)
+      }
+    }
+    return values
+  }
+
   @PluginMethod
   fun pickDirectory(call: PluginCall) {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
@@ -31,22 +44,25 @@ class FolderPickerPlugin : Plugin() {
   fun pickFile(call: PluginCall) {
     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
     intent.addCategory(Intent.CATEGORY_OPENABLE)
-    intent.type = "*/*"
-    val mimeTypesArray = call.getArray("mimeTypes")
-    val mimeTypes: Array<String>? = if (mimeTypesArray != null) {
-      val list = mutableListOf<String>()
-      for (index in 0 until mimeTypesArray.length()) {
-        val value = mimeTypesArray.opt(index)?.toString()
-        if (!value.isNullOrBlank()) {
-          list.add(value)
-        }
-      }
-      list.toTypedArray()
+    val extensions = parseStringArray(call, "extensions")
+      .map { ext -> ext.removePrefix(".").lowercase() }
+      .filter { ext -> ext.isNotBlank() }
+    intent.type = if (extensions.size == 1 && extensions.first() == "bin") {
+      "application/octet-stream"
     } else {
-      null
+      "*/*"
     }
-    if (mimeTypes != null && mimeTypes.isNotEmpty()) {
-      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes)
+    val mimeTypes = parseStringArray(call, "mimeTypes")
+    if (mimeTypes.isNotEmpty()) {
+      intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+    }
+    val initialUriString = call.getString("initialUri")
+    if (!initialUriString.isNullOrBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      try {
+        intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(initialUriString))
+      } catch (_: Exception) {
+        // Invalid URIs are ignored so file selection can continue.
+      }
     }
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
@@ -122,6 +138,17 @@ class FolderPickerPlugin : Plugin() {
       try {
         val doc = DocumentFile.fromSingleUri(context, fileUri)
           ?: throw IllegalStateException("Unable to access selected file")
+        val extensions = parseStringArray(call, "extensions")
+          .map { ext -> ext.removePrefix(".").lowercase() }
+          .filter { ext -> ext.isNotBlank() }
+        val fileName = doc.name ?: ""
+        if (extensions.isNotEmpty()) {
+          val normalizedName = fileName.lowercase()
+          val matches = extensions.any { ext -> normalizedName.endsWith(".$ext") }
+          if (!matches) {
+            throw IllegalStateException("Selected file does not match required extension.")
+          }
+        }
         val permissionPersisted = context.contentResolver.persistedUriPermissions.any {
           it.uri == fileUri && it.isReadPermission
         }
@@ -130,7 +157,7 @@ class FolderPickerPlugin : Plugin() {
         }
         val response = JSObject()
         response.put("uri", fileUri.toString())
-        response.put("name", doc.name ?: "")
+        response.put("name", fileName)
         response.put("sizeBytes", doc.length())
         val modifiedAt = if (doc.lastModified() > 0) {
           val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
@@ -138,6 +165,20 @@ class FolderPickerPlugin : Plugin() {
           formatter.format(java.util.Date(doc.lastModified()))
         } else null
         response.put("modifiedAt", modifiedAt)
+        val documentId = DocumentsContract.getDocumentId(fileUri)
+        val parentDocumentId = documentId.substringBeforeLast('/', "")
+        val authority = fileUri.authority
+        if (parentDocumentId.isNotBlank() && !authority.isNullOrBlank()) {
+          val parentTreeUri = DocumentsContract.buildTreeDocumentUri(authority, parentDocumentId)
+          try {
+            context.contentResolver.takePersistableUriPermission(parentTreeUri, flags)
+          } catch (_: SecurityException) {
+            // Parent tree permission may not be grantable for every provider.
+          }
+          val parentRoot = DocumentFile.fromTreeUri(context, parentTreeUri)
+          response.put("parentTreeUri", parentTreeUri.toString())
+          response.put("parentRootName", parentRoot?.name ?: "")
+        }
         response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
@@ -260,6 +301,66 @@ class FolderPickerPlugin : Plugin() {
     }
   }
 
+  @PluginMethod
+  fun writeFileToTree(call: PluginCall) {
+    val treeUriString = call.getString("treeUri")
+    if (treeUriString.isNullOrBlank()) {
+      call.reject("treeUri is required")
+      return
+    }
+    val relativePath = call.getString("path")
+    if (relativePath.isNullOrBlank()) {
+      call.reject("path is required")
+      return
+    }
+    val dataBase64 = call.getString("data")
+    if (dataBase64.isNullOrBlank()) {
+      call.reject("data is required")
+      return
+    }
+    val mimeType = call.getString("mimeType") ?: "application/octet-stream"
+    val overwrite = call.getBoolean("overwrite", true) ?: true
+    val treeUri = Uri.parse(treeUriString)
+
+    executor.execute {
+      try {
+        val (parentDocumentId, fileName) = resolveParentDocumentId(treeUri, relativePath)
+        val existing = findChildDocument(treeUri, parentDocumentId, fileName)
+        if (existing != null) {
+          if (existing.mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+            throw IllegalStateException("Path points to a directory: $fileName")
+          }
+          if (!overwrite) {
+            throw IllegalStateException("File already exists: $fileName")
+          }
+          val existingUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, existing.documentId)
+          val deleted = DocumentsContract.deleteDocument(context.contentResolver, existingUri)
+          if (!deleted) {
+            throw IllegalStateException("Unable to overwrite existing file: $fileName")
+          }
+        }
+
+        val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId)
+        val createdUri = DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, fileName)
+          ?: throw IllegalStateException("Unable to create file: $fileName")
+
+        val bytes = android.util.Base64.decode(dataBase64, android.util.Base64.DEFAULT)
+        context.contentResolver.openOutputStream(createdUri, "w")?.use { output ->
+          output.write(bytes)
+          output.flush()
+        } ?: throw IllegalStateException("Unable to open output stream")
+
+        val response = JSObject()
+        response.put("uri", createdUri.toString())
+        response.put("sizeBytes", bytes.size)
+        response.put("modifiedAt", isoTimestampNow())
+        call.resolve(response)
+      } catch (error: Exception) {
+        call.reject(error.message, error)
+      }
+    }
+  }
+
   private fun normalizePath(path: String?): String {
     if (path.isNullOrBlank() || path == "/") return ""
     return path.trim().trim('/').replace(Regex("/+"), "/")
@@ -287,6 +388,69 @@ class FolderPickerPlugin : Plugin() {
     return documentId
   }
 
+  private fun resolveParentDocumentId(treeUri: Uri, relativePath: String): Pair<String, String> {
+    val normalized = normalizePath(relativePath)
+    if (normalized.isBlank()) {
+      throw IllegalStateException("path must include a file name")
+    }
+    val segments = normalized.split('/').filter { it.isNotBlank() }
+    if (segments.isEmpty()) {
+      throw IllegalStateException("path must include a file name")
+    }
+
+    var parentDocumentId = DocumentsContract.getTreeDocumentId(treeUri)
+    if (segments.size > 1) {
+      segments.dropLast(1).forEach { segment ->
+        val existing = findChildDocument(treeUri, parentDocumentId, segment)
+        if (existing != null) {
+          if (existing.mimeType != DocumentsContract.Document.MIME_TYPE_DIR) {
+            throw IllegalStateException("Path segment is not a directory: $segment")
+          }
+          parentDocumentId = existing.documentId
+          return@forEach
+        }
+
+        val parentUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, parentDocumentId)
+        val createdUri = DocumentsContract.createDocument(
+          context.contentResolver,
+          parentUri,
+          DocumentsContract.Document.MIME_TYPE_DIR,
+          segment
+        ) ?: throw IllegalStateException("Unable to create directory: $segment")
+        parentDocumentId = DocumentsContract.getDocumentId(createdUri)
+      }
+    }
+
+    return Pair(parentDocumentId, segments.last())
+  }
+
+  private data class ChildDocument(
+    val documentId: String,
+    val mimeType: String,
+  )
+
+  private fun findChildDocument(treeUri: Uri, parentId: String, name: String): ChildDocument? {
+    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
+    val projection = arrayOf(
+      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+      DocumentsContract.Document.COLUMN_MIME_TYPE
+    )
+    context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+      val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+      val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+      val mimeIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_MIME_TYPE)
+      while (cursor.moveToNext()) {
+        val displayName = cursor.getString(nameIndex) ?: continue
+        if (displayName != name) continue
+        val documentId = cursor.getString(idIndex) ?: continue
+        val mimeType = cursor.getString(mimeIndex) ?: ""
+        return ChildDocument(documentId, mimeType)
+      }
+    }
+    return null
+  }
+
   private fun findChildDocumentId(treeUri: Uri, parentId: String, name: String, requireDirectory: Boolean): String? {
     val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
     val projection = arrayOf(
@@ -307,5 +471,11 @@ class FolderPickerPlugin : Plugin() {
       }
     }
     return null
+  }
+
+  private fun isoTimestampNow(): String {
+    val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US)
+    formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
+    return formatter.format(java.util.Date())
   }
 }

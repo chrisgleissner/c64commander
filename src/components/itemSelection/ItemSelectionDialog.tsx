@@ -74,6 +74,11 @@ export const ItemSelectionDialog = ({
     return null;
   }, [sourceGroups, selectedSourceId]);
 
+  const c64UltimateSource = useMemo(
+    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === 'ultimate') ?? null,
+    [sourceGroups],
+  );
+
   const browser = useSourceNavigator(source);
 
   useEffect(() => {
@@ -252,6 +257,33 @@ export const ItemSelectionDialog = ({
             {!source && (
               <div className="space-y-5">
                 <p className="text-lg font-semibold text-foreground">Choose source</p>
+                <div className="grid gap-2 sm:grid-cols-2" data-testid="import-selection-interstitial">
+                  <Button
+                    variant="outline"
+                    className="justify-start min-w-0"
+                    onClick={() => {
+                      if (!c64UltimateSource) return;
+                      setPendingLocalSource(false);
+                      setSelectedSourceId(c64UltimateSource.id);
+                    }}
+                    disabled={!c64UltimateSource?.isAvailable}
+                    data-testid="import-option-c64u"
+                  >
+                    <FolderPlus className="h-4 w-4 mr-1" />
+                    <span className="truncate">C64U file import</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start min-w-0"
+                    onClick={() => void handleAddLocalSource()}
+                    disabled={pendingLocalSource}
+                    aria-busy={pendingLocalSource}
+                    data-testid="import-option-local"
+                  >
+                    <FolderPlus className="h-4 w-4 mr-1" />
+                    <span className="truncate">Local file import</span>
+                  </Button>
+                </div>
                 {sourceGroups.map((group) => (
                   <div key={group.label} className="space-y-3">
                     <p className="text-base font-semibold text-foreground">{group.label}</p>
@@ -288,13 +320,35 @@ export const ItemSelectionDialog = ({
                         </Button>
                       ) : null}
                     </div>
+                    {group.sources.length ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {group.sources.map((item) => (
+                          <Button
+                            key={item.id}
+                            variant="secondary"
+                            className="justify-start min-w-0"
+                            onClick={() => {
+                              setPendingLocalSource(false);
+                              setSelectedSourceId(item.id);
+                            }}
+                            disabled={!item.isAvailable}
+                            data-testid={`browse-source-${item.id}`}
+                          >
+                            <span className="truncate">{item.name}</span>
+                          </Button>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
             )}
 
             {source && (
-              <div className="space-y-3">
+              <div
+                className="space-y-3"
+                data-testid={source.type === 'ultimate' ? 'c64u-file-picker' : source.type === 'local' ? 'local-file-picker' : 'source-file-picker'}
+              >
                 <div>
                   <p className="text-base font-semibold">Select items</p>
                   <p className="text-xs text-muted-foreground" data-testid="add-items-selection-count">

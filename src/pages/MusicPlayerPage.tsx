@@ -15,11 +15,11 @@ import {
   addHvscProgressListener,
   checkForHvscUpdates,
   getHvscCacheStatus,
-  getHvscDurationByMd5Seconds,
   getHvscStatus,
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  resolveHvscSonglength,
   type HvscStatus,
   type HvscUpdateStatus,
   HvscSongSource,
@@ -52,6 +52,10 @@ const formatBytes = (bytes?: number | null) => {
 };
 
 const HVSC_PROGRESS_LOG_INTERVAL = 500;
+
+const mergeLocalSongMetadata = (current: SongEntry[], filePath: string, nextEntries: SongEntry[]) =>
+  [...current.filter((entry) => entry.path !== filePath), ...nextEntries]
+    .sort((left, right) => left.path.localeCompare(right.path) || (left.songNr ?? 1) - (right.songNr ?? 1));
 
 export default function MusicPlayerPage() {
   const {
@@ -104,6 +108,18 @@ export default function MusicPlayerPage() {
   const [localFolderPaths, setLocalFolderPaths] = useState<SongFolder[]>([]);
   const [localSongs, setLocalSongs] = useState<SongEntry[]>([]);
   const localInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedLocalFolderRef = useRef('');
+
+  useEffect(() => {
+    selectedLocalFolderRef.current = selectedLocalFolder;
+  }, [selectedLocalFolder]);
+
+  const handleLocalSongMetadataResolved = useCallback((update: { path: string; entries: SongEntry[] }) => {
+    const activeFolder = selectedLocalFolderRef.current;
+    if (!activeFolder) return;
+    if (!update.path.toLowerCase().startsWith(activeFolder.toLowerCase())) return;
+    setLocalSongs((previous) => mergeLocalSongMetadata(previous, update.path, update.entries));
+  }, []);
 
   useEffect(() => {
     getHvscStatus()
@@ -281,9 +297,10 @@ export default function MusicPlayerPage() {
   const localSource = useMemo(
     () =>
       createLocalFsSongSource(localFiles, {
-        lookupDurationSeconds: hvscStatus?.installedVersion ? getHvscDurationByMd5Seconds : undefined,
+        resolveSonglength: hvscStatus?.installedVersion ? resolveHvscSonglength : undefined,
+        onSongMetadataResolved: handleLocalSongMetadataResolved,
       }),
-    [localFiles, hvscStatus?.installedVersion],
+    [handleLocalSongMetadataResolved, localFiles, hvscStatus?.installedVersion],
   );
 
   const localFolders = useMemo(() => {
@@ -467,11 +484,13 @@ export default function MusicPlayerPage() {
     const resolved = await source.getSong(entry);
     await playTrack({
       id: entry.id,
-      title: resolved.title,
+      title: entry.title,
       source: source.id,
       path: resolved.path,
       data: resolved.data,
       durationMs: resolved.durationMs,
+      songNr: entry.songNr,
+      subsongCount: entry.subsongCount,
     });
   };
 
@@ -499,11 +518,13 @@ export default function MusicPlayerPage() {
           const resolved = await hvscSource.getSong(entry);
           return {
             id: entry.id,
-            title: resolved.title,
+            title: entry.title,
             source: hvscSource.id,
             path: resolved.path,
             data: resolved.data,
             durationMs: resolved.durationMs,
+            songNr: entry.songNr,
+            subsongCount: entry.subsongCount,
           };
         }),
       );
@@ -574,11 +595,13 @@ export default function MusicPlayerPage() {
           const resolved = await localSource.getSong(entry);
           return {
             id: entry.id,
-            title: resolved.title,
+            title: entry.title,
             source: localSource.id,
             path: resolved.path,
             data: resolved.data,
             durationMs: resolved.durationMs,
+            songNr: entry.songNr,
+            subsongCount: entry.subsongCount,
           };
         }),
       );
@@ -609,11 +632,13 @@ export default function MusicPlayerPage() {
           const resolved = await localSource.getSong(entry);
           return {
             id: entry.id,
-            title: resolved.title,
+            title: entry.title,
             source: localSource.id,
             path: resolved.path,
             data: resolved.data,
             durationMs: resolved.durationMs,
+            songNr: entry.songNr,
+            subsongCount: entry.subsongCount,
           };
         }),
       );
@@ -655,6 +680,11 @@ export default function MusicPlayerPage() {
   const progressPercent = durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0;
   const remainingMs = durationMs ? Math.max(0, durationMs - elapsedMs) : undefined;
   const remainingLabel = durationMs ? `-${formatTime(remainingMs)}` : '—';
+  const currentSubsongLabel =
+    currentTrack?.subsongCount && currentTrack.subsongCount > 1
+      ? `Song ${currentTrack.songNr ?? 1}/${currentTrack.subsongCount}`
+      : null;
+  const nowPlayingPathLabel = currentTrack?.path ?? currentTrack?.source?.toUpperCase() ?? '—';
 
   const handlePlayCurrentTrack = useCallback(async () => {
     if (!currentTrack) return;
@@ -703,7 +733,8 @@ export default function MusicPlayerPage() {
                 {currentTrack?.title ?? 'No track selected'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {currentTrack?.path ?? currentTrack?.source?.toUpperCase() ?? '—'}
+                {nowPlayingPathLabel}
+                {currentSubsongLabel ? ` · ${currentSubsongLabel}` : ''}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -888,8 +919,16 @@ export default function MusicPlayerPage() {
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                 {hvscSongs.slice(0, 80).map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground break-words whitespace-normal">
-                      {entry.path}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium break-words whitespace-normal">
+                        {entry.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground break-words whitespace-normal">
+                        {entry.path}
+                        {entry.subsongCount && entry.subsongCount > 1
+                          ? ` · Song ${entry.songNr ?? 1}/${entry.subsongCount}`
+                          : ''}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"
@@ -997,8 +1036,16 @@ export default function MusicPlayerPage() {
               <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
                 {localSongs.slice(0, 80).map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between gap-2">
-                    <div className="text-xs text-muted-foreground break-words whitespace-normal">
-                      {entry.path}
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium break-words whitespace-normal">
+                        {entry.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground break-words whitespace-normal">
+                        {entry.path}
+                        {entry.subsongCount && entry.subsongCount > 1
+                          ? ` · Song ${entry.songNr ?? 1}/${entry.subsongCount}`
+                          : ''}
+                      </p>
                     </div>
                     <Button
                       variant="ghost"

@@ -53,7 +53,7 @@ Track device status at a glance, control the machine and drives, and access quic
 
 ### Play
 
-Control SID playback, adjust playback settings, manage playlists, and explore HVSC playback modes.
+Control SID playback, adjust playback settings, manage playlists, select SID subsongs, and explore HVSC playback modes.
 
 <table>
   <tr>

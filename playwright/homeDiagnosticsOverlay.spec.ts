@@ -81,7 +81,7 @@ test.describe('Home header and diagnostics overlay', () => {
         const subtitle = page.getByTestId('home-header-subtitle');
         await expect(logo).toBeVisible();
         await expect(title).toHaveText(/home/i);
-        await expect(subtitle).toHaveText('C64 Controller');
+        await expect(subtitle).toHaveText('C64 Commander');
 
         const ratios = await logo.evaluate((img: HTMLImageElement) => ({
             natural: img.naturalWidth / img.naturalHeight,
@@ -96,7 +96,7 @@ test.describe('Home header and diagnostics overlay', () => {
         expect(Math.abs((homeHeaderBox?.height ?? 0) - (playHeaderBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
         await expect(page.getByTestId('home-header-logo')).toHaveCount(0);
-        await expect(page.getByText('C64 Controller', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('C64 Commander', { exact: true })).toHaveCount(0);
 
         const diagnosticsIndicator = page.getByTestId('diagnostics-activity-indicator');
         const connectivityIndicator = page.getByTestId('connectivity-indicator');

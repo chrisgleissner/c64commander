@@ -26,6 +26,7 @@ RUN_FUZZ=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
+RUN_DUMP_C64U_CONFIG=false
 PLAYWRIGHT_DEVICES=""
 PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
@@ -104,6 +105,7 @@ Options:
   --skip-apk            Skip npm run android:apk
   --screenshots         Capture app screenshots into doc/img
   --screenshots-only    Capture screenshots only (no tests, no APK, no Android)
+  --dump-c64u-config     Dump C64U config to doc/c64/c64u-config.yaml and exit
 
   -h, --help            Show this help
 
@@ -435,6 +437,10 @@ while [[ $# -gt 0 ]]; do
       RUN_INSTALL_APK=false
       shift
       ;;
+    --dump-c64u-config)
+      RUN_DUMP_C64U_CONFIG=true
+      shift
+      ;;
     --smoke-android-emulator)
       RUN_SMOKE_ANDROID_EMULATOR=true
       if [[ "$RUN_BUILD" != "false" ]]; then
@@ -513,6 +519,18 @@ fi
 if [[ "$RUN_EMULATOR" == "true" ]]; then
   log "Starting Android emulator flow"
   "$ROOT_DIR/scripts/android-emulator.sh"
+  exit 0
+fi
+
+if [[ "$RUN_DUMP_C64U_CONFIG" == "true" ]]; then
+  CONFIG_HOST="c64u"
+  if [[ "$C64U_HOST_SET" == "true" ]]; then
+    CONFIG_HOST="$C64U_HOST"
+  fi
+  log "Dumping C64U config"
+  (cd "$ROOT_DIR/scripts" && ./dump_c64u_config.py \
+    --base-url "http://${CONFIG_HOST}" \
+    --output "$ROOT_DIR/doc/c64/c64u-config.yaml")
   exit 0
 fi
 

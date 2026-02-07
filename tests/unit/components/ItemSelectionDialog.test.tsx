@@ -27,7 +27,7 @@ describe('ItemSelectionDialog source picker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-  it('renders only add file/folder buttons for each source group', () => {
+  it('renders import interstitial choices plus per-group add and browse actions', () => {
     vi.mocked(useSourceNavigator).mockReturnValue({
       path: '/',
       entries: [],
@@ -58,7 +58,10 @@ describe('ItemSelectionDialog source picker', () => {
 
     const addButtons = screen.getAllByRole('button', { name: /add file \/ folder/i });
     expect(addButtons).toHaveLength(2);
-    expect(screen.queryByText('My Folder')).toBeNull();
+    expect(screen.getByTestId('import-selection-interstitial')).toBeInTheDocument();
+    expect(screen.getByTestId('import-option-c64u')).toBeInTheDocument();
+    expect(screen.getByTestId('import-option-local')).toBeInTheDocument();
+    expect(screen.getByTestId('browse-source-local-1')).toHaveTextContent('My Folder');
   });
 
   it('filters entries and confirms selection', async () => {

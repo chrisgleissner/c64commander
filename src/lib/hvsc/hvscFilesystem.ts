@@ -1,8 +1,12 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { parseSonglengths, type SonglengthsData } from '@/lib/sid/songlengths';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import type { HvscFolderListing, HvscSong } from './hvscTypes';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
+import {
+  ensureHvscSonglengthsReadyOnColdStart,
+  resetHvscSonglengths,
+  resolveHvscSonglengthDuration,
+} from './hvscSongLengthService';
 
 const HVSC_WORK_DIR = 'hvsc';
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
@@ -149,66 +153,45 @@ const resolveEntry = async (basePath: string, entry: string | { name?: string; t
   return { name, type: entry.type };
 };
 
-let songlengthsCache: SonglengthsData | null = null;
-
-const loadSonglengths = async (): Promise<SonglengthsData | null> => {
-  if (songlengthsCache) return songlengthsCache;
-  const md5Path = `${HVSC_LIBRARY_DIR}/Songlengths.md5`;
-  const txtPath = `${HVSC_LIBRARY_DIR}/Songlengths.txt`;
-  let parsed: SonglengthsData | null = null;
-  try {
-    const md5 = await Filesystem.readFile({ directory: Directory.Data, path: md5Path });
-    parsed = parseSonglengths(decodeBase64Text(md5.data));
-  } catch {
-    parsed = null;
-  }
-  try {
-    const txt = await Filesystem.readFile({ directory: Directory.Data, path: txtPath });
-    const parsedTxt = parseSonglengths(decodeBase64Text(txt.data));
-    if (parsed) {
-      parsedTxt.pathToSeconds.forEach((value, key) => {
-        if (!parsed?.pathToSeconds.has(key)) parsed?.pathToSeconds.set(key, value);
-      });
-      parsedTxt.md5ToSeconds.forEach((value, key) => {
-        if (!parsed?.md5ToSeconds.has(key)) parsed?.md5ToSeconds.set(key, value);
-      });
-    } else {
-      parsed = parsedTxt;
-    }
-  } catch {
-    // ignore missing text file
-  }
-  songlengthsCache = parsed;
-  return songlengthsCache;
-};
-
 export const resetSonglengthsCache = () => {
-  songlengthsCache = null;
+  resetHvscSonglengths('hvsc-filesystem-reset');
 };
 
 export const listHvscFolder = async (path: string): Promise<HvscFolderListing> => {
   const normalized = normalizeSourcePath(path || '/');
   const basePath = resolveLibraryFolder(normalized);
   const entries = await listEntries(basePath);
-  const folders: string[] = [];
-  const songs: HvscFolderListing['songs'] = [];
-  const durations = await loadSonglengths();
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const resolvedEntries = await Promise.all(entries.map(async (entry) => resolveEntry(basePath, entry)));
 
-  for (const entry of entries) {
-    const resolved = await resolveEntry(basePath, entry);
-    if (!resolved.name) continue;
-    if (resolved.type === 'directory') {
-      folders.push(`${normalized === '/' ? '' : normalized}/${resolved.name}`.replace(/\/+/g, '/'));
-    } else if (resolved.type === 'file' && resolved.name.toLowerCase().endsWith('.sid')) {
-      const virtualPath = `${normalized === '/' ? '' : normalized}/${resolved.name}`.replace(/\/+/g, '/');
-      songs.push({
-        id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
-        virtualPath,
-        fileName: resolved.name,
-        durationSeconds: durations?.pathToSeconds.get(normalizeFilePath(virtualPath))?.[0] ?? null,
-      });
-    }
-  }
+  const folders = resolvedEntries
+    .filter((entry) => entry.name && entry.type === 'directory')
+    .map((entry) => `${normalized === '/' ? '' : normalized}/${entry.name}`.replace(/\/+/g, '/'));
+
+  const songs = (
+    await Promise.all(
+      resolvedEntries
+        .filter((entry) => entry.name && entry.type === 'file' && entry.name.toLowerCase().endsWith('.sid'))
+        .map(async (entry) => {
+          const virtualPath = `${normalized === '/' ? '' : normalized}/${entry.name}`.replace(/\/+/g, '/');
+          const duration = await resolveHvscSonglengthDuration({
+            virtualPath,
+            fileName: entry.name,
+          });
+          const durations = duration.durations && duration.durations.length ? duration.durations : null;
+          const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
+          const primaryDuration = durations?.[0] ?? duration.durationSeconds;
+          return {
+            id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
+            virtualPath,
+            fileName: entry.name,
+            durationSeconds: primaryDuration ?? null,
+            durationsSeconds: durations,
+            subsongCount,
+          };
+        }),
+    )
+  );
 
   return {
     path: normalized,
@@ -220,12 +203,22 @@ export const listHvscFolder = async (path: string): Promise<HvscFolderListing> =
 export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<HvscSong | null> => {
   const path = resolveLibraryPath(virtualPath);
   try {
+    await ensureHvscSonglengthsReadyOnColdStart();
     const result = await Filesystem.readFile({ directory: Directory.Data, path });
+    const duration = await resolveHvscSonglengthDuration({
+      virtualPath,
+      fileName: virtualPath.split('/').pop() || virtualPath,
+    });
+    const durations = duration.durations && duration.durations.length ? duration.durations : null;
+    const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
+    const primaryDuration = durations?.[0] ?? duration.durationSeconds;
     return {
       id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
       virtualPath: normalizeFilePath(virtualPath),
       fileName: virtualPath.split('/').pop() || virtualPath,
-      durationSeconds: (await loadSonglengths())?.pathToSeconds.get(normalizeFilePath(virtualPath))?.[0] ?? null,
+      durationSeconds: primaryDuration ?? null,
+      durationsSeconds: durations,
+      subsongCount,
       md5: null,
       dataBase64: result.data,
     };
@@ -235,8 +228,9 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
 };
 
 export const getHvscDurationByMd5 = async (md5: string) => {
-  const songlengths = await loadSonglengths();
-  return songlengths?.md5ToSeconds.get(md5)?.[0] ?? null;
+  await ensureHvscSonglengthsReadyOnColdStart();
+  const duration = await resolveHvscSonglengthDuration({ md5 });
+  return duration.durationSeconds;
 };
 
 export const writeLibraryFile = async (virtualPath: string, data: Uint8Array) => {

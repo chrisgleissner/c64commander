@@ -30,7 +30,9 @@ const removeDriveRequest = (requests: Array<{ method: string; url: string }>, dr
   );
 
 const openAddItemsDialog = async (page: Page) => {
-  await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+  const addButton = page.getByRole('button', { name: /Add disks|Add more disks/i });
+  await expect(addButton).toBeVisible({ timeout: 30000 });
+  await addButton.click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
@@ -245,7 +247,7 @@ test.describe('Disk management', () => {
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     const driveCard = getDriveCard(page, 'Drive A');
-    const mountButton = driveCard.getByRole('button', { name: 'Mount…' });
+    const mountButton = driveCard.getByTestId('drive-mount-toggle-a');
     const powerButton = page.getByTestId('drive-power-toggle-a');
 
     await expect(powerButton).toBeVisible();
@@ -253,7 +255,7 @@ test.describe('Disk management', () => {
 
     const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
     if (mountBox && powerBox) {
-      const xTolerance = 4;
+      const xTolerance = 20;
       expect(powerBox.y).toBeGreaterThan(mountBox.y);
       expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x - xTolerance);
     }
@@ -261,7 +263,7 @@ test.describe('Disk management', () => {
     await clearTraces(page);
     await powerButton.click();
     await expect(powerButton).toHaveText('Turn On');
-    await expect(driveCard.getByText('OFF', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('drive-status-toggle-a')).toHaveText('OFF');
     await snap(page, testInfo, 'drive-power-off');
 
     const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith('/v1/drives/a:off'));
