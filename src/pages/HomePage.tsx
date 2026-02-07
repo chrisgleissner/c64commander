@@ -13,8 +13,9 @@ import {
   Upload,
   Play,
   Download,
-  FolderOpen
+  FolderOpen,
 } from 'lucide-react';
+import { getC64API } from '@/lib/c64api';
 import { useC64ConfigItems, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { AppBar } from '@/components/AppBar';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
@@ -34,11 +35,27 @@ import { reportUserError } from '@/lib/uiErrors';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { buildSidStatusEntries } from '@/lib/config/sidStatus';
-import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from '@/lib/config/configItems';
+import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/config/configItems';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
+import { buildStreamStatusEntries } from '@/lib/config/streamStatus';
+import {
+  FULL_RAM_SIZE_BYTES,
+  clearRamAndReboot,
+  dumpFullRamImage,
+  loadFullRamImage,
+} from '@/lib/machine/ramOperations';
+import {
+  buildRamDumpFileName,
+  ensureRamDumpFolder,
+  pickRamDumpFile,
+  selectRamDumpFolder,
+  writeRamDumpToFolder,
+} from '@/lib/machine/ramDumpStorage';
+import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from '@/lib/config/ramDumpFolderStore';
 
 export default function HomePage() {
+  const api = getC64API();
   const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
@@ -50,6 +67,11 @@ export default function HomePage() {
   const { data: sidAddressingCategory } = useC64ConfigItems(
     'SID Addressing',
     SID_ADDRESSING_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
+  const { data: streamCategory } = useC64ConfigItems(
+    'Data Streams',
+    STREAM_ITEMS,
     status.isConnected || status.isConnecting,
   );
   const controls = useC64MachineControl();
@@ -72,9 +94,18 @@ export default function HomePage() {
   const [saveName, setSaveName] = useState('');
   const [renameValues, setRenameValues] = useState<Record<string, string>>({});
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
+  const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
+  const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
+  const [folderTaskPending, setFolderTaskPending] = useState(false);
+  const [powerOffArmed, setPowerOffArmed] = useState(false);
 
   const buildInfo = getBuildInfo();
   const buildInfoRows = getBuildInfoRows(buildInfo);
+  const streamStatusEntries = useMemo(
+    () => buildStreamStatusEntries(streamCategory as Record<string, unknown> | undefined),
+    [streamCategory],
+  );
+  const machineTaskBusy = machineTaskId !== null;
 
   const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
@@ -89,6 +120,131 @@ export default function HomePage() {
         context: { action: successMessage },
       });
     }
+  });
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as RamDumpFolderConfig | null;
+      if (!detail) {
+        setRamDumpFolder(null);
+        return;
+      }
+      setRamDumpFolder(detail);
+    };
+    window.addEventListener('c64u-ram-dump-folder-updated', handler as EventListener);
+    return () => window.removeEventListener('c64u-ram-dump-folder-updated', handler as EventListener);
+  }, []);
+
+  useEffect(() => {
+    if (!powerOffArmed) return undefined;
+    const timeout = window.setTimeout(() => {
+      setPowerOffArmed(false);
+    }, 5000);
+    return () => window.clearTimeout(timeout);
+  }, [powerOffArmed]);
+
+  const runMachineTask = trace(async function runMachineTask(
+    taskId: string,
+    task: () => Promise<void>,
+    successTitle: string,
+    successDescription?: string,
+  ) {
+    if (machineTaskBusy) return;
+    setMachineTaskId(taskId);
+    try {
+      await task();
+      toast({
+        title: successTitle,
+        description: successDescription,
+      });
+    } catch (error) {
+      reportUserError({
+        operation: 'HOME_MACHINE_TASK',
+        title: 'Machine action failed',
+        description: (error as Error).message,
+        error,
+        context: { taskId },
+      });
+    } finally {
+      setMachineTaskId(null);
+    }
+  });
+
+  const handleSelectRamDumpFolder = trace(async function handleSelectRamDumpFolder() {
+    setFolderTaskPending(true);
+    try {
+      const folder = await selectRamDumpFolder();
+      setRamDumpFolder(folder);
+      toast({
+        title: 'RAM dump folder set',
+        description: folder.rootName ?? 'Folder access granted',
+      });
+    } catch (error) {
+      reportUserError({
+        operation: 'RAM_DUMP_FOLDER_SELECT',
+        title: 'Folder selection failed',
+        description: (error as Error).message,
+        error,
+      });
+    } finally {
+      setFolderTaskPending(false);
+    }
+  });
+
+  const handleRebootClearMemory = trace(async function handleRebootClearMemory() {
+    await runMachineTask(
+      'reboot-clear-memory',
+      async () => {
+        await clearRamAndReboot(api);
+      },
+      'Machine rebooting',
+      'RAM cleared (excluding I/O region).',
+    );
+  });
+
+  const handleSaveRam = trace(async function handleSaveRam() {
+    await runMachineTask(
+      'save-ram',
+      async () => {
+        const image = await dumpFullRamImage(api);
+        const folder = await ensureRamDumpFolder();
+        const fileName = buildRamDumpFileName();
+        await writeRamDumpToFolder(folder, fileName, image);
+        setRamDumpFolder(folder);
+      },
+      'RAM dump saved',
+      'Saved to selected folder.',
+    );
+  });
+
+  const handleLoadRam = trace(async function handleLoadRam() {
+    await runMachineTask(
+      'load-ram',
+      async () => {
+        const pickedFile = await pickRamDumpFile();
+        if (pickedFile.bytes.length !== FULL_RAM_SIZE_BYTES) {
+          throw new Error(
+            `Invalid RAM dump size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${pickedFile.bytes.length} bytes`,
+          );
+        }
+        await loadFullRamImage(api, pickedFile.bytes);
+      },
+      'RAM loaded',
+      'Memory image applied successfully.',
+    );
+  });
+
+  const handlePowerOff = trace(async function handlePowerOff() {
+    if (!powerOffArmed) {
+      setPowerOffArmed(true);
+      toast({
+        title: 'Confirm Power Off',
+        description: 'Tap Power Off again within 5 seconds.',
+      });
+      return;
+    }
+    setPowerOffArmed(false);
+    await handleAction(() => controls.powerOff.mutateAsync(), 'Powering off...');
   });
 
   const handleSaveToApp = trace(async function handleSaveToApp() {
@@ -176,6 +332,39 @@ export default function HomePage() {
       </div>
     );
   };
+
+  const renderStreamStatus = () => (
+    <div className="space-y-2" data-testid="home-stream-status">
+      <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+        <span>Streams</span>
+      </div>
+      <div className="bg-card border border-border rounded-xl p-4">
+        <div className="space-y-2">
+          {streamStatusEntries.map((entry) => (
+            <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-foreground">{entry.label}</span>
+                <span className={entry.state === 'ON' ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
+                  {entry.state}
+                </span>
+              </div>
+              <div className="mt-1 grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-muted-foreground">IP</span>
+                  <p className="font-medium break-words">{entry.ip}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Port</span>
+                  <p className="font-medium break-words">{entry.port}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -266,51 +455,107 @@ export default function HomePage() {
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Machine
+            {machineTaskBusy && (
+              <span className="ml-2 text-xs text-muted-foreground">Working…</span>
+            )}
           </h3>
-          <div className="grid grid-cols-3 gap-3">
-            <QuickActionCard
-              icon={RotateCcw}
-              label="Reset"
-              onClick={() => handleAction(() => controls.reset.mutateAsync(), 'Machine reset')}
-              disabled={!status.isConnected}
-              loading={controls.reset.isPending}
-            />
-            <QuickActionCard
-              icon={Power}
-              label="Reboot"
-              onClick={() => handleAction(() => controls.reboot.mutateAsync(), 'Machine rebooting...')}
-              disabled={!status.isConnected}
-              loading={controls.reboot.isPending}
-            />
-            <QuickActionCard
-              icon={Menu}
-              label="Menu"
-              onClick={() => handleAction(() => controls.menuButton.mutateAsync(), 'Menu toggled')}
-              disabled={!status.isConnected}
-              loading={controls.menuButton.isPending}
-            />
-            <QuickActionCard
-              icon={Pause}
-              label="Pause"
-              onClick={() => handleAction(() => controls.pause.mutateAsync(), 'Machine paused')}
-              disabled={!status.isConnected}
-              loading={controls.pause.isPending}
-            />
-            <QuickActionCard
-              icon={Play}
-              label="Resume"
-              onClick={() => handleAction(() => controls.resume.mutateAsync(), 'Machine resumed')}
-              disabled={!status.isConnected}
-              loading={controls.resume.isPending}
-            />
-            <QuickActionCard
-              icon={PowerOff}
-              label="Power Off"
-              variant="danger"
-              onClick={() => handleAction(() => controls.powerOff.mutateAsync(), 'Powering off...')}
-              disabled={!status.isConnected}
-              loading={controls.powerOff.isPending}
-            />
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
+            <div className="grid grid-cols-4 gap-2">
+              <QuickActionCard
+                icon={RotateCcw}
+                label="Reset"
+                compact
+                onClick={() => handleAction(() => controls.reset.mutateAsync(), 'Machine reset')}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={controls.reset.isPending}
+              />
+              <QuickActionCard
+                icon={Power}
+                label="Reboot"
+                compact
+                onClick={() => handleAction(() => controls.reboot.mutateAsync(), 'Machine rebooting...')}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={controls.reboot.isPending}
+              />
+              <QuickActionCard
+                icon={Menu}
+                label="Menu"
+                compact
+                onClick={() => handleAction(() => controls.menuButton.mutateAsync(), 'Menu toggled')}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={controls.menuButton.isPending}
+              />
+              <QuickActionCard
+                icon={Pause}
+                label="Pause"
+                compact
+                onClick={() => handleAction(() => controls.pause.mutateAsync(), 'Machine paused')}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={controls.pause.isPending}
+              />
+              <QuickActionCard
+                icon={Play}
+                label="Resume"
+                compact
+                onClick={() => handleAction(() => controls.resume.mutateAsync(), 'Machine resumed')}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={controls.resume.isPending}
+              />
+              <QuickActionCard
+                icon={RotateCcw}
+                label="Reboot (Clr Mem)"
+                compact
+                onClick={() => void handleRebootClearMemory()}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={machineTaskId === 'reboot-clear-memory'}
+              />
+              <QuickActionCard
+                icon={Download}
+                label="Save RAM"
+                compact
+                onClick={() => void handleSaveRam()}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={machineTaskId === 'save-ram'}
+              />
+              <QuickActionCard
+                icon={Upload}
+                label="Load RAM"
+                compact
+                onClick={() => void handleLoadRam()}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={machineTaskId === 'load-ram'}
+              />
+              <QuickActionCard
+                icon={PowerOff}
+                label={powerOffArmed ? 'Confirm Off' : 'Power Off'}
+                compact
+                variant="danger"
+                className="col-start-1 row-start-3 border-destructive/50 bg-destructive/5"
+                onClick={() => void handlePowerOff()}
+                disabled={!status.isConnected || machineTaskBusy}
+                loading={controls.powerOff.isPending}
+              />
+            </div>
+
+            <div className="bg-card border border-border rounded-xl p-3 space-y-3">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wider">RAM Dump Folder</p>
+                <p className="text-sm font-medium break-words" data-testid="ram-dump-folder-value">
+                  {ramDumpFolder?.rootName ?? 'Not configured'}
+                </p>
+                <p className="text-[11px] text-muted-foreground break-words">
+                  {ramDumpFolder?.treeUri ?? 'Select a folder before first Save RAM action.'}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleSelectRamDumpFolder()}
+                disabled={folderTaskPending || machineTaskBusy}
+              >
+                {folderTaskPending ? 'Changing…' : 'Change Folder'}
+              </Button>
+            </div>
           </div>
         </motion.div>
 
@@ -347,19 +592,22 @@ export default function HomePage() {
                 </span>
               </div>
             </button>
-            <div className="space-y-2" data-testid="home-sid-status">
-              <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                <span>SID</span>
-              </div>
-              <div className="bg-card border border-border rounded-xl p-4">
-                <div className="grid grid-cols-2 gap-2">
-                  {renderSidStatus('socket1')}
-                  {renderSidStatus('socket2')}
-                  {renderSidStatus('ultiSid1')}
-                  {renderSidStatus('ultiSid2')}
+            <div className="space-y-3">
+              <div className="space-y-2" data-testid="home-sid-status">
+                <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  <span>SID</span>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-4">
+                  <div className="grid grid-cols-2 gap-2">
+                    {renderSidStatus('socket1')}
+                    {renderSidStatus('socket2')}
+                    {renderSidStatus('ultiSid1')}
+                    {renderSidStatus('ultiSid2')}
+                  </div>
                 </div>
               </div>
+              {renderStreamStatus()}
             </div>
           </div>
         </motion.div>
@@ -378,22 +626,24 @@ export default function HomePage() {
               <span className="ml-2 text-xs text-muted-foreground">Applying…</span>
             )}
           </h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-2">
             <QuickActionCard
               icon={Save}
               label="Save"
               description="To flash"
               variant="success"
+              compact
               onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), 'Config saved to flash')}
-              disabled={!status.isConnected}
+              disabled={!status.isConnected || machineTaskBusy}
               loading={controls.saveConfig.isPending}
             />
             <QuickActionCard
               icon={RefreshCw}
               label="Load"
               description="From flash"
+              compact
               onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), 'Config loaded from flash')}
-              disabled={!status.isConnected}
+              disabled={!status.isConnected || machineTaskBusy}
               loading={controls.loadConfig.isPending}
             />
             <QuickActionCard
@@ -401,8 +651,9 @@ export default function HomePage() {
               label="Reset"
               description="To default"
               variant="danger"
+              compact
               onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), 'Config reset to defaults')}
-              disabled={!status.isConnected}
+              disabled={!status.isConnected || machineTaskBusy}
               loading={controls.resetConfig.isPending}
             />
             <QuickActionCard
@@ -410,31 +661,35 @@ export default function HomePage() {
               label="Save"
               description="To App"
               variant="success"
+              compact
               onClick={() => setSaveDialogOpen(true)}
-              disabled={!status.isConnected || isSaving}
+              disabled={!status.isConnected || isSaving || machineTaskBusy}
               loading={isSaving}
             />
             <QuickActionCard
               icon={Download}
               label="Load"
               description="From App"
+              compact
               onClick={() => setLoadDialogOpen(true)}
-              disabled={!status.isConnected || appConfigs.length === 0}
+              disabled={!status.isConnected || appConfigs.length === 0 || machineTaskBusy}
             />
             <QuickActionCard
               icon={RotateCcw}
               label="Revert"
               description="Changes"
+              compact
               onClick={() => handleAction(() => revertToInitial(), 'Config reverted')}
-              disabled={!status.isConnected || isApplying || !hasChanges}
+              disabled={!status.isConnected || isApplying || !hasChanges || machineTaskBusy}
               loading={isApplying}
             />
             <QuickActionCard
               icon={FolderOpen}
               label="Manage"
               description="App Configs"
+              compact
               onClick={() => setManageDialogOpen(true)}
-              disabled={!status.isConnected || appConfigs.length === 0}
+              disabled={!status.isConnected || appConfigs.length === 0 || machineTaskBusy}
             />
           </div>
         </motion.div>

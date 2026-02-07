@@ -9,6 +9,7 @@ const {
   reportUserErrorSpy,
   sidSocketsPayloadRef,
   sidAddressingPayloadRef,
+  streamPayloadRef,
   statusPayloadRef,
   drivesPayloadRef,
   machineControlPayloadRef,
@@ -19,6 +20,7 @@ const {
   reportUserErrorSpy: vi.fn(),
   sidSocketsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   sidAddressingPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  streamPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   statusPayloadRef: {
     current: {
       isConnected: true,
@@ -95,6 +97,9 @@ vi.mock('@/hooks/useC64Connection', () => ({
     if (category === 'SID Addressing') {
       return { data: sidAddressingPayloadRef.current };
     }
+    if (category === 'Data Streams') {
+      return { data: streamPayloadRef.current };
+    }
     return { data: null };
   },
   useC64MachineControl: () => machineControlPayloadRef.current,
@@ -122,6 +127,7 @@ beforeEach(() => {
   reportUserErrorSpy.mockReset();
   sidSocketsPayloadRef.current = undefined;
   sidAddressingPayloadRef.current = undefined;
+  streamPayloadRef.current = undefined;
   statusPayloadRef.current = {
     isConnected: true,
     isConnecting: false,
@@ -223,6 +229,36 @@ describe('HomePage SID status', () => {
     expect(screen.getByText('UltiSID 2').parentElement?.textContent ?? '').toContain('OFF');
   });
 
+  it('renders stream statuses from Data Streams config', () => {
+    streamPayloadRef.current = {
+      'Data Streams': {
+        items: {
+          'Stream VIC to': { selected: '239.0.1.64:11000' },
+          'Stream Audio to': { selected: 'off' },
+          'Stream Debug to': { selected: '239.0.1.66' },
+        },
+      },
+    };
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    const streamSection = screen.getByTestId('home-stream-status');
+    expect(within(streamSection).getByTestId('stream-status-label').textContent).toContain('Streams');
+    expect(within(streamSection).getByText('VIC')).toBeTruthy();
+    expect(within(streamSection).getByText('Audio')).toBeTruthy();
+    expect(within(streamSection).getByText('Debug')).toBeTruthy();
+    expect(within(streamSection).getAllByText('ON').length).toBe(2);
+    expect(within(streamSection).getAllByText('OFF').length).toBe(1);
+    expect(within(streamSection).getByText('239.0.1.64')).toBeTruthy();
+    expect(within(streamSection).getByText('239.0.1.66')).toBeTruthy();
+    expect(within(streamSection).getByText('11000')).toBeTruthy();
+    expect(within(streamSection).getByText('11002')).toBeTruthy();
+  });
+
   it('shows build info placeholders and offline message when disconnected', () => {
     (globalThis as any).__APP_VERSION__ = '';
     (globalThis as any).__GIT_SHA__ = '';
@@ -319,6 +355,24 @@ describe('HomePage SID status', () => {
       title: 'Error',
       context: { action: 'Menu toggled' },
     });
+  });
+
+  it('requires a second tap to confirm power off', async () => {
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
+    expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
+    expect(toastSpy).toHaveBeenCalledWith({
+      title: 'Confirm Power Off',
+      description: 'Tap Power Off again within 5 seconds.',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /confirm off/i }));
+    await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
   });
 
   it('manages app configs via dialogs', async () => {

@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HomeDiskManager } from '@/components/disks/HomeDiskManager';
-import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useDiskLibrary } from '@/hooks/useDiskLibrary';
 import { getC64API } from '@/lib/c64api';
 import { toast } from '@/hooks/use-toast';
@@ -113,6 +113,7 @@ describe('HomeDiskManager UI & Interactions', () => {
         (useC64Drives as any).mockReturnValue({
             data: { drives: [{ a: createMockDrive() }, { b: createMockDrive() }] },
         });
+        (useC64ConfigItems as any).mockReturnValue({ data: undefined });
     });
 
     it('renders drive power toggle and handles error', async () => {

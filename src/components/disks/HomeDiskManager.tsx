@@ -5,12 +5,13 @@ import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder } from 'luci
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
-import { useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
+import { useC64ConfigItems, useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
 import { useListPreviewLimit } from '@/hooks/useListPreviewLimit';
 import { useLocalSources } from '@/hooks/useLocalSources';
 import { useActionTrace } from '@/hooks/useActionTrace';
@@ -32,12 +33,23 @@ import { prepareDirectoryInput } from '@/lib/sourceNavigation/localSourcesStore'
 import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavigation/types';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
+import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
 type DriveKey = (typeof DRIVE_KEYS)[number];
 
 const buildDriveLabel = (key: DriveKey) => `Drive ${key.toUpperCase()}`;
+const DRIVE_CONFIG_CATEGORY: Record<DriveKey, string> = {
+  a: 'Drive A Settings',
+  b: 'Drive B Settings',
+};
+const DRIVE_BUS_ID_ITEM = 'Drive Bus ID';
+const DRIVE_TYPE_ITEM = 'Drive Type';
+const DRIVE_BUS_ID_OPTIONS = ['8', '9', '10', '11'] as const;
+const DRIVE_TYPE_OPTIONS = ['1541', '1571', '1581'] as const;
+const DRIVE_DEFAULT_BUS_ID: Record<DriveKey, number> = { a: 8, b: 9 };
+const DRIVE_DEFAULT_TYPE = '1541';
 
 const buildDrivePath = (path?: string | null, file?: string | null) => {
   if (!file) return null;
@@ -132,6 +144,17 @@ export const HomeDiskManager = () => {
 
   const api = getC64API();
   const queryClient = useQueryClient();
+  const [driveConfigPending, setDriveConfigPending] = useState<Record<DriveKey, boolean>>({ a: false, b: false });
+  const { data: driveAConfig } = useC64ConfigItems(
+    DRIVE_CONFIG_CATEGORY.a,
+    [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: driveBConfig } = useC64ConfigItems(
+    DRIVE_CONFIG_CATEGORY.b,
+    [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
+    status.isConnected || status.isConnecting,
+  );
 
   const localSourcesById = useMemo(
     () => new Map(localSources.map((source) => [source.id, source])),
@@ -372,6 +395,105 @@ export const HomeDiskManager = () => {
     const disk = diskLibrary.disks.find((entry) => entry.location === 'ultimate' && entry.path === fullPath);
     return disk?.id ?? null;
   };
+
+  const withRetry = async <T,>(operation: string, run: () => Promise<T>, attempts = 2) => {
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await run();
+      } catch (error) {
+        lastError = error as Error;
+        if (attempt >= attempts) break;
+        addErrorLog('Drive config update retry', {
+          operation,
+          attempt,
+          attempts,
+          error: lastError.message,
+        });
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 120);
+        });
+      }
+    }
+    throw new Error(`${operation} failed: ${lastError?.message ?? 'unknown error'}`);
+  };
+
+  const getDriveConfigValue = (payload: unknown, drive: DriveKey, itemName: string) => {
+    const categoryName = DRIVE_CONFIG_CATEGORY[drive];
+    const record = payload as Record<string, unknown> | undefined;
+    const categoryBlock = record?.[categoryName] as Record<string, unknown> | undefined;
+    const itemsBlock = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+    if (!itemsBlock || !Object.prototype.hasOwnProperty.call(itemsBlock, itemName)) return undefined;
+    return normalizeConfigItem(itemsBlock[itemName]).value;
+  };
+
+  const parseBusId = (value: unknown) => {
+    const numeric = typeof value === 'number' ? value : Number(String(value ?? '').trim());
+    if (!Number.isInteger(numeric)) return null;
+    if (numeric < 8 || numeric > 11) return null;
+    return numeric;
+  };
+
+  const parseDriveType = (value: unknown) => {
+    const normalized = String(value ?? '').trim();
+    return (DRIVE_TYPE_OPTIONS as readonly string[]).includes(normalized) ? normalized : null;
+  };
+
+  const resolveDriveBusId = (drive: DriveKey, payload: unknown, fallbackInfo?: { bus_id?: number }) => {
+    const fromConfig = parseBusId(getDriveConfigValue(payload, drive, DRIVE_BUS_ID_ITEM));
+    if (fromConfig !== null) return fromConfig;
+    const fromDriveInfo = parseBusId(fallbackInfo?.bus_id);
+    if (fromDriveInfo !== null) return fromDriveInfo;
+    return DRIVE_DEFAULT_BUS_ID[drive];
+  };
+
+  const resolveDriveType = (drive: DriveKey, payload: unknown, fallbackInfo?: { type?: string }) => {
+    const fromConfig = parseDriveType(getDriveConfigValue(payload, drive, DRIVE_TYPE_ITEM));
+    if (fromConfig) return fromConfig;
+    const fromDriveInfo = parseDriveType(fallbackInfo?.type);
+    if (fromDriveInfo) return fromDriveInfo;
+    return DRIVE_DEFAULT_TYPE;
+  };
+
+  const handleDriveConfigUpdate = trace(async (
+    drive: DriveKey,
+    itemName: string,
+    value: string | number,
+    successTitle: string,
+    successDescription: string,
+  ) => {
+    if (!status.isConnected) return;
+    setDriveConfigPending((prev) => ({ ...prev, [drive]: true }));
+    try {
+      const category = DRIVE_CONFIG_CATEGORY[drive];
+      await withRetry(
+        `${buildDriveLabel(drive)} ${itemName} update`,
+        () => api.setConfigValue(category, itemName, value),
+      );
+      setDriveErrors((prev) => ({ ...prev, [drive]: '' }));
+      toast({ title: successTitle, description: successDescription });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          predicate: (query) =>
+            Array.isArray(query.queryKey)
+            && query.queryKey[0] === 'c64-config-items'
+            && query.queryKey[1] === category,
+        }),
+        queryClient.invalidateQueries({ queryKey: ['c64-drives'] }),
+      ]);
+    } catch (error) {
+      setDriveErrors((prev) => ({ ...prev, [drive]: (error as Error).message }));
+      reportUserError({
+        operation: 'DRIVE_CONFIG_UPDATE',
+        title: 'Drive setting update failed',
+        description: (error as Error).message,
+        error,
+        context: { drive, itemName, value },
+      });
+    } finally {
+      setDriveConfigPending((prev) => ({ ...prev, [drive]: false }));
+    }
+  });
 
   const handleRotate = trace(async (drive: DriveKey, direction: 1 | -1) => {
     const currentId = resolveMountedDiskId(drive);
@@ -842,6 +964,9 @@ export const HomeDiskManager = () => {
 
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
+    const driveConfigPayload = key === 'a' ? driveAConfig : driveBConfig;
+    const busId = resolveDriveBusId(key, driveConfigPayload, info);
+    const driveType = resolveDriveType(key, driveConfigPayload, info);
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === 'boolean';
@@ -866,11 +991,14 @@ export const HomeDiskManager = () => {
       mountedDisk,
       canRotate,
       mountedLabel,
+      busId,
+      driveType,
       powerEnabled,
       hasPowerState,
       powerLabel,
       powerTarget,
       powerPending,
+      configPending: Boolean(driveConfigPending[key]),
     };
   });
 
@@ -882,12 +1010,65 @@ export const HomeDiskManager = () => {
           Drives
         </h3>
         <div className="grid gap-3">
-          {driveRows.map(({ key, info, mounted, mountedDisk, canRotate, mountedLabel, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending }) => (
+          {driveRows.map(({ key, mounted, mountedDisk, canRotate, mountedLabel, busId, driveType, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending }) => (
             <div key={key} className="config-card space-y-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-sm">{buildDriveLabel(key)}</span>
-                  <span className="text-xs text-muted-foreground">#{info?.bus_id ?? '—'}</span>
+                  <Select
+                    value={String(busId)}
+                    onValueChange={(value) =>
+                      void handleDriveConfigUpdate(
+                        key,
+                        DRIVE_BUS_ID_ITEM,
+                        Number(value),
+                        'Drive Bus ID updated',
+                        `${buildDriveLabel(key)} now uses device #${value}.`,
+                      )}
+                    disabled={!status.isConnected || configPending}
+                  >
+                    <SelectTrigger
+                      className="h-7 w-[86px] px-2 text-xs"
+                      aria-label={`${buildDriveLabel(key)} Bus ID`}
+                      data-testid={`drive-bus-select-${key}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DRIVE_BUS_ID_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          #{option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={driveType}
+                    onValueChange={(value) =>
+                      void handleDriveConfigUpdate(
+                        key,
+                        DRIVE_TYPE_ITEM,
+                        value,
+                        'Drive Type updated',
+                        `${buildDriveLabel(key)} switched to ${value} mode.`,
+                      )}
+                    disabled={!status.isConnected || configPending}
+                  >
+                    <SelectTrigger
+                      className="h-7 w-[90px] px-2 text-xs"
+                      aria-label={`${buildDriveLabel(key)} Drive Type`}
+                      data-testid={`drive-type-select-${key}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DRIVE_TYPE_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-center gap-2">
                   <span
@@ -920,11 +1101,11 @@ export const HomeDiskManager = () => {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {mounted && (
-                    <Button variant="outline" size="sm" onClick={() => void handleEject(key)} disabled={!status.isConnected}>
+                    <Button variant="outline" size="sm" onClick={() => void handleEject(key)} disabled={!status.isConnected || configPending}>
                       Eject
                     </Button>
                   )}
-                  <Button variant="default" size="sm" onClick={() => setActiveDrive(key)} disabled={!status.isConnected}>
+                  <Button variant="default" size="sm" onClick={() => setActiveDrive(key)} disabled={!status.isConnected || configPending}>
                     Mount…
                   </Button>
                 </div>
@@ -932,11 +1113,11 @@ export const HomeDiskManager = () => {
 
               {canRotate && (
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => void handleRotate(key, -1)} disabled={!status.isConnected}>
+                  <Button variant="outline" size="sm" onClick={() => void handleRotate(key, -1)} disabled={!status.isConnected || configPending}>
                     <ArrowRightLeft className="h-4 w-4 mr-1" />
                     Prev
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => void handleRotate(key, 1)} disabled={!status.isConnected}>
+                  <Button variant="outline" size="sm" onClick={() => void handleRotate(key, 1)} disabled={!status.isConnected || configPending}>
                     <ArrowLeftRight className="h-4 w-4 mr-1" />
                     Next
                   </Button>
@@ -948,7 +1129,7 @@ export const HomeDiskManager = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => void handleToggleDrivePower(key, powerTarget)}
-                  disabled={!status.isConnected || !hasPowerState || powerPending}
+                  disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                   data-testid={`drive-power-toggle-${key}`}
                 >
                   {powerLabel}
@@ -1055,7 +1236,7 @@ export const HomeDiskManager = () => {
             <DialogDescription>Select the drive to mount this disk.</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            {driveRows.map(({ key, info, mounted }) => (
+            {driveRows.map(({ key, busId, driveType, mounted, configPending }) => (
               <Button
                 key={key}
                 variant="outline"
@@ -1063,10 +1244,10 @@ export const HomeDiskManager = () => {
                   if (!activeDisk) return;
                   void handleMountDisk(key, activeDisk).finally(() => setActiveDisk(null));
                 }}
-                disabled={!status.isConnected}
+                disabled={!status.isConnected || configPending}
               >
                 <HardDrive className="h-4 w-4 mr-2" />
-                {buildDriveLabel(key)} (#{info?.bus_id ?? '—'}) {mounted ? '• mounted' : ''}
+                {buildDriveLabel(key)} (#{busId}, {driveType}) {mounted ? '• mounted' : ''}
               </Button>
             ))}
           </div>

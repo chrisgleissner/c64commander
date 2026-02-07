@@ -46,6 +46,13 @@ type FolderPickerPlugin = {
   getPersistedUris: () => Promise<{ uris: SafPersistedUri[] }>;
   readFile: (options: { uri: string }) => Promise<{ data: string }>;
   readFileFromTree: (options: { treeUri: string; path: string }) => Promise<{ data: string }>;
+  writeFileToTree: (options: {
+    treeUri: string;
+    path: string;
+    data: string;
+    mimeType?: string;
+    overwrite?: boolean;
+  }) => Promise<{ uri: string; sizeBytes: number; modifiedAt?: string | null }>;
 };
 
 type FolderPickerOverride = Partial<FolderPickerPlugin>;
@@ -102,5 +109,10 @@ export const FolderPicker: FolderPickerPlugin = {
     const override = resolveOverrideMethod('readFileFromTree');
     if (override) return override(options);
     return plugin.readFileFromTree(options);
+  },
+  writeFileToTree: (options) => {
+    const override = resolveOverrideMethod('writeFileToTree');
+    if (override) return override(options);
+    return plugin.writeFileToTree(options);
   },
 };

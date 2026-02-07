@@ -1,88 +1,74 @@
-# PLANS.md - Playback, Disk Labels, Songlengths Facade, and HVSC Pipeline Hardening
+# PLANS.md - Disks/Home REST Configuration, Streams, and RAM Control
 
 ## Execution Contract
 - Status legend: `[ ] pending`, `[-] in progress`, `[x] completed`.
 - Loop per phase: `plan -> implement -> targeted tests -> verify -> update this file`.
+- REST is the source of truth for all new read/write behavior in this scope.
 - No test weakening, no skipped failures, no bypasses.
-- Risky refactors require explicit rollback notes before edits.
 
-## Phase 0 - Baseline and Guardrails
-- [x] Capture current baseline and failing surfaces for A-E.
-- Invariants:
-  - Repository remains buildable after every phase.
-  - Existing behavior outside scope is unchanged.
-- Test gate:
-  - Run targeted existing tests for play/hvsc/disks before edits.
-- Rollback strategy:
-  - Keep changes isolated by subsystem (playback, disk labels, songlengths, hvsc runtime) so each can be reverted independently.
+## Phase 0 - Baseline and Scope Lock
+- [x] Confirm current Disks/Home implementations, REST endpoints, and existing tests.
+- [x] Define concrete data contracts for:
+  - Drive Bus ID + Drive Type (REST-backed read/write)
+  - Streams (REST-backed read-only ON/OFF + IP + port)
+  - RAM actions (freeze/dump/load/reboot-clear)
+  - RAM dump folder persistence and picker flow
+- [x] Verification:
+  - Captured impacted files and test suites before edits.
 
-## Phase 1 - Issue A/B/C UX and Playback Correctness
-- [x] A: Ensure Play starts first playlist item when no prior track and playlist non-empty, with single in-flight play start.
-- [x] B: Fix volume slider release snap-back and preserve authoritative UI position during/after interaction.
-- [x] C: Replace dangling dash disk labels with exact required strings while preserving styling.
-- Invariants:
-  - At most one start-play request in flight.
-  - No duplicate start requests from rapid taps.
-  - Slider value remains stable post-release and still updates mixer/persistence.
-  - Home/Disks visuals unchanged except text logic.
-- Test gate:
-  - Add tests for first-play + rapid taps.
-  - Add tests for volume drag/release stability.
-  - Add tests for Home and Disks no-disk/mounted labels.
-- Rollback strategy:
-  - Keep play/volume logic edits in `PlayFilesPage` scoped to handlers/effects.
-  - Keep disk label edits text-only in `HomePage` and `HomeDiskManager`.
+## Phase 1 - REST/API and Persistence Foundations
+- [x] Add/extend REST client methods needed for stream and RAM workflows.
+- [x] Implement RAM operations service with explicit retry handling, chunked reads/writes, and fail-fast error context.
+- [x] Implement RAM dump folder persistence store and native/web picker adapters.
+- [x] Extend Android FolderPicker plugin + TS bindings as needed to support writing RAM dumps to selected SAF folder.
+- [x] Verification:
+  - Targeted unit tests passed:
+    - `tests/unit/ramOperations.test.ts`
+    - `tests/unit/ramDumpFolderStore.test.ts`
+    - `tests/unit/ramDumpStorage.test.ts`
+  - Android Kotlin compile check passed with Gradle fallback from daemon to non-daemon mode.
 
-## Phase 2 - Issue D Songlengths Facade + Backend Boundary
-- [x] Introduce facade + backend interface and first backend (in-memory text parser/indexer).
-- [x] Route all HVSC songlength access through facade; remove direct parsing/map access from HVSC filesystem/listing code.
-- [x] Route Play page songlength resolution through facade API (no direct map probing at call sites).
-- [x] Add lifecycle APIs: cold-start load and reload-on-config-change.
-- [x] Add centralized structured observability and status summary logging.
-- Invariants:
-  - Deterministic parse/index build.
-  - Matching order strictly: unique filename -> filename+partial path -> full path -> md5 fallback.
-  - Ambiguous matches never guessed.
-  - Corrupt input never crashes; marks unavailable state.
-  - Index model supports >=100k entries with best-effort memory estimate under 80 MiB.
-- Test gate:
-  - Facade correctness tests for unique/duplicate/path/md5/ambiguity.
-  - Facade robustness tests for malformed/truncated input and cold-start failure.
-  - Playlist reprocessing test on songlengths selection change.
-  - Synthetic 100k benchmark-style test for parse/index performance + memory estimate.
-- Rollback strategy:
-  - Keep compatibility wrappers in `src/lib/sid/songlengths.ts` while runtime callers are migrated to facade-backed APIs.
+## Phase 2 - Disks Page Drive Bus/Type UX (REST-Driven)
+- [x] Add compact Drive Type indicator immediately right of Bus ID in each drive row.
+- [x] Make Bus ID and Drive Type configurable inline via dropdowns (no modal/navigation).
+- [x] Wire dropdown writes through REST; update UI only after success; on failure keep prior value and surface error.
+- [x] Disable affected controls while requests are in-flight and preserve stable layout.
+- [x] Ensure no regression to mount/eject/power/group workflows.
+- [x] Verification:
+  - Targeted `HomeDiskManager` suites all passed (base, UI, dialogs, extended).
 
-## Phase 3 - Issue E HVSC Download/Extraction/Ingestion State Machine Hardening
-- [x] Implement explicit linear state machine: `IDLE -> DOWNLOADING -> DOWNLOADED -> EXTRACTING -> EXTRACTED -> INGESTING -> READY`.
-- [x] Enforce transition invariants and structured transition logging.
-- [x] Ensure failure containment/recovery markers for partial download/extract/ingest and restart-safe behavior.
-- [x] Improve progress/status consistency to eliminate contradictory state combinations.
-- Invariants:
-  - Illegal state transitions impossible (guarded, logged, rejected).
-  - All exceptions include stack + context in logs.
-  - Partial artifacts are recoverable and deterministic across restarts.
-- Test gate:
-  - Tests for interruption, corrupt archive, extraction failure, ingestion failure.
-  - Tests for restart behavior after each failure class.
-  - End-to-end success path test with expected transition order.
-- Rollback strategy:
-  - Keep runtime state-machine helpers isolated and archive I/O logic intact.
+## Phase 3 - Home Page Streams + Machine Controls Rework
+- [x] Add `Streams` section below SID using REST-backed config values for VIC/Audio/Debug ON/OFF + IP + port.
+- [x] Rework Machine Control layout to compact 4-column grid with 3-row footprint and 9 buttons.
+- [x] Keep existing machine semantics and add:
+  - Reboot (Clr Mem)
+  - Save RAM
+  - Load RAM
+- [x] Enforce in-flight disabling and atomic UI behavior for RAM/reboot-clear flows.
+- [x] Add RAM dump folder UI near Machine controls, including first-save folder prompt and change-folder action.
+- [x] Visually separate Power Off and guard accidental activation.
+- [x] Resize Config group action cards to match machine control density.
+- [x] Verification:
+  - Added/updated tests:
+    - `tests/unit/pages/HomePage.test.tsx`
+    - `tests/unit/pages/HomePage.ramActions.test.tsx`
+    - `tests/unit/streamStatus.test.ts`
+  - Re-ran targeted Disks/Home/RAM suites successfully.
 
-## Phase 4 - Full Verification and CI Parity
-- [x] Run full local validation and confirm green results.
-- Invariants:
-  - `npm run test`, `npm run lint`, `npm run build` all pass.
-  - Any touched docs are current.
-- Test gate:
-  - Full test suite and targeted suites for changed subsystems.
-- Rollback strategy:
-  - If late regression appears, revert only offending subsystem hunks and re-run all gates.
+## Phase 4 - Full Verification and Build/CI Parity
+- [x] Run full web checks:
+  - `npm run test`
+  - `npm run lint`
+  - `npm run build`
+- [x] Run local helper build for CI parity:
+  - `./build`
+- [x] Validate touched docs remain accurate and update docs only if behavior changes require it.
+- [x] Final pass for error handling consistency (no silent catches).
 
 ## Progress Log
-- 2026-02-07: Initialized new execution contract and phased plan for issues A-E.
-- 2026-02-07: Phase 0 baseline complete (targeted tests for hvsc/songlengths/disks/play hooks all green).
-- 2026-02-07: Phase 1 complete. Implemented play single-flight guard + explicit first-item start target resolution, stabilized volume slider target sync after release, and replaced dash disk labels with required strings. Added unit tests in `tests/unit/playFiles/playbackGuards.test.ts`, plus disk label assertions in Home and Disks test suites.
-- 2026-02-07: Phase 2 complete. Added `SongLengthServiceFacade` + `SongLengthStoreBackend` with `InMemoryTextBackend`; centralized HVSC songlength loading/resolution lifecycle and observability; migrated play-page resolution to facade-backed APIs.
-- 2026-02-07: Phase 3 complete. Added explicit HVSC archive pipeline state machine with guarded transitions and structured logs; strengthened recovery flows and added restart-recovery tests for interrupted/corrupt/failing ingestion scenarios.
-- 2026-02-07: Phase 4 complete. Verification passed: `npm run test` (120 files, 705 tests), `npm run lint`, `npm run build`.
+- 2026-02-07: Re-initialized plan for requested Disks/Home REST UI + RAM operations scope.
+- 2026-02-07: Phase 0 completed (scoped affected modules: `HomePage`, `HomeDiskManager`, `useC64Connection`, `c64api`, `FolderPicker` bridge, and related unit tests).
+- 2026-02-07: Phase 1 completed. Added RAM operation service + RAM dump storage/persistence modules; extended Android `FolderPicker` with `writeFileToTree`; added targeted unit tests and verified Android Kotlin compilation.
+- 2026-02-07: Phase 2 completed. Added REST-backed inline Drive Bus ID/Type controls in `HomeDiskManager`, with retry + error handling and in-flight disabling.
+- 2026-02-07: Phase 3 completed. Added Home Streams section, compact 9-button machine control grid, RAM actions/folder management, and guarded Power Off flow; updated Home-page tests and UX documentation notes.
+- 2026-02-07: Phase 4 completed. Verified `npm run test`, `npm run lint`, `npm run build`, and `./build` all pass. `./build` Playwright run passed (`312` tests) and Android Gradle tasks completed successfully via Kotlin non-daemon fallback after known JDK 25 daemon incompatibility warnings.

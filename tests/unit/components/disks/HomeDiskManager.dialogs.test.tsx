@@ -67,6 +67,7 @@ vi.mock('@/hooks/useDiskLibrary', () => ({ useDiskLibrary: () => mockDiskLibrary
 vi.mock('@/hooks/useC64Connection', () => ({
   useC64Connection: () => ({ status: { isConnected: true, deviceInfo: { unique_id: 'test' } } }),
   useC64Drives: () => ({ data: { drives: [] } }),
+  useC64ConfigItems: () => ({ data: undefined }),
 }));
 
 vi.mock('@/hooks/useLocalSources', () => ({ useLocalSources: () => ({ sources: [], addSourceFromPicker: vi.fn(), addSourceFromFiles: vi.fn() }) }));
