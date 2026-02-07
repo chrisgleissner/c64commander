@@ -82,24 +82,14 @@ test.describe('Home interactions', () => {
       ),
     ).toBe(true);
 
-    const panSlider = page.getByTestId('home-sid-pan-socket1').getByRole('slider');
-    await expect(panSlider).toBeVisible();
-    const panBox = await panSlider.boundingBox();
-    if (!panBox) {
-      throw new Error('Pan slider not visible for interaction.');
-    }
-    const startX = panBox.x + panBox.width * 0.2;
-    const endX = panBox.x + panBox.width * 0.9;
-    const centerY = panBox.y + panBox.height / 2;
-    await page.mouse.move(startX, centerY);
-    await page.mouse.down();
-    await page.mouse.move(endX, centerY);
-    await page.mouse.up();
+    const sidToggle = page.getByTestId('home-sid-toggle-socket1');
+    await expect(sidToggle).toBeVisible();
+    await sidToggle.click();
 
     await expect.poll(() =>
       hasRequest(
         server.requests,
-        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/Audio%20Mixer/Pan%20Socket%201?value='),
+        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201?value=Disabled'),
       ),
     ).toBe(true);
   });
