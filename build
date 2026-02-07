@@ -27,6 +27,7 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 PLAYWRIGHT_DEVICES=""
+PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
 DEVICE_ID=""
 FUZZ_SEED=""
@@ -121,6 +122,7 @@ Notes:
   --screenshots-only  Captures screenshots without running tests or Android builds.
   --test-e2e          Runs Playwright E2E tests excluding @screenshots.
   --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
+  Playwright port     Auto-selected to avoid clashes; set PLAYWRIGHT_PORT to pin a specific port.
 EOF
 }
 
@@ -132,6 +134,59 @@ require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "Missing command: $1" >&2
     exit 1
+  fi
+}
+
+is_local_port_in_use() {
+  local port="$1"
+  node -e "const net = require('net'); const port = Number(process.argv[1]); const socket = net.createConnection({ host: '127.0.0.1', port }); const fail = () => process.exit(1); socket.setTimeout(400); socket.on('connect', () => { socket.destroy(); process.exit(0); }); socket.on('timeout', fail); socket.on('error', fail);" "$port" >/dev/null 2>&1
+}
+
+ensure_playwright_port() {
+  if [[ "$PLAYWRIGHT_PORT_RESOLVED" == "true" ]]; then
+    return
+  fi
+  PLAYWRIGHT_PORT_RESOLVED=true
+
+  if [[ -n "${PLAYWRIGHT_PORT:-}" ]]; then
+    if [[ ! "${PLAYWRIGHT_PORT}" =~ ^[0-9]+$ ]]; then
+      echo "Invalid PLAYWRIGHT_PORT: ${PLAYWRIGHT_PORT}" >&2
+      exit 1
+    fi
+    log "Using configured Playwright port: ${PLAYWRIGHT_PORT}"
+    return
+  fi
+
+  local base_port="${PLAYWRIGHT_PORT_BASE:-4173}"
+  if [[ ! "${base_port}" =~ ^[0-9]+$ ]]; then
+    echo "Invalid PLAYWRIGHT_PORT_BASE: ${PLAYWRIGHT_PORT_BASE}" >&2
+    exit 1
+  fi
+
+  local start_port=$((base_port + ((RANDOM + $$) % 200)))
+  local max_tries=500
+  local selected_port=""
+  for ((i = 0; i < max_tries; i += 1)); do
+    local candidate=$((start_port + i))
+    if [[ "$candidate" -gt 65535 ]]; then
+      break
+    fi
+    if ! is_local_port_in_use "$candidate"; then
+      selected_port="$candidate"
+      break
+    fi
+  done
+
+  if [[ -z "$selected_port" ]]; then
+    echo "Could not find a free Playwright port (base=${base_port}, tries=${max_tries})." >&2
+    exit 1
+  fi
+
+  export PLAYWRIGHT_PORT="$selected_port"
+  if [[ "$selected_port" == "$base_port" ]]; then
+    log "Using Playwright port: ${PLAYWRIGHT_PORT}"
+  else
+    log "Playwright default port ${base_port} unavailable; using ${PLAYWRIGHT_PORT}"
   fi
 }
 
@@ -527,6 +582,10 @@ if [[ "$RUN_SCREENSHOTS_ONLY" == "true" && "$RUN_BUILD" == "false" ]]; then
     echo "Missing dist/index.html. Run without --skip-build or build assets first." >&2
     exit 1
   fi
+fi
+
+if [[ "$RUN_TEST" == "true" || "$RUN_TEST_E2E" == "true" || "$RUN_TEST_E2E_CI" == "true" || "$RUN_SCREENSHOTS" == "true" || "$RUN_FUZZ" == "true" ]]; then
+  ensure_playwright_port
 fi
 
 if [[ "$RUN_TEST" == "true" ]]; then
