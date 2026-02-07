@@ -28,6 +28,8 @@ export type SongLengthResolveStrategy =
 
 export type SongLengthResolution = {
   durationSeconds: number | null;
+  durations?: number[] | null;
+  subsongCount?: number | null;
   strategy: SongLengthResolveStrategy;
   matchedPath?: string | null;
   matchedMd5?: string | null;

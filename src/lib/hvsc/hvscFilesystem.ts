@@ -176,11 +176,16 @@ export const listHvscFolder = async (path: string): Promise<HvscFolderListing> =
         virtualPath,
         fileName: resolved.name,
       });
+      const durations = duration.durations && duration.durations.length ? duration.durations : null;
+      const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
+      const primaryDuration = durations?.[0] ?? duration.durationSeconds;
       songs.push({
         id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
         virtualPath,
         fileName: resolved.name,
-        durationSeconds: duration.durationSeconds,
+        durationSeconds: primaryDuration ?? null,
+        durationsSeconds: durations,
+        subsongCount,
       });
     }
   }
@@ -201,11 +206,16 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
       virtualPath,
       fileName: virtualPath.split('/').pop() || virtualPath,
     });
+    const durations = duration.durations && duration.durations.length ? duration.durations : null;
+    const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
+    const primaryDuration = durations?.[0] ?? duration.durationSeconds;
     return {
       id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
       virtualPath: normalizeFilePath(virtualPath),
       fileName: virtualPath.split('/').pop() || virtualPath,
-      durationSeconds: duration.durationSeconds,
+      durationSeconds: primaryDuration ?? null,
+      durationsSeconds: durations,
+      subsongCount,
       md5: null,
       dataBase64: result.data,
     };

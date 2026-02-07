@@ -27,7 +27,7 @@ SONGLENGTHS_CANDIDATES = (
     "DOCUMENTS/Songlengths.md5",
 )
 
-PATH_LINE_RE = re.compile(r"^;\s*(/.*\.\w+)\s*$")
+PATH_LINE_RE = re.compile(r"^[;#:]+\s*(/?.+?)\s*$")
 HASH_LINE_RE = re.compile(r"^[0-9a-fA-F]{32}=")
 
 
@@ -73,7 +73,7 @@ def collect_frequencies(hvsc_root: Path, songlengths_path: Path) -> Dict[str, Li
                 pending_relative_path = None
                 continue
 
-            if line.startswith(";"):
+            if line.startswith((";", "#", ":")):
                 pending_relative_path = None
                 continue
 

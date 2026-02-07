@@ -10,6 +10,8 @@ export type SongEntry = {
   path: string;
   title: string;
   durationMs?: number;
+  songNr?: number;
+  subsongCount?: number;
   source: SongSourceId;
   payload?: unknown;
 };

@@ -21,7 +21,14 @@ export type HvscCacheStatus = {
 export type HvscFolderListing = {
   path: string;
   folders: string[];
-  songs: Array<{ id: number; virtualPath: string; fileName: string; durationSeconds?: number | null }>;
+  songs: Array<{
+    id: number;
+    virtualPath: string;
+    fileName: string;
+    durationSeconds?: number | null;
+    durationsSeconds?: number[] | null;
+    subsongCount?: number | null;
+  }>;
 };
 
 export type HvscSong = {
@@ -29,6 +36,8 @@ export type HvscSong = {
   virtualPath: string;
   fileName: string;
   durationSeconds?: number | null;
+  durationsSeconds?: number[] | null;
+  subsongCount?: number | null;
   md5?: string | null;
   dataBase64: string;
 };

@@ -199,7 +199,7 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
   private uniqueFileNameToEntryId = new Map<string, number>();
   private duplicateFileNameToEntryIds = new Map<string, number[]>();
 
-  constructor(private readonly options: InMemoryTextBackendOptions = {}) {}
+  constructor(private readonly options: InMemoryTextBackendOptions = {}) { }
 
   private intern(
     pool: string[],
@@ -298,8 +298,12 @@ export class InMemoryTextBackend implements SongLengthStoreBackend {
   ): SongLengthResolution {
     const record = this.records[recordId];
     if (!record) return { durationSeconds: null, strategy: 'not-found' };
+    const durations = this.durations[record.durationId] ?? null;
+    const normalizedDurations = durations?.length ? durations : null;
     return {
       durationSeconds: this.resolveDuration(recordId, query.songNr),
+      durations: normalizedDurations,
+      subsongCount: normalizedDurations ? normalizedDurations.length : null,
       strategy,
       matchedPath: this.fullPaths[record.fullPathId] ?? null,
       matchedMd5: record.md5,

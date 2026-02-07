@@ -12,6 +12,7 @@ export {
   checkForHvscUpdates,
   getHvscCacheStatus,
   getHvscDurationByMd5Seconds,
+  getHvscDurationsByMd5Seconds,
   getHvscFolderListing,
   getHvscSong,
   getHvscStatus,

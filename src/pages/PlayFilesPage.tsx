@@ -85,7 +85,6 @@ import {
   formatDurationSeconds,
   formatTime,
   getLocalFilePath,
-  getSidSongCount,
   isSongCategory,
   parseDurationInput,
   parseModifiedAt,
@@ -93,6 +92,7 @@ import {
   shuffleArray,
   sliderToDurationSeconds,
 } from '@/pages/playFiles/playFilesUtils';
+import { getSidSongCount } from '@/lib/sid/sidUtils';
 
 
 export default function PlayFilesPage() {

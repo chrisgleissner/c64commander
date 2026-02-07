@@ -1,4 +1,4 @@
-import { computeSidMd5 } from '@/lib/sid/sidUtils';
+import { computeSidMd5, getSidSongCount } from '@/lib/sid/sidUtils';
 import { addErrorLog } from '@/lib/logging';
 import type { SongEntry, SongFolder, SongSource } from './SongSource';
 
@@ -11,6 +11,7 @@ export type LocalSidFile = File | {
 
 export type LocalFsSongSourceOptions = {
   lookupDurationSeconds?: (md5: string) => Promise<number | null | undefined>;
+  lookupDurationsByMd5Seconds?: (md5: string) => Promise<number[] | null | undefined>;
 };
 
 const normalizeLocalPath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
@@ -41,15 +42,67 @@ export const createLocalFsSongSource = (
 
   const listSongs = async (path: string): Promise<SongEntry[]> => {
     const normalized = normalizeLocalPath(path || '/');
-    return files
-      .filter((file) => getLocalPath(file).toLowerCase().startsWith(normalized.toLowerCase()))
-      .map((file) => ({
-        id: `${file.name}-${file.lastModified}`,
-        path: getLocalPath(file),
-        title: file.name,
-        source: 'local',
-        payload: file,
-      }));
+    const candidates = files.filter((file) => getLocalPath(file).toLowerCase().startsWith(normalized.toLowerCase()));
+    const entries = await Promise.all(
+      candidates.map(async (file) => {
+        const baseId = `${file.name}-${file.lastModified ?? 0}`;
+        const pathValue = getLocalPath(file);
+        let subsongCount = 1;
+        let durationsSeconds: number[] | null = null;
+        try {
+          const buffer = await file.arrayBuffer();
+          subsongCount = getSidSongCount(buffer);
+          if (options.lookupDurationsByMd5Seconds) {
+            const md5 = await computeSidMd5(buffer);
+            const durations = await options.lookupDurationsByMd5Seconds(md5);
+            if (durations?.length) {
+              durationsSeconds = durations;
+              subsongCount = Math.max(subsongCount, durations.length);
+            }
+          }
+        } catch (error) {
+          addErrorLog('Local SID metadata scan failed', {
+            error: (error as Error).message,
+            path: pathValue,
+          });
+        }
+
+        const makeTitle = (songNr: number, count: number) =>
+          count > 1 ? `${file.name} (Song ${songNr}/${count})` : file.name;
+
+        if (subsongCount <= 1) {
+          return [{
+            id: baseId,
+            path: pathValue,
+            title: makeTitle(1, subsongCount),
+            durationMs: durationsSeconds?.[0] ? durationsSeconds[0] * 1000 : undefined,
+            songNr: 1,
+            subsongCount: subsongCount || 1,
+            source: 'local',
+            payload: file,
+          }];
+        }
+
+        return Array.from({ length: subsongCount }, (_, index) => ({
+          id: `${baseId}:${index + 1}`,
+          path: pathValue,
+          title: makeTitle(index + 1, subsongCount),
+          durationMs: durationsSeconds?.[index] ? durationsSeconds[index] * 1000 : undefined,
+          songNr: index + 1,
+          subsongCount,
+          source: 'local',
+          payload: file,
+        }));
+      }),
+    );
+    return entries.flat();
+  };
+
+  const resolveDurationForSong = (durations: number[] | null | undefined, songNr?: number | null) => {
+    if (!durations || durations.length === 0) return null;
+    const index = songNr && songNr > 0 ? songNr - 1 : 0;
+    if (index < 0 || index >= durations.length) return null;
+    return durations[index] ?? null;
   };
 
   const getSong = async (entry: SongEntry) => {
@@ -58,7 +111,18 @@ export const createLocalFsSongSource = (
     const buffer = await file.arrayBuffer();
     const data = new Uint8Array(buffer);
     let durationMs: number | undefined = entry.durationMs;
-    if (options.lookupDurationSeconds) {
+    if (options.lookupDurationsByMd5Seconds) {
+      try {
+        const md5 = await computeSidMd5(buffer);
+        const durations = await options.lookupDurationsByMd5Seconds(md5);
+        const seconds = resolveDurationForSong(durations ?? null, entry.songNr ?? null);
+        if (seconds !== null) durationMs = seconds * 1000;
+      } catch (error) {
+        addErrorLog('SID duration lookup failed', {
+          error: (error as Error).message,
+        });
+      }
+    } else if (options.lookupDurationSeconds) {
       try {
         const md5 = await computeSidMd5(buffer);
         const result = await options.lookupDurationSeconds(md5);

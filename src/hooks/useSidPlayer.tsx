@@ -11,6 +11,7 @@ export type SidTrack = {
   data?: Uint8Array;
   durationMs?: number;
   songNr?: number;
+  subsongCount?: number;
 };
 
 export type SidQueue = SidTrack[];

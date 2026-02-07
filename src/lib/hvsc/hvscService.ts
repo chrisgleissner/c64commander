@@ -22,6 +22,7 @@ import {
   ingestCachedHvsc as ingestRuntimeCached,
   installOrUpdateHvsc as installRuntime,
 } from './hvscIngestionRuntime';
+import { resolveHvscSonglengthDuration } from './hvscSongLengthService';
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
@@ -51,33 +52,29 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
   return checkRuntimeUpdates();
 };
 
-export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> =>
-  {
-    const mock = getMockBridge();
-    if (mock?.installOrUpdateHvsc) return mock.installOrUpdateHvsc({ cancelToken });
-    return installRuntime(cancelToken);
-  };
+export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
+  const mock = getMockBridge();
+  if (mock?.installOrUpdateHvsc) return mock.installOrUpdateHvsc({ cancelToken });
+  return installRuntime(cancelToken);
+};
 
-export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> =>
-  {
-    const mock = getMockBridge();
-    if (mock?.ingestCachedHvsc) return mock.ingestCachedHvsc({ cancelToken });
-    return ingestRuntimeCached(cancelToken);
-  };
+export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
+  const mock = getMockBridge();
+  if (mock?.ingestCachedHvsc) return mock.ingestCachedHvsc({ cancelToken });
+  return ingestRuntimeCached(cancelToken);
+};
 
-export const cancelHvscInstall = async (cancelToken: string): Promise<void> =>
-  {
-    const mock = getMockBridge();
-    if (mock?.cancelHvscInstall) return mock.cancelHvscInstall({ cancelToken });
-    return cancelRuntimeInstall(cancelToken);
-  };
+export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
+  const mock = getMockBridge();
+  if (mock?.cancelHvscInstall) return mock.cancelHvscInstall({ cancelToken });
+  return cancelRuntimeInstall(cancelToken);
+};
 
-export const addHvscProgressListener = async (listener: HvscProgressListener) =>
-  {
-    const mock = getMockBridge();
-    if (mock?.addListener) return mock.addListener('progress', listener);
-    return addRuntimeListener(listener);
-  };
+export const addHvscProgressListener = async (listener: HvscProgressListener) => {
+  const mock = getMockBridge();
+  if (mock?.addListener) return mock.addListener('progress', listener);
+  return addRuntimeListener(listener);
+};
 
 const buildFolderListingFromIndex = (path: string, entries: Array<{ path: string; name: string; durationSeconds?: number | null }>): HvscFolderListing => {
   const normalized = normalizeSourcePath(path || '/');
@@ -136,12 +133,11 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
   }
 };
 
-export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> =>
-  {
-    const mock = getMockBridge();
-    if (mock?.getHvscSong) return mock.getHvscSong(options);
-    return getRuntimeSong(options);
-  };
+export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
+  const mock = getMockBridge();
+  if (mock?.getHvscSong) return mock.getHvscSong(options);
+  return getRuntimeSong(options);
+};
 
 export const getHvscDurationByMd5Seconds = async (md5: string) => {
   const mock = getMockBridge();
@@ -150,4 +146,15 @@ export const getHvscDurationByMd5Seconds = async (md5: string) => {
     return result.durationSeconds ?? null;
   }
   return getRuntimeDurationByMd5(md5);
+};
+
+export const getHvscDurationsByMd5Seconds = async (md5: string) => {
+  const mock = getMockBridge();
+  if (mock?.getHvscDurationsByMd5) {
+    const result = await mock.getHvscDurationsByMd5({ md5 });
+    return result.durationsSeconds ?? null;
+  }
+  const resolution = await resolveHvscSonglengthDuration({ md5 });
+  if (resolution.durations?.length) return resolution.durations;
+  return resolution.durationSeconds !== null ? [resolution.durationSeconds] : null;
 };
