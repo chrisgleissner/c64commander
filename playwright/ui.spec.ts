@@ -254,8 +254,7 @@ test.describe('UI coverage', () => {
   test('home page shows resolved version', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const expectedVersion = resolveExpectedVersion() || '—';
-    const versionCard = page.getByText('Version', { exact: true }).locator('..');
-    const versionText = versionCard.locator('p');
+    const versionText = page.getByTestId('home-system-version');
     if (expectedVersion === '—') {
       await expect(versionText).toHaveText('—');
     } else {

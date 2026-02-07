@@ -1817,7 +1817,11 @@ export default function PlayFilesPage() {
         subtitle={status.isConnected ? 'Connected' : status.isConnecting ? 'Connecting…' : 'Offline'}
       />
       <main className="container max-w-3xl mx-auto px-4 py-6 pb-24 space-y-6">
-        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+        <div
+          className="bg-card border border-border rounded-xl p-4 space-y-4"
+          data-section-label="Playback controls"
+          data-testid="play-section-playback"
+        >
           <PlaybackControlsCard
             hasCurrentItem={Boolean(currentItem)}
             currentItemLabel={currentItem?.label ?? null}
@@ -1918,21 +1922,23 @@ export default function PlayFilesPage() {
           />
         </div>
 
-        <PlaylistPanel
-          items={playlistListItems}
-          selectedCount={selectedPlaylistCount}
-          allSelected={allPlaylistSelected}
-          onToggleSelectAll={toggleSelectAllPlaylist}
-          onRemoveSelected={handleRemoveSelectedPlaylist}
-          maxVisible={listPreviewLimit}
-          categoryOptions={CATEGORY_OPTIONS}
-          playlistTypeFilters={playlistTypeFilters}
-          onToggleFilter={togglePlaylistTypeFilter}
-          formatCategory={formatPlayCategory}
-          hasPlaylist={hasPlaylist}
-          onAddItems={() => setBrowserOpen(true)}
-          onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
-        />
+        <div data-section-label="Playlist" data-testid="play-section-playlist">
+          <PlaylistPanel
+            items={playlistListItems}
+            selectedCount={selectedPlaylistCount}
+            allSelected={allPlaylistSelected}
+            onToggleSelectAll={toggleSelectAllPlaylist}
+            onRemoveSelected={handleRemoveSelectedPlaylist}
+            maxVisible={listPreviewLimit}
+            categoryOptions={CATEGORY_OPTIONS}
+            playlistTypeFilters={playlistTypeFilters}
+            onToggleFilter={togglePlaylistTypeFilter}
+            formatCategory={formatPlayCategory}
+            hasPlaylist={hasPlaylist}
+            onAddItems={() => setBrowserOpen(true)}
+            onClearPlaylist={() => removePlaylistItemsById(new Set(playlistIds))}
+          />
+        </div>
 
         <input
           ref={localSourceInputRef}
@@ -1985,47 +1991,49 @@ export default function PlayFilesPage() {
         ) : null}
 
         {hvscControlsEnabled && (
-          <HvscControls
-            hvscInstalled={hvscInstalled}
-            hvscInstalledVersion={hvscStatus?.installedVersion ?? null}
-            hvscAvailable={hvscAvailable}
-            hvscUpdating={hvscUpdating}
-            hvscInProgress={hvscInProgress}
-            hvscSummaryState={hvscSummaryState}
-            hvscSummaryFilesExtracted={hvscSummaryFilesExtracted}
-            hvscSummaryDurationMs={hvscSummaryDurationMs}
-            hvscSummaryUpdatedAt={hvscSummaryUpdatedAt}
-            hvscSummaryFailureLabel={hvscSummaryFailureLabel}
-            hvscActionLabel={hvscActionLabel}
-            hvscStage={hvscStage}
-            hvscDownloadPercent={hvscDownloadPercent}
-            hvscDownloadBytes={hvscDownloadBytes}
-            hvscDownloadTotalBytes={hvscDownloadTotalBytes}
-            hvscDownloadElapsedMs={hvscDownloadElapsedMs}
-            hvscDownloadStatus={hvscDownloadStatus}
-            hvscExtractionPercent={hvscExtractionPercent}
-            hvscExtractionTotalFiles={hvscExtractionTotalFiles}
-            hvscExtractionElapsedMs={hvscExtractionElapsedMs}
-            hvscExtractionStatus={hvscExtractionStatus}
-            hvscCurrentFile={hvscCurrentFile}
-            hvscInlineError={hvscInlineError}
-            hvscFolderFilter={hvscFolderFilter}
-            hvscVisibleFolders={hvscVisibleFolders}
-            hvscSongs={hvscSongs}
-            selectedHvscFolder={selectedHvscFolder}
-            hvscRootPath={hvscRoot.path}
-            formatHvscDuration={formatHvscDuration}
-            formatHvscTimestamp={formatHvscTimestamp}
-            formatBytes={formatBytes}
-            onInstall={() => void handleHvscInstall()}
-            onIngest={() => void handleHvscIngest()}
-            onCancel={() => void handleHvscCancel()}
-            onFolderFilterChange={setHvscFolderFilter}
-            onSelectFolder={(folder) => void loadHvscFolder(folder)}
-            onPlayFolder={(folder) => void handlePlayHvscFolder(folder)}
-            onPlayEntry={(entry) => void handlePlayEntry(entry)}
-            buildHvscFile={buildHvscFile}
-          />
+          <div data-section-label="HVSC library" data-testid="play-section-hvsc">
+            <HvscControls
+              hvscInstalled={hvscInstalled}
+              hvscInstalledVersion={hvscStatus?.installedVersion ?? null}
+              hvscAvailable={hvscAvailable}
+              hvscUpdating={hvscUpdating}
+              hvscInProgress={hvscInProgress}
+              hvscSummaryState={hvscSummaryState}
+              hvscSummaryFilesExtracted={hvscSummaryFilesExtracted}
+              hvscSummaryDurationMs={hvscSummaryDurationMs}
+              hvscSummaryUpdatedAt={hvscSummaryUpdatedAt}
+              hvscSummaryFailureLabel={hvscSummaryFailureLabel}
+              hvscActionLabel={hvscActionLabel}
+              hvscStage={hvscStage}
+              hvscDownloadPercent={hvscDownloadPercent}
+              hvscDownloadBytes={hvscDownloadBytes}
+              hvscDownloadTotalBytes={hvscDownloadTotalBytes}
+              hvscDownloadElapsedMs={hvscDownloadElapsedMs}
+              hvscDownloadStatus={hvscDownloadStatus}
+              hvscExtractionPercent={hvscExtractionPercent}
+              hvscExtractionTotalFiles={hvscExtractionTotalFiles}
+              hvscExtractionElapsedMs={hvscExtractionElapsedMs}
+              hvscExtractionStatus={hvscExtractionStatus}
+              hvscCurrentFile={hvscCurrentFile}
+              hvscInlineError={hvscInlineError}
+              hvscFolderFilter={hvscFolderFilter}
+              hvscVisibleFolders={hvscVisibleFolders}
+              hvscSongs={hvscSongs}
+              selectedHvscFolder={selectedHvscFolder}
+              hvscRootPath={hvscRoot.path}
+              formatHvscDuration={formatHvscDuration}
+              formatHvscTimestamp={formatHvscTimestamp}
+              formatBytes={formatBytes}
+              onInstall={() => void handleHvscInstall()}
+              onIngest={() => void handleHvscIngest()}
+              onCancel={() => void handleHvscCancel()}
+              onFolderFilterChange={setHvscFolderFilter}
+              onSelectFolder={(folder) => void loadHvscFolder(folder)}
+              onPlayFolder={(folder) => void handlePlayHvscFolder(folder)}
+              onPlayEntry={(entry) => void handlePlayEntry(entry)}
+              buildHvscFile={buildHvscFile}
+            />
+          </div>
         )}
       </main>
     </div>

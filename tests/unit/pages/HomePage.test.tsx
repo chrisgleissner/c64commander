@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import HomePage from '../../../src/pages/HomePage';
 
 const {
@@ -94,6 +94,35 @@ vi.mock('@/components/ThemeProvider', () => ({
   }),
 }));
 
+vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+  ),
+}));
+
+const buildRouter = (ui: JSX.Element) => createMemoryRouter(
+  [{ path: '*', element: ui }],
+  {
+    initialEntries: ['/'],
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
+  },
+);
+
+const renderWithRouter = (ui: JSX.Element) => render(
+  <RouterProvider
+    router={buildRouter(ui)}
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}
+  />,
+);
+
+const renderHomePage = () => renderWithRouter(<HomePage />);
+
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => queryClientMockRef.current,
 }));
@@ -105,6 +134,7 @@ vi.mock('@/hooks/useC64Connection', () => ({
   useC64Drives: () => ({
     data: drivesPayloadRef.current,
   }),
+  useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   useC64ConfigItems: (category: string) => {
     if (category === 'SID Sockets Configuration') {
       return { data: sidSocketsPayloadRef.current };
@@ -220,11 +250,7 @@ describe('HomePage SID status', () => {
       },
     };
 
-    const { rerender } = render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    const { rerender } = renderHomePage();
 
     expect(screen.getByTestId('sid-status-label').textContent).toContain('SID');
     const sidSocket1 = screen.getByText('SID Socket 1');
@@ -257,9 +283,13 @@ describe('HomePage SID status', () => {
     };
 
     rerender(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
+      <RouterProvider
+        router={buildRouter(<HomePage />)}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      />,
     );
 
     expect(screen.getByText('SID Socket 1').parentElement?.textContent ?? '').toContain('OFF');
@@ -279,11 +309,7 @@ describe('HomePage SID status', () => {
       },
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     const streamSection = screen.getByTestId('home-stream-status');
     expect(within(streamSection).getByTestId('stream-status-label').textContent).toContain('Streams');
@@ -307,11 +333,7 @@ describe('HomePage SID status', () => {
       ],
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
 
@@ -332,11 +354,7 @@ describe('HomePage SID status', () => {
       ],
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset Printer' }));
 
@@ -357,11 +375,7 @@ describe('HomePage SID status', () => {
       },
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     const sidSection = screen.getByTestId('home-sid-status');
     fireEvent.click(within(sidSection).getByRole('button', { name: 'Reset' }));
@@ -382,11 +396,7 @@ describe('HomePage SID status', () => {
       },
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     const ipInput = screen.getByTestId('home-stream-ip-vic');
     fireEvent.change(ipInput, { target: { value: 'bad host!' } });
@@ -408,15 +418,16 @@ describe('HomePage SID status', () => {
       deviceInfo: null,
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
-    expect(screen.getByText('Version').nextSibling?.textContent).toContain('—');
-    expect(screen.getByText(/Git/i).nextSibling?.textContent).toContain('—');
-    expect(screen.getByText(/Build/i).nextSibling?.textContent).toContain('2026-01-01 12:00:00 UTC');
+    const systemInfo = screen.getByTestId('home-system-info');
+    fireEvent.click(systemInfo);
+
+    expect(screen.getByTestId('home-system-version').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-device').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-git').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-build-time').textContent).toContain('2026-01-01 12:00:00 UTC');
     expect(screen.getByText(/unable to connect to c64 ultimate/i)).toBeTruthy();
   });
 
@@ -440,18 +451,17 @@ describe('HomePage SID status', () => {
     (globalThis as any).__GIT_SHA__ = 'deadbeefcafefeed';
     (globalThis as any).__BUILD_TIME__ = '2024-03-20T12:34:00.000Z';
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
-    expect(screen.getByText('1.2.3')).toBeTruthy();
-    expect(screen.getByText('deadbeef')).toBeTruthy();
-    expect(screen.getByText('2024-03-20 12:34:00 UTC')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'C64U' })).toBeTruthy();
-    expect(screen.getByText('c64u.local')).toBeTruthy();
-    expect(screen.getByText('Mounted: disk.d64')).toBeTruthy();
+    const systemInfo = screen.getByTestId('home-system-info');
+    fireEvent.click(systemInfo);
+
+    expect(screen.getByTestId('home-system-version').textContent).toContain('1.2.3');
+    expect(screen.getByTestId('home-system-device').textContent).toContain('c64u.local');
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain('1.0.0');
+    expect(screen.getByTestId('home-system-git').textContent).toContain('deadbeef');
+    expect(screen.getByTestId('home-system-build-time').textContent).toContain('2024-03-20 12:34:00 UTC');
+    expect(screen.getByTestId('home-drive-summary').textContent).toContain('disk.d64');
   });
 
   it('shows "No disk" on Home when drive A has no mounted image', () => {
@@ -464,11 +474,7 @@ describe('HomePage SID status', () => {
       drives: [{ a: { enabled: true }, b: { enabled: true } }],
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     expect(screen.getAllByText('No disk mounted').length).toBeGreaterThan(0);
   });
@@ -477,11 +483,7 @@ describe('HomePage SID status', () => {
     const menuError = new Error('menu failed');
     machineControlPayloadRef.current.menuButton.mutateAsync = vi.fn().mockRejectedValue(menuError);
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getAllByRole('button', { name: /^Reset$/ })[0]);
     await waitFor(() => expect(machineControlPayloadRef.current.reset.mutateAsync).toHaveBeenCalled());
@@ -497,11 +499,7 @@ describe('HomePage SID status', () => {
   });
 
   it('requires explicit confirmation before power off', async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
     expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
@@ -516,11 +514,7 @@ describe('HomePage SID status', () => {
   });
 
   it('renders exactly eight machine controls with one pause-resume control', async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     const machineControls = screen.getByTestId('home-machine-controls');
     expect(within(machineControls).getAllByRole('button')).toHaveLength(8);
@@ -549,11 +543,7 @@ describe('HomePage SID status', () => {
       hasChanges: true,
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /revert changes/i }));
     await waitFor(() => expect(appConfigStatePayloadRef.current.revertToInitial).toHaveBeenCalled());

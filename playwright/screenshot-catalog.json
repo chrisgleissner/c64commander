@@ -1,0 +1,59 @@
+{
+  "disks": [
+    "drives",
+    "disks"
+  ],
+  "config": [
+    "audio-mixer",
+    "sid-sockets-configuration",
+    "ultisid-configuration",
+    "sid-addressing",
+    "u64-specific-settings",
+    "c64-and-cartridge-settings",
+    "clock-settings",
+    "softiec-drive-settings",
+    "printer-settings",
+    "network-settings",
+    "ethernet-settings",
+    "wifi-settings",
+    "tape-settings",
+    "led-strip-settings",
+    "drive-a-settings",
+    "drive-b-settings",
+    "data-streams",
+    "modem-settings",
+    "user-interface-settings"
+  ],
+  "home": [
+    "machine",
+    "quick-config",
+    "drives",
+    "printers",
+    "config"
+  ],
+  "play": [
+    "playback-controls",
+    "playlist",
+    "hvsc-library"
+  ],
+  "settings": [
+    "appearance",
+    "connection",
+    "diagnostics",
+    "play-and-disk",
+    "config",
+    "hvsc-library",
+    "device-safety",
+    "about"
+  ],
+  "docs": [
+    "getting-started",
+    "home",
+    "play-files",
+    "disks-drives",
+    "swapping-disks",
+    "config",
+    "settings",
+    "diagnostics"
+  ]
+}

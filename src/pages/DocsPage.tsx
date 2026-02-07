@@ -53,7 +53,7 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Home is the operational dashboard: device info, machine controls, and quick configuration actions.
+          Home is the operational dashboard: system info, machine controls, and high-value configuration shortcuts.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li><strong>Reset / Reboot</strong> control the C64U CPU and system state.</li>
@@ -61,14 +61,9 @@ const docSections: DocSection[] = [
           <li><strong>Pause / Resume</strong> stops or restarts the CPU via DMA.</li>
           <li><strong>Power Off</strong> shuts down the machine.</li>
         </ul>
-        <p className="font-medium">Config actions:</p>
-        <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Save</strong> stores current settings to flash.</li>
-          <li><strong>Load</strong> restores the saved flash configuration.</li>
-          <li><strong>Reset</strong> returns settings to defaults.</li>
-        </ul>
         <p className="text-muted-foreground">
-          The drive summary provides quick status and the currently mounted image for Drive A/B.
+          System info is collapsed by default, with version and firmware visible at a glance. The drive summary shows
+          mounted media for Drive A/B, with quick CPU and video/LED shortcuts nearby.
         </p>
       </div>
     ),

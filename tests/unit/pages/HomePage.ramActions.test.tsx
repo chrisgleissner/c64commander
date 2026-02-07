@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import HomePage from '@/pages/HomePage';
 
 const {
@@ -48,6 +48,7 @@ vi.mock('@/hooks/useC64Connection', () => ({
       drives: [{ a: { enabled: true } }, { b: { enabled: true } }],
     },
   }),
+  useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   useC64ConfigItems: () => ({ data: undefined }),
   useC64MachineControl: () => ({
     reset: { mutateAsync: vi.fn().mockResolvedValue(undefined), isPending: false },
@@ -86,6 +87,35 @@ vi.mock('@/components/ThemeProvider', () => ({
     setTheme: vi.fn(),
   }),
 }));
+
+vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
+  DiagnosticsActivityIndicator: ({ onClick }: { onClick: () => void }) => (
+    <button type="button" onClick={onClick} data-testid="diagnostics-activity-indicator" />
+  ),
+}));
+
+const buildRouter = (ui: JSX.Element) => createMemoryRouter(
+  [{ path: '*', element: ui }],
+  {
+    initialEntries: ['/'],
+    future: {
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    },
+  },
+);
+
+const renderWithRouter = (ui: JSX.Element) => render(
+  <RouterProvider
+    router={buildRouter(ui)}
+    future={{
+      v7_startTransition: true,
+      v7_relativeSplatPath: true,
+    }}
+  />,
+);
+
+const renderHomePage = () => renderWithRouter(<HomePage />);
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: toastSpy,
@@ -152,11 +182,7 @@ describe('HomePage RAM actions', () => {
   });
 
   it('runs reboot clear memory action', async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /reboot \(Clear RAM\)/i }));
 
@@ -174,11 +200,7 @@ describe('HomePage RAM actions', () => {
       selectedAt: '2026-02-07T00:00:00.000Z',
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /save ram/i }));
 
@@ -192,11 +214,7 @@ describe('HomePage RAM actions', () => {
   });
 
   it('prompts for folder and then saves RAM when no RAM dump folder is configured', async () => {
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /save ram/i }));
 
@@ -215,11 +233,7 @@ describe('HomePage RAM actions', () => {
       selectedAt: '2026-02-07T00:00:00.000Z',
     };
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /load ram/i }));
 
@@ -244,11 +258,7 @@ describe('HomePage RAM actions', () => {
       },
     });
 
-    render(
-      <MemoryRouter>
-        <HomePage />
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     fireEvent.click(screen.getByRole('button', { name: /load ram/i }));
 

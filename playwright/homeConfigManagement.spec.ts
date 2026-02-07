@@ -13,22 +13,29 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 
 const openSaveDialog = async (page: Page) => {
   // Click the "Save to App" QuickActionCard (label="Save", description="To App")
-  await page.getByText('To App').click();
+  const button = page.getByTestId('home-config-save-app');
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
 const openLoadDialog = async (page: Page) => {
   // Click the "Load from App" QuickActionCard (label="Load", description="From App")
   // There are two "Load" cards, we want the second one (first is "From flash", second is "From App")
-  await page.getByText('From App').click();
+  const button = page.getByTestId('home-config-load-app');
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
 const openManageDialog = async (page: Page) => {
   // Click the "Manage" QuickActionCard (label="Manage", description="App Configs")
   // Need to wait for it to be enabled (requires appConfigs.length > 0)
-  await page.getByRole('button').filter({ has: page.getByText('App Configs') }).waitFor({ state: 'visible', timeout: 5000 });
-  await page.getByRole('button').filter({ has: page.getByText('App Configs') }).click();
+  const button = page.getByTestId('home-config-manage-app');
+  await button.waitFor({ state: 'visible', timeout: 5000 });
+  await expect(button).toBeEnabled();
+  await button.scrollIntoViewIfNeeded();
+  await button.click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 
@@ -110,7 +117,7 @@ test.describe('Home page app config management', () => {
 
   test('save config with duplicate name shows error @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     allowWarnings(testInfo, 'Expected error toast for duplicate config name.');
-    
+
     await page.addInitScript(({ baseUrl }: { baseUrl: string }) => {
       localStorage.setItem('c64u_app_configs', JSON.stringify([{
         id: 'existing-id',
@@ -178,7 +185,7 @@ test.describe('Home page app config management', () => {
     await expect(page.getByText(/Config loaded|Loaded/i).first()).toBeVisible();
     await snap(page, testInfo, 'toast-shown');
 
-    await expect.poll(() => 
+    await expect.poll(() =>
       server.requests.some(req => req.url.includes('/v1/configs') && req.method === 'POST')
     ).toBe(true);
 

@@ -12,6 +12,7 @@ interface QuickActionCardProps {
   loading?: boolean;
   compact?: boolean;
   className?: string;
+  dataTestId?: string;
 }
 
 export function QuickActionCard({
@@ -24,6 +25,7 @@ export function QuickActionCard({
   loading = false,
   compact = false,
   className,
+  dataTestId,
 }: QuickActionCardProps) {
   const variantClasses = {
     default: 'hover:border-primary hover:bg-primary/5',
@@ -36,6 +38,7 @@ export function QuickActionCard({
       whileTap={{ scale: 0.95 }}
       onClick={onClick}
       disabled={disabled || loading}
+      data-testid={dataTestId}
       className={cn(
         'quick-action',
         compact ? 'gap-1.5 p-2.5 min-h-[86px]' : null,

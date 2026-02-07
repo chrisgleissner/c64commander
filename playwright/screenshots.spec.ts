@@ -17,6 +17,7 @@ import {
 } from './testArtifacts';
 import { disableTraceAssertions } from './traceUtils';
 import type { TraceEvent } from '../src/lib/tracing/types';
+import { registerScreenshotSections, sanitizeSegment } from './screenshotCatalog';
 
 const SCREENSHOT_ROOT = path.resolve('doc/img/app');
 const FIXED_NOW_ISO = '2024-03-20T12:34:56.000Z';
@@ -266,6 +267,114 @@ const scrollAndCapture = async (page: Page, testInfo: TestInfo, locator: ReturnT
   await captureScreenshot(page, testInfo, relativePath);
 };
 
+const scrollHeadingIntoView = async (page: Page, locator: ReturnType<Page['locator']>) => {
+  await locator.scrollIntoViewIfNeeded();
+  const offset = await page.evaluate(() => {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--app-bar-height');
+    const parsed = Number.parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  });
+  if (offset > 0) {
+    await page.evaluate((value) => window.scrollBy(0, -value - 8), offset);
+  }
+};
+
+const capturePageSections = async (page: Page, testInfo: TestInfo, pageId: string) => {
+  const headings = page.locator('main h2, main h3, main h4');
+  const count = await headings.count();
+  if (count === 0) return;
+
+  const headingData: Array<{ text: string; locator: ReturnType<Page['locator']> }> = [];
+  for (let index = 0; index < count; index += 1) {
+    const locator = headings.nth(index);
+    const text = (await locator.innerText()).trim();
+    if (!text) continue;
+    headingData.push({ text, locator });
+  }
+
+  const slugs = headingData.map((entry) => sanitizeSegment(entry.text));
+  const orderMap = await registerScreenshotSections(pageId, slugs);
+
+  for (let index = 0; index < headingData.length; index += 1) {
+    const entry = headingData[index];
+    const slug = sanitizeSegment(entry.text);
+    const order = orderMap.get(slug) ?? index + 1;
+    await scrollHeadingIntoView(page, entry.locator);
+    await captureScreenshot(page, testInfo, `${pageId}/sections/${String(order).padStart(2, '0')}-${slug}.png`);
+  }
+};
+
+const captureDocsSections = async (page: Page, testInfo: TestInfo) => {
+  const sectionButtons = page.locator('main button').filter({ hasText: /^[A-Za-z]/ });
+  const count = await sectionButtons.count();
+  if (count === 0) return;
+  const slugs: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const label = (await sectionButtons.nth(index).innerText()).split('\n')[0]?.trim() ?? '';
+    if (label) slugs.push(sanitizeSegment(label));
+  }
+  const orderMap = await registerScreenshotSections('docs', slugs);
+  for (let index = 0; index < count; index += 1) {
+    const button = sectionButtons.nth(index);
+    const label = (await button.innerText()).split('\n')[0]?.trim() ?? '';
+    if (!label) continue;
+    const slug = sanitizeSegment(label);
+    const order = orderMap.get(slug) ?? index + 1;
+    await button.scrollIntoViewIfNeeded();
+    await button.click();
+    await page.waitForTimeout(150);
+    await captureScreenshot(page, testInfo, `docs/sections/${String(order).padStart(2, '0')}-${slug}.png`);
+    await button.click();
+    await page.waitForTimeout(100);
+  }
+};
+
+const captureConfigSections = async (page: Page, testInfo: TestInfo) => {
+  const toggles = page.locator('[data-testid^="config-category-"]');
+  const count = await toggles.count();
+  if (count === 0) return;
+  const labels: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const label = (await toggles.nth(index).innerText()).split('\n')[0]?.trim() ?? '';
+    if (label) labels.push(sanitizeSegment(label));
+  }
+  const orderMap = await registerScreenshotSections('config', labels);
+  for (let index = 0; index < count; index += 1) {
+    const toggle = toggles.nth(index);
+    const label = (await toggle.innerText()).split('\n')[0]?.trim() ?? '';
+    if (!label) continue;
+    const slug = sanitizeSegment(label);
+    const order = orderMap.get(slug) ?? index + 1;
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+    await page.waitForTimeout(150);
+    await captureScreenshot(page, testInfo, `config/sections/${String(order).padStart(2, '0')}-${slug}.png`);
+    await toggle.click();
+    await page.waitForTimeout(100);
+  }
+};
+
+const captureLabeledSections = async (page: Page, testInfo: TestInfo, pageId: string) => {
+  const sections = page.locator('main [data-section-label]');
+  const count = await sections.count();
+  if (count === 0) return;
+  const labels: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const label = (await sections.nth(index).getAttribute('data-section-label'))?.trim() ?? '';
+    if (label) labels.push(sanitizeSegment(label));
+  }
+  const orderMap = await registerScreenshotSections(pageId, labels);
+  for (let index = 0; index < count; index += 1) {
+    const section = sections.nth(index);
+    const label = (await section.getAttribute('data-section-label'))?.trim() ?? '';
+    if (!label) continue;
+    const slug = sanitizeSegment(label);
+    const order = orderMap.get(slug) ?? index + 1;
+    await scrollHeadingIntoView(page, section);
+    await captureScreenshot(page, testInfo, `${pageId}/sections/${String(order).padStart(2, '0')}-${slug}.png`);
+  }
+};
+
 const installFixedClock = async (page: Page) => {
   await page.addInitScript(({ nowMs }) => {
     const OriginalDate = Date;
@@ -392,15 +501,12 @@ test.describe('App screenshots', () => {
     await expect(page.getByRole('button', { name: 'Disks', exact: true })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
-    await captureScreenshot(page, testInfo, 'home/01-overview-light.png');
+    await captureScreenshot(page, testInfo, 'home/00-overview-light.png');
+    await capturePageSections(page, testInfo, 'home');
 
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-    await captureScreenshot(page, testInfo, 'home/02-overview-dark.png');
+    await captureScreenshot(page, testInfo, 'home/01-overview-dark.png');
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
-
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Machine' }), 'home/03-machine-controls.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Drives' }), 'home/04-drives-sid.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Config' }), 'home/05-config-actions.png');
   });
 
   test('capture home interaction screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -433,9 +539,8 @@ test.describe('App screenshots', () => {
     await expect(page.getByTestId('disk-list')).toContainText('Disk 1.d64');
 
     await page.evaluate(() => window.scrollTo(0, 0));
-    await captureScreenshot(page, testInfo, 'disks/01-drive-status.png');
-
-    await scrollAndCapture(page, testInfo, page.getByTestId('disk-list'), 'disks/02-disk-list.png');
+    await captureScreenshot(page, testInfo, 'disks/01-overview.png');
+    await capturePageSections(page, testInfo, 'disks');
 
     const viewAllButton = page.getByRole('button', { name: 'View all' });
     await expect(viewAllButton).toBeVisible();
@@ -450,36 +555,11 @@ test.describe('App screenshots', () => {
     allowVisualOverflow(testInfo, 'Audio mixer controls overflow on narrow screenshot viewport.');
     await page.goto('/config');
     await expect(page.getByRole('heading', { name: 'Config' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
+    await expect.poll(async () => page.locator('[data-testid^="config-category-"]').count()).toBeGreaterThan(0);
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'config/01-categories.png');
-
-    const u64Section = page.getByRole('button', { name: 'U64 Specific Settings' });
-    await u64Section.click();
-    await expect(page.getByText('System Mode')).toBeVisible();
-    await scrollAndCapture(page, testInfo, u64Section, 'config/02-u64-specific.png');
-
-    const audioMixerSection = page.getByRole('button', { name: 'Audio Mixer' });
-    await audioMixerSection.click();
-    const slider = page.getByLabel('Vol UltiSid 1 slider');
-    await expect(slider).toBeVisible();
-    const sliderBox = await slider.boundingBox();
-    if (sliderBox) {
-      await slider.click({ position: { x: sliderBox.width - 2, y: sliderBox.height / 2 } });
-    }
-    await scrollAndCapture(page, testInfo, audioMixerSection, 'config/03-audio-mixer.png');
-
-    const ultisidSection = page.getByRole('button', { name: 'UltiSID Configuration' });
-    await ultisidSection.click();
-    await expect(page.getByText('UltiSID 1 Filter Curve')).toBeVisible();
-    await scrollAndCapture(page, testInfo, ultisidSection, 'config/04-ultisid.png');
-
-    const driveASection = page.getByRole('button', { name: 'Drive A Settings' });
-    await driveASection.click();
-    const driveBSection = page.getByRole('button', { name: 'Drive B Settings' });
-    await driveBSection.click();
-    await scrollAndCapture(page, testInfo, driveBSection, 'config/05-drive-settings.png');
+    await captureConfigSections(page, testInfo);
   });
 
   test('capture play screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -489,10 +569,8 @@ test.describe('App screenshots', () => {
     await expect(page.getByTestId('playlist-list')).toContainText('intro.sid');
 
     await page.evaluate(() => window.scrollTo(0, 0));
-    await captureScreenshot(page, testInfo, 'play/01-playback-controls.png');
-
-    await scrollAndCapture(page, testInfo, page.getByTestId('duration-slider'), 'play/02-playback-settings.png');
-    await scrollAndCapture(page, testInfo, page.getByTestId('playlist-list'), 'play/03-playlist.png');
+    await captureScreenshot(page, testInfo, 'play/01-overview.png');
+    await captureLabeledSections(page, testInfo, 'play');
 
     const viewAllButton = page.getByRole('button', { name: 'View all' });
     await expect(viewAllButton).toBeVisible();
@@ -503,7 +581,6 @@ test.describe('App screenshots', () => {
     await expect(page.getByTestId('action-list-view-all')).toBeHidden();
 
     await expect(page.getByTestId('hvsc-controls')).toBeVisible();
-    await scrollAndCapture(page, testInfo, page.getByTestId('hvsc-controls'), 'play/04-hvsc-controls.png');
   });
 
   test('capture import flow screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -535,15 +612,8 @@ test.describe('App screenshots', () => {
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
-    await captureScreenshot(page, testInfo, 'settings/01-appearance.png');
-
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Connection' }), 'settings/02-connection.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Diagnostics' }), 'settings/03-diagnostics.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Play and Disk' }), 'settings/04-play-disk.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Config' }), 'settings/05-config.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'HVSC Library' }), 'settings/06-hvsc-library.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'Device Safety' }), 'settings/07-device-safety.png');
-    await scrollAndCapture(page, testInfo, page.getByRole('heading', { name: 'About' }), 'settings/08-about.png');
+    await captureScreenshot(page, testInfo, 'settings/01-overview.png');
+    await capturePageSections(page, testInfo, 'settings');
   });
 
   test('capture diagnostics screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -606,26 +676,9 @@ test.describe('App screenshots', () => {
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'docs/01-overview.png');
+    await captureDocsSections(page, testInfo);
 
-    const openDocSection = async (title: string, contentSnippet: string, targetPath: string) => {
-      const button = page.getByRole('main').getByRole('button', { name: title });
-      await button.scrollIntoViewIfNeeded();
-      await button.click();
-      await expect(page.getByText(contentSnippet)).toBeVisible();
-      await captureScreenshot(page, testInfo, targetPath);
-      await button.click();
-      await expect(page.getByText(contentSnippet)).toHaveCount(0);
-    };
-
-    await openDocSection('Getting Started', 'Connect in 4 steps:', 'docs/02-getting-started.png');
-    await openDocSection('Home', 'Config actions:', 'docs/03-home.png');
-    await openDocSection('Play Files', 'Use Play to find files', 'docs/04-play.png');
-    await openDocSection('Disks & Drives', 'manages drive state', 'docs/05-disks.png');
-    await openDocSection('Swapping Disks', 'Disk swapping is designed', 'docs/06-disk-swapping.png');
-    await openDocSection('Config', 'Config exposes all C64U categories', 'docs/07-config.png');
-    await openDocSection('Settings', 'Settings controls connection details', 'docs/08-settings.png');
-
-    await scrollAndCapture(page, testInfo, page.getByText('External Resources', { exact: true }), 'docs/09-external-resources.png');
+    await scrollAndCapture(page, testInfo, page.getByText('External Resources', { exact: true }), 'docs/external/01-external-resources.png');
   });
 
   test('capture demo mode play screenshot', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
