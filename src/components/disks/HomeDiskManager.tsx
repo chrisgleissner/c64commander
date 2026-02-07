@@ -21,7 +21,7 @@ import { reportUserError } from '@/lib/uiErrors';
 import { cn } from '@/lib/utils';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
-import { resetConnectedDrives } from '@/lib/disks/resetDrives';
+import { resetDiskDevices } from '@/lib/disks/resetDrives';
 import { createDiskEntry, getDiskFolderPath, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { assignDiskGroupsByPrefix } from '@/lib/disks/diskGrouping';
 import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
@@ -36,6 +36,12 @@ import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavi
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import {
+  buildBusIdOptions,
+  buildTypeOptions,
+  normalizeDriveDevices,
+  type DriveDeviceClass,
+} from '@/lib/drives/driveDevices';
 
 const DRIVE_KEYS = ['a', 'b'] as const;
 
@@ -48,10 +54,16 @@ const DRIVE_CONFIG_CATEGORY: Record<DriveKey, string> = {
 };
 const DRIVE_BUS_ID_ITEM = 'Drive Bus ID';
 const DRIVE_TYPE_ITEM = 'Drive Type';
-const DRIVE_BUS_ID_OPTIONS = ['8', '9', '10', '11'] as const;
-const DRIVE_TYPE_OPTIONS = ['1541', '1571', '1581'] as const;
+const DRIVE_BUS_ID_DEFAULTS = [8, 9, 10, 11] as const;
+const DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'] as const;
 const DRIVE_DEFAULT_BUS_ID: Record<DriveKey, number> = { a: 8, b: 9 };
 const DRIVE_DEFAULT_TYPE = '1541';
+const SOFT_IEC_CONTROL = {
+  class: 'SOFT_IEC_DRIVE' as DriveDeviceClass,
+  category: 'SoftIEC Drive Settings',
+  enabledItem: 'IEC Drive',
+  busItem: 'Soft Drive Bus ID',
+};
 
 const buildDrivePath = (path?: string | null, file?: string | null) => {
   if (!file) return null;
@@ -148,6 +160,14 @@ export const HomeDiskManager = () => {
   const api = getC64API();
   const queryClient = useQueryClient();
   const [driveConfigPending, setDriveConfigPending] = useState<Record<DriveKey, boolean>>({ a: false, b: false });
+  const [softIecConfigPending, setSoftIecConfigPending] = useState(false);
+  const refreshDrivesFromDevice = useCallback(async () => {
+    await queryClient.fetchQuery({
+      queryKey: ['c64-drives'],
+      queryFn: () => api.getDrives(),
+      staleTime: 0,
+    });
+  }, [api, queryClient]);
   const { data: driveAConfig } = useC64ConfigItems(
     DRIVE_CONFIG_CATEGORY.a,
     [DRIVE_BUS_ID_ITEM, DRIVE_TYPE_ITEM],
@@ -391,13 +411,13 @@ export const HomeDiskManager = () => {
     if (!status.isConnected || resetDrivesPending) return;
     setResetDrivesPending(true);
     try {
-      await resetConnectedDrives(api, drivesData ?? null);
+      await resetDiskDevices(api, drivesData ?? null);
+      await refreshDrivesFromDevice();
+      setDriveErrors((prev) => ({ ...prev, a: '', b: '' }));
       toast({
         title: 'Drives reset',
-        description: 'All connected drives were reset.',
+        description: 'Drive A, Drive B, and Soft IEC Drive were reset.',
       });
-      setDriveErrors((prev) => ({ ...prev, a: '', b: '' }));
-      await queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
     } catch (error) {
       reportUserError({
         operation: 'RESET_DRIVES',
@@ -456,13 +476,12 @@ export const HomeDiskManager = () => {
   const parseBusId = (value: unknown) => {
     const numeric = typeof value === 'number' ? value : Number(String(value ?? '').trim());
     if (!Number.isInteger(numeric)) return null;
-    if (numeric < 8 || numeric > 11) return null;
     return numeric;
   };
 
   const parseDriveType = (value: unknown) => {
     const normalized = String(value ?? '').trim();
-    return (DRIVE_TYPE_OPTIONS as readonly string[]).includes(normalized) ? normalized : null;
+    return normalized.length ? normalized : null;
   };
 
   const resolveDriveBusId = (drive: DriveKey, payload: unknown, fallbackInfo?: { bus_id?: number }) => {
@@ -518,6 +537,34 @@ export const HomeDiskManager = () => {
       });
     } finally {
       setDriveConfigPending((prev) => ({ ...prev, [drive]: false }));
+    }
+  });
+
+  const handleSoftIecConfigUpdate = trace(async (
+    itemName: 'IEC Drive' | 'Soft Drive Bus ID',
+    value: string | number,
+    successTitle: string,
+    successDescription: string,
+  ) => {
+    if (!status.isConnected) return;
+    setSoftIecConfigPending(true);
+    try {
+      await withRetry(
+        `Soft IEC ${itemName} update`,
+        () => api.setConfigValue(SOFT_IEC_CONTROL.category, itemName, value),
+      );
+      toast({ title: successTitle, description: successDescription });
+      await refreshDrivesFromDevice();
+    } catch (error) {
+      reportUserError({
+        operation: 'SOFT_IEC_CONFIG_UPDATE',
+        title: 'Soft IEC setting update failed',
+        description: (error as Error).message,
+        error,
+        context: { itemName, value },
+      });
+    } finally {
+      setSoftIecConfigPending(false);
     }
   });
 
@@ -988,11 +1035,19 @@ export const HomeDiskManager = () => {
     [buildDiskMenuItems, handleDiskSelect, selectedDiskIds],
   );
 
+  const normalizedDriveModel = useMemo(
+    () => normalizeDriveDevices(drivesData ?? null),
+    [drivesData],
+  );
+  const softIecDevice = normalizedDriveModel.devices.find((entry) => entry.class === SOFT_IEC_CONTROL.class) ?? null;
+
   const driveRows = DRIVE_KEYS.map((key) => {
     const info = drivesData?.drives?.find((entry) => entry[key])?.[key];
     const driveConfigPayload = key === 'a' ? driveAConfig : driveBConfig;
     const busId = resolveDriveBusId(key, driveConfigPayload, info);
     const driveType = resolveDriveType(key, driveConfigPayload, info);
+    const busOptions = buildBusIdOptions([...DRIVE_BUS_ID_DEFAULTS], busId);
+    const driveTypeOptions = buildTypeOptions([...DRIVE_TYPE_DEFAULTS], driveType);
     const powerOverride = drivePowerOverride[key];
     const powerEnabled = powerOverride ?? info?.enabled;
     const hasPowerState = typeof powerEnabled === 'boolean';
@@ -1018,7 +1073,9 @@ export const HomeDiskManager = () => {
       canRotate,
       mountedLabel,
       busId,
+      busOptions,
       driveType,
+      driveTypeOptions,
       powerEnabled,
       hasPowerState,
       powerLabel,
@@ -1027,6 +1084,10 @@ export const HomeDiskManager = () => {
       configPending: Boolean(driveConfigPending[key]),
     };
   });
+
+  const softIecBusId = softIecDevice?.busId ?? 11;
+  const softIecBusOptions = buildBusIdOptions([8, 9, 10, 11], softIecBusId);
+  const softIecType = softIecDevice?.type ?? 'DOS emulation';
 
   return (
     <div className="space-y-6">
@@ -1046,7 +1107,7 @@ export const HomeDiskManager = () => {
           />
         </div>
         <div className="grid gap-3">
-          {driveRows.map(({ key, mounted, mountedDisk, canRotate, mountedLabel, busId, driveType, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending }) => (
+          {driveRows.map(({ key, mounted, mountedDisk, canRotate, mountedLabel, busId, busOptions, driveType, driveTypeOptions, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending }) => (
             <div key={key} className="config-card space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1071,7 +1132,7 @@ export const HomeDiskManager = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {DRIVE_BUS_ID_OPTIONS.map((option) => (
+                      {busOptions.map((option) => (
                         <SelectItem key={option} value={option}>
                           #{option}
                         </SelectItem>
@@ -1098,7 +1159,7 @@ export const HomeDiskManager = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {DRIVE_TYPE_OPTIONS.map((option) => (
+                      {driveTypeOptions.map((option) => (
                         <SelectItem key={option} value={option}>
                           {option}
                         </SelectItem>
@@ -1177,6 +1238,69 @@ export const HomeDiskManager = () => {
               ) : null}
             </div>
           ))}
+          {softIecDevice ? (
+            <div className="config-card space-y-2" data-testid="drive-soft-iec-row">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm">Soft IEC Drive</span>
+                  <span className="text-xs text-muted-foreground">#{softIecBusId}</span>
+                  <span className="text-xs text-muted-foreground">{softIecType}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    void handleSoftIecConfigUpdate(
+                      'IEC Drive',
+                      softIecDevice.enabled ? 'Disabled' : 'Enabled',
+                      softIecDevice.enabled ? 'Soft IEC disabled' : 'Soft IEC enabled',
+                      softIecDevice.enabled ? 'Soft IEC drive turned off.' : 'Soft IEC drive turned on.',
+                    )}
+                  disabled={!status.isConnected || softIecConfigPending}
+                  data-testid="drive-power-toggle-soft-iec"
+                >
+                  {softIecDevice.enabled ? 'ON' : 'OFF'}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Bus ID</span>
+                  <Select
+                    value={String(softIecBusId)}
+                    onValueChange={(value) =>
+                      void handleSoftIecConfigUpdate(
+                        'Soft Drive Bus ID',
+                        Number(value),
+                        'Soft IEC bus ID updated',
+                        `Soft IEC now uses device #${value}.`,
+                      )}
+                    disabled={!status.isConnected || softIecConfigPending}
+                  >
+                    <SelectTrigger data-testid="drive-bus-select-soft-iec">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {softIecBusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          #{option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">Type</span>
+                  {/* Soft IEC mode changes are not documented via REST/config for this panel, so type is read-only. */}
+                  <div className="h-9 rounded-md border border-border/60 bg-background px-3 flex items-center text-xs text-muted-foreground">
+                    {softIecType}
+                  </div>
+                </div>
+              </div>
+              {softIecDevice.lastError ? (
+                <p className="text-xs text-muted-foreground">Service error reported.</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 

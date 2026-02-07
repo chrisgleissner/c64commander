@@ -4,10 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 import HomePage from '../../../src/pages/HomePage';
 
 const {
-  mockNavigate,
   toastSpy,
   reportUserErrorSpy,
   c64ApiMockRef,
+  queryClientMockRef,
   sidSocketsPayloadRef,
   sidAddressingPayloadRef,
   audioMixerPayloadRef,
@@ -19,7 +19,6 @@ const {
   machineControlPayloadRef,
   appConfigStatePayloadRef,
 } = vi.hoisted(() => ({
-  mockNavigate: vi.fn(),
   toastSpy: vi.fn(),
   reportUserErrorSpy: vi.fn(),
   c64ApiMockRef: {
@@ -27,6 +26,12 @@ const {
       setConfigValue: vi.fn().mockResolvedValue({}),
       resetDrive: vi.fn().mockResolvedValue({}),
       writeMemory: vi.fn().mockResolvedValue({}),
+    },
+  },
+  queryClientMockRef: {
+    current: {
+      invalidateQueries: vi.fn().mockResolvedValue(undefined),
+      fetchQuery: vi.fn().mockResolvedValue(undefined),
     },
   },
   sidSocketsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
@@ -51,7 +56,7 @@ const {
   },
   drivesPayloadRef: {
     current: {
-      drives: [] as Array<{ a?: { enabled: boolean; image_file?: string }; b?: { enabled: boolean } }>,
+      drives: [] as Array<Record<string, { enabled?: boolean; image_file?: string; bus_id?: number; type?: string }>>,
     },
   },
   machineControlPayloadRef: {
@@ -82,14 +87,6 @@ const {
   },
 }));
 
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom');
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
-});
-
 vi.mock('@/components/ThemeProvider', () => ({
   useThemeContext: () => ({
     theme: 'light',
@@ -98,9 +95,7 @@ vi.mock('@/components/ThemeProvider', () => ({
 }));
 
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({
-    invalidateQueries: vi.fn().mockResolvedValue(undefined),
-  }),
+  useQueryClient: () => queryClientMockRef.current,
 }));
 
 vi.mock('@/hooks/useC64Connection', () => ({
@@ -155,9 +150,12 @@ vi.mock('@/lib/c64api', () => ({
 }));
 
 beforeEach(() => {
-  mockNavigate.mockReset();
   toastSpy.mockReset();
   reportUserErrorSpy.mockReset();
+  queryClientMockRef.current = {
+    invalidateQueries: vi.fn().mockResolvedValue(undefined),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
+  };
   sidSocketsPayloadRef.current = undefined;
   sidAddressingPayloadRef.current = undefined;
   audioMixerPayloadRef.current = undefined;
@@ -305,6 +303,7 @@ describe('HomePage SID status', () => {
       drives: [
         { a: { enabled: true, image_file: 'disk-a.d64' } },
         { b: { enabled: true } },
+        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation' } },
       ],
     };
 
@@ -316,9 +315,34 @@ describe('HomePage SID status', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
 
-    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(3));
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('a');
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('b');
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('softiec');
+    expect(queryClientMockRef.current.fetchQuery).toHaveBeenCalled();
+  });
+
+  it('resets printer only from Home printer section', async () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, image_file: 'disk-a.d64' } },
+        { b: { enabled: true } },
+        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation' } },
+        { 'Printer Emulation': { enabled: true, bus_id: 4 } },
+      ],
+    };
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Printer' }));
+
+    await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(1));
+    expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('printer');
+    expect(queryClientMockRef.current.fetchQuery).toHaveBeenCalled();
   });
 
   it('writes SID silence registers when SID reset is pressed', async () => {
@@ -427,7 +451,7 @@ describe('HomePage SID status', () => {
     expect(screen.getByText('2024-03-20 12:34:00 UTC')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'C64U' })).toBeTruthy();
     expect(screen.getByText('c64u.local')).toBeTruthy();
-    expect(screen.getByText('disk.d64')).toBeTruthy();
+    expect(screen.getByText('Mounted: disk.d64')).toBeTruthy();
   });
 
   it('shows "No disk" on Home when drive A has no mounted image', () => {
@@ -446,7 +470,7 @@ describe('HomePage SID status', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('No disk')).toBeTruthy();
+    expect(screen.getAllByText('No disk mounted').length).toBeGreaterThan(0);
   });
 
   it('handles machine actions and reports errors', async () => {
@@ -472,7 +496,7 @@ describe('HomePage SID status', () => {
     });
   });
 
-  it('requires a second tap to confirm power off', async () => {
+  it('requires explicit confirmation before power off', async () => {
     render(
       <MemoryRouter>
         <HomePage />
@@ -481,13 +505,37 @@ describe('HomePage SID status', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
     expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
-    expect(toastSpy).toHaveBeenCalledWith({
-      title: 'Confirm Power Off',
-      description: 'Tap Power Off again within 5 seconds.',
-    });
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText(/cannot be powered on again via software/i)).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
+    expect(machineControlPayloadRef.current.powerOff.mutateAsync).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /confirm off/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^power off$/i }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^power off$/i }));
     await waitFor(() => expect(machineControlPayloadRef.current.powerOff.mutateAsync).toHaveBeenCalled());
+  });
+
+  it('renders exactly eight machine controls with one pause-resume control', async () => {
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    const machineControls = screen.getByTestId('home-machine-controls');
+    expect(within(machineControls).getAllByRole('button')).toHaveLength(8);
+    expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
+    expect(within(machineControls).queryByRole('button', { name: /^resume$/i })).toBeNull();
+
+    fireEvent.click(within(machineControls).getByRole('button', { name: /^pause$/i }));
+
+    await waitFor(() => expect(machineControlPayloadRef.current.pause.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(within(machineControls).queryByRole('button', { name: /^pause$/i })).toBeNull();
+    expect(within(machineControls).getAllByRole('button', { name: /^resume$/i })).toHaveLength(1);
+
+    fireEvent.click(within(machineControls).getByRole('button', { name: /^resume$/i }));
+    await waitFor(() => expect(machineControlPayloadRef.current.resume.mutateAsync).toHaveBeenCalledTimes(1));
+    expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
   });
 
   it('manages app configs via dialogs', async () => {

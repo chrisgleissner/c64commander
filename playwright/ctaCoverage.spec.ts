@@ -208,30 +208,21 @@ test.describe('Home Page Quick Actions', () => {
     await attachStepScreenshot(page, testInfo, `config-controls-found-${configControlCount}`);
   });
 
-  test('drive status cards navigate to disks page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('home drives group exposes inline controls without navigation dependency', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
     await attachStepScreenshot(page, testInfo, 'home-page');
 
-    // Find drive status cards
-    const driveCards = page.locator('button:has-text("Drive"), button:has-text("drive")');
-    const cardCount = await driveCards.count();
+    const drivesGroup = page.getByTestId('home-drives-group');
+    await expect(drivesGroup).toBeVisible();
+    await expect(drivesGroup.getByRole('button', { name: 'Reset Drives' })).toBeVisible();
+    await expect(page.getByTestId('home-drive-toggle-a')).toBeVisible();
+    await expect(page.getByTestId('home-drive-toggle-b')).toBeVisible();
+    await expect(page.getByTestId('home-drive-toggle-soft-iec')).toBeVisible();
+    await expect(page.getByTestId('home-drive-bus-a')).toBeVisible();
+    await expect(page.getByTestId('home-drive-type-a')).toBeVisible();
 
-    if (cardCount > 0) {
-      await attachStepScreenshot(page, testInfo, `drive-cards-found-${cardCount}`);
-
-      // Click first drive card
-      const firstCard = driveCards.first();
-      await firstCard.click();
-      await page.waitForURL('**/disks', { timeout: 5000 });
-      await attachStepScreenshot(page, testInfo, 'after-drive-card-click');
-
-      // Should navigate to disks page
-      const currentUrl = page.url();
-      expect(currentUrl).toContain('/disks');
-      await attachStepScreenshot(page, testInfo, 'navigated-to-disks');
-    } else {
-      await attachStepScreenshot(page, testInfo, 'drive-cards-not-found');
-    }
+    expect(new URL(page.url()).pathname).toBe('/');
+    await attachStepScreenshot(page, testInfo, 'home-drives-inline-controls');
   });
 });
 

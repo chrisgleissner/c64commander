@@ -14,6 +14,13 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const openAddItemsDialog = async (page: Page) => {
+  const addButton = page.getByRole('button', { name: /Add items|Add more items/i });
+  await expect(addButton).toBeVisible({ timeout: 30000 });
+  await addButton.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+};
+
 const waitForFtpIdle = async (container: Page) => {
   const loading = container.getByTestId('ftp-loading');
   if (await loading.count()) {
@@ -128,7 +135,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     await page.waitForSelector('[role="dialog"]');
     await snap(page, testInfo, 'modal-opened');
 
@@ -147,7 +154,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     await page.waitForSelector('[role="dialog"]');
     await snap(page, testInfo, 'modal-opened');
 
@@ -172,7 +179,7 @@ test.describe('Item Selection Dialog UX', () => {
 
   test('import interstitial shows local and C64U options', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByTestId('import-selection-interstitial')).toBeVisible();
@@ -183,7 +190,7 @@ test.describe('Item Selection Dialog UX', () => {
 
   test('C64U file picker is reachable from interstitial', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
 
     const dialog = page.getByRole('dialog');
     await dialog.getByTestId('import-option-c64u').click();
@@ -195,7 +202,7 @@ test.describe('Item Selection Dialog UX', () => {
   test('local file picker is reachable from playlist flow', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedLocalSource(page);
     await page.goto('/play');
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
@@ -209,7 +216,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     await page.waitForSelector('[role="dialog"]');
     
     // Select C64 Ultimate source to get file list
@@ -235,7 +242,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-page-loaded');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await waitForFtpIdle(dialog);
@@ -260,7 +267,7 @@ test.describe('Item Selection Dialog UX', () => {
 
   test('folder row tap navigates and checkbox selection does not navigate', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/play');
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
     await waitForFtpIdle(dialog);
@@ -292,7 +299,7 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-initial');
 
     // Open add items dialog
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     await snap(page, testInfo, 'add-items-opened');
 
     // Select C64 Ultimate source
@@ -344,7 +351,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
 
@@ -425,7 +432,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
@@ -461,7 +468,7 @@ test.describe('Item Selection Dialog UX', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-initial');
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'This device');
     const input = page.locator('input[type="file"][webkitdirectory]');
@@ -476,7 +483,7 @@ test.describe('Item Selection Dialog UX', () => {
     });
     expect(firstCount).toBeGreaterThan(0);
 
-    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    await openAddItemsDialog(page);
     await clickSourceSelectionButton(page.getByRole('dialog'), 'This device');
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -536,14 +543,14 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'play-initial');
 
     for (let i = 0; i < 2; i += 1) {
-      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await openAddItemsDialog(page);
       await expect(page.getByRole('dialog')).toBeVisible();
       await page.getByRole('button', { name: 'Cancel' }).click();
       await expect(page.getByRole('dialog')).toBeHidden();
     }
 
     const addDisk = async (diskName: string) => {
-      await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+      await openAddItemsDialog(page);
       const dialog = page.getByRole('dialog');
       await clickSourceSelectionButton(dialog, 'C64 Ultimate');
       await ensureRemoteRoot(dialog);

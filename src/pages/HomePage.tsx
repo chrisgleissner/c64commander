@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -19,7 +18,6 @@ import {
 import { getC64API } from '@/lib/c64api';
 import { useC64ConfigItems, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
 import { AppBar } from '@/components/AppBar';
-import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +38,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
 import { reportUserError } from '@/lib/uiErrors';
+import { addErrorLog } from '@/lib/logging';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/config/configItems';
@@ -48,7 +47,7 @@ import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { buildSidControlEntries } from '@/lib/config/sidDetails';
 import { buildStreamConfigValue, buildStreamControlEntries, validateStreamHost, validateStreamPort } from '@/lib/config/homeStreams';
-import { resetConnectedDrives } from '@/lib/disks/resetDrives';
+import { resetDiskDevices, resetPrinterDevice } from '@/lib/disks/resetDrives';
 import { buildSidSilenceTargets, silenceSidTargets } from '@/lib/sid/sidSilence';
 import {
   FULL_RAM_SIZE_BYTES,
@@ -58,12 +57,21 @@ import {
 } from '@/lib/machine/ramOperations';
 import {
   buildRamDumpFileName,
-  ensureRamDumpFolder,
   pickRamDumpFile,
   selectRamDumpFolder,
   writeRamDumpToFolder,
 } from '@/lib/machine/ramDumpStorage';
-import { loadRamDumpFolderConfig, type RamDumpFolderConfig } from '@/lib/config/ramDumpFolderStore';
+import {
+  loadRamDumpFolderConfig,
+  saveRamDumpFolderConfig,
+  type RamDumpFolderConfig,
+} from '@/lib/config/ramDumpFolderStore';
+import {
+  buildBusIdOptions,
+  buildTypeOptions,
+  normalizeDriveDevices,
+  type DriveDeviceClass,
+} from '@/lib/drives/driveDevices';
 
 const DRIVE_A_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
 const DRIVE_B_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
@@ -82,11 +90,34 @@ const HOME_SID_ADDRESSING_ITEMS = [
   'SID Socket 1 Address',
   'SID Socket 2 Address',
 ] as const;
+const DISK_BUS_ID_DEFAULTS = [8, 9, 10, 11];
+const PRINTER_BUS_ID_DEFAULTS = [4, 5];
+const PHYSICAL_DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'];
+
+type DriveControlSpec = {
+  class: DriveDeviceClass;
+  category: string;
+  enabledItem: string;
+  busItem: string;
+  typeItem?: string;
+};
+
+const DRIVE_CONTROL_SPECS: DriveControlSpec[] = [
+  { class: 'PHYSICAL_DRIVE_A', category: 'Drive A Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type' },
+  { class: 'PHYSICAL_DRIVE_B', category: 'Drive B Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type' },
+  { class: 'SOFT_IEC_DRIVE', category: 'SoftIEC Drive Settings', enabledItem: 'IEC Drive', busItem: 'Soft Drive Bus ID' },
+];
+
+const PRINTER_CONTROL_SPEC: DriveControlSpec = {
+  class: 'PRINTER',
+  category: 'Printer Settings',
+  enabledItem: 'IEC printer',
+  busItem: 'Bus ID',
+};
 
 export default function HomePage() {
   const api = getC64API();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const { data: driveASettingsCategory } = useC64ConfigItems(
@@ -142,7 +173,9 @@ export default function HomePage() {
   const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
   const [folderTaskPending, setFolderTaskPending] = useState(false);
-  const [powerOffArmed, setPowerOffArmed] = useState(false);
+  const [powerOffDialogOpen, setPowerOffDialogOpen] = useState(false);
+  const [machineExecutionState, setMachineExecutionState] = useState<'running' | 'paused'>('running');
+  const [pauseResumePending, setPauseResumePending] = useState(false);
   const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
   const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
   const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string }>>({});
@@ -161,7 +194,7 @@ export default function HomePage() {
     [audioMixerCategory, sidAddressingCategory],
   );
   const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
-  const machineTaskBusy = machineTaskId !== null;
+  const machineTaskBusy = machineTaskId !== null || pauseResumePending;
 
   const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
@@ -190,14 +223,6 @@ export default function HomePage() {
     window.addEventListener('c64u-ram-dump-folder-updated', handler as EventListener);
     return () => window.removeEventListener('c64u-ram-dump-folder-updated', handler as EventListener);
   }, []);
-
-  useEffect(() => {
-    if (!powerOffArmed) return undefined;
-    const timeout = window.setTimeout(() => {
-      setPowerOffArmed(false);
-    }, 5000);
-    return () => window.clearTimeout(timeout);
-  }, [powerOffArmed]);
 
   useEffect(() => {
     setStreamDrafts((previous) => {
@@ -241,6 +266,14 @@ export default function HomePage() {
     }
   });
 
+  const refreshDrivesFromDevice = trace(async function refreshDrivesFromDevice() {
+    await queryClient.fetchQuery({
+      queryKey: ['c64-drives'],
+      queryFn: () => api.getDrives(),
+      staleTime: 0,
+    });
+  });
+
   const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
   const readItemValue = (payload: unknown, categoryName: string, itemName: string) => {
@@ -277,6 +310,7 @@ export default function HomePage() {
     value: string | number,
     operation: string,
     successTitle: string,
+    options: { refreshDrives?: boolean } = {},
   ) {
     const key = buildConfigKey(category, itemName);
     const previousValue = configOverrides[key];
@@ -291,6 +325,13 @@ export default function HomePage() {
           && query.queryKey[0] === 'c64-config-items'
           && query.queryKey[1] === category,
       });
+      if (options.refreshDrives) {
+        await queryClient.fetchQuery({
+          queryKey: ['c64-drives'],
+          queryFn: () => api.getDrives(),
+          staleTime: 0,
+        });
+      }
     } catch (error) {
       setConfigOverrides((previous) => {
         const next = { ...previous };
@@ -343,28 +384,65 @@ export default function HomePage() {
       'Machine rebooting',
       'RAM cleared (excluding I/O region).',
     );
+    setMachineExecutionState('running');
+  });
+
+  const handlePauseResume = trace(async function handlePauseResume() {
+    if (!status.isConnected || machineTaskId !== null || pauseResumePending) return;
+    const targetState = machineExecutionState === 'running' ? 'paused' : 'running';
+    setPauseResumePending(true);
+    try {
+      if (targetState === 'paused') {
+        await controls.pause.mutateAsync();
+      } else {
+        await controls.resume.mutateAsync();
+      }
+      setMachineExecutionState(targetState);
+      toast({ title: targetState === 'paused' ? 'Machine paused' : 'Machine resumed' });
+    } catch (error) {
+      addErrorLog('Machine pause/resume failed', {
+        targetState,
+        error: (error as Error).message,
+      });
+      reportUserError({
+        operation: 'HOME_MACHINE_PAUSE_RESUME',
+        title: 'Machine action failed',
+        description: (error as Error).message,
+        error,
+        context: { targetState },
+      });
+    } finally {
+      setPauseResumePending(false);
+    }
   });
 
   const handleSaveRam = trace(async function handleSaveRam() {
     await runMachineTask(
       'save-ram',
       async () => {
+        const folder = ramDumpFolder ?? await selectRamDumpFolder();
+        if (!ramDumpFolder) {
+          setRamDumpFolder(folder);
+        }
         const image = await dumpFullRamImage(api);
-        const folder = await ensureRamDumpFolder();
         const fileName = buildRamDumpFileName();
         await writeRamDumpToFolder(folder, fileName, image);
-        setRamDumpFolder(folder);
       },
       'RAM dump saved',
       'Saved to selected folder.',
     );
+    setMachineExecutionState('running');
   });
 
   const handleLoadRam = trace(async function handleLoadRam() {
     await runMachineTask(
       'load-ram',
       async () => {
-        const pickedFile = await pickRamDumpFile();
+        const pickedFile = await pickRamDumpFile({ preferredFolder: ramDumpFolder ?? undefined });
+        if (!ramDumpFolder && pickedFile.parentFolder) {
+          saveRamDumpFolderConfig(pickedFile.parentFolder);
+          setRamDumpFolder(pickedFile.parentFolder);
+        }
         if (pickedFile.bytes.length !== FULL_RAM_SIZE_BYTES) {
           throw new Error(
             `Invalid RAM dump size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${pickedFile.bytes.length} bytes`,
@@ -375,18 +453,15 @@ export default function HomePage() {
       'RAM loaded',
       'Memory image applied successfully.',
     );
+    setMachineExecutionState('running');
   });
 
   const handlePowerOff = trace(async function handlePowerOff() {
-    if (!powerOffArmed) {
-      setPowerOffArmed(true);
-      toast({
-        title: 'Confirm Power Off',
-        description: 'Tap Power Off again within 5 seconds.',
-      });
-      return;
-    }
-    setPowerOffArmed(false);
+    setPowerOffDialogOpen(true);
+  });
+
+  const confirmPowerOff = trace(async function confirmPowerOff() {
+    setPowerOffDialogOpen(false);
     await handleAction(() => controls.powerOff.mutateAsync(), 'Powering off...');
   });
 
@@ -394,37 +469,39 @@ export default function HomePage() {
     await runMachineTask(
       'reset-drives',
       async () => {
-        await resetConnectedDrives(api, drivesData ?? null);
-        await queryClient.invalidateQueries({ queryKey: ['c64-drives'] });
+        await resetDiskDevices(api, drivesData ?? null);
+        await refreshDrivesFromDevice();
       },
       'Drives reset',
-      'All connected drives were reset.',
+      'Drive A, Drive B, and Soft IEC Drive were reset.',
     );
   });
 
-  const handleDriveToggle = trace(async function handleDriveToggle(drive: 'a' | 'b') {
-    const category = drive === 'a' ? 'Drive A Settings' : 'Drive B Settings';
-    const currentValue = resolveConfigValue(
-      drive === 'a' ? driveASettingsCategory : driveBSettingsCategory,
-      category,
-      'Drive',
-      'Disabled',
+  const handleResetPrinter = trace(async function handleResetPrinter() {
+    await runMachineTask(
+      'reset-printer',
+      async () => {
+        await resetPrinterDevice(api, drivesData ?? null);
+        await refreshDrivesFromDevice();
+      },
+      'Printer reset',
+      'Printer emulation was reset.',
     );
-    const options = readItemOptions(
-      drive === 'a' ? driveASettingsCategory : driveBSettingsCategory,
-      category,
-      'Drive',
-    );
-    if (options.length !== 2) return;
-    const normalizedCurrent = String(currentValue).trim().toLowerCase();
-    const [firstOption, secondOption] = options;
-    const nextValue = normalizedCurrent === String(firstOption).trim().toLowerCase() ? secondOption : firstOption;
+  });
+
+  const handleEnabledToggle = trace(async function handleEnabledToggle(
+    label: string,
+    spec: DriveControlSpec,
+    enabled: boolean,
+  ) {
+    const nextValue = enabled ? 'Disabled' : 'Enabled';
     await updateConfigValue(
-      category,
-      'Drive',
+      spec.category,
+      spec.enabledItem,
       nextValue,
-      'HOME_DRIVE_TOGGLE',
-      `Drive ${drive.toUpperCase()} ${String(nextValue).toLowerCase()}`,
+      'HOME_DRIVE_ENABLED',
+      `${label} ${enabled ? 'disabled' : 'enabled'}`,
+      { refreshDrives: true },
     );
   });
 
@@ -569,14 +646,14 @@ export default function HomePage() {
     }
   });
 
-  const resolveDrive = (key: 'a' | 'b') =>
-    drivesData?.drives?.find((entry) => entry[key])?.[key];
-
-  const driveA = resolveDrive('a');
-  const driveB = resolveDrive('b');
-  const driveADiskLabel = driveA?.enabled && driveA?.image_file
-    ? driveA.image_file
-    : 'No disk';
+  const normalizedDriveModel = useMemo(
+    () => normalizeDriveDevices(drivesData ?? null),
+    [drivesData],
+  );
+  const drivesByClass = useMemo(
+    () => new Map(normalizedDriveModel.devices.map((entry) => [entry.class, entry])),
+    [normalizedDriveModel.devices],
+  );
 
   const sidEnablement = useMemo(
     () => buildSidEnablement(
@@ -592,31 +669,72 @@ export default function HomePage() {
     ['ultiSid2', sidEnablement.ultiSid2],
   ]), [sidEnablement]);
 
-  const driveSettingsRows: Array<{
-    key: 'a' | 'b';
-    category: 'Drive A Settings' | 'Drive B Settings';
-    driveValue: string;
-    typeValue: string;
-    typeOptions: string[];
-    busValue: string;
-    busOptions: string[];
-  }> = ['a', 'b'].map((driveKey) => {
-    const category = driveKey === 'a' ? 'Drive A Settings' : 'Drive B Settings';
-    const payload = driveKey === 'a' ? driveASettingsCategory : driveBSettingsCategory;
-    const info = driveKey === 'a' ? driveA : driveB;
-    const typeOptions = readItemOptions(payload, category, 'Drive Type').map((option) => String(option));
-    const rawBusOptions = readItemOptions(payload, category, 'Drive Bus ID').map((option) => String(option));
-    const busOptions = rawBusOptions.length ? rawBusOptions : ['8', '9', '10', '11'];
+  const driveControlRows = DRIVE_CONTROL_SPECS.map((spec) => {
+    const device = drivesByClass.get(spec.class) ?? null;
+    const payload = spec.class === 'PHYSICAL_DRIVE_A'
+      ? driveASettingsCategory
+      : spec.class === 'PHYSICAL_DRIVE_B'
+        ? driveBSettingsCategory
+        : undefined;
+    const enabledValue = String(
+      resolveConfigValue(payload, spec.category, spec.enabledItem, device?.enabled ? 'Enabled' : 'Disabled'),
+    );
+    const enabled = enabledValue.trim().toLowerCase() === 'enabled';
+    const busFallback = device?.busId ?? (spec.class === 'PHYSICAL_DRIVE_A' ? 8 : spec.class === 'PHYSICAL_DRIVE_B' ? 9 : 11);
+    const busValue = Number(resolveConfigValue(payload, spec.category, spec.busItem, busFallback));
+    const busOptions = buildBusIdOptions(DISK_BUS_ID_DEFAULTS, Number.isFinite(busValue) ? busValue : null);
+
+    const typeValue = spec.typeItem
+      ? String(resolveConfigValue(payload, spec.category, spec.typeItem, device?.type ?? '1541'))
+      : (device?.type ?? 'DOS emulation');
+    const typeOptions = spec.typeItem
+      ? buildTypeOptions(
+        readItemOptions(payload, spec.category, spec.typeItem).map((value) => String(value)).length
+          ? readItemOptions(payload, spec.category, spec.typeItem).map((value) => String(value))
+          : PHYSICAL_DRIVE_TYPE_DEFAULTS,
+        typeValue,
+      )
+      : [typeValue];
+
+    const statusText = spec.class === 'SOFT_IEC_DRIVE'
+      ? (device?.lastError ? 'Service error reported' : 'DOS emulation ready')
+      : (device?.imageFile ? `Mounted: ${device.imageFile}` : 'No disk mounted');
+
     return {
-      key: driveKey,
-      category,
-      driveValue: String(resolveConfigValue(payload, category, 'Drive', info?.enabled ? 'Enabled' : 'Disabled')),
-      typeValue: String(resolveConfigValue(payload, category, 'Drive Type', info?.type ?? '1541')),
-      typeOptions,
-      busValue: String(resolveConfigValue(payload, category, 'Drive Bus ID', info?.bus_id ?? (driveKey === 'a' ? 8 : 9))),
+      spec,
+      device,
+      enabled,
+      enabledValue,
+      busValue: String(busValue),
       busOptions,
+      typeValue,
+      typeOptions,
+      statusText,
+      pendingEnabled: Boolean(configWritePending[buildConfigKey(spec.category, spec.enabledItem)]),
+      pendingBus: Boolean(configWritePending[buildConfigKey(spec.category, spec.busItem)]),
+      pendingType: spec.typeItem ? Boolean(configWritePending[buildConfigKey(spec.category, spec.typeItem)]) : false,
     };
   });
+
+  const printerDevice = drivesByClass.get('PRINTER') ?? null;
+  const printerEnabledValue = String(
+    resolveConfigValue(
+      undefined,
+      PRINTER_CONTROL_SPEC.category,
+      PRINTER_CONTROL_SPEC.enabledItem,
+      printerDevice?.enabled ? 'Enabled' : 'Disabled',
+    ),
+  );
+  const printerEnabled = printerEnabledValue.trim().toLowerCase() === 'enabled';
+  const printerBusValue = Number(
+    resolveConfigValue(
+      undefined,
+      PRINTER_CONTROL_SPEC.category,
+      PRINTER_CONTROL_SPEC.busItem,
+      printerDevice?.busId ?? 4,
+    ),
+  );
+  const printerBusOptions = buildBusIdOptions(PRINTER_BUS_ID_DEFAULTS, Number.isFinite(printerBusValue) ? printerBusValue : null);
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -712,81 +830,90 @@ export default function HomePage() {
             )}
           </h3>
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)]">
-            <div className="grid grid-cols-4 gap-2">
-              <QuickActionCard
-                icon={RotateCcw}
-                label="Reset"
-                compact
-                onClick={() => handleAction(() => controls.reset.mutateAsync(), 'Machine reset')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.reset.isPending}
-              />
-              <QuickActionCard
-                icon={Power}
-                label="Reboot"
-                compact
-                onClick={() => handleAction(() => controls.reboot.mutateAsync(), 'Machine rebooting...')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.reboot.isPending}
-              />
-              <QuickActionCard
-                icon={Menu}
-                label="Menu"
-                compact
-                onClick={() => handleAction(() => controls.menuButton.mutateAsync(), 'Menu toggled')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.menuButton.isPending}
-              />
-              <QuickActionCard
-                icon={Pause}
-                label="Pause"
-                compact
-                onClick={() => handleAction(() => controls.pause.mutateAsync(), 'Machine paused')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.pause.isPending}
-              />
-              <QuickActionCard
-                icon={Play}
-                label="Resume"
-                compact
-                onClick={() => handleAction(() => controls.resume.mutateAsync(), 'Machine resumed')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.resume.isPending}
-              />
-              <QuickActionCard
-                icon={RotateCcw}
-                label="Reboot (Clear RAM)"
-                compact
-                onClick={() => void handleRebootClearMemory()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'reboot-clear-memory'}
-              />
-              <QuickActionCard
-                icon={Download}
-                label="Save RAM"
-                compact
-                onClick={() => void handleSaveRam()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'save-ram'}
-              />
-              <QuickActionCard
-                icon={Upload}
-                label="Load RAM"
-                compact
-                onClick={() => void handleLoadRam()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'load-ram'}
-              />
-              <QuickActionCard
-                icon={PowerOff}
-                label={powerOffArmed ? 'Confirm Off' : 'Power Off'}
-                compact
-                variant="danger"
-                className="col-start-1 row-start-3 border-destructive/50 bg-destructive/5"
-                onClick={() => void handlePowerOff()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.powerOff.isPending}
-              />
+            <div className="space-y-3" data-testid="home-machine-controls">
+              <div className="grid grid-cols-3 gap-2 border border-destructive/20 rounded-xl bg-destructive/[0.03] p-2">
+                <QuickActionCard
+                  icon={RotateCcw}
+                  label="Reset"
+                  compact
+                  variant="danger"
+                  className="border-destructive/40 bg-destructive/[0.04]"
+                  onClick={() =>
+                    handleAction(async () => {
+                      await controls.reset.mutateAsync();
+                      setMachineExecutionState('running');
+                    }, 'Machine reset')}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={controls.reset.isPending}
+                />
+                <QuickActionCard
+                  icon={Power}
+                  label="Reboot"
+                  compact
+                  variant="danger"
+                  className="border-destructive/40 bg-destructive/[0.04]"
+                  onClick={() =>
+                    handleAction(async () => {
+                      await controls.reboot.mutateAsync();
+                      setMachineExecutionState('running');
+                    }, 'Machine rebooting...')}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={controls.reboot.isPending}
+                />
+                <QuickActionCard
+                  icon={PowerOff}
+                  label="Power Off"
+                  compact
+                  variant="danger"
+                  className="border-destructive bg-destructive/15"
+                  onClick={() => void handlePowerOff()}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={controls.powerOff.isPending}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-5 border border-border rounded-xl p-2">
+                <QuickActionCard
+                  icon={Menu}
+                  label="Menu"
+                  compact
+                  onClick={() => handleAction(() => controls.menuButton.mutateAsync(), 'Menu toggled')}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={controls.menuButton.isPending}
+                />
+                <QuickActionCard
+                  icon={machineExecutionState === 'paused' ? Play : Pause}
+                  label={machineExecutionState === 'paused' ? 'Resume' : 'Pause'}
+                  compact
+                  className={machineExecutionState === 'paused' ? 'border-primary/60 bg-primary/10' : undefined}
+                  onClick={() => void handlePauseResume()}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={pauseResumePending}
+                />
+                <QuickActionCard
+                  icon={RotateCcw}
+                  label="Reboot (Clear RAM)"
+                  compact
+                  onClick={() => void handleRebootClearMemory()}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={machineTaskId === 'reboot-clear-memory'}
+                />
+                <QuickActionCard
+                  icon={Download}
+                  label="Save RAM"
+                  compact
+                  onClick={() => void handleSaveRam()}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={machineTaskId === 'save-ram'}
+                />
+                <QuickActionCard
+                  icon={Upload}
+                  label="Load RAM"
+                  compact
+                  onClick={() => void handleLoadRam()}
+                  disabled={!status.isConnected || machineTaskBusy}
+                  loading={machineTaskId === 'load-ram'}
+                />
+              </div>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-3 space-y-3">
@@ -821,79 +948,69 @@ export default function HomePage() {
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
             Drives
           </h3>
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_180px]">
-              <button
-                type="button"
-                className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm text-left hover:border-primary/60 transition"
-                onClick={wrapUserEvent(() => navigate('/disks'), 'click', 'DriveTile', { title: 'Drive A' }, 'DriveTile')}
-                aria-label="Open Disks"
-              >
-                <div className="flex flex-wrap items-center gap-2 min-w-0">
-                  <span className="font-medium shrink-0">Drive A:</span>
-                  <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
-                    {driveA?.enabled ? 'ON' : 'OFF'}
-                  </span>
-                  <span className="font-medium break-words whitespace-normal min-w-0">
-                    {driveADiskLabel}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-medium shrink-0">Drive B:</span>
-                  <span className={driveB?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
-                    {driveB?.enabled ? 'ON' : 'OFF'}
-                  </span>
-                </div>
-              </button>
-              <QuickActionCard
-                icon={RotateCcw}
-                label="Reset Drives"
-                compact
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3" data-testid="home-drives-group">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-primary uppercase tracking-wide">Drive mapping</p>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => void handleResetDrives()}
                 disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'reset-drives'}
-              />
+              >
+                {machineTaskId === 'reset-drives' ? 'Resetting…' : 'Reset Drives'}
+              </Button>
             </div>
-
-            <div className="bg-card border border-border rounded-xl p-4 space-y-3" data-testid="home-drive-controls">
-              {driveSettingsRows.map((row) => {
-                const toggleKey = buildConfigKey(row.category, 'Drive');
-                const typeKey = buildConfigKey(row.category, 'Drive Type');
-                const busKey = buildConfigKey(row.category, 'Drive Bus ID');
+            <div className="space-y-2">
+              {driveControlRows.map((row) => {
+                const label = row.device?.label
+                  ?? (row.spec.class === 'PHYSICAL_DRIVE_A'
+                    ? 'Drive A'
+                    : row.spec.class === 'PHYSICAL_DRIVE_B'
+                      ? 'Drive B'
+                      : 'Soft IEC Drive');
+                const testIdSuffix = row.spec.class === 'PHYSICAL_DRIVE_A'
+                  ? 'a'
+                  : row.spec.class === 'PHYSICAL_DRIVE_B'
+                    ? 'b'
+                    : 'soft-iec';
                 return (
-                  <div key={row.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
+                  <div key={row.spec.class} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-semibold">Drive {row.key.toUpperCase()}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{label}</p>
+                        <p className="text-xs text-muted-foreground">{row.statusText}</p>
+                      </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => void handleDriveToggle(row.key)}
-                        disabled={!status.isConnected || Boolean(configWritePending[toggleKey])}
-                        data-testid={`home-drive-toggle-${row.key}`}
+                        onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
+                        disabled={!status.isConnected || row.pendingEnabled}
+                        data-testid={`home-drive-toggle-${testIdSuffix}`}
                       >
-                        {row.driveValue}
+                        {row.enabled ? 'ON' : 'OFF'}
                       </Button>
                     </div>
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                       <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Drive Type</span>
+                        <span className="text-xs text-muted-foreground">Bus ID</span>
                         <Select
-                          value={row.typeValue}
+                          value={row.busValue}
                           onValueChange={(value) =>
                             void updateConfigValue(
-                              row.category,
-                              'Drive Type',
-                              value,
-                              'HOME_DRIVE_TYPE',
-                              `Drive ${row.key.toUpperCase()} type updated`,
+                              row.spec.category,
+                              row.spec.busItem,
+                              Number(value),
+                              'HOME_DRIVE_BUS',
+                              `${label} bus ID updated`,
+                              { refreshDrives: true },
                             )}
-                          disabled={!status.isConnected || Boolean(configWritePending[typeKey])}
+                          disabled={!status.isConnected || row.pendingBus}
                         >
-                          <SelectTrigger data-testid={`home-drive-type-${row.key}`}>
+                          <SelectTrigger data-testid={`home-drive-bus-${testIdSuffix}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {row.typeOptions.map((option) => (
+                            {row.busOptions.map((option) => (
                               <SelectItem key={option} value={option}>
                                 {option}
                               </SelectItem>
@@ -902,24 +1019,225 @@ export default function HomePage() {
                         </Select>
                       </div>
                       <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Drive Bus ID</span>
+                        <span className="text-xs text-muted-foreground">Type</span>
+                        {row.spec.typeItem ? (
+                          <Select
+                            value={row.typeValue}
+                            onValueChange={(value) =>
+                              void updateConfigValue(
+                                row.spec.category,
+                                row.spec.typeItem!,
+                                value,
+                                'HOME_DRIVE_TYPE',
+                                `${label} type updated`,
+                                { refreshDrives: true },
+                              )}
+                            disabled={!status.isConnected || row.pendingType}
+                          >
+                            <SelectTrigger data-testid={`home-drive-type-${testIdSuffix}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {row.typeOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="h-10 rounded-md border border-border/60 bg-background px-3 flex items-center text-sm text-muted-foreground">
+                            {row.typeValue}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.34 }}
+          className="space-y-3"
+        >
+          <h3 className="category-header">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            Printers
+          </h3>
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3" data-testid="home-printer-group">
+            <p className="text-xs text-muted-foreground">Serial bus device (typical bus IDs: 4 or 5)</p>
+            <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold">Printer</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleEnabledToggle('Printer', PRINTER_CONTROL_SPEC, printerEnabled)}
+                  disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)])}
+                  data-testid="home-printer-toggle"
+                >
+                  {printerEnabled ? 'ON' : 'OFF'}
+                </Button>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground">Bus ID</span>
+                <Select
+                  value={String(printerBusValue)}
+                  onValueChange={(value) =>
+                    void updateConfigValue(
+                      PRINTER_CONTROL_SPEC.category,
+                      PRINTER_CONTROL_SPEC.busItem,
+                      Number(value),
+                      'HOME_PRINTER_BUS',
+                      'Printer bus ID updated',
+                      { refreshDrives: true },
+                    )}
+                  disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.busItem)])}
+                >
+                  <SelectTrigger data-testid="home-printer-bus">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {printerBusOptions.map((option) => (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleResetPrinter()}
+              disabled={!status.isConnected || machineTaskBusy}
+            >
+              {machineTaskId === 'reset-printer' ? 'Resetting…' : 'Reset Printer'}
+            </Button>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.36 }}
+          className="space-y-2"
+          data-testid="home-sid-status"
+        >
+          <div className="flex items-center justify-between gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              <span>SID</span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSidReset()}
+              disabled={!status.isConnected || machineTaskBusy}
+            >
+              Reset
+            </Button>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="space-y-3">
+              {sidControlEntries.map((entry) => {
+                const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
+                const panKey = buildConfigKey('Audio Mixer', entry.panItem);
+                const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
+                const statusValue = sidStatusMap.get(entry.key);
+                const statusLabel = statusValue === undefined ? '—' : statusValue ? 'ON' : 'OFF';
+                const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
+                const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
+                const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
+                const selectedVolume = volumeOptions.find((option) => option.trim() === entry.volume) ?? entry.volume;
+                const selectedPan = panOptions.find((option) => option.trim() === entry.pan) ?? entry.pan;
+                const selectedAddress = addressOptions.find((option) => option.trim() === entry.address) ?? entry.address;
+                return (
+                  <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 p-3 space-y-2" data-testid={`home-sid-entry-${entry.key}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">{entry.label}</span>
+                      <span className={statusValue ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Volume</span>
                         <Select
-                          value={row.busValue}
+                          value={selectedVolume}
                           onValueChange={(value) =>
                             void updateConfigValue(
-                              row.category,
-                              'Drive Bus ID',
-                              Number(value),
-                              'HOME_DRIVE_BUS',
-                              `Drive ${row.key.toUpperCase()} bus ID updated`,
+                              'Audio Mixer',
+                              entry.volumeItem,
+                              value,
+                              'HOME_SID_VOLUME',
+                              `${entry.label} volume updated`,
                             )}
-                          disabled={!status.isConnected || Boolean(configWritePending[busKey])}
+                          disabled={!status.isConnected || Boolean(configWritePending[volumeKey])}
                         >
-                          <SelectTrigger data-testid={`home-drive-bus-${row.key}`}>
+                          <SelectTrigger data-testid={`home-sid-volume-${entry.key}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {row.busOptions.map((option) => (
+                            {volumeOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option.trim()}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Pan</span>
+                        <Select
+                          value={selectedPan}
+                          onValueChange={(value) =>
+                            void updateConfigValue(
+                              'Audio Mixer',
+                              entry.panItem,
+                              value,
+                              'HOME_SID_PAN',
+                              `${entry.label} pan updated`,
+                            )}
+                          disabled={!status.isConnected || Boolean(configWritePending[panKey])}
+                        >
+                          <SelectTrigger data-testid={`home-sid-pan-${entry.key}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {panOptions.map((option) => (
+                              <SelectItem key={option} value={option}>
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Address</span>
+                        <Select
+                          value={selectedAddress}
+                          onValueChange={(value) =>
+                            void updateConfigValue(
+                              'SID Addressing',
+                              entry.addressItem,
+                              value,
+                              'HOME_SID_ADDRESS',
+                              `${entry.label} address updated`,
+                            )}
+                          disabled={!status.isConnected || Boolean(configWritePending[addressKey])}
+                        >
+                          <SelectTrigger data-testid={`home-sid-address-${entry.key}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {addressOptions.map((option) => (
                               <SelectItem key={option} value={option}>
                                 {option}
                               </SelectItem>
@@ -932,192 +1250,74 @@ export default function HomePage() {
                 );
               })}
             </div>
+          </div>
+        </motion.div>
 
-            <div className="space-y-2" data-testid="home-sid-status">
-              <div className="flex items-center justify-between gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
-                <span className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  <span>SID</span>
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleSidReset()}
-                  disabled={!status.isConnected || machineTaskBusy}
-                >
-                  Reset
-                </Button>
-              </div>
-              <div className="bg-card border border-border rounded-xl p-4">
-                <div className="space-y-3">
-                  {sidControlEntries.map((entry) => {
-                    const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
-                    const panKey = buildConfigKey('Audio Mixer', entry.panItem);
-                    const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
-                    const statusValue = sidStatusMap.get(entry.key);
-                    const statusLabel = statusValue === undefined ? '—' : statusValue ? 'ON' : 'OFF';
-                    const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
-                    const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
-                    const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
-                    const selectedVolume = volumeOptions.find((option) => option.trim() === entry.volume) ?? entry.volume;
-                    const selectedPan = panOptions.find((option) => option.trim() === entry.pan) ?? entry.pan;
-                    const selectedAddress = addressOptions.find((option) => option.trim() === entry.address) ?? entry.address;
-                    return (
-                      <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 p-3 space-y-2" data-testid={`home-sid-entry-${entry.key}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold">{entry.label}</span>
-                          <span className={statusValue ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
-                            {statusLabel}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">Volume</span>
-                            <Select
-                              value={selectedVolume}
-                              onValueChange={(value) =>
-                                void updateConfigValue(
-                                  'Audio Mixer',
-                                  entry.volumeItem,
-                                  value,
-                                  'HOME_SID_VOLUME',
-                                  `${entry.label} volume updated`,
-                                )}
-                              disabled={!status.isConnected || Boolean(configWritePending[volumeKey])}
-                            >
-                              <SelectTrigger data-testid={`home-sid-volume-${entry.key}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {volumeOptions.map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option.trim()}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">Pan</span>
-                            <Select
-                              value={selectedPan}
-                              onValueChange={(value) =>
-                                void updateConfigValue(
-                                  'Audio Mixer',
-                                  entry.panItem,
-                                  value,
-                                  'HOME_SID_PAN',
-                                  `${entry.label} pan updated`,
-                                )}
-                              disabled={!status.isConnected || Boolean(configWritePending[panKey])}
-                            >
-                              <SelectTrigger data-testid={`home-sid-pan-${entry.key}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {panOptions.map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">Address</span>
-                            <Select
-                              value={selectedAddress}
-                              onValueChange={(value) =>
-                                void updateConfigValue(
-                                  'SID Addressing',
-                                  entry.addressItem,
-                                  value,
-                                  'HOME_SID_ADDRESS',
-                                  `${entry.label} address updated`,
-                                )}
-                              disabled={!status.isConnected || Boolean(configWritePending[addressKey])}
-                            >
-                              <SelectTrigger data-testid={`home-sid-address-${entry.key}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {addressOptions.map((option) => (
-                                  <SelectItem key={option} value={option}>
-                                    {option}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.38 }}
+          className="space-y-2"
+          data-testid="home-stream-status"
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+            <span>Streams</span>
+          </div>
+          <div className="bg-card border border-border rounded-xl p-4">
+            <div className="space-y-2">
+              {streamControlEntries.map((entry) => {
+                const draft = streamDrafts[entry.key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+                const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
+                return (
+                  <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-medium text-foreground">{entry.label}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleStreamToggle(entry.key)}
+                        disabled={!status.isConnected || pending}
+                        data-testid={`home-stream-toggle-${entry.key}`}
+                      >
+                        {draft.enabled ? 'ON' : 'OFF'}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 text-[11px]">
+                      <div className="space-y-1">
+                        <span className="text-muted-foreground">IP</span>
+                        <Input
+                          value={draft.ip}
+                          onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
+                          onBlur={() => void handleStreamCommit(entry.key)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              void handleStreamCommit(entry.key);
+                            }
+                          }}
+                          disabled={!status.isConnected || pending || !draft.enabled}
+                          data-testid={`home-stream-ip-${entry.key}`}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2" data-testid="home-stream-status">
-              <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                <span>Streams</span>
-              </div>
-              <div className="bg-card border border-border rounded-xl p-4">
-                <div className="space-y-2">
-                  {streamControlEntries.map((entry) => {
-                    const draft = streamDrafts[entry.key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
-                    const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
-                    return (
-                      <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-3 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-foreground">{entry.label}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void handleStreamToggle(entry.key)}
-                            disabled={!status.isConnected || pending}
-                            data-testid={`home-stream-toggle-${entry.key}`}
-                          >
-                            {draft.enabled ? 'ON' : 'OFF'}
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 text-[11px]">
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground">IP</span>
-                            <Input
-                              value={draft.ip}
-                              onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
-                              onBlur={() => void handleStreamCommit(entry.key)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  void handleStreamCommit(entry.key);
-                                }
-                              }}
-                              disabled={!status.isConnected || pending || !draft.enabled}
-                              data-testid={`home-stream-ip-${entry.key}`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-muted-foreground">Port</span>
-                            <Input
-                              value={draft.port}
-                              onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
-                              onBlur={() => void handleStreamCommit(entry.key)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  void handleStreamCommit(entry.key);
-                                }
-                              }}
-                              disabled={!status.isConnected || pending || !draft.enabled}
-                              data-testid={`home-stream-port-${entry.key}`}
-                            />
-                          </div>
-                        </div>
+                      <div className="space-y-1">
+                        <span className="text-muted-foreground">Port</span>
+                        <Input
+                          value={draft.port}
+                          onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
+                          onBlur={() => void handleStreamCommit(entry.key)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              void handleStreamCommit(entry.key);
+                            }
+                          }}
+                          disabled={!status.isConnected || pending || !draft.enabled}
+                          data-testid={`home-stream-port-${entry.key}`}
+                        />
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </motion.div>
@@ -1218,6 +1418,30 @@ export default function HomePage() {
           </motion.div>
         )}
       </main>
+
+      <Dialog open={powerOffDialogOpen} onOpenChange={setPowerOffDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Power Off</DialogTitle>
+            <DialogDescription>
+              Once powered off, this machine cannot be powered on again via software.
+              Use the physical power button on the device to power it back on.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPowerOffDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => void confirmPowerOff()}
+              disabled={controls.powerOff.isPending}
+            >
+              {controls.powerOff.isPending ? 'Powering off…' : 'Power Off'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
         <DialogContent>

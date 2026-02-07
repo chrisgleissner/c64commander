@@ -276,9 +276,10 @@ test.describe('Home page app config management', () => {
       },
     });
 
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'HOME' })).toBeVisible({ timeout: 20000 });
     const sidGroup = page.getByTestId('home-sid-status');
-    await expect(sidGroup).toBeVisible();
+    await expect(sidGroup).toBeVisible({ timeout: 20000 });
     await expect(sidGroup.getByTestId('sid-status-label')).toContainText('SID');
     await expect(sidGroup.getByRole('button', { name: 'Reset' })).toBeVisible();
     await expect(sidGroup.locator('[data-testid="sid-status-dot"]')).toHaveCount(0);

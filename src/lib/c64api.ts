@@ -295,9 +295,9 @@ export interface CategoriesResponse {
 }
 
 export interface DriveInfo {
-  enabled: boolean;
-  bus_id: number;
-  type: string;
+  enabled?: boolean;
+  bus_id?: number;
+  type?: string;
   rom?: string;
   image_file?: string;
   image_path?: string;
@@ -906,19 +906,19 @@ export class C64API {
     return this.request(`/v1/drives/${drive}:remove`, { method: 'PUT' });
   }
 
-  async resetDrive(drive: 'a' | 'b'): Promise<{ errors: string[] }> {
+  async resetDrive(drive: string): Promise<{ errors: string[] }> {
     return this.request(`/v1/drives/${drive}:reset`, { method: 'PUT' });
   }
 
-  async driveOn(drive: 'a' | 'b'): Promise<{ errors: string[] }> {
+  async driveOn(drive: string): Promise<{ errors: string[] }> {
     return this.request(`/v1/drives/${drive}:on`, { method: 'PUT' });
   }
 
-  async driveOff(drive: 'a' | 'b'): Promise<{ errors: string[] }> {
+  async driveOff(drive: string): Promise<{ errors: string[] }> {
     return this.request(`/v1/drives/${drive}:off`, { method: 'PUT' });
   }
 
-  async setDriveMode(drive: 'a' | 'b', mode: '1541' | '1571' | '1581'): Promise<{ errors: string[] }> {
+  async setDriveMode(drive: string, mode: '1541' | '1571' | '1581'): Promise<{ errors: string[] }> {
     return this.request(`/v1/drives/${drive}:set_mode?mode=${mode}`, { method: 'PUT' });
   }
 

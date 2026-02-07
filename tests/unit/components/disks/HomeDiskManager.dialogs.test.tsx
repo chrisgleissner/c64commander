@@ -50,7 +50,10 @@ vi.mock('@/components/FileOriginIcon', () => ({ FileOriginIcon: () => null }));
 
 const mockInvalidateQueries = vi.fn();
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+  useQueryClient: () => ({
+    invalidateQueries: mockInvalidateQueries,
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 
 const mockDiskLibrary = {

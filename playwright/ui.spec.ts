@@ -262,7 +262,8 @@ test.describe('UI coverage', () => {
       const tagMatch = expectedVersion.match(/^(.+?)-[0-9a-f]{7,}$/i);
       if (tagMatch) {
         const escapedTag = tagMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}-[0-9a-f]{7,8}$`));
+        // Accept SHA-style suffixes and branch/build suffixes produced by CI metadata.
+        await expect(versionText).toHaveText(new RegExp(`^${escapedTag}-[0-9a-z][0-9a-z-]{3,20}$`, 'i'));
       } else {
         await expect(versionText).toHaveText(expectedVersion);
       }

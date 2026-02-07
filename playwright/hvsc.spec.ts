@@ -627,7 +627,10 @@ test.describe('HVSC Play page', () => {
     const initialRequests = c64Server.sidplayRequests.length;
 
     await page.reload();
-    await expect(page.getByTestId('playlist-list').getByText('10_Orbyte.sid', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('playlist-list')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByTestId('playlist-list').getByText('10_Orbyte.sid', { exact: true })).toBeVisible({
+      timeout: 20000,
+    });
 
     const playButton = page.getByTestId('playlist-play');
     const playLabel = (await playButton.getAttribute('aria-label')) ?? '';

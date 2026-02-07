@@ -1,98 +1,129 @@
-# PLANS.md - Home/Disks Interactivity, SID Silencing, and Import UX Coverage
+# PLANS.md
 
-## Execution Contract
-- Status legend: `[ ] pending`, `[-] in progress`, `[x] completed`.
-- Loop per phase: `plan -> implement -> targeted tests -> verify -> update this file`.
-- Scope locked to requested areas only: import UX/screenshots, drive reset, SID info+reset, Home interactivity, unit/E2E/screenshot coverage.
-- No silent exception handling; all caught errors must be reported or rethrown with context.
-- No test weakening/skipping.
+## 1. SCOPE
+- [x] Audit current Home/Disks/API behavior against requested device classes and machine controls.
+- [x] Implement full disk + printer support on Home and disk-only support on Disks page.
+- [x] Implement read, write, and reset handling aligned with documented REST support.
+- [x] Keep changes minimal and aligned with existing UX/component patterns.
 
-## Phase 0 - Baseline and Scope Lock
-- [x] Confirm current behavior and impacted modules for:
-  - Home `Drives`, `SID`, `Streams`
-  - Disks page drive controls
-  - Item import UX (Play + Disks)
-  - Existing screenshot and Playwright flows
-- [x] Define concrete contracts:
-  - Global drive reset behavior and failure semantics
-  - SID metadata mapping (volume/pan/address + ordering)
-  - SID silence write plan (register offsets + per-SID error aggregation)
-  - Home interaction rules (toggle/select/input + validation)
-- [x] Verification:
-  - Impacted files + tests captured before edits.
+## 2. RESET SEMANTICS (CRITICAL)
+- [x] Implement `Reset Drives` to target only Drive A, Drive B, and Soft IEC Drive.
+- [x] Implement `Reset Printer` to target only Printer emulation (same REST API endpoint as for 'Reset Drives').
+- [x] Enforce mandatory post-reset `GET /v1/drives` refresh and UI update strictly from refreshed payload.
+- [x] Ensure transient fields (e.g., Soft IEC `last_error`) clear only when absent in refreshed response.
+- [x] Add explicit unsupported-reset handling with code comments/tests (no invented endpoints, no toggle simulation).
 
-## Phase 1 - Core Logic: Drive Reset + SID Mapping + SID Silence
-- [x] Implement global drive reset service that resets all connected drives in one action and reports partial failures with context.
-- [x] Implement SID metadata mapping helpers for ordered rows:
-  1. SID Socket 1
-  2. SID Socket 2
-  3. UltiSID 1
-  4. UltiSID 2
-  with formatted `Volume`, `Pan`, `Address`.
-- [x] Implement SID silence operation service:
-  - CTRL writes at offsets `$04`, `$0B`, `$12` -> `0x00`
-  - MODE/VOL write at `$18` -> `0x00`
-  - AD/SR writes at `$05/$06`, `$0C/$0D`, `$13/$14` -> `0x00`
-  - Apply per configured SID base address; continue on per-SID failure; aggregate/report failures.
-- [x] Verification:
-  - New/updated unit tests for drive reset service, SID mapping, SID silence writes pass.
+## 3. REFERENCE API RESPONSE
+- [x] Support full parsing of `GET /v1/drives` payload including `a`, `b`, `IEC Drive`, and `Printer Emulation`.
+- [x] Preserve optional fields (`rom`, `image_file`, `image_path`, `last_error`, `partitions`) without crashes.
+- [x] Ignore unknown future device entries safely.
 
-## Phase 2 - UI Wiring: Home + Disks
-- [x] Add `Reset Drives` button on Disks page (global action).
-- [x] Add `Reset Drives` button in Home `Drives` section (global action).
-- [x] Expand Home `SID` section:
-  - Show per-SID `Volume`, `Pan`, `Address` in required order.
-  - Add `Reset` button wired to SID silence service.
-- [x] Implement Home interactivity in groups `Drives`, `SID`, `Streams`:
-  - 2-value settings use toggle interactions.
-  - finite >2 settings use dropdown interactions.
-  - free-form settings use input interactions.
-  - Writes are REST-backed, reflect updates immediately after success, and report failures.
-  - Invalid inputs are validated and rejected with explicit user-visible errors.
-- [x] Verification:
-  - Updated Home/Disks unit tests pass for wiring, REST calls, and error paths.
+## 4. DATA NORMALISATION (MANDATORY)
+- [x] Add/extend a normalization layer for drive-like devices with explicit classes:
+  - [x] `PHYSICAL_DRIVE_A`
+  - [x] `PHYSICAL_DRIVE_B`
+  - [x] `SOFT_IEC_DRIVE`
+  - [x] `PRINTER`
+- [x] Implement mapping rules:
+  - [x] `a` -> `PHYSICAL_DRIVE_A`
+  - [x] `b` -> `PHYSICAL_DRIVE_B`
+  - [x] `IEC Drive` -> `SOFT_IEC_DRIVE`
+  - [x] `Printer Emulation` -> `PRINTER`
+- [x] Expose UI labels:
+  - [x] `Drive A`
+  - [x] `Drive B`
+  - [x] `Soft IEC Drive`
+  - [x] `Printer`
+- [x] Enforce deterministic ordering:
+  - [x] Home: A, B, Soft IEC, Printer
+  - [x] Disks: A, B, Soft IEC (no printer)
+- [x] Cover missing fields + unknown devices in unit tests.
 
-## Phase 3 - Import UX and Screenshot Coverage
-- [x] Ensure import interstitial explicitly presents both choices:
-  - Local file import
-  - C64U file import
-- [x] Ensure local and C64U picker flows are reachable via normal Play flow.
-- [x] Add/extend Playwright coverage for:
-  - import interstitial
-  - local file picker flow
-  - C64U file picker flow
-- [x] Add reproducible screenshots (at least one each) for:
-  - toggle interaction
-  - dropdown interaction
-  - input field interaction
-  - local file picker
-  - C64U file picker
-  - import interstitial
-  - SID reset interaction (post-silence)
-- [x] Verification:
-  - Screenshot files generated under `doc/img/app/**` and linked to deterministic Playwright flows.
+## 5. HOME PAGE REQUIREMENTS
+- [x] Convert Home drives UI into one consolidated Drives group directly under Drives header.
+- [x] Remove dedicated per-drive cards/subgroups for A/B/Soft IEC from Home.
+- [x] Render compact per-device rows in the consolidated group with:
+  - [x] Enabled toggle
+  - [x] Bus ID dropdown
+  - [x] Drive type dropdown where supported
+- [x] Keep Home dashboard concise (no full low-level details: rom, image_file, image_path, partitions, last_error).
+- [x] Place `Reset Drives` inside the consolidated Drives group (not standalone section).
+- [x] Add Printers section immediately below Drives with:
+  - [x] Enabled toggle
+  - [x] Bus ID dropdown
+  - [x] explanatory label text
+  - [x] `Reset Printer` action
 
-## Phase 4 - E2E + Full Validation
-- [x] Add/extend Playwright tests for:
-  - Home toggle/dropdown/input interactions
-  - Reset Drives (Home + Disks)
-  - SID Reset invocation and no regressions to SID metadata controls
-  - Import flow coverage requested above
-- [x] Run targeted suites for changed areas.
-- [x] Run full local checks:
-  - `npm run test`
-  - `npm run lint`
-  - `npm run build`
-  - `npm run test:e2e`
-  - `./build`
-- [x] Verification:
-  - All tests pass locally.
-  - CI-equivalent local flow passes (`./build`).
+## 6. MACHINE SECTION – PAUSE / RESUME (UPDATED)
+- [x] Reduce machine controls to exactly 8 controls.
+- [x] Replace separate Pause and Resume with one unified stateful control.
+- [x] Drive Pause/Resume state from authoritative REST-backed machine state (not last button press).
+- [x] During pause/resume mutation: disable control and show loading indicator.
+- [x] On pause/resume failure: revert UI state and log via existing logging.
+- [x] Rework machine layout/grouping:
+  - [x] Reset first
+  - [x] Reboot second
+  - [x] Separate high-risk controls from pause/resume
+  - [x] Power Off with strongest destructive styling
+  - [x] Reset/Reboot with subtle danger accent
+- [x] Replace double-tap Power Off with explicit confirmation dialog containing required warning text.
+- [x] Implement Save RAM flow:
+  - [x] Configured folder => save immediately
+  - [x] Missing folder => prompt folder, persist it, then save in same flow
+- [x] Implement Load RAM flow:
+  - [x] Configured folder => open file picker rooted at RAM DUMP folder, restrict `.bin`
+  - [x] Missing folder => open file picker, persist parent folder after file select, then load immediately
+- [x] Enforce invariants: Save/Load RAM never fail only due to missing RAM DUMP folder.
+- [x] Add tests for all four RAM folder cases.
 
-## Progress Log
-- 2026-02-07: Plan re-initialized for requested Home/Disks/SID/import scope and verification constraints.
-- 2026-02-07: Added core services for global drive reset, SID detail mapping, and deterministic SID silence register writes with unit coverage.
-- 2026-02-07: Wired Home + Disks UI for Reset Drives, SID Reset, ordered SID volume/pan/address display, and REST-backed Drives/SID/Streams interactions.
-- 2026-02-07: Added import interstitial and picker test ids; expanded Playwright coverage for Home interactivity + import flows.
-- 2026-02-07: Captured deterministic screenshots for toggle/dropdown/input, SID reset post-state, and import interstitial/local/C64U pickers under `doc/img/app/**`.
-- 2026-02-07: Verification complete locally via `npm run screenshots`, `npm run test`, `npm run lint`, `npm run build`, `npm run test:e2e`, and `./build` (all passing).
+## 7. DISKS PAGE REQUIREMENTS
+- [x] Ensure Disks page shows only Drive A, Drive B, Soft IEC Drive (no printer UI).
+- [x] Show bus ID + type next to each listed drive.
+- [x] Keep interaction behavior aligned with Home drive behavior.
+
+## 8. INTERACTION MODEL
+- [x] Boolean fields mutate immediately on tap with per-control pending state.
+- [x] Enumerated fields use dropdowns.
+- [x] Free-form fields use input editor behavior.
+- [x] On mutation failure: revert UI, log error, and show non-intrusive toast.
+
+## 9. REST DISCOVERY (MANDATORY)
+- [x] Confirm writable fields and reset endpoint availability from existing REST client + OpenAPI.
+- [x] Implement mutation routing only where endpoints exist.
+- [x] Render unsupported mutations read-only.
+- [x] Add explicit tests proving no mutation is attempted for unsupported operations.
+
+## 10. DROPDOWN VALUES
+- [x] Disk bus ID dropdown supports 8, 9, 10, 11 and always includes current out-of-range value.
+- [x] Printer bus ID dropdown supports 4, 5 and always includes current out-of-range value.
+- [x] Physical drive type dropdown includes at least 1541, 1571, 1581.
+- [x] Soft IEC type editing enabled only if REST/config support exists; otherwise read-only.
+
+## 11. TEST REQUIREMENTS
+- [x] Add normalization tests for all device classes and mapping behavior.
+- [x] Add test: Soft IEC `last_error` disappears only after reset + refreshed `GET /v1/drives` response.
+- [x] Add reset semantics tests:
+  - [x] Reset Drives affects only disk devices
+  - [x] Reset Printer affects only printer
+  - [x] Every reset action triggers a drives refetch
+- [x] Add Pause–Resume tests:
+  - [x] exactly one pause/resume control
+  - [x] icon + label reflect current machine state
+  - [x] correct REST pause/resume call path
+  - [x] UI updates from refreshed machine state
+- [x] Add UI invariant tests:
+  - [x] Printers never appear on Disks page
+  - [x] Machine controls count is exactly 8
+- [x] Update/extend unit and Playwright tests without weakening assertions.
+
+## 12. DELIVERABLES & VERIFICATION
+- [x] Update Home page for drives, printers, machine controls, power-off confirmation, RAM flows.
+- [x] Update Disks page to be drives-only (A/B/Soft IEC) with required fields/actions.
+- [x] Ensure reset/pause semantics are correct and deterministic.
+- [x] Ensure `PLANS.md` tasks are completed and checked only after verification.
+- [x] Run full local verification:
+  - [x] `npm run test`
+  - [x] `npm run lint`
+  - [x] `npm run build`
+  - [x] `npm run test:e2e`
+  - [x] `./build`

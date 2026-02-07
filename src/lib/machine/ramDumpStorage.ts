@@ -27,6 +27,7 @@ export type PickedRamDumpFile = {
   sizeBytes: number;
   modifiedAt: string | null;
   bytes: Uint8Array;
+  parentFolder: RamDumpFolderConfig | null;
 };
 
 const readFileFromPickerResult = async (result: {
@@ -35,6 +36,8 @@ const readFileFromPickerResult = async (result: {
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   permissionPersisted?: boolean;
+  parentTreeUri?: string | null;
+  parentRootName?: string | null;
 }): Promise<PickedRamDumpFile> => {
   if (!result?.uri) {
     throw new Error('No RAM dump file selected.');
@@ -44,11 +47,21 @@ const readFileFromPickerResult = async (result: {
   }
   const payload = await FolderPicker.readFile({ uri: result.uri });
   const bytes = base64ToUint8(payload.data);
+  const parentFolder = (() => {
+    const treeUri = result.parentTreeUri?.trim() ?? '';
+    if (!treeUri) return null;
+    return {
+      treeUri,
+      rootName: result.parentRootName?.trim() ? result.parentRootName : null,
+      selectedAt: new Date().toISOString(),
+    } satisfies RamDumpFolderConfig;
+  })();
   return {
     name: result.name ?? 'ram.bin',
     sizeBytes: result.sizeBytes ?? bytes.length,
     modifiedAt: result.modifiedAt ?? null,
     bytes,
+    parentFolder,
   };
 };
 
@@ -105,17 +118,25 @@ export const writeRamDumpToFolder = async (
   }
 };
 
-export const pickRamDumpFile = async (): Promise<PickedRamDumpFile> => {
+export const pickRamDumpFile = async (
+  options: { preferredFolder?: RamDumpFolderConfig } = {},
+): Promise<PickedRamDumpFile> => {
   if (isAndroidNative()) {
     const result = await FolderPicker.pickFile({
+      extensions: ['bin'],
       mimeTypes: [RAM_DUMP_MIME_TYPE],
+      initialUri: options.preferredFolder?.treeUri,
     });
-    return readFileFromPickerResult(result);
+    const picked = await readFileFromPickerResult(result);
+    if (!picked.name.toLowerCase().endsWith('.bin')) {
+      throw new Error('Select a .bin RAM dump file.');
+    }
+    return picked;
   }
 
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = '.bin,application/octet-stream';
+  input.accept = '.bin';
 
   const file = await new Promise<File | null>((resolve) => {
     input.addEventListener('change', () => {
@@ -128,10 +149,14 @@ export const pickRamDumpFile = async (): Promise<PickedRamDumpFile> => {
     throw new Error('No RAM dump file selected.');
   }
   const buffer = await file.arrayBuffer();
+  if (!file.name.toLowerCase().endsWith('.bin')) {
+    throw new Error('Select a .bin RAM dump file.');
+  }
   return {
     name: file.name,
     sizeBytes: file.size,
     modifiedAt: file.lastModified ? new Date(file.lastModified).toISOString() : null,
     bytes: new Uint8Array(buffer),
+    parentFolder: null,
   };
 };

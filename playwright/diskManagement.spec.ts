@@ -30,7 +30,9 @@ const removeDriveRequest = (requests: Array<{ method: string; url: string }>, dr
   );
 
 const openAddItemsDialog = async (page: Page) => {
-  await page.getByRole('button', { name: /Add disks|Add more disks/i }).click();
+  const addButton = page.getByRole('button', { name: /Add disks|Add more disks/i });
+  await expect(addButton).toBeVisible({ timeout: 30000 });
+  await addButton.click();
   await expect(page.getByRole('dialog')).toBeVisible();
 };
 

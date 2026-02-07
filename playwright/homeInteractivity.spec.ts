@@ -88,7 +88,7 @@ test.describe('Home interactions', () => {
     ).toBe(true);
   });
 
-  test('home reset drives calls all drive reset endpoints', async ({ page }: { page: Page }) => {
+  test('home reset drives calls all disk reset endpoints only', async ({ page }: { page: Page }) => {
     await page.goto('/');
 
     await page.getByRole('button', { name: 'Reset Drives' }).click();
@@ -99,8 +99,13 @@ test.describe('Home interactions', () => {
     await expect.poll(() =>
       hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/b:reset')),
     ).toBe(true);
+    await expect.poll(() =>
+      hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/softiec:reset')),
+    ).toBe(true);
+    expect(hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/printer:reset'))).toBe(false);
 
-    await expect(page.getByText('Drive A:')).toBeVisible();
+    await expect(page.getByTestId('home-drives-group')).toBeVisible();
+    await expect(page.getByTestId('home-drive-toggle-a')).toBeVisible();
   });
 
   test('disks reset drives calls all drive reset endpoints without list regressions', async ({ page }: { page: Page }) => {
@@ -115,6 +120,10 @@ test.describe('Home interactions', () => {
     await expect.poll(() =>
       hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/b:reset')),
     ).toBe(true);
+    await expect.poll(() =>
+      hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/softiec:reset')),
+    ).toBe(true);
+    expect(hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/printer:reset'))).toBe(false);
 
     await expect(page.getByTestId('disk-list')).toBeVisible();
     await expect(page.getByRole('button', { name: /Add disks|Add more disks/i })).toBeVisible();

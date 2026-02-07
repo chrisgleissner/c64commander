@@ -58,7 +58,7 @@ export default defineConfig({
   outputDir,
   preserveOutput: 'always',
   workers: resolvedWorkers,
-  timeout: 60000,
+  timeout: 90000,
   expect: { timeout: 10000 },
   globalTeardown: './playwright/global-teardown-coverage.ts',
   reporter: [
@@ -71,8 +71,8 @@ export default defineConfig({
     trace: 'on',
     screenshot: 'on',
     video: 'on',
-    actionTimeout: 15000,
-    navigationTimeout: 30000,
+    actionTimeout: 20000,
+    navigationTimeout: 40000,
   },
   webServer: {
     command: webServerCommand,

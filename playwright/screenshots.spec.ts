@@ -524,6 +524,7 @@ test.describe('App screenshots', () => {
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
     const localDialog = page.getByRole('dialog');
+    await expect(localDialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
     await localDialog.getByTestId('browse-source-seed-local-source').click();
     await expect(localDialog.getByTestId('local-file-picker')).toBeVisible();
     await captureScreenshot(page, testInfo, 'play/import/03-local-file-picker.png');

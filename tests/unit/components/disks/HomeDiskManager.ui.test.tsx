@@ -37,6 +37,7 @@ vi.mock('@/lib/uiErrors');
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 vi.mock('@/lib/disks/diskMount', () => ({

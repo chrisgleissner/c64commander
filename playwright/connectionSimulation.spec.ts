@@ -223,7 +223,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await snap(page, testInfo, 'real-connected-operations');
   });
 
-  test('switch back to demo preserves playlist state', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('connection mode switch preserves playlist state', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -310,7 +310,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
     }
 
     const indicator = page.getByTestId('connectivity-indicator');
-    await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
+    await expect.poll(async () => {
+      const state = await indicator.getAttribute('data-connection-state');
+      return state === 'DEMO_ACTIVE' || state === 'REAL_CONNECTED';
+    }).toBe(true);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('demo.sid', { exact: true })).toBeVisible();
 

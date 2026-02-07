@@ -47,6 +47,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
     setQueryData: vi.fn(),
+    fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
 }));
 
@@ -177,6 +178,8 @@ describe('HomeDiskManager', () => {
         renderComponent();
         expect(screen.getByText('Drive A')).toBeInTheDocument();
         expect(screen.getByText('Drive B')).toBeInTheDocument();
+        expect(screen.queryByText(/^Printer$/i)).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /reset printer/i })).not.toBeInTheDocument();
         expect(screen.getAllByText('No disk mounted').length).toBeGreaterThan(0);
         expect(screen.getByText('disk1.d64')).toBeInTheDocument();
         expect(screen.getByText('disk2.d64')).toBeInTheDocument();
