@@ -108,11 +108,13 @@ test.describe('Home interactions', () => {
     await expect(page.getByTestId('home-drive-toggle-a')).toBeVisible();
   });
 
-  test('disks reset drives calls all drive reset endpoints without list regressions', async ({ page }: { page: Page }) => {
+  test('disks per-drive reset controls call all drive reset endpoints without list regressions', async ({ page }: { page: Page }) => {
     await page.goto('/disks');
     await expect(page.getByTestId('disk-list')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Reset Drives' }).click();
+    await page.getByTestId('drive-reset-a').click();
+    await page.getByTestId('drive-reset-b').click();
+    await page.getByTestId('drive-reset-soft-iec').click();
 
     await expect.poll(() =>
       hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/a:reset')),

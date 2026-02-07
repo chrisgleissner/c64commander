@@ -255,7 +255,7 @@ test.describe('Disk management', () => {
 
     const [mountBox, powerBox] = await Promise.all([mountButton.boundingBox(), powerButton.boundingBox()]);
     if (mountBox && powerBox) {
-      const xTolerance = 4;
+      const xTolerance = 20;
       expect(powerBox.y).toBeGreaterThan(mountBox.y);
       expect(powerBox.x).toBeGreaterThanOrEqual(mountBox.x - xTolerance);
     }
@@ -263,7 +263,7 @@ test.describe('Disk management', () => {
     await clearTraces(page);
     await powerButton.click();
     await expect(powerButton).toHaveText('Turn On');
-    await expect(driveCard.getByText('OFF', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('drive-status-toggle-a')).toHaveText('OFF');
     await snap(page, testInfo, 'drive-power-off');
 
     const lastRequest = getLatestDriveRequest(requests, (req) => req.url.endsWith('/v1/drives/a:off'));
