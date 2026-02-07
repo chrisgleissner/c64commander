@@ -171,6 +171,80 @@
         "-36 dB",
         "-42 dB"
       ]
+    },
+    "Pan Socket 1": {
+      "value": "Left 1",
+      "options": [
+        "Left 1",
+        "Right 1"
+      ]
+    },
+    "Pan Socket 2": {
+      "value": "Left 2",
+      "options": [
+        "Left 2",
+        "Right 2"
+      ]
+    },
+    "Pan UltiSID 1": {
+      "value": "Left 1",
+      "options": [
+        "Left 1",
+        "Right 1"
+      ]
+    },
+    "Pan UltiSID 2": {
+      "value": "Left 2",
+      "options": [
+        "Left 2",
+        "Right 2"
+      ]
+    }
+  },
+  "SID Sockets Configuration": {
+    "SID Socket 1": {
+      "value": "Enabled",
+      "options": [
+        "Enabled",
+        "Disabled"
+      ]
+    },
+    "SID Socket 2": {
+      "value": "Enabled",
+      "options": [
+        "Enabled",
+        "Disabled"
+      ]
+    }
+  },
+  "SID Addressing": {
+    "SID Socket 1 Address": {
+      "value": "$D400",
+      "options": [
+        "$D400",
+        "Unmapped"
+      ]
+    },
+    "SID Socket 2 Address": {
+      "value": "$D440",
+      "options": [
+        "$D420",
+        "Unmapped"
+      ]
+    },
+    "UltiSID 1 Address": {
+      "value": "$D420",
+      "options": [
+        "$D420",
+        "Unmapped"
+      ]
+    },
+    "UltiSID 2 Address": {
+      "value": "$D440",
+      "options": [
+        "$D440",
+        "Unmapped"
+      ]
     }
   },
   "UltiSID Configuration": {

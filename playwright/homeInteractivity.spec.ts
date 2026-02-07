@@ -10,6 +10,17 @@ const hasRequest = (
   predicate: (req: { method: string; url: string }) => boolean,
 ) => requests.some(predicate);
 
+const waitForConnected = async (page: Page) => {
+  await expect(page.getByTestId('connectivity-indicator')).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
+};
+
+const waitForStreamsReady = async (page: Page) => {
+  await waitForConnected(page);
+  const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
+  await expect(page.getByTestId('home-stream-endpoint-display-audio')).toHaveText(streamPattern);
+  await expect(page.getByTestId('home-stream-endpoint-display-vic')).toHaveText(streamPattern);
+};
+
 test.describe('Home interactions', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -31,6 +42,7 @@ test.describe('Home interactions', () => {
 
   test('toggle interactions update stream config', async ({ page }: { page: Page }) => {
     await page.goto('/');
+    await waitForStreamsReady(page);
 
     await page.getByTestId('home-stream-toggle-audio').click();
 
@@ -44,6 +56,7 @@ test.describe('Home interactions', () => {
 
   test('dropdown interactions update drive and SID config', async ({ page }: { page: Page }) => {
     await page.goto('/');
+    await waitForConnected(page);
 
     await page.getByTestId('home-drive-type-a').click();
     await page.getByRole('option', { name: '1571' }).click();
@@ -69,6 +82,7 @@ test.describe('Home interactions', () => {
   test('input interactions validate and then update stream config', async ({ page }: { page: Page }) => {
     allowWarnings(test.info(), 'Expected validation toast for invalid stream host input.');
     await page.goto('/');
+    await waitForStreamsReady(page);
 
     await page.getByTestId('home-stream-edit-toggle-vic').click();
     const input = page.getByTestId('home-stream-endpoint-vic');
@@ -91,6 +105,7 @@ test.describe('Home interactions', () => {
 
   test('home reset drives calls all disk reset endpoints only', async ({ page }: { page: Page }) => {
     await page.goto('/');
+    await waitForConnected(page);
 
     await page.getByRole('button', { name: 'Reset Drives' }).click();
 
@@ -112,6 +127,7 @@ test.describe('Home interactions', () => {
   test('disks per-drive reset controls call all drive reset endpoints without list regressions', async ({ page }: { page: Page }) => {
     await page.goto('/disks');
     await expect(page.getByTestId('disk-list')).toBeVisible();
+    await waitForConnected(page);
 
     await page.getByTestId('drive-reset-a').click();
     await page.getByTestId('drive-reset-b').click();
@@ -145,6 +161,8 @@ test.describe('Home interactions', () => {
     });
 
     await page.goto('/');
+    await waitForConnected(page);
+    await expect(page.getByTestId('home-sid-address-socket1')).toHaveText(/\$[0-9A-F]{4}|Unmapped/);
     await page.getByTestId('home-sid-status').getByRole('button', { name: 'Reset' }).click();
 
     await expect.poll(() =>

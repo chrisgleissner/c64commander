@@ -1024,6 +1024,7 @@ export default function HomePage() {
           className="w-full text-left px-1 py-1"
           aria-expanded={systemInfoExpanded}
           data-testid="home-system-info"
+          data-section-label="System info"
         >
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
             <span className="text-muted-foreground">App</span>
@@ -1081,6 +1082,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="space-y-2"
+          data-section-label="Machine"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1189,6 +1191,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
           className="space-y-2"
+          data-section-label="Quick Config"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1404,6 +1407,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="space-y-3"
+          data-section-label="Drives"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1534,6 +1538,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.34 }}
           className="space-y-3"
+          data-section-label="Printers"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1600,6 +1605,7 @@ export default function HomePage() {
           transition={{ delay: 0.36 }}
           className="space-y-2"
           data-testid="home-sid-status"
+          data-section-label="SID"
         >
           <div className="flex items-center justify-between gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
             <span className="flex items-center gap-2">
@@ -1730,6 +1736,7 @@ export default function HomePage() {
           transition={{ delay: 0.38 }}
           className="space-y-2"
           data-testid="home-stream-status"
+          data-section-label="Streams"
         >
           <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1840,6 +1847,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           className="space-y-3"
+          data-section-label="Config"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />

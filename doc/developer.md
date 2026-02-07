@@ -158,6 +158,16 @@ Notes:
 - `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
 - Screenshot output is organized under `doc/img/app/<page>/<section>.png` for easy browsing.
 
+### Video walkthrough
+
+```bash
+./build --video   # Record a Playwright walkthrough video
+```
+
+Notes:
+- Video output is written to `test-results/evidence/playwright/<testId>/<deviceId>/video.webm`.
+- The walkthrough is driven by `playwright/video.spec.ts` and tagged with `@video`.
+
 ## Test architecture
 
 ### Unit tests (Vitest)

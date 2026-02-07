@@ -22,6 +22,7 @@ RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
 RUN_SCREENSHOTS_ONLY=false
+RUN_VIDEO=false
 RUN_FUZZ=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
@@ -104,6 +105,7 @@ Primary actions (exactly one; default build when omitted):
   --test-smoke
   --screenshots
   --screenshots-only
+  --video
   --emulator
   --dump-c64u-config
 
@@ -170,6 +172,7 @@ Examples:
   ./build --emulator
   ./build --screenshots
   ./build --screenshots-only
+  ./build --video
   ./build --test-e2e --record-traces --trace-suite playback
   ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off
   ./build --test-smoke --c64u-target real --c64u-host C64U
@@ -177,6 +180,7 @@ Examples:
 Notes:
   --screenshots       Runs full build/tests by default, then captures screenshots.
   --screenshots-only  Captures screenshots without running tests or Android builds.
+  --video             Records a Playwright walkthrough video.
   --test-e2e          Runs Playwright E2E tests excluding @screenshots.
   --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
   --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
@@ -471,6 +475,10 @@ while [[ $# -gt 0 ]]; do
       set_primary_action "screenshots-only" "$1"
       shift
       ;;
+    --video)
+      set_primary_action "video" "$1"
+      shift
+      ;;
     --emulator)
       set_primary_action "emulator" "$1"
       shift
@@ -742,7 +750,7 @@ if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config"
   fi
 fi
 
-if [[ "$PRIMARY_ACTION" == "screenshots" || "$PRIMARY_ACTION" == "screenshots-only" ]]; then
+if [[ "$PRIMARY_ACTION" == "screenshots" || "$PRIMARY_ACTION" == "screenshots-only" || "$PRIMARY_ACTION" == "video" ]]; then
   if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 ]]; then
     echo "Screenshot actions must run in isolation" >&2
     exit 1
@@ -821,6 +829,7 @@ RUN_FORMAT=true
 RUN_INSTALL_APK=false
 RUN_SCREENSHOTS=false
 RUN_SCREENSHOTS_ONLY=false
+RUN_VIDEO=false
 RUN_TEST_UNIT=false
 RUN_TEST_E2E=false
 RUN_TEST_E2E_CI=false
@@ -895,6 +904,18 @@ case "$PRIMARY_ACTION" in
   screenshots-only)
     RUN_SCREENSHOTS=true
     RUN_SCREENSHOTS_ONLY=true
+    RUN_TEST=false
+    RUN_TEST_UNIT=false
+    RUN_TEST_E2E=false
+    RUN_TEST_E2E_CI=false
+    RUN_TEST_MAESTRO_CI=false
+    RUN_TEST_MAESTRO_ALL=false
+    RUN_TEST_MAESTRO_TAGS=false
+    RUN_APK=false
+    RUN_INSTALL_APK=false
+    ;;
+  video)
+    RUN_VIDEO=true
     RUN_TEST=false
     RUN_TEST_UNIT=false
     RUN_TEST_E2E=false
@@ -1003,7 +1024,7 @@ if [[ "$RUN_SCREENSHOTS_ONLY" == "true" && "$RUN_BUILD" == "false" ]]; then
   fi
 fi
 
-if [[ "$RUN_TEST" == "true" || "$RUN_TEST_E2E" == "true" || "$RUN_TEST_E2E_CI" == "true" || "$RUN_SCREENSHOTS" == "true" || "$RUN_FUZZ" == "true" ]]; then
+if [[ "$RUN_TEST" == "true" || "$RUN_TEST_E2E" == "true" || "$RUN_TEST_E2E_CI" == "true" || "$RUN_SCREENSHOTS" == "true" || "$RUN_VIDEO" == "true" || "$RUN_FUZZ" == "true" ]]; then
   ensure_playwright_port
 fi
 
@@ -1068,6 +1089,15 @@ if [[ "$RUN_SCREENSHOTS" == "true" ]]; then
     SOURCE_DATE_EPOCH="0" \
     PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" \
     npm run screenshots)
+fi
+
+if [[ "$RUN_VIDEO" == "true" ]]; then
+  log "Recording walkthrough video"
+  (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
+  (cd "$ROOT_DIR" && \
+    PLAYWRIGHT_DEVICES="${PLAYWRIGHT_DEVICES:-phone}" \
+    PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-1}" \
+    npm run video)
 fi
 
 if [[ "$RUN_FUZZ" == "true" ]]; then

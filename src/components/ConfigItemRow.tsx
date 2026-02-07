@@ -350,16 +350,15 @@ export function ConfigItemRow({
 
   if (controlKind === 'select') {
     const emptySentinel = '__empty__';
-    const selectOptions = optionList.map((option) => ({
+    const normalizedOptions = optionList.includes(displayValue) || displayValue === ''
+      ? optionList
+      : [...optionList, displayValue];
+    const selectOptions = normalizedOptions.map((option) => ({
       raw: option,
       value: option === '' ? emptySentinel : option,
       label: option === '' ? '(empty)' : option,
     }));
-    const selectedValue = optionList.includes(displayValue)
-      ? displayValue === ''
-        ? emptySentinel
-        : displayValue
-      : undefined;
+    const selectedValue = displayValue === '' ? emptySentinel : displayValue;
 
     return (
       <div

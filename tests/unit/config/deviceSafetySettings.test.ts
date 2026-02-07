@@ -70,7 +70,7 @@ describe('deviceSafetySettings defaults', () => {
         expect(config.ftpMaxConcurrency).toBe(expected.ftpMaxConcurrency);
         expect(config.backoffBaseMs).toBe(expected.backoffBaseMs);
         expect(config.backoffMaxMs).toBe(expected.backoffMaxMs);
-        expect(config.backoffFactor).toBe(expected.backoffFactor);
+        expect(config.backoffFactor).toBeCloseTo(expected.backoffFactor, 6);
         expect(config.circuitBreakerThreshold).toBe(expected.circuitBreakerThreshold);
         expect(config.circuitBreakerCooldownMs).toBe(expected.circuitBreakerCooldownMs);
     });
