@@ -519,11 +519,12 @@ test.describe('App screenshots', () => {
     await captureScreenshot(page, testInfo, 'home/interactions/02-dropdown.png');
     await page.keyboard.press('Escape');
 
+    await page.getByTestId('home-stream-edit-toggle-vic').click();
     const streamInput = page.getByTestId('home-stream-ip-vic');
     await streamInput.click();
     await streamInput.fill('239.0.1.90');
     await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/03-input.png');
-    await streamInput.press('Enter');
+    await page.getByTestId('home-stream-confirm-vic').click();
 
     await page.getByTestId('home-sid-status').getByRole('button', { name: 'Reset' }).click();
     await expect.poll(() =>

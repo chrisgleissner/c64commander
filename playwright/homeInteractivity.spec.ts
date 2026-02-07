@@ -70,15 +70,16 @@ test.describe('Home interactions', () => {
     allowWarnings(test.info(), 'Expected validation toast for invalid stream host input.');
     await page.goto('/');
 
+    await page.getByTestId('home-stream-edit-toggle-vic').click();
     const input = page.getByTestId('home-stream-ip-vic');
     await input.fill('bad host!');
-    await input.blur();
+    await page.getByTestId('home-stream-confirm-vic').click();
 
     await page.waitForTimeout(150);
     expect(hasRequest(server.requests, (req) => req.url.includes('bad%20host%21'))).toBe(false);
 
     await input.fill('239.0.1.90');
-    await input.press('Enter');
+    await page.getByTestId('home-stream-confirm-vic').click();
 
     await expect.poll(() =>
       hasRequest(
