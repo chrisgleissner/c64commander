@@ -1,30 +1,30 @@
 {
-  "baseUrl": "http://c64u",
-  "mode": "SAFE",
-  "auth": "OFF",
-  "ftpMode": "PASV",
-  "outputDir": "test-results/c64u-interface-contract",
-  "concurrency": {
-    "restMaxInFlight": 2,
-    "ftpMaxSessions": 1,
-    "mixedMaxInFlight": 2
-  },
-  "pacing": {
-    "restMinDelayMs": 100,
-    "ftpMinDelayMs": 100
-  },
-  "health": {
-    "endpoint": "/v1/version",
-    "intervalMs": 5000,
-    "timeoutMs": 2000
-  },
-  "timeouts": {
-    "restTimeoutMs": 8000,
-    "ftpTimeoutMs": 15000,
-    "scenarioTimeoutMs": 60000,
-    "maxDestructiveScenarioMs": 120000
-  },
-  "scratch": {
-    "ftpDir": "/Temp/c64u-interface-contract"
-  }
+    "baseUrl": "http://c64u",
+    "mode": "SAFE",
+    "auth": "OFF",
+    "ftpMode": "PASV",
+    "outputDir": "test-results/c64u-interface-contract",
+    "concurrency": {
+        "restMaxInFlight": 2,
+        "ftpMaxSessions": 1,
+        "mixedMaxInFlight": 2
+    },
+    "pacing": {
+        "restMinDelayMs": 100,
+        "ftpMinDelayMs": 100
+    },
+    "health": {
+        "endpoint": "/v1/version",
+        "intervalMs": 5000,
+        "timeoutMs": 2000
+    },
+    "timeouts": {
+        "restTimeoutMs": 8000,
+        "ftpTimeoutMs": 15000,
+        "scenarioTimeoutMs": 60000,
+        "maxDestructiveScenarioMs": 120000
+    },
+    "scratch": {
+        "ftpDir": "/Temp/c64u-interface-contract"
+    }
 }
