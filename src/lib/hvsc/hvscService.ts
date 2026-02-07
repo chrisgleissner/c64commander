@@ -39,7 +39,7 @@ const getMockBridge = () => getBrowserWindow()?.__hvscMock__;
 const hasRuntimeBridge = () => {
   if (typeof window === 'undefined') return false;
   try {
-    return Capacitor.isNativePlatform();
+    return Capacitor.isNativePlatform() || Capacitor.isPluginAvailable('Filesystem');
   } catch (error) {
     const err = error as Error;
     addErrorLog('HVSC runtime bridge probe failed', {
