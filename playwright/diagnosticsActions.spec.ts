@@ -10,6 +10,10 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
+const waitForTracing = async (page: Page) => {
+  await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces));
+};
+
 test.describe('Diagnostics Actions tab', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -110,6 +114,8 @@ test.describe('Diagnostics Actions tab', () => {
         },
       ];
     })) as TraceEvent[];
+
+    await waitForTracing(page);
 
     // Seed traces with await for event to propagate
     await page.evaluate((seedEvents: TraceEvent[]) => {

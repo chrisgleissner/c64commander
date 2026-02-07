@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildStreamConfigValue,
   buildStreamControlEntries,
+  buildStreamEndpointLabel,
+  parseStreamEndpoint,
   validateStreamHost,
   validateStreamPort,
 } from '@/lib/config/homeStreams';
@@ -26,7 +28,7 @@ describe('homeStreams', () => {
 
   it('validates stream hosts and ports', () => {
     expect(validateStreamHost('239.0.1.64')).toBeNull();
-    expect(validateStreamHost('c64u.local')).toBeNull();
+    expect(validateStreamHost('c64u.local')).toContain('valid IPv4');
     expect(validateStreamHost('bad host!')).toContain('valid IPv4');
 
     expect(validateStreamPort('11000')).toBeNull();
@@ -39,5 +41,10 @@ describe('homeStreams', () => {
     expect(buildStreamConfigValue(false, '239.0.1.64', '11000')).toBe('off');
     expect(buildStreamConfigValue(true, '239.0.1.64', '11000')).toBe('239.0.1.64:11000');
   });
-});
 
+  it('formats and parses stream endpoint labels', () => {
+    expect(buildStreamEndpointLabel('239.0.1.64', '11000')).toBe('239.0.1.64:11000');
+    expect(parseStreamEndpoint('239.0.1.64:11000')).toEqual({ ip: '239.0.1.64', port: '11000', error: null });
+    expect(parseStreamEndpoint('239.0.1.64')).toMatchObject({ error: 'Enter endpoint as IPv4:port.' });
+  });
+});

@@ -33,6 +33,8 @@ Use the repo build helper to run Maestro flows locally with consistent filtering
 - `./build --test-maestro-ci` runs flows tagged `ci-critical` (CI parity).
 - `./build --test-maestro-all` runs all flows, ignoring `excludeTags`.
 - `./build --test-maestro-tags "+device,+file-picker,-slow"` runs with tag filters.
+- `--test-apk-path <path>` overrides the APK used for Maestro runs.
+- `--test-device-id <id>` targets a specific adb device.
 
 Tag filters are comma-separated. Prefix `+` to include and `-` to exclude. Unprefixed tags are treated as includes.
 

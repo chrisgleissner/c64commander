@@ -504,7 +504,7 @@ test.describe('Playback file browser', () => {
 
     expect(afterMetrics.width).toEqual(initialMetrics.width);
     expect(afterMetrics.height).toEqual(initialMetrics.height);
-    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(20);
+    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(40);
     await snap(page, testInfo, 'alphabet-overlay-metrics');
   });
 

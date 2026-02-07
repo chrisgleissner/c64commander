@@ -19,18 +19,18 @@ vi.mock('@capacitor/filesystem', () => ({
 }));
 
 vi.mock('@capacitor/core', () => ({
-  Capacitor: {
-    isNativePlatform: vi.fn().mockReturnValue(false),
-  },
+    Capacitor: {
+        isNativePlatform: vi.fn().mockReturnValue(false),
+    },
 }));
 
-vi.mock('@/lib/hvsc/hvscReleaseService', () => ({
+vi.mock('../../../src/lib/hvsc/hvscReleaseService', () => ({
     fetchLatestHvscVersions: vi.fn(),
     buildHvscBaselineUrl: vi.fn((v, base) => `${base}/full${v}.7z`),
     buildHvscUpdateUrl: vi.fn((v, base) => `${base}/update${v}.7z`),
 }));
 
-vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
+vi.mock('../../../src/lib/hvsc/hvscFilesystem', () => ({
     deleteLibraryFile: vi.fn(),
     ensureHvscDirs: vi.fn(),
     getHvscCacheDir: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
     getHvscDurationByMd5: vi.fn(),
 }));
 
-vi.mock('@/lib/hvsc/hvscArchiveExtraction', () => ({
+vi.mock('../../../src/lib/hvsc/hvscArchiveExtraction', () => ({
     extractArchiveEntries: vi.fn().mockImplementation(async ({ onEntry, onEnumerate, onProgress }) => {
         if (onEnumerate) onEnumerate(2);
         if (onProgress) onProgress(0, 2);
@@ -60,14 +60,14 @@ vi.mock('@/lib/hvsc/hvscArchiveExtraction', () => ({
     }),
 }));
 
-vi.mock('@/lib/hvsc/hvscStateStore', () => ({
+vi.mock('../../../src/lib/hvsc/hvscStateStore', () => ({
     loadHvscState: vi.fn().mockReturnValue({ ingestionState: 'idle' }),
     markUpdateApplied: vi.fn(),
     updateHvscState: vi.fn(),
     isUpdateApplied: vi.fn().mockReturnValue(false),
 }));
 
-vi.mock('@/lib/logging', () => ({
+vi.mock('../../../src/lib/logging', () => ({
     addErrorLog: vi.fn(),
     addLog: vi.fn(),
 }));
@@ -87,14 +87,14 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
     beforeEach(async () => {
         vi.resetAllMocks();
         (global as any).fetch = vi.fn();
-        
+
         // Dynamic import to ensure mocks are applied
-        hvscReleaseService = await import('@/lib/hvsc/hvscReleaseService');
-        hvscStateStore = await import('@/lib/hvsc/hvscStateStore');
-        hvscFilesystem = await import('@/lib/hvsc/hvscFilesystem');
-        hvscArchiveExtraction = await import('@/lib/hvsc/hvscArchiveExtraction');
-        hvscIngestionRuntime = await import('@/lib/hvsc/hvscIngestionRuntime');
-        
+        hvscReleaseService = await import('../../../src/lib/hvsc/hvscReleaseService');
+        hvscStateStore = await import('../../../src/lib/hvsc/hvscStateStore');
+        hvscFilesystem = await import('../../../src/lib/hvsc/hvscFilesystem');
+        hvscArchiveExtraction = await import('../../../src/lib/hvsc/hvscArchiveExtraction');
+        hvscIngestionRuntime = await import('../../../src/lib/hvsc/hvscIngestionRuntime');
+
         (hvscStateStore.loadHvscState as any).mockReturnValue({ ingestionState: 'idle' });
         (Capacitor.isNativePlatform as any).mockReturnValue(false);
         (hvscArchiveExtraction.extractArchiveEntries as any).mockImplementation(
@@ -110,27 +110,27 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
     });
 
     it('reports not ingesting when idle', async () => {
-         const status = await hvscIngestionRuntime.getHvscStatus();
-         expect(status).toBeDefined();
-         expect(status.ingestionState).toBe('idle');
+        const status = await hvscIngestionRuntime.getHvscStatus();
+        expect(status).toBeDefined();
+        expect(status.ingestionState).toBe('idle');
     });
 
     it('simulates native download path', async () => {
         (Capacitor.isNativePlatform as any).mockReturnValue(true);
         (hvscReleaseService.fetchLatestHvscVersions as any).mockResolvedValue({
-               full: { version: 80, url: 'http://foo/full.7z' },
-               update: { version: 80, url: 'http://foo/update.7z' },
-               versions: [80],
-               baselineVersion: 80,
-               updateVersion: 80,
-               baseUrl: 'http://foo'
+            full: { version: 80, url: 'http://foo/full.7z' },
+            update: { version: 80, url: 'http://foo/update.7z' },
+            versions: [80],
+            baselineVersion: 80,
+            updateVersion: 80,
+            baseUrl: 'http://foo'
         } as any);
         (Filesystem.downloadFile as any).mockResolvedValue({ path: 'local/full.7z' });
         (Filesystem.stat as any).mockResolvedValue({ size: 100 } as any);
         (Filesystem.readFile as any).mockResolvedValue({ data: 'AAE=' });
 
         await hvscIngestionRuntime.installOrUpdateHvsc('token');
-        
+
         expect(Capacitor.isNativePlatform).toHaveBeenCalled();
         expect(Filesystem.downloadFile).toHaveBeenCalled();
     });
@@ -143,18 +143,18 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
             body: null
         });
         (Filesystem.readFile as any).mockResolvedValue({ data: 'AAE=' });
-        
+
         (hvscReleaseService.fetchLatestHvscVersions as any).mockResolvedValue({
-               full: { version: 81, url: 'http://foo/full81.7z' },
-               update: { version: 81, url: 'http://foo/update81.7z' },
-               versions: [81],
-               baselineVersion: 81,
-               updateVersion: 81,
-               baseUrl: 'http://foo'
+            full: { version: 81, url: 'http://foo/full81.7z' },
+            update: { version: 81, url: 'http://foo/update81.7z' },
+            versions: [81],
+            baselineVersion: 81,
+            updateVersion: 81,
+            baseUrl: 'http://foo'
         } as any);
-        
+
         await hvscIngestionRuntime.installOrUpdateHvsc('token2');
-        
+
         expect(global.fetch).toHaveBeenCalledWith('http://foo/full81.7z', expect.objectContaining({ method: 'HEAD' }));
         expect(global.fetch).toHaveBeenCalledTimes(2);
         // Verify second call is GET with no-store
@@ -177,16 +177,16 @@ describe('hvscIngestionRuntime Coverage Gap Fillers', () => {
         (Filesystem.readFile as any).mockResolvedValue({ data: 'AAE=' });
         // Ensure cached archive helpers are set for resolution
         (hvscFilesystem.readCachedArchive as any).mockResolvedValue(new Uint8Array(10));
-        
+
         (hvscFilesystem.readCachedArchiveMarker as any).mockResolvedValue({
-             version: 80,
-             type: 'baseline',
-             filename: 'hvsc-baseline-80.7z',
-             processed: false // Force processing
+            version: 80,
+            type: 'baseline',
+            filename: 'hvsc-baseline-80.7z',
+            processed: false // Force processing
         });
-        
+
         await hvscIngestionRuntime.ingestCachedHvsc('token3');
-        
+
         expect(hvscFilesystem.deleteLibraryFile).toHaveBeenCalledWith('/DEMOS/gone.sid');
     });
 });

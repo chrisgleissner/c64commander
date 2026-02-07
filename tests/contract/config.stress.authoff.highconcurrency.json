@@ -1,0 +1,44 @@
+{
+    "baseUrl": "http://c64u",
+    "mode": "STRESS",
+    "auth": "OFF",
+    "ftpMode": "PASV",
+    "ftpPort": 21,
+    "outputDir": "test-results/contract",
+    "concurrency": {
+        "restMaxInFlight": 10,
+        "ftpMaxSessions": 2,
+        "mixedMaxInFlight": 6
+    },
+    "pacing": {
+        "restMinDelayMs": 50,
+        "ftpMinDelayMs": 100
+    },
+    "health": {
+        "endpoint": "/v1/version",
+        "intervalMs": 5000,
+        "timeoutMs": 2000
+    },
+    "timeouts": {
+        "restTimeoutMs": 8000,
+        "ftpTimeoutMs": 15000,
+        "scenarioTimeoutMs": 120000,
+        "maxDestructiveScenarioMs": 180000
+    },
+    "scratch": {
+        "ftpDir": "/Temp/contract-test"
+    },
+    "media": {
+        "diskImagePath": "/USB2/Games/3D_Pinball.d64",
+        "diskDrive": "a",
+        "diskType": "d64",
+        "diskMode": "readonly",
+        "sidFilePath": "/USB2/SID/HVSC/C64Music/MUSICIANS/H/Hubbard_Rob/Action_Biker.sid",
+        "sidSongNr": 0,
+        "prgFilePath": "/USB2/SID/HVSC",
+        "prgAction": "run",
+        "modFilePath": "/USB2/MOD/jukebox_packtune.mod",
+        "crtFilePath": ""
+    },
+    "allowMachineReset": false
+}

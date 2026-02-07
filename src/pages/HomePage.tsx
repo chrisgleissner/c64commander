@@ -23,6 +23,7 @@ import { QuickActionCard } from '@/components/QuickActionCard';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -43,14 +44,17 @@ import { reportUserError } from '@/lib/uiErrors';
 import { addErrorLog } from '@/lib/logging';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
+import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/config/configItems';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { buildSidControlEntries } from '@/lib/config/sidDetails';
+import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
 import {
   buildStreamConfigValue,
+  buildStreamEndpointLabel,
   buildStreamControlEntries,
+  parseStreamEndpoint,
   validateStreamHost,
   validateStreamPort,
   type StreamKey,
@@ -105,6 +109,8 @@ const PRINTER_BUS_ID_DEFAULTS = [4, 5];
 const PHYSICAL_DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'];
 const EMPTY_SELECT_VALUE = '__empty__';
 const EMPTY_SELECT_LABEL = 'Default';
+const SID_SLIDER_DETENT_RANGE = 0.2;
+const SID_SLIDER_STEP = 0.01;
 
 const LED_COLOR_SWATCHES: Record<string, string> = {
   Red: '#d3202c',
@@ -153,6 +159,80 @@ const normalizeSelectOptions = (options: string[], currentValue: string) => {
   const includesEmpty = options.some((option) => String(option).trim().length === 0)
     || currentValue.trim().length === 0;
   return includesEmpty ? [...unique, EMPTY_SELECT_VALUE] : unique;
+};
+
+const normalizeOptionToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const parseNumericOption = (value: string) => {
+  const match = value.trim().match(/[+-]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+};
+
+const resolveOptionIndex = (options: string[], currentValue: string) => {
+  const normalizedValue = normalizeOptionToken(currentValue);
+  let index = options.findIndex((option) => normalizeOptionToken(option) === normalizedValue);
+  if (index >= 0) return index;
+  const numericValue = parseNumericOption(currentValue);
+  if (numericValue !== null) {
+    index = options.findIndex((option) => parseNumericOption(option) === numericValue);
+  }
+  return index >= 0 ? index : 0;
+};
+
+const resolveVolumeCenterIndex = (options: string[]) => {
+  const numericIndex = options.findIndex((option) => parseNumericOption(option) === 0);
+  if (numericIndex >= 0) return numericIndex;
+  const normalizedIndex = options.findIndex((option) => normalizeOptionToken(option) === '0 db');
+  return normalizedIndex >= 0 ? normalizedIndex : null;
+};
+
+const resolvePanCenterIndex = (options: string[]) => {
+  const centerIndex = options.findIndex((option) => normalizeOptionToken(option) === 'center');
+  return centerIndex >= 0 ? centerIndex : null;
+};
+
+const clampSliderValue = (value: number, max: number) => Math.min(Math.max(value, 0), max);
+
+const applySoftDetent = (value: number, centerIndex: number | null) => {
+  if (centerIndex === null) return value;
+  const distance = Math.abs(value - centerIndex);
+  return distance <= SID_SLIDER_DETENT_RANGE ? centerIndex : value;
+};
+
+const formatSidBaseAddress = (value: unknown) => {
+  const parsed = parseSidBaseAddress(value);
+  if (parsed === null) return '$----';
+  return `$${parsed.toString(16).toUpperCase().padStart(4, '0')}`;
+};
+
+const resolveSidSocketToggleValue = (options: string[], enable: boolean) => {
+  const enabledTokens = ['enabled', 'on', 'true'];
+  const disabledTokens = ['disabled', 'off', 'false'];
+  const match = options.find((option) => {
+    const normalized = normalizeOptionToken(option);
+    return enable ? enabledTokens.includes(normalized) : disabledTokens.includes(normalized);
+  });
+  if (match) return match;
+  if (options.length) return enable ? options[0] : options[options.length - 1];
+  return enable ? 'Enabled' : 'Disabled';
+};
+
+const resolveSidAddressEnableValue = (options: string[]) => {
+  const enableOption = options.find((option) => parseSidBaseAddress(option) !== null);
+  return enableOption ?? options[0] ?? 'Unmapped';
+};
+
+const resolveSidAddressDisableValue = (options: string[]) => {
+  const disableOption = options.find((option) => {
+    const normalized = normalizeOptionToken(option);
+    return normalized === 'unmapped' || normalized === 'disabled' || normalized === 'off';
+  });
+  return disableOption ?? 'Unmapped';
+};
+
+const isSilentSidValue = (value: string, options: string[]) => {
+  const muteValue = resolveAudioMixerMuteValue(options);
+  return normalizeOptionToken(value) === normalizeOptionToken(muteValue);
 };
 
 type DriveControlSpec = {
@@ -252,9 +332,10 @@ export default function HomePage() {
   const [pauseResumePending, setPauseResumePending] = useState(false);
   const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
   const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
-  const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string }>>({});
+  const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string; endpoint: string }>>({});
   const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
   const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
+  const [activeSlider, setActiveSlider] = useState<{ id: string; value: number } | null>(null);
 
   const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
@@ -364,6 +445,7 @@ export default function HomePage() {
           enabled: entry.enabled,
           ip: entry.ip,
           port: entry.port,
+          endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
         };
       });
       return next;
@@ -610,6 +692,42 @@ export default function HomePage() {
     );
   });
 
+  const handleSidEnableToggle = trace(async function handleSidEnableToggle(
+    entry: ReturnType<typeof buildSidControlEntries>[number],
+    enabled: boolean,
+  ) {
+    if (entry.key === 'socket1' || entry.key === 'socket2') {
+      const socketIndex = entry.key === 'socket1' ? 1 : 2;
+      const socketItem = `SID Socket ${socketIndex}`;
+      const socketOptions = readItemOptions(
+        sidSocketsCategory as Record<string, unknown> | undefined,
+        'SID Sockets Configuration',
+        socketItem,
+      ).map((value) => String(value));
+      const nextValue = resolveSidSocketToggleValue(socketOptions, !enabled);
+      await updateConfigValue(
+        'SID Sockets Configuration',
+        socketItem,
+        nextValue,
+        'HOME_SID_ENABLED',
+        `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
+      );
+      return;
+    }
+
+    const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
+    const nextValue = enabled
+      ? resolveSidAddressDisableValue(addressOptions)
+      : resolveSidAddressEnableValue(addressOptions);
+    await updateConfigValue(
+      'SID Addressing',
+      entry.addressItem,
+      nextValue,
+      'HOME_SID_ADDRESS',
+      `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
+    );
+  });
+
   const handleSidReset = trace(async function handleSidReset() {
     await runMachineTask(
       'sid-reset',
@@ -624,7 +742,12 @@ export default function HomePage() {
   const handleStreamToggle = trace(async function handleStreamToggle(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
-    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+    const current = streamDrafts[key] ?? {
+      enabled: entry.enabled,
+      ip: entry.ip,
+      port: entry.port,
+      endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+    };
     const next = { ...current, enabled: !current.enabled };
     setStreamDrafts((previous) => ({ ...previous, [key]: next }));
     if (next.enabled) {
@@ -652,15 +775,22 @@ export default function HomePage() {
     );
   });
 
-  const handleStreamFieldChange = (key: StreamKey, field: 'ip' | 'port', value: string) => {
+  const handleStreamFieldChange = (key: StreamKey, value: string) => {
+    const parsed = parseStreamEndpoint(value);
     setStreamEditorError(null);
-    setStreamDrafts((previous) => ({
-      ...previous,
-      [key]: {
-        ...(previous[key] ?? { enabled: false, ip: '', port: '' }),
-        [field]: value,
-      },
-    }));
+    setStreamDrafts((previous) => {
+      const fallback = { enabled: false, ip: '', port: '', endpoint: '' };
+      const current = previous[key] ?? fallback;
+      return {
+        ...previous,
+        [key]: {
+          ...current,
+          endpoint: value,
+          ip: parsed.ip,
+          port: parsed.port,
+        },
+      };
+    });
   };
 
   const handleStreamEditOpen = (key: StreamKey) => {
@@ -668,7 +798,12 @@ export default function HomePage() {
     if (!entry) return;
     setStreamDrafts((previous) => ({
       ...previous,
-      [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+      [key]: {
+        enabled: entry.enabled,
+        ip: entry.ip,
+        port: entry.port,
+        endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+      },
     }));
     setStreamEditorError(null);
     setActiveStreamEditorKey(key);
@@ -679,7 +814,12 @@ export default function HomePage() {
     if (entry) {
       setStreamDrafts((previous) => ({
         ...previous,
-        [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+        [key]: {
+          enabled: entry.enabled,
+          ip: entry.ip,
+          port: entry.port,
+          endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+        },
       }));
     }
     setStreamEditorError(null);
@@ -689,25 +829,52 @@ export default function HomePage() {
   const handleStreamCommit = trace(async function handleStreamCommit(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return false;
-    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
-    const hostError = validateStreamHost(current.ip);
+    const current = streamDrafts[key] ?? {
+      enabled: entry.enabled,
+      ip: entry.ip,
+      port: entry.port,
+      endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+    };
+    const parsed = parseStreamEndpoint(current.endpoint);
+    if (parsed.error) {
+      reportUserError({
+        operation: 'STREAM_VALIDATE',
+        title: 'Invalid stream endpoint',
+        description: parsed.error,
+        context: { stream: key, endpoint: current.endpoint },
+      });
+      setStreamEditorError(parsed.error);
+      return false;
+    }
+    const nextIp = parsed.ip;
+    const nextPort = parsed.port;
+    setStreamDrafts((previous) => ({
+      ...previous,
+      [key]: {
+        ...current,
+        ip: nextIp,
+        port: nextPort,
+        endpoint: buildStreamEndpointLabel(nextIp, nextPort),
+      },
+    }));
+    const hostError = validateStreamHost(nextIp);
     if (hostError) {
       reportUserError({
         operation: 'STREAM_VALIDATE',
         title: 'Invalid stream host',
         description: hostError,
-        context: { stream: key, ip: current.ip },
+        context: { stream: key, ip: nextIp },
       });
       setStreamEditorError(hostError);
       return false;
     }
-    const portError = validateStreamPort(current.port);
+    const portError = validateStreamPort(nextPort);
     if (portError) {
       reportUserError({
         operation: 'STREAM_VALIDATE',
         title: 'Invalid stream port',
         description: portError,
-        context: { stream: key, port: current.port },
+        context: { stream: key, port: nextPort },
       });
       setStreamEditorError(portError);
       return false;
@@ -716,7 +883,7 @@ export default function HomePage() {
     await updateConfigValue(
       'Data Streams',
       entry.itemName,
-      buildStreamConfigValue(current.enabled, current.ip, current.port),
+      buildStreamConfigValue(current.enabled, nextIp, nextPort),
       'HOME_STREAM_UPDATE',
       `${entry.label} stream updated`,
     );
@@ -972,6 +1139,7 @@ export default function HomePage() {
           className="w-full text-left px-1 py-1"
           aria-expanded={systemInfoExpanded}
           data-testid="home-system-info"
+          data-section-label="System info"
         >
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
             <span className="text-muted-foreground">App</span>
@@ -1029,6 +1197,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
           className="space-y-2"
+          data-section-label="Machine"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1137,6 +1306,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
           className="space-y-2"
+          data-section-label="Quick Config"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1352,6 +1522,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
           className="space-y-3"
+          data-section-label="Drives"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1389,78 +1560,86 @@ export default function HomePage() {
                     data-testid={`home-drive-row-${testIdSuffix}`}
                     aria-label={`${label} Bus ${row.busValue} Type ${row.typeValue} ${row.enabled ? 'ON' : 'OFF'}`}
                   >
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold">{label}</p>
-                      <div className="flex items-center gap-1 text-xs">
-                        <span className="text-muted-foreground">Bus</span>
-                        <Select
-                          value={row.busValue}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              row.spec.category,
-                              row.spec.busItem,
-                              Number(value),
-                              'HOME_DRIVE_BUS',
-                              `${label} bus ID updated`,
-                              { refreshDrives: true },
-                            )}
-                          disabled={!status.isConnected || row.pendingBus}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="pr-2 text-sm font-semibold leading-tight">{label}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
+                          disabled={!status.isConnected || row.pendingEnabled}
+                          data-testid={`home-drive-toggle-${testIdSuffix}`}
+                          className={row.enabled ? 'text-success' : undefined}
                         >
-                          <SelectTrigger
-                            className="h-8 min-w-[3.9rem] px-2 text-xs"
-                            data-testid={`home-drive-bus-${testIdSuffix}`}
-                            aria-label={`${label} bus id`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {row.busOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          {row.enabled ? 'ON' : 'OFF'}
+                        </Button>
                       </div>
-                      <Select
-                        value={row.typeValue}
-                        onValueChange={(value) => {
-                          if (!row.spec.typeItem) return;
-                          void updateConfigValue(
-                            row.spec.category,
-                            row.spec.typeItem,
-                            value,
-                            'HOME_DRIVE_TYPE',
-                            `${label} type updated`,
-                            { refreshDrives: true },
-                          );
-                        }}
-                        disabled={!row.spec.typeItem || !status.isConnected || row.pendingType}
-                      >
-                        <SelectTrigger
-                          className="h-8 min-w-[5.5rem] px-2 text-xs"
-                          data-testid={`home-drive-type-${testIdSuffix}`}
-                          aria-label={`${label} type`}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {row.typeOptions.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
-                        disabled={!status.isConnected || row.pendingEnabled}
-                        data-testid={`home-drive-toggle-${testIdSuffix}`}
-                      >
-                        {row.enabled ? 'ON' : 'OFF'}
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Bus ID</span>
+                          <Select
+                            value={row.busValue}
+                            onValueChange={(value) =>
+                              void updateConfigValue(
+                                row.spec.category,
+                                row.spec.busItem,
+                                Number(value),
+                                'HOME_DRIVE_BUS',
+                                `${label} bus ID updated`,
+                                { refreshDrives: true },
+                              )}
+                            disabled={!status.isConnected || row.pendingBus}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-full px-2 text-xs whitespace-nowrap"
+                              data-testid={`home-drive-bus-${testIdSuffix}`}
+                              aria-label={`${label} bus id`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {row.busOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Type</span>
+                          <Select
+                            value={row.typeValue}
+                            onValueChange={(value) => {
+                              if (!row.spec.typeItem) return;
+                              void updateConfigValue(
+                                row.spec.category,
+                                row.spec.typeItem,
+                                value,
+                                'HOME_DRIVE_TYPE',
+                                `${label} type updated`,
+                                { refreshDrives: true },
+                              );
+                            }}
+                            disabled={!row.spec.typeItem || !status.isConnected || row.pendingType}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-full px-2 text-xs whitespace-nowrap"
+                              data-testid={`home-drive-type-${testIdSuffix}`}
+                              aria-label={`${label} type`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {row.typeOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1474,6 +1653,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.34 }}
           className="space-y-3"
+          data-section-label="Printers"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1490,6 +1670,7 @@ export default function HomePage() {
                   onClick={() => void handleEnabledToggle('Printer', PRINTER_CONTROL_SPEC, printerEnabled)}
                   disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)])}
                   data-testid="home-printer-toggle"
+                  className={printerEnabled ? 'text-success' : undefined}
                 >
                   {printerEnabled ? 'ON' : 'OFF'}
                 </Button>
@@ -1539,6 +1720,7 @@ export default function HomePage() {
           transition={{ delay: 0.36 }}
           className="space-y-2"
           data-testid="home-sid-status"
+          data-section-label="SID"
         >
           <div className="flex items-center justify-between gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
             <span className="flex items-center gap-2">
@@ -1561,99 +1743,184 @@ export default function HomePage() {
                 const panKey = buildConfigKey('Audio Mixer', entry.panItem);
                 const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
                 const statusValue = sidStatusMap.get(entry.key);
-                const statusLabel = statusValue === undefined ? '—' : statusValue ? 'ON' : 'OFF';
                 const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
                 const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
-                const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
-                const selectedVolume = volumeOptions.find((option) => option.trim() === entry.volume) ?? entry.volume;
-                const selectedPan = panOptions.find((option) => option.trim() === entry.pan) ?? entry.pan;
-                const selectedAddress = addressOptions.find((option) => option.trim() === entry.address) ?? entry.address;
+                const volumeIndex = resolveOptionIndex(volumeOptions, entry.volume);
+                const panIndex = resolveOptionIndex(panOptions, entry.pan);
+                const volumeCenterIndex = resolveVolumeCenterIndex(volumeOptions);
+                const panCenterIndex = resolvePanCenterIndex(panOptions);
+                const volumeMax = Math.max(volumeOptions.length - 1, 0);
+                const panMax = Math.max(panOptions.length - 1, 0);
+                const volumeSliderId = `sid-${entry.key}-volume`;
+                const panSliderId = `sid-${entry.key}-pan`;
+                const volumePending = Boolean(configWritePending[volumeKey]);
+                const panPending = Boolean(configWritePending[panKey]);
+                const isSidEnabled = statusValue !== false;
+                const isSilent = isSidEnabled && isSilentSidValue(entry.volume, volumeOptions);
+                const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
+                const isVolumeActive = activeSlider?.id === volumeSliderId;
+                const isPanActive = activeSlider?.id === panSliderId;
+                const volumeSliderValue = clampSliderValue(isVolumeActive ? activeSlider?.value ?? volumeIndex : volumeIndex, volumeMax);
+                const panSliderValue = clampSliderValue(isPanActive ? activeSlider?.value ?? panIndex : panIndex, panMax);
+                const volumeDisplayIndex = clampSliderValue(Math.round(volumeSliderValue), volumeMax);
+                const panDisplayIndex = clampSliderValue(Math.round(panSliderValue), panMax);
+                const volumeDisplayLabel = (volumeOptions[volumeDisplayIndex] ?? volumeOptions[0] ?? '—').trim();
+                const panDisplayLabel = (panOptions[panDisplayIndex] ?? panOptions[0] ?? '—').trim();
+                const volumePercent = volumeMax > 0 ? (volumeSliderValue / volumeMax) * 100 : 0;
+                const panPercent = panMax > 0 ? (panSliderValue / panMax) * 100 : 0;
+                const socketItemName = entry.key === 'socket1' ? 'SID Socket 1' : entry.key === 'socket2' ? 'SID Socket 2' : null;
+                const toggleKey = socketItemName
+                  ? buildConfigKey('SID Sockets Configuration', socketItemName)
+                  : addressKey;
+                const togglePending = Boolean(configWritePending[toggleKey]);
+                const sliderDisabled = !status.isConnected || !isSidEnabled;
                 return (
-                  <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 p-2.5 space-y-2" data-testid={`home-sid-entry-${entry.key}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold">{entry.label}</span>
-                      <span className={statusValue ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
-                        {statusLabel}
-                      </span>
+                  <div
+                    key={entry.key}
+                    className="rounded-lg border border-border/60 bg-muted/40 p-2 space-y-2"
+                    data-testid={`home-sid-entry-${entry.key}`}
+                    aria-label={`${entry.label} ${baseAddressLabel} ${isSidEnabled ? 'ON' : 'OFF'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 min-h-[32px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-semibold">{entry.label}</span>
+                        <span
+                          className={isSilent ? 'text-sm font-semibold font-mono tabular-nums text-amber-600' : 'text-sm font-semibold font-mono tabular-nums text-muted-foreground'}
+                          data-testid={`home-sid-address-${entry.key}`}
+                        >
+                          {baseAddressLabel}
+                        </span>
+                        {isSilent ? (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Silent</span>
+                        ) : null}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleSidEnableToggle(entry, isSidEnabled)}
+                        disabled={!status.isConnected || togglePending}
+                        data-testid={`home-sid-toggle-${entry.key}`}
+                        className={isSidEnabled ? 'text-success' : undefined}
+                      >
+                        {isSidEnabled ? 'ON' : 'OFF'}
+                      </Button>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                      <div className="space-y-1">
+                    <div className={`grid grid-cols-2 gap-3 min-h-[48px] ${isSidEnabled ? '' : 'opacity-60 grayscale'}`}>
+                      <div className="flex flex-col gap-1 min-w-0">
                         <span className="text-xs text-muted-foreground">Volume</span>
-                        <Select
-                          value={selectedVolume}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              'Audio Mixer',
-                              entry.volumeItem,
-                              value,
-                              'HOME_SID_VOLUME',
-                              `${entry.label} volume updated`,
-                            )}
-                          disabled={!status.isConnected || Boolean(configWritePending[volumeKey])}
-                        >
-                          <SelectTrigger data-testid={`home-sid-volume-${entry.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {volumeOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option.trim()}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative">
+                          {isVolumeActive ? (
+                            <div
+                              className="pointer-events-none absolute -top-6 left-0 w-full"
+                              aria-hidden="true"
+                            >
+                              <div
+                                className="absolute -translate-x-1/2 rounded-md border border-border/70 bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm"
+                                style={{ left: `${volumePercent}%` }}
+                              >
+                                {volumeDisplayLabel}
+                              </div>
+                            </div>
+                          ) : null}
+                          <span
+                            className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60"
+                            aria-hidden="true"
+                          />
+                          <Slider
+                            value={[volumeSliderValue]}
+                            min={0}
+                            max={volumeMax}
+                            step={SID_SLIDER_STEP}
+                            disabled={!status.isConnected || volumePending || sliderDisabled}
+                            onPointerDown={() => setActiveSlider({ id: volumeSliderId, value: volumeSliderValue })}
+                            onPointerUp={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
+                            onPointerCancel={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
+                            onBlur={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
+                            onValueChange={(values) => {
+                              const rawValue = values[0] ?? volumeIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, volumeCenterIndex), volumeMax);
+                              setActiveSlider({ id: volumeSliderId, value: snapped });
+                            }}
+                            onValueCommit={(values) => {
+                              const rawValue = values[0] ?? volumeIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, volumeCenterIndex), volumeMax);
+                              const nextIndex = clampSliderValue(Math.round(snapped), volumeMax);
+                              const nextValue = volumeOptions[nextIndex] ?? volumeOptions[0];
+                              if (nextValue && normalizeOptionToken(nextValue) !== normalizeOptionToken(entry.volume)) {
+                                void updateConfigValue(
+                                  'Audio Mixer',
+                                  entry.volumeItem,
+                                  nextValue,
+                                  'HOME_SID_VOLUME',
+                                  `${entry.label} volume updated`,
+                                );
+                              }
+                              setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev));
+                            }}
+                            aria-label={`${entry.label} volume slider`}
+                            data-testid={`home-sid-volume-${entry.key}`}
+                            className="h-12"
+                            thumbClassName="h-6 w-6"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1">
+                      <div className="flex flex-col gap-1 min-w-0">
                         <span className="text-xs text-muted-foreground">Pan</span>
-                        <Select
-                          value={selectedPan}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              'Audio Mixer',
-                              entry.panItem,
-                              value,
-                              'HOME_SID_PAN',
-                              `${entry.label} pan updated`,
-                            )}
-                          disabled={!status.isConnected || Boolean(configWritePending[panKey])}
-                        >
-                          <SelectTrigger data-testid={`home-sid-pan-${entry.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {panOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Address</span>
-                        <Select
-                          value={selectedAddress}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              'SID Addressing',
-                              entry.addressItem,
-                              value,
-                              'HOME_SID_ADDRESS',
-                              `${entry.label} address updated`,
-                            )}
-                          disabled={!status.isConnected || Boolean(configWritePending[addressKey])}
-                        >
-                          <SelectTrigger data-testid={`home-sid-address-${entry.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {addressOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative">
+                          {isPanActive ? (
+                            <div
+                              className="pointer-events-none absolute -top-6 left-0 w-full"
+                              aria-hidden="true"
+                            >
+                              <div
+                                className="absolute -translate-x-1/2 rounded-md border border-border/70 bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm"
+                                style={{ left: `${panPercent}%` }}
+                              >
+                                {panDisplayLabel}
+                              </div>
+                            </div>
+                          ) : null}
+                          <span
+                            className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60"
+                            aria-hidden="true"
+                          />
+                          <Slider
+                            value={[panSliderValue]}
+                            min={0}
+                            max={panMax}
+                            step={SID_SLIDER_STEP}
+                            disabled={!status.isConnected || panPending || sliderDisabled}
+                            onPointerDown={() => setActiveSlider({ id: panSliderId, value: panSliderValue })}
+                            onPointerUp={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
+                            onPointerCancel={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
+                            onBlur={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
+                            onValueChange={(values) => {
+                              const rawValue = values[0] ?? panIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, panCenterIndex), panMax);
+                              setActiveSlider({ id: panSliderId, value: snapped });
+                            }}
+                            onValueCommit={(values) => {
+                              const rawValue = values[0] ?? panIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, panCenterIndex), panMax);
+                              const nextIndex = clampSliderValue(Math.round(snapped), panMax);
+                              const nextValue = panOptions[nextIndex] ?? panOptions[0];
+                              if (nextValue && normalizeOptionToken(nextValue) !== normalizeOptionToken(entry.pan)) {
+                                void updateConfigValue(
+                                  'Audio Mixer',
+                                  entry.panItem,
+                                  nextValue,
+                                  'HOME_SID_PAN',
+                                  `${entry.label} pan updated`,
+                                );
+                              }
+                              setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev));
+                            }}
+                            aria-label={`${entry.label} pan slider`}
+                            data-testid={`home-sid-pan-${entry.key}`}
+                            className="h-12"
+                            thumbClassName="h-6 w-6"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1669,6 +1936,7 @@ export default function HomePage() {
           transition={{ delay: 0.38 }}
           className="space-y-2"
           data-testid="home-stream-status"
+          data-section-label="Streams"
         >
           <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -1677,7 +1945,12 @@ export default function HomePage() {
           <div className="bg-card border border-border rounded-xl p-3">
             <div className="space-y-2">
               {streamControlEntries.map((entry) => {
-                const draft = streamDrafts[entry.key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+                const draft = streamDrafts[entry.key] ?? {
+                  enabled: entry.enabled,
+                  ip: entry.ip,
+                  port: entry.port,
+                  endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+                };
                 const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
                 return (
                   <div
@@ -1686,29 +1959,20 @@ export default function HomePage() {
                     data-testid={`home-stream-row-${entry.key}`}
                   >
                     <div
-                      className="grid grid-cols-[3.8rem_minmax(0,1fr)_5.8rem_auto] items-center gap-2 text-xs"
+                      className="flex items-start justify-between gap-2 text-xs"
                       aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port} ${draft.enabled ? 'ON' : 'OFF'}`}
                     >
                       <button
                         type="button"
-                        className="col-span-3 grid grid-cols-[3.8rem_minmax(0,1fr)_5.8rem] items-center gap-2 text-left"
+                        className="min-w-0 flex-1 text-left"
                         onClick={() => handleStreamEditOpen(entry.key)}
                         disabled={!status.isConnected || pending}
                         data-testid={`home-stream-edit-toggle-${entry.key}`}
                         aria-label={`Edit ${entry.label} stream target`}
                       >
                         <span className="font-semibold text-foreground">{entry.label.toUpperCase()}</span>
-                        <span
-                          className="truncate text-foreground"
-                          data-testid={`home-stream-ip-display-${entry.key}`}
-                        >
-                          {draft.ip || '—'}
-                        </span>
-                        <span
-                          className="font-mono text-right text-foreground"
-                          data-testid={`home-stream-port-display-${entry.key}`}
-                        >
-                          {draft.port || '—'}
+                        <span className="ml-2 break-all font-mono text-foreground" data-testid={`home-stream-endpoint-display-${entry.key}`}>
+                          {buildStreamEndpointLabel(draft.ip, draft.port)}
                         </span>
                       </button>
                       <Button
@@ -1717,33 +1981,23 @@ export default function HomePage() {
                         onClick={() => void handleStreamToggle(entry.key)}
                         disabled={!status.isConnected || pending}
                         data-testid={`home-stream-toggle-${entry.key}`}
+                        className={draft.enabled ? 'text-success' : undefined}
                       >
                         {draft.enabled ? 'ON' : 'OFF'}
                       </Button>
                     </div>
                     {activeStreamEditorKey === entry.key && (
                       <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
-                        <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] md:items-end">
+                        <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
                           <div className="space-y-1">
-                            <label htmlFor={`home-stream-ip-${entry.key}`} className="text-muted-foreground">IP</label>
+                            <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">IP:PORT</label>
                             <Input
-                              id={`home-stream-ip-${entry.key}`}
-                              value={draft.ip}
-                              onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
+                              id={`home-stream-endpoint-${entry.key}`}
+                              value={draft.endpoint}
+                              onChange={(event) => handleStreamFieldChange(entry.key, event.target.value)}
                               disabled={!status.isConnected || pending}
-                              data-testid={`home-stream-ip-${entry.key}`}
-                              aria-label={`${entry.label} stream ip address`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label htmlFor={`home-stream-port-${entry.key}`} className="text-muted-foreground">Port</label>
-                            <Input
-                              id={`home-stream-port-${entry.key}`}
-                              value={draft.port}
-                              onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
-                              disabled={!status.isConnected || pending}
-                              data-testid={`home-stream-port-${entry.key}`}
-                              aria-label={`${entry.label} stream port`}
+                              data-testid={`home-stream-endpoint-${entry.key}`}
+                              aria-label={`${entry.label} stream endpoint`}
                             />
                           </div>
                           <Button
@@ -1793,6 +2047,7 @@ export default function HomePage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           className="space-y-3"
+          data-section-label="Config"
         >
           <h3 className="category-header">
             <span className="w-1.5 h-1.5 rounded-full bg-primary" />

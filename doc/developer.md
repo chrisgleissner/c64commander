@@ -102,24 +102,26 @@ All common development tasks use `./build`:
 ### Testing
 
 ```bash
-./build --test           # Unit tests only (vitest)
+./build --test-unit      # Unit tests only (vitest)
 ./build --test-e2e       # E2E tests only (Playwright, no screenshots)
 ./build --test-e2e-ci    # Full CI mirror: screenshots + e2e + validation
-./build --validate-evidence  # Validate Playwright evidence structure
-./build --android-tests  # Run Android instrumentation tests (requires device/emulator)
-./build --coverage       # Web + Android coverage checks
+./build --test-e2e --validate-evidence  # Validate Playwright evidence structure
+./build --test-unit --android-tests  # Run Android instrumentation tests (requires device/emulator)
+./build --test-unit --coverage       # Web + Android coverage checks
+./build --test-fuzz      # Chaos fuzz runner (mock target only)
+./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off  # Contract test harness
 ```
 
 ### Android
 
 ```bash
 ./build --emulator       # Launch Android emulator
-./build --install        # Build and install APK to connected device
-./build --device R5CRC3ZY9XH --install  # Install to specific device
-./build --smoke-android-emulator  # Run emulator smoke tests (mock target only)
-./build --smoke-android-real      # Run mock + real target smoke tests
-./build --smoke-android-real --c64u-host C64U
-./build --smoke-android-real --c64u-host auto  # External mock for emulator
+./build --install-apk        # Build and install APK to connected device
+./build --device-id R5CRC3ZY9XH --install-apk  # Install to specific device
+./build --test-smoke          # Run emulator smoke tests (mock target only)
+./build --test-smoke --c64u-target real  # Run mock + real target smoke tests
+./build --test-smoke --c64u-target real --c64u-host C64U
+./build --test-smoke --c64u-target real --c64u-host auto  # External mock for emulator
 ```
 
 Read `doc/testing/maestro.md` before writing or editing Maestro flows.
@@ -156,6 +158,16 @@ Notes:
 - `--test-e2e-ci` mirrors CI (screenshots + E2E + evidence validation).
 - Screenshot output is organized under `doc/img/app/<page>/<section>.png` for easy browsing.
 
+### Video walkthrough
+
+```bash
+./build --video   # Record a Playwright walkthrough video
+```
+
+Notes:
+- Video output is written to `test-results/evidence/playwright/<testId>/<deviceId>/video.webm`.
+- The walkthrough is driven by `playwright/video.spec.ts` and tagged with `@video`.
+
 ## Test architecture
 
 ### Unit tests (Vitest)
@@ -165,7 +177,7 @@ Location: `tests/unit/` and `src/**/*.{test,spec}.{ts,tsx}`
 Run:
 
 ```bash
-./build --test
+./build --test-unit
 ```
 
 ### E2E tests (Playwright)
@@ -189,7 +201,7 @@ Run:
 ```bash
 ./build --test-e2e           # E2E only
 ./build --test-e2e-ci        # Full CI mirror
-./build --validate-evidence  # Validate evidence structure
+./build --test-e2e --validate-evidence  # Validate evidence structure
 ```
 
 Evidence structure:
@@ -513,7 +525,7 @@ flowchart TB
     LBuild["npm run cap:build"]
     LTest["npm run test"]
     LE2E["npm run test:e2e"]
-    LSmoke["build --smoke-android-emulator"]
+    LSmoke["build --test-smoke"]
   end
 
   subgraph CI["GitHub Actions CI"]

@@ -35,9 +35,22 @@ const createMemoryStorage = (): Storage => {
  * In vitest's jsdom environment localStorage is available by default; this helper
  * provides a fallback for edge cases (e.g. opaque-origin restrictions).
  */
+const isStorageUsable = (storage?: Storage | null) => {
+  if (!storage) return false;
+  try {
+    const probeKey = "__c64u_storage_probe__";
+    storage.setItem(probeKey, "1");
+    storage.removeItem(probeKey);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const ensureLocalStorage = () => {
-  if (typeof (globalThis as { localStorage?: Storage }).localStorage !== "undefined") return;
-  let storage: Storage | undefined;
+  const existingStorage = (globalThis as { localStorage?: Storage }).localStorage;
+  if (isStorageUsable(existingStorage)) return;
+  let storage: Storage | undefined = existingStorage;
   let shouldOverrideWindow = false;
 
   if (typeof window !== "undefined") {
@@ -54,7 +67,7 @@ const ensureLocalStorage = () => {
     }
   }
 
-  if (!storage) {
+  if (!isStorageUsable(storage)) {
     storage = createMemoryStorage();
   }
 
@@ -67,7 +80,7 @@ const ensureLocalStorage = () => {
   if (typeof window !== "undefined") {
     let hasUsableLocalStorage = false;
     try {
-      hasUsableLocalStorage = typeof window.localStorage !== "undefined";
+      hasUsableLocalStorage = isStorageUsable(window.localStorage);
     } catch {
       shouldOverrideWindow = true;
     }

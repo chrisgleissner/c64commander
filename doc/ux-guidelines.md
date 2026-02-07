@@ -229,6 +229,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 - RAM dump folder panel (current folder + Change Folder)
 - Configuration quick actions sized to match machine control cards
 - Drive status cards with navigation to Disks page
+- SID socket rows use a compact two-row layout with read-only base addresses and volume/pan sliders
 - SID status and Streams status (VIC/Audio/Debug ON/OFF + target IP/port)
 
 **Settings Page (SettingsPage.tsx)**

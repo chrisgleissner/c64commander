@@ -14,7 +14,8 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
 // Seed once per test; allowed base URLs cover both real and demo, so no paired call is required.
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string, demoBaseUrl?: string | null) => {
   await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }: { realBaseUrl: string; demoBaseUrl: string | null }) => {
-    (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = realArg;
+    (window as Window & { __c64uExpectedBaseUrl?: string; __c64uTestProbeEnabled?: boolean }).__c64uExpectedBaseUrl = realArg;
+    (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
     (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = demoArg
       ? [realArg, demoArg]
       : [realArg];

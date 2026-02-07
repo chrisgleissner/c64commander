@@ -4,14 +4,14 @@
 
 1. **Agent entrypoint**: also see [AGENTS.md](../AGENTS.md).
 2. **Never skip tests or ignore failures**:
-    - Do NOT add skips or comment out failing code/tests.
-    - Fix root causes.
+   - Do NOT add skips or comment out failing code/tests.
+   - Fix root causes.
 3. **Keep the repo buildable**:
-    - If changes break builds, fix them before declaring work complete.
+   - If changes break builds, fix them before declaring work complete.
 4. **Before declaring work complete**:
-    - Ensure relevant docs are updated (`README.md`, `doc/`, `docs/`).
-    - Run tests and build steps that apply to your change set.
-    - Always run a full build (use `./build` when available) and fix any errors before saying work is done.
+   - Ensure relevant docs are updated (`README.md`, `doc/`, `docs/`).
+   - Run tests and build steps that apply to your change set.
+   - Always run a full build (use `./build` when available) and fix any errors before saying work is done.
 
 ## Quick discovery
 
@@ -41,16 +41,19 @@ React + Vite + Capacitor app for managing a C64 Ultimate device. Supports config
 ## Code guidelines
 
 ### Principles
+
 1. **Clarity**: predictable state and UI feedback.
 2. **Reliability**: handle network errors and timeouts.
 3. **Performance**: avoid unnecessary re-fetches and expensive rendering.
 4. **Consistency**: reuse existing UI components and patterns.
 
 ### Formatting
+
 - Use existing formatting and lint rules.
 - Do not reformat unrelated code.
 
 ### Documentation
+
 - Keep technical docs in `doc/`.
 - Keep user-facing docs in `README.md`.
 
@@ -74,7 +77,7 @@ npm run build
 
 ```bash
 npm run cap:build
-./build --install
+./build --install-apk
 ```
 
 ## Release tag APKs

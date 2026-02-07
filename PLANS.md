@@ -1,57 +1,51 @@
 # PLANS.md
 
-## 1. Scope and Constraints
-- [ ] Confirm all changes are limited to Home page UI/tests and no backend feature work.
-- [ ] Keep interaction touch-first (no hover behavior) and reuse existing Home design primitives (`Button`, `Select`, `Input`, inline card rows).
-- [ ] Preserve accessibility and light/dark readability for compact rows.
+This file is the authoritative execution contract for the Home page SID compact redesign.
+Strict loop: plan -> execute -> verify. A task is checked only after implementation and verification.
 
-## 2. Home Page Header Fix (Home Only)
-- [ ] Change Home subtitle text to exactly `C64 Commander`.
-- [ ] Verify only Home subtitle changed.
-- [ ] Verify subtitle render remains stable on small screens and both themes (manual inspection).
+## 1. Objective
+- [ ] Confirm current Home SID layout and drive toggle styling references.
+- [ ] Define compact two-row SID layout targets and verify space reduction goal.
+- [ ] Enumerate data sources needed for SID enablement, address display, volume, and pan.
 
-## 3. Streams Section: Compact Dashboard Rows + Inline Edit
-- [ ] Refactor Streams default layout to three compact single-line rows (VIC, AUDIO, DEBUG) with aligned columns for label/ip/port/state.
-- [ ] Ensure IP and port are always side by side in collapsed rows.
-- [ ] Add inline per-row editor (single active row at a time) with IP + PORT fields and explicit `OK` confirm.
-- [ ] Add cancel/revert behavior for inline editing.
-- [ ] Keep stream state toggle behavior and wire editor confirm to existing config update path.
-- [ ] Validate IP (IPv4) and port (1..65535) on confirm with lightweight error feedback.
-- [ ] Add/update accessibility labels for row summary and editor fields.
-- [ ] Add/adjust unit tests for collapsed rows and inline edit confirm/persist flow.
+## 2. Core Design Decision (Mandatory)
+- [ ] Implement two-row compact SID layout for all SID sockets (no single-row, no collapsible sections).
+- [ ] Ensure layout is static (no dynamic height changes).
 
-## 4. Drives Section: Single-Line Rows + Dropdown Editing
-- [ ] Refactor drives rows to compact single-line layout with drive name, bus ID, type, and ON/OFF state.
-- [ ] Keep dropdown editing for bus ID and type using existing `Select` pattern.
-- [ ] Ensure editing does not introduce large vertical whitespace.
-- [ ] Keep existing drive state/config wiring and add/update tests for single-line row + dropdown presence/interaction.
+## 3. Per-SID Layout (Authoritative Spec)
+- [ ] Row 1: render label, base address (hex-only, monospaced), right-aligned ON/OFF toggle matching drive styling.
+- [ ] Row 2: render labeled volume and pan sliders with center detent and touch-safe sizes.
+- [ ] Ensure sliders are disabled (visible) when SID is OFF.
+- [ ] Provide live value feedback during drag only (tooltip/value bubble).
 
-## 5. Implementation Guidelines
-- [ ] Keep changes small and contained in Home page and corresponding tests only.
-- [ ] Preserve existing stable selectors where possible; add minimal new test IDs only where required.
-- [ ] Check dark-mode contrast and compact spacing manually against references.
+## 4. Strict Exclusions From Home Page
+- [ ] Remove editable base address controls from Home SID section.
+- [ ] Remove model/filter/register/persistent numeric or dropdown SID controls from Home.
 
-## 6. Verification Requirements
-- [ ] Update tests for: Home subtitle text, Streams collapsed layout, Streams inline edit flow, Drives compact rows/dropdowns.
-- [ ] If golden/snapshot tests are affected, update only necessary artifacts and record rationale here.
-- [ ] Manually compare resulting Home UI behavior against reference screenshots:
-  - [ ] `/mnt/data/00-overview-light.png`
-  - [ ] `/mnt/data/01-overview-dark.png`
-  - [ ] `/mnt/data/01-machine.png`
-  - [ ] `/mnt/data/02-quick-config.png`
-  - [ ] `/mnt/data/03-drives.png`
-  - [ ] `/mnt/data/04-printers.png`
-  - [ ] `/mnt/data/05-config.png`
-- [ ] Run required local checks and confirm pass: unit tests, integration/UI tests, lint, type/build checks, CI-equivalent local build.
+## 5. Base Address Handling (Critical Safety Rule)
+- [ ] Always display base address as hex-only text and keep it read-only.
+- [ ] Confirm Home SID rows do not add long-press navigation (optional behavior not implemented).
 
-## 7. Required Workflow in PLANS.md
-### Design mapping
-- [ ] Finalized stream collapsed row columns documented.
-- [ ] Finalized stream inline editor placement/controls documented.
-- [ ] Finalized drive row columns and reused dropdown/state components documented.
+## 6. Error and Diagnostic Behavior
+- [ ] Detect enabled-but-silent SID condition and apply non-destructive visual indicator on base address.
 
-### Verification
-- [ ] Record exact commands run and outcomes after implementation.
+## 7. Accessibility and Ergonomics (Non-Negotiable)
+- [ ] Enforce >= 48 dp touch targets and sufficient contrast.
+- [ ] Ensure disabled state uses opacity + desaturation, not color alone.
+- [ ] Avoid relying on color-only state indicators.
 
-### Golden/snapshot impact
-- [ ] Document whether any golden/snapshot updates were needed.
+## 8. Technical Constraints
+- [ ] Use CSS Grid/Flexbox only; no expand/collapse behavior.
+- [ ] Keep layout static in Capacitor and avoid dynamic height on interaction.
+
+## 9. Verification Requirements
+- [ ] Verify phone-sized viewport layout and one-hand slider usability.
+- [ ] Verify center detent is soft and does not block any supported values.
+- [ ] Verify live value feedback appears only during slider interaction.
+- [ ] Verify SID ON/OFF toggle matches Drive A/B behavior and base address remains visible.
+- [ ] Ensure no regressions to Drive, Play, or Config pages.
+
+## 10. Completion Criteria
+- [ ] All PLANS.md tasks checked off.
+- [ ] Home SID section matches the two-row layout and space reduction goals.
+- [ ] All tests pass locally (unit + integration/E2E) and CI is green.

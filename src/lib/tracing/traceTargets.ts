@@ -6,6 +6,10 @@ import { getActiveMockBaseUrl } from '@/lib/mock/mockServer';
 const isTestProbeEnabled = () => {
   const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
   if (env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof window !== 'undefined') {
+    const win = window as Window & { __c64uTestProbeEnabled?: boolean };
+    if (win.__c64uTestProbeEnabled) return true;
+  }
   if (typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
   return false;
 };

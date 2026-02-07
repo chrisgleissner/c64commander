@@ -132,7 +132,7 @@ npm run cap:build
 ### Full local helper (if applicable)
 
 ```bash
-./build --install
+./build --install-apk
 ```
 
 ## What to optimize for

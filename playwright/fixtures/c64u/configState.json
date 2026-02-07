@@ -2,15 +2,29 @@
   "U64 Specific Settings": {
     "System Mode": {
       "value": "PAL",
-      "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
+      "options": [
+        "PAL",
+        "NTSC",
+        "PAL-60",
+        "NTSC-50",
+        "PAL-60/L",
+        "NTSC-50/L"
+      ]
     },
     "Digital Video Mode": {
       "value": "Auto",
-      "options": ["Auto", "HDMI", "DVI"]
+      "options": [
+        "Auto",
+        "HDMI",
+        "DVI"
+      ]
     },
     "HDMI Scan lines": {
       "value": "Enabled",
-      "options": ["Disabled", "Enabled"]
+      "options": [
+        "Disabled",
+        "Enabled"
+      ]
     }
   },
   "Audio Mixer": {
@@ -157,18 +171,149 @@
         "-36 dB",
         "-42 dB"
       ]
+    },
+    "Pan Socket 1": {
+      "value": "Left 1",
+      "options": [
+        "Left 1",
+        "Right 1"
+      ]
+    },
+    "Pan Socket 2": {
+      "value": "Left 2",
+      "options": [
+        "Left 2",
+        "Right 2"
+      ]
+    },
+    "Pan UltiSID 1": {
+      "value": "Left 1",
+      "options": [
+        "Left 1",
+        "Right 1"
+      ]
+    },
+    "Pan UltiSID 2": {
+      "value": "Left 2",
+      "options": [
+        "Left 2",
+        "Right 2"
+      ]
+    }
+  },
+  "SID Sockets Configuration": {
+    "SID Socket 1": {
+      "value": "Enabled",
+      "options": [
+        "Enabled",
+        "Disabled"
+      ]
+    },
+    "SID Socket 2": {
+      "value": "Enabled",
+      "options": [
+        "Enabled",
+        "Disabled"
+      ]
+    }
+  },
+  "SID Addressing": {
+    "SID Socket 1 Address": {
+      "value": "$D400",
+      "options": [
+        "$D400",
+        "Unmapped"
+      ]
+    },
+    "SID Socket 2 Address": {
+      "value": "$D440",
+      "options": [
+        "$D420",
+        "Unmapped"
+      ]
+    },
+    "UltiSID 1 Address": {
+      "value": "$D420",
+      "options": [
+        "$D420",
+        "Unmapped"
+      ]
+    },
+    "UltiSID 2 Address": {
+      "value": "$D440",
+      "options": [
+        "$D440",
+        "Unmapped"
+      ]
     }
   },
   "UltiSID Configuration": {
     "UltiSID 1 Filter Curve": {
       "value": "U2 High",
-      "options": ["8580 Lo", "8580 Hi", "6581", "6581 Alt", "U2 Low", "U2 Mid", "U2 High"]
+      "options": [
+        "8580 Lo",
+        "8580 Hi",
+        "6581",
+        "6581 Alt",
+        "U2 Low",
+        "U2 Mid",
+        "U2 High"
+      ]
+    }
+  },
+  "Data Streams": {
+    "Stream Audio to": {
+      "value": "on",
+      "options": [
+        "on",
+        "off"
+      ]
+    },
+    "Stream VIC to": {
+      "value": "239.0.1.90:11000"
     }
   },
   "Drive A Settings": {
-    "Drive Type": { "value": "1541", "options": ["1541", "1571", "1581"] }
+    "Drive Type": {
+      "value": "1541",
+      "options": [
+        "1541",
+        "1571",
+        "1581"
+      ]
+    }
   },
   "Drive B Settings": {
-    "Drive Type": { "value": "1541", "options": ["1541", "1571", "1581"] }
+    "Drive Type": {
+      "value": "1541",
+      "options": [
+        "1541",
+        "1571",
+        "1581"
+      ]
+    }
+  },
+  "Data Streams": {
+    "Stream VIC to": {
+      "value": "239.0.1.90:11000",
+      "options": [
+        "off",
+        "239.0.1.90:11000"
+      ]
+    },
+    "Stream Audio to": {
+      "value": "239.0.1.90:11001",
+      "options": [
+        "off",
+        "239.0.1.90:11001"
+      ]
+    },
+    "Stream Debug to": {
+      "value": "239.0.1.90:11002",
+      "options": [
+        "off",
+        "239.0.1.90:11002"
+      ]
+    }
   }
 }

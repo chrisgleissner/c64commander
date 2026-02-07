@@ -25,10 +25,13 @@
     "user-interface-settings"
   ],
   "home": [
+    "system-info",
     "machine",
     "quick-config",
     "drives",
     "printers",
+    "sid",
+    "streams",
     "config"
   ],
   "play": [

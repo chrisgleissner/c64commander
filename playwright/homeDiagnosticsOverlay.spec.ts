@@ -11,6 +11,10 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
 };
 
+const waitForTracing = async (page: Page) => {
+    await page.waitForFunction(() => Boolean((window as Window & { __c64uTracing?: { seedTraces?: unknown } }).__c64uTracing?.seedTraces));
+};
+
 const decodeZip = (zipData: number[]) => {
     const files = unzipSync(new Uint8Array(zipData));
     return Object.fromEntries(Object.entries(files).map(([name, data]) => [name, strFromU8(data)]));
@@ -117,6 +121,7 @@ test.describe('Home header and diagnostics overlay', () => {
             ];
         });
         await page.goto('/', { waitUntil: 'domcontentloaded' });
+        await waitForTracing(page);
         await page.evaluate(() => {
             const tracing = (window as Window & {
                 __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void };
@@ -170,6 +175,7 @@ test.describe('Home header and diagnostics overlay', () => {
         });
 
         await page.goto('/', { waitUntil: 'domcontentloaded' });
+        await waitForTracing(page);
 
         await page.evaluate(() => {
             const tracing = (window as Window & {

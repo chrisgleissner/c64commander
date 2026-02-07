@@ -29,23 +29,23 @@ Track device status at a glance, control the machine and drives, and access quic
 <table>
   <tr>
     <td>
-      <img src="doc/img/app/home/01-overview-light.png" alt="Home overview (Light)" width="480"/>
+      <img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/home/02-overview-dark.png" alt="Home overview (Dark)" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/home/03-machine-controls.png" alt="Home machine controls" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/home/04-drives-sid.png" alt="Home drives and SID" width="480"/>
+      <img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/home/05-config-actions.png" alt="Home configuration actions" width="480"/>
+      <img src="doc/img/app/home/sections/01-machine.png" alt="Home machine" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/home/sections/03-drives.png" alt="Home drives" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/home/sections/05-config.png" alt="Home configuration" width="480"/>
     </td>
     <td></td>
   </tr>
@@ -58,18 +58,18 @@ Control SID playback, adjust playback settings, manage playlists, select SID sub
 <table>
   <tr>
     <td>
-      <img src="doc/img/app/play/01-playback-controls.png" alt="Play playback controls" width="480"/>
+      <img src="doc/img/app/play/01-overview.png" alt="Play overview" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/play/02-playback-settings.png" alt="Play playback settings" width="480"/>
+      <img src="doc/img/app/play/sections/01-playback-controls.png" alt="Play playback controls" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/play/03-playlist.png" alt="Play playlist" width="480"/>
+      <img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/play/04-hvsc-controls.png" alt="Play HVSC controls" width="480"/>
+      <img src="doc/img/app/play/sections/03-hvsc-library.png" alt="Play HVSC library" width="480"/>
     </td>
   </tr>
   <tr>
@@ -87,10 +87,10 @@ Monitor drive status, mount images, and browse your disk collections.
 <table>
   <tr>
     <td>
-      <img src="doc/img/app/disks/01-drive-status.png" alt="Disks drive status" width="480"/>
+      <img src="doc/img/app/disks/01-overview.png" alt="Disks overview" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/disks/02-disk-list.png" alt="Disks list" width="480"/>
+      <img src="doc/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="480"/>
     </td>
   </tr>
 </table>
@@ -105,20 +105,20 @@ Browse configuration categories, tune audio and SID settings, and edit drive-spe
       <img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/config/02-u64-specific.png" alt="Configuration U64 specific" width="480"/>
+      <img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/config/03-audio-mixer.png" alt="Configuration audio mixer" width="480"/>
+      <img src="doc/img/app/config/sections/01-audio-mixer.png" alt="Configuration audio mixer" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/config/04-ultisid.png" alt="Configuration UltiSID" width="480"/>
+      <img src="doc/img/app/config/sections/03-ultisid-configuration.png" alt="Configuration UltiSID" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/config/05-drive-settings.png" alt="Configuration drive settings" width="480"/>
+      <img src="doc/img/app/config/sections/15-drive-a-settings.png" alt="Configuration drive A settings" width="480"/>
     </td>
     <td></td>
   </tr>
@@ -131,34 +131,34 @@ Adjust appearance, connections, diagnostics, playback defaults, HVSC library acc
 <table>
   <tr>
     <td>
-      <img src="doc/img/app/settings/01-appearance.png" alt="Settings appearance" width="480"/>
+      <img src="doc/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/settings/02-connection.png" alt="Settings connection" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/settings/03-diagnostics.png" alt="Settings diagnostics" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/settings/04-play-disk.png" alt="Settings play and disk" width="480"/>
+      <img src="doc/img/app/settings/sections/02-connection.png" alt="Settings connection" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/settings/05-config.png" alt="Settings configuration" width="480"/>
+      <img src="doc/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/settings/06-hvsc-library.png" alt="Settings HVSC library" width="480"/>
+      <img src="doc/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/settings/07-device-safety.png" alt="Settings device safety" width="480"/>
+      <img src="doc/img/app/settings/sections/05-config.png" alt="Settings configuration" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/settings/08-about.png" alt="Settings about" width="480"/>
+      <img src="doc/img/app/settings/sections/06-hvsc-library.png" alt="Settings HVSC library" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/settings/sections/08-about.png" alt="Settings about" width="480"/>
     </td>
   </tr>
 </table>
@@ -173,31 +173,31 @@ Read in-app documentation, getting started guides, and per-page walkthroughs wit
       <img src="doc/img/app/docs/01-overview.png" alt="Docs overview" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/docs/02-getting-started.png" alt="Docs getting started" width="480"/>
+      <img src="doc/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/docs/03-home.png" alt="Docs home" width="480"/>
+      <img src="doc/img/app/docs/sections/02-home.png" alt="Docs home" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/docs/04-play.png" alt="Docs play" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/docs/05-disks.png" alt="Docs disks" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/docs/06-config.png" alt="Docs configuration" width="480"/>
+      <img src="doc/img/app/docs/sections/03-play-files.png" alt="Docs play files" width="480"/>
     </td>
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/docs/07-settings.png" alt="Docs settings" width="480"/>
+      <img src="doc/img/app/docs/sections/04-disks-drives.png" alt="Docs disks and drives" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/docs/08-external-resources.png" alt="Docs external resources" width="480"/>
+      <img src="doc/img/app/docs/sections/06-config.png" alt="Docs configuration" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/docs/sections/07-settings.png" alt="Docs settings" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/docs/external/01-external-resources.png" alt="Docs external resources" width="480"/>
     </td>
   </tr>
 </table>
@@ -225,7 +225,7 @@ Trigger diagnostic actions, inspect traces, review logs, and triage errors.
   </tr>
 </table>
 
-Full screenshot set lives under `doc/img/app/`.
+Full screenshot set lives under [doc/img/app/](doc/img/app/).
 
 ## Install the APK on your Android phone
 

@@ -10,6 +10,17 @@ const hasRequest = (
   predicate: (req: { method: string; url: string }) => boolean,
 ) => requests.some(predicate);
 
+const waitForConnected = async (page: Page) => {
+  await expect(page.getByTestId('connectivity-indicator')).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
+};
+
+const waitForStreamsReady = async (page: Page) => {
+  await waitForConnected(page);
+  const streamPattern = /\d+\.\d+\.\d+\.\d+:\d+/;
+  await expect(page.getByTestId('home-stream-endpoint-display-audio')).toHaveText(streamPattern);
+  await expect(page.getByTestId('home-stream-endpoint-display-vic')).toHaveText(streamPattern);
+};
+
 test.describe('Home interactions', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -31,6 +42,7 @@ test.describe('Home interactions', () => {
 
   test('toggle interactions update stream config', async ({ page }: { page: Page }) => {
     await page.goto('/');
+    await waitForStreamsReady(page);
 
     await page.getByTestId('home-stream-toggle-audio').click();
 
@@ -43,7 +55,22 @@ test.describe('Home interactions', () => {
   });
 
   test('dropdown interactions update drive and SID config', async ({ page }: { page: Page }) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+        },
+        'SID Addressing': {
+          'SID Socket 1 Address': '$D400',
+        },
+        'Audio Mixer': {
+          'Pan Socket 1': 'Left 5',
+        },
+      },
+    });
+
     await page.goto('/');
+    await waitForConnected(page);
 
     await page.getByTestId('home-drive-type-a').click();
     await page.getByRole('option', { name: '1571' }).click();
@@ -55,13 +82,14 @@ test.describe('Home interactions', () => {
       ),
     ).toBe(true);
 
-    await page.getByTestId('home-sid-pan-socket1').click();
-    await page.getByRole('option', { name: 'Right 1' }).click();
+    const sidToggle = page.getByTestId('home-sid-toggle-socket1');
+    await expect(sidToggle).toBeVisible();
+    await sidToggle.click();
 
     await expect.poll(() =>
       hasRequest(
         server.requests,
-        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/Audio%20Mixer/Pan%20Socket%201?value=Right%201'),
+        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201?value=Disabled'),
       ),
     ).toBe(true);
   });
@@ -69,16 +97,17 @@ test.describe('Home interactions', () => {
   test('input interactions validate and then update stream config', async ({ page }: { page: Page }) => {
     allowWarnings(test.info(), 'Expected validation toast for invalid stream host input.');
     await page.goto('/');
+    await waitForStreamsReady(page);
 
     await page.getByTestId('home-stream-edit-toggle-vic').click();
-    const input = page.getByTestId('home-stream-ip-vic');
-    await input.fill('bad host!');
+    const input = page.getByTestId('home-stream-endpoint-vic');
+    await input.fill('bad host!:11000');
     await page.getByTestId('home-stream-confirm-vic').click();
 
     await page.waitForTimeout(150);
-    expect(hasRequest(server.requests, (req) => req.url.includes('bad%20host%21'))).toBe(false);
+    expect(hasRequest(server.requests, (req) => req.url.includes('bad%20host%21%3A11000'))).toBe(false);
 
-    await input.fill('239.0.1.90');
+    await input.fill('239.0.1.90:11000');
     await page.getByTestId('home-stream-confirm-vic').click();
 
     await expect.poll(() =>
@@ -91,6 +120,7 @@ test.describe('Home interactions', () => {
 
   test('home reset drives calls all disk reset endpoints only', async ({ page }: { page: Page }) => {
     await page.goto('/');
+    await waitForConnected(page);
 
     await page.getByRole('button', { name: 'Reset Drives' }).click();
 
@@ -112,6 +142,7 @@ test.describe('Home interactions', () => {
   test('disks per-drive reset controls call all drive reset endpoints without list regressions', async ({ page }: { page: Page }) => {
     await page.goto('/disks');
     await expect(page.getByTestId('disk-list')).toBeVisible();
+    await waitForConnected(page);
 
     await page.getByTestId('drive-reset-a').click();
     await page.getByTestId('drive-reset-b').click();
@@ -145,6 +176,8 @@ test.describe('Home interactions', () => {
     });
 
     await page.goto('/');
+    await waitForConnected(page);
+    await expect(page.getByTestId('home-sid-address-socket1')).toHaveText(/\$[0-9A-F]{4}|\$----/);
     await page.getByTestId('home-sid-status').getByRole('button', { name: 'Reset' }).click();
 
     await expect.poll(() =>
@@ -165,6 +198,6 @@ test.describe('Home interactions', () => {
     expect(addresses).toContain('D438');
 
     await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Volume');
-    await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Address');
+    await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Pan');
   });
 });

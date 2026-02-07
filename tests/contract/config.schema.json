@@ -1,0 +1,258 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "baseUrl",
+        "mode",
+        "auth",
+        "ftpMode",
+        "outputDir",
+        "concurrency",
+        "pacing",
+        "health",
+        "timeouts",
+        "scratch"
+    ],
+    "properties": {
+        "baseUrl": {
+            "type": "string",
+            "pattern": "^https?://"
+        },
+        "mode": {
+            "type": "string",
+            "enum": [
+                "SAFE",
+                "STRESS"
+            ]
+        },
+        "auth": {
+            "type": "string",
+            "enum": [
+                "ON",
+                "OFF"
+            ]
+        },
+        "password": {
+            "type": "string"
+        },
+        "ftpMode": {
+            "type": "string",
+            "enum": [
+                "PASV",
+                "PORT"
+            ]
+        },
+        "ftpPort": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+        },
+        "outputDir": {
+            "type": "string"
+        },
+        "concurrency": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "restMaxInFlight",
+                "ftpMaxSessions",
+                "mixedMaxInFlight"
+            ],
+            "properties": {
+                "restMaxInFlight": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "ftpMaxSessions": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "mixedMaxInFlight": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
+        "pacing": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "restMinDelayMs",
+                "ftpMinDelayMs"
+            ],
+            "properties": {
+                "restMinDelayMs": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "ftpMinDelayMs": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "health": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "endpoint",
+                "intervalMs",
+                "timeoutMs"
+            ],
+            "properties": {
+                "endpoint": {
+                    "type": "string"
+                },
+                "intervalMs": {
+                    "type": "integer",
+                    "minimum": 100
+                },
+                "timeoutMs": {
+                    "type": "integer",
+                    "minimum": 100
+                }
+            }
+        },
+        "timeouts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "restTimeoutMs",
+                "ftpTimeoutMs",
+                "scenarioTimeoutMs",
+                "maxDestructiveScenarioMs"
+            ],
+            "properties": {
+                "restTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 100
+                },
+                "ftpTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 100
+                },
+                "scenarioTimeoutMs": {
+                    "type": "integer",
+                    "minimum": 1000
+                },
+                "maxDestructiveScenarioMs": {
+                    "type": "integer",
+                    "minimum": 1000
+                }
+            }
+        },
+        "scratch": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "ftpDir"
+            ],
+            "properties": {
+                "ftpDir": {
+                    "type": "string"
+                }
+            }
+        },
+        "scenarios": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "rest": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "ftp": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "mixed": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "media": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "diskImagePath": {
+                    "type": "string"
+                },
+                "diskDrive": {
+                    "type": "string",
+                    "enum": [
+                        "a",
+                        "b"
+                    ]
+                },
+                "diskType": {
+                    "type": "string"
+                },
+                "diskMode": {
+                    "type": "string",
+                    "enum": [
+                        "readwrite",
+                        "readonly",
+                        "unlinked"
+                    ]
+                },
+                "sidFilePath": {
+                    "type": "string"
+                },
+                "sidSongNr": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "prgFilePath": {
+                    "type": "string"
+                },
+                "prgAction": {
+                    "type": "string",
+                    "enum": [
+                        "run",
+                        "load"
+                    ]
+                }
+            }
+        },
+        "allowMachineReset": {
+            "type": "boolean"
+        },
+        "http": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "keepAlive": {
+                    "type": "boolean"
+                },
+                "maxSockets": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        }
+    },
+    "allOf": [
+        {
+            "if": {
+                "properties": {
+                    "auth": {
+                        "const": "ON"
+                    }
+                }
+            },
+            "then": {
+                "required": [
+                    "password"
+                ]
+            }
+        }
+    ]
+}
