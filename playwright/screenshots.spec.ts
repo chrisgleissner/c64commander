@@ -257,7 +257,7 @@ test.describe('App screenshots', () => {
     await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/03-input.png');
     await page.getByTestId('home-stream-confirm-vic').click();
 
-    await expect(page.getByTestId('home-sid-address-socket1')).toHaveText(/\$[0-9A-F]{4}|Unmapped/);
+    await expect(page.getByTestId('home-sid-address-socket1')).toHaveText(/\$[0-9A-F]{4}|\$----/);
     await page.getByTestId('home-sid-status').getByRole('button', { name: 'Reset' }).click();
     await expect.poll(() =>
       server.requests.filter((req) => req.method === 'PUT' && req.url.startsWith('/v1/machine:writemem')).length,

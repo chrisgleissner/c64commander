@@ -118,7 +118,12 @@ const tourHome = async (page: Page) => {
     await openAndCloseSelect(page, page.getByTestId('home-printer-bus'));
 
     await smoothScrollToLocator(page, page.getByTestId('home-sid-status'), 2200);
-    await openAndCloseSelect(page, page.getByTestId('home-sid-pan-socket1'));
+    const panSlider = page.getByTestId('home-sid-pan-socket1').getByRole('slider');
+    const panBox = await panSlider.boundingBox();
+    if (panBox) {
+        await panSlider.click({ position: { x: panBox.width * 0.8, y: panBox.height / 2 } });
+        await page.waitForTimeout(SHORT_PAUSE_MS);
+    }
 
     await smoothScrollToLocator(page, page.getByTestId('home-stream-status'), 2200);
     const streamEdit = page.getByTestId('home-stream-edit-toggle-audio');

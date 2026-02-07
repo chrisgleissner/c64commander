@@ -68,13 +68,16 @@ test.describe('Home interactions', () => {
       ),
     ).toBe(true);
 
-    await page.getByTestId('home-sid-pan-socket1').click();
-    await page.getByRole('option', { name: 'Right 1' }).click();
+    const panSlider = page.getByTestId('home-sid-pan-socket1').getByRole('slider');
+    const panBox = await panSlider.boundingBox();
+    if (panBox) {
+      await panSlider.click({ position: { x: panBox.width * 0.85, y: panBox.height / 2 } });
+    }
 
     await expect.poll(() =>
       hasRequest(
         server.requests,
-        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/Audio%20Mixer/Pan%20Socket%201?value=Right%201'),
+        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/Audio%20Mixer/Pan%20Socket%201?value='),
       ),
     ).toBe(true);
   });
@@ -162,7 +165,7 @@ test.describe('Home interactions', () => {
 
     await page.goto('/');
     await waitForConnected(page);
-    await expect(page.getByTestId('home-sid-address-socket1')).toHaveText(/\$[0-9A-F]{4}|Unmapped/);
+    await expect(page.getByTestId('home-sid-address-socket1')).toHaveText(/\$[0-9A-F]{4}|\$----/);
     await page.getByTestId('home-sid-status').getByRole('button', { name: 'Reset' }).click();
 
     await expect.poll(() =>
@@ -183,6 +186,6 @@ test.describe('Home interactions', () => {
     expect(addresses).toContain('D438');
 
     await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Volume');
-    await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Address');
+    await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Pan');
   });
 });

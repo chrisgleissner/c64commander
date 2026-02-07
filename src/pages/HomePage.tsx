@@ -23,6 +23,7 @@ import { QuickActionCard } from '@/components/QuickActionCard';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
@@ -43,11 +44,12 @@ import { reportUserError } from '@/lib/uiErrors';
 import { addErrorLog } from '@/lib/logging';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
+import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/config/configItems';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { buildSidControlEntries } from '@/lib/config/sidDetails';
+import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
 import {
   buildStreamConfigValue,
   buildStreamEndpointLabel,
@@ -107,6 +109,8 @@ const PRINTER_BUS_ID_DEFAULTS = [4, 5];
 const PHYSICAL_DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'];
 const EMPTY_SELECT_VALUE = '__empty__';
 const EMPTY_SELECT_LABEL = 'Default';
+const SID_SLIDER_DETENT_RANGE = 0.2;
+const SID_SLIDER_STEP = 0.01;
 
 const LED_COLOR_SWATCHES: Record<string, string> = {
   Red: '#d3202c',
@@ -155,6 +159,80 @@ const normalizeSelectOptions = (options: string[], currentValue: string) => {
   const includesEmpty = options.some((option) => String(option).trim().length === 0)
     || currentValue.trim().length === 0;
   return includesEmpty ? [...unique, EMPTY_SELECT_VALUE] : unique;
+};
+
+const normalizeOptionToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const parseNumericOption = (value: string) => {
+  const match = value.trim().match(/[+-]?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+};
+
+const resolveOptionIndex = (options: string[], currentValue: string) => {
+  const normalizedValue = normalizeOptionToken(currentValue);
+  let index = options.findIndex((option) => normalizeOptionToken(option) === normalizedValue);
+  if (index >= 0) return index;
+  const numericValue = parseNumericOption(currentValue);
+  if (numericValue !== null) {
+    index = options.findIndex((option) => parseNumericOption(option) === numericValue);
+  }
+  return index >= 0 ? index : 0;
+};
+
+const resolveVolumeCenterIndex = (options: string[]) => {
+  const numericIndex = options.findIndex((option) => parseNumericOption(option) === 0);
+  if (numericIndex >= 0) return numericIndex;
+  const normalizedIndex = options.findIndex((option) => normalizeOptionToken(option) === '0 db');
+  return normalizedIndex >= 0 ? normalizedIndex : null;
+};
+
+const resolvePanCenterIndex = (options: string[]) => {
+  const centerIndex = options.findIndex((option) => normalizeOptionToken(option) === 'center');
+  return centerIndex >= 0 ? centerIndex : null;
+};
+
+const clampSliderValue = (value: number, max: number) => Math.min(Math.max(value, 0), max);
+
+const applySoftDetent = (value: number, centerIndex: number | null) => {
+  if (centerIndex === null) return value;
+  const distance = Math.abs(value - centerIndex);
+  return distance <= SID_SLIDER_DETENT_RANGE ? centerIndex : value;
+};
+
+const formatSidBaseAddress = (value: unknown) => {
+  const parsed = parseSidBaseAddress(value);
+  if (parsed === null) return '$----';
+  return `$${parsed.toString(16).toUpperCase().padStart(4, '0')}`;
+};
+
+const resolveSidSocketToggleValue = (options: string[], enable: boolean) => {
+  const enabledTokens = ['enabled', 'on', 'true'];
+  const disabledTokens = ['disabled', 'off', 'false'];
+  const match = options.find((option) => {
+    const normalized = normalizeOptionToken(option);
+    return enable ? enabledTokens.includes(normalized) : disabledTokens.includes(normalized);
+  });
+  if (match) return match;
+  if (options.length) return enable ? options[0] : options[options.length - 1];
+  return enable ? 'Enabled' : 'Disabled';
+};
+
+const resolveSidAddressEnableValue = (options: string[]) => {
+  const enableOption = options.find((option) => parseSidBaseAddress(option) !== null);
+  return enableOption ?? options[0] ?? 'Unmapped';
+};
+
+const resolveSidAddressDisableValue = (options: string[]) => {
+  const disableOption = options.find((option) => {
+    const normalized = normalizeOptionToken(option);
+    return normalized === 'unmapped' || normalized === 'disabled' || normalized === 'off';
+  });
+  return disableOption ?? 'Unmapped';
+};
+
+const isSilentSidValue = (value: string, options: string[]) => {
+  const muteValue = resolveAudioMixerMuteValue(options);
+  return normalizeOptionToken(value) === normalizeOptionToken(muteValue);
 };
 
 type DriveControlSpec = {
@@ -257,6 +335,7 @@ export default function HomePage() {
   const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string; endpoint: string }>>({});
   const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
   const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
+  const [activeSlider, setActiveSlider] = useState<{ id: string; value: number } | null>(null);
 
   const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
@@ -610,6 +689,42 @@ export default function HomePage() {
       'HOME_DRIVE_ENABLED',
       `${label} ${enabled ? 'disabled' : 'enabled'}`,
       { refreshDrives: true },
+    );
+  });
+
+  const handleSidEnableToggle = trace(async function handleSidEnableToggle(
+    entry: ReturnType<typeof buildSidControlEntries>[number],
+    enabled: boolean,
+  ) {
+    if (entry.key === 'socket1' || entry.key === 'socket2') {
+      const socketIndex = entry.key === 'socket1' ? 1 : 2;
+      const socketItem = `SID Socket ${socketIndex}`;
+      const socketOptions = readItemOptions(
+        sidSocketsCategory as Record<string, unknown> | undefined,
+        'SID Sockets Configuration',
+        socketItem,
+      ).map((value) => String(value));
+      const nextValue = resolveSidSocketToggleValue(socketOptions, !enabled);
+      await updateConfigValue(
+        'SID Sockets Configuration',
+        socketItem,
+        nextValue,
+        'HOME_SID_ENABLED',
+        `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
+      );
+      return;
+    }
+
+    const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
+    const nextValue = enabled
+      ? resolveSidAddressDisableValue(addressOptions)
+      : resolveSidAddressEnableValue(addressOptions);
+    await updateConfigValue(
+      'SID Addressing',
+      entry.addressItem,
+      nextValue,
+      'HOME_SID_ADDRESS',
+      `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
     );
   });
 
@@ -1628,99 +1743,184 @@ export default function HomePage() {
                 const panKey = buildConfigKey('Audio Mixer', entry.panItem);
                 const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
                 const statusValue = sidStatusMap.get(entry.key);
-                const statusLabel = statusValue === undefined ? '—' : statusValue ? 'ON' : 'OFF';
                 const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
                 const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
-                const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
-                const selectedVolume = volumeOptions.find((option) => option.trim() === entry.volume) ?? entry.volume;
-                const selectedPan = panOptions.find((option) => option.trim() === entry.pan) ?? entry.pan;
-                const selectedAddress = addressOptions.find((option) => option.trim() === entry.address) ?? entry.address;
+                const volumeIndex = resolveOptionIndex(volumeOptions, entry.volume);
+                const panIndex = resolveOptionIndex(panOptions, entry.pan);
+                const volumeCenterIndex = resolveVolumeCenterIndex(volumeOptions);
+                const panCenterIndex = resolvePanCenterIndex(panOptions);
+                const volumeMax = Math.max(volumeOptions.length - 1, 0);
+                const panMax = Math.max(panOptions.length - 1, 0);
+                const volumeSliderId = `sid-${entry.key}-volume`;
+                const panSliderId = `sid-${entry.key}-pan`;
+                const volumePending = Boolean(configWritePending[volumeKey]);
+                const panPending = Boolean(configWritePending[panKey]);
+                const isSidEnabled = statusValue !== false;
+                const isSilent = isSidEnabled && isSilentSidValue(entry.volume, volumeOptions);
+                const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
+                const isVolumeActive = activeSlider?.id === volumeSliderId;
+                const isPanActive = activeSlider?.id === panSliderId;
+                const volumeSliderValue = clampSliderValue(isVolumeActive ? activeSlider?.value ?? volumeIndex : volumeIndex, volumeMax);
+                const panSliderValue = clampSliderValue(isPanActive ? activeSlider?.value ?? panIndex : panIndex, panMax);
+                const volumeDisplayIndex = clampSliderValue(Math.round(volumeSliderValue), volumeMax);
+                const panDisplayIndex = clampSliderValue(Math.round(panSliderValue), panMax);
+                const volumeDisplayLabel = (volumeOptions[volumeDisplayIndex] ?? volumeOptions[0] ?? '—').trim();
+                const panDisplayLabel = (panOptions[panDisplayIndex] ?? panOptions[0] ?? '—').trim();
+                const volumePercent = volumeMax > 0 ? (volumeSliderValue / volumeMax) * 100 : 0;
+                const panPercent = panMax > 0 ? (panSliderValue / panMax) * 100 : 0;
+                const socketItemName = entry.key === 'socket1' ? 'SID Socket 1' : entry.key === 'socket2' ? 'SID Socket 2' : null;
+                const toggleKey = socketItemName
+                  ? buildConfigKey('SID Sockets Configuration', socketItemName)
+                  : addressKey;
+                const togglePending = Boolean(configWritePending[toggleKey]);
+                const sliderDisabled = !status.isConnected || !isSidEnabled;
                 return (
-                  <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 p-2.5 space-y-2" data-testid={`home-sid-entry-${entry.key}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-semibold">{entry.label}</span>
-                      <span className={statusValue ? 'text-xs font-semibold text-success' : 'text-xs font-semibold text-muted-foreground'}>
-                        {statusLabel}
-                      </span>
+                  <div
+                    key={entry.key}
+                    className="rounded-lg border border-border/60 bg-muted/40 p-2 space-y-2"
+                    data-testid={`home-sid-entry-${entry.key}`}
+                    aria-label={`${entry.label} ${baseAddressLabel} ${isSidEnabled ? 'ON' : 'OFF'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 min-h-[32px]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-semibold">{entry.label}</span>
+                        <span
+                          className={isSilent ? 'text-sm font-semibold font-mono tabular-nums text-amber-600' : 'text-sm font-semibold font-mono tabular-nums text-muted-foreground'}
+                          data-testid={`home-sid-address-${entry.key}`}
+                        >
+                          {baseAddressLabel}
+                        </span>
+                        {isSilent ? (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Silent</span>
+                        ) : null}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleSidEnableToggle(entry, isSidEnabled)}
+                        disabled={!status.isConnected || togglePending}
+                        data-testid={`home-sid-toggle-${entry.key}`}
+                        className={isSidEnabled ? 'text-success' : undefined}
+                      >
+                        {isSidEnabled ? 'ON' : 'OFF'}
+                      </Button>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                      <div className="space-y-1">
+                    <div className={`grid grid-cols-2 gap-3 min-h-[48px] ${isSidEnabled ? '' : 'opacity-60 grayscale'}`}>
+                      <div className="flex flex-col gap-1 min-w-0">
                         <span className="text-xs text-muted-foreground">Volume</span>
-                        <Select
-                          value={selectedVolume}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              'Audio Mixer',
-                              entry.volumeItem,
-                              value,
-                              'HOME_SID_VOLUME',
-                              `${entry.label} volume updated`,
-                            )}
-                          disabled={!status.isConnected || Boolean(configWritePending[volumeKey])}
-                        >
-                          <SelectTrigger data-testid={`home-sid-volume-${entry.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {volumeOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option.trim()}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative">
+                          {isVolumeActive ? (
+                            <div
+                              className="pointer-events-none absolute -top-6 left-0 w-full"
+                              aria-hidden="true"
+                            >
+                              <div
+                                className="absolute -translate-x-1/2 rounded-md border border-border/70 bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm"
+                                style={{ left: `${volumePercent}%` }}
+                              >
+                                {volumeDisplayLabel}
+                              </div>
+                            </div>
+                          ) : null}
+                          <span
+                            className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60"
+                            aria-hidden="true"
+                          />
+                          <Slider
+                            value={[volumeSliderValue]}
+                            min={0}
+                            max={volumeMax}
+                            step={SID_SLIDER_STEP}
+                            disabled={!status.isConnected || volumePending || sliderDisabled}
+                            onPointerDown={() => setActiveSlider({ id: volumeSliderId, value: volumeSliderValue })}
+                            onPointerUp={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
+                            onPointerCancel={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
+                            onBlur={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
+                            onValueChange={(values) => {
+                              const rawValue = values[0] ?? volumeIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, volumeCenterIndex), volumeMax);
+                              setActiveSlider({ id: volumeSliderId, value: snapped });
+                            }}
+                            onValueCommit={(values) => {
+                              const rawValue = values[0] ?? volumeIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, volumeCenterIndex), volumeMax);
+                              const nextIndex = clampSliderValue(Math.round(snapped), volumeMax);
+                              const nextValue = volumeOptions[nextIndex] ?? volumeOptions[0];
+                              if (nextValue && normalizeOptionToken(nextValue) !== normalizeOptionToken(entry.volume)) {
+                                void updateConfigValue(
+                                  'Audio Mixer',
+                                  entry.volumeItem,
+                                  nextValue,
+                                  'HOME_SID_VOLUME',
+                                  `${entry.label} volume updated`,
+                                );
+                              }
+                              setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev));
+                            }}
+                            aria-label={`${entry.label} volume slider`}
+                            data-testid={`home-sid-volume-${entry.key}`}
+                            className="h-12"
+                            thumbClassName="h-6 w-6"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1">
+                      <div className="flex flex-col gap-1 min-w-0">
                         <span className="text-xs text-muted-foreground">Pan</span>
-                        <Select
-                          value={selectedPan}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              'Audio Mixer',
-                              entry.panItem,
-                              value,
-                              'HOME_SID_PAN',
-                              `${entry.label} pan updated`,
-                            )}
-                          disabled={!status.isConnected || Boolean(configWritePending[panKey])}
-                        >
-                          <SelectTrigger data-testid={`home-sid-pan-${entry.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {panOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Address</span>
-                        <Select
-                          value={selectedAddress}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              'SID Addressing',
-                              entry.addressItem,
-                              value,
-                              'HOME_SID_ADDRESS',
-                              `${entry.label} address updated`,
-                            )}
-                          disabled={!status.isConnected || Boolean(configWritePending[addressKey])}
-                        >
-                          <SelectTrigger data-testid={`home-sid-address-${entry.key}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {addressOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="relative">
+                          {isPanActive ? (
+                            <div
+                              className="pointer-events-none absolute -top-6 left-0 w-full"
+                              aria-hidden="true"
+                            >
+                              <div
+                                className="absolute -translate-x-1/2 rounded-md border border-border/70 bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm"
+                                style={{ left: `${panPercent}%` }}
+                              >
+                                {panDisplayLabel}
+                              </div>
+                            </div>
+                          ) : null}
+                          <span
+                            className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60"
+                            aria-hidden="true"
+                          />
+                          <Slider
+                            value={[panSliderValue]}
+                            min={0}
+                            max={panMax}
+                            step={SID_SLIDER_STEP}
+                            disabled={!status.isConnected || panPending || sliderDisabled}
+                            onPointerDown={() => setActiveSlider({ id: panSliderId, value: panSliderValue })}
+                            onPointerUp={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
+                            onPointerCancel={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
+                            onBlur={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
+                            onValueChange={(values) => {
+                              const rawValue = values[0] ?? panIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, panCenterIndex), panMax);
+                              setActiveSlider({ id: panSliderId, value: snapped });
+                            }}
+                            onValueCommit={(values) => {
+                              const rawValue = values[0] ?? panIndex;
+                              const snapped = clampSliderValue(applySoftDetent(rawValue, panCenterIndex), panMax);
+                              const nextIndex = clampSliderValue(Math.round(snapped), panMax);
+                              const nextValue = panOptions[nextIndex] ?? panOptions[0];
+                              if (nextValue && normalizeOptionToken(nextValue) !== normalizeOptionToken(entry.pan)) {
+                                void updateConfigValue(
+                                  'Audio Mixer',
+                                  entry.panItem,
+                                  nextValue,
+                                  'HOME_SID_PAN',
+                                  `${entry.label} pan updated`,
+                                );
+                              }
+                              setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev));
+                            }}
+                            aria-label={`${entry.label} pan slider`}
+                            data-testid={`home-sid-pan-${entry.key}`}
+                            className="h-12"
+                            thumbClassName="h-6 w-6"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

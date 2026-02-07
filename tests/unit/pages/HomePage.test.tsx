@@ -267,8 +267,8 @@ describe('HomePage SID status', () => {
     expect(ultiSid1).toBeTruthy();
     expect(ultiSid2).toBeTruthy();
 
-    expect(sidSocket1.parentElement?.textContent ?? '').toContain('ON');
-    expect(sidSocket2.parentElement?.textContent ?? '').toContain('OFF');
+    expect(screen.getByTestId('home-sid-toggle-socket1').textContent).toBe('ON');
+    expect(screen.getByTestId('home-sid-toggle-socket2').textContent).toBe('OFF');
 
     sidSocketsPayloadRef.current = {
       'SID Sockets Configuration': {
@@ -297,10 +297,10 @@ describe('HomePage SID status', () => {
       />,
     );
 
-    expect(screen.getByText('SID Socket 1').parentElement?.textContent ?? '').toContain('OFF');
-    expect(screen.getByText('SID Socket 2').parentElement?.textContent ?? '').toContain('ON');
-    expect(screen.getByText('UltiSID 1').parentElement?.textContent ?? '').toContain('ON');
-    expect(screen.getByText('UltiSID 2').parentElement?.textContent ?? '').toContain('OFF');
+    expect(screen.getByTestId('home-sid-toggle-socket1').textContent).toBe('OFF');
+    expect(screen.getByTestId('home-sid-toggle-socket2').textContent).toBe('ON');
+    expect(screen.getByTestId('home-sid-toggle-ultiSid1').textContent).toBe('ON');
+    expect(screen.getByTestId('home-sid-toggle-ultiSid2').textContent).toBe('OFF');
   });
 
   it('renders stream rows with full IP:PORT endpoint values from Data Streams config', () => {
