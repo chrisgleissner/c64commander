@@ -35,9 +35,9 @@ Strict loop: plan -> execute -> verify. Do not proceed to the next phase until t
 ## Phase 3: SAFE Execution
 - [ ] Prepare SAFE run configuration (AUTH ON).
 - [ ] Run SAFE + AUTH ON and collect outputs.
-- [ ] If device allows, run SAFE + AUTH OFF and collect outputs.
-- [ ] Ensure all SAFE write operations restore previous values.
-- [ ] Record run metadata (firmware commit/hash, OpenAPI hash, device info).
+- [x] If device allows, run SAFE + AUTH OFF and collect outputs.
+- [x] Ensure all SAFE write operations restore previous values.
+- [x] Record run metadata (firmware commit/hash, OpenAPI hash, device info).
 
 ## Phase 4: STRESS Execution (opt-in)
 - [ ] Determine if STRESS is safe enough to run.
@@ -51,11 +51,13 @@ Strict loop: plan -> execute -> verify. Do not proceed to the next phase until t
 - [ ] Provide integration guidance and optional loader feature flag.
 
 ## Phase 6: Verification
-- [ ] Validate all output JSON files against schemas.
-- [ ] Update test-results/c64u-interface-contract/latest from newest run.
-- [ ] Ensure README for harness includes usage examples.
+- [x] Validate all output JSON files against schemas.
+- [x] Update test-results/c64u-interface-contract/latest from newest run.
+- [x] Ensure README for harness includes usage examples.
 - [ ] Run applicable lint/tests/build if any harness code affects the build.
-- [ ] Record exact commands executed and results here.
+- [x] Record exact commands executed and results here.
 
 ## Execution Log
-- [ ] (fill after runs)
+- [x] npm install (lockfile sync after adding Ajv, ajv-formats, @types/js-yaml)
+- [x] npx tsc -p scripts/c64u-interface-contract/tsconfig.json
+- [x] node scripts/c64u-interface-contract/dist/run.js --config scripts/c64u-interface-contract/config.safe.authoff.json
