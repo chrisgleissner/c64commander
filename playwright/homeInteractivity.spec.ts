@@ -55,6 +55,20 @@ test.describe('Home interactions', () => {
   });
 
   test('dropdown interactions update drive and SID config', async ({ page }: { page: Page }) => {
+    await page.request.post(`${server.baseUrl}/v1/configs`, {
+      data: {
+        'SID Sockets Configuration': {
+          'SID Socket 1': 'Enabled',
+        },
+        'SID Addressing': {
+          'SID Socket 1 Address': '$D400',
+        },
+        'Audio Mixer': {
+          'Pan Socket 1': 'Left 5',
+        },
+      },
+    });
+
     await page.goto('/');
     await waitForConnected(page);
 
@@ -69,10 +83,18 @@ test.describe('Home interactions', () => {
     ).toBe(true);
 
     const panSlider = page.getByTestId('home-sid-pan-socket1').getByRole('slider');
+    await expect(panSlider).toBeVisible();
     const panBox = await panSlider.boundingBox();
-    if (panBox) {
-      await panSlider.click({ position: { x: panBox.width * 0.85, y: panBox.height / 2 } });
+    if (!panBox) {
+      throw new Error('Pan slider not visible for interaction.');
     }
+    const startX = panBox.x + panBox.width * 0.2;
+    const endX = panBox.x + panBox.width * 0.9;
+    const centerY = panBox.y + panBox.height / 2;
+    await page.mouse.move(startX, centerY);
+    await page.mouse.down();
+    await page.mouse.move(endX, centerY);
+    await page.mouse.up();
 
     await expect.poll(() =>
       hasRequest(
