@@ -32,22 +32,21 @@ Track device status at a glance, control the machine and drives, and access quic
       <img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="480"/>
     </td>
     <td>
+      <img src="doc/img/app/home/sections/03-quick-config.png" alt="Home machine" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/home/sections/04-drives.png" alt="Home drives" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/home/sections/06-sid.png" alt="Home configuration" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
       <img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="480"/>
     </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/home/sections/01-machine.png" alt="Home machine" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/home/sections/03-drives.png" alt="Home drives" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/home/sections/05-config.png" alt="Home configuration" width="480"/>
-    </td>
-    <td></td>
   </tr>
 </table>
 
@@ -61,22 +60,16 @@ Control SID playback, adjust playback settings, manage playlists, select SID sub
       <img src="doc/img/app/play/01-overview.png" alt="Play overview" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/play/sections/01-playback-controls.png" alt="Play playback controls" width="480"/>
+      <img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="480"/>
     </td>
   </tr>
   <tr>
-    <td>
-      <img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="480"/>
-    </td>
     <td>
       <img src="doc/img/app/play/sections/03-hvsc-library.png" alt="Play HVSC library" width="480"/>
     </td>
-  </tr>
-  <tr>
     <td>
       <img src="doc/img/app/play/05-demo-mode.png" alt="Play demo mode" width="480"/>
     </td>
-    <td></td>
   </tr>
 </table>
 
@@ -153,14 +146,6 @@ Adjust appearance, connections, diagnostics, playback defaults, HVSC library acc
       <img src="doc/img/app/settings/sections/06-hvsc-library.png" alt="Settings HVSC library" width="480"/>
     </td>
   </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/settings/sections/08-about.png" alt="Settings about" width="480"/>
-    </td>
-  </tr>
 </table>
 
 ### Docs
@@ -182,22 +167,6 @@ Read in-app documentation, getting started guides, and per-page walkthroughs wit
     </td>
     <td>
       <img src="doc/img/app/docs/sections/03-play-files.png" alt="Docs play files" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/docs/sections/04-disks-drives.png" alt="Docs disks and drives" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/docs/sections/06-config.png" alt="Docs configuration" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/docs/sections/07-settings.png" alt="Docs settings" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/docs/external/01-external-resources.png" alt="Docs external resources" width="480"/>
     </td>
   </tr>
 </table>
