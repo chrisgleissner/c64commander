@@ -15,12 +15,11 @@ import {
   addHvscProgressListener,
   checkForHvscUpdates,
   getHvscCacheStatus,
-  getHvscDurationByMd5Seconds,
-  getHvscDurationsByMd5Seconds,
   getHvscStatus,
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  resolveHvscSonglength,
   type HvscStatus,
   type HvscUpdateStatus,
   HvscSongSource,
@@ -53,6 +52,10 @@ const formatBytes = (bytes?: number | null) => {
 };
 
 const HVSC_PROGRESS_LOG_INTERVAL = 500;
+
+const mergeLocalSongMetadata = (current: SongEntry[], filePath: string, nextEntries: SongEntry[]) =>
+  [...current.filter((entry) => entry.path !== filePath), ...nextEntries]
+    .sort((left, right) => left.path.localeCompare(right.path) || (left.songNr ?? 1) - (right.songNr ?? 1));
 
 export default function MusicPlayerPage() {
   const {
@@ -105,6 +108,18 @@ export default function MusicPlayerPage() {
   const [localFolderPaths, setLocalFolderPaths] = useState<SongFolder[]>([]);
   const [localSongs, setLocalSongs] = useState<SongEntry[]>([]);
   const localInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedLocalFolderRef = useRef('');
+
+  useEffect(() => {
+    selectedLocalFolderRef.current = selectedLocalFolder;
+  }, [selectedLocalFolder]);
+
+  const handleLocalSongMetadataResolved = useCallback((update: { path: string; entries: SongEntry[] }) => {
+    const activeFolder = selectedLocalFolderRef.current;
+    if (!activeFolder) return;
+    if (!update.path.toLowerCase().startsWith(activeFolder.toLowerCase())) return;
+    setLocalSongs((previous) => mergeLocalSongMetadata(previous, update.path, update.entries));
+  }, []);
 
   useEffect(() => {
     getHvscStatus()
@@ -282,10 +297,10 @@ export default function MusicPlayerPage() {
   const localSource = useMemo(
     () =>
       createLocalFsSongSource(localFiles, {
-        lookupDurationSeconds: hvscStatus?.installedVersion ? getHvscDurationByMd5Seconds : undefined,
-        lookupDurationsByMd5Seconds: hvscStatus?.installedVersion ? getHvscDurationsByMd5Seconds : undefined,
+        resolveSonglength: hvscStatus?.installedVersion ? resolveHvscSonglength : undefined,
+        onSongMetadataResolved: handleLocalSongMetadataResolved,
       }),
-    [localFiles, hvscStatus?.installedVersion],
+    [handleLocalSongMetadataResolved, localFiles, hvscStatus?.installedVersion],
   );
 
   const localFolders = useMemo(() => {

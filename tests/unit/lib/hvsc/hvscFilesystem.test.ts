@@ -4,7 +4,6 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import {
   ensureHvscSonglengthsReadyOnColdStart,
   resolveHvscSonglengthDuration,
-  resetHvscSonglengths,
 } from '@/lib/hvsc/hvscSongLengthService';
 
 // Mock dependencies

@@ -19,6 +19,7 @@ export {
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  resolveHvscSonglength,
 } from './hvscService';
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
 export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from './hvscRootLocator';

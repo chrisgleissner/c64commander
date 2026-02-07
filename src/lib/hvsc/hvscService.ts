@@ -6,10 +6,13 @@ import type {
   HvscStatus,
   HvscUpdateStatus,
 } from './hvscTypes';
+import { Capacitor } from '@capacitor/core';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { createHvscMediaIndex } from './hvscMediaIndex';
 import { loadHvscRoot } from './hvscRootLocator';
 import { ensureHvscSonglengthsReadyOnColdStart } from './hvscSongLengthService';
+import type { SongLengthResolveQuery, SongLengthResolution } from '@/lib/songlengths';
+import { addErrorLog } from '@/lib/logging';
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -26,13 +29,34 @@ import { resolveHvscSonglengthDuration } from './hvscSongLengthService';
 
 export type HvscProgressListener = (event: HvscProgressEvent) => void;
 
-const hasMockBridge = () => Boolean((window as Window & { __hvscMock__?: Record<string, any> }).__hvscMock__);
-const getMockBridge = () => (window as Window & { __hvscMock__?: Record<string, any> }).__hvscMock__;
+type HvscMockBridge = Record<string, any>;
+
+const getBrowserWindow = () =>
+  (typeof window === 'undefined' ? undefined : (window as Window & { __hvscMock__?: HvscMockBridge }));
+
+const hasMockBridge = () => Boolean(getBrowserWindow()?.__hvscMock__);
+const getMockBridge = () => getBrowserWindow()?.__hvscMock__;
+const hasRuntimeBridge = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return Capacitor.isNativePlatform();
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog('HVSC runtime bridge probe failed', {
+      error: {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      },
+    });
+    return false;
+  }
+};
 
 const hvscIndex = createHvscMediaIndex();
 void ensureHvscSonglengthsReadyOnColdStart();
 
-export const isHvscBridgeAvailable = () => typeof window !== 'undefined' || hasMockBridge();
+export const isHvscBridgeAvailable = () => hasMockBridge() || hasRuntimeBridge();
 
 export const getHvscStatus = async (): Promise<HvscStatus> => {
   const mock = getMockBridge();
@@ -126,7 +150,16 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
       return getRuntimeFolderListing(path);
     }
     return buildFolderListingFromIndex(path, entries);
-  } catch {
+  } catch (error) {
+    const err = error as Error;
+    addErrorLog('HVSC folder listing fallback to runtime failed over index', {
+      path,
+      error: {
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      },
+    });
     const mock = getMockBridge();
     if (mock?.getHvscFolderListing) return mock.getHvscFolderListing({ path });
     return getRuntimeFolderListing(path);
@@ -157,4 +190,12 @@ export const getHvscDurationsByMd5Seconds = async (md5: string) => {
   const resolution = await resolveHvscSonglengthDuration({ md5 });
   if (resolution.durations?.length) return resolution.durations;
   return resolution.durationSeconds !== null ? [resolution.durationSeconds] : null;
+};
+
+export const resolveHvscSonglength = async (query: SongLengthResolveQuery): Promise<SongLengthResolution> => {
+  const mock = getMockBridge();
+  if (mock?.resolveHvscSonglengthDuration) {
+    return mock.resolveHvscSonglengthDuration(query);
+  }
+  return resolveHvscSonglengthDuration(query);
 };

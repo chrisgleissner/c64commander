@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -245,6 +245,7 @@ export default function HomePage() {
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
   const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
   const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
+  const machineTaskInFlightRef = useRef<string | null>(null);
   const [folderTaskPending, setFolderTaskPending] = useState(false);
   const [powerOffDialogOpen, setPowerOffDialogOpen] = useState(false);
   const [machineExecutionState, setMachineExecutionState] = useState<'running' | 'paused'>('running');
@@ -375,7 +376,8 @@ export default function HomePage() {
     successTitle: string,
     successDescription?: string,
   ) {
-    if (machineTaskBusy) return;
+    if (machineTaskInFlightRef.current !== null || machineTaskBusy) return;
+    machineTaskInFlightRef.current = taskId;
     setMachineTaskId(taskId);
     try {
       await task();
@@ -392,6 +394,9 @@ export default function HomePage() {
         context: { taskId },
       });
     } finally {
+      if (machineTaskInFlightRef.current === taskId) {
+        machineTaskInFlightRef.current = null;
+      }
       setMachineTaskId(null);
     }
   });

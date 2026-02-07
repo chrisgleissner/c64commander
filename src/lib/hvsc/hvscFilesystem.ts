@@ -161,34 +161,37 @@ export const listHvscFolder = async (path: string): Promise<HvscFolderListing> =
   const normalized = normalizeSourcePath(path || '/');
   const basePath = resolveLibraryFolder(normalized);
   const entries = await listEntries(basePath);
-  const folders: string[] = [];
-  const songs: HvscFolderListing['songs'] = [];
   await ensureHvscSonglengthsReadyOnColdStart();
+  const resolvedEntries = await Promise.all(entries.map(async (entry) => resolveEntry(basePath, entry)));
 
-  for (const entry of entries) {
-    const resolved = await resolveEntry(basePath, entry);
-    if (!resolved.name) continue;
-    if (resolved.type === 'directory') {
-      folders.push(`${normalized === '/' ? '' : normalized}/${resolved.name}`.replace(/\/+/g, '/'));
-    } else if (resolved.type === 'file' && resolved.name.toLowerCase().endsWith('.sid')) {
-      const virtualPath = `${normalized === '/' ? '' : normalized}/${resolved.name}`.replace(/\/+/g, '/');
-      const duration = await resolveHvscSonglengthDuration({
-        virtualPath,
-        fileName: resolved.name,
-      });
-      const durations = duration.durations && duration.durations.length ? duration.durations : null;
-      const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
-      const primaryDuration = durations?.[0] ?? duration.durationSeconds;
-      songs.push({
-        id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
-        virtualPath,
-        fileName: resolved.name,
-        durationSeconds: primaryDuration ?? null,
-        durationsSeconds: durations,
-        subsongCount,
-      });
-    }
-  }
+  const folders = resolvedEntries
+    .filter((entry) => entry.name && entry.type === 'directory')
+    .map((entry) => `${normalized === '/' ? '' : normalized}/${entry.name}`.replace(/\/+/g, '/'));
+
+  const songs = (
+    await Promise.all(
+      resolvedEntries
+        .filter((entry) => entry.name && entry.type === 'file' && entry.name.toLowerCase().endsWith('.sid'))
+        .map(async (entry) => {
+          const virtualPath = `${normalized === '/' ? '' : normalized}/${entry.name}`.replace(/\/+/g, '/');
+          const duration = await resolveHvscSonglengthDuration({
+            virtualPath,
+            fileName: entry.name,
+          });
+          const durations = duration.durations && duration.durations.length ? duration.durations : null;
+          const subsongCount = durations ? durations.length : duration.durationSeconds ? 1 : null;
+          const primaryDuration = durations?.[0] ?? duration.durationSeconds;
+          return {
+            id: Math.abs(Array.from(virtualPath).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0)),
+            virtualPath,
+            fileName: entry.name,
+            durationSeconds: primaryDuration ?? null,
+            durationsSeconds: durations,
+            subsongCount,
+          };
+        }),
+    )
+  );
 
   return {
     path: normalized,
