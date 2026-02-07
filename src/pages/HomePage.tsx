@@ -50,7 +50,9 @@ import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { buildSidControlEntries } from '@/lib/config/sidDetails';
 import {
   buildStreamConfigValue,
+  buildStreamEndpointLabel,
   buildStreamControlEntries,
+  parseStreamEndpoint,
   validateStreamHost,
   validateStreamPort,
   type StreamKey,
@@ -252,7 +254,7 @@ export default function HomePage() {
   const [pauseResumePending, setPauseResumePending] = useState(false);
   const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
   const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
-  const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string }>>({});
+  const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string; endpoint: string }>>({});
   const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
   const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
 
@@ -364,6 +366,7 @@ export default function HomePage() {
           enabled: entry.enabled,
           ip: entry.ip,
           port: entry.port,
+          endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
         };
       });
       return next;
@@ -624,7 +627,12 @@ export default function HomePage() {
   const handleStreamToggle = trace(async function handleStreamToggle(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
-    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+    const current = streamDrafts[key] ?? {
+      enabled: entry.enabled,
+      ip: entry.ip,
+      port: entry.port,
+      endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+    };
     const next = { ...current, enabled: !current.enabled };
     setStreamDrafts((previous) => ({ ...previous, [key]: next }));
     if (next.enabled) {
@@ -652,15 +660,22 @@ export default function HomePage() {
     );
   });
 
-  const handleStreamFieldChange = (key: StreamKey, field: 'ip' | 'port', value: string) => {
+  const handleStreamFieldChange = (key: StreamKey, value: string) => {
+    const parsed = parseStreamEndpoint(value);
     setStreamEditorError(null);
-    setStreamDrafts((previous) => ({
-      ...previous,
-      [key]: {
-        ...(previous[key] ?? { enabled: false, ip: '', port: '' }),
-        [field]: value,
-      },
-    }));
+    setStreamDrafts((previous) => {
+      const fallback = { enabled: false, ip: '', port: '', endpoint: '' };
+      const current = previous[key] ?? fallback;
+      return {
+        ...previous,
+        [key]: {
+          ...current,
+          endpoint: value,
+          ip: parsed.ip,
+          port: parsed.port,
+        },
+      };
+    });
   };
 
   const handleStreamEditOpen = (key: StreamKey) => {
@@ -668,7 +683,12 @@ export default function HomePage() {
     if (!entry) return;
     setStreamDrafts((previous) => ({
       ...previous,
-      [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+      [key]: {
+        enabled: entry.enabled,
+        ip: entry.ip,
+        port: entry.port,
+        endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+      },
     }));
     setStreamEditorError(null);
     setActiveStreamEditorKey(key);
@@ -679,7 +699,12 @@ export default function HomePage() {
     if (entry) {
       setStreamDrafts((previous) => ({
         ...previous,
-        [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+        [key]: {
+          enabled: entry.enabled,
+          ip: entry.ip,
+          port: entry.port,
+          endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+        },
       }));
     }
     setStreamEditorError(null);
@@ -689,25 +714,52 @@ export default function HomePage() {
   const handleStreamCommit = trace(async function handleStreamCommit(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return false;
-    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
-    const hostError = validateStreamHost(current.ip);
+    const current = streamDrafts[key] ?? {
+      enabled: entry.enabled,
+      ip: entry.ip,
+      port: entry.port,
+      endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+    };
+    const parsed = parseStreamEndpoint(current.endpoint);
+    if (parsed.error) {
+      reportUserError({
+        operation: 'STREAM_VALIDATE',
+        title: 'Invalid stream endpoint',
+        description: parsed.error,
+        context: { stream: key, endpoint: current.endpoint },
+      });
+      setStreamEditorError(parsed.error);
+      return false;
+    }
+    const nextIp = parsed.ip;
+    const nextPort = parsed.port;
+    setStreamDrafts((previous) => ({
+      ...previous,
+      [key]: {
+        ...current,
+        ip: nextIp,
+        port: nextPort,
+        endpoint: buildStreamEndpointLabel(nextIp, nextPort),
+      },
+    }));
+    const hostError = validateStreamHost(nextIp);
     if (hostError) {
       reportUserError({
         operation: 'STREAM_VALIDATE',
         title: 'Invalid stream host',
         description: hostError,
-        context: { stream: key, ip: current.ip },
+        context: { stream: key, ip: nextIp },
       });
       setStreamEditorError(hostError);
       return false;
     }
-    const portError = validateStreamPort(current.port);
+    const portError = validateStreamPort(nextPort);
     if (portError) {
       reportUserError({
         operation: 'STREAM_VALIDATE',
         title: 'Invalid stream port',
         description: portError,
-        context: { stream: key, port: current.port },
+        context: { stream: key, port: nextPort },
       });
       setStreamEditorError(portError);
       return false;
@@ -716,7 +768,7 @@ export default function HomePage() {
     await updateConfigValue(
       'Data Streams',
       entry.itemName,
-      buildStreamConfigValue(current.enabled, current.ip, current.port),
+      buildStreamConfigValue(current.enabled, nextIp, nextPort),
       'HOME_STREAM_UPDATE',
       `${entry.label} stream updated`,
     );
@@ -1389,78 +1441,86 @@ export default function HomePage() {
                     data-testid={`home-drive-row-${testIdSuffix}`}
                     aria-label={`${label} Bus ${row.busValue} Type ${row.typeValue} ${row.enabled ? 'ON' : 'OFF'}`}
                   >
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold">{label}</p>
-                      <div className="flex items-center gap-1 text-xs">
-                        <span className="text-muted-foreground">Bus</span>
-                        <Select
-                          value={row.busValue}
-                          onValueChange={(value) =>
-                            void updateConfigValue(
-                              row.spec.category,
-                              row.spec.busItem,
-                              Number(value),
-                              'HOME_DRIVE_BUS',
-                              `${label} bus ID updated`,
-                              { refreshDrives: true },
-                            )}
-                          disabled={!status.isConnected || row.pendingBus}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="pr-2 text-sm font-semibold leading-tight">{label}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
+                          disabled={!status.isConnected || row.pendingEnabled}
+                          data-testid={`home-drive-toggle-${testIdSuffix}`}
+                          className={row.enabled ? 'text-success' : undefined}
                         >
-                          <SelectTrigger
-                            className="h-8 min-w-[3.9rem] px-2 text-xs"
-                            data-testid={`home-drive-bus-${testIdSuffix}`}
-                            aria-label={`${label} bus id`}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {row.busOptions.map((option) => (
-                              <SelectItem key={option} value={option}>
-                                {option}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          {row.enabled ? 'ON' : 'OFF'}
+                        </Button>
                       </div>
-                      <Select
-                        value={row.typeValue}
-                        onValueChange={(value) => {
-                          if (!row.spec.typeItem) return;
-                          void updateConfigValue(
-                            row.spec.category,
-                            row.spec.typeItem,
-                            value,
-                            'HOME_DRIVE_TYPE',
-                            `${label} type updated`,
-                            { refreshDrives: true },
-                          );
-                        }}
-                        disabled={!row.spec.typeItem || !status.isConnected || row.pendingType}
-                      >
-                        <SelectTrigger
-                          className="h-8 min-w-[5.5rem] px-2 text-xs"
-                          data-testid={`home-drive-type-${testIdSuffix}`}
-                          aria-label={`${label} type`}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {row.typeOptions.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
-                        disabled={!status.isConnected || row.pendingEnabled}
-                        data-testid={`home-drive-toggle-${testIdSuffix}`}
-                      >
-                        {row.enabled ? 'ON' : 'OFF'}
-                      </Button>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Bus ID</span>
+                          <Select
+                            value={row.busValue}
+                            onValueChange={(value) =>
+                              void updateConfigValue(
+                                row.spec.category,
+                                row.spec.busItem,
+                                Number(value),
+                                'HOME_DRIVE_BUS',
+                                `${label} bus ID updated`,
+                                { refreshDrives: true },
+                              )}
+                            disabled={!status.isConnected || row.pendingBus}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-full px-2 text-xs whitespace-nowrap"
+                              data-testid={`home-drive-bus-${testIdSuffix}`}
+                              aria-label={`${label} bus id`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {row.busOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-xs text-muted-foreground whitespace-nowrap">Type</span>
+                          <Select
+                            value={row.typeValue}
+                            onValueChange={(value) => {
+                              if (!row.spec.typeItem) return;
+                              void updateConfigValue(
+                                row.spec.category,
+                                row.spec.typeItem,
+                                value,
+                                'HOME_DRIVE_TYPE',
+                                `${label} type updated`,
+                                { refreshDrives: true },
+                              );
+                            }}
+                            disabled={!row.spec.typeItem || !status.isConnected || row.pendingType}
+                          >
+                            <SelectTrigger
+                              className="h-8 w-full px-2 text-xs whitespace-nowrap"
+                              data-testid={`home-drive-type-${testIdSuffix}`}
+                              aria-label={`${label} type`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {row.typeOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1490,6 +1550,7 @@ export default function HomePage() {
                   onClick={() => void handleEnabledToggle('Printer', PRINTER_CONTROL_SPEC, printerEnabled)}
                   disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)])}
                   data-testid="home-printer-toggle"
+                  className={printerEnabled ? 'text-success' : undefined}
                 >
                   {printerEnabled ? 'ON' : 'OFF'}
                 </Button>
@@ -1677,7 +1738,12 @@ export default function HomePage() {
           <div className="bg-card border border-border rounded-xl p-3">
             <div className="space-y-2">
               {streamControlEntries.map((entry) => {
-                const draft = streamDrafts[entry.key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+                const draft = streamDrafts[entry.key] ?? {
+                  enabled: entry.enabled,
+                  ip: entry.ip,
+                  port: entry.port,
+                  endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+                };
                 const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
                 return (
                   <div
@@ -1686,29 +1752,20 @@ export default function HomePage() {
                     data-testid={`home-stream-row-${entry.key}`}
                   >
                     <div
-                      className="grid grid-cols-[3.8rem_minmax(0,1fr)_5.8rem_auto] items-center gap-2 text-xs"
+                      className="flex items-start justify-between gap-2 text-xs"
                       aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port} ${draft.enabled ? 'ON' : 'OFF'}`}
                     >
                       <button
                         type="button"
-                        className="col-span-3 grid grid-cols-[3.8rem_minmax(0,1fr)_5.8rem] items-center gap-2 text-left"
+                        className="min-w-0 flex-1 text-left"
                         onClick={() => handleStreamEditOpen(entry.key)}
                         disabled={!status.isConnected || pending}
                         data-testid={`home-stream-edit-toggle-${entry.key}`}
                         aria-label={`Edit ${entry.label} stream target`}
                       >
                         <span className="font-semibold text-foreground">{entry.label.toUpperCase()}</span>
-                        <span
-                          className="truncate text-foreground"
-                          data-testid={`home-stream-ip-display-${entry.key}`}
-                        >
-                          {draft.ip || '—'}
-                        </span>
-                        <span
-                          className="font-mono text-right text-foreground"
-                          data-testid={`home-stream-port-display-${entry.key}`}
-                        >
-                          {draft.port || '—'}
+                        <span className="ml-2 break-all font-mono text-foreground" data-testid={`home-stream-endpoint-display-${entry.key}`}>
+                          {buildStreamEndpointLabel(draft.ip, draft.port)}
                         </span>
                       </button>
                       <Button
@@ -1717,33 +1774,23 @@ export default function HomePage() {
                         onClick={() => void handleStreamToggle(entry.key)}
                         disabled={!status.isConnected || pending}
                         data-testid={`home-stream-toggle-${entry.key}`}
+                        className={draft.enabled ? 'text-success' : undefined}
                       >
                         {draft.enabled ? 'ON' : 'OFF'}
                       </Button>
                     </div>
                     {activeStreamEditorKey === entry.key && (
                       <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
-                        <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] md:items-end">
+                        <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
                           <div className="space-y-1">
-                            <label htmlFor={`home-stream-ip-${entry.key}`} className="text-muted-foreground">IP</label>
+                            <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">IP:PORT</label>
                             <Input
-                              id={`home-stream-ip-${entry.key}`}
-                              value={draft.ip}
-                              onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
+                              id={`home-stream-endpoint-${entry.key}`}
+                              value={draft.endpoint}
+                              onChange={(event) => handleStreamFieldChange(entry.key, event.target.value)}
                               disabled={!status.isConnected || pending}
-                              data-testid={`home-stream-ip-${entry.key}`}
-                              aria-label={`${entry.label} stream ip address`}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label htmlFor={`home-stream-port-${entry.key}`} className="text-muted-foreground">Port</label>
-                            <Input
-                              id={`home-stream-port-${entry.key}`}
-                              value={draft.port}
-                              onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
-                              disabled={!status.isConnected || pending}
-                              data-testid={`home-stream-port-${entry.key}`}
-                              aria-label={`${entry.label} stream port`}
+                              data-testid={`home-stream-endpoint-${entry.key}`}
+                              aria-label={`${entry.label} stream endpoint`}
                             />
                           </div>
                           <Button

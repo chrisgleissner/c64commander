@@ -2,15 +2,29 @@
   "U64 Specific Settings": {
     "System Mode": {
       "value": "PAL",
-      "options": ["PAL", "NTSC", "PAL-60", "NTSC-50", "PAL-60/L", "NTSC-50/L"]
+      "options": [
+        "PAL",
+        "NTSC",
+        "PAL-60",
+        "NTSC-50",
+        "PAL-60/L",
+        "NTSC-50/L"
+      ]
     },
     "Digital Video Mode": {
       "value": "Auto",
-      "options": ["Auto", "HDMI", "DVI"]
+      "options": [
+        "Auto",
+        "HDMI",
+        "DVI"
+      ]
     },
     "HDMI Scan lines": {
       "value": "Enabled",
-      "options": ["Disabled", "Enabled"]
+      "options": [
+        "Disabled",
+        "Enabled"
+      ]
     }
   },
   "Audio Mixer": {
@@ -162,13 +176,58 @@
   "UltiSID Configuration": {
     "UltiSID 1 Filter Curve": {
       "value": "U2 High",
-      "options": ["8580 Lo", "8580 Hi", "6581", "6581 Alt", "U2 Low", "U2 Mid", "U2 High"]
+      "options": [
+        "8580 Lo",
+        "8580 Hi",
+        "6581",
+        "6581 Alt",
+        "U2 Low",
+        "U2 Mid",
+        "U2 High"
+      ]
     }
   },
   "Drive A Settings": {
-    "Drive Type": { "value": "1541", "options": ["1541", "1571", "1581"] }
+    "Drive Type": {
+      "value": "1541",
+      "options": [
+        "1541",
+        "1571",
+        "1581"
+      ]
+    }
   },
   "Drive B Settings": {
-    "Drive Type": { "value": "1541", "options": ["1541", "1571", "1581"] }
+    "Drive Type": {
+      "value": "1541",
+      "options": [
+        "1541",
+        "1571",
+        "1581"
+      ]
+    }
+  },
+  "Data Streams": {
+    "Stream VIC to": {
+      "value": "239.0.1.90:11000",
+      "options": [
+        "off",
+        "239.0.1.90:11000"
+      ]
+    },
+    "Stream Audio to": {
+      "value": "239.0.1.90:11001",
+      "options": [
+        "off",
+        "239.0.1.90:11001"
+      ]
+    },
+    "Stream Debug to": {
+      "value": "239.0.1.90:11002",
+      "options": [
+        "off",
+        "239.0.1.90:11002"
+      ]
+    }
   }
 }

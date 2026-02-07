@@ -27,6 +27,7 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
+RUN_INTERFACE_TEST=false
 PLAYWRIGHT_DEVICES=""
 PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
@@ -49,6 +50,18 @@ TRACE_SUITE=""
 MAESTRO_TAGS=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
+INTERFACE_TEST_MODE="safe"
+INTERFACE_TEST_AUTH="off"
+INTERFACE_TEST_PASSWORD=""
+INTERFACE_TEST_ALLOW_RESET=false
+INTERFACE_TEST_DISK_PATH=""
+INTERFACE_TEST_DISK_DRIVE="a"
+INTERFACE_TEST_DISK_TYPE="d64"
+INTERFACE_TEST_DISK_MODE="readonly"
+INTERFACE_TEST_SID_PATH=""
+INTERFACE_TEST_SID_SONGNR=""
+INTERFACE_TEST_PRG_PATH=""
+INTERFACE_TEST_PRG_ACTION="run"
 
 usage() {
   cat <<'EOF'
@@ -106,6 +119,19 @@ Options:
   --screenshots         Capture app screenshots into doc/img
   --screenshots-only    Capture screenshots only (no tests, no APK, no Android)
   --dump-c64u-config     Dump C64U config to doc/c64/c64u-config.yaml and exit
+  --interface-test       Run C64U interface contract harness
+  --interface-test-mode safe|unsafe  Interface run mode (default: safe)
+  --interface-test-auth on|off       Interface run auth (default: off)
+  --interface-test-password <pw>     Password for auth=on
+  --interface-test-allow-reset       Allow machine reset scenario in unsafe mode
+  --interface-test-disk <path>       Disk image path for mount test
+  --interface-test-disk-drive a|b    Drive letter for mount (default: a)
+  --interface-test-disk-type <type>  Disk type (default: d64)
+  --interface-test-disk-mode <mode>  Disk mode (default: readonly)
+  --interface-test-sid <path>        SID file path for sidplay
+  --interface-test-sid-song <num>    SID song index
+  --interface-test-prg <path>        PRG file path for load/run
+  --interface-test-prg-action run|load  PRG action (default: run)
 
   -h, --help            Show this help
 
@@ -118,6 +144,7 @@ Examples:
   ./build --screenshots
   ./build --screenshots-only
   ./build --test-e2e --record-traces --trace-suite playback
+  ./build --interface-test --interface-test-mode safe --interface-test-auth off
 
 Notes:
   --screenshots       Runs full build/tests by default, then captures screenshots.
@@ -190,6 +217,119 @@ ensure_playwright_port() {
   else
     log "Playwright default port ${base_port} unavailable; using ${PLAYWRIGHT_PORT}"
   fi
+}
+
+run_interface_test() {
+  local mode_raw="${INTERFACE_TEST_MODE,,}"
+  local mode="SAFE"
+  if [[ "$mode_raw" == "unsafe" || "$mode_raw" == "stress" ]]; then
+    mode="STRESS"
+  elif [[ "$mode_raw" != "safe" ]]; then
+    echo "Invalid --interface-test-mode: ${INTERFACE_TEST_MODE}" >&2
+    exit 1
+  fi
+
+  local auth_raw="${INTERFACE_TEST_AUTH,,}"
+  local auth="OFF"
+  if [[ "$auth_raw" == "on" ]]; then
+    auth="ON"
+  elif [[ "$auth_raw" != "off" ]]; then
+    echo "Invalid --interface-test-auth: ${INTERFACE_TEST_AUTH}" >&2
+    exit 1
+  fi
+
+  if [[ "$auth" == "ON" && -z "$INTERFACE_TEST_PASSWORD" ]]; then
+    echo "--interface-test-password is required when auth=on" >&2
+    exit 1
+  fi
+
+  if [[ -n "$INTERFACE_TEST_DISK_DRIVE" && "$INTERFACE_TEST_DISK_DRIVE" != "a" && "$INTERFACE_TEST_DISK_DRIVE" != "b" ]]; then
+    echo "Invalid --interface-test-disk-drive: ${INTERFACE_TEST_DISK_DRIVE}" >&2
+    exit 1
+  fi
+
+  if [[ -n "$INTERFACE_TEST_DISK_MODE" && "$INTERFACE_TEST_DISK_MODE" != "readwrite" && "$INTERFACE_TEST_DISK_MODE" != "readonly" && "$INTERFACE_TEST_DISK_MODE" != "unlinked" ]]; then
+    echo "Invalid --interface-test-disk-mode: ${INTERFACE_TEST_DISK_MODE}" >&2
+    exit 1
+  fi
+
+  if [[ -n "$INTERFACE_TEST_PRG_ACTION" && "$INTERFACE_TEST_PRG_ACTION" != "run" && "$INTERFACE_TEST_PRG_ACTION" != "load" ]]; then
+    echo "Invalid --interface-test-prg-action: ${INTERFACE_TEST_PRG_ACTION}" >&2
+    exit 1
+  fi
+
+  local base_url="http://${C64U_HOST}"
+  local config_path
+  config_path="$(mktemp -t c64u-interface-test.XXXXXX.json)"
+  trap 'rm -f "$config_path"' RETURN
+
+  export INTERFACE_TEST_BASE_URL="$base_url"
+  export INTERFACE_TEST_MODE_UPPER="$mode"
+  export INTERFACE_TEST_AUTH_UPPER="$auth"
+  export INTERFACE_TEST_PASSWORD
+  export INTERFACE_TEST_ALLOW_RESET
+  export INTERFACE_TEST_DISK_PATH
+  export INTERFACE_TEST_DISK_DRIVE
+  export INTERFACE_TEST_DISK_TYPE
+  export INTERFACE_TEST_DISK_MODE
+  export INTERFACE_TEST_SID_PATH
+  export INTERFACE_TEST_SID_SONGNR
+  export INTERFACE_TEST_PRG_PATH
+  export INTERFACE_TEST_PRG_ACTION
+
+  node --input-type=module - "$config_path" <<'NODE'
+import fs from 'node:fs';
+
+const outPath = process.argv[2];
+const cfg = {
+  baseUrl: process.env.INTERFACE_TEST_BASE_URL,
+  mode: process.env.INTERFACE_TEST_MODE_UPPER,
+  auth: process.env.INTERFACE_TEST_AUTH_UPPER,
+  ftpMode: 'PASV',
+  outputDir: 'test-results/c64u-interface-contract',
+  concurrency: { restMaxInFlight: 2, ftpMaxSessions: 1, mixedMaxInFlight: 2 },
+  pacing: { restMinDelayMs: 100, ftpMinDelayMs: 100 },
+  health: { endpoint: '/v1/version', intervalMs: 5000, timeoutMs: 2000 },
+  timeouts: { restTimeoutMs: 8000, ftpTimeoutMs: 15000, scenarioTimeoutMs: 120000, maxDestructiveScenarioMs: 180000 },
+  scratch: { ftpDir: '/Temp/c64u-interface-contract' },
+};
+
+if (cfg.auth === 'ON') {
+  cfg.password = process.env.INTERFACE_TEST_PASSWORD;
+}
+
+if (process.env.INTERFACE_TEST_ALLOW_RESET === 'true') {
+  cfg.allowMachineReset = true;
+}
+
+const media = {};
+if (process.env.INTERFACE_TEST_DISK_PATH) {
+  media.diskImagePath = process.env.INTERFACE_TEST_DISK_PATH;
+  media.diskDrive = process.env.INTERFACE_TEST_DISK_DRIVE || 'a';
+  media.diskType = process.env.INTERFACE_TEST_DISK_TYPE || 'd64';
+  media.diskMode = process.env.INTERFACE_TEST_DISK_MODE || 'readonly';
+}
+if (process.env.INTERFACE_TEST_SID_PATH) {
+  media.sidFilePath = process.env.INTERFACE_TEST_SID_PATH;
+  if (process.env.INTERFACE_TEST_SID_SONGNR) {
+    const songNr = Number(process.env.INTERFACE_TEST_SID_SONGNR);
+    if (Number.isFinite(songNr)) media.sidSongNr = songNr;
+  }
+}
+if (process.env.INTERFACE_TEST_PRG_PATH) {
+  media.prgFilePath = process.env.INTERFACE_TEST_PRG_PATH;
+  media.prgAction = process.env.INTERFACE_TEST_PRG_ACTION || 'run';
+}
+if (Object.keys(media).length) {
+  cfg.media = media;
+}
+
+fs.writeFileSync(outPath, JSON.stringify(cfg, null, 2));
+NODE
+
+  log "Running interface contract harness (${mode}/${auth}) against ${base_url}"
+  (cd "$ROOT_DIR" && npx tsc -p scripts/c64u-interface-contract/tsconfig.json)
+  (cd "$ROOT_DIR" && node scripts/c64u-interface-contract/dist/run.js --config "$config_path")
 }
 
 run_android_instrumentation() {
@@ -441,6 +581,58 @@ while [[ $# -gt 0 ]]; do
       RUN_DUMP_C64U_CONFIG=true
       shift
       ;;
+    --interface-test)
+      RUN_INTERFACE_TEST=true
+      shift
+      ;;
+    --interface-test-mode)
+      INTERFACE_TEST_MODE="$2"
+      shift 2
+      ;;
+    --interface-test-auth)
+      INTERFACE_TEST_AUTH="$2"
+      shift 2
+      ;;
+    --interface-test-password)
+      INTERFACE_TEST_PASSWORD="$2"
+      shift 2
+      ;;
+    --interface-test-allow-reset)
+      INTERFACE_TEST_ALLOW_RESET=true
+      shift
+      ;;
+    --interface-test-disk)
+      INTERFACE_TEST_DISK_PATH="$2"
+      shift 2
+      ;;
+    --interface-test-disk-drive)
+      INTERFACE_TEST_DISK_DRIVE="$2"
+      shift 2
+      ;;
+    --interface-test-disk-type)
+      INTERFACE_TEST_DISK_TYPE="$2"
+      shift 2
+      ;;
+    --interface-test-disk-mode)
+      INTERFACE_TEST_DISK_MODE="$2"
+      shift 2
+      ;;
+    --interface-test-sid)
+      INTERFACE_TEST_SID_PATH="$2"
+      shift 2
+      ;;
+    --interface-test-sid-song)
+      INTERFACE_TEST_SID_SONGNR="$2"
+      shift 2
+      ;;
+    --interface-test-prg)
+      INTERFACE_TEST_PRG_PATH="$2"
+      shift 2
+      ;;
+    --interface-test-prg-action)
+      INTERFACE_TEST_PRG_ACTION="$2"
+      shift 2
+      ;;
     --smoke-android-emulator)
       RUN_SMOKE_ANDROID_EMULATOR=true
       if [[ "$RUN_BUILD" != "false" ]]; then
@@ -578,6 +770,10 @@ fi
 if [[ "$RUN_INSTALL" == "true" ]]; then
   log "Installing npm dependencies"
   (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
+fi
+
+if [[ "$RUN_INTERFACE_TEST" == "true" ]]; then
+  run_interface_test
 fi
 
 if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then

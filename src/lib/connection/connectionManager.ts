@@ -39,7 +39,14 @@ export type ConnectionSnapshot = Readonly<{
 const STARTUP_PROBE_INTERVAL_MS = 700;
 const PROBE_REQUEST_TIMEOUT_MS = 2500;
 
-const isTestProbeEnabled = () => import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
+const isTestProbeEnabled = () => {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof window !== 'undefined') {
+    const win = window as Window & { __c64uTestProbeEnabled?: boolean };
+    if (win.__c64uTestProbeEnabled) return true;
+  }
+  return false;
+};
 
 const normalizeUrl = (value?: string | null) => {
   if (!value) return '';

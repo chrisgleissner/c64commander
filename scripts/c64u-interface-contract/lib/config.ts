@@ -5,6 +5,7 @@ import { z } from "zod";
 const ModeSchema = z.union([z.literal("SAFE"), z.literal("STRESS")]);
 const AuthSchema = z.union([z.literal("ON"), z.literal("OFF")]);
 const FtpModeSchema = z.union([z.literal("PASV"), z.literal("PORT")]);
+const PrgActionSchema = z.union([z.literal("run"), z.literal("load")]);
 
 export const ConfigSchema = z
     .object({
@@ -44,6 +45,19 @@ export const ConfigSchema = z
                 mixed: z.array(z.string()).optional()
             })
             .optional(),
+        media: z
+            .object({
+                diskImagePath: z.string().optional(),
+                diskDrive: z.union([z.literal("a"), z.literal("b")]).optional(),
+                diskType: z.string().optional(),
+                diskMode: z.union([z.literal("readwrite"), z.literal("readonly"), z.literal("unlinked")]).optional(),
+                sidFilePath: z.string().optional(),
+                sidSongNr: z.number().int().min(0).optional(),
+                prgFilePath: z.string().optional(),
+                prgAction: PrgActionSchema.optional()
+            })
+            .optional(),
+        allowMachineReset: z.boolean().optional(),
         http: z
             .object({
                 keepAlive: z.boolean().optional(),
@@ -87,7 +101,12 @@ export const DefaultConfig: HarnessConfig = {
     },
     scratch: {
         ftpDir: "/Temp/c64u-interface-contract"
-    }
+    },
+    media: {
+        diskDrive: "a",
+        prgAction: "run"
+    },
+    allowMachineReset: false
 };
 
 export function loadConfig(configPath?: string): HarnessConfig {

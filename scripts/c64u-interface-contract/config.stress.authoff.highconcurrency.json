@@ -1,0 +1,41 @@
+{
+    "baseUrl": "http://c64u",
+    "mode": "STRESS",
+    "auth": "OFF",
+    "ftpMode": "PASV",
+    "outputDir": "test-results/c64u-interface-contract",
+    "concurrency": {
+        "restMaxInFlight": 10,
+        "ftpMaxSessions": 2,
+        "mixedMaxInFlight": 6
+    },
+    "pacing": {
+        "restMinDelayMs": 50,
+        "ftpMinDelayMs": 100
+    },
+    "health": {
+        "endpoint": "/v1/version",
+        "intervalMs": 5000,
+        "timeoutMs": 2000
+    },
+    "timeouts": {
+        "restTimeoutMs": 8000,
+        "ftpTimeoutMs": 15000,
+        "scenarioTimeoutMs": 120000,
+        "maxDestructiveScenarioMs": 180000
+    },
+    "scratch": {
+        "ftpDir": "/Temp/c64u-interface-contract"
+    },
+    "media": {
+        "diskImagePath": "__SET_ME__",
+        "diskDrive": "a",
+        "diskType": "d64",
+        "diskMode": "readonly",
+        "sidFilePath": "__SET_ME__",
+        "sidSongNr": 0,
+        "prgFilePath": "__SET_ME__",
+        "prgAction": "run"
+    },
+    "allowMachineReset": false
+}

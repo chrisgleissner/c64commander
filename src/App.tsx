@@ -71,6 +71,14 @@ const RouteRefresher = () => {
   return null;
 };
 
+const shouldEnableCoverageProbe = () => {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof window !== 'undefined') {
+    return Boolean((window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled);
+  }
+  return false;
+};
+
 const AppRoutes = () => (
   <BrowserRouter>
     <GlobalErrorListener />
@@ -81,7 +89,7 @@ const AppRoutes = () => (
     <ConnectionController />
     <DemoModeInterstitial />
     <Routes>
-      {import.meta.env.VITE_ENABLE_TEST_PROBES === '1' ? (
+      {shouldEnableCoverageProbe() ? (
         <Route path="/__coverage__" element={<CoverageProbePage />} />
       ) : null}
       <Route path="/" element={<HomePage />} />

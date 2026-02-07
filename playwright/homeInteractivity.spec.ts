@@ -71,14 +71,14 @@ test.describe('Home interactions', () => {
     await page.goto('/');
 
     await page.getByTestId('home-stream-edit-toggle-vic').click();
-    const input = page.getByTestId('home-stream-ip-vic');
-    await input.fill('bad host!');
+    const input = page.getByTestId('home-stream-endpoint-vic');
+    await input.fill('bad host!:11000');
     await page.getByTestId('home-stream-confirm-vic').click();
 
     await page.waitForTimeout(150);
-    expect(hasRequest(server.requests, (req) => req.url.includes('bad%20host%21'))).toBe(false);
+    expect(hasRequest(server.requests, (req) => req.url.includes('bad%20host%21%3A11000'))).toBe(false);
 
-    await input.fill('239.0.1.90');
+    await input.fill('239.0.1.90:11000');
     await page.getByTestId('home-stream-confirm-vic').click();
 
     await expect.poll(() =>

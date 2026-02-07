@@ -53,8 +53,13 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
       } catch (error) {
         console.warn('Unable to clear showDirectoryPicker', error);
       }
-      const routingWindow = window as Window & { __c64uExpectedBaseUrl?: string; __c64uAllowedBaseUrls?: string[] };
+      const routingWindow = window as Window & {
+        __c64uExpectedBaseUrl?: string;
+        __c64uAllowedBaseUrls?: string[];
+        __c64uTestProbeEnabled?: boolean;
+      };
       routingWindow.__c64uExpectedBaseUrl = baseUrlArg;
+      routingWindow.__c64uTestProbeEnabled = true;
       const allowedBaseUrls = new Set<string>();
       if (Array.isArray(routingWindow.__c64uAllowedBaseUrls)) {
         routingWindow.__c64uAllowedBaseUrls.forEach((url) => {
@@ -97,7 +102,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
       window.__hvscMock__ = {
         addListener: (_event: string, listener: (event: any) => void) => {
           listeners.push(listener);
-          return { remove: async () => {} };
+          return { remove: async () => { } };
         },
         getHvscStatus: async () => ({
           installedBaselineVersion: 83,
@@ -119,7 +124,7 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
-        cancelHvscInstall: async () => {},
+        cancelHvscInstall: async () => { },
         getHvscFolderListing: async ({ path }: { path: string }) => {
           const normalized = path || '/';
           if (normalized === '/') {

@@ -13,6 +13,7 @@ import type { LogEventInput } from "./lib/logging.js";
 import yaml from "js-yaml";
 
 type LogEvent = LogEventInput & { timestamp: string };
+type ConcurrencyObservation = { scope: string; maxInFlight: number; failureMode: string; notes?: string };
 
 const args = parseArgs(process.argv.slice(2));
 const config = loadConfig(args.configPath);
@@ -26,6 +27,7 @@ fs.mkdirSync(latestRoot, { recursive: true });
 
 const logStream = fs.createWriteStream(path.join(runRoot, "logs.ndjson"), { flags: "a" });
 const latencyMap = new Map<string, { kind: "REST" | "FTP"; tracker: LatencyTracker }>();
+const concurrencyObservations: ConcurrencyObservation[] = [];
 
 const log = (event: LogEventInput) => {
     const payload: LogEvent = { timestamp: new Date().toISOString(), ...event };
@@ -68,7 +70,15 @@ const ftpScenarios = filterScenarios(buildFtpScenarios(), config.scenarios?.ftp)
 const mixedScenarios = filterScenarios(buildMixedScenarios(), config.scenarios?.mixed);
 
 await runScenarioGroup("rest", restScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () => scenario.run({ rest: restClient, request: restRequest, config, log }));
+    await runScenario(scenario.id, scenario.safe, () => scenario.run({
+        rest: restClient,
+        request: restRequest,
+        config,
+        log,
+        recordConcurrencyObservation: (observation) => {
+            concurrencyObservations.push(observation);
+        }
+    }));
 });
 
 await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
@@ -126,7 +136,7 @@ const concurrencyPayload = {
     mode: config.mode,
     auth: config.auth,
     limits: config.concurrency,
-    observations: [] as Array<{ scope: string; maxInFlight: number; failureMode: string; notes?: string }>
+    observations: concurrencyObservations
 };
 
 const conflictsPayload = {

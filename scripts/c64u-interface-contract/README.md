@@ -53,6 +53,36 @@ test-results/
 - SAFE is reversible and limits writes to safe config toggles and an FTP scratch directory.
 - STRESS is opt-in and may be disruptive. It enforces hard runtime caps and abort conditions.
 
+## Media-Driven REST Scenarios (STRESS)
+
+Some REST endpoints require real filesystem paths. Provide them via the optional `media` block in your config:
+
+```json
+{
+  "media": {
+    "diskImagePath": "/Usb0/disks/demo.d64",
+    "diskDrive": "a",
+    "diskType": "d64",
+    "diskMode": "readonly",
+    "sidFilePath": "/Usb0/music/demo.sid",
+    "sidSongNr": 0,
+    "prgFilePath": "/Usb0/prg/demo.prg",
+    "prgAction": "run"
+  }
+}
+```
+
+If a path is omitted, the corresponding scenario is skipped.
+
+Machine reset is guarded by `allowMachineReset` (defaults to false).
+
+## Concurrency Stress
+
+Increase `concurrency.restMaxInFlight` to probe high-load behavior. The harness records:
+
+- REST concurrency observations (errors, drift, max latency).
+- Per-operation latency percentiles, which feed cooldown suggestions.
+
 ## Notes
 
 - REST auth uses the network password (`X-Password` header).

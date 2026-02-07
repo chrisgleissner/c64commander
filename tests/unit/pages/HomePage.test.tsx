@@ -303,7 +303,7 @@ describe('HomePage SID status', () => {
     expect(screen.getByText('UltiSID 2').parentElement?.textContent ?? '').toContain('OFF');
   });
 
-  it('renders compact stream rows with side-by-side IP and port from Data Streams config', () => {
+  it('renders stream rows with full IP:PORT endpoint values from Data Streams config', () => {
     streamPayloadRef.current = {
       'Data Streams': {
         items: {
@@ -324,11 +324,9 @@ describe('HomePage SID status', () => {
     expect(within(streamSection).getByText('DEBUG')).toBeTruthy();
     expect(within(streamSection).getAllByText('ON').length).toBe(2);
     expect(within(streamSection).getAllByText('OFF').length).toBe(1);
-    expect(within(streamSection).queryByTestId('home-stream-ip-vic')).toBeNull();
-    expect(within(streamSection).getByTestId('home-stream-ip-display-vic').textContent).toBe('239.0.1.64');
-    expect(within(streamSection).getByTestId('home-stream-port-display-vic').textContent).toBe('11000');
-    expect(within(streamSection).getByTestId('home-stream-ip-display-debug').textContent).toBe('239.0.1.66');
-    expect(within(streamSection).getByTestId('home-stream-port-display-debug').textContent).toBe('11002');
+    expect(within(streamSection).queryByTestId('home-stream-endpoint-vic')).toBeNull();
+    expect(within(streamSection).getByTestId('home-stream-endpoint-display-vic').textContent).toBe('239.0.1.64:11000');
+    expect(within(streamSection).getByTestId('home-stream-endpoint-display-debug').textContent).toBe('239.0.1.66:11002');
   });
 
   it('resets all connected drives from Home drives section', async () => {
@@ -406,14 +404,14 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
-    const ipInput = screen.getByTestId('home-stream-ip-vic');
-    fireEvent.change(ipInput, { target: { value: 'bad host!' } });
+    const endpointInput = screen.getByTestId('home-stream-endpoint-vic');
+    fireEvent.change(endpointInput, { target: { value: 'bad host!:11000' } });
     fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
 
     await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
       operation: 'STREAM_VALIDATE',
     })));
-    expect(screen.getByTestId('home-stream-error-vic').textContent).toContain('Enter a valid IPv4 address or host name');
+    expect(screen.getByTestId('home-stream-error-vic').textContent).toContain('Enter a valid IPv4 address');
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalled();
   });
 
@@ -431,8 +429,7 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
-    fireEvent.change(screen.getByTestId('home-stream-ip-vic'), { target: { value: '239.0.1.90' } });
-    fireEvent.change(screen.getByTestId('home-stream-port-vic'), { target: { value: '12000' } });
+    fireEvent.change(screen.getByTestId('home-stream-endpoint-vic'), { target: { value: '239.0.1.90:12000' } });
     fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
 
     await waitFor(() => expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
@@ -440,10 +437,10 @@ describe('HomePage SID status', () => {
       'Stream VIC to',
       '239.0.1.90:12000',
     ));
-    expect(screen.queryByTestId('home-stream-ip-vic')).toBeNull();
+    expect(screen.queryByTestId('home-stream-endpoint-vic')).toBeNull();
   });
 
-  it('renders compact drives rows and supports dropdown interaction', async () => {
+  it('renders two-line drives rows with explicit labels and supports dropdown interaction', async () => {
     drivesPayloadRef.current = {
       drives: [
         { a: { enabled: true, bus_id: 8, type: '1541' } },
@@ -476,6 +473,11 @@ describe('HomePage SID status', () => {
     expect(within(drivesGroup).getByTestId('home-drive-row-a')).toBeTruthy();
     expect(within(drivesGroup).getByTestId('home-drive-row-b')).toBeTruthy();
     expect(within(drivesGroup).getByTestId('home-drive-row-soft-iec')).toBeTruthy();
+    expect(within(drivesGroup).getByText('Drive A')).toBeTruthy();
+    expect(within(drivesGroup).getByText('Drive B')).toBeTruthy();
+    expect(within(drivesGroup).getByText('Soft IEC Drive')).toBeTruthy();
+    expect(within(drivesGroup).getAllByText('Bus ID').length).toBeGreaterThanOrEqual(3);
+    expect(within(drivesGroup).getAllByText('Type').length).toBeGreaterThanOrEqual(3);
 
     const driveBusSelect = screen.getByTestId('home-drive-bus-a');
     fireEvent.click(driveBusSelect);

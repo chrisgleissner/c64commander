@@ -28,8 +28,6 @@ const OFF_TOKENS = new Set([
   'false',
 ]);
 
-const HOST_PATTERN = /^(?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/;
-
 const IPV4_PATTERN = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 
 const getItemValue = (payload: unknown, itemName: string) => {
@@ -89,9 +87,9 @@ export const buildStreamControlEntries = (dataStreamsCategory?: Record<string, u
 
 export const validateStreamHost = (value: string) => {
   const trimmed = value.trim();
-  if (!trimmed) return 'IP/host is required.';
-  if (!HOST_PATTERN.test(trimmed) && !IPV4_PATTERN.test(trimmed)) {
-    return 'Enter a valid IPv4 address or host name.';
+  if (!trimmed) return 'IPv4 address is required.';
+  if (!IPV4_PATTERN.test(trimmed)) {
+    return 'Enter a valid IPv4 address.';
   }
   return null;
 };
@@ -112,3 +110,22 @@ export const buildStreamConfigValue = (enabled: boolean, ip: string, port: strin
   return `${ip.trim()}:${port.trim()}`;
 };
 
+export const buildStreamEndpointLabel = (ip: string, port: string) => {
+  const host = ip.trim();
+  const endpointPort = port.trim();
+  if (!host && !endpointPort) return '—';
+  if (!host) return `—:${endpointPort || '—'}`;
+  if (!endpointPort) return `${host}:—`;
+  return `${host}:${endpointPort}`;
+};
+
+export const parseStreamEndpoint = (value: string) => {
+  const trimmed = value.trim();
+  const separatorIndex = trimmed.lastIndexOf(':');
+  if (separatorIndex <= 0 || separatorIndex === trimmed.length - 1) {
+    return { ip: '', port: '', error: 'Enter endpoint as IPv4:port.' };
+  }
+  const ip = trimmed.slice(0, separatorIndex).trim();
+  const port = trimmed.slice(separatorIndex + 1).trim();
+  return { ip, port, error: null };
+};

@@ -520,9 +520,9 @@ test.describe('App screenshots', () => {
     await page.keyboard.press('Escape');
 
     await page.getByTestId('home-stream-edit-toggle-vic').click();
-    const streamInput = page.getByTestId('home-stream-ip-vic');
+    const streamInput = page.getByTestId('home-stream-endpoint-vic');
     await streamInput.click();
-    await streamInput.fill('239.0.1.90');
+    await streamInput.fill('239.0.1.90:11000');
     await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/03-input.png');
     await page.getByTestId('home-stream-confirm-vic').click();
 

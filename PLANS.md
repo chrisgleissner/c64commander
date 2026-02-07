@@ -1,66 +1,56 @@
 # PLANS.md
 
-This plan is the authoritative contract for the C64U interface-contract research work.
-Strict loop: plan -> execute -> verify. Do not proceed to the next phase until the current phase is complete.
+This file is the authoritative execution contract for Home page structural layout fixes.
+Strict loop: plan -> execute -> verify. A task is checked only after implementation and verification.
 
-## Phase 0: Preconditions
-- [ ] Confirm access to a real C64U device and its base URL.
-- [ ] Confirm whether the device network password is known and whether AUTH OFF is enabled on-device.
-- [ ] Confirm firmware source is available via symlink: 1541ultimate/.
-- [ ] Confirm run host has Node.js available for the harness.
+## Non-Negotiable Process
+- [x] Create and maintain `PLANS.md` as authoritative contract for this task.
+- [ ] Execute all work through plan-execute-verify loop.
+- [ ] Keep scope limited to Home page Drives and Streams rendering/editing.
+- [ ] Complete verification gates: unit tests, UI/integration tests, narrow-width layout checks, CI green.
 
-## Phase 1: Discovery (static)
-- [x] Read README and existing docs relevant to REST/FTP behavior.
-- [x] Inspect OpenAPI spec: doc/c64/c64u-openapi.yaml.
-- [x] Inspect firmware sources under 1541ultimate/ for REST and FTP servers:
-  - [x] Locate REST request handlers and auth checks.
-  - [x] Locate FTP command handlers, auth checks, and concurrency hints.
-  - [x] Record relevant paths, symbols, and constants.
-- [x] Extract candidate endpoint list and FTP command list for testing.
+## Scope Guardrails
+- [ ] Restrict code changes to Home page Drives/Streams behavior and directly affected tests/utilities.
+- [ ] Do not add new product features.
+- [ ] Do not change REST semantics.
+- [ ] Do not refactor unrelated UI.
 
-## Phase 2: Harness Design
-- [x] Create harness layout under scripts/c64u-interface-contract/ per required structure.
-- [x] Define config schema (config.schema.json) with mode, auth, ftpMode, concurrency, pacing, outputDir.
-- [x] Define output schemas in scripts/c64u-interface-contract/schemas/ (endpoints, cooldowns, concurrency, conflicts, latency).
-- [x] Implement core libs:
-  - [x] restClient.ts with correlation IDs and auth header support.
-  - [x] ftpClient.ts with PASV/PORT, auth support, correlation IDs.
-  - [x] health.ts probe + circuit breaker (N=3, T=30s).
-  - [x] timing.ts for pacing and cooldown measurement.
-  - [x] concurrency.ts for in-flight control.
-- [x] Implement scenarios for REST, FTP, and mixed tests.
-- [x] Implement output writer, schema validation, and latest/ sync.
-- [x] Implement AUTH comparison tool.
+## Section A - Drives: Layout Correction
+- [ ] Replace each drive entry with mandatory two-line layout.
+- [ ] Ensure line 1 keeps drive name left and ON/OFF toggle right.
+- [ ] Ensure drive name does not truncate.
+- [ ] Ensure line 2 shows explicit `Bus ID` and `Type` labels.
+- [ ] Ensure selectors avoid internal wrapping and keep values readable on narrow widths.
+- [ ] Keep existing drive toggle/select interactions and request behavior unchanged.
+- [ ] Add/update tests for new drives layout expectations.
 
-## Phase 3: SAFE Execution
-- [ ] Prepare SAFE run configuration (AUTH ON).
-- [ ] Run SAFE + AUTH ON and collect outputs.
-- [x] If device allows, run SAFE + AUTH OFF and collect outputs.
-- [x] Ensure all SAFE write operations restore previous values.
-- [x] Record run metadata (firmware commit/hash, OpenAPI hash, device info).
+## Section B - Streams: IP Address Visibility & Editing
+- [ ] Replace split/truncated stream endpoint display with single full `IP:PORT` text.
+- [ ] Remove stream endpoint ellipsis/truncation behavior.
+- [ ] Keep stream ON/OFF toggle right-aligned.
+- [ ] Keep default row read-only and open editor on tap.
+- [ ] Treat endpoint as one editable field in editor.
+- [ ] Validate on confirm with strict IPv4 + valid port range.
+- [ ] Preserve request payload format as single `IP:PORT` value.
+- [ ] Add/update tests for endpoint rendering and editing/validation.
 
-## Phase 4: STRESS Execution (opt-in)
-- [ ] Determine if STRESS is safe enough to run.
-- [ ] If approved, run STRESS with hard caps and abort conditions.
-- [ ] Collect outputs and confirm recovery behavior.
+## Section C - UX Principles Enforcement
+- [ ] Favor vertical density over horizontal compression in Drives and Streams rows.
+- [ ] Ensure no truncated technical value in target sections.
+- [ ] Keep explicit, stable labels (`Bus ID`, `Type`, `IP:PORT`).
+- [ ] Preserve scanable control-panel style hierarchy.
 
-## Phase 5: Reporting and Integration Guidance
-- [x] Write report: doc/c64/interface-contract.md with required tables and references.
-- [x] Document SAFE vs STRESS coverage and excluded endpoints with rationale.
-- [x] Provide reproduction commands.
-- [x] Provide integration guidance and optional loader feature flag.
+## Section D - Verification
+- [ ] Verify drive names are never truncated in updated layout.
+- [ ] Verify `Bus ID` and `Type` labels are fully visible.
+- [ ] Verify stream rows always show full `IP:PORT`.
+- [ ] Verify tap-to-edit and confirm/cancel flows work with validation.
+- [ ] Verify layout behavior on narrow Android-like viewport widths.
+- [ ] Verify no regressions in other Home page controls.
 
-## Phase 6: Verification
-- [x] Validate all output JSON files against schemas.
-- [x] Update test-results/c64u-interface-contract/latest from newest run.
-- [x] Ensure README for harness includes usage examples.
-- [ ] Run applicable lint/tests/build if any harness code affects the build.
-- [x] Record exact commands executed and results here.
-
-## Execution Log
-- [x] npm install (lockfile sync after adding Ajv, ajv-formats, @types/js-yaml)
-- [x] npx tsc -p scripts/c64u-interface-contract/tsconfig.json
-- [x] node scripts/c64u-interface-contract/dist/run.js --config scripts/c64u-interface-contract/config.safe.authoff.json
-- [ ] vitest run (via runTests tool) FAILED: localStorage not defined in connectionManager tests; alias @/lib/* not resolved in hvsc and deviceInteraction tests.
-- [x] npm run lint
-- [x] npm run build (warning: Module "url" externalized for browser compatibility)
+## Delivery
+- [ ] Keep `PLANS.md` updated with completion status.
+- [ ] Run unit tests and pass.
+- [ ] Run UI/integration tests (Playwright) and pass.
+- [ ] Run lint/build/full local build helper and pass.
+- [ ] Confirm CI is green (or provide exact status if local-only).
