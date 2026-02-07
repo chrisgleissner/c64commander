@@ -1,6 +1,6 @@
-# C64U Interface Contract Harness
+# C64U Contract Test Harness
 
-This harness derives a machine-consumable interface contract for the C64U REST API and FTP service.
+This harness derives a machine-consumable contract test record for the C64U REST API and FTP service.
 It is designed for SAFE and STRESS runs and writes reproducible artifacts under test-results/.
 
 ## Requirements
@@ -13,19 +13,19 @@ It is designed for SAFE and STRESS runs and writes reproducible artifacts under 
 Build the harness (TypeScript -> JS):
 
 ```bash
-npx tsc -p scripts/c64u-interface-contract/tsconfig.json
+npx tsc -p tests/contract/tsconfig.json
 ```
 
 Run a SAFE session:
 
 ```bash
-node scripts/c64u-interface-contract/dist/run.js --config scripts/c64u-interface-contract/config.sample.json
+node tests/contract/dist/run.js --config tests/contract/config.sample.json
 ```
 
 Compare AUTH ON vs AUTH OFF runs:
 
 ```bash
-node scripts/c64u-interface-contract/dist/compare.js --left test-results/c64u-interface-contract/runs/<run-a> --right test-results/c64u-interface-contract/runs/<run-b>
+node tests/contract/dist/compare.js --left test-results/contract/runs/<run-a> --right test-results/contract/runs/<run-b>
 ```
 
 ## Output Layout
@@ -34,7 +34,7 @@ Outputs are written to:
 
 ```
 test-results/
-  c64u-interface-contract/
+  contract/
     runs/
       <timestamp>-<mode>-<auth>/
         meta.json
@@ -91,3 +91,4 @@ Increase `concurrency.restMaxInFlight` to probe high-load behavior. The harness 
 - REST auth uses the network password (`X-Password` header).
 - FTP auth uses PASS with the same network password.
 - If the network password is empty, AUTH OFF mode is supported by firmware.
+- The harness always reboots the device and waits for `/v1/info` to recover before exiting.

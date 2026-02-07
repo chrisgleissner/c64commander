@@ -1,9 +1,10 @@
 {
     "baseUrl": "http://c64u",
     "mode": "SAFE",
-    "auth": "OFF",
+    "auth": "ON",
+    "password": "changeme",
     "ftpMode": "PASV",
-    "outputDir": "test-results/c64u-interface-contract",
+    "outputDir": "test-results/contract",
     "concurrency": {
         "restMaxInFlight": 2,
         "ftpMaxSessions": 1,
@@ -25,6 +26,6 @@
         "maxDestructiveScenarioMs": 120000
     },
     "scratch": {
-        "ftpDir": "/Temp/c64u-interface-contract"
+        "ftpDir": "/Temp/contract-test"
     }
 }

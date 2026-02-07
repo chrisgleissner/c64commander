@@ -34,5 +34,5 @@ export class SchemaValidator {
 }
 
 export function schemaPath(name: string): string {
-    return path.join(process.cwd(), "scripts/c64u-interface-contract/schemas", name);
+    return path.join(process.cwd(), "tests/contract/schemas", name);
 }

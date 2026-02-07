@@ -27,11 +27,19 @@ RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
-RUN_INTERFACE_TEST=false
+RUN_CONTRACT_TEST=false
 PLAYWRIGHT_DEVICES=""
 PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
 DEVICE_ID=""
+TEST_APK_PATH=""
+TEST_DEVICE_ID=""
+SKIP_INSTALL=false
+SKIP_BUILD=false
+SKIP_TESTS=false
+SKIP_APK=false
+SKIP_FORMAT=false
+INSTALL_APK=false
 FUZZ_SEED=""
 FUZZ_STEPS=""
 FUZZ_TIME_BUDGET=""
@@ -50,25 +58,33 @@ TRACE_SUITE=""
 MAESTRO_TAGS=""
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
-INTERFACE_TEST_MODE="safe"
-INTERFACE_TEST_AUTH="off"
-INTERFACE_TEST_PASSWORD=""
-INTERFACE_TEST_ALLOW_RESET=false
-INTERFACE_TEST_DISK_PATH=""
-INTERFACE_TEST_DISK_DRIVE="a"
-INTERFACE_TEST_DISK_TYPE="d64"
-INTERFACE_TEST_DISK_MODE="readonly"
-INTERFACE_TEST_SID_PATH=""
-INTERFACE_TEST_SID_SONGNR=""
-INTERFACE_TEST_PRG_PATH=""
-INTERFACE_TEST_PRG_ACTION="run"
+CONTRACT_MODE="safe"
+CONTRACT_AUTH="off"
+CONTRACT_PASSWORD=""
+CONTRACT_ALLOW_RESET=false
+CONTRACT_DISK_PATH=""
+CONTRACT_DISK_DRIVE="a"
+CONTRACT_DISK_TYPE="d64"
+CONTRACT_DISK_MODE="readonly"
+CONTRACT_SID_PATH=""
+CONTRACT_SID_SONGNR=""
+CONTRACT_PRG_PATH=""
+CONTRACT_PRG_ACTION="run"
+PRIMARY_ACTION=""
+PRIMARY_ACTION_SOURCE=""
+BUILD_FLAGS=()
+TEST_MODIFIERS=()
+TEST_APK_FLAGS=()
+FUZZ_FLAGS=()
+CONTRACT_FLAGS=()
+TARGET_FLAGS=()
 
 usage() {
   cat <<'EOF'
 build - C64 Commander local build helper
 
 Usage:
-  ./build [options]
+  ./build [primary-action] [options]
 
 Default (no options):
   - Install deps
@@ -76,31 +92,45 @@ Default (no options):
   - Run tests
   - Build debug APK
 
-Options:
-  --emulator            Run scripts/android-emulator.sh and exit
-  --install             Install APK to a connected Android device (via adb)
-  --device [id]         Device ID for adb (optional). If omitted, picks the first real phone.
-  --apk-path <path>     APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
+Primary actions (exactly one; default build when omitted):
+  --test-unit
+  --test-e2e
+  --test-e2e-ci
+  --test-maestro-ci
+  --test-maestro-all
+  --test-maestro-tags <tags>
+  --test-fuzz
+  --test-contract
+  --test-smoke
+  --screenshots
+  --screenshots-only
+  --emulator
+  --dump-c64u-config
 
-  --test                Run unit tests only (vitest)
-  --test-e2e            Run E2E tests only (Playwright, no screenshots)
-  --test-e2e-ci         Run full CI mirror (screenshots + e2e + validation)
-  --test-maestro-ci     Run Maestro CI flows (ci-critical tag)
-  --test-maestro-all    Run all Maestro flows (ignores excludeTags)
-  --test-maestro-tags <tags> Run Maestro flows by tags (+include/-exclude)
-  --validate-evidence   Validate Playwright evidence structure
-  --coverage            Run unit + e2e coverage (slower)
-  --record-traces       Record golden traces during Playwright runs
+Build domain (default build only):
+  --skip-install
+  --skip-build
+  --skip-tests
+  --skip-apk
+  --skip-format
+  --install-apk            Install APK to a connected Android device (via adb)
+  --apk-path <path>        APK path to install (default: android/app/build/outputs/apk/debug/app-debug.apk)
+  --device-id <id>         Device ID for adb (optional). If omitted, picks the first real phone.
+
+Test modifiers (require one --test-* primary action):
+  --coverage               Run coverage pipeline (unit + e2e)
+  --validate-evidence      Validate Playwright evidence structure
+  --record-traces          Record golden traces during Playwright runs
   --trace-output-dir <path> Output directory for golden traces (default: playwright/fixtures/traces/golden)
-  --trace-suite <name>  Optional suite name to scope trace recording
-  --android-tests       Run Android instrumentation tests (requires a device/emulator)
-  --skip-android-tests  Skip Android instrumentation tests
-  --skip-android-coverage Skip Android Jacoco coverage check
-  --smoke-android-emulator Run Android emulator smoke test (mock target only)
-  --smoke-android-real  Also run emulator smoke test against real target (requires flag)
-  --c64u-target mock|real   Target for emulator smoke (default: mock; real requires --smoke-android-real)
-  --c64u-host <hostname>    Hostname/IP for real target (default: C64U)
-  --fuzz                Run Playwright chaos fuzz runner (mock device only)
+  --trace-suite <name>     Optional suite name to scope trace recording
+  --devices <list>         Device profiles for Playwright (phone, tablet, phone,tablet, all)
+  --android-tests          Run Android instrumentation tests (requires a device/emulator)
+  --skip-android-tests     Skip Android instrumentation tests
+  --skip-android-coverage  Skip Android Jacoco coverage check
+  --test-apk-path <path>   APK path override for Maestro/smoke tests
+  --test-device-id <id>    adb device id for Maestro tests
+
+Fuzz modifiers (require --test-fuzz):
   --fuzz-seed <num>          Base seed for fuzz RNG (default: epoch millis; each shard adds its index)
   --fuzz-steps <num>         Max fuzz steps (optional; default: unbounded when time budget is set)
   --fuzz-time-budget <dur>   Time budget for fuzz run (default 30m; e.g. 120s, 10m)
@@ -110,53 +140,89 @@ Options:
   --fuzz-no-progress-steps N End session after N unchanged steps (default 20)
   --fuzz-progress-timeout <dur> Progress watchdog timeout (default 5s; e.g. 5000ms, 5s)
 
-  --devices <list>      Device profiles for Playwright (phone, tablet, phone,tablet, all)
-  --skip-format         Skip repository auto-formatting before build steps
-  --skip-install        Skip npm install
-  --skip-build          Skip npm run cap:build
-  --skip-tests          Skip npm test
-  --skip-apk            Skip npm run android:apk
-  --screenshots         Capture app screenshots into doc/img
-  --screenshots-only    Capture screenshots only (no tests, no APK, no Android)
-  --dump-c64u-config     Dump C64U config to doc/c64/c64u-config.yaml and exit
-  --interface-test       Run C64U interface contract harness
-  --interface-test-mode safe|unsafe  Interface run mode (default: safe)
-  --interface-test-auth on|off       Interface run auth (default: off)
-  --interface-test-password <pw>     Password for auth=on
-  --interface-test-allow-reset       Allow machine reset scenario in unsafe mode
-  --interface-test-disk <path>       Disk image path for mount test
-  --interface-test-disk-drive a|b    Drive letter for mount (default: a)
-  --interface-test-disk-type <type>  Disk type (default: d64)
-  --interface-test-disk-mode <mode>  Disk mode (default: readonly)
-  --interface-test-sid <path>        SID file path for sidplay
-  --interface-test-sid-song <num>    SID song index
-  --interface-test-prg <path>        PRG file path for load/run
-  --interface-test-prg-action run|load  PRG action (default: run)
+Contract test modifiers (require --test-contract):
+  --contract-mode safe|unsafe
+  --contract-auth on|off
+  --contract-password <pw>
+  --contract-allow-reset
+  --contract-disk <path>
+  --contract-disk-drive a|b
+  --contract-disk-type <type>
+  --contract-disk-mode <mode>
+  --contract-sid <path>
+  --contract-sid-song <num>
+  --contract-prg <path>
+  --contract-prg-action run|load
+  --c64u-target mock|real (required)
+  --c64u-host <hostname>
 
-  -h, --help            Show this help
+Smoke test modifiers (require --test-smoke):
+  --c64u-target mock|real   mock=emulator only, real=emulator + real target
+  --c64u-host <hostname>    Hostname/IP for real target (default: C64U)
+
+  -h, --help               Show this help
 
 Examples:
   ./build
   ./build --skip-tests
-  ./build --install --device R5CRC3ZY9XH
-  ./build --apk-path /path/to/app-debug.apk --install
+  ./build --install-apk --device-id R5CRC3ZY9XH
+  ./build --apk-path /path/to/app-debug.apk --install-apk
   ./build --emulator
   ./build --screenshots
   ./build --screenshots-only
   ./build --test-e2e --record-traces --trace-suite playback
-  ./build --interface-test --interface-test-mode safe --interface-test-auth off
+  ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off
+  ./build --test-smoke --c64u-target real --c64u-host C64U
 
 Notes:
   --screenshots       Runs full build/tests by default, then captures screenshots.
   --screenshots-only  Captures screenshots without running tests or Android builds.
   --test-e2e          Runs Playwright E2E tests excluding @screenshots.
   --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
+  --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
+  --coverage          Runs unit + E2E coverage regardless of test category.
   Playwright port     Auto-selected to avoid clashes; set PLAYWRIGHT_PORT to pin a specific port.
 EOF
 }
 
 log() {
   printf "\n==> %s\n" "$1"
+}
+
+record_flag() {
+  local -n target="$1"
+  target+=("$2")
+}
+
+set_primary_action() {
+  local action="$1"
+  local flag="$2"
+  if [[ -n "$PRIMARY_ACTION" ]]; then
+    echo "Multiple primary actions: ${PRIMARY_ACTION_SOURCE} and ${flag}" >&2
+    exit 1
+  fi
+  PRIMARY_ACTION="$action"
+  PRIMARY_ACTION_SOURCE="$flag"
+}
+
+is_test_action() {
+  case "$PRIMARY_ACTION" in
+    test-unit|test-e2e|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-smoke)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+require_value() {
+  local flag="$1"
+  local value="$2"
+  if [[ -z "$value" || "$value" == "--"* ]]; then
+    echo "Error: ${flag} requires a value" >&2
+    exit 1
+  fi
 }
 
 require_cmd() {
@@ -219,106 +285,106 @@ ensure_playwright_port() {
   fi
 }
 
-run_interface_test() {
-  local mode_raw="${INTERFACE_TEST_MODE,,}"
+run_contract_test() {
+  local mode_raw="${CONTRACT_MODE,,}"
   local mode="SAFE"
-  if [[ "$mode_raw" == "unsafe" || "$mode_raw" == "stress" ]]; then
+  if [[ "$mode_raw" == "unsafe" ]]; then
     mode="STRESS"
   elif [[ "$mode_raw" != "safe" ]]; then
-    echo "Invalid --interface-test-mode: ${INTERFACE_TEST_MODE}" >&2
+    echo "Invalid --contract-mode: ${CONTRACT_MODE}" >&2
     exit 1
   fi
 
-  local auth_raw="${INTERFACE_TEST_AUTH,,}"
+  local auth_raw="${CONTRACT_AUTH,,}"
   local auth="OFF"
   if [[ "$auth_raw" == "on" ]]; then
     auth="ON"
   elif [[ "$auth_raw" != "off" ]]; then
-    echo "Invalid --interface-test-auth: ${INTERFACE_TEST_AUTH}" >&2
+    echo "Invalid --contract-auth: ${CONTRACT_AUTH}" >&2
     exit 1
   fi
 
-  if [[ "$auth" == "ON" && -z "$INTERFACE_TEST_PASSWORD" ]]; then
-    echo "--interface-test-password is required when auth=on" >&2
+  if [[ "$auth" == "ON" && -z "$CONTRACT_PASSWORD" ]]; then
+    echo "--contract-password is required when auth=on" >&2
     exit 1
   fi
 
-  if [[ -n "$INTERFACE_TEST_DISK_DRIVE" && "$INTERFACE_TEST_DISK_DRIVE" != "a" && "$INTERFACE_TEST_DISK_DRIVE" != "b" ]]; then
-    echo "Invalid --interface-test-disk-drive: ${INTERFACE_TEST_DISK_DRIVE}" >&2
+  if [[ -n "$CONTRACT_DISK_DRIVE" && "$CONTRACT_DISK_DRIVE" != "a" && "$CONTRACT_DISK_DRIVE" != "b" ]]; then
+    echo "Invalid --contract-disk-drive: ${CONTRACT_DISK_DRIVE}" >&2
     exit 1
   fi
 
-  if [[ -n "$INTERFACE_TEST_DISK_MODE" && "$INTERFACE_TEST_DISK_MODE" != "readwrite" && "$INTERFACE_TEST_DISK_MODE" != "readonly" && "$INTERFACE_TEST_DISK_MODE" != "unlinked" ]]; then
-    echo "Invalid --interface-test-disk-mode: ${INTERFACE_TEST_DISK_MODE}" >&2
+  if [[ -n "$CONTRACT_DISK_MODE" && "$CONTRACT_DISK_MODE" != "readwrite" && "$CONTRACT_DISK_MODE" != "readonly" && "$CONTRACT_DISK_MODE" != "unlinked" ]]; then
+    echo "Invalid --contract-disk-mode: ${CONTRACT_DISK_MODE}" >&2
     exit 1
   fi
 
-  if [[ -n "$INTERFACE_TEST_PRG_ACTION" && "$INTERFACE_TEST_PRG_ACTION" != "run" && "$INTERFACE_TEST_PRG_ACTION" != "load" ]]; then
-    echo "Invalid --interface-test-prg-action: ${INTERFACE_TEST_PRG_ACTION}" >&2
+  if [[ -n "$CONTRACT_PRG_ACTION" && "$CONTRACT_PRG_ACTION" != "run" && "$CONTRACT_PRG_ACTION" != "load" ]]; then
+    echo "Invalid --contract-prg-action: ${CONTRACT_PRG_ACTION}" >&2
     exit 1
   fi
 
   local base_url="http://${C64U_HOST}"
   local config_path
-  config_path="$(mktemp -t c64u-interface-test.XXXXXX.json)"
+  config_path="$(mktemp -t c64u-contract-test.XXXXXX.json)"
   trap 'rm -f "$config_path"' RETURN
 
-  export INTERFACE_TEST_BASE_URL="$base_url"
-  export INTERFACE_TEST_MODE_UPPER="$mode"
-  export INTERFACE_TEST_AUTH_UPPER="$auth"
-  export INTERFACE_TEST_PASSWORD
-  export INTERFACE_TEST_ALLOW_RESET
-  export INTERFACE_TEST_DISK_PATH
-  export INTERFACE_TEST_DISK_DRIVE
-  export INTERFACE_TEST_DISK_TYPE
-  export INTERFACE_TEST_DISK_MODE
-  export INTERFACE_TEST_SID_PATH
-  export INTERFACE_TEST_SID_SONGNR
-  export INTERFACE_TEST_PRG_PATH
-  export INTERFACE_TEST_PRG_ACTION
+  export CONTRACT_TEST_BASE_URL="$base_url"
+  export CONTRACT_TEST_MODE_UPPER="$mode"
+  export CONTRACT_TEST_AUTH_UPPER="$auth"
+  export CONTRACT_TEST_PASSWORD
+  export CONTRACT_TEST_ALLOW_RESET
+  export CONTRACT_TEST_DISK_PATH
+  export CONTRACT_TEST_DISK_DRIVE
+  export CONTRACT_TEST_DISK_TYPE
+  export CONTRACT_TEST_DISK_MODE
+  export CONTRACT_TEST_SID_PATH
+  export CONTRACT_TEST_SID_SONGNR
+  export CONTRACT_TEST_PRG_PATH
+  export CONTRACT_TEST_PRG_ACTION
 
   node --input-type=module - "$config_path" <<'NODE'
 import fs from 'node:fs';
 
 const outPath = process.argv[2];
 const cfg = {
-  baseUrl: process.env.INTERFACE_TEST_BASE_URL,
-  mode: process.env.INTERFACE_TEST_MODE_UPPER,
-  auth: process.env.INTERFACE_TEST_AUTH_UPPER,
+  baseUrl: process.env.CONTRACT_TEST_BASE_URL,
+  mode: process.env.CONTRACT_TEST_MODE_UPPER,
+  auth: process.env.CONTRACT_TEST_AUTH_UPPER,
   ftpMode: 'PASV',
-  outputDir: 'test-results/c64u-interface-contract',
+  outputDir: 'test-results/contract',
   concurrency: { restMaxInFlight: 2, ftpMaxSessions: 1, mixedMaxInFlight: 2 },
   pacing: { restMinDelayMs: 100, ftpMinDelayMs: 100 },
   health: { endpoint: '/v1/version', intervalMs: 5000, timeoutMs: 2000 },
   timeouts: { restTimeoutMs: 8000, ftpTimeoutMs: 15000, scenarioTimeoutMs: 120000, maxDestructiveScenarioMs: 180000 },
-  scratch: { ftpDir: '/Temp/c64u-interface-contract' },
+  scratch: { ftpDir: '/Temp/contract-test' },
 };
 
 if (cfg.auth === 'ON') {
-  cfg.password = process.env.INTERFACE_TEST_PASSWORD;
+  cfg.password = process.env.CONTRACT_TEST_PASSWORD;
 }
 
-if (process.env.INTERFACE_TEST_ALLOW_RESET === 'true') {
+if (process.env.CONTRACT_TEST_ALLOW_RESET === 'true') {
   cfg.allowMachineReset = true;
 }
 
 const media = {};
-if (process.env.INTERFACE_TEST_DISK_PATH) {
-  media.diskImagePath = process.env.INTERFACE_TEST_DISK_PATH;
-  media.diskDrive = process.env.INTERFACE_TEST_DISK_DRIVE || 'a';
-  media.diskType = process.env.INTERFACE_TEST_DISK_TYPE || 'd64';
-  media.diskMode = process.env.INTERFACE_TEST_DISK_MODE || 'readonly';
+if (process.env.CONTRACT_TEST_DISK_PATH) {
+  media.diskImagePath = process.env.CONTRACT_TEST_DISK_PATH;
+  media.diskDrive = process.env.CONTRACT_TEST_DISK_DRIVE || 'a';
+  media.diskType = process.env.CONTRACT_TEST_DISK_TYPE || 'd64';
+  media.diskMode = process.env.CONTRACT_TEST_DISK_MODE || 'readonly';
 }
-if (process.env.INTERFACE_TEST_SID_PATH) {
-  media.sidFilePath = process.env.INTERFACE_TEST_SID_PATH;
-  if (process.env.INTERFACE_TEST_SID_SONGNR) {
-    const songNr = Number(process.env.INTERFACE_TEST_SID_SONGNR);
+if (process.env.CONTRACT_TEST_SID_PATH) {
+  media.sidFilePath = process.env.CONTRACT_TEST_SID_PATH;
+  if (process.env.CONTRACT_TEST_SID_SONGNR) {
+    const songNr = Number(process.env.CONTRACT_TEST_SID_SONGNR);
     if (Number.isFinite(songNr)) media.sidSongNr = songNr;
   }
 }
-if (process.env.INTERFACE_TEST_PRG_PATH) {
-  media.prgFilePath = process.env.INTERFACE_TEST_PRG_PATH;
-  media.prgAction = process.env.INTERFACE_TEST_PRG_ACTION || 'run';
+if (process.env.CONTRACT_TEST_PRG_PATH) {
+  media.prgFilePath = process.env.CONTRACT_TEST_PRG_PATH;
+  media.prgAction = process.env.CONTRACT_TEST_PRG_ACTION || 'run';
 }
 if (Object.keys(media).length) {
   cfg.media = media;
@@ -327,9 +393,24 @@ if (Object.keys(media).length) {
 fs.writeFileSync(outPath, JSON.stringify(cfg, null, 2));
 NODE
 
-  log "Running interface contract harness (${mode}/${auth}) against ${base_url}"
-  (cd "$ROOT_DIR" && npx tsc -p scripts/c64u-interface-contract/tsconfig.json)
-  (cd "$ROOT_DIR" && node scripts/c64u-interface-contract/dist/run.js --config "$config_path")
+  log "Running contract test harness (${mode}/${auth}) against ${base_url}"
+  local harness_status=0
+  set +e
+  (cd "$ROOT_DIR" && npx tsc -p tests/contract/tsconfig.json)
+  local tsc_status=$?
+  (cd "$ROOT_DIR" && node tests/contract/dist/run.js --config "$config_path")
+  local run_status=$?
+  set -e
+  if [[ "$tsc_status" -ne 0 || "$run_status" -ne 0 ]]; then
+    echo "Contract test harness failed (tsc=${tsc_status}, run=${run_status})" >&2
+    harness_status=1
+  fi
+
+  contract_test_teardown "$base_url" "$auth"
+
+  if [[ "$harness_status" -ne 0 ]]; then
+    exit 1
+  fi
 }
 
 run_android_instrumentation() {
@@ -344,188 +425,98 @@ run_android_instrumentation() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --emulator)
-      RUN_EMULATOR=true
-      shift
-      ;;
-    --install)
-      RUN_INSTALL_APK=true
-      shift
-      ;;
-    --test)
-      RUN_TEST_UNIT=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_APK=false
-      RUN_TEST=false
+    --test-unit)
+      set_primary_action "test-unit" "$1"
       shift
       ;;
     --test-e2e)
-      RUN_TEST_E2E=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_APK=false
-      RUN_TEST=false
+      set_primary_action "test-e2e" "$1"
       shift
       ;;
     --test-e2e-ci)
-      RUN_TEST_E2E_CI=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_APK=false
-      RUN_TEST=false
+      set_primary_action "test-e2e-ci" "$1"
       shift
       ;;
     --test-maestro-ci)
-      RUN_TEST_MAESTRO_CI=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_APK=true
-      RUN_TEST=false
-      RUN_TEST_UNIT=false
-      RUN_TEST_E2E=false
-      RUN_TEST_E2E_CI=false
-      RUN_VALIDATE_EVIDENCE=false
-      RUN_COVERAGE=false
-      RUN_ANDROID_TESTS=false
-      RUN_ANDROID_COVERAGE=false
+      set_primary_action "test-maestro-ci" "$1"
       shift
       ;;
     --test-maestro-all)
-      RUN_TEST_MAESTRO_ALL=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_APK=true
-      RUN_TEST=false
-      RUN_TEST_UNIT=false
-      RUN_TEST_E2E=false
-      RUN_TEST_E2E_CI=false
-      RUN_VALIDATE_EVIDENCE=false
-      RUN_COVERAGE=false
-      RUN_ANDROID_TESTS=false
-      RUN_ANDROID_COVERAGE=false
+      set_primary_action "test-maestro-all" "$1"
       shift
       ;;
     --test-maestro-tags)
-      if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
-        RUN_TEST_MAESTRO_TAGS=true
-        MAESTRO_TAGS="$2"
-        RUN_BUILD=true
-        RUN_INSTALL=true
-        RUN_APK=true
-        RUN_TEST=false
-        RUN_TEST_UNIT=false
-        RUN_TEST_E2E=false
-        RUN_TEST_E2E_CI=false
-        RUN_VALIDATE_EVIDENCE=false
-        RUN_COVERAGE=false
-        RUN_ANDROID_TESTS=false
-        RUN_ANDROID_COVERAGE=false
-        shift 2
-      else
-        echo "Error: --test-maestro-tags requires a value" >&2
-        exit 1
-      fi
+      require_value "$1" "${2:-}"
+      set_primary_action "test-maestro-tags" "$1"
+      MAESTRO_TAGS="$2"
+      shift 2
       ;;
-    --validate-evidence)
-      RUN_VALIDATE_EVIDENCE=true
-      RUN_BUILD=false
-      RUN_INSTALL=false
-      RUN_APK=false
-      RUN_TEST=false
+    --test-fuzz)
+      set_primary_action "test-fuzz" "$1"
       shift
       ;;
-    --coverage)
-      RUN_COVERAGE=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_APK=false
-      RUN_TEST=false
+    --test-contract)
+      set_primary_action "test-contract" "$1"
       shift
       ;;
-    --fuzz)
-      RUN_FUZZ=true
-      RUN_BUILD=true
-      RUN_INSTALL=true
-      RUN_TEST=false
-      RUN_TEST_UNIT=false
-      RUN_TEST_E2E=false
-      RUN_TEST_E2E_CI=false
-      RUN_VALIDATE_EVIDENCE=false
-      RUN_COVERAGE=false
-      RUN_ANDROID_TESTS=false
-      RUN_ANDROID_COVERAGE=false
-      RUN_APK=false
-      RUN_INSTALL_APK=false
+    --test-smoke)
+      set_primary_action "test-smoke" "$1"
       shift
       ;;
-    --android-tests)
-      RUN_ANDROID_TESTS=true
+    --screenshots)
+      set_primary_action "screenshots" "$1"
       shift
       ;;
-    --record-traces)
-      RECORD_TRACES=true
+    --screenshots-only)
+      set_primary_action "screenshots-only" "$1"
       shift
       ;;
-    --trace-output-dir)
-      TRACE_OUTPUT_DIR="$2"
-      shift 2
-      ;;
-    --trace-suite)
-      TRACE_SUITE="$2"
-      shift 2
-      ;;
-    --skip-android-tests)
-      RUN_ANDROID_TESTS=false
+    --emulator)
+      set_primary_action "emulator" "$1"
       shift
       ;;
-    --skip-android-coverage)
-      RUN_ANDROID_COVERAGE=false
+    --dump-c64u-config)
+      set_primary_action "dump-c64u-config" "$1"
       shift
       ;;
-    --fuzz-seed)
-      FUZZ_SEED="$2"
+    --skip-install)
+      record_flag BUILD_FLAGS "$1"
+      SKIP_INSTALL=true
+      shift
+      ;;
+    --skip-build)
+      record_flag BUILD_FLAGS "$1"
+      SKIP_BUILD=true
+      shift
+      ;;
+    --skip-tests)
+      record_flag BUILD_FLAGS "$1"
+      SKIP_TESTS=true
+      shift
+      ;;
+    --skip-apk)
+      record_flag BUILD_FLAGS "$1"
+      SKIP_APK=true
+      shift
+      ;;
+    --skip-format)
+      record_flag BUILD_FLAGS "$1"
+      SKIP_FORMAT=true
+      shift
+      ;;
+    --install-apk)
+      record_flag BUILD_FLAGS "$1"
+      INSTALL_APK=true
+      shift
+      ;;
+    --apk-path)
+      record_flag BUILD_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      APK_PATH="$2"
       shift 2
       ;;
-    --fuzz-steps)
-      FUZZ_STEPS="$2"
-      shift 2
-      ;;
-    --fuzz-time-budget)
-      FUZZ_TIME_BUDGET="$2"
-      shift 2
-      ;;
-    --fuzz-last-interactions)
-      FUZZ_LAST_INTERACTIONS="$2"
-      shift 2
-      ;;
-    --fuzz-retain-success)
-      FUZZ_RETAIN_SUCCESS="$2"
-      shift 2
-      ;;
-    --fuzz-min-session-steps)
-      FUZZ_MIN_SESSION_STEPS="$2"
-      shift 2
-      ;;
-    --fuzz-no-progress-steps)
-      FUZZ_NO_PROGRESS_STEPS="$2"
-      shift 2
-      ;;
-    --fuzz-progress-timeout)
-      FUZZ_PROGRESS_TIMEOUT="$2"
-      shift 2
-      ;;
-    --devices)
-      if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
-        PLAYWRIGHT_DEVICES="$2"
-        export PLAYWRIGHT_DEVICES
-        shift 2
-      else
-        echo "Error: --devices requires a value" >&2
-        exit 1
-      fi
-      ;;
-    --device)
+    --device-id)
+      record_flag BUILD_FLAGS "$1"
       if [[ -n "${2:-}" && "${2:-}" != "--"* ]]; then
         DEVICE_ID="$2"
         shift 2
@@ -534,148 +525,196 @@ while [[ $# -gt 0 ]]; do
         shift
       fi
       ;;
-    --apk-path)
-      APK_PATH="$2"
+    --coverage)
+      record_flag TEST_MODIFIERS "$1"
+      RUN_COVERAGE=true
+      shift
+      ;;
+    --validate-evidence)
+      record_flag TEST_MODIFIERS "$1"
+      RUN_VALIDATE_EVIDENCE=true
+      shift
+      ;;
+    --record-traces)
+      record_flag TEST_MODIFIERS "$1"
+      RECORD_TRACES=true
+      shift
+      ;;
+    --trace-output-dir)
+      record_flag TEST_MODIFIERS "$1"
+      require_value "$1" "${2:-}"
+      TRACE_OUTPUT_DIR="$2"
       shift 2
       ;;
-    --skip-install)
-      RUN_INSTALL=false
+    --trace-suite)
+      record_flag TEST_MODIFIERS "$1"
+      require_value "$1" "${2:-}"
+      TRACE_SUITE="$2"
+      shift 2
+      ;;
+    --devices)
+      record_flag TEST_MODIFIERS "$1"
+      require_value "$1" "${2:-}"
+      PLAYWRIGHT_DEVICES="$2"
+      export PLAYWRIGHT_DEVICES
+      shift 2
+      ;;
+    --android-tests)
+      record_flag TEST_MODIFIERS "$1"
+      RUN_ANDROID_TESTS=true
       shift
       ;;
-    --skip-format)
-      RUN_FORMAT=false
-      shift
-      ;;
-    --skip-build)
-      RUN_BUILD=false
-      shift
-      ;;
-    --skip-tests)
-      RUN_TEST=false
-      shift
-      ;;
-    --skip-apk)
-      RUN_APK=false
-      shift
-      ;;
-    --screenshots)
-      RUN_SCREENSHOTS=true
-      shift
-      ;;
-    --screenshots-only)
-      RUN_SCREENSHOTS_ONLY=true
-      RUN_SCREENSHOTS=true
-      RUN_TEST=false
-      RUN_TEST_UNIT=false
-      RUN_TEST_E2E=false
-      RUN_TEST_E2E_CI=false
-      RUN_VALIDATE_EVIDENCE=false
-      RUN_COVERAGE=false
+    --skip-android-tests)
+      record_flag TEST_MODIFIERS "$1"
       RUN_ANDROID_TESTS=false
-      RUN_ANDROID_COVERAGE=false
-      RUN_APK=false
-      RUN_INSTALL_APK=false
       shift
       ;;
-    --dump-c64u-config)
-      RUN_DUMP_C64U_CONFIG=true
-      shift
-      ;;
-    --interface-test)
-      RUN_INTERFACE_TEST=true
-      shift
-      ;;
-    --interface-test-mode)
-      INTERFACE_TEST_MODE="$2"
-      shift 2
-      ;;
-    --interface-test-auth)
-      INTERFACE_TEST_AUTH="$2"
-      shift 2
-      ;;
-    --interface-test-password)
-      INTERFACE_TEST_PASSWORD="$2"
-      shift 2
-      ;;
-    --interface-test-allow-reset)
-      INTERFACE_TEST_ALLOW_RESET=true
-      shift
-      ;;
-    --interface-test-disk)
-      INTERFACE_TEST_DISK_PATH="$2"
-      shift 2
-      ;;
-    --interface-test-disk-drive)
-      INTERFACE_TEST_DISK_DRIVE="$2"
-      shift 2
-      ;;
-    --interface-test-disk-type)
-      INTERFACE_TEST_DISK_TYPE="$2"
-      shift 2
-      ;;
-    --interface-test-disk-mode)
-      INTERFACE_TEST_DISK_MODE="$2"
-      shift 2
-      ;;
-    --interface-test-sid)
-      INTERFACE_TEST_SID_PATH="$2"
-      shift 2
-      ;;
-    --interface-test-sid-song)
-      INTERFACE_TEST_SID_SONGNR="$2"
-      shift 2
-      ;;
-    --interface-test-prg)
-      INTERFACE_TEST_PRG_PATH="$2"
-      shift 2
-      ;;
-    --interface-test-prg-action)
-      INTERFACE_TEST_PRG_ACTION="$2"
-      shift 2
-      ;;
-    --smoke-android-emulator)
-      RUN_SMOKE_ANDROID_EMULATOR=true
-      if [[ "$RUN_BUILD" != "false" ]]; then
-        RUN_BUILD=true
-      fi
-      if [[ "$RUN_APK" != "false" ]]; then
-        RUN_APK=true
-      fi
-      RUN_TEST=false
-      RUN_TEST_UNIT=false
-      RUN_TEST_E2E=false
-      RUN_TEST_E2E_CI=false
-      RUN_VALIDATE_EVIDENCE=false
-      RUN_COVERAGE=false
-      RUN_ANDROID_TESTS=false
+    --skip-android-coverage)
+      record_flag TEST_MODIFIERS "$1"
       RUN_ANDROID_COVERAGE=false
       shift
       ;;
-    --smoke-android-real)
-      RUN_SMOKE_ANDROID_REAL=true
-      RUN_SMOKE_ANDROID_EMULATOR=true
-      if [[ "$RUN_BUILD" != "false" ]]; then
-        RUN_BUILD=true
-      fi
-      if [[ "$RUN_APK" != "false" ]]; then
-        RUN_APK=true
-      fi
-      RUN_TEST=false
-      RUN_TEST_UNIT=false
-      RUN_TEST_E2E=false
-      RUN_TEST_E2E_CI=false
-      RUN_VALIDATE_EVIDENCE=false
-      RUN_COVERAGE=false
-      RUN_ANDROID_TESTS=false
-      RUN_ANDROID_COVERAGE=false
+    --test-apk-path)
+      record_flag TEST_APK_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      TEST_APK_PATH="$2"
+      shift 2
+      ;;
+    --test-device-id)
+      record_flag TEST_APK_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      TEST_DEVICE_ID="$2"
+      shift 2
+      ;;
+    --fuzz-seed)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_SEED="$2"
+      shift 2
+      ;;
+    --fuzz-steps)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_STEPS="$2"
+      shift 2
+      ;;
+    --fuzz-time-budget)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_TIME_BUDGET="$2"
+      shift 2
+      ;;
+    --fuzz-last-interactions)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_LAST_INTERACTIONS="$2"
+      shift 2
+      ;;
+    --fuzz-retain-success)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_RETAIN_SUCCESS="$2"
+      shift 2
+      ;;
+    --fuzz-min-session-steps)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_MIN_SESSION_STEPS="$2"
+      shift 2
+      ;;
+    --fuzz-no-progress-steps)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_NO_PROGRESS_STEPS="$2"
+      shift 2
+      ;;
+    --fuzz-progress-timeout)
+      record_flag FUZZ_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      FUZZ_PROGRESS_TIMEOUT="$2"
+      shift 2
+      ;;
+    --contract-mode)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_MODE="$2"
+      shift 2
+      ;;
+    --contract-auth)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_AUTH="$2"
+      shift 2
+      ;;
+    --contract-password)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_PASSWORD="$2"
+      shift 2
+      ;;
+    --contract-allow-reset)
+      record_flag CONTRACT_FLAGS "$1"
+      CONTRACT_ALLOW_RESET=true
       shift
+      ;;
+    --contract-disk)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_DISK_PATH="$2"
+      shift 2
+      ;;
+    --contract-disk-drive)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_DISK_DRIVE="$2"
+      shift 2
+      ;;
+    --contract-disk-type)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_DISK_TYPE="$2"
+      shift 2
+      ;;
+    --contract-disk-mode)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_DISK_MODE="$2"
+      shift 2
+      ;;
+    --contract-sid)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_SID_PATH="$2"
+      shift 2
+      ;;
+    --contract-sid-song)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_SID_SONGNR="$2"
+      shift 2
+      ;;
+    --contract-prg)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_PRG_PATH="$2"
+      shift 2
+      ;;
+    --contract-prg-action)
+      record_flag CONTRACT_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      CONTRACT_PRG_ACTION="$2"
+      shift 2
       ;;
     --c64u-target)
+      record_flag TARGET_FLAGS "$1"
+      require_value "$1" "${2:-}"
       C64U_TARGET="$2"
       C64U_TARGET_SET=true
       shift 2
       ;;
     --c64u-host)
+      record_flag TARGET_FLAGS "$1"
+      require_value "$1" "${2:-}"
       C64U_HOST="$2"
       C64U_HOST_SET=true
       shift 2
@@ -692,21 +731,187 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$RUN_SCREENSHOTS_ONLY" == "true" ]]; then
-  RUN_TEST=false
-  RUN_TEST_UNIT=false
-  RUN_TEST_E2E=false
-  RUN_TEST_E2E_CI=false
-  RUN_TEST_MAESTRO_CI=false
-  RUN_TEST_MAESTRO_ALL=false
-  RUN_TEST_MAESTRO_TAGS=false
-  RUN_VALIDATE_EVIDENCE=false
-  RUN_COVERAGE=false
-  RUN_ANDROID_TESTS=false
-  RUN_ANDROID_COVERAGE=false
-  RUN_APK=false
-  RUN_INSTALL_APK=false
+if [[ -z "$PRIMARY_ACTION" ]]; then
+  PRIMARY_ACTION="build"
 fi
+
+if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" ]]; then
+  if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 ]]; then
+    echo "Tooling actions must run in isolation" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$PRIMARY_ACTION" == "screenshots" || "$PRIMARY_ACTION" == "screenshots-only" ]]; then
+  if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 ]]; then
+    echo "Screenshot actions must run in isolation" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$PRIMARY_ACTION" != "build" && ${#BUILD_FLAGS[@]} -gt 0 ]]; then
+  echo "Build flags are only valid for the default build action" >&2
+  exit 1
+fi
+
+if ! is_test_action; then
+  if [[ ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 ]]; then
+    echo "Test modifiers require a --test-* primary action" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$PRIMARY_ACTION" != "test-fuzz" && ${#FUZZ_FLAGS[@]} -gt 0 ]]; then
+  echo "Fuzz modifiers require --test-fuzz" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" != "test-contract" && ${#CONTRACT_FLAGS[@]} -gt 0 ]]; then
+  echo "Contract test modifiers require --test-contract" >&2
+  exit 1
+fi
+
+if [[ ${#TARGET_FLAGS[@]} -gt 0 ]]; then
+  case "$PRIMARY_ACTION" in
+    test-contract|test-maestro-ci|test-maestro-all|test-maestro-tags|test-smoke|test-fuzz)
+      ;;
+    *)
+      echo "--c64u-target/--c64u-host are only valid with contract, Maestro, or smoke tests" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" != "mock" && "$C64U_TARGET" != "real" ]]; then
+  echo "Invalid --c64u-target: ${C64U_TARGET}" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-fuzz" ]]; then
+  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" != "mock" ]]; then
+    echo "Fuzz tests must target mock devices" >&2
+    exit 1
+  fi
+  if [[ "$C64U_HOST_SET" == "true" ]]; then
+    echo "Fuzz tests do not accept --c64u-host" >&2
+    exit 1
+  fi
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract" && "$C64U_TARGET_SET" != "true" ]]; then
+  echo "Contract tests require --c64u-target mock|real" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-contract" && "$CONTRACT_ALLOW_RESET" == "true" && "${CONTRACT_MODE,,}" != "unsafe" ]]; then
+  echo "--contract-allow-reset requires --contract-mode unsafe" >&2
+  exit 1
+fi
+
+if [[ "$PRIMARY_ACTION" == "test-maestro-tags" && -z "$MAESTRO_TAGS" ]]; then
+  echo "--test-maestro-tags requires a value" >&2
+  exit 1
+fi
+
+RUN_INSTALL=true
+RUN_BUILD=true
+RUN_TEST=true
+RUN_APK=true
+RUN_FORMAT=true
+RUN_INSTALL_APK=false
+RUN_SCREENSHOTS=false
+RUN_SCREENSHOTS_ONLY=false
+RUN_TEST_UNIT=false
+RUN_TEST_E2E=false
+RUN_TEST_E2E_CI=false
+RUN_TEST_MAESTRO_CI=false
+RUN_TEST_MAESTRO_ALL=false
+RUN_TEST_MAESTRO_TAGS=false
+RUN_FUZZ=false
+RUN_CONTRACT_TEST=false
+RUN_SMOKE_ANDROID_EMULATOR=false
+RUN_SMOKE_ANDROID_REAL=false
+RUN_EMULATOR=false
+RUN_DUMP_C64U_CONFIG=false
+
+case "$PRIMARY_ACTION" in
+  build)
+    RUN_INSTALL="$([[ "$SKIP_INSTALL" == "true" ]] && echo false || echo true)"
+    RUN_BUILD="$([[ "$SKIP_BUILD" == "true" ]] && echo false || echo true)"
+    RUN_TEST="$([[ "$SKIP_TESTS" == "true" ]] && echo false || echo true)"
+    RUN_APK="$([[ "$SKIP_APK" == "true" ]] && echo false || echo true)"
+    RUN_FORMAT="$([[ "$SKIP_FORMAT" == "true" ]] && echo false || echo true)"
+    RUN_INSTALL_APK="$INSTALL_APK"
+    ;;
+  test-unit)
+    RUN_TEST=false
+    RUN_TEST_UNIT=true
+    RUN_APK=false
+    ;;
+  test-e2e)
+    RUN_TEST=false
+    RUN_TEST_E2E=true
+    RUN_APK=false
+    ;;
+  test-e2e-ci)
+    RUN_TEST=false
+    RUN_TEST_E2E_CI=true
+    RUN_APK=false
+    ;;
+  test-maestro-ci)
+    RUN_TEST=false
+    RUN_TEST_MAESTRO_CI=true
+    ;;
+  test-maestro-all)
+    RUN_TEST=false
+    RUN_TEST_MAESTRO_ALL=true
+    ;;
+  test-maestro-tags)
+    RUN_TEST=false
+    RUN_TEST_MAESTRO_TAGS=true
+    ;;
+  test-fuzz)
+    RUN_TEST=false
+    RUN_FUZZ=true
+    RUN_APK=false
+    ;;
+  test-contract)
+    RUN_TEST=false
+    RUN_BUILD=false
+    RUN_APK=false
+    RUN_CONTRACT_TEST=true
+    ;;
+  test-smoke)
+    RUN_TEST=false
+    RUN_SMOKE_ANDROID_EMULATOR=true
+    RUN_SMOKE_ANDROID_REAL=false
+    if [[ "$C64U_TARGET" == "real" ]]; then
+      RUN_SMOKE_ANDROID_REAL=true
+    fi
+    ;;
+  screenshots)
+    RUN_SCREENSHOTS=true
+    ;;
+  screenshots-only)
+    RUN_SCREENSHOTS=true
+    RUN_SCREENSHOTS_ONLY=true
+    RUN_TEST=false
+    RUN_TEST_UNIT=false
+    RUN_TEST_E2E=false
+    RUN_TEST_E2E_CI=false
+    RUN_TEST_MAESTRO_CI=false
+    RUN_TEST_MAESTRO_ALL=false
+    RUN_TEST_MAESTRO_TAGS=false
+    RUN_APK=false
+    RUN_INSTALL_APK=false
+    ;;
+  emulator)
+    RUN_EMULATOR=true
+    ;;
+  dump-c64u-config)
+    RUN_DUMP_C64U_CONFIG=true
+    ;;
+esac
 
 if [[ "$RUN_EMULATOR" == "true" ]]; then
   log "Starting Android emulator flow"
@@ -772,8 +977,8 @@ if [[ "$RUN_INSTALL" == "true" ]]; then
   (cd "$ROOT_DIR" && npm install --no-audit --no-fund)
 fi
 
-if [[ "$RUN_INTERFACE_TEST" == "true" ]]; then
-  run_interface_test
+if [[ "$RUN_CONTRACT_TEST" == "true" ]]; then
+  run_contract_test
 fi
 
 if [[ "$RUN_BUILD" == "true" && "$RUN_FORMAT" == "true" ]]; then
@@ -898,10 +1103,10 @@ if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "
   else
     MAESTRO_MODE="tags"
   fi
-  MAESTRO_APK_PATH="${APK_PATH:-$APK_DEFAULT}"
+  MAESTRO_APK_PATH="${TEST_APK_PATH:-$APK_DEFAULT}"
   MAESTRO_ARGS=(--mode "$MAESTRO_MODE" --apk-path "$MAESTRO_APK_PATH" --c64u-target "$C64U_TARGET" --c64u-host "$C64U_HOST")
-  if [[ -n "$DEVICE_ID" ]]; then
-    MAESTRO_ARGS+=(--device-id "$DEVICE_ID")
+  if [[ -n "$TEST_DEVICE_ID" ]]; then
+    MAESTRO_ARGS+=(--device-id "$TEST_DEVICE_ID")
   fi
   if [[ "$RUN_TEST_MAESTRO_TAGS" == "true" ]]; then
     MAESTRO_ARGS+=(--tags "$MAESTRO_TAGS")
@@ -911,20 +1116,10 @@ fi
 
 if [[ "$RUN_SMOKE_ANDROID_EMULATOR" == "true" ]]; then
   log "Running Android emulator smoke test"
-  SMOKE_APK_PATH="${APK_PATH:-$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk}"
-  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" == "real" && "$RUN_SMOKE_ANDROID_REAL" != "true" ]]; then
-    echo "--c64u-target real requires --smoke-android-real" >&2
-    exit 1
-  fi
-  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" == "mock" ]]; then
-    (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
-      --c64u-target "mock" \
-      --apk-path "$SMOKE_APK_PATH")
-  else
-    (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
-      --c64u-target "mock" \
-      --apk-path "$SMOKE_APK_PATH")
-  fi
+  SMOKE_APK_PATH="${TEST_APK_PATH:-$ROOT_DIR/android/app/build/outputs/apk/debug/app-debug.apk}"
+  (cd "$ROOT_DIR" && bash scripts/smoke-android-emulator.sh \
+    --c64u-target "mock" \
+    --apk-path "$SMOKE_APK_PATH")
   if [[ "$RUN_SMOKE_ANDROID_REAL" == "true" ]]; then
     REAL_HOST="$C64U_HOST"
     if [[ "$C64U_HOST_SET" != "true" ]]; then
@@ -939,6 +1134,10 @@ if [[ "$RUN_SMOKE_ANDROID_EMULATOR" == "true" ]]; then
   (cd "$ROOT_DIR" && node scripts/validate-android-emulator-evidence.mjs)
 fi
 
+if [[ "$RUN_ANDROID_TESTS" == "true" && "$RUN_TEST" != "true" && "$RUN_COVERAGE" != "true" ]]; then
+  run_android_instrumentation
+fi
+
 if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   require_cmd adb
   APK_PATH="${APK_PATH:-$APK_DEFAULT}"
@@ -951,7 +1150,7 @@ if [[ "$RUN_INSTALL_APK" == "true" ]]; then
   if [[ -z "$DEVICE_ID" ]]; then
     mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}' | grep -v '^emulator-')
     if [[ ${#DEVICES[@]} -eq 0 ]]; then
-      echo "No adb devices found. Connect a device or pass --device <id>." >&2
+      echo "No adb devices found. Connect a device or pass --device-id <id>." >&2
       exit 1
     fi
     DEVICE_ID="${DEVICES[0]}"

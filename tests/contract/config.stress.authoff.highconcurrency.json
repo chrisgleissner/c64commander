@@ -3,7 +3,7 @@
     "mode": "STRESS",
     "auth": "OFF",
     "ftpMode": "PASV",
-    "outputDir": "test-results/c64u-interface-contract",
+    "outputDir": "test-results/contract",
     "concurrency": {
         "restMaxInFlight": 10,
         "ftpMaxSessions": 2,
@@ -25,17 +25,19 @@
         "maxDestructiveScenarioMs": 180000
     },
     "scratch": {
-        "ftpDir": "/Temp/c64u-interface-contract"
+        "ftpDir": "/Temp/contract-test"
     },
     "media": {
-        "diskImagePath": "__SET_ME__",
+        "diskImagePath": "/USB2/Games/3D_Pinball.d64",
         "diskDrive": "a",
         "diskType": "d64",
         "diskMode": "readonly",
-        "sidFilePath": "__SET_ME__",
+        "sidFilePath": "/USB2/SID/HVSC/C64Music/MUSICIANS/H/Hubbard_Rob/Action_Biker.sid",
         "sidSongNr": 0,
-        "prgFilePath": "__SET_ME__",
-        "prgAction": "run"
+        "prgFilePath": "/USB2/SID/HVSC",
+        "prgAction": "run",
+        "modFilePath": "/USB2/MOD/jukebox_packtune.mod",
+        "crtFilePath": ""
     },
     "allowMachineReset": false
 }

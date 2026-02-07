@@ -54,7 +54,9 @@ export const ConfigSchema = z
                 sidFilePath: z.string().optional(),
                 sidSongNr: z.number().int().min(0).optional(),
                 prgFilePath: z.string().optional(),
-                prgAction: PrgActionSchema.optional()
+                prgAction: PrgActionSchema.optional(),
+                modFilePath: z.string().optional(),
+                crtFilePath: z.string().optional()
             })
             .optional(),
         allowMachineReset: z.boolean().optional(),
@@ -78,7 +80,7 @@ export const DefaultConfig: HarnessConfig = {
     auth: "OFF",
     password: "",
     ftpMode: "PASV",
-    outputDir: "test-results/c64u-interface-contract",
+    outputDir: "test-results/contract",
     concurrency: {
         restMaxInFlight: 2,
         ftpMaxSessions: 1,
@@ -100,7 +102,7 @@ export const DefaultConfig: HarnessConfig = {
         maxDestructiveScenarioMs: 120000
     },
     scratch: {
-        ftpDir: "/Temp/c64u-interface-contract"
+        ftpDir: "/Temp/contract-test"
     },
     media: {
         diskDrive: "a",

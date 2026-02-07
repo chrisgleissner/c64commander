@@ -69,113 +69,142 @@ const restScenarios = filterScenarios(buildRestScenarios(), config.scenarios?.re
 const ftpScenarios = filterScenarios(buildFtpScenarios(), config.scenarios?.ftp);
 const mixedScenarios = filterScenarios(buildMixedScenarios(), config.scenarios?.mixed);
 
-await runScenarioGroup("rest", restScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () => scenario.run({
-        rest: restClient,
-        request: restRequest,
-        config,
-        log,
-        recordConcurrencyObservation: (observation) => {
-            concurrencyObservations.push(observation);
+try {
+    await runScenarioGroup("rest", restScenarios, async (scenario) => {
+        await runScenario(scenario.id, scenario.safe, () => scenario.run({
+            rest: restClient,
+            request: restRequest,
+            config,
+            log,
+            recordConcurrencyObservation: (observation) => {
+                concurrencyObservations.push(observation);
+            }
+        }));
+    });
+
+    await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
+        await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log }));
+    });
+
+    await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
+        await runScenario(scenario.id, scenario.safe, () => scenario.run({ rest: restClient, request: restRequest, config, log }));
+    });
+
+    const latencyStats = buildLatencyStats(latencyMap, config);
+    const restCooldowns = buildCooldowns(latencyStats, "REST", config);
+    const ftpCooldowns = buildCooldowns(latencyStats, "FTP", config);
+
+    const endpoints = loadOpenApiEndpoints(config);
+    const ftpCommands = [
+        "USER",
+        "PASS",
+        "QUIT",
+        "PORT",
+        "CWD",
+        "CDUP",
+        "PWD",
+        "NLST",
+        "LIST",
+        "RETR",
+        "STOR",
+        "NOOP",
+        "SYST",
+        "ABOR",
+        "TYPE",
+        "MODE",
+        "RNFR",
+        "RNTO",
+        "MKD",
+        "RMD",
+        "DELE",
+        "SIZE",
+        "PASV",
+        "MLST",
+        "MLSD",
+        "FEAT"
+    ];
+
+    const endpointsPayload = {
+        generatedAt: new Date().toISOString(),
+        mode: config.mode,
+        auth: config.auth,
+        rest: endpoints,
+        ftp: ftpCommands.map((command) => ({ command, safe: true }))
+    };
+
+    const concurrencyPayload = {
+        generatedAt: new Date().toISOString(),
+        mode: config.mode,
+        auth: config.auth,
+        limits: config.concurrency,
+        observations: concurrencyObservations
+    };
+
+    const conflictsPayload = {
+        generatedAt: new Date().toISOString(),
+        mode: config.mode,
+        auth: config.auth,
+        conflicts: extractConflictsFromLogs()
+    };
+
+    function extractConflictsFromLogs(): Array<{ primary: string; secondary: string; overlap: string; evidence: string }> {
+        const logsPath = path.join(runRoot, "logs.ndjson");
+        if (!fs.existsSync(logsPath)) return [];
+        const lines = fs.readFileSync(logsPath, "utf8").split("\n").filter(Boolean);
+        const results: Array<{ primary: string; secondary: string; overlap: string; evidence: string }> = [];
+        for (const line of lines) {
+            try {
+                const event = JSON.parse(line);
+                if (event.kind !== "conflict") continue;
+                const d = event.details;
+                if (!d || !d.pair) continue;
+                const parts = d.pair.split(" × ");
+                results.push({
+                    primary: parts[0] || d.pair,
+                    secondary: parts[1] || d.pair,
+                    overlap: d.conflict ? "forbidden" : "allowed",
+                    evidence: `aOk=${d.aOk} bOk=${d.bOk} aLatency=${d.aLatencyMs}ms bLatency=${d.bLatencyMs}ms`
+                });
+            } catch { /* skip malformed lines */ }
         }
-    }));
-});
+        return results;
+    }
 
-await runScenarioGroup("ftp", ftpScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () => scenario.run({ config, log }));
-});
+    const meta = await buildMeta(config);
 
-await runScenarioGroup("mixed", mixedScenarios, async (scenario) => {
-    await runScenario(scenario.id, scenario.safe, () => scenario.run({ rest: restClient, request: restRequest, config, log }));
-});
+    writeJson(path.join(runRoot, "meta.json"), meta);
+    writeJson(path.join(runRoot, "endpoints.json"), endpointsPayload);
+    writeJson(path.join(runRoot, "latency-stats.json"), latencyStats);
+    writeJson(path.join(runRoot, "rest-cooldowns.json"), restCooldowns);
+    writeJson(path.join(runRoot, "ftp-cooldowns.json"), ftpCooldowns);
+    writeJson(path.join(runRoot, "concurrency.json"), concurrencyPayload);
+    writeJson(path.join(runRoot, "conflicts.json"), conflictsPayload);
 
-const latencyStats = buildLatencyStats(latencyMap, config);
-const restCooldowns = buildCooldowns(latencyStats, "REST", config);
-const ftpCooldowns = buildCooldowns(latencyStats, "FTP", config);
+    const validator = new SchemaValidator();
+    validateOrThrow(validator, schemaPath("endpoints.schema.json"), path.join(runRoot, "endpoints.json"));
+    validateOrThrow(validator, schemaPath("latency.schema.json"), path.join(runRoot, "latency-stats.json"));
+    validateOrThrow(validator, schemaPath("cooldowns.schema.json"), path.join(runRoot, "rest-cooldowns.json"));
+    validateOrThrow(validator, schemaPath("cooldowns.schema.json"), path.join(runRoot, "ftp-cooldowns.json"));
+    validateOrThrow(validator, schemaPath("concurrency.schema.json"), path.join(runRoot, "concurrency.json"));
+    validateOrThrow(validator, schemaPath("conflicts.schema.json"), path.join(runRoot, "conflicts.json"));
 
-const endpoints = loadOpenApiEndpoints(config);
-const ftpCommands = [
-    "USER",
-    "PASS",
-    "QUIT",
-    "PORT",
-    "CWD",
-    "CDUP",
-    "PWD",
-    "NLST",
-    "LIST",
-    "RETR",
-    "STOR",
-    "NOOP",
-    "SYST",
-    "ABOR",
-    "TYPE",
-    "MODE",
-    "RNFR",
-    "RNTO",
-    "MKD",
-    "RMD",
-    "DELE",
-    "SIZE",
-    "PASV",
-    "MLST",
-    "MLSD",
-    "FEAT"
-];
-
-const endpointsPayload = {
-    generatedAt: new Date().toISOString(),
-    mode: config.mode,
-    auth: config.auth,
-    rest: endpoints,
-    ftp: ftpCommands.map((command) => ({ command, safe: true }))
-};
-
-const concurrencyPayload = {
-    generatedAt: new Date().toISOString(),
-    mode: config.mode,
-    auth: config.auth,
-    limits: config.concurrency,
-    observations: concurrencyObservations
-};
-
-const conflictsPayload = {
-    generatedAt: new Date().toISOString(),
-    mode: config.mode,
-    auth: config.auth,
-    conflicts: [] as Array<{ primary: string; secondary: string; overlap: string; evidence: string }>
-};
-
-const meta = await buildMeta(config);
-
-writeJson(path.join(runRoot, "meta.json"), meta);
-writeJson(path.join(runRoot, "endpoints.json"), endpointsPayload);
-writeJson(path.join(runRoot, "latency-stats.json"), latencyStats);
-writeJson(path.join(runRoot, "rest-cooldowns.json"), restCooldowns);
-writeJson(path.join(runRoot, "ftp-cooldowns.json"), ftpCooldowns);
-writeJson(path.join(runRoot, "concurrency.json"), concurrencyPayload);
-writeJson(path.join(runRoot, "conflicts.json"), conflictsPayload);
-
-const validator = new SchemaValidator();
-validateOrThrow(validator, schemaPath("endpoints.schema.json"), path.join(runRoot, "endpoints.json"));
-validateOrThrow(validator, schemaPath("latency.schema.json"), path.join(runRoot, "latency-stats.json"));
-validateOrThrow(validator, schemaPath("cooldowns.schema.json"), path.join(runRoot, "rest-cooldowns.json"));
-validateOrThrow(validator, schemaPath("cooldowns.schema.json"), path.join(runRoot, "ftp-cooldowns.json"));
-validateOrThrow(validator, schemaPath("concurrency.schema.json"), path.join(runRoot, "concurrency.json"));
-validateOrThrow(validator, schemaPath("conflicts.schema.json"), path.join(runRoot, "conflicts.json"));
-
-copyLatest(runRoot, latestRoot, [
-    "meta.json",
-    "logs.ndjson",
-    "endpoints.json",
-    "latency-stats.json",
-    "rest-cooldowns.json",
-    "ftp-cooldowns.json",
-    "concurrency.json",
-    "conflicts.json"
-]);
-
-logStream.end();
+    copyLatest(runRoot, latestRoot, [
+        "meta.json",
+        "logs.ndjson",
+        "endpoints.json",
+        "latency-stats.json",
+        "rest-cooldowns.json",
+        "ftp-cooldowns.json",
+        "concurrency.json",
+        "conflicts.json"
+    ]);
+} finally {
+    try {
+        await rebootAndRecover(restClient, config);
+    } finally {
+        logStream.end();
+    }
+}
 
 async function runScenarioGroup<T extends { id: string }>(
     label: string,
@@ -188,6 +217,7 @@ async function runScenarioGroup<T extends { id: string }>(
         if (abort.abort) {
             throw new Error(`Abort after ${label}:${scenario.id} - ${abort.reason}`);
         }
+        await delay(config.pacing.restMinDelayMs);
     }
 }
 
@@ -228,6 +258,13 @@ async function runScenario(id: string, safe: boolean, run: () => Promise<void>):
         if (abortError) {
             throw abortError;
         }
+    } catch (error) {
+        const isAbort = abortError !== null;
+        log({ kind: "scenario", op: id, status: isAbort ? "abort" : "error", details: { message: String(error) } });
+        if (isAbort) {
+            throw error;
+        }
+        // Non-abort errors: log and continue to next scenario
     } finally {
         clearInterval(interval);
     }
@@ -380,6 +417,32 @@ function copyLatest(sourceDir: string, targetDir: string, files: string[]): void
         const dest = path.join(targetDir, file);
         fs.copyFileSync(src, dest);
     }
+}
+
+async function rebootAndRecover(client: RestClient, cfg: typeof config): Promise<void> {
+    const timeoutMs = 120_000;
+    const pollIntervalMs = 2_000;
+    const start = Date.now();
+
+    try {
+        await client.request({ method: "PUT", url: "/v1/machine:reboot" });
+    } catch (error) {
+        console.warn("Reboot request failed", { error: String(error), baseUrl: cfg.baseUrl });
+    }
+
+    while (Date.now() - start < timeoutMs) {
+        try {
+            const response = await client.request({ method: "GET", url: "/v1/info" });
+            if (response.status === 200) {
+                return;
+            }
+        } catch (error) {
+            console.warn("Recovery probe failed", { error: String(error) });
+        }
+        await delay(pollIntervalMs);
+    }
+
+    throw new Error(`Contract test recovery timed out after ${timeoutMs}ms`);
 }
 
 function hashFile(filePath: string): string {
