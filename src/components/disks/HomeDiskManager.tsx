@@ -856,7 +856,8 @@ export const HomeDiskManager = () => {
       ? diskLibrary.disks.filter((disk) => disk.group === mountedDisk.group).length
       : 0;
     const canRotate = Boolean(mountedDisk?.group && groupSize > 1);
-    const mountedLabel = forcedEmpty ? '--' : mountedDisk?.name || info?.image_file || '--';
+    const mountedDiskName = forcedEmpty ? null : mountedDisk?.name || info?.image_file || null;
+    const mountedLabel = mountedDiskName ? `Mounted disk: ${mountedDiskName}` : 'No disk mounted';
 
     return {
       key,

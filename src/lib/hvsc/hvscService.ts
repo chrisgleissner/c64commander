@@ -9,6 +9,7 @@ import type {
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { createHvscMediaIndex } from './hvscMediaIndex';
 import { loadHvscRoot } from './hvscRootLocator';
+import { ensureHvscSonglengthsReadyOnColdStart } from './hvscSongLengthService';
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -28,6 +29,7 @@ const hasMockBridge = () => Boolean((window as Window & { __hvscMock__?: Record<
 const getMockBridge = () => (window as Window & { __hvscMock__?: Record<string, any> }).__hvscMock__;
 
 const hvscIndex = createHvscMediaIndex();
+void ensureHvscSonglengthsReadyOnColdStart();
 
 export const isHvscBridgeAvailable = () => typeof window !== 'undefined' || hasMockBridge();
 

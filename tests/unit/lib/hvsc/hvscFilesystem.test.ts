@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as hvscFS from '@/lib/hvsc/hvscFilesystem';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { parseSonglengths } from '@/lib/sid/songlengths';
+import {
+  ensureHvscSonglengthsReadyOnColdStart,
+  resolveHvscSonglengthDuration,
+  resetHvscSonglengths,
+} from '@/lib/hvsc/hvscSongLengthService';
 
 // Mock dependencies
 vi.mock('@capacitor/filesystem', () => ({
@@ -17,8 +21,10 @@ vi.mock('@capacitor/filesystem', () => ({
   Directory: { Data: 'DATA' },
 }));
 
-vi.mock('@/lib/sid/songlengths', () => ({
-  parseSonglengths: vi.fn(),
+vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
+  ensureHvscSonglengthsReadyOnColdStart: vi.fn(async () => undefined),
+  resolveHvscSonglengthDuration: vi.fn(async () => ({ durationSeconds: null, strategy: 'not-found' })),
+  resetHvscSonglengths: vi.fn(),
 }));
 
 vi.mock('@/lib/sid/sidUtils', () => ({
@@ -92,10 +98,7 @@ describe('hvscFilesystem', () => {
       });
 
       // @ts-expect-error - mock typing
-       vi.mocked(Filesystem.readFile).mockResolvedValue({ data: btoa('MOCK_DATA') }); 
-      const mockDurations = { pathToSeconds: new Map([['/ROOT/MUSIC.sid', [123]]]), md5ToSeconds: new Map() };
-      // @ts-expect-error - mock typing
-       vi.mocked(parseSonglengths).mockReturnValue(mockDurations);
+      vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({ durationSeconds: 123, strategy: 'full-path' } as any);
        
       const result = await hvscFS.listHvscFolder('/ROOT');
 
@@ -104,6 +107,7 @@ describe('hvscFilesystem', () => {
       expect(result.songs).toHaveLength(1);
       expect(result.songs[0].fileName).toBe('MUSIC.sid');
       expect(result.songs[0].durationSeconds).toBe(123);
+      expect(ensureHvscSonglengthsReadyOnColdStart).toHaveBeenCalled();
     });
   });
 

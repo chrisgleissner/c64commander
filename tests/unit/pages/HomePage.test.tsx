@@ -279,6 +279,25 @@ describe('HomePage SID status', () => {
     expect(screen.getByText('disk.d64')).toBeTruthy();
   });
 
+  it('shows "No disk" on Home when drive A has no mounted image', () => {
+    statusPayloadRef.current = {
+      isConnected: true,
+      isConnecting: false,
+      deviceInfo: null,
+    };
+    drivesPayloadRef.current = {
+      drives: [{ a: { enabled: true }, b: { enabled: true } }],
+    };
+
+    render(
+      <MemoryRouter>
+        <HomePage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('No disk')).toBeTruthy();
+  });
+
   it('handles machine actions and reports errors', async () => {
     const menuError = new Error('menu failed');
     machineControlPayloadRef.current.menuButton.mutateAsync = vi.fn().mockRejectedValue(menuError);

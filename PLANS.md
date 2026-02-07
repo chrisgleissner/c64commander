@@ -1,117 +1,88 @@
-# PLANS.md - Critical UX, Playback, Navigation, and FTP Performance Fixes
+# PLANS.md - Playback, Disk Labels, Songlengths Facade, and HVSC Pipeline Hardening
 
-## Execution Loop
-- [x] 1. Establish baseline and failing coverage for A-F.
-  - Success criteria:
-    - Existing relevant tests are identified and executed.
-    - New failing tests are added for each required behavior gap.
-    - Baseline failures are reproducible locally.
+## Execution Contract
+- Status legend: `[ ] pending`, `[-] in progress`, `[x] completed`.
+- Loop per phase: `plan -> implement -> targeted tests -> verify -> update this file`.
+- No test weakening, no skipped failures, no bypasses.
+- Risky refactors require explicit rollback notes before edits.
 
-## A. Diagnostics Overlay Navigation Bug
-- [x] 2. Convert diagnostics open behavior to true modal overlay without route changes.
-  - Success criteria:
-    - Tapping diagnostics activity indicator does not call route navigation.
-    - Current route and scroll position remain unchanged while opening diagnostics.
-    - Closing diagnostics returns to exact prior page/state.
+## Phase 0 - Baseline and Guardrails
+- [x] Capture current baseline and failing surfaces for A-E.
+- Invariants:
+  - Repository remains buildable after every phase.
+  - Existing behavior outside scope is unchanged.
+- Test gate:
+  - Run targeted existing tests for play/hvsc/disks before edits.
+- Rollback strategy:
+  - Keep changes isolated by subsystem (playback, disk labels, songlengths, hvsc runtime) so each can be reverted independently.
 
-- [x] 3. Add diagnostics navigation/scroll regression tests.
-  - Success criteria:
-    - Playwright coverage opens diagnostics from multiple pages and verifies pathname stability.
-    - Scroll position before opening equals scroll position after close.
+## Phase 1 - Issue A/B/C UX and Playback Correctness
+- [x] A: Ensure Play starts first playlist item when no prior track and playlist non-empty, with single in-flight play start.
+- [x] B: Fix volume slider release snap-back and preserve authoritative UI position during/after interaction.
+- [x] C: Replace dangling dash disk labels with exact required strings while preserving styling.
+- Invariants:
+  - At most one start-play request in flight.
+  - No duplicate start requests from rapid taps.
+  - Slider value remains stable post-release and still updates mixer/persistence.
+  - Home/Disks visuals unchanged except text logic.
+- Test gate:
+  - Add tests for first-play + rapid taps.
+  - Add tests for volume drag/release stability.
+  - Add tests for Home and Disks no-disk/mounted labels.
+- Rollback strategy:
+  - Keep play/volume logic edits in `PlayFilesPage` scoped to handlers/effects.
+  - Keep disk label edits text-only in `HomePage` and `HomeDiskManager`.
 
-## B. Playback Volume UX and Mute Snapshot Model
-- [x] 4. Fix playback volume slider state model and labeling.
-  - Success criteria:
-    - Slider label is "Playback volume" or "Session volume".
-    - Slider reflects effective runtime playback volume and does not snap back during updates.
-    - Slider state persists correctly across page navigation and overlays.
-    - Volume updates do not modify SID enablement/addressing fields.
+## Phase 2 - Issue D Songlengths Facade + Backend Boundary
+- [x] Introduce facade + backend interface and first backend (in-memory text parser/indexer).
+- [x] Route all HVSC songlength access through facade; remove direct parsing/map access from HVSC filesystem/listing code.
+- [x] Route Play page songlength resolution through facade API (no direct map probing at call sites).
+- [x] Add lifecycle APIs: cold-start load and reload-on-config-change.
+- [x] Add centralized structured observability and status summary logging.
+- Invariants:
+  - Deterministic parse/index build.
+  - Matching order strictly: unique filename -> filename+partial path -> full path -> md5 fallback.
+  - Ambiguous matches never guessed.
+  - Corrupt input never crashes; marks unavailable state.
+  - Index model supports >=100k entries with best-effort memory estimate under 80 MiB.
+- Test gate:
+  - Facade correctness tests for unique/duplicate/path/md5/ambiguity.
+  - Facade robustness tests for malformed/truncated input and cold-start failure.
+  - Playlist reprocessing test on songlengths selection change.
+  - Synthetic 100k benchmark-style test for parse/index performance + memory estimate.
+- Rollback strategy:
+  - Keep compatibility wrappers in `src/lib/sid/songlengths.ts` while runtime callers are migrated to facade-backed APIs.
 
-- [x] 5. Implement strict mute snapshot restore invariants.
-  - Success criteria:
-    - Mute captures pre-mute SID state required for exact restoration.
-    - Unmute restores exactly the captured pre-mute state.
-    - Only affected SID volume entries are changed.
+## Phase 3 - Issue E HVSC Download/Extraction/Ingestion State Machine Hardening
+- [x] Implement explicit linear state machine: `IDLE -> DOWNLOADING -> DOWNLOADED -> EXTRACTING -> EXTRACTED -> INGESTING -> READY`.
+- [x] Enforce transition invariants and structured transition logging.
+- [x] Ensure failure containment/recovery markers for partial download/extract/ingest and restart-safe behavior.
+- [x] Improve progress/status consistency to eliminate contradictory state combinations.
+- Invariants:
+  - Illegal state transitions impossible (guarded, logged, rejected).
+  - All exceptions include stack + context in logs.
+  - Partial artifacts are recoverable and deterministic across restarts.
+- Test gate:
+  - Tests for interruption, corrupt archive, extraction failure, ingestion failure.
+  - Tests for restart behavior after each failure class.
+  - End-to-end success path test with expected transition order.
+- Rollback strategy:
+  - Keep runtime state-machine helpers isolated and archive I/O logic intact.
 
-- [x] 6. Add/extend tests for volume + mute invariants.
-  - Success criteria:
-    - Unit and/or Playwright tests verify exact mute/unmute restoration.
-    - Tests verify no SID enablement/addressing corruption from playback volume control.
+## Phase 4 - Full Verification and CI Parity
+- [x] Run full local validation and confirm green results.
+- Invariants:
+  - `npm run test`, `npm run lint`, `npm run build` all pass.
+  - Any touched docs are current.
+- Test gate:
+  - Full test suite and targeted suites for changed subsystems.
+- Rollback strategy:
+  - If late regression appears, revert only offending subsystem hunks and re-run all gates.
 
-## C. Catastrophic Playback Auto-Advance Bug
-- [x] 7. Refactor auto-advance to deterministic single-shot time-based guards.
-  - Success criteria:
-    - Auto-advance can fire at most once per track instance.
-    - Auto-advance is based only on known/resolved track end time.
-    - Polling glitches/transient states do not trigger advancement.
-
-- [x] 8. Enforce user-advance guard + play request serialization.
-  - Success criteria:
-    - User Next/Previous/select always trigger immediate transition logic.
-    - Automatic advancement for prior track is cancelled once user advances.
-    - Play requests are serialized/coalesced so only one play transition request is in-flight.
-
-- [x] 9. Add/extend tests for auto-advance and request flood protection.
-  - Success criteria:
-    - Auto-advance fires exactly once at end.
-    - No duplicate/cascading transitions occur.
-    - One transition produces one play request sequence.
-
-## D. Playlist Currently Playing Indicator
-- [x] 10. Implement confirmed-playback driven row highlight and icon highlight.
-  - Success criteria:
-    - Entire currently playing row is highlighted.
-    - Play icon has secondary highlight.
-    - Selection state remains visually distinct from playback state.
-    - Only one row can be playback-highlighted.
-
-- [x] 11. Add/extend tests for playback-state-driven highlight updates.
-  - Success criteria:
-    - Manual play highlights correct row.
-    - Next/Previous and auto-advance update highlight correctly.
-    - Playback failure clears/updates highlight appropriately.
-
-## E. FTP File Browser Interaction Model
-- [x] 12. Redesign item rows: row tap navigates folders, checkbox selects, no Open button.
-  - Success criteria:
-    - "Open" icon/button is removed.
-    - Folder row tap (outside checkbox) navigates.
-    - Checkbox selection does not navigate.
-    - Folders show folder icon + subtle chevron; files have no chevron.
-    - Thin horizontal dividers are rendered between all rows.
-
-- [x] 13. Add/extend tests for FTP browser interactions and affordances.
-  - Success criteria:
-    - Folder row tap navigates.
-    - Folder checkbox selects recursively without navigation.
-    - Files select via checkbox and do not navigate.
-    - Tests assert no "Open" control remains.
-
-## F. FTP Performance Regression
-- [x] 14. Remove/disable costly FTP songlengths discovery/read paths by default and optimize scan flow.
-  - Success criteria:
-    - No FTP file content reads occur during normal folder add-to-playlist scanning.
-    - MD5-based duration lookup is not triggered for FTP sources by default.
-    - FTP throttling remains configurable and defaults stay safe/sane.
-
-- [x] 15. Add FTP performance regression tests.
-  - Success criteria:
-    - Tests verify zero unnecessary `/v1/ftp/read` calls during FTP folder add.
-    - Tests verify folder add of tens of files completes within an acceptable bound.
-
-## Final Verification
-- [x] 16. Run full validation and finalize plan.
-  - Success criteria:
-    - `npm run test` passes.
-    - `npm run lint` passes.
-    - `npm run build` passes.
-    - Relevant Playwright specs pass.
-    - PLANS.md is fully checked with accurate completion notes.
-
-## Completion Notes
-- Verified:
-  - `npm run test` -> pass (`118` files, `685` tests)
-  - `npm run lint` -> pass
-  - `npm run build` -> pass
-  - `npm run validate:traces` -> pass
-  - Playwright targeted suites for diagnostics, FTP UX/perf, playback, navigation, layout, and UI -> pass (`147/147`)
+## Progress Log
+- 2026-02-07: Initialized new execution contract and phased plan for issues A-E.
+- 2026-02-07: Phase 0 baseline complete (targeted tests for hvsc/songlengths/disks/play hooks all green).
+- 2026-02-07: Phase 1 complete. Implemented play single-flight guard + explicit first-item start target resolution, stabilized volume slider target sync after release, and replaced dash disk labels with required strings. Added unit tests in `tests/unit/playFiles/playbackGuards.test.ts`, plus disk label assertions in Home and Disks test suites.
+- 2026-02-07: Phase 2 complete. Added `SongLengthServiceFacade` + `SongLengthStoreBackend` with `InMemoryTextBackend`; centralized HVSC songlength loading/resolution lifecycle and observability; migrated play-page resolution to facade-backed APIs.
+- 2026-02-07: Phase 3 complete. Added explicit HVSC archive pipeline state machine with guarded transitions and structured logs; strengthened recovery flows and added restart-recovery tests for interrupted/corrupt/failing ingestion scenarios.
+- 2026-02-07: Phase 4 complete. Verification passed: `npm run test` (120 files, 705 tests), `npm run lint`, `npm run build`.

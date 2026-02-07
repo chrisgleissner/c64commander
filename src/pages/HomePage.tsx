@@ -144,6 +144,9 @@ export default function HomePage() {
 
   const driveA = resolveDrive('a');
   const driveB = resolveDrive('b');
+  const driveADiskLabel = driveA?.enabled && driveA?.image_file
+    ? driveA.image_file
+    : 'No disk';
 
   const sidEnablement = useMemo(
     () => buildSidEnablement(
@@ -333,9 +336,8 @@ export default function HomePage() {
                 <span className={driveA?.enabled ? 'text-success shrink-0' : 'text-muted-foreground shrink-0'}>
                   {driveA?.enabled ? 'ON' : 'OFF'}
                 </span>
-                <span className="shrink-0">–</span>
                 <span className="font-medium break-words whitespace-normal min-w-0">
-                  {driveA?.enabled ? driveA?.image_file || '—' : '—'}
+                  {driveADiskLabel}
                 </span>
               </div>
               <div className="flex items-center gap-2 min-w-0">
