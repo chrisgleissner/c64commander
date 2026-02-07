@@ -231,6 +231,11 @@ beforeEach(() => {
 });
 
 describe('HomePage SID status', () => {
+  it('renders the Home subtitle as C64 Commander', () => {
+    renderHomePage();
+    expect(screen.getByTestId('home-header-subtitle').textContent).toBe('C64 Commander');
+  });
+
   it('renders SID layout and updates on config changes', () => {
     (globalThis as any).__BUILD_TIME__ = new Date().toISOString();
     sidSocketsPayloadRef.current = {
@@ -298,7 +303,7 @@ describe('HomePage SID status', () => {
     expect(screen.getByText('UltiSID 2').parentElement?.textContent ?? '').toContain('OFF');
   });
 
-  it('renders stream statuses from Data Streams config', () => {
+  it('renders compact stream rows with side-by-side IP and port from Data Streams config', () => {
     streamPayloadRef.current = {
       'Data Streams': {
         items: {
@@ -313,15 +318,17 @@ describe('HomePage SID status', () => {
 
     const streamSection = screen.getByTestId('home-stream-status');
     expect(within(streamSection).getByTestId('stream-status-label').textContent).toContain('Streams');
+    expect(within(streamSection).getAllByTestId(/^home-stream-row-/)).toHaveLength(3);
     expect(within(streamSection).getByText('VIC')).toBeTruthy();
-    expect(within(streamSection).getByText('Audio')).toBeTruthy();
-    expect(within(streamSection).getByText('Debug')).toBeTruthy();
+    expect(within(streamSection).getByText('AUDIO')).toBeTruthy();
+    expect(within(streamSection).getByText('DEBUG')).toBeTruthy();
     expect(within(streamSection).getAllByText('ON').length).toBe(2);
     expect(within(streamSection).getAllByText('OFF').length).toBe(1);
-    expect(within(streamSection).getByDisplayValue('239.0.1.64')).toBeTruthy();
-    expect(within(streamSection).getByDisplayValue('239.0.1.66')).toBeTruthy();
-    expect(within(streamSection).getByDisplayValue('11000')).toBeTruthy();
-    expect(within(streamSection).getByDisplayValue('11002')).toBeTruthy();
+    expect(within(streamSection).queryByTestId('home-stream-ip-vic')).toBeNull();
+    expect(within(streamSection).getByTestId('home-stream-ip-display-vic').textContent).toBe('239.0.1.64');
+    expect(within(streamSection).getByTestId('home-stream-port-display-vic').textContent).toBe('11000');
+    expect(within(streamSection).getByTestId('home-stream-ip-display-debug').textContent).toBe('239.0.1.66');
+    expect(within(streamSection).getByTestId('home-stream-port-display-debug').textContent).toBe('11002');
   });
 
   it('resets all connected drives from Home drives section', async () => {
@@ -398,14 +405,87 @@ describe('HomePage SID status', () => {
 
     renderHomePage();
 
+    fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
     const ipInput = screen.getByTestId('home-stream-ip-vic');
     fireEvent.change(ipInput, { target: { value: 'bad host!' } });
-    fireEvent.blur(ipInput);
+    fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
 
     await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
       operation: 'STREAM_VALIDATE',
     })));
+    expect(screen.getByTestId('home-stream-error-vic').textContent).toContain('Enter a valid IPv4 address or host name');
     expect(c64ApiMockRef.current.setConfigValue).not.toHaveBeenCalled();
+  });
+
+  it('supports inline stream edit with explicit confirm', async () => {
+    streamPayloadRef.current = {
+      'Data Streams': {
+        items: {
+          'Stream VIC to': { selected: '239.0.1.64:11000' },
+          'Stream Audio to': { selected: '239.0.1.65:11001' },
+          'Stream Debug to': { selected: 'off' },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByTestId('home-stream-edit-toggle-vic'));
+    fireEvent.change(screen.getByTestId('home-stream-ip-vic'), { target: { value: '239.0.1.90' } });
+    fireEvent.change(screen.getByTestId('home-stream-port-vic'), { target: { value: '12000' } });
+    fireEvent.click(screen.getByTestId('home-stream-confirm-vic'));
+
+    await waitFor(() => expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+      'Data Streams',
+      'Stream VIC to',
+      '239.0.1.90:12000',
+    ));
+    expect(screen.queryByTestId('home-stream-ip-vic')).toBeNull();
+  });
+
+  it('renders compact drives rows and supports dropdown interaction', async () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, bus_id: 8, type: '1541' } },
+        { b: { enabled: true, bus_id: 9, type: '1571' } },
+        { 'IEC Drive': { enabled: false, bus_id: 11, type: 'DOS emulation' } },
+      ],
+    };
+    driveASettingsPayloadRef.current = {
+      'Drive A Settings': {
+        items: {
+          Drive: { selected: 'Enabled' },
+          'Drive Bus ID': { selected: '8', options: ['8', '9', '10', '11'] },
+          'Drive Type': { selected: '1541', options: ['1541', '1571', '1581'] },
+        },
+      },
+    };
+    driveBSettingsPayloadRef.current = {
+      'Drive B Settings': {
+        items: {
+          Drive: { selected: 'Enabled' },
+          'Drive Bus ID': { selected: '9', options: ['8', '9', '10', '11'] },
+          'Drive Type': { selected: '1571', options: ['1541', '1571', '1581'] },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    const drivesGroup = screen.getByTestId('home-drives-group');
+    expect(within(drivesGroup).getByTestId('home-drive-row-a')).toBeTruthy();
+    expect(within(drivesGroup).getByTestId('home-drive-row-b')).toBeTruthy();
+    expect(within(drivesGroup).getByTestId('home-drive-row-soft-iec')).toBeTruthy();
+
+    const driveBusSelect = screen.getByTestId('home-drive-bus-a');
+    fireEvent.click(driveBusSelect);
+    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
+    fireEvent.keyDown(document.activeElement ?? driveBusSelect, { key: 'Escape' });
+
+    const driveTypeSelect = screen.getByTestId('home-drive-type-a');
+    fireEvent.click(driveTypeSelect);
+    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
+    fireEvent.keyDown(document.activeElement ?? driveTypeSelect, { key: 'Escape' });
   });
 
   it('shows build info placeholders and offline message when disconnected', () => {

@@ -48,7 +48,13 @@ import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { buildSidControlEntries } from '@/lib/config/sidDetails';
-import { buildStreamConfigValue, buildStreamControlEntries, validateStreamHost, validateStreamPort } from '@/lib/config/homeStreams';
+import {
+  buildStreamConfigValue,
+  buildStreamControlEntries,
+  validateStreamHost,
+  validateStreamPort,
+  type StreamKey,
+} from '@/lib/config/homeStreams';
 import { resetDiskDevices, resetPrinterDevice } from '@/lib/disks/resetDrives';
 import { buildSidSilenceTargets, silenceSidTargets } from '@/lib/sid/sidSilence';
 import {
@@ -246,6 +252,8 @@ export default function HomePage() {
   const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
   const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
   const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string }>>({});
+  const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
+  const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
 
   const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
@@ -608,7 +616,7 @@ export default function HomePage() {
     );
   });
 
-  const handleStreamToggle = trace(async function handleStreamToggle(key: 'vic' | 'audio' | 'debug') {
+  const handleStreamToggle = trace(async function handleStreamToggle(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
     const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
@@ -624,10 +632,12 @@ export default function HomePage() {
           description: hostError ?? portError ?? 'Invalid stream target',
           context: { stream: key, ip: next.ip, port: next.port },
         });
+        setStreamEditorError(hostError ?? portError ?? 'Invalid stream target');
         setStreamDrafts((previous) => ({ ...previous, [key]: current }));
         return;
       }
     }
+    setStreamEditorError(null);
     await updateConfigValue(
       'Data Streams',
       entry.itemName,
@@ -637,7 +647,8 @@ export default function HomePage() {
     );
   });
 
-  const handleStreamFieldChange = (key: 'vic' | 'audio' | 'debug', field: 'ip' | 'port', value: string) => {
+  const handleStreamFieldChange = (key: StreamKey, field: 'ip' | 'port', value: string) => {
+    setStreamEditorError(null);
     setStreamDrafts((previous) => ({
       ...previous,
       [key]: {
@@ -647,40 +658,56 @@ export default function HomePage() {
     }));
   };
 
-  const handleStreamCommit = trace(async function handleStreamCommit(key: 'vic' | 'audio' | 'debug') {
+  const handleStreamEditOpen = (key: StreamKey) => {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
-    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
-    if (current.enabled) {
-      const hostError = validateStreamHost(current.ip);
-      if (hostError) {
-        reportUserError({
-          operation: 'STREAM_VALIDATE',
-          title: 'Invalid stream host',
-          description: hostError,
-          context: { stream: key, ip: current.ip },
-        });
-        setStreamDrafts((previous) => ({
-          ...previous,
-          [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
-        }));
-        return;
-      }
-      const portError = validateStreamPort(current.port);
-      if (portError) {
-        reportUserError({
-          operation: 'STREAM_VALIDATE',
-          title: 'Invalid stream port',
-          description: portError,
-          context: { stream: key, port: current.port },
-        });
-        setStreamDrafts((previous) => ({
-          ...previous,
-          [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
-        }));
-        return;
-      }
+    setStreamDrafts((previous) => ({
+      ...previous,
+      [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+    }));
+    setStreamEditorError(null);
+    setActiveStreamEditorKey(key);
+  };
+
+  const handleStreamEditCancel = (key: StreamKey) => {
+    const entry = streamControlEntries.find((value) => value.key === key);
+    if (entry) {
+      setStreamDrafts((previous) => ({
+        ...previous,
+        [key]: { enabled: entry.enabled, ip: entry.ip, port: entry.port },
+      }));
     }
+    setStreamEditorError(null);
+    setActiveStreamEditorKey((previous) => (previous === key ? null : previous));
+  };
+
+  const handleStreamCommit = trace(async function handleStreamCommit(key: StreamKey) {
+    const entry = streamControlEntries.find((value) => value.key === key);
+    if (!entry) return false;
+    const current = streamDrafts[key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
+    const hostError = validateStreamHost(current.ip);
+    if (hostError) {
+      reportUserError({
+        operation: 'STREAM_VALIDATE',
+        title: 'Invalid stream host',
+        description: hostError,
+        context: { stream: key, ip: current.ip },
+      });
+      setStreamEditorError(hostError);
+      return false;
+    }
+    const portError = validateStreamPort(current.port);
+    if (portError) {
+      reportUserError({
+        operation: 'STREAM_VALIDATE',
+        title: 'Invalid stream port',
+        description: portError,
+        context: { stream: key, port: current.port },
+      });
+      setStreamEditorError(portError);
+      return false;
+    }
+    setStreamEditorError(null);
     await updateConfigValue(
       'Data Streams',
       entry.itemName,
@@ -688,6 +715,7 @@ export default function HomePage() {
       'HOME_STREAM_UPDATE',
       `${entry.label} stream updated`,
     );
+    return true;
   });
 
   const handleSaveToApp = trace(async function handleSaveToApp() {
@@ -874,10 +902,6 @@ export default function HomePage() {
       )
       : [typeValue];
 
-    const statusText = spec.class === 'SOFT_IEC_DRIVE'
-      ? (device?.lastError ? 'Service error reported' : 'DOS emulation ready')
-      : (device?.imageFile ? `Mounted: ${device.imageFile}` : 'No disk mounted');
-
     return {
       spec,
       device,
@@ -887,7 +911,6 @@ export default function HomePage() {
       busOptions,
       typeValue,
       typeOptions,
-      statusText,
       pendingEnabled: Boolean(configWritePending[buildConfigKey(spec.category, spec.enabledItem)]),
       pendingBus: Boolean(configWritePending[buildConfigKey(spec.category, spec.busItem)]),
       pendingType: spec.typeItem ? Boolean(configWritePending[buildConfigKey(spec.category, spec.typeItem)]) : false,
@@ -928,7 +951,7 @@ export default function HomePage() {
             />
             <div className="min-w-0">
               <h1 className="c64-header text-xl truncate" data-testid="home-header-title">Home</h1>
-              <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="home-header-subtitle">C64 Controller</p>
+              <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="home-header-subtitle">C64 Commander</p>
             </div>
           </div>
         }
@@ -1355,25 +1378,16 @@ export default function HomePage() {
                     ? 'b'
                     : 'soft-iec';
                 return (
-                  <div key={row.spec.class} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 space-y-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold">{label}</p>
-                        <p className="text-xs text-muted-foreground">{row.statusText}</p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
-                        disabled={!status.isConnected || row.pendingEnabled}
-                        data-testid={`home-drive-toggle-${testIdSuffix}`}
-                      >
-                        {row.enabled ? 'ON' : 'OFF'}
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Bus ID</span>
+                  <div
+                    key={row.spec.class}
+                    className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
+                    data-testid={`home-drive-row-${testIdSuffix}`}
+                    aria-label={`${label} Bus ${row.busValue} Type ${row.typeValue} ${row.enabled ? 'ON' : 'OFF'}`}
+                  >
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-2">
+                      <p className="min-w-0 truncate text-sm font-semibold">{label}</p>
+                      <div className="flex items-center gap-1 text-xs">
+                        <span className="text-muted-foreground">Bus</span>
                         <Select
                           value={row.busValue}
                           onValueChange={(value) =>
@@ -1387,7 +1401,11 @@ export default function HomePage() {
                             )}
                           disabled={!status.isConnected || row.pendingBus}
                         >
-                          <SelectTrigger data-testid={`home-drive-bus-${testIdSuffix}`}>
+                          <SelectTrigger
+                            className="h-8 min-w-[3.9rem] px-2 text-xs"
+                            data-testid={`home-drive-bus-${testIdSuffix}`}
+                            aria-label={`${label} bus id`}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1399,39 +1417,45 @@ export default function HomePage() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Type</span>
-                        {row.spec.typeItem ? (
-                          <Select
-                            value={row.typeValue}
-                            onValueChange={(value) =>
-                              void updateConfigValue(
-                                row.spec.category,
-                                row.spec.typeItem!,
-                                value,
-                                'HOME_DRIVE_TYPE',
-                                `${label} type updated`,
-                                { refreshDrives: true },
-                              )}
-                            disabled={!status.isConnected || row.pendingType}
-                          >
-                            <SelectTrigger data-testid={`home-drive-type-${testIdSuffix}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {row.typeOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="h-10 rounded-md border border-border/60 bg-background px-3 flex items-center text-sm text-muted-foreground">
-                            {row.typeValue}
-                          </div>
-                        )}
-                      </div>
+                      <Select
+                        value={row.typeValue}
+                        onValueChange={(value) => {
+                          if (!row.spec.typeItem) return;
+                          void updateConfigValue(
+                            row.spec.category,
+                            row.spec.typeItem,
+                            value,
+                            'HOME_DRIVE_TYPE',
+                            `${label} type updated`,
+                            { refreshDrives: true },
+                          );
+                        }}
+                        disabled={!row.spec.typeItem || !status.isConnected || row.pendingType}
+                      >
+                        <SelectTrigger
+                          className="h-8 min-w-[5.5rem] px-2 text-xs"
+                          data-testid={`home-drive-type-${testIdSuffix}`}
+                          aria-label={`${label} type`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {row.typeOptions.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
+                        disabled={!status.isConnected || row.pendingEnabled}
+                        data-testid={`home-drive-toggle-${testIdSuffix}`}
+                      >
+                        {row.enabled ? 'ON' : 'OFF'}
+                      </Button>
                     </div>
                   </div>
                 );
@@ -1651,9 +1675,37 @@ export default function HomePage() {
                 const draft = streamDrafts[entry.key] ?? { enabled: entry.enabled, ip: entry.ip, port: entry.port };
                 const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
                 return (
-                  <div key={entry.key} className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-foreground">{entry.label}</span>
+                  <div
+                    key={entry.key}
+                    className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
+                    data-testid={`home-stream-row-${entry.key}`}
+                  >
+                    <div
+                      className="grid grid-cols-[3.8rem_minmax(0,1fr)_5.8rem_auto] items-center gap-2 text-xs"
+                      aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port} ${draft.enabled ? 'ON' : 'OFF'}`}
+                    >
+                      <button
+                        type="button"
+                        className="col-span-3 grid grid-cols-[3.8rem_minmax(0,1fr)_5.8rem] items-center gap-2 text-left"
+                        onClick={() => handleStreamEditOpen(entry.key)}
+                        disabled={!status.isConnected || pending}
+                        data-testid={`home-stream-edit-toggle-${entry.key}`}
+                        aria-label={`Edit ${entry.label} stream target`}
+                      >
+                        <span className="font-semibold text-foreground">{entry.label.toUpperCase()}</span>
+                        <span
+                          className="truncate text-foreground"
+                          data-testid={`home-stream-ip-display-${entry.key}`}
+                        >
+                          {draft.ip || '—'}
+                        </span>
+                        <span
+                          className="font-mono text-right text-foreground"
+                          data-testid={`home-stream-port-display-${entry.key}`}
+                        >
+                          {draft.port || '—'}
+                        </span>
+                      </button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -1664,38 +1716,65 @@ export default function HomePage() {
                         {draft.enabled ? 'ON' : 'OFF'}
                       </Button>
                     </div>
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-2 text-[11px]">
-                      <div className="space-y-1">
-                        <span className="text-muted-foreground">IP</span>
-                        <Input
-                          value={draft.ip}
-                          onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
-                          onBlur={() => void handleStreamCommit(entry.key)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              void handleStreamCommit(entry.key);
-                            }
-                          }}
-                          disabled={!status.isConnected || pending || !draft.enabled}
-                          data-testid={`home-stream-ip-${entry.key}`}
-                        />
+                    {activeStreamEditorKey === entry.key && (
+                      <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
+                        <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] md:items-end">
+                          <div className="space-y-1">
+                            <label htmlFor={`home-stream-ip-${entry.key}`} className="text-muted-foreground">IP</label>
+                            <Input
+                              id={`home-stream-ip-${entry.key}`}
+                              value={draft.ip}
+                              onChange={(event) => handleStreamFieldChange(entry.key, 'ip', event.target.value)}
+                              disabled={!status.isConnected || pending}
+                              data-testid={`home-stream-ip-${entry.key}`}
+                              aria-label={`${entry.label} stream ip address`}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label htmlFor={`home-stream-port-${entry.key}`} className="text-muted-foreground">Port</label>
+                            <Input
+                              id={`home-stream-port-${entry.key}`}
+                              value={draft.port}
+                              onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
+                              disabled={!status.isConnected || pending}
+                              data-testid={`home-stream-port-${entry.key}`}
+                              aria-label={`${entry.label} stream port`}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleStreamEditCancel(entry.key)}
+                            disabled={!status.isConnected || pending}
+                            data-testid={`home-stream-cancel-${entry.key}`}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => {
+                              void (async () => {
+                                const updated = await handleStreamCommit(entry.key);
+                                if (updated) {
+                                  setActiveStreamEditorKey(null);
+                                }
+                              })();
+                            }}
+                            disabled={!status.isConnected || pending}
+                            data-testid={`home-stream-confirm-${entry.key}`}
+                          >
+                            OK
+                          </Button>
+                        </div>
+                        {streamEditorError && (
+                          <p className="mt-2 text-[11px] text-destructive" data-testid={`home-stream-error-${entry.key}`}>
+                            {streamEditorError}
+                          </p>
+                        )}
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-muted-foreground">Port</span>
-                        <Input
-                          value={draft.port}
-                          onChange={(event) => handleStreamFieldChange(entry.key, 'port', event.target.value)}
-                          onBlur={() => void handleStreamCommit(entry.key)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              void handleStreamCommit(entry.key);
-                            }
-                          }}
-                          disabled={!status.isConnected || pending || !draft.enabled}
-                          data-testid={`home-stream-port-${entry.key}`}
-                        />
-                      </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}
