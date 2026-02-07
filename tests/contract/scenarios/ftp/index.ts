@@ -171,7 +171,13 @@ export function buildFtpScenarios(): FtpScenario[] {
 
                         if (failures > 0) break; // Don't escalate if already failing
                     } finally {
-                        await Promise.all(sessions.map((s) => s.close().catch(() => { /* ignore close errors */ })));
+                        await Promise.all(
+                            sessions.map((s) =>
+                                s.close().catch((closeError) => {
+                                    console.warn("FTP session close failed", { error: String(closeError), sessionId: s.sessionId });
+                                })
+                            )
+                        );
                     }
                 }
             }

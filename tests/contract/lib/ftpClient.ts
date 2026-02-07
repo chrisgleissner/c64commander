@@ -144,9 +144,49 @@ export class FtpClient {
         }
         socket.write(data);
         socket.end();
-        close();
+        try {
+            await this.waitForDataSocketToFinish(socket);
+        } finally {
+            close();
+        }
         const post = await this.readResponse();
         return { response: post, latencyMs: Date.now() - start, correlationId };
+    }
+
+    private async waitForDataSocketToFinish(socket: net.Socket): Promise<void> {
+        await withTimeout(
+            new Promise<void>((resolve, reject) => {
+                let settled = false;
+                const cleanup = () => {
+                    socket.off("finish", onDone);
+                    socket.off("close", onDone);
+                    socket.off("end", onDone);
+                    socket.off("error", onError);
+                };
+                const onDone = () => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    cleanup();
+                    resolve();
+                };
+                const onError = (err: Error) => {
+                    if (settled) {
+                        return;
+                    }
+                    settled = true;
+                    cleanup();
+                    reject(err);
+                };
+                socket.once("finish", onDone);
+                socket.once("close", onDone);
+                socket.once("end", onDone);
+                socket.once("error", onError);
+            }),
+            this.config.timeoutMs,
+            "FTP data socket finish timeout"
+        );
     }
 
     async sendCommand(command: string): Promise<FtpCommandResult> {
@@ -258,40 +298,57 @@ export class FtpClient {
 
         const server = net.createServer();
         server.maxConnections = 1;
-        const port = await new Promise<number>((resolve, reject) => {
-            server.once("error", reject);
-            server.listen(0, () => {
-                const address = server.address();
-                if (!address || typeof address === "string") {
-                    reject(new Error("FTP PORT listen failed"));
-                    return;
-                }
-                resolve(address.port);
-            });
-        });
+        let closed = false;
+        const closeServer = () => {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            server.close();
+        };
 
-        const localAddress = this.control.localAddress || "127.0.0.1";
-        if (!localAddress.includes(".")) {
-            throw new Error(`FTP PORT requires IPv4 local address, got '${localAddress}'`);
-        }
-        const [a, b, c, d] = localAddress.split(".").map((part) => parseInt(part, 10));
-        const pHi = Math.floor(port / 256);
-        const pLo = port % 256;
-        await this.sendCommand(`PORT ${a},${b},${c},${d},${pHi},${pLo}`);
-
-        const socket = await withTimeout(
-            new Promise<net.Socket>((resolve, reject) => {
-                server.once("connection", (client) => {
-                    server.close();
-                    resolve(client);
-                });
+        try {
+            const port = await new Promise<number>((resolve, reject) => {
                 server.once("error", reject);
-            }),
-            this.config.timeoutMs,
-            "FTP PORT accept timeout"
-        );
+                server.listen(0, () => {
+                    const address = server.address();
+                    if (!address || typeof address === "string") {
+                        reject(new Error("FTP PORT listen failed"));
+                        return;
+                    }
+                    resolve(address.port);
+                });
+            });
 
-        return { socket, close: () => socket.destroy() };
+            const localAddress = this.control.localAddress || "127.0.0.1";
+            if (!localAddress.includes(".")) {
+                throw new Error(`FTP PORT requires IPv4 local address, got '${localAddress}'`);
+            }
+            const [a, b, c, d] = localAddress.split(".").map((part) => parseInt(part, 10));
+            const pHi = Math.floor(port / 256);
+            const pLo = port % 256;
+            await this.sendCommand(`PORT ${a},${b},${c},${d},${pHi},${pLo}`);
+
+            const socket = await withTimeout(
+                new Promise<net.Socket>((resolve, reject) => {
+                    server.once("connection", (client) => {
+                        closeServer();
+                        resolve(client);
+                    });
+                    server.once("error", (err) => {
+                        closeServer();
+                        reject(err);
+                    });
+                }),
+                this.config.timeoutMs,
+                "FTP PORT accept timeout"
+            );
+
+            return { socket, close: () => socket.destroy() };
+        } catch (error) {
+            closeServer();
+            throw error;
+        }
     }
 }
 

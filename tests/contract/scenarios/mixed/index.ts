@@ -145,14 +145,22 @@ export function buildMixedScenarios(): MixedScenario[] {
                     });
 
                     // Cleanup
-                    try { await clientA.dele("conflict-probe.txt"); } catch { /* ignore */ }
+                    try {
+                        await clientA.dele("conflict-probe.txt");
+                    } catch (cleanupError) {
+                        console.warn("FTP cleanup delete failed", { error: String(cleanupError) });
+                    }
 
                 } catch (error) {
                     log({ kind: "conflict", op: "ftp×ftp", status: "error", details: { message: String(error) } });
                 } finally {
                     await Promise.all([
-                        clientA.close().catch(() => { }),
-                        clientB.close().catch(() => { })
+                        clientA.close().catch((closeError) => {
+                            console.warn("FTP client A close failed", { error: String(closeError) });
+                        }),
+                        clientB.close().catch((closeError) => {
+                            console.warn("FTP client B close failed", { error: String(closeError) });
+                        })
                     ]);
                 }
             }
@@ -243,12 +251,18 @@ export function buildMixedScenarios(): MixedScenario[] {
                     });
 
                     // Cleanup
-                    try { await ftp.dele("conflict-rest-ftp.txt"); } catch { /* ignore */ }
+                    try {
+                        await ftp.dele("conflict-rest-ftp.txt");
+                    } catch (cleanupError) {
+                        console.warn("FTP cleanup delete failed", { error: String(cleanupError) });
+                    }
 
                 } catch (error) {
                     log({ kind: "conflict", op: "rest×ftp", status: "error", details: { message: String(error) } });
                 } finally {
-                    await ftp.close().catch(() => { });
+                    await ftp.close().catch((closeError) => {
+                        console.warn("FTP close failed", { error: String(closeError) });
+                    });
                 }
             }
         },
@@ -274,7 +288,9 @@ export function buildMixedScenarios(): MixedScenario[] {
                 } catch (error) {
                     log({ kind: "mixed", op: "sequential-rest-then-ftp", status: "error", details: { message: String(error) } });
                 } finally {
-                    await ftp.close().catch(() => { });
+                    await ftp.close().catch((closeError) => {
+                        console.warn("FTP close failed", { error: String(closeError) });
+                    });
                 }
             }
         }

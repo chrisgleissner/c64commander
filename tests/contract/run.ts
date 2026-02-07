@@ -65,7 +65,11 @@ const restRequest = createRestRequest(restClient, config.mode);
 const healthMonitor = new HealthMonitor(
     async () => {
         try {
-            const response = await restClient.request({ method: "GET", url: config.health.endpoint });
+            const response = await withTimeout(
+                restClient.request({ method: "GET", url: config.health.endpoint }),
+                config.health.timeoutMs,
+                `Health probe timeout: ${config.health.endpoint}`
+            );
             return { ok: response.status === 200, status: response.status, latencyMs: response.latencyMs };
         } catch (error) {
             console.warn("Health probe failed", { error: String(error) });
@@ -175,7 +179,9 @@ try {
                     overlap: d.conflict ? "forbidden" : "allowed",
                     evidence: `aOk=${d.aOk} bOk=${d.bOk} aLatency=${d.aLatencyMs}ms bLatency=${d.bLatencyMs}ms`
                 });
-            } catch { /* skip malformed lines */ }
+            } catch (error) {
+                console.warn("Failed to parse conflict log line", { error: String(error) });
+            }
         }
         return results;
     }
@@ -395,7 +401,7 @@ function loadOpenApiEndpoints(cfg: typeof config) {
     const endpoints: Array<{ id: string; method: string; path: string; group: string; safe: boolean }> = [];
 
     for (const [pathKey, methods] of Object.entries(paths)) {
-        for (const [method, meta] of Object.entries(methods)) {
+        for (const [method] of Object.entries(methods)) {
             if (!isHttpMethod(method)) {
                 continue;
             }
