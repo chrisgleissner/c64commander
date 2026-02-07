@@ -195,7 +195,7 @@ describe('HomeDiskManager', () => {
 
         renderComponent();
 
-        expect(screen.getByText('Mounted disk: mounted-demo.d64')).toBeInTheDocument();
+        expect(screen.getByText('mounted-demo.d64')).toBeInTheDocument();
     });
 
     it('handles mount flow', async () => {

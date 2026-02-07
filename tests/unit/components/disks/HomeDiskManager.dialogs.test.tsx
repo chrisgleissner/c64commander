@@ -96,14 +96,8 @@ describe('HomeDiskManager Dialogs', () => {
 
     it('handles mounting a disk to a specific drive via dialog', async () => {
       // 1. Click "Mount..." on Drive A
-      const { getAllByText, getByText, getAllByTestId } = render(<HomeDiskManager />);
-      
-      // Drive mount buttons. In the code: <Button ...>Mount…</Button>
-      // My code renders "Mount…"
-      const mountDriveButtons = getAllByText('Mount…');
-      // Assuming first one is Drive A, second is Drive B?
-      // Drives are rendered via map over DRIVE_KEYS ['a', 'b'].
-      fireEvent.click(mountDriveButtons[0]); // Drive A
+      const { getAllByTestId } = render(<HomeDiskManager />);
+      fireEvent.click(screen.getByTestId('drive-mount-toggle-a'));
       
       // Dialog opens. SelectableActionList with "Available disks" title renders.
       // We need to click "Mount" on a disk inside this dialog.

@@ -110,7 +110,7 @@ const docSections: DocSection[] = [
         <p className="font-medium">Find and mount disks:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
           <li>Open <strong>Disks</strong>.</li>
-          <li>In the Drive cards, tap <strong>Mount…</strong> for Drive A or B.</li>
+          <li>In a Drive card header, tap the <strong>disk icon</strong> to mount/eject.</li>
           <li>Choose a disk from the collection or add one first.</li>
         </ol>
         <p className="font-medium">Add disks to the collection:</p>
@@ -133,9 +133,8 @@ const docSections: DocSection[] = [
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li><strong>Set group</strong> assigns disks to a rotation group.</li>
-          <li><strong>Prev / Next</strong> on a drive cycles through the assigned group.</li>
-          <li>Use <strong>Mount…</strong> to swap directly to a specific disk.</li>
-          <li><strong>Eject</strong> clears a mounted disk before inserting another image.</li>
+          <li>Use the drive-row rotate arrows to cycle disks in the group.</li>
+          <li>Use the header <strong>disk icon</strong> to open mount/eject actions.</li>
         </ul>
       </div>
     ),

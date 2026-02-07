@@ -147,14 +147,13 @@ describe('HomeDiskManager UI & Interactions', () => {
         });
     });
 
-    it('resets all connected drives from disks page control', async () => {
+    it('resets an individual drive from its card control', async () => {
         render(<HomeDiskManager />);
-        fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
+        fireEvent.click(screen.getByTestId('drive-reset-a'));
         await waitFor(() => {
             expect(mockApi.resetDrive).toHaveBeenCalledWith('a');
-            expect(mockApi.resetDrive).toHaveBeenCalledWith('b');
             expect(toast).toHaveBeenCalledWith(expect.objectContaining({
-                title: 'Drives reset',
+                title: 'Drive A reset',
             }));
         });
     });
@@ -331,7 +330,7 @@ describe('HomeDiskManager UI & Interactions', () => {
 
         mockApi.unmountDrive.mockRejectedValueOnce(new Error('Eject failed'));
 
-        const ejectBtn = screen.getByRole('button', { name: 'Eject' });
+        const ejectBtn = screen.getByRole('button', { name: 'Drive A Eject disk' });
         fireEvent.click(ejectBtn);
 
          await waitFor(() => {

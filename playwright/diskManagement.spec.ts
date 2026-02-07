@@ -247,7 +247,7 @@ test.describe('Disk management', () => {
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     const driveCard = getDriveCard(page, 'Drive A');
-    const mountButton = driveCard.getByRole('button', { name: 'Mount…' });
+    const mountButton = driveCard.getByTestId('drive-mount-toggle-a');
     const powerButton = page.getByTestId('drive-power-toggle-a');
 
     await expect(powerButton).toBeVisible();
