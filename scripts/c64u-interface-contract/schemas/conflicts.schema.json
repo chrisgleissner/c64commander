@@ -1,0 +1,65 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "generatedAt",
+        "mode",
+        "auth",
+        "conflicts"
+    ],
+    "properties": {
+        "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "mode": {
+            "type": "string",
+            "enum": [
+                "SAFE",
+                "STRESS"
+            ]
+        },
+        "auth": {
+            "type": "string",
+            "enum": [
+                "ON",
+                "OFF"
+            ]
+        },
+        "conflicts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "primary",
+                    "secondary",
+                    "overlap",
+                    "evidence"
+                ],
+                "properties": {
+                    "primary": {
+                        "type": "string"
+                    },
+                    "secondary": {
+                        "type": "string"
+                    },
+                    "overlap": {
+                        "type": "string",
+                        "enum": [
+                            "allowed",
+                            "wait-for-response",
+                            "wait-for-completion",
+                            "forbidden",
+                            "unknown"
+                        ]
+                    },
+                    "evidence": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

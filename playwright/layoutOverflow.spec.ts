@@ -496,7 +496,7 @@ test.describe('Layout overflow safeguards', () => {
     }
   });
 
-  test('AppBar header has safe-area top padding on all pages', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('AppBar header has safe-area top padding on all pages @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     const routes = ['/', '/play', '/disks', '/config', '/settings'];
     for (const route of routes) {
       await page.goto(route, { waitUntil: 'domcontentloaded' });

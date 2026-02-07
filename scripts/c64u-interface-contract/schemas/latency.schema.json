@@ -1,0 +1,87 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "generatedAt",
+        "mode",
+        "auth",
+        "operations"
+    ],
+    "properties": {
+        "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "mode": {
+            "type": "string",
+            "enum": [
+                "SAFE",
+                "STRESS"
+            ]
+        },
+        "auth": {
+            "type": "string",
+            "enum": [
+                "ON",
+                "OFF"
+            ]
+        },
+        "operations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "kind",
+                    "samples",
+                    "p50",
+                    "p90",
+                    "p95",
+                    "p99",
+                    "min",
+                    "max",
+                    "mean"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "REST",
+                            "FTP"
+                        ]
+                    },
+                    "samples": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "p50": {
+                        "type": "number"
+                    },
+                    "p90": {
+                        "type": "number"
+                    },
+                    "p95": {
+                        "type": "number"
+                    },
+                    "p99": {
+                        "type": "number"
+                    },
+                    "min": {
+                        "type": "number"
+                    },
+                    "max": {
+                        "type": "number"
+                    },
+                    "mean": {
+                        "type": "number"
+                    }
+                }
+            }
+        }
+    }
+}

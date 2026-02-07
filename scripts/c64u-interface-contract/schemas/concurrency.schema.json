@@ -1,0 +1,82 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "generatedAt",
+        "mode",
+        "auth",
+        "limits",
+        "observations"
+    ],
+    "properties": {
+        "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "mode": {
+            "type": "string",
+            "enum": [
+                "SAFE",
+                "STRESS"
+            ]
+        },
+        "auth": {
+            "type": "string",
+            "enum": [
+                "ON",
+                "OFF"
+            ]
+        },
+        "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "restMaxInFlight",
+                "ftpMaxSessions",
+                "mixedMaxInFlight"
+            ],
+            "properties": {
+                "restMaxInFlight": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "ftpMaxSessions": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "mixedMaxInFlight": {
+                    "type": "integer",
+                    "minimum": 1
+                }
+            }
+        },
+        "observations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "scope",
+                    "maxInFlight",
+                    "failureMode"
+                ],
+                "properties": {
+                    "scope": {
+                        "type": "string"
+                    },
+                    "maxInFlight": {
+                        "type": "integer",
+                        "minimum": 1
+                    },
+                    "failureMode": {
+                        "type": "string"
+                    },
+                    "notes": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

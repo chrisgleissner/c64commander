@@ -1,0 +1,72 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "generatedAt",
+        "mode",
+        "auth",
+        "operations"
+    ],
+    "properties": {
+        "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "mode": {
+            "type": "string",
+            "enum": [
+                "SAFE",
+                "STRESS"
+            ]
+        },
+        "auth": {
+            "type": "string",
+            "enum": [
+                "ON",
+                "OFF"
+            ]
+        },
+        "operations": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "id",
+                    "kind",
+                    "minDelayMs",
+                    "recommendedDelayMs",
+                    "maxDelayMs"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "REST",
+                            "FTP"
+                        ]
+                    },
+                    "minDelayMs": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "recommendedDelayMs": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "maxDelayMs": {
+                        "type": "integer",
+                        "minimum": 0
+                    },
+                    "basis": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

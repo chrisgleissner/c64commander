@@ -1,6 +1,31 @@
 import { test, expect } from '@playwright/test';
 
 test('verify comprehensive user tracing', async ({ page }) => {
+  const dismissBlockingDialogIfPresent = async () => {
+    const dialog = page.getByRole('dialog').last();
+    const isVisible = await dialog.isVisible().catch(() => false);
+    if (!isVisible) {
+      return;
+    }
+
+    const continueInDemoMode = dialog.getByRole('button', { name: /continue in demo mode/i }).first();
+    if (await continueInDemoMode.isVisible().catch(() => false)) {
+      await continueInDemoMode.click();
+      await expect(dialog).toBeHidden({ timeout: 10000 });
+      return;
+    }
+
+    const closeButton = dialog.getByRole('button', { name: /close|dismiss|ok|cancel/i }).first();
+    if (await closeButton.isVisible().catch(() => false)) {
+      await closeButton.click();
+      await expect(dialog).toBeHidden({ timeout: 10000 });
+      return;
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden({ timeout: 10000 });
+  };
+
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
@@ -35,6 +60,7 @@ test('verify comprehensive user tracing', async ({ page }) => {
   await page.waitForURL('**/config');
 
   // 3. Open diagnostics from header indicator
+  await dismissBlockingDialogIfPresent();
   await page.getByTestId('connectivity-indicator').click();
 
   // Get traces

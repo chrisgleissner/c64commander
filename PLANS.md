@@ -1,57 +1,61 @@
 # PLANS.md
 
-## 1. Scope and Constraints
-- [ ] Confirm all changes are limited to Home page UI/tests and no backend feature work.
-- [ ] Keep interaction touch-first (no hover behavior) and reuse existing Home design primitives (`Button`, `Select`, `Input`, inline card rows).
-- [ ] Preserve accessibility and light/dark readability for compact rows.
+This plan is the authoritative contract for the C64U interface-contract research work.
+Strict loop: plan -> execute -> verify. Do not proceed to the next phase until the current phase is complete.
 
-## 2. Home Page Header Fix (Home Only)
-- [ ] Change Home subtitle text to exactly `C64 Commander`.
-- [ ] Verify only Home subtitle changed.
-- [ ] Verify subtitle render remains stable on small screens and both themes (manual inspection).
+## Phase 0: Preconditions
+- [ ] Confirm access to a real C64U device and its base URL.
+- [ ] Confirm whether the device network password is known and whether AUTH OFF is enabled on-device.
+- [ ] Confirm firmware source is available via symlink: 1541ultimate/.
+- [ ] Confirm run host has Node.js available for the harness.
 
-## 3. Streams Section: Compact Dashboard Rows + Inline Edit
-- [ ] Refactor Streams default layout to three compact single-line rows (VIC, AUDIO, DEBUG) with aligned columns for label/ip/port/state.
-- [ ] Ensure IP and port are always side by side in collapsed rows.
-- [ ] Add inline per-row editor (single active row at a time) with IP + PORT fields and explicit `OK` confirm.
-- [ ] Add cancel/revert behavior for inline editing.
-- [ ] Keep stream state toggle behavior and wire editor confirm to existing config update path.
-- [ ] Validate IP (IPv4) and port (1..65535) on confirm with lightweight error feedback.
-- [ ] Add/update accessibility labels for row summary and editor fields.
-- [ ] Add/adjust unit tests for collapsed rows and inline edit confirm/persist flow.
+## Phase 1: Discovery (static)
+- [x] Read README and existing docs relevant to REST/FTP behavior.
+- [x] Inspect OpenAPI spec: doc/c64/c64u-openapi.yaml.
+- [x] Inspect firmware sources under 1541ultimate/ for REST and FTP servers:
+  - [x] Locate REST request handlers and auth checks.
+  - [x] Locate FTP command handlers, auth checks, and concurrency hints.
+  - [x] Record relevant paths, symbols, and constants.
+- [x] Extract candidate endpoint list and FTP command list for testing.
 
-## 4. Drives Section: Single-Line Rows + Dropdown Editing
-- [ ] Refactor drives rows to compact single-line layout with drive name, bus ID, type, and ON/OFF state.
-- [ ] Keep dropdown editing for bus ID and type using existing `Select` pattern.
-- [ ] Ensure editing does not introduce large vertical whitespace.
-- [ ] Keep existing drive state/config wiring and add/update tests for single-line row + dropdown presence/interaction.
+## Phase 2: Harness Design
+- [x] Create harness layout under scripts/c64u-interface-contract/ per required structure.
+- [x] Define config schema (config.schema.json) with mode, auth, ftpMode, concurrency, pacing, outputDir.
+- [x] Define output schemas in scripts/c64u-interface-contract/schemas/ (endpoints, cooldowns, concurrency, conflicts, latency).
+- [x] Implement core libs:
+  - [x] restClient.ts with correlation IDs and auth header support.
+  - [x] ftpClient.ts with PASV/PORT, auth support, correlation IDs.
+  - [x] health.ts probe + circuit breaker (N=3, T=30s).
+  - [x] timing.ts for pacing and cooldown measurement.
+  - [x] concurrency.ts for in-flight control.
+- [x] Implement scenarios for REST, FTP, and mixed tests.
+- [x] Implement output writer, schema validation, and latest/ sync.
+- [x] Implement AUTH comparison tool.
 
-## 5. Implementation Guidelines
-- [ ] Keep changes small and contained in Home page and corresponding tests only.
-- [ ] Preserve existing stable selectors where possible; add minimal new test IDs only where required.
-- [ ] Check dark-mode contrast and compact spacing manually against references.
+## Phase 3: SAFE Execution
+- [ ] Prepare SAFE run configuration (AUTH ON).
+- [ ] Run SAFE + AUTH ON and collect outputs.
+- [ ] If device allows, run SAFE + AUTH OFF and collect outputs.
+- [ ] Ensure all SAFE write operations restore previous values.
+- [ ] Record run metadata (firmware commit/hash, OpenAPI hash, device info).
 
-## 6. Verification Requirements
-- [ ] Update tests for: Home subtitle text, Streams collapsed layout, Streams inline edit flow, Drives compact rows/dropdowns.
-- [ ] If golden/snapshot tests are affected, update only necessary artifacts and record rationale here.
-- [ ] Manually compare resulting Home UI behavior against reference screenshots:
-  - [ ] `/mnt/data/00-overview-light.png`
-  - [ ] `/mnt/data/01-overview-dark.png`
-  - [ ] `/mnt/data/01-machine.png`
-  - [ ] `/mnt/data/02-quick-config.png`
-  - [ ] `/mnt/data/03-drives.png`
-  - [ ] `/mnt/data/04-printers.png`
-  - [ ] `/mnt/data/05-config.png`
-- [ ] Run required local checks and confirm pass: unit tests, integration/UI tests, lint, type/build checks, CI-equivalent local build.
+## Phase 4: STRESS Execution (opt-in)
+- [ ] Determine if STRESS is safe enough to run.
+- [ ] If approved, run STRESS with hard caps and abort conditions.
+- [ ] Collect outputs and confirm recovery behavior.
 
-## 7. Required Workflow in PLANS.md
-### Design mapping
-- [ ] Finalized stream collapsed row columns documented.
-- [ ] Finalized stream inline editor placement/controls documented.
-- [ ] Finalized drive row columns and reused dropdown/state components documented.
+## Phase 5: Reporting and Integration Guidance
+- [ ] Write report: doc/c64/interface-contract.md with required tables and references.
+- [ ] Document SAFE vs STRESS coverage and excluded endpoints with rationale.
+- [ ] Provide reproduction commands.
+- [ ] Provide integration guidance and optional loader feature flag.
 
-### Verification
-- [ ] Record exact commands run and outcomes after implementation.
+## Phase 6: Verification
+- [ ] Validate all output JSON files against schemas.
+- [ ] Update test-results/c64u-interface-contract/latest from newest run.
+- [ ] Ensure README for harness includes usage examples.
+- [ ] Run applicable lint/tests/build if any harness code affects the build.
+- [ ] Record exact commands executed and results here.
 
-### Golden/snapshot impact
-- [ ] Document whether any golden/snapshot updates were needed.
+## Execution Log
+- [ ] (fill after runs)
