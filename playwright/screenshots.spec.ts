@@ -442,9 +442,9 @@ test.describe('App screenshots', () => {
     }, { baseUrl: server.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
-    const demoDialog = page.getByRole('heading', { name: 'Demo Mode' });
+    const demoDialog = page.getByRole('dialog', { name: 'Demo Mode' });
     if (await demoDialog.isVisible()) {
-      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+      await demoDialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
       await expect(demoDialog).toHaveCount(0);
     }
     await expect(page.getByTestId('connectivity-indicator')).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');

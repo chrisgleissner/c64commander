@@ -45,5 +45,6 @@ tags:
     text: "Add more items"
     optional: true
 - assertVisible: "Choose source"
-- assertVisible: "This device"
+- assertVisible:
+  id: "import-option-local"
 - takeScreenshot: choose-source

@@ -56,13 +56,14 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
-    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    if (await dialogTitle.isVisible().catch(() => false)) {
-      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    if (await dialog.isVisible().catch(() => false)) {
+      await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     }
 
     const demoIndicator = page.getByTestId('connectivity-indicator');
@@ -96,13 +97,14 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
-    await expect(page.getByRole('heading', { name: 'Demo Mode' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toHaveCount(0);
     expect(demoServer.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(false);
 
     await snap(page, testInfo, 'real-connected-no-demo');
@@ -125,16 +127,17 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
+    const dialogTitle = page.getByRole('dialog', { name: 'Demo Mode' });
     await expect(dialogTitle).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await dialogTitle.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Demo Mode' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toHaveCount(0);
 
     await snap(page, testInfo, 'demo-fallback-once');
   });
@@ -422,9 +425,9 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(false);
     await indicator.click();
-    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();

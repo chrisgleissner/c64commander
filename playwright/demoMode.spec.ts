@@ -27,7 +27,7 @@ test.describe('Automatic Demo Mode', () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -105,17 +105,18 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
     await snap(page, testInfo, 'demo-interstitial-shown');
 
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
-    await expect(dialogTitle).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(dialog).toHaveCount(0);
 
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
@@ -172,7 +173,9 @@ test.describe('Automatic Demo Mode', () => {
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     const urlInput = page.locator('#deviceHost');
@@ -194,6 +197,7 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '3000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
