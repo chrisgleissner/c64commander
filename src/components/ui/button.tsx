@@ -32,16 +32,50 @@ const buttonVariants = cva(
 
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+  VariantProps<typeof buttonVariants> {
   asChild?: boolean;
 }
 
-const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+const blurOnClick = (event: React.MouseEvent<HTMLElement>) => {
+  const target = event.currentTarget as HTMLElement | null;
+  if (target?.blur && document.activeElement === target) {
+    target.blur();
+  }
+};
+
+const StatelessButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} onClick={onClick} {...props} />;
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        onClick={(event: React.MouseEvent<HTMLElement>) => {
+          onClick?.(event as React.MouseEvent<HTMLButtonElement>);
+          blurOnClick(event);
+        }}
+        {...props}
+      />
+    );
   },
 );
-Button.displayName = "Button";
+StatelessButton.displayName = "StatelessButton";
 
-export { Button, buttonVariants };
+const StatefulButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, onClick, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button";
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        onClick={onClick}
+        {...props}
+      />
+    );
+  },
+);
+StatefulButton.displayName = "StatefulButton";
+
+const Button = StatelessButton;
+
+export { Button, StatefulButton, StatelessButton, buttonVariants };

@@ -5,7 +5,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { enableTraceAssertions } from './traceUtils';
+import { assertTraceOrder, enableTraceAssertions, getTraces } from './traceUtils';
 
 declare global {
   interface Window {
@@ -43,6 +43,24 @@ test.describe('HVSC Play page', () => {
 
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
+  };
+
+  const expectActionTraceSequence = async (page: Page, testInfo: TestInfo, actionName: string) => {
+    await expect.poll(async () => {
+      const traces = await getTraces(page);
+      const actionStart = traces.find((event) =>
+        event.type === 'action-start'
+        && (event.data as { name?: string } | undefined)?.name === actionName,
+      );
+      if (!actionStart) return false;
+      const related = traces.filter((event) => event.correlationId === actionStart.correlationId);
+      try {
+        assertTraceOrder(testInfo, related, ['action-start', 'action-end']);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(true);
   };
 
   const seedBaseConfig = async (page: Page, baseUrl: string, hvscBaseUrl: string) => {
@@ -529,6 +547,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscInstall');
     await snap(page, testInfo, 'hvsc-installed');
   });
 
@@ -549,6 +568,7 @@ test.describe('HVSC Play page', () => {
 
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+    await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscInstall');
 
     const markerExists = await page.evaluate(async ({ baselineVersion }) => {
       const fs = (window as any)?.Capacitor?.Plugins?.Filesystem;
@@ -565,6 +585,7 @@ test.describe('HVSC Play page', () => {
 
     await page.getByRole('button', { name: 'Ingest HVSC' }).click();
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+    await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscIngest');
 
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     await page.getByRole('button', { name: 'Play folder' }).click();
@@ -674,11 +695,14 @@ test.describe('HVSC Play page', () => {
   test('HVSC ingestion progress updates incrementally', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, {
       installedVersion: 0,
-      ingestionProgressSteps: [1],
+      downloadProgressSteps: [512, 2048],
+      ingestionProgressSteps: [1, 2],
+      installDelayMs: 400,
     });
     await page.goto('/play');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
 
+    await expect(page.getByTestId('hvsc-progress')).toBeVisible();
     const files = page.getByTestId('hvsc-extraction-files');
     await expect(files).toContainText('Files:');
     await expect.poll(async () => files.textContent()).toContain('Files: 1');

@@ -36,7 +36,13 @@ export function QuickActionCard({
   return (
     <motion.button
       whileTap={{ scale: 0.95 }}
-      onClick={onClick}
+      onClick={(event) => {
+        onClick();
+        const target = event.currentTarget as HTMLElement | null;
+        if (target?.blur && document.activeElement === target) {
+          target.blur();
+        }
+      }}
       disabled={disabled || loading}
       data-testid={dataTestId}
       className={cn(

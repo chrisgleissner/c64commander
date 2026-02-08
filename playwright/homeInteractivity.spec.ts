@@ -200,4 +200,53 @@ test.describe('Home interactions', () => {
     await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Volume');
     await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Pan');
   });
+
+  test('SID type column renders and LED controls stay inline', async ({ page }: { page: Page }) => {
+    await page.goto('/');
+    await waitForConnected(page);
+
+    const socketType = page.getByTestId('home-sid-type-socket1');
+    await expect(socketType).toBeVisible();
+    const socketTag = await socketType.evaluate((el) => el.tagName);
+    expect(socketTag).toBe('SPAN');
+
+    const ultiType = page.getByTestId('home-sid-type-ultiSid1');
+    await expect(ultiType).toBeVisible();
+    const ultiTag = await ultiType.evaluate((el) => el.tagName);
+    expect(ultiTag).toBe('BUTTON');
+
+    const ledControls = [
+      'home-led-mode',
+      'home-led-color',
+      'home-led-intensity',
+      'home-led-sid-select',
+      'home-led-tint',
+    ];
+
+    for (const control of ledControls) {
+      await expect(page.getByTestId(control)).toBeVisible();
+    }
+
+    const beforePath = await page.evaluate(() => window.location.pathname);
+    await page.getByTestId('home-led-mode').click();
+    await page.keyboard.press('Escape');
+    const afterPath = await page.evaluate(() => window.location.pathname);
+    expect(afterPath).toBe(beforePath);
+  });
+
+  test('stateless actions clear focus after click', async ({ page }: { page: Page }) => {
+    await page.goto('/');
+    await waitForConnected(page);
+
+    const action = page.getByTestId('home-config-save-app');
+    await action.scrollIntoViewIfNeeded();
+    await action.click();
+
+    const activeTestId = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement | null;
+      return active?.dataset?.testid ?? null;
+    });
+
+    expect(activeTestId).not.toBe('home-config-save-app');
+  });
 });

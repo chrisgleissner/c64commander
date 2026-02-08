@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
 import {
   RotateCcw,
   Power,
@@ -49,6 +48,7 @@ import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/con
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { LED_FIXED_COLORS, getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
 import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
 import {
   buildStreamConfigValue,
@@ -99,6 +99,9 @@ const SID_AUDIO_ITEMS = [
   'Pan UltiSID 1',
   'Pan UltiSID 2',
 ] as const;
+const SID_DETECTED_ITEMS = ['SID Detected Socket 1', 'SID Detected Socket 2'] as const;
+const ULTISID_PROFILE_ITEMS = ['UltiSID 1 Filter Curve', 'UltiSID 2 Filter Curve'] as const;
+const HOME_SID_SOCKET_ITEMS = [...SID_SOCKETS_ITEMS, ...SID_DETECTED_ITEMS] as const;
 const HOME_SID_ADDRESSING_ITEMS = [
   ...SID_ADDRESSING_ITEMS,
   'SID Socket 1 Address',
@@ -111,36 +114,6 @@ const EMPTY_SELECT_VALUE = '__empty__';
 const EMPTY_SELECT_LABEL = 'Default';
 const SID_SLIDER_DETENT_RANGE = 0.2;
 const SID_SLIDER_STEP = 0.01;
-
-const LED_COLOR_SWATCHES: Record<string, string> = {
-  Red: '#d3202c',
-  Scarlet: '#c81427',
-  Orange: '#f27918',
-  Amber: '#ffb000',
-  Yellow: '#ffe23c',
-  'Lemon-Lime': '#cfe833',
-  Chartreuse: '#8fd11a',
-  Lime: '#6dd83b',
-  Green: '#25b04d',
-  Jade: '#00b38f',
-  'Spring Green': '#00cc8b',
-  Aquamarine: '#2fc9b8',
-  Cyan: '#14bcd9',
-  'Deep Sky Blue': '#1e88e5',
-  Azure: '#2f6df6',
-  'Royal Blue': '#4169e1',
-  Blue: '#2b4dcf',
-  Indigo: '#3f3db4',
-  Violet: '#7a4bd8',
-  Purple: '#8a3fd6',
-  Magenta: '#c738d1',
-  Fuchsia: '#ff2d8a',
-  Rose: '#f06292',
-  Cerise: '#e1146a',
-  White: '#f5f5f5',
-};
-
-const resolveLedColorSwatch = (colorName: string) => LED_COLOR_SWATCHES[colorName] ?? null;
 
 const normalizeSelectValue = (value: string) => (value.trim().length === 0 ? EMPTY_SELECT_VALUE : value);
 
@@ -259,7 +232,6 @@ const PRINTER_CONTROL_SPEC: DriveControlSpec = {
 export default function HomePage() {
   const api = getC64API();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const { status } = useC64Connection();
   const { data: drivesData } = useC64Drives();
   const { data: u64SettingsCategory } = useC64ConfigItems(
@@ -284,7 +256,12 @@ export default function HomePage() {
   );
   const { data: sidSocketsCategory } = useC64ConfigItems(
     'SID Sockets Configuration',
-    SID_SOCKETS_ITEMS,
+    [...HOME_SID_SOCKET_ITEMS],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: ultiSidCategory } = useC64ConfigItems(
+    'UltiSID Configuration',
+    [...ULTISID_PROFILE_ITEMS],
     status.isConnected || status.isConnecting,
   );
   const { data: sidAddressingCategory } = useC64ConfigItems(
@@ -372,18 +349,30 @@ export default function HomePage() {
     () => buildStreamControlEntries(streamCategory as Record<string, unknown> | undefined),
     [streamCategory],
   );
-  const sidControlEntries = useMemo(
-    () => buildSidControlEntries(
+  const sidControlEntries = useMemo(() => {
+    const entries = buildSidControlEntries(
       audioMixerCategory as Record<string, unknown> | undefined,
       sidAddressingCategory as Record<string, unknown> | undefined,
-    ),
-    [audioMixerCategory, sidAddressingCategory],
-  );
+    );
+    return entries.map((entry) => {
+      const volumeOverride = configOverrides[buildConfigKey('Audio Mixer', entry.volumeItem)];
+      const panOverride = configOverrides[buildConfigKey('Audio Mixer', entry.panItem)];
+      const addressOverride = configOverrides[buildConfigKey('SID Addressing', entry.addressItem)];
+      return {
+        ...entry,
+        volume: volumeOverride !== undefined ? String(volumeOverride) : entry.volume,
+        pan: panOverride !== undefined ? String(panOverride) : entry.pan,
+        addressRaw: addressOverride !== undefined ? String(addressOverride) : entry.addressRaw,
+      };
+    });
+  }, [audioMixerCategory, configOverrides, sidAddressingCategory]);
   const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
 
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
+  const sidTypeTriggerClass =
+    'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-muted-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
 
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
@@ -402,11 +391,31 @@ export default function HomePage() {
   const ledModeValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip Mode', 'Off'));
   const ledFixedColorOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Fixed Color').map((value) => String(value));
   const ledFixedColorValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Fixed Color', '—'));
+  const ledIntensityOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Strip Intensity').map((value) => String(value));
+  const ledSidSelectOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select').map((value) => String(value));
   const ledTintOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Color tint').map((value) => String(value));
   const ledTintValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Color tint', 'Pure'));
   const ledSidSelectValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select', '—'));
   const ledIntensityValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Strip Intensity', '0'));
-  const ledColorSwatch = resolveLedColorSwatch(ledFixedColorValue);
+
+  const ultiSidConfig = ultiSidCategory as Record<string, unknown> | undefined;
+  const ultiSid1ProfileValue = String(resolveConfigValue(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 1 Filter Curve', '—'));
+  const ultiSid2ProfileValue = String(resolveConfigValue(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 2 Filter Curve', '—'));
+  const ultiSid1ProfileOptions = readItemOptions(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 1 Filter Curve').map((value) => String(value));
+  const ultiSid2ProfileOptions = readItemOptions(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 2 Filter Curve').map((value) => String(value));
+
+  const sidDetectedSocket1 = String(resolveConfigValue(
+    sidSocketsCategory as Record<string, unknown> | undefined,
+    'SID Sockets Configuration',
+    'SID Detected Socket 1',
+    'None',
+  ));
+  const sidDetectedSocket2 = String(resolveConfigValue(
+    sidSocketsCategory as Record<string, unknown> | undefined,
+    'SID Sockets Configuration',
+    'SID Detected Socket 2',
+    'None',
+  ));
 
   const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
     try {
@@ -959,78 +968,52 @@ export default function HomePage() {
     }));
   }, [drivesByClass]);
 
-  const ledSummary = useMemo(() => {
-    const trimmedMode = ledModeValue.trim() || 'Off';
-    const normalized = trimmedMode.toLowerCase();
-    const details: Array<{ key: string; value: string }> = [];
-    let showColor = false;
-
-    if (normalized === 'off') {
-      return { mode: 'Off', details, showColor };
-    }
-
-    if (normalized === 'fixed color') {
-      if (ledFixedColorValue && ledFixedColorValue !== '—') {
-        details.push({ key: 'color', value: ledFixedColorValue });
-        showColor = true;
-      }
-      if (ledTintValue && ledTintValue !== '—') {
-        details.push({ key: 'tint', value: ledTintValue });
-      }
-      if (ledIntensityValue && ledIntensityValue !== '—') {
-        details.push({ key: 'intensity', value: `Int ${ledIntensityValue}` });
-      }
-      return { mode: trimmedMode, details, showColor };
-    }
-
-    if (normalized === 'sid music') {
-      if (ledSidSelectValue && ledSidSelectValue !== '—') {
-        details.push({ key: 'sid', value: ledSidSelectValue });
-      }
-      if (ledIntensityValue && ledIntensityValue !== '—') {
-        details.push({ key: 'intensity', value: `Int ${ledIntensityValue}` });
-      }
-      return { mode: trimmedMode, details, showColor };
-    }
-
-    if (normalized === 'rainbow') {
-      if (ledIntensityValue && ledIntensityValue !== '—') {
-        details.push({ key: 'intensity', value: `Int ${ledIntensityValue}` });
-      }
-      return { mode: trimmedMode, details, showColor };
-    }
-
-    if (ledIntensityValue && ledIntensityValue !== '—') {
-      details.push({ key: 'intensity', value: `Int ${ledIntensityValue}` });
-    }
-
-    return { mode: trimmedMode, details, showColor };
-  }, [ledFixedColorValue, ledIntensityValue, ledModeValue, ledSidSelectValue, ledTintValue]);
-
   const effectiveVideoModeOptions = videoModeOptions.length ? videoModeOptions : [videoModeValue];
   const effectiveAnalogVideoOptions = analogVideoOptions.length ? analogVideoOptions : [analogVideoValue];
   const effectiveDigitalVideoOptions = digitalVideoOptions.length ? digitalVideoOptions : [digitalVideoValue];
   const effectiveHdmiScanOptions = hdmiScanOptions.length ? hdmiScanOptions : [hdmiScanValue];
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
+  const effectiveLedModeOptions = ledModeOptions.length ? ledModeOptions : [ledModeValue];
+  const effectiveLedFixedColorOptions = ledFixedColorOptions.length ? ledFixedColorOptions : [ledFixedColorValue];
+  const effectiveLedIntensityOptions = ledIntensityOptions.length ? ledIntensityOptions : [ledIntensityValue];
+  const effectiveLedSidSelectOptions = ledSidSelectOptions.length ? ledSidSelectOptions : [ledSidSelectValue];
   const effectiveLedTintOptions = ledTintOptions.length ? ledTintOptions : [ledTintValue];
+  const effectiveUltiSid1ProfileOptions = ultiSid1ProfileOptions.length ? ultiSid1ProfileOptions : [ultiSid1ProfileValue];
+  const effectiveUltiSid2ProfileOptions = ultiSid2ProfileOptions.length ? ultiSid2ProfileOptions : [ultiSid2ProfileValue];
 
   const videoModeSelectOptions = normalizeSelectOptions(effectiveVideoModeOptions, videoModeValue);
   const analogVideoSelectOptions = normalizeSelectOptions(effectiveAnalogVideoOptions, analogVideoValue);
   const digitalVideoSelectOptions = normalizeSelectOptions(effectiveDigitalVideoOptions, digitalVideoValue);
   const hdmiScanSelectOptions = normalizeSelectOptions(effectiveHdmiScanOptions, hdmiScanValue);
+  const ledModeSelectOptions = normalizeSelectOptions(effectiveLedModeOptions, ledModeValue);
+  const ledFixedColorSelectOptions = normalizeSelectOptions(effectiveLedFixedColorOptions, ledFixedColorValue);
+  const ledIntensitySelectOptions = normalizeSelectOptions(effectiveLedIntensityOptions, ledIntensityValue);
+  const ledSidSelectSelectOptions = normalizeSelectOptions(effectiveLedSidSelectOptions, ledSidSelectValue);
   const ledTintSelectOptions = normalizeSelectOptions(effectiveLedTintOptions, ledTintValue);
+  const ultiSid1ProfileSelectOptions = normalizeSelectOptions(effectiveUltiSid1ProfileOptions, ultiSid1ProfileValue);
+  const ultiSid2ProfileSelectOptions = normalizeSelectOptions(effectiveUltiSid2ProfileOptions, ultiSid2ProfileValue);
 
   const videoModeSelectValue = normalizeSelectValue(videoModeValue);
   const analogVideoSelectValue = normalizeSelectValue(analogVideoValue);
   const digitalVideoSelectValue = normalizeSelectValue(digitalVideoValue);
   const hdmiScanSelectValue = normalizeSelectValue(hdmiScanValue);
+  const ledModeSelectValue = normalizeSelectValue(ledModeValue);
+  const ledFixedColorSelectValue = normalizeSelectValue(ledFixedColorValue);
+  const ledIntensitySelectValue = normalizeSelectValue(ledIntensityValue);
+  const ledSidSelectSelectValue = normalizeSelectValue(ledSidSelectValue);
   const ledTintSelectValue = normalizeSelectValue(ledTintValue);
+  const ultiSid1ProfileSelectValue = normalizeSelectValue(ultiSid1ProfileValue);
+  const ultiSid2ProfileSelectValue = normalizeSelectValue(ultiSid2ProfileValue);
 
   const cpuSpeedPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'CPU Speed')]);
   const videoModePending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'System Mode')]);
   const analogVideoPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Analog Video Mode')]);
   const digitalVideoPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Digital Video Mode')]);
   const hdmiScanPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'HDMI Scan lines')]);
+  const ledModePending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip Mode')]);
+  const ledFixedColorPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Fixed Color')]);
+  const ledIntensityPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Strip Intensity')]);
+  const ledSidSelectPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip SID Select')]);
   const ledTintPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Color tint')]);
 
   const sidEnablement = useMemo(
@@ -1442,31 +1425,137 @@ export default function HomePage() {
 
             <div className="space-y-3">
               <div className="bg-card border border-border rounded-xl p-3 space-y-2" data-testid="home-led-summary">
-                <button
-                  type="button"
-                  onClick={() => navigate('/config')}
-                  className="w-full text-left"
-                >
-                  <span className="text-xs text-muted-foreground">LED</span>
-                  <div className="text-sm font-medium text-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span>LED: {ledSummary.mode}</span>
-                    {ledSummary.details.map((detail) => (
-                      <span key={detail.key} className="flex items-center gap-1">
-                        <span className="text-muted-foreground">•</span>
-                        <span>{detail.value}</span>
-                        {detail.key === 'color' && ledSummary.showColor && ledColorSwatch ? (
-                          <span
-                            className="h-3 w-4 rounded-sm border border-border/70"
-                            style={{ backgroundColor: ledColorSwatch }}
-                            aria-hidden="true"
-                          />
-                        ) : null}
-                      </span>
-                    ))}
+                <p className="text-xs font-semibold text-primary uppercase tracking-wider">LED</p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Mode</span>
+                    <Select
+                      value={ledModeSelectValue}
+                      onValueChange={(value) =>
+                        void updateConfigValue(
+                          'LED Strip Settings',
+                          'LedStrip Mode',
+                          resolveSelectValue(value),
+                          'HOME_LED_MODE',
+                          'LED mode updated',
+                        )}
+                      disabled={!status.isConnected || ledModePending}
+                    >
+                      <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-mode">
+                        <SelectValue placeholder={ledModeValue} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ledModeSelectOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {formatSelectOptionLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                </button>
-                {ledSummary.details.some((detail) => detail.key === 'tint') && (
-                  <div className="flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Fixed Color</span>
+                    <Select
+                      value={ledFixedColorSelectValue}
+                      onValueChange={(value) =>
+                        void updateConfigValue(
+                          'LED Strip Settings',
+                          'Fixed Color',
+                          resolveSelectValue(value),
+                          'HOME_LED_COLOR',
+                          'LED color updated',
+                        )}
+                      disabled={!status.isConnected || ledFixedColorPending}
+                    >
+                      <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-color">
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const rgb = getLedColorRgb(ledFixedColorSelectValue ?? ledFixedColorValue);
+                            return rgb ? (
+                              <div
+                                className="w-4 h-4 rounded-sm border border-border/50 shrink-0"
+                                style={{ backgroundColor: rgbToCss(rgb) }}
+                                aria-hidden="true"
+                              />
+                            ) : null;
+                          })()}
+                          <span>{formatSelectOptionLabel(ledFixedColorSelectValue ?? ledFixedColorValue)}</span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ledFixedColorSelectOptions.map((option) => {
+                          const optionRgb = getLedColorRgb(option);
+                          return (
+                            <SelectItem key={option} value={option}>
+                              <div className="flex items-center gap-2">
+                                {optionRgb ? (
+                                  <div
+                                    className="w-4 h-4 rounded-sm border border-border/50 shrink-0"
+                                    style={{ backgroundColor: rgbToCss(optionRgb) }}
+                                    aria-hidden="true"
+                                  />
+                                ) : null}
+                                <span>{formatSelectOptionLabel(option)}</span>
+                              </div>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Intensity</span>
+                    <Select
+                      value={ledIntensitySelectValue}
+                      onValueChange={(value) =>
+                        void updateConfigValue(
+                          'LED Strip Settings',
+                          'Strip Intensity',
+                          resolveSelectValue(value),
+                          'HOME_LED_INTENSITY',
+                          'LED intensity updated',
+                        )}
+                      disabled={!status.isConnected || ledIntensityPending}
+                    >
+                      <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-intensity">
+                        <SelectValue placeholder={ledIntensityValue} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ledIntensitySelectOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {formatSelectOptionLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">SID Select</span>
+                    <Select
+                      value={ledSidSelectSelectValue}
+                      onValueChange={(value) =>
+                        void updateConfigValue(
+                          'LED Strip Settings',
+                          'LedStrip SID Select',
+                          resolveSelectValue(value),
+                          'HOME_LED_SID_SELECT',
+                          'LED SID select updated',
+                        )}
+                      disabled={!status.isConnected || ledSidSelectPending}
+                    >
+                      <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-sid-select">
+                        <SelectValue placeholder={ledSidSelectValue} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ledSidSelectSelectOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {formatSelectOptionLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Tint</span>
                     <Select
                       value={ledTintSelectValue}
@@ -1492,7 +1581,7 @@ export default function HomePage() {
                       </SelectContent>
                     </Select>
                   </div>
-                )}
+                </div>
               </div>
               <div className="bg-card border border-border rounded-xl p-3 space-y-2">
                 <div className="space-y-1">
@@ -1768,6 +1857,26 @@ export default function HomePage() {
                 const panDisplayLabel = (panOptions[panDisplayIndex] ?? panOptions[0] ?? '—').trim();
                 const volumePercent = volumeMax > 0 ? (volumeSliderValue / volumeMax) * 100 : 0;
                 const panPercent = panMax > 0 ? (panSliderValue / panMax) * 100 : 0;
+                const isUltiSid = entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
+                const sidTypeLabel = entry.key === 'socket1'
+                  ? sidDetectedSocket1
+                  : entry.key === 'socket2'
+                    ? sidDetectedSocket2
+                    : entry.key === 'ultiSid1'
+                      ? ultiSid1ProfileValue
+                      : ultiSid2ProfileValue;
+                const ultiSidProfileSelectValue = entry.key === 'ultiSid1'
+                  ? ultiSid1ProfileSelectValue
+                  : ultiSid2ProfileSelectValue;
+                const ultiSidProfileSelectOptions = entry.key === 'ultiSid1'
+                  ? ultiSid1ProfileSelectOptions
+                  : ultiSid2ProfileSelectOptions;
+                const ultiSidProfileItem = entry.key === 'ultiSid1'
+                  ? 'UltiSID 1 Filter Curve'
+                  : 'UltiSID 2 Filter Curve';
+                const ultiSidProfilePending = isUltiSid
+                  ? Boolean(configWritePending[buildConfigKey('UltiSID Configuration', ultiSidProfileItem)])
+                  : false;
                 const socketItemName = entry.key === 'socket1' ? 'SID Socket 1' : entry.key === 'socket2' ? 'SID Socket 2' : null;
                 const toggleKey = socketItemName
                   ? buildConfigKey('SID Sockets Configuration', socketItemName)
@@ -1781,9 +1890,42 @@ export default function HomePage() {
                     data-testid={`home-sid-entry-${entry.key}`}
                     aria-label={`${entry.label} ${baseAddressLabel} ${isSidEnabled ? 'ON' : 'OFF'}`}
                   >
-                    <div className="flex items-center justify-between gap-2 min-h-[32px]">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm font-semibold">{entry.label}</span>
+                    <div className="grid grid-cols-[140px_1fr_80px_auto] items-center gap-2 min-h-[32px]">
+                      <div className="min-w-0">
+                        <span className="text-sm font-semibold truncate">{entry.label}</span>
+                      </div>
+                      <div className="min-w-0 flex justify-start">
+                        {isUltiSid ? (
+                          <Select
+                            value={ultiSidProfileSelectValue}
+                            onValueChange={(value) =>
+                              void updateConfigValue(
+                                'UltiSID Configuration',
+                                ultiSidProfileItem,
+                                resolveSelectValue(value),
+                                'HOME_ULTISID_PROFILE',
+                                `${entry.label} profile updated`,
+                              )}
+                            disabled={!status.isConnected || ultiSidProfilePending}
+                          >
+                            <SelectTrigger className={sidTypeTriggerClass} data-testid={`home-sid-type-${entry.key}`}>
+                              <SelectValue placeholder={sidTypeLabel} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ultiSidProfileSelectOptions.map((option) => (
+                                <SelectItem key={option} value={option}>
+                                  {formatSelectOptionLabel(option)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-xs font-semibold text-muted-foreground" data-testid={`home-sid-type-${entry.key}`}>
+                            {sidTypeLabel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 min-w-0 justify-end">
                         <span
                           className={isSilent ? 'text-sm font-semibold font-mono tabular-nums text-amber-600' : 'text-sm font-semibold font-mono tabular-nums text-muted-foreground'}
                           data-testid={`home-sid-address-${entry.key}`}

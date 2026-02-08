@@ -20,7 +20,6 @@ import { registerScreenshotSections, sanitizeSegment } from './screenshotCatalog
 import {
   installFixedClock,
   installListPreviewLimit,
-  installLocalSourceSeed,
   installStableStorage,
   seedDiagnosticsTraces,
 } from './visualSeeds';
@@ -234,6 +233,7 @@ test.describe('App screenshots', () => {
     await captureLabeledSections(page, testInfo, 'home');
 
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'home/01-overview-dark.png');
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   });
@@ -317,7 +317,9 @@ test.describe('App screenshots', () => {
   });
 
   test('capture import flow screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await installLocalSourceSeed(page);
+    await page.addInitScript(() => {
+      (window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm = true;
+    });
     await page.goto('/play');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
@@ -334,8 +336,10 @@ test.describe('App screenshots', () => {
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
     const localDialog = page.getByRole('dialog');
-    await expect(localDialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
-    await localDialog.getByTestId('browse-source-seed-local-source').click();
+    await localDialog.getByTestId('import-option-local').click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await expect(input).toHaveCount(1);
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(localDialog.getByTestId('local-file-picker')).toBeVisible();
     await captureScreenshot(page, testInfo, 'play/import/03-local-file-picker.png');
   });

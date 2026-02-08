@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildPlayPlan, executePlayPlan } from '@/lib/playback/playbackRouter';
+import { readFtpFile } from '@/lib/ftp/ftpClient';
+import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
 import { injectAutostart } from '@/lib/playback/autostart';
 import { loadFirstDiskPrgViaDma } from '@/lib/playback/diskFirstPrg';
@@ -10,6 +12,30 @@ vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
 }));
+
+vi.mock('@/lib/ftp/ftpClient', () => ({
+  readFtpFile: vi.fn(),
+}));
+
+vi.mock('@/lib/ftp/ftpConfig', () => ({
+  getStoredFtpPort: vi.fn().mockReturnValue(21),
+}));
+
+vi.mock('@/lib/sourceNavigation/ftpSourceAdapter', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/sourceNavigation/ftpSourceAdapter')>('@/lib/sourceNavigation/ftpSourceAdapter');
+  return {
+    ...actual,
+    normalizeFtpHost: vi.fn((host: string) => host),
+  };
+});
+
+vi.mock('@/lib/c64api', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/c64api')>('@/lib/c64api');
+  return {
+    ...actual,
+    getC64APIConfigSnapshot: vi.fn(() => ({ deviceHost: 'c64u', password: '' })),
+  };
+});
 
 vi.mock('@/lib/playback/autostart', async () => {
   const actual = await vi.importActual<typeof import('@/lib/playback/autostart')>('@/lib/playback/autostart');
@@ -44,6 +70,8 @@ beforeEach(() => {
   vi.mocked(resolveLocalDiskBlob).mockReset();
   vi.mocked(loadDiskAutostartMode).mockReset();
   vi.mocked(loadDiskAutostartMode).mockReturnValue('kernal');
+  vi.mocked(readFtpFile).mockReset();
+  vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: 'c64u', password: '' } as any);
 });
 
 const createApiMock = () => ({
@@ -69,6 +97,25 @@ describe('playbackRouter', () => {
   it('routes SID playback from Ultimate filesystem', async () => {
     const api = createApiMock();
     const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID' });
+    await executePlayPlan(api as any, plan);
+    expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', undefined);
+  });
+
+  it('uses FTP + upload when Ultimate SID has duration and download succeeds', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
+    const encoded = Buffer.from(sidBytes).toString('base64');
+    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
+    await executePlayPlan(api as any, plan);
+    expect(api.playSidUpload).toHaveBeenCalledTimes(1);
+    expect(api.playSid).not.toHaveBeenCalled();
+  });
+
+  it('falls back to PUT when Ultimate SID FTP download fails', async () => {
+    const api = createApiMock();
+    vi.mocked(readFtpFile).mockRejectedValue(new Error('ftp failed'));
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', undefined);
   });
