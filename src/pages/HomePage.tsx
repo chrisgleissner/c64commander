@@ -88,10 +88,11 @@ import {
   normalizeDriveDevices,
   type DriveDeviceClass,
 } from '@/lib/drives/driveDevices';
+import { redactTreeUri } from '@/lib/native/safUtils';
 
 const DRIVE_A_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
 const DRIVE_B_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
-const U64_HOME_ITEMS = ['System Mode', 'CPU Speed', 'Analog Video Mode', 'Digital Video Mode', 'HDMI Scan lines'] as const;
+const U64_HOME_ITEMS = ['System Mode', 'Turbo Control', 'CPU Speed', 'Analog Video Mode', 'Digital Video Mode', 'HDMI Scan lines'] as const;
 const LED_STRIP_HOME_ITEMS = ['LedStrip Mode', 'Fixed Color', 'Strip Intensity', 'LedStrip SID Select', 'Color tint'] as const;
 const SID_AUDIO_ITEMS = [
   'Vol Socket 1',
@@ -185,6 +186,10 @@ const resolvePanCenterIndex = (options: string[]) => {
 
 const clampSliderValue = (value: number, max: number) => Math.min(Math.max(value, 0), max);
 
+const clampToRange = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const resolveSliderIndex = (value: number, max: number) => clampSliderValue(Math.round(value), max);
+
 const applySoftDetent = (value: number, centerIndex: number | null) => {
   if (centerIndex === null) return value;
   const distance = Math.abs(value - centerIndex);
@@ -248,6 +253,20 @@ const PRINTER_CONTROL_SPEC: DriveControlSpec = {
   busItem: 'Bus ID',
 };
 
+const PRINTER_HOME_ITEMS = [
+  'IEC printer',
+  'Bus ID',
+  'Output file',
+  'Output type',
+  'Ink density',
+  'Page top margin (default is 5)',
+  'Page height (default is 60)',
+  'Emulation',
+  'Commodore charset',
+  'Epson charset',
+  'IBM table 2',
+] as const;
+
 import { SectionHeader } from '@/components/SectionHeader';
 import { cn } from '@/lib/utils';
 
@@ -308,7 +327,7 @@ export default function HomePage() {
   );
   const { data: printerConfig } = useC64ConfigItems(
     'Printer Settings',
-    ['IEC printer', 'Bus ID'],
+    [...PRINTER_HOME_ITEMS],
     status.isConnected || status.isConnecting,
   );
   const controls = useC64MachineControl();
@@ -341,10 +360,12 @@ export default function HomePage() {
   const [pauseResumePending, setPauseResumePending] = useState(false);
   const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
   const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
-  const [streamDrafts, setStreamDrafts] = useState<Record<string, { enabled: boolean; ip: string; port: string; endpoint: string }>>({});
+  const [streamDrafts, setStreamDrafts] = useState<Record<string, { ip: string; port: string; endpoint: string }>>({});
   const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
   const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
-  const [activeSlider, setActiveSlider] = useState<{ id: string; value: number } | null>(null);
+  const [streamActionPending, setStreamActionPending] = useState<Record<string, boolean>>({});
+  const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
+  const [ledIntensityDraft, setLedIntensityDraft] = useState<number | null>(null);
   const [mountTarget, setMountTarget] = useState<{
     spec: DriveControlSpec;
     currentPath?: string;
@@ -407,6 +428,14 @@ export default function HomePage() {
     return normalizeConfigItem(items[itemName]).options ?? [];
   };
 
+  const readItemDetails = (payload: unknown, categoryName: string, itemName: string) => {
+    const record = payload as Record<string, unknown> | undefined;
+    const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
+    const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
+    if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
+    return normalizeConfigItem(items[itemName]).details;
+  };
+
   const resolveConfigValue = (
     payload: unknown,
     category: string,
@@ -417,6 +446,61 @@ export default function HomePage() {
     if (override !== undefined) return override;
     const value = readItemValue(payload, category, itemName);
     return value === undefined ? fallback : value;
+  };
+
+  const parseNumericValue = (value: string | number, fallback: number) => {
+    const match = String(value).trim().match(/[+-]?\d+(?:\.\d+)?/);
+    if (!match) return fallback;
+    const parsed = Number(match[0]);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const resolveTurboControlValue = (cpuSpeed: string, options: string[]) => {
+    const speed = parseNumericValue(cpuSpeed, 1);
+    const desired = speed <= 1 ? 'Off' : 'Manual';
+    const match = options.find((option) => normalizeOptionToken(option) === normalizeOptionToken(desired));
+    return match ?? options[0] ?? desired;
+  };
+
+  const formatPrinterLabel = (itemName: string) => {
+    if (itemName === 'Page top margin (default is 5)') return 'Margin';
+    if (itemName === 'Page height (default is 60)') return 'Height';
+    if (itemName === 'Output file') return 'Output';
+    if (itemName === 'Output type') return 'Type';
+    if (itemName === 'Ink density') return 'Ink';
+    if (itemName === 'Commodore charset') return 'CBM charset';
+    if (itemName === 'Epson charset') return 'Epson set';
+    if (itemName === 'IBM table 2') return 'IBM set';
+    return itemName;
+  };
+
+  const formatPrinterOptionLabel = (value: string) => {
+    const normalized = value.trim();
+    if (normalized === 'PNG B&W') return 'PNG B/W';
+    if (normalized === 'PNG COLOR') return 'PNG Color';
+    if (normalized === 'IBM Graphics Printer') return 'IBM Graphics';
+    if (normalized === 'Commodore MPS') return 'MPS';
+    if (normalized === 'Epson FX-80/JX-80') return 'Epson FX';
+    if (normalized === 'IBM Proprinter') return 'IBM Pro';
+    if (normalized === 'USA/UK') return 'US/UK';
+    if (normalized === 'France/Italy') return 'FR/IT';
+    if (normalized === 'Germany') return 'DE';
+    if (normalized === 'Denmark') return 'DK';
+    if (normalized === 'Denmark I') return 'DK I';
+    if (normalized === 'Denmark II') return 'DK II';
+    if (normalized === 'Spain') return 'ES';
+    if (normalized === 'Sweden') return 'SE';
+    if (normalized === 'Switzerland') return 'CH';
+    if (normalized === 'France') return 'FR';
+    if (normalized === 'Italy') return 'IT';
+    if (normalized === 'Norway') return 'NO';
+    if (normalized === 'Portugal') return 'PT';
+    if (normalized === 'Greece') return 'GR';
+    if (normalized === 'Israel') return 'IL';
+    if (normalized === 'Japan') return 'JP';
+    if (normalized === 'International 1') return 'Intl 1';
+    if (normalized === 'International 2') return 'Intl 2';
+    return normalized;
   };
 
   const buildInfo = getBuildInfo();
@@ -443,6 +527,10 @@ export default function HomePage() {
   }, [audioMixerCategory, configOverrides, sidAddressingCategory]);
   const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
+  const ramDumpFolderLabel = ramDumpFolder?.rootName ?? (ramDumpFolder ? 'Folder access granted' : 'Not configured');
+  const ramDumpFolderDetail = ramDumpFolder
+    ? (redactTreeUri(ramDumpFolder.treeUri) ?? 'Folder access granted')
+    : 'Select a folder before first Save RAM action.';
 
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
@@ -457,6 +545,13 @@ export default function HomePage() {
   const digitalVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Digital Video Mode', '—'));
   const hdmiScanOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'HDMI Scan lines').map((value) => String(value));
   const hdmiScanValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'HDMI Scan lines', 'Disabled'));
+  const turboControlOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Turbo Control').map((value) => String(value));
+  const turboControlValue = String(resolveConfigValue(
+    u64Category,
+    'U64 Specific Settings',
+    'Turbo Control',
+    turboControlOptions[0] ?? 'Manual',
+  ));
   const cpuSpeedOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'CPU Speed').map((value) => String(value));
   const cpuSpeedValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'CPU Speed', '1'));
 
@@ -464,12 +559,16 @@ export default function HomePage() {
   const ledModeValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip Mode', 'Off'));
   const ledFixedColorOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Fixed Color').map((value) => String(value));
   const ledFixedColorValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Fixed Color', '—'));
-  const ledIntensityOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Strip Intensity').map((value) => String(value));
   const ledSidSelectOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select').map((value) => String(value));
   const ledTintOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Color tint').map((value) => String(value));
   const ledTintValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Color tint', 'Pure'));
   const ledSidSelectValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select', '—'));
   const ledIntensityValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Strip Intensity', '0'));
+  const ledIntensityDetails = readItemDetails(ledStripConfig, 'LED Strip Settings', 'Strip Intensity');
+  const ledIntensityMin = ledIntensityDetails?.min ?? 0;
+  const ledIntensityMax = ledIntensityDetails?.max ?? 31;
+  const ledIntensityNumber = parseNumericValue(ledIntensityValue, ledIntensityMin);
+  const ledIntensityDisplayValue = ledIntensityDraft ?? ledIntensityNumber;
 
   const ultiSidConfig = ultiSidCategory as Record<string, unknown> | undefined;
   const ultiSid1ProfileValue = String(resolveConfigValue(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 1 Filter Curve', '—'));
@@ -524,7 +623,6 @@ export default function HomePage() {
       streamControlEntries.forEach((entry) => {
         if (configWritePending[`Data Streams::${entry.itemName}`]) return;
         next[entry.key] = {
-          enabled: entry.enabled,
           ip: entry.ip,
           port: entry.port,
           endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
@@ -533,6 +631,10 @@ export default function HomePage() {
       return next;
     });
   }, [configWritePending, streamControlEntries]);
+
+  useEffect(() => {
+    setLedIntensityDraft(null);
+  }, [ledIntensityValue]);
 
   const runMachineTask = trace(async function runMachineTask(
     taskId: string,
@@ -579,7 +681,7 @@ export default function HomePage() {
     value: string | number,
     operation: string,
     successTitle: string,
-    options: { refreshDrives?: boolean } = {},
+    options: { refreshDrives?: boolean; suppressToast?: boolean } = {},
   ) {
     const key = buildConfigKey(category, itemName);
     const previousValue = configOverrides[key];
@@ -587,7 +689,9 @@ export default function HomePage() {
     setConfigWritePending((previous) => ({ ...previous, [key]: true }));
     try {
       await api.setConfigValue(category, itemName, value);
-      toast({ title: successTitle });
+      if (!options.suppressToast) {
+        toast({ title: successTitle });
+      }
       await queryClient.invalidateQueries({
         predicate: (query) =>
           Array.isArray(query.queryKey)
@@ -621,6 +725,28 @@ export default function HomePage() {
     } finally {
       setConfigWritePending((previous) => ({ ...previous, [key]: false }));
     }
+  });
+
+  const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(nextValue: string) {
+    await updateConfigValue(
+      'U64 Specific Settings',
+      'CPU Speed',
+      nextValue,
+      'HOME_CPU_SPEED',
+      'CPU speed updated',
+    );
+
+    if (turboControlOptions.length === 0) return;
+    const desiredTurbo = resolveTurboControlValue(nextValue, turboControlOptions);
+    if (normalizeOptionToken(desiredTurbo) === normalizeOptionToken(turboControlValue)) return;
+    await updateConfigValue(
+      'U64 Specific Settings',
+      'Turbo Control',
+      desiredTurbo,
+      'HOME_TURBO_CONTROL',
+      'Turbo control updated',
+      { suppressToast: true },
+    );
   });
 
   const handleSelectRamDumpFolder = trace(async function handleSelectRamDumpFolder() {
@@ -821,47 +947,71 @@ export default function HomePage() {
     );
   });
 
-  const handleStreamToggle = trace(async function handleStreamToggle(key: StreamKey) {
+  const handleStreamStart = trace(async function handleStreamStart(key: StreamKey) {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return;
-    const current = streamDrafts[key] ?? {
-      enabled: entry.enabled,
+    const draft = streamDrafts[key] ?? {
       ip: entry.ip,
       port: entry.port,
       endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
     };
-    const next = { ...current, enabled: !current.enabled };
-    setStreamDrafts((previous) => ({ ...previous, [key]: next }));
-    if (next.enabled) {
-      const hostError = validateStreamHost(next.ip);
-      const portError = validateStreamPort(next.port);
-      if (hostError || portError) {
-        reportUserError({
-          operation: 'STREAM_VALIDATE',
-          title: 'Invalid stream target',
-          description: hostError ?? portError ?? 'Invalid stream target',
-          context: { stream: key, ip: next.ip, port: next.port },
-        });
-        setStreamEditorError(hostError ?? portError ?? 'Invalid stream target');
-        setStreamDrafts((previous) => ({ ...previous, [key]: current }));
-        return;
-      }
+    const hostError = validateStreamHost(draft.ip);
+    const portError = validateStreamPort(draft.port);
+    if (hostError || portError) {
+      reportUserError({
+        operation: 'STREAM_VALIDATE',
+        title: 'Invalid stream target',
+        description: hostError ?? portError ?? 'Invalid stream target',
+        context: { stream: key, ip: draft.ip, port: draft.port },
+      });
+      setStreamEditorError(hostError ?? portError ?? 'Invalid stream target');
+      return;
     }
     setStreamEditorError(null);
-    await updateConfigValue(
-      'Data Streams',
-      entry.itemName,
-      buildStreamConfigValue(next.enabled, next.ip, next.port),
-      'HOME_STREAM_TOGGLE',
-      `${entry.label} stream ${next.enabled ? 'enabled' : 'disabled'}`,
-    );
+    const ipPort = `${draft.ip.trim()}:${draft.port.trim()}`;
+    setStreamActionPending((prev) => ({ ...prev, [key]: true }));
+    try {
+      await api.startStream(entry.restName, ipPort);
+      toast({ title: `${entry.label} start command sent` });
+    } catch (error) {
+      reportUserError({
+        operation: 'STREAM_START',
+        title: 'Stream start failed',
+        description: (error as Error).message,
+        error,
+        context: { stream: key, ip: ipPort },
+      });
+    } finally {
+      setStreamActionPending((prev) => ({ ...prev, [key]: false }));
+    }
+  });
+
+  const handleStreamStop = trace(async function handleStreamStop(key: StreamKey) {
+    const entry = streamControlEntries.find((value) => value.key === key);
+    if (!entry) return;
+    setStreamEditorError(null);
+    setStreamActionPending((prev) => ({ ...prev, [key]: true }));
+    try {
+      await api.stopStream(entry.restName);
+      toast({ title: `${entry.label} stop command sent` });
+    } catch (error) {
+      reportUserError({
+        operation: 'STREAM_STOP',
+        title: 'Stream stop failed',
+        description: (error as Error).message,
+        error,
+        context: { stream: key },
+      });
+    } finally {
+      setStreamActionPending((prev) => ({ ...prev, [key]: false }));
+    }
   });
 
   const handleStreamFieldChange = (key: StreamKey, value: string) => {
     const parsed = parseStreamEndpoint(value);
     setStreamEditorError(null);
     setStreamDrafts((previous) => {
-      const fallback = { enabled: false, ip: '', port: '', endpoint: '' };
+      const fallback = { ip: '', port: '', endpoint: '' };
       const current = previous[key] ?? fallback;
       return {
         ...previous,
@@ -881,7 +1031,6 @@ export default function HomePage() {
     setStreamDrafts((previous) => ({
       ...previous,
       [key]: {
-        enabled: entry.enabled,
         ip: entry.ip,
         port: entry.port,
         endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
@@ -897,7 +1046,6 @@ export default function HomePage() {
       setStreamDrafts((previous) => ({
         ...previous,
         [key]: {
-          enabled: entry.enabled,
           ip: entry.ip,
           port: entry.port,
           endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
@@ -912,7 +1060,6 @@ export default function HomePage() {
     const entry = streamControlEntries.find((value) => value.key === key);
     if (!entry) return false;
     const current = streamDrafts[key] ?? {
-      enabled: entry.enabled,
       ip: entry.ip,
       port: entry.port,
       endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
@@ -965,9 +1112,9 @@ export default function HomePage() {
     await updateConfigValue(
       'Data Streams',
       entry.itemName,
-      buildStreamConfigValue(current.enabled, nextIp, nextPort),
+      buildStreamConfigValue(true, nextIp, nextPort),
       'HOME_STREAM_UPDATE',
-      `${entry.label} stream updated`,
+      `${entry.label} stream target updated`,
     );
     return true;
   });
@@ -1048,7 +1195,6 @@ export default function HomePage() {
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
   const effectiveLedModeOptions = ledModeOptions.length ? ledModeOptions : [ledModeValue];
   const effectiveLedFixedColorOptions = ledFixedColorOptions.length ? ledFixedColorOptions : [ledFixedColorValue];
-  const effectiveLedIntensityOptions = ledIntensityOptions.length ? ledIntensityOptions : [ledIntensityValue];
   const effectiveLedSidSelectOptions = ledSidSelectOptions.length ? ledSidSelectOptions : [ledSidSelectValue];
   const effectiveLedTintOptions = ledTintOptions.length ? ledTintOptions : [ledTintValue];
   const effectiveUltiSid1ProfileOptions = ultiSid1ProfileOptions.length ? ultiSid1ProfileOptions : [ultiSid1ProfileValue];
@@ -1060,7 +1206,6 @@ export default function HomePage() {
   const hdmiScanSelectOptions = normalizeSelectOptions(effectiveHdmiScanOptions, hdmiScanValue);
   const ledModeSelectOptions = normalizeSelectOptions(effectiveLedModeOptions, ledModeValue);
   const ledFixedColorSelectOptions = normalizeSelectOptions(effectiveLedFixedColorOptions, ledFixedColorValue);
-  const ledIntensitySelectOptions = normalizeSelectOptions(effectiveLedIntensityOptions, ledIntensityValue);
   const ledSidSelectSelectOptions = normalizeSelectOptions(effectiveLedSidSelectOptions, ledSidSelectValue);
   const ledTintSelectOptions = normalizeSelectOptions(effectiveLedTintOptions, ledTintValue);
   const ultiSid1ProfileSelectOptions = normalizeSelectOptions(effectiveUltiSid1ProfileOptions, ultiSid1ProfileValue);
@@ -1072,7 +1217,6 @@ export default function HomePage() {
   const hdmiScanSelectValue = normalizeSelectValue(hdmiScanValue);
   const ledModeSelectValue = normalizeSelectValue(ledModeValue);
   const ledFixedColorSelectValue = normalizeSelectValue(ledFixedColorValue);
-  const ledIntensitySelectValue = normalizeSelectValue(ledIntensityValue);
   const ledSidSelectSelectValue = normalizeSelectValue(ledSidSelectValue);
   const ledTintSelectValue = normalizeSelectValue(ledTintValue);
   const ultiSid1ProfileSelectValue = normalizeSelectValue(ultiSid1ProfileValue);
@@ -1164,6 +1308,29 @@ export default function HomePage() {
     ),
   );
   const printerBusOptions = buildBusIdOptions(PRINTER_BUS_ID_DEFAULTS, Number.isFinite(printerBusValue) ? printerBusValue : null);
+  const printerConfigPayload = printerConfig as Record<string, unknown> | undefined;
+  const buildPrinterControl = (itemName: typeof PRINTER_HOME_ITEMS[number], fallback: string | number) => {
+    const value = resolveConfigValue(printerConfigPayload, 'Printer Settings', itemName, fallback);
+    const options = readItemOptions(printerConfigPayload, 'Printer Settings', itemName).map((entry) => String(entry));
+    const details = readItemDetails(printerConfigPayload, 'Printer Settings', itemName);
+    return {
+      itemName,
+      label: formatPrinterLabel(itemName),
+      value: String(value),
+      options,
+      details,
+      pending: Boolean(configWritePending[buildConfigKey('Printer Settings', itemName)]),
+    };
+  };
+
+  const printerControlRows = [
+    buildPrinterControl('Output type', 'PNG B&W'),
+    buildPrinterControl('Ink density', 'Medium'),
+    buildPrinterControl('Emulation', 'Commodore MPS'),
+    buildPrinterControl('Commodore charset', 'USA/UK'),
+    buildPrinterControl('Epson charset', 'Basic'),
+    buildPrinterControl('IBM table 2', 'International 1'),
+  ];
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -1370,14 +1537,7 @@ export default function HomePage() {
                 category="U64 Specific Settings"
                 value={cpuSpeedValue}
                 options={effectiveCpuSpeedOptions}
-                onValueChange={(value) =>
-                  void updateConfigValue(
-                    'U64 Specific Settings',
-                    'CPU Speed',
-                    value,
-                    'HOME_CPU_SPEED',
-                    'CPU speed updated',
-                  )}
+                onValueChange={(value) => void handleCpuSpeedChange(String(value))}
                 isLoading={cpuSpeedPending}
                 valueTestId="home-cpu-speed-value"
                 sliderTestId="home-cpu-speed-slider"
@@ -1573,30 +1733,34 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Intensity</span>
-                    <Select
-                      value={ledIntensitySelectValue}
-                      onValueChange={(value) =>
-                        void updateConfigValue(
-                          'LED Strip Settings',
-                          'Strip Intensity',
-                          resolveSelectValue(value),
-                          'HOME_LED_INTENSITY',
-                          'LED intensity updated',
-                        )}
-                      disabled={!status.isConnected || ledIntensityPending}
-                    >
-                      <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-intensity">
-                        <SelectValue placeholder={ledIntensityValue} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ledIntensitySelectOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {formatSelectOptionLabel(option)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <span className="text-xs font-semibold text-foreground" data-testid="home-led-intensity-value">
+                      {Math.round(ledIntensityDisplayValue)}
+                    </span>
                   </div>
+                  <Slider
+                    value={[clampToRange(ledIntensityDisplayValue, ledIntensityMin, ledIntensityMax)]}
+                    min={ledIntensityMin}
+                    max={ledIntensityMax}
+                    step={1}
+                    onValueChange={(values) => {
+                      const nextValue = clampToRange(values[0] ?? ledIntensityMin, ledIntensityMin, ledIntensityMax);
+                      setLedIntensityDraft(nextValue);
+                      void updateConfigValue('LED Strip Settings', 'Strip Intensity', Math.round(nextValue), 'HOME_LED_INTENSITY', 'LED intensity updated', { suppressToast: true });
+                    }}
+                    onValueCommit={(values) => {
+                      const nextValue = clampToRange(values[0] ?? ledIntensityMin, ledIntensityMin, ledIntensityMax);
+                      setLedIntensityDraft(null);
+                      void updateConfigValue(
+                        'LED Strip Settings',
+                        'Strip Intensity',
+                        Math.round(nextValue),
+                        'HOME_LED_INTENSITY',
+                        'LED intensity updated',
+                      );
+                    }}}
+                    disabled={!status.isConnected || ledIntensityPending}
+                    data-testid="home-led-intensity-slider"
+                  />
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">SID Select</span>
                     <Select
@@ -1655,10 +1819,10 @@ export default function HomePage() {
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-primary uppercase tracking-wider">RAM Dump Folder</p>
                   <p className="text-sm font-medium break-words" data-testid="ram-dump-folder-value">
-                    {ramDumpFolder?.rootName ?? 'Not configured'}
+                    {ramDumpFolderLabel}
                   </p>
                   <p className="text-[11px] text-muted-foreground break-words">
-                    {ramDumpFolder?.treeUri ?? 'Select a folder before first Save RAM action.'}
+                    {ramDumpFolderDetail}
                   </p>
                 </div>
                 <Button
@@ -1787,8 +1951,8 @@ export default function HomePage() {
                   {printerEnabled ? 'ON' : 'OFF'}
                 </Button>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
                   <Select
                     value={String(printerBusValue)}
@@ -1815,6 +1979,34 @@ export default function HomePage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {printerControlRows.filter((entry) => entry.options.length > 0).map((entry) => (
+                  <div key={entry.itemName} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground whitespace-nowrap">{entry.label}</span>
+                    <Select
+                      value={entry.value}
+                      onValueChange={(value) =>
+                        void updateConfigValue(
+                          'Printer Settings',
+                          entry.itemName,
+                          value,
+                          'HOME_PRINTER_CONFIG',
+                          `${entry.label} updated`,
+                        )}
+                      disabled={!status.isConnected || entry.pending}
+                    >
+                      <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-printer-${entry.itemName.toLowerCase().replace(/\s+/g, '-')}`}>
+                        <SelectValue>{formatPrinterOptionLabel(entry.value)}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {entry.options.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {formatPrinterOptionLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -1854,10 +2046,10 @@ export default function HomePage() {
               const panPending = Boolean(configWritePending[panKey]);
               const isSidEnabled = statusValue !== false;
               const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
-              const isVolumeActive = activeSlider?.id === volumeSliderId;
-              const isPanActive = activeSlider?.id === panSliderId;
-              const volumeSliderValue = clampSliderValue(isVolumeActive ? activeSlider?.value ?? volumeIndex : volumeIndex, volumeMax);
-              const panSliderValue = clampSliderValue(isPanActive ? activeSlider?.value ?? panIndex : panIndex, panMax);
+              const activeVolumeValue = activeSliders[volumeSliderId];
+              const activePanValue = activeSliders[panSliderId];
+              const volumeSliderValue = clampSliderValue(activeVolumeValue ?? volumeIndex, volumeMax);
+              const panSliderValue = clampSliderValue(activePanValue ?? panIndex, panMax);
               const isUltiSid = entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
 
               // Identity / Filter
@@ -1959,15 +2151,57 @@ export default function HomePage() {
                   addressPending={addressPending}
                   shapingControls={shapingControls}
                   volume={volumeSliderValue}
+                  volumeMax={volumeMax}
+                  volumeStep={SID_SLIDER_STEP}
                   onVolumeChange={(val) => {
                     const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
-                    setActiveSlider({ id: volumeSliderId, value: snapped });
+                    setActiveSliders((prev) => ({ ...prev, [volumeSliderId]: snapped }));
+                    const idx = resolveSliderIndex(snapped, volumeMax);
+                    const v = volumeOptions[idx] ?? volumeOptions[0] ?? entry.volume;
+                    void updateConfigValue('Audio Mixer', entry.volumeItem, v, 'HOME_SID_VOLUME', `${entry.label} volume updated`, { suppressToast: true });
+                  }}
+                  onVolumeCommit={(val) => {
+                    const nextIndex = resolveSliderIndex(applySoftDetent(val, volumeCenterIndex), volumeMax);
+                    const nextValue = volumeOptions[nextIndex] ?? volumeOptions[0] ?? entry.volume;
+                    setActiveSliders((prev) => {
+                      const next = { ...prev };
+                      delete next[volumeSliderId];
+                      return next;
+                    });
+                    void updateConfigValue(
+                      'Audio Mixer',
+                      entry.volumeItem,
+                      nextValue,
+                      'HOME_SID_VOLUME',
+                      `${entry.label} volume updated`,
+                    );
                   }}
                   volumePending={volumePending}
                   pan={panSliderValue}
+                  panMax={panMax}
+                  panStep={SID_SLIDER_STEP}
                   onPanChange={(val) => {
                     const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
-                    setActiveSlider({ id: panSliderId, value: snapped });
+                    setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
+                    const idx = resolveSliderIndex(snapped, panMax);
+                    const v = panOptions[idx] ?? panOptions[0] ?? entry.pan;
+                    void updateConfigValue('Audio Mixer', entry.panItem, v, 'HOME_SID_PAN', `${entry.label} pan updated`, { suppressToast: true });
+                  }}
+                  onPanCommit={(val) => {
+                    const nextIndex = resolveSliderIndex(applySoftDetent(val, panCenterIndex), panMax);
+                    const nextValue = panOptions[nextIndex] ?? panOptions[0] ?? entry.pan;
+                    setActiveSliders((prev) => {
+                      const next = { ...prev };
+                      delete next[panSliderId];
+                      return next;
+                    });
+                    void updateConfigValue(
+                      'Audio Mixer',
+                      entry.panItem,
+                      nextValue,
+                      'HOME_SID_PAN',
+                      `${entry.label} pan updated`,
+                    );
                   }}
                   panPending={panPending}
                   isConnected={status.isConnected}
@@ -1990,12 +2224,11 @@ export default function HomePage() {
           <div className="space-y-2">
             {streamControlEntries.map((entry) => {
               const draft = streamDrafts[entry.key] ?? {
-                enabled: entry.enabled,
                 ip: entry.ip,
                 port: entry.port,
                 endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
               };
-              const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
+              const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]) || Boolean(streamActionPending[entry.key]);
               return (
                 <div
                   key={entry.key}
@@ -2004,7 +2237,7 @@ export default function HomePage() {
                 >
                   <div
                     className="flex items-center justify-between gap-2 text-xs"
-                    aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port} ${draft.enabled ? 'ON' : 'OFF'}`}
+                    aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port}`}
                   >
                     <button
                       type="button"
@@ -2019,16 +2252,28 @@ export default function HomePage() {
                         {buildStreamEndpointLabel(draft.ip, draft.port)}
                       </span>
                     </button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => void handleStreamToggle(entry.key)}
-                      disabled={!status.isConnected || pending}
-                      data-testid={`home-stream-toggle-${entry.key}`}
-                      className={cn("h-6 px-2 text-xs", draft.enabled ? 'text-success' : undefined)}
-                    >
-                      {draft.enabled ? 'ON' : 'OFF'}
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleStreamStart(entry.key)}
+                        disabled={!status.isConnected || pending}
+                        data-testid={`home-stream-start-${entry.key}`}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Start
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void handleStreamStop(entry.key)}
+                        disabled={!status.isConnected || pending}
+                        data-testid={`home-stream-stop-${entry.key}`}
+                        className="h-6 px-2 text-xs"
+                      >
+                        Stop
+                      </Button>
+                    </div>
                   </div>
                   {activeStreamEditorKey === entry.key && (
                     <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">

@@ -7,9 +7,8 @@ import { recordDeviceGuard } from '@/lib/tracing/traceSession';
 export const FULL_RAM_SIZE_BYTES = 0x10000;
 const IO_REGION_START = 0xD000;
 const IO_REGION_END = 0xE000;
-const READ_CHUNK_SIZE_BYTES = 0x0800;
-const WRITE_CHUNK_SIZE_BYTES = 0x0800;
-
+const READ_CHUNK_SIZE_BYTES = 0x1000;
+const WRITE_CHUNK_SIZE_BYTES = 0x10000;
 const WAIT_BETWEEN_RETRIES_MS = 120;
 const DEFAULT_RETRY_ATTEMPTS = 2;
 

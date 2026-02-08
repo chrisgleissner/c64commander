@@ -20,6 +20,7 @@ import {
   ingestCachedHvsc,
   installOrUpdateHvsc,
   isHvscBridgeAvailable,
+  recoverStaleIngestionState,
   type HvscFailureCategory,
   type HvscProgressEvent,
   type HvscStatusSummary,
@@ -180,6 +181,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
         addErrorLog('HVSC status fetch failed', { error: (error as Error).message });
         setHvscStatus(null);
       });
+  }, []);
+
+  useEffect(() => {
+    recoverStaleIngestionState();
   }, []);
 
   useEffect(() => {

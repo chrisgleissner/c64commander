@@ -36,6 +36,7 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
     const { restCount, ftpCount, errorCount, restInFlight, ftpInFlight } = useDiagnosticsActivity();
     const restActive = restInFlight > 0;
     const ftpActive = ftpInFlight > 0;
+    const restDisplayCount = restCount > 0 ? restCount : restInFlight;
 
     return (
         <button
@@ -46,10 +47,10 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
             data-testid="diagnostics-activity-indicator"
             data-diagnostics-open-trigger="true"
         >
-            {restCount > 0 ? (
+            {restCount > 0 || restInFlight > 0 ? (
                 <IndicatorDot
                     colorClass="bg-diagnostics-rest"
-                    count={restCount}
+                    count={restDisplayCount}
                     animate={restActive}
                     testId="diagnostics-activity-rest"
                     ariaLabel="REST activity"

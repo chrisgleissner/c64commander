@@ -40,16 +40,25 @@ test.describe('Home interactions', () => {
     }
   });
 
-  test('toggle interactions update stream config', async ({ page }: { page: Page }) => {
+  test('start/stop interactions send stream commands', async ({ page }: { page: Page }) => {
     await page.goto('/');
     await waitForStreamsReady(page);
 
-    await page.getByTestId('home-stream-toggle-audio').click();
+    await page.getByTestId('home-stream-start-audio').click();
 
     await expect.poll(() =>
       hasRequest(
         server.requests,
-        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/Data%20Streams/Stream%20Audio%20to?value=off'),
+        (req) => req.method === 'PUT' && req.url.includes('/v1/streams/audio:start'),
+      ),
+    ).toBe(true);
+
+    await page.getByTestId('home-stream-stop-audio').click();
+
+    await expect.poll(() =>
+      hasRequest(
+        server.requests,
+        (req) => req.method === 'PUT' && req.url.includes('/v1/streams/audio:stop'),
       ),
     ).toBe(true);
   });

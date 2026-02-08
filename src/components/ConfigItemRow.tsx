@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 
 interface ConfigItemRowProps {
   name: string;
+  label?: string;
   category?: string;
   value: string | number;
   options?: string[];
@@ -31,6 +32,7 @@ interface ConfigItemRowProps {
   rightAccessory?: React.ReactNode;
   valueTestId?: string;
   sliderTestId?: string;
+  formatOptionLabel?: (value: string) => string;
 }
 
 type ConfigItemLayoutMode = 'horizontal' | 'vertical';
@@ -94,6 +96,8 @@ export function ConfigItemRow({
   rightAccessory,
   valueTestId,
   sliderTestId,
+  label,
+  formatOptionLabel,
 }: ConfigItemRowProps) {
   const [inputValue, setInputValue] = useState(() => String(value));
   const lastCommittedRef = useRef<string>(String(value));
@@ -203,7 +207,10 @@ export function ConfigItemRow({
     return 160;
   }, [controlKind, rightAccessory]);
 
-  const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(name, widgetMinWidth);
+  const displayLabel = label ?? name;
+  const formatOption = (option: string) => (formatOptionLabel ? formatOptionLabel(option) : option);
+
+  const { layout, containerRef, labelRef } = useAdaptiveLabelLayout(displayLabel, widgetMinWidth);
 
   const rowClassName = cn(
     'settings-row w-full',
@@ -324,7 +331,7 @@ export function ConfigItemRow({
       >
         <div className={labelBlockClassName}>
           <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
-            {name}
+            {displayLabel}
           </span>
           <span className="text-xs text-muted-foreground">
             {checked ? checkboxMapping.checkedValue : checkboxMapping.uncheckedValue}
@@ -341,7 +348,7 @@ export function ConfigItemRow({
               lastCommittedRef.current = String(nextValue);
               onValueChange(nextValue);
             }}
-            aria-label={`${name} checkbox`}
+            aria-label={`${displayLabel} checkbox`}
           />
         </div>
       </div>
@@ -356,9 +363,10 @@ export function ConfigItemRow({
     const selectOptions = normalizedOptions.map((option) => ({
       raw: option,
       value: option === '' ? emptySentinel : option,
-      label: option === '' ? '(empty)' : option,
+      label: option === '' ? '(empty)' : formatOption(option),
     }));
     const selectedValue = displayValue === '' ? emptySentinel : displayValue;
+    const displayValueLabel = displayValue === '' ? '(empty)' : formatOption(String(displayValue));
 
     return (
       <div
@@ -369,7 +377,7 @@ export function ConfigItemRow({
       >
         <div className={labelBlockClassName}>
           <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
-            {name}
+            {displayLabel}
           </span>
         </div>
         <div className={layout === 'horizontal' ? 'min-w-[160px] max-w-[220px]' : 'w-full'}>
@@ -384,8 +392,8 @@ export function ConfigItemRow({
             }}
             disabled={isLoading || isItemLoading || isReadOnly}
           >
-            <SelectTrigger aria-label={`${name} select`}>
-              <SelectValue placeholder={isItemLoading ? 'Loading…' : displayValue || 'Select'} />
+            <SelectTrigger aria-label={`${displayLabel} select`}>
+              <SelectValue placeholder={isItemLoading ? 'Loading…' : displayValueLabel || 'Select'} />
             </SelectTrigger>
             <SelectContent>
               {selectOptions.map((option) => (
@@ -415,7 +423,8 @@ export function ConfigItemRow({
 
     if (selectedIndex < 0) selectedIndex = 0;
 
-    const currentLabel = sliderOptions[selectedIndex] ?? displayValue;
+    const currentLabelRaw = sliderOptions[selectedIndex] ?? displayValue;
+    const currentLabel = formatOption(String(currentLabelRaw));
 
     return (
       <div
@@ -426,7 +435,7 @@ export function ConfigItemRow({
       >
         <div className={labelBlockClassName}>
           <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
-            {name}
+            {displayLabel}
           </span>
           <span className="text-xs text-muted-foreground font-semibold" data-testid={valueTestId}>
             {currentLabel}
@@ -451,6 +460,7 @@ export function ConfigItemRow({
                 const nextIndex = values[0] ?? 0;
                 const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
                 setInputValue(String(nextValue));
+                onValueChange(nextValue);
               }}
               onValueCommit={(values) => {
                 if (isReadOnly) return;
@@ -461,7 +471,7 @@ export function ConfigItemRow({
                 setInputValue(String(nextValue));
                 onValueChange(nextValue);
               }}
-              aria-label={`${name} slider`}
+              aria-label={`${displayLabel} slider`}
               data-testid={sliderTestId}
             />
           </div>
@@ -482,14 +492,14 @@ export function ConfigItemRow({
     >
       <div className={labelBlockClassName}>
         <span ref={labelRef} className={labelClassName} data-testid="config-item-label">
-          {name}
+          {displayLabel}
         </span>
       </div>
       <div className={layout === 'horizontal' ? 'min-w-[160px] max-w-[220px] flex items-center gap-2' : 'w-full flex items-center gap-2'}>
         <Input
           type={inputType}
           value={inputValue}
-          aria-label={`${name} ${controlKind === 'password' ? 'password' : 'text'} input`}
+          aria-label={`${displayLabel} ${controlKind === 'password' ? 'password' : 'text'} input`}
           disabled={isLoading || isItemLoading || isReadOnly}
           onChange={(e) => {
             if (isReadOnly) return;

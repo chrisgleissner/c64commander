@@ -1,7 +1,9 @@
+export type HvscIngestionState = 'idle' | 'installing' | 'updating' | 'ready' | 'error';
+
 export type HvscStatus = {
   installedBaselineVersion?: number | null;
   installedVersion: number;
-  ingestionState: string;
+  ingestionState: HvscIngestionState;
   lastUpdateCheckUtcMs?: number | null;
   ingestionError?: string | null;
 };

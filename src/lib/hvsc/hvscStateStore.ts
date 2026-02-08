@@ -1,4 +1,4 @@
-import type { HvscStatus } from './hvscTypes';
+import type { HvscIngestionState, HvscStatus } from './hvscTypes';
 
 type HvscUpdateRecord = {
   version: number;
@@ -11,6 +11,13 @@ export type HvscState = HvscStatus & {
 };
 
 const STORAGE_KEY = 'c64u_hvsc_state:v1';
+
+const validIngestionStates = new Set<HvscIngestionState>(['idle', 'installing', 'updating', 'ready', 'error']);
+
+const toIngestionState = (value: unknown): HvscIngestionState =>
+  typeof value === 'string' && validIngestionStates.has(value as HvscIngestionState)
+    ? (value as HvscIngestionState)
+    : 'idle';
 
 const defaultState = (): HvscState => ({
   installedBaselineVersion: null,
@@ -31,7 +38,7 @@ export const loadHvscState = (): HvscState => {
     return {
       installedBaselineVersion: parsed.installedBaselineVersion ?? null,
       installedVersion: parsed.installedVersion ?? 0,
-      ingestionState: parsed.ingestionState ?? 'idle',
+      ingestionState: toIngestionState(parsed.ingestionState),
       lastUpdateCheckUtcMs: parsed.lastUpdateCheckUtcMs ?? null,
       ingestionError: parsed.ingestionError ?? null,
       updates: parsed.updates ?? {},

@@ -55,4 +55,15 @@ describe('checkC64Liveness', () => {
         expect(result.decision).toBe('wedged');
         expect(result.rasterChanged).toBe(false);
     });
+
+    it('throws when readMemory returns zero bytes', async () => {
+        const api = buildApi({
+            '00A2:3': [new Uint8Array(0)],
+            'D012:1': [new Uint8Array(0)],
+        });
+
+        await expect(
+            checkC64Liveness(api as any, { jiffyWaitMs: 0, rasterAttempts: 1, rasterDelayMs: 0 }),
+        ).rejects.toThrow('read returned 0 byte(s); expected 3');
+    });
 });

@@ -1,6 +1,6 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
-import type { HvscCacheStatus, HvscFolderListing, HvscProgressEvent, HvscSong, HvscStatus, HvscUpdateStatus } from './hvscTypes';
+import type { HvscCacheStatus, HvscFolderListing, HvscIngestionState, HvscProgressEvent, HvscSong, HvscStatus, HvscUpdateStatus } from './hvscTypes';
 import { buildHvscBaselineUrl, buildHvscUpdateUrl, fetchLatestHvscVersions } from './hvscReleaseService';
 import { extractArchiveEntries } from './hvscArchiveExtraction';
 import {
@@ -19,7 +19,7 @@ import {
   writeCachedArchiveMarker,
 } from './hvscFilesystem';
 import { loadHvscState, markUpdateApplied, updateHvscState, isUpdateApplied } from './hvscStateStore';
-import { updateHvscStatusSummaryFromEvent } from './hvscStatusStore';
+import { updateHvscStatusSummaryFromEvent, loadHvscStatusSummary, saveHvscStatusSummary } from './hvscStatusStore';
 import { reloadHvscSonglengthsOnConfigChange } from './hvscSongLengthService';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
 import { addErrorLog, addLog } from '@/lib/logging';
@@ -28,6 +28,42 @@ const listeners = new Set<(event: HvscProgressEvent) => void>();
 const cancelTokens = new Map<string, { cancelled: boolean }>();
 
 let summaryLastStage: string | null = null;
+let activeIngestionRunning = false;
+
+/** True while an ingestion task (install/update or cached ingest) is executing. */
+export const isIngestionRuntimeActive = () => activeIngestionRunning;
+
+/**
+ * Detects and resets stale ingestion state left behind after an app crash.
+ * If `ingestionState` is 'installing' or 'updating' but no runtime is active,
+ * we know the previous run was interrupted. Resets state to 'error' and marks
+ * any in-progress status summary steps as 'failure'.
+ * Returns true if recovery was performed.
+ */
+export const recoverStaleIngestionState = (): boolean => {
+  if (activeIngestionRunning) return false;
+  const state = loadHvscState();
+  if (state.ingestionState !== 'installing' && state.ingestionState !== 'updating') return false;
+  addLog('warn', 'HVSC cold-start recovery: resetting stale ingestion state', {
+    ingestionState: state.ingestionState,
+  });
+  updateHvscState({ ingestionState: 'error' as HvscIngestionState, ingestionError: 'Interrupted by app restart' });
+  const summary = loadHvscStatusSummary();
+  const now = new Date().toISOString();
+  if (summary.download.status === 'in-progress' || summary.extraction.status === 'in-progress') {
+    saveHvscStatusSummary({
+      ...summary,
+      download: summary.download.status === 'in-progress'
+        ? { ...summary.download, status: 'failure', finishedAt: now, errorMessage: 'Interrupted by app restart', errorCategory: 'unknown' }
+        : summary.download,
+      extraction: summary.extraction.status === 'in-progress'
+        ? { ...summary.extraction, status: 'failure', finishedAt: now, errorMessage: 'Interrupted by app restart', errorCategory: 'unknown' }
+        : summary.extraction,
+      lastUpdatedAt: now,
+    });
+  }
+  return true;
+};
 
 type HvscPipelineState =
   | 'IDLE'
@@ -345,6 +381,7 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
 
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
   summaryLastStage = null;
+  activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createEmitter(ingestionId);
   emitProgress({ stage: 'start', message: 'HVSC install/update started' });
@@ -707,11 +744,13 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     });
     throw error;
   } finally {
+    activeIngestionRunning = false;
     cancelTokens.delete(cancelToken);
   }
 };
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
+  activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createEmitter(ingestionId);
   emitProgress({ stage: 'start', message: 'HVSC cached ingestion started' });
@@ -924,6 +963,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     emitProgress({ stage: 'error', message: (error as Error).message, archiveName: currentArchive ?? undefined, errorCause: (error as Error).message });
     throw error;
   } finally {
+    activeIngestionRunning = false;
     cancelTokens.delete(cancelToken);
   }
 };

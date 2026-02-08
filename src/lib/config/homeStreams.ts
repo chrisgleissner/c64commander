@@ -6,16 +6,17 @@ export type StreamControlEntry = {
   key: StreamKey;
   label: string;
   itemName: string;
+  restName: string;
   enabled: boolean;
   ip: string;
   port: string;
   rawValue: string;
 };
 
-const STREAM_LAYOUT: Array<{ key: StreamKey; label: string; itemName: string; defaultPort: string }> = [
-  { key: 'vic', label: 'VIC', itemName: 'Stream VIC to', defaultPort: '11000' },
-  { key: 'audio', label: 'Audio', itemName: 'Stream Audio to', defaultPort: '11001' },
-  { key: 'debug', label: 'Debug', itemName: 'Stream Debug to', defaultPort: '11002' },
+const STREAM_LAYOUT: Array<{ key: StreamKey; label: string; itemName: string; defaultPort: string; restName: string }> = [
+  { key: 'vic', label: 'VIC', itemName: 'Stream VIC to', defaultPort: '11000', restName: 'video' },
+  { key: 'audio', label: 'Audio', itemName: 'Stream Audio to', defaultPort: '11001', restName: 'audio' },
+  { key: 'debug', label: 'Debug', itemName: 'Stream Debug to', defaultPort: '11002', restName: 'debug' },
 ];
 
 const OFF_TOKENS = new Set([
@@ -78,6 +79,7 @@ export const buildStreamControlEntries = (dataStreamsCategory?: Record<string, u
       key: entry.key,
       label: entry.label,
       itemName: entry.itemName,
+      restName: entry.restName,
       enabled: parsed.enabled,
       ip: parsed.ip,
       port: parsed.port,

@@ -490,6 +490,11 @@ export async function createMockC64Server(
       }
     }
 
+    const streamMatch = parsed.pathname.match(/^\/v1\/streams\/([^/]+):(start|stop)$/);
+    if (method === 'PUT' && streamMatch) {
+      return sendJson(200, { errors: [] });
+    }
+
     return sendJson(404, { errors: ['Not found'] });
   });
 

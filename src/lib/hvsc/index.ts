@@ -1,6 +1,7 @@
 export type {
   HvscCacheStatus,
   HvscFolderListing,
+  HvscIngestionState,
   HvscProgressEvent,
   HvscSong,
   HvscStatus,
@@ -21,6 +22,7 @@ export {
   isHvscBridgeAvailable,
   resolveHvscSonglength,
 } from './hvscService';
+export { recoverStaleIngestionState } from './hvscIngestionRuntime';
 export { createHvscMediaIndex, HvscMediaIndexAdapter } from './hvscMediaIndex';
 export { clearHvscRoot, getDefaultHvscRoot, loadHvscRoot, saveHvscRoot } from './hvscRootLocator';
 export {

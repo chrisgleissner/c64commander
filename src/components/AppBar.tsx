@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ConnectivityIndicator } from '@/components/ConnectivityIndicator';
 import { DiagnosticsActivityIndicator } from '@/components/DiagnosticsActivityIndicator';
 import { requestDiagnosticsOpen } from '@/lib/diagnostics/diagnosticsOverlay';
+import { isDiagnosticsOverlayActive, subscribeDiagnosticsOverlay } from '@/lib/diagnostics/diagnosticsOverlayState';
+import { useDiagnosticsActivity } from '@/hooks/useDiagnosticsActivity';
+import { toast, useToast } from '@/hooks/use-toast';
 
 type Props = {
   title: ReactNode;
@@ -13,6 +16,10 @@ type Props = {
 
 export function AppBar({ title, subtitle, leading, children }: Props) {
   const headerRef = useRef<HTMLElement | null>(null);
+  const restToastRef = useRef<ReturnType<typeof toast> | null>(null);
+  const { restInFlight } = useDiagnosticsActivity();
+  const { toasts } = useToast();
+  const [diagnosticsOverlayActive, setDiagnosticsOverlayActive] = useState(isDiagnosticsOverlayActive());
 
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
@@ -40,6 +47,42 @@ export function AppBar({ title, subtitle, leading, children }: Props) {
       window.removeEventListener('resize', updateHeight);
     };
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeDiagnosticsOverlay((active) => {
+      setDiagnosticsOverlayActive(active);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const restToastId = restToastRef.current?.id;
+    const hasOtherToast = toasts.some((entry) => entry.id !== restToastId);
+    if (diagnosticsOverlayActive || restInFlight === 0 || hasOtherToast) {
+      if (restToastRef.current) {
+        restToastRef.current.dismiss();
+        restToastRef.current = null;
+      }
+      return;
+    }
+
+    const description = restInFlight === 1
+      ? '1 request in flight.'
+      : `${restInFlight} requests in flight.`;
+
+    if (!restToastRef.current) {
+      restToastRef.current = toast({
+        title: 'REST activity',
+        description,
+      });
+      return;
+    }
+
+    restToastRef.current.update({
+      title: 'REST activity',
+      description,
+    });
+  }, [diagnosticsOverlayActive, restInFlight, toasts]);
 
   const handleDiagnosticsOpen = () => {
     requestDiagnosticsOpen('actions');

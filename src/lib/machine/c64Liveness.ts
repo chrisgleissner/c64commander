@@ -12,19 +12,21 @@ const delay = (ms: number) => new Promise<void>((resolve) => {
 
 const toUint24 = (bytes: Uint8Array) => bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
 
+const assertByteLength = (bytes: Uint8Array, expected: number, label: string) => {
+    if (bytes.length !== expected) {
+        throw new Error(`${label} read returned ${bytes.length} byte(s); expected ${expected}.`);
+    }
+};
+
 const readJiffyClock = async (api: C64API) => {
     const bytes = await api.readMemory('00A2', 3);
-    if (bytes.length < 3) {
-        throw new Error(`Jiffy clock read returned ${bytes.length} byte(s).`);
-    }
+    assertByteLength(bytes, 3, 'Jiffy clock');
     return toUint24(bytes);
 };
 
 const readRaster = async (api: C64API) => {
     const bytes = await api.readMemory('D012', 1);
-    if (bytes.length < 1) {
-        throw new Error(`Raster read returned ${bytes.length} byte(s).`);
-    }
+    assertByteLength(bytes, 1, 'Raster');
     return bytes[0];
 };
 
@@ -57,52 +59,64 @@ export const checkC64Liveness = async (
     const rasterAttempts = Math.max(1, options.rasterAttempts ?? DEFAULT_RASTER_ATTEMPTS);
     const rasterDelayMs = Math.max(0, options.rasterDelayMs ?? DEFAULT_RASTER_DELAY_MS);
 
-    const jiffyStart = await readJiffyClock(api);
-    const rasterStart = await readRaster(api);
+    try {
+        const jiffyStart = await readJiffyClock(api);
+        const rasterStart = await readRaster(api);
 
-    await delay(jiffyWaitMs);
+        await delay(jiffyWaitMs);
 
-    const jiffyEnd = await readJiffyClock(api);
-    let rasterEnd = rasterStart;
-    let rasterChanged = false;
+        const jiffyEnd = await readJiffyClock(api);
+        let rasterEnd = rasterStart;
+        let rasterChanged = false;
 
-    for (let attempt = 0; attempt < rasterAttempts; attempt += 1) {
-        await delay(rasterDelayMs);
-        const next = await readRaster(api);
-        rasterEnd = next;
-        if (next !== rasterStart) {
-            rasterChanged = true;
-            break;
+        for (let attempt = 0; attempt < rasterAttempts; attempt += 1) {
+            await delay(rasterDelayMs);
+            const next = await readRaster(api);
+            rasterEnd = next;
+            if (next !== rasterStart) {
+                rasterChanged = true;
+                break;
+            }
         }
+
+        const jiffyAdvanced = jiffyEnd !== jiffyStart;
+        const decision: C64LivenessDecision = jiffyAdvanced
+            ? 'healthy'
+            : rasterChanged
+                ? 'irq-stalled'
+                : 'wedged';
+
+        recordLivenessTrace({
+            decision,
+            jiffyStart,
+            jiffyEnd,
+            jiffyAdvanced,
+            rasterStart,
+            rasterEnd,
+            rasterChanged,
+            jiffyWaitMs,
+            rasterAttempts,
+            rasterDelayMs,
+        });
+
+        return {
+            jiffyStart,
+            jiffyEnd,
+            jiffyAdvanced,
+            rasterStart,
+            rasterEnd,
+            rasterChanged,
+            decision,
+        };
+    } catch (error) {
+        const err = error instanceof Error ? error : new Error('Liveness check failed');
+        recordLivenessTrace({
+            decision: 'wedged',
+            error: err.message,
+            jiffyWaitMs,
+            rasterAttempts,
+            rasterDelayMs,
+        });
+        throw err;
     }
-
-    const jiffyAdvanced = jiffyEnd !== jiffyStart;
-    const decision: C64LivenessDecision = jiffyAdvanced
-        ? 'healthy'
-        : rasterChanged
-            ? 'irq-stalled'
-            : 'wedged';
-
-    recordLivenessTrace({
-        decision,
-        jiffyStart,
-        jiffyEnd,
-        jiffyAdvanced,
-        rasterStart,
-        rasterEnd,
-        rasterChanged,
-        jiffyWaitMs,
-        rasterAttempts,
-        rasterDelayMs,
-    });
-
-    return {
-        jiffyStart,
-        jiffyEnd,
-        jiffyAdvanced,
-        rasterStart,
-        rasterEnd,
-        rasterChanged,
-        decision,
-    };
 };

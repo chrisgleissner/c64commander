@@ -41,11 +41,17 @@ export interface SidCardProps {
 
     // Row 4: Volume & Pan
     volume: number;
+    volumeMax: number;
+    volumeStep?: number;
     onVolumeChange: (value: number) => void;
+    onVolumeCommit?: (value: number) => void;
     volumePending?: boolean;
 
     pan: number;
+    panMax: number;
+    panStep?: number;
     onPanChange: (value: number) => void;
+    onPanCommit?: (value: number) => void;
     panPending?: boolean;
 
     isConnected: boolean;
@@ -73,10 +79,16 @@ export function SidCard({
     addressPending,
     shapingControls,
     volume,
+    volumeMax,
+    volumeStep,
     onVolumeChange,
+    onVolumeCommit,
     volumePending,
     pan,
+    panMax,
+    panStep,
     onPanChange,
+    onPanCommit,
     panPending,
     isConnected,
     className,
@@ -195,9 +207,10 @@ export function SidCard({
                     <Slider
                         value={[volume]}
                         min={0}
-                        max={1}
-                        step={0.01}
+                        max={volumeMax}
+                        step={volumeStep ?? 1}
                         onValueChange={(vals) => onVolumeChange(vals[0])}
+                        onValueCommit={(vals) => onVolumeCommit?.(vals[0])}
                         disabled={!isConnected || volumePending}
                         className="flex-1"
                         data-testid={`home-sid-volume-${testIdSuffix}`}
@@ -208,9 +221,10 @@ export function SidCard({
                     <Slider
                         value={[pan]}
                         min={0}
-                        max={1}
-                        step={0.01}
+                        max={panMax}
+                        step={panStep ?? 1}
                         onValueChange={(vals) => onPanChange(vals[0])}
+                        onValueCommit={(vals) => onPanCommit?.(vals[0])}
                         disabled={!isConnected || panPending}
                         className="flex-1"
                         data-testid={`home-sid-pan-${testIdSuffix}`}

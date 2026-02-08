@@ -243,7 +243,7 @@ test.describe('App screenshots', () => {
     await waitForConnected(page);
     await expect(page.getByTestId('home-stream-endpoint-display-audio')).toHaveText(/\d+\.\d+\.\d+\.\d+:\d+/);
 
-    await page.getByTestId('home-stream-toggle-audio').click();
+    await page.getByTestId('home-stream-start-audio').click();
     await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/01-toggle.png');
 
     await page.getByTestId('home-drive-type-a').click();

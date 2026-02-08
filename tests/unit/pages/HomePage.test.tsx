@@ -169,6 +169,17 @@ vi.mock('@/hooks/useActionTrace', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: toastSpy,
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useDiagnosticsActivity', () => ({
+  useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
+}));
+
+vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
+  isDiagnosticsOverlayActive: () => false,
+  subscribeDiagnosticsOverlay: () => () => {},
+  shouldSuppressDiagnosticsSideEffects: () => false,
 }));
 
 vi.mock('@/lib/uiErrors', () => ({
@@ -196,6 +207,8 @@ beforeEach(() => {
     setConfigValue: vi.fn().mockResolvedValue({}),
     resetDrive: vi.fn().mockResolvedValue({}),
     writeMemory: vi.fn().mockResolvedValue({}),
+    startStream: vi.fn().mockResolvedValue({}),
+    stopStream: vi.fn().mockResolvedValue({}),
   };
   statusPayloadRef.current = {
     isConnected: true,
@@ -322,8 +335,8 @@ describe('HomePage SID status', () => {
     expect(within(streamSection).getByText('VIC')).toBeTruthy();
     expect(within(streamSection).getByText('AUDIO')).toBeTruthy();
     expect(within(streamSection).getByText('DEBUG')).toBeTruthy();
-    expect(within(streamSection).getAllByText('ON').length).toBe(2);
-    expect(within(streamSection).getAllByText('OFF').length).toBe(1);
+    expect(within(streamSection).getAllByText('Start').length).toBe(3);
+    expect(within(streamSection).getAllByText('Stop').length).toBe(3);
     expect(within(streamSection).queryByTestId('home-stream-endpoint-vic')).toBeNull();
     expect(within(streamSection).getByTestId('home-stream-endpoint-display-vic').textContent).toBe('239.0.1.64:11000');
     expect(within(streamSection).getByTestId('home-stream-endpoint-display-debug').textContent).toBe('239.0.1.66:11002');
