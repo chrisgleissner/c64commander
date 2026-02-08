@@ -604,10 +604,13 @@ export const useHvscLibrary = (): HvscLibraryState => {
     }
   }), [refreshHvscCacheStatus, refreshHvscStatus, runHvscAction, updateHvscSummary]);
 
+  const hvscHasCache = Boolean(hvscCacheBaseline)
+    || hvscCacheUpdates.length > 0
+    || hvscStatusSummary.download.status === 'success';
+
   const handleHvscIngest = useCallback(() => runHvscAction('HvscLibrary.handleHvscIngest', async () => {
     if (!isHvscBridgeAvailable()) return;
-    const hasCache = Boolean(hvscCacheBaseline) || hvscCacheUpdates.length > 0;
-    if (!hasCache) {
+    if (!hvscHasCache) {
       toast({
         title: 'HVSC cache missing',
         description: 'Download HVSC first, then ingest cached updates.',
@@ -683,7 +686,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
       setHvscActiveToken(null);
       refreshHvscCacheStatus();
     }
-  }), [hvscCacheBaseline, hvscCacheUpdates.length, refreshHvscCacheStatus, runHvscAction, updateHvscSummary]);
+  }), [hvscHasCache, refreshHvscCacheStatus, runHvscAction, updateHvscSummary]);
 
   const handleHvscCancel = useCallback(async () => {
     const token = hvscActiveToken ?? 'hvsc-install';
@@ -755,9 +758,6 @@ export const useHvscLibrary = (): HvscLibraryState => {
 
   const hvscRoot = useMemo(() => loadHvscRoot(), []);
   const hvscAvailable = isHvscBridgeAvailable();
-  const hvscHasCache = Boolean(hvscCacheBaseline)
-    || hvscCacheUpdates.length > 0
-    || hvscStatusSummary.download.status === 'success';
   const hvscLibraryAvailable = hvscAvailable
     && (Boolean(hvscStatus?.installedVersion)
       || (hvscStatusSummary.download.status === 'success' && hvscStatusSummary.extraction.status === 'success'));

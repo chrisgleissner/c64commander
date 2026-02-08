@@ -77,6 +77,14 @@ const tryFetchUltimateSidBlob = async (path: string) => {
       path: normalizedPath,
     });
     const bytes = base64ToUint8(response.data);
+    if (typeof response.sizeBytes === 'number' && response.sizeBytes !== bytes.length) {
+      addLog('warn', 'FTP SID payload size mismatch', {
+        path: normalizedPath,
+        expectedBytes: response.sizeBytes,
+        actualBytes: bytes.length,
+      });
+      return null;
+    }
     return new Blob([bytes], { type: 'application/octet-stream' });
   } catch (error) {
     addLog('debug', 'FTP SID fetch failed', {

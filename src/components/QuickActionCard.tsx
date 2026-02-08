@@ -1,6 +1,15 @@
 import { motion } from 'framer-motion';
+import type { MouseEvent } from 'react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const blurOnPointerClick = (event: MouseEvent<HTMLElement>) => {
+  if (event.detail === 0) return;
+  const target = event.currentTarget as HTMLElement | null;
+  if (target?.blur && document.activeElement === target) {
+    target.blur();
+  }
+};
 
 interface QuickActionCardProps {
   icon: LucideIcon;
@@ -38,10 +47,7 @@ export function QuickActionCard({
       whileTap={{ scale: 0.95 }}
       onClick={(event) => {
         onClick();
-        const target = event.currentTarget as HTMLElement | null;
-        if (target?.blur && document.activeElement === target) {
-          target.blur();
-        }
+        blurOnPointerClick(event);
       }}
       disabled={disabled || loading}
       data-testid={dataTestId}

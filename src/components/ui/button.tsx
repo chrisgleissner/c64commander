@@ -36,7 +36,8 @@ export interface ButtonProps
   asChild?: boolean;
 }
 
-const blurOnClick = (event: React.MouseEvent<HTMLElement>) => {
+const blurOnPointerClick = (event: React.MouseEvent<HTMLElement>) => {
+  if (event.detail === 0) return;
   const target = event.currentTarget as HTMLElement | null;
   if (target?.blur && document.activeElement === target) {
     target.blur();
@@ -52,7 +53,7 @@ const StatelessButton = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         onClick={(event: React.MouseEvent<HTMLElement>) => {
           onClick?.(event as React.MouseEvent<HTMLButtonElement>);
-          blurOnClick(event);
+          blurOnPointerClick(event);
         }}
         {...props}
       />

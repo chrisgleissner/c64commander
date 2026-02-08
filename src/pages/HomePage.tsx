@@ -52,7 +52,7 @@ import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/con
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
-import { LED_FIXED_COLORS, getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
+import { getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
 import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
 import {
   buildStreamConfigValue,
