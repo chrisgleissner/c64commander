@@ -1,5 +1,5 @@
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
@@ -93,6 +93,7 @@ import {
   sliderToDurationSeconds,
 } from '@/pages/playFiles/playFilesUtils';
 import { getSidSongCount } from '@/lib/sid/sidUtils';
+import { reduceVolumeState } from '@/pages/playFiles/volumeState';
 
 
 export default function PlayFilesPage() {
@@ -204,6 +205,8 @@ export default function PlayFilesPage() {
     hvscRoot,
     hvscAvailable,
     hvscLibraryAvailable,
+    hvscCanIngest,
+    hvscPhase,
     hvscFolderFilter,
     hvscSongs,
     selectedHvscFolder,
@@ -212,6 +215,7 @@ export default function PlayFilesPage() {
     handleHvscInstall,
     handleHvscIngest,
     handleHvscCancel,
+    handleHvscReset,
     buildHvscLocalPlayFile,
     formatHvscDuration,
     formatHvscTimestamp,
@@ -238,8 +242,11 @@ export default function PlayFilesPage() {
     hvscStage,
     hvscVisibleFolders,
   } = useHvscLibrary();
-  const [volumeIndex, setVolumeIndex] = useState(0);
-  const [volumeMuted, setVolumeMuted] = useState(false);
+  const [volumeState, dispatchVolume] = useReducer(reduceVolumeState, {
+    index: 0,
+    muted: false,
+    reason: null,
+  });
   const [reshuffleActive, setReshuffleActive] = useState(false);
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
@@ -272,6 +279,9 @@ export default function PlayFilesPage() {
     const zeroIndex = volumeSteps.findIndex((option) => option.numeric === 0);
     return zeroIndex >= 0 ? zeroIndex : 0;
   }, [volumeSteps]);
+
+  const volumeIndex = volumeState.index;
+  const volumeMuted = volumeState.muted;
 
   const resolveVolumeIndex = useCallback((value: string | number) => {
     if (!volumeSteps.length) return defaultVolumeIndex;
@@ -427,7 +437,7 @@ export default function PlayFilesPage() {
       volumeSessionActiveRef.current = false;
       manualMuteSnapshotRef.current = null;
       pauseMuteSnapshotRef.current = null;
-      setVolumeMuted(false);
+      dispatchVolume({ type: 'reset', index: defaultVolumeIndex });
       volumeUiTargetRef.current = null;
       return;
     }
@@ -440,9 +450,9 @@ export default function PlayFilesPage() {
     volumeSessionActiveRef.current = false;
     manualMuteSnapshotRef.current = null;
     pauseMuteSnapshotRef.current = null;
-    setVolumeMuted(false);
+    dispatchVolume({ type: 'reset', index: defaultVolumeIndex });
     volumeUiTargetRef.current = null;
-  }, [applyAudioMixerUpdates, buildEnabledSidRestoreUpdates, resolveEnabledSidVolumeItems, sidEnablement, status.isConnected, status.isConnecting, status.state]);
+  }, [applyAudioMixerUpdates, buildEnabledSidRestoreUpdates, defaultVolumeIndex, dispatchVolume, resolveEnabledSidVolumeItems, sidEnablement, status.isConnected, status.isConnecting, status.state]);
 
   const restoreVolumeOverridesRef = useRef(restoreVolumeOverrides);
 
@@ -462,8 +472,7 @@ export default function PlayFilesPage() {
   useEffect(() => {
     if (updateConfigBatch.isPending) return;
     if (!enabledSidVolumeItems.length || !volumeSteps.length) {
-      setVolumeMuted(false);
-      setVolumeIndex(defaultVolumeIndex);
+      dispatchVolume({ type: 'reset', index: defaultVolumeIndex });
       volumeUiTargetRef.current = null;
       return;
     }
@@ -477,7 +486,6 @@ export default function PlayFilesPage() {
       return;
     }
     if (!activeIndices.length) {
-      setVolumeMuted(true);
       const snapshot = manualMuteSnapshotRef.current;
       const snapshotIndices = snapshot
         ? Object.values(snapshot.volumes).map((value) => resolveVolumeIndex(value))
@@ -486,17 +494,15 @@ export default function PlayFilesPage() {
       const muteCounts = new Map<number, number>();
       muteIndices.forEach((index) => muteCounts.set(index, (muteCounts.get(index) ?? 0) + 1));
       const muteIndex = Array.from(muteCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
+      let nextIndex = muteIndex;
       if (snapshotIndices.length) {
         const counts = new Map<number, number>();
         snapshotIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
-        const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
-        setVolumeIndex(nextIndex);
-      } else {
-        setVolumeIndex(muteIndex);
+        nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
       }
+      dispatchVolume({ type: 'sync', index: nextIndex, muted: true });
       return;
     }
-    setVolumeMuted(false);
     const counts = new Map<number, number>();
     activeIndices.forEach((index) => counts.set(index, (counts.get(index) ?? 0) + 1));
     const nextIndex = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? defaultVolumeIndex;
@@ -507,8 +513,8 @@ export default function PlayFilesPage() {
     if (syncDecision === 'clear') {
       volumeUiTargetRef.current = null;
     }
-    setVolumeIndex(nextIndex);
-  }, [defaultVolumeIndex, enabledSidVolumeItems, resolveVolumeIndex, updateConfigBatch.isPending, volumeSteps]);
+    dispatchVolume({ type: 'sync', index: nextIndex, muted: false });
+  }, [defaultVolumeIndex, dispatchVolume, enabledSidVolumeItems, resolveVolumeIndex, updateConfigBatch.isPending, volumeSteps, volumeMuted]);
 
   useEffect(() => {
     setSelectedPlaylistIds((prev) => {
@@ -1358,7 +1364,7 @@ export default function PlayFilesPage() {
         await withTimeout(api.machineResume(), 3000, 'Resume');
         pauseMuteSnapshotRef.current = null;
         setIsPaused(false);
-        setVolumeMuted(wasMuted);
+        dispatchVolume({ type: wasMuted ? 'mute' : 'unmute', reason: 'pause' });
         const now = Date.now();
         trackStartedAtRef.current = now - elapsedMs;
         playedClockRef.current.resume(now);
@@ -1376,7 +1382,7 @@ export default function PlayFilesPage() {
         await withTimeout(api.machinePause(), 3000, 'Pause');
         if (pauseItems.length) {
           await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(pauseItems, sidEnablement), 'Pause');
-          setVolumeMuted(true);
+          dispatchVolume({ type: 'mute', reason: 'pause' });
         }
         const now = Date.now();
         playedClockRef.current.pause(now);
@@ -1395,7 +1401,7 @@ export default function PlayFilesPage() {
         },
       });
     }
-  }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, durationMs, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, withTimeout, trace]);
+  }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, dispatchVolume, durationMs, elapsedMs, isPaused, isPlaying, reportUserError, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, withTimeout, trace]);
 
   const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
     if (!volumeSteps.length || !sidVolumeItems.length) return;
@@ -1419,7 +1425,7 @@ export default function PlayFilesPage() {
           volumeUiTargetRef.current = null;
         }
       });
-      setVolumeMuted(false);
+      dispatchVolume({ type: 'unmute', reason: 'manual' });
     };
 
     if (volumeUpdateTimerRef.current) {
@@ -1433,11 +1439,11 @@ export default function PlayFilesPage() {
     }
 
     volumeUpdateTimerRef.current = window.setTimeout(runUpdate, 200);
-  }, [applyAudioMixerUpdates, buildEnabledSidVolumeUpdates, ensureVolumeSessionSnapshot, reserveVolumeUiTarget, sidEnablement, sidVolumeItems, volumeSteps]);
+  }, [applyAudioMixerUpdates, buildEnabledSidVolumeUpdates, dispatchVolume, ensureVolumeSessionSnapshot, reserveVolumeUiTarget, sidEnablement, sidVolumeItems, volumeSteps]);
 
   const handleVolumeChange = useCallback((value: number[]) => {
     const nextIndex = value[0] ?? 0;
-    setVolumeIndex(nextIndex);
+    dispatchVolume({ type: 'set-index', index: nextIndex });
     reserveVolumeUiTarget(nextIndex);
     if (volumeMuted) {
       previousVolumeIndexRef.current = nextIndex;
@@ -1455,7 +1461,7 @@ export default function PlayFilesPage() {
     }
     if (volumeDragRef.current) return;
     scheduleVolumeUpdate(nextIndex);
-  }, [reserveVolumeUiTarget, scheduleVolumeUpdate, volumeMuted, volumeSteps]);
+  }, [dispatchVolume, reserveVolumeUiTarget, scheduleVolumeUpdate, volumeMuted, volumeSteps]);
 
   const handleVolumeCommit = useCallback(async (nextIndex: number) => {
     volumeDragRef.current = false;
@@ -1489,7 +1495,7 @@ export default function PlayFilesPage() {
       previousVolumeIndexRef.current = volumeIndex;
       await ensureVolumeSessionSnapshot();
       manualMuteSnapshotRef.current = captureSidMuteSnapshot(items, sidEnablement);
-      setVolumeMuted(true);
+      dispatchVolume({ type: 'mute', reason: 'manual' });
       volumeUiTargetRef.current = null;
       await applyAudioMixerUpdates(buildEnabledSidMuteUpdates(items, sidEnablement), 'Mute');
       return;
@@ -1506,13 +1512,14 @@ export default function PlayFilesPage() {
     if (Object.keys(updates).length) {
       await applyAudioMixerUpdates(updates, 'Unmute');
     }
-    setVolumeMuted(false);
+    dispatchVolume({ type: 'unmute', reason: 'manual' });
     manualMuteSnapshotRef.current = null;
     volumeUiTargetRef.current = null;
   }, [
     applyAudioMixerUpdates,
     buildEnabledSidVolumeUpdates,
     captureSidMuteSnapshot,
+    dispatchVolume,
     ensureVolumeSessionSnapshot,
     resolveEnabledSidVolumeItems,
     sidEnablement,
@@ -1998,6 +2005,8 @@ export default function PlayFilesPage() {
               hvscAvailable={hvscAvailable}
               hvscUpdating={hvscUpdating}
               hvscInProgress={hvscInProgress}
+              hvscCanIngest={hvscCanIngest}
+              hvscPhase={hvscPhase}
               hvscSummaryState={hvscSummaryState}
               hvscSummaryFilesExtracted={hvscSummaryFilesExtracted}
               hvscSummaryDurationMs={hvscSummaryDurationMs}
@@ -2027,6 +2036,7 @@ export default function PlayFilesPage() {
               onInstall={() => void handleHvscInstall()}
               onIngest={() => void handleHvscIngest()}
               onCancel={() => void handleHvscCancel()}
+              onReset={handleHvscReset}
               onFolderFilterChange={setHvscFolderFilter}
               onSelectFolder={(folder) => void loadHvscFolder(folder)}
               onPlayFolder={(folder) => void handlePlayHvscFolder(folder)}

@@ -10,6 +10,10 @@ import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import { ItemSelectionView } from './ItemSelectionView';
 
+const isLocalAutoConfirmDisabled = () =>
+  typeof window !== 'undefined'
+  && Boolean((window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm);
+
 export type SourceGroup = {
   label: string;
   sources: SourceLocation[];
@@ -99,6 +103,7 @@ export const ItemSelectionDialog = ({
     setPendingLocalSource(false);
     setPendingLocalSourceCount(0);
     setPendingLocalSourceId(null);
+    setAutoConfirming(false);
   }, [open]);
 
   const confirmLocalSource = useCallback(async (target: SourceLocation) => {
@@ -144,7 +149,7 @@ export const ItemSelectionDialog = ({
     setSelectedSourceId(targetSource.id);
     setPendingLocalSource(false);
     setPendingLocalSourceId(null);
-    if (autoConfirmLocalSource) {
+    if (autoConfirmLocalSource && !isLocalAutoConfirmDisabled()) {
       void confirmLocalSource(targetSource);
     }
   }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, pendingLocalSourceId, selectedSourceId]);

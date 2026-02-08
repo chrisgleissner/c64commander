@@ -111,6 +111,10 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
         }),
+        getHvscCacheStatus: async () => ({
+          baselineVersion: null as number | null,
+          updateVersions: [] as number[],
+        }),
         checkForHvscUpdates: async () => ({
           latestVersion: 84,
           installedVersion: 84,

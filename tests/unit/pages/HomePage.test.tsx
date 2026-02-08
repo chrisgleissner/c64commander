@@ -257,7 +257,7 @@ describe('HomePage SID status', () => {
 
     const { rerender } = renderHomePage();
 
-    expect(screen.getByTestId('sid-status-label').textContent).toContain('SID');
+    expect(within(screen.getByTestId('home-sid-status')).getAllByText('SID').length).toBeGreaterThan(0);
     const sidSocket1 = screen.getByText('SID Socket 1');
     const sidSocket2 = screen.getByText('SID Socket 2');
     const ultiSid1 = screen.getByText('UltiSID 1');
@@ -317,7 +317,7 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     const streamSection = screen.getByTestId('home-stream-status');
-    expect(within(streamSection).getByTestId('stream-status-label').textContent).toContain('Streams');
+    expect(within(streamSection).getByText('Streams')).toBeTruthy();
     expect(within(streamSection).getAllByTestId(/^home-stream-row-/)).toHaveLength(3);
     expect(within(streamSection).getByText('VIC')).toBeTruthy();
     expect(within(streamSection).getByText('AUDIO')).toBeTruthy();
@@ -340,7 +340,7 @@ describe('HomePage SID status', () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
+    fireEvent.click(screen.getByTestId('home-drives-reset'));
 
     await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(3));
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('a');
@@ -361,7 +361,7 @@ describe('HomePage SID status', () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Printer' }));
+    fireEvent.click(screen.getByTestId('home-printer-reset'));
 
     await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(1));
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('printer');
@@ -383,7 +383,7 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     const sidSection = screen.getByTestId('home-sid-status');
-    fireEvent.click(within(sidSection).getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByTestId('home-sid-reset'));
 
     await waitFor(() => expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledTimes(20));
     expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D404', new Uint8Array([0]));
@@ -477,7 +477,8 @@ describe('HomePage SID status', () => {
     expect(within(drivesGroup).getByText('Drive B')).toBeTruthy();
     expect(within(drivesGroup).getByText('Soft IEC Drive')).toBeTruthy();
     expect(within(drivesGroup).getAllByText('Bus ID').length).toBeGreaterThanOrEqual(3);
-    expect(within(drivesGroup).getAllByText('Type').length).toBeGreaterThanOrEqual(3);
+    expect(within(drivesGroup).getAllByText('Type').length).toBeGreaterThanOrEqual(2);
+    expect(within(drivesGroup).getByText('Path')).toBeTruthy();
 
     const driveBusSelect = screen.getByTestId('home-drive-bus-a');
     fireEvent.click(driveBusSelect);

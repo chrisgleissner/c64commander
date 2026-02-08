@@ -17,11 +17,15 @@ export type UseLocalSourcesState = {
 };
 
 export const useLocalSources = (): UseLocalSourcesState => {
-  const [sources, setSources] = useState<LocalSourceRecord[]>([]);
+  const [sources, setSources] = useState<LocalSourceRecord[]>(() => loadLocalSources());
 
   useEffect(() => {
-    setSources(loadLocalSources());
-  }, []);
+    if (sources.length) return;
+    const stored = loadLocalSources();
+    if (stored.length) {
+      setSources(stored);
+    }
+  }, [sources.length]);
 
   const persist = useCallback((next: LocalSourceRecord[]) => {
     setSources(next);
