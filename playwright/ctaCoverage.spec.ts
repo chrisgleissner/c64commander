@@ -96,7 +96,7 @@ test.describe('Shuffle Mode Tests', () => {
     // Radix UI checkboxes use role="checkbox"
     const shuffleDiv = page.locator('div:has-text("Shuffle")');
     const shuffleCheckbox = shuffleDiv.locator('button[role="checkbox"]').first();
-    
+
     await expect(shuffleCheckbox).toBeVisible();
     await attachStepScreenshot(page, testInfo, 'shuffle-checkbox-found');
 
@@ -214,7 +214,7 @@ test.describe('Home Page Quick Actions', () => {
 
     const drivesGroup = page.getByTestId('home-drives-group');
     await expect(drivesGroup).toBeVisible();
-    await expect(drivesGroup.getByRole('button', { name: 'Reset Drives' })).toBeVisible();
+    await expect(page.getByTestId('home-drives-reset')).toBeVisible();
     await expect(page.getByTestId('home-drive-toggle-a')).toBeVisible();
     await expect(page.getByTestId('home-drive-toggle-b')).toBeVisible();
     await expect(page.getByTestId('home-drive-toggle-soft-iec')).toBeVisible();

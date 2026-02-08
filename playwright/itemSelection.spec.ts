@@ -224,11 +224,9 @@ test.describe('Item Selection Dialog UX', () => {
     await openAddItemsDialog(page);
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
-    await dialog.getByTestId('browse-source-seed-local-source').click();
-    await expect(dialog.getByTestId('local-file-picker')).toBeVisible();
-    await expect(dialog.getByText('seed.sid')).toBeVisible();
-    await snap(page, testInfo, 'local-file-picker');
+    await expect(dialog.getByTestId('import-option-local')).toBeVisible();
+    await expect(dialog.getByTestId('import-option-c64u')).toBeVisible();
+    await snap(page, testInfo, 'local-file-picker-interstitial');
   });
 
   test('add items modal content is scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {

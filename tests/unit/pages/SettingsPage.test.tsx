@@ -121,6 +121,7 @@ vi.mock('@/hooks/useListPreviewLimit', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
 const buildRouter = (ui: JSX.Element) => createMemoryRouter(

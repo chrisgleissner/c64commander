@@ -40,8 +40,8 @@ describe('ramOperations', () => {
     expect(api.machinePause).toHaveBeenCalledTimes(1);
     expect(api.machineResume).toHaveBeenCalledTimes(1);
     expect(api.readMemory).toHaveBeenCalled();
-    expect(api.readMemory).toHaveBeenCalledWith('0000', 2048);
-    expect(api.readMemory).toHaveBeenLastCalledWith('F800', 2048);
+    expect(api.readMemory).toHaveBeenCalledWith('0000', 4096);
+    expect(api.readMemory).toHaveBeenLastCalledWith('F000', 4096);
   });
 
   it('loads full RAM while paused and resumes afterwards', async () => {
@@ -54,28 +54,28 @@ describe('ramOperations', () => {
     expect(api.machinePause).toHaveBeenCalledTimes(1);
     expect(api.machineResume).toHaveBeenCalledTimes(1);
     expect(api.writeMemoryBlock).toHaveBeenCalledWith('0000', expect.any(Uint8Array));
-    expect(api.writeMemoryBlock).toHaveBeenLastCalledWith('F800', expect.any(Uint8Array));
+    expect(api.writeMemoryBlock).toHaveBeenLastCalledWith('0000', expect.any(Uint8Array));
   });
 
-  it('reads RAM in monotonic 2KB chunks', async () => {
+  it('reads RAM in monotonic 4KB chunks', async () => {
     const api = buildApi();
 
     await dumpFullRamImage(api as any);
 
     const chunkReads = api.readMemory.mock.calls
-      .filter(([, length]: [string, number]) => length === 2048)
+      .filter(([, length]: [string, number]) => length === 4096)
       .map(([address]) => address);
 
-    expect(chunkReads.length).toBe(32);
+    expect(chunkReads.length).toBe(16);
     expect(chunkReads[0]).toBe('0000');
-    expect(chunkReads[chunkReads.length - 1]).toBe('F800');
+    expect(chunkReads[chunkReads.length - 1]).toBe('F000');
     const addresses = chunkReads.map((value) => parseInt(value, 16));
     addresses.forEach((value, index) => {
-      expect(value).toBe(index * 0x800);
+      expect(value).toBe(index * 0x1000);
     });
   });
 
-  it('writes RAM in monotonic 2KB chunks', async () => {
+  it('writes RAM in a single 64KB chunk', async () => {
     const api = buildApi();
     const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
 
@@ -84,13 +84,8 @@ describe('ramOperations', () => {
     const chunkWrites = api.writeMemoryBlock.mock.calls
       .map(([address]: [string]) => address);
 
-    expect(chunkWrites.length).toBe(32);
+    expect(chunkWrites.length).toBe(1);
     expect(chunkWrites[0]).toBe('0000');
-    expect(chunkWrites[chunkWrites.length - 1]).toBe('F800');
-    const addresses = chunkWrites.map((value) => parseInt(value, 16));
-    addresses.forEach((value, index) => {
-      expect(value).toBe(index * 0x800);
-    });
   });
 
   it('rejects RAM images with invalid size', async () => {

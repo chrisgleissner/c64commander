@@ -119,6 +119,7 @@ const renderHomePage = () => renderWithRouter(<HomePage />);
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: toastSpy,
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
 vi.mock('@/lib/uiErrors', () => ({

@@ -227,7 +227,7 @@ test.describe('Home interactions', () => {
     const ledControls = [
       'home-led-mode',
       'home-led-color',
-      'home-led-intensity',
+      'home-led-intensity-slider',
       'home-led-sid-select',
       'home-led-tint',
     ];

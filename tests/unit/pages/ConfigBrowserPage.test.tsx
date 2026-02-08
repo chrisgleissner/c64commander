@@ -50,6 +50,7 @@ vi.mock('@/hooks/useRefreshControl', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
 vi.mock('@/components/ConfigItemRow', () => ({

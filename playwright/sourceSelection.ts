@@ -6,10 +6,12 @@ const getInterstitialTestId = (label: SourceSelectionLabel) =>
   (label === 'C64 Ultimate' ? 'import-option-c64u' : 'import-option-local');
 
 export const getSourceSelectionButton = (container: Page | Locator, label: SourceSelectionLabel) =>
-  container
-    .getByText(label, { exact: true })
-    .locator('..')
-    .getByRole('button', { name: 'Add file / folder' });
+  container.getByTestId(getInterstitialTestId(label)).or(
+    container
+      .getByText(label, { exact: true })
+      .locator('..')
+      .getByRole('button', { name: 'Add file / folder' }),
+  );
 
 export const clickSourceSelectionButton = async (
   container: Page | Locator,

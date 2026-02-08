@@ -1757,7 +1757,7 @@ export default function HomePage() {
                         'HOME_LED_INTENSITY',
                         'LED intensity updated',
                       );
-                    }}}
+                    }}
                     disabled={!status.isConnected || ledIntensityPending}
                     data-testid="home-led-intensity-slider"
                   />

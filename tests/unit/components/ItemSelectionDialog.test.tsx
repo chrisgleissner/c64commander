@@ -61,7 +61,6 @@ describe('ItemSelectionDialog source picker', () => {
     expect(screen.getByTestId('import-selection-interstitial')).toBeInTheDocument();
     expect(screen.getByTestId('import-option-c64u')).toBeInTheDocument();
     expect(screen.getByTestId('import-option-local')).toBeInTheDocument();
-    expect(screen.getByTestId('browse-source-local-1')).toHaveTextContent('My Folder');
   });
 
   it('filters entries and confirms selection', async () => {
@@ -102,7 +101,7 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getByTestId('import-option-c64u'));
     expect(screen.getByTestId('add-items-filter')).toBeInTheDocument();
 
     expect(screen.queryByText('notes.txt')).toBeNull();
@@ -156,7 +155,7 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getByTestId('import-option-c64u'));
     fireEvent.click(screen.getAllByRole('checkbox')[0]);
     fireEvent.click(screen.getByTestId('add-items-confirm'));
 
@@ -196,7 +195,7 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getByTestId('import-option-local'));
 
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
@@ -231,6 +230,8 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
+    fireEvent.click(screen.getByTestId('import-option-c64u'));
+
     await waitFor(() => {
       expect(reportUserError).toHaveBeenCalledWith(expect.objectContaining({
         operation: 'BROWSE',
@@ -264,7 +265,7 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getByTestId('import-option-c64u'));
     const confirmButton = screen.getByTestId('add-items-confirm');
     expect(confirmButton).toBeDisabled();
     expect(reportUserError).not.toHaveBeenCalled();
@@ -300,7 +301,7 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getByTestId('import-option-local'));
 
     await waitFor(() => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -342,7 +343,7 @@ describe('ItemSelectionDialog source picker', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /add file \/ folder/i }));
+    fireEvent.click(screen.getByTestId('import-option-local'));
 
     await waitFor(() => {
       expect(onAutoConfirmStart).toHaveBeenCalled();

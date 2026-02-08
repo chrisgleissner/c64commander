@@ -65,7 +65,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeUltimatePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
-const tryFetchUltimateSidBlob = async (path: string) => {
+export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
   const { deviceHost: rawHost, password = '' } = getC64APIConfigSnapshot();
   const host = normalizeFtpHost(rawHost);

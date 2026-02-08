@@ -852,6 +852,26 @@ export default function PlayFilesPage() {
     [durationFallbackMs, resolveSonglengthDurationMsForPath],
   );
 
+  const resolveUltimateSidDurationByMd5 = useCallback(
+    async (path: string, songNr?: number | null): Promise<number | null> => {
+      try {
+        const { tryFetchUltimateSidBlob } = await import('@/lib/playback/playbackRouter');
+        const blob = await tryFetchUltimateSidBlob(path);
+        if (!blob) return null;
+        const buffer = await blob.arrayBuffer();
+        const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
+        const md5 = await computeSidMd5(buffer);
+        const seconds = await getHvscDurationByMd5Seconds(md5);
+        if (seconds === undefined || seconds === null) return null;
+        return seconds * 1000;
+      } catch {
+        addLog('debug', 'Ultimate SID MD5 duration lookup failed', { path });
+        return null;
+      }
+    },
+    [],
+  );
+
 
   const playItem = useCallback(
     async (item: PlaylistItem, options?: { rebootBeforePlay?: boolean; playlistIndex?: number }) => {
@@ -879,6 +899,18 @@ export default function PlayFilesPage() {
           subsongCount = metadata.subsongCount;
           if (!metadata.readable) {
             throw new Error('Local file unavailable. Re-add it to the playlist.');
+          }
+        } else if (item.category === 'sid' && item.request.source === 'ultimate' && !item.durationMs) {
+          try {
+            const pathMs = await resolveSonglengthDurationMsForPath(item.path, null, item.request.songNr ?? null);
+            if (pathMs !== null) {
+              durationOverride = pathMs;
+            } else {
+              const md5Ms = await resolveUltimateSidDurationByMd5(item.path, item.request.songNr ?? null);
+              if (md5Ms !== null) durationOverride = md5Ms;
+            }
+          } catch {
+            addLog('debug', 'Ultimate SID duration resolution failed', { path: item.path });
           }
         }
         try {
@@ -946,7 +978,7 @@ export default function PlayFilesPage() {
         setIsPaused(false);
       });
     },
-    [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, reportUserError, resolveSidMetadata],
+    [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, reportUserError, resolveSidMetadata, resolveSonglengthDurationMsForPath, resolveUltimateSidDurationByMd5],
   );
 
   const playlistItemDuration = useCallback(

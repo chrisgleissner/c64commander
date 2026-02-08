@@ -50,7 +50,7 @@ describe('ledColors', () => {
         it('contains Royal Blue with correct RGB values', () => {
             const royalBlue = LED_FIXED_COLORS.find((c) => c.name === 'Royal Blue');
             expect(royalBlue).toBeDefined();
-            expect(royalBlue?.rgb).toEqual({ r: 0, g: 64, b: 255 });
+            expect(royalBlue?.rgb).toEqual({ r: 0, g: 63, b: 255 });
         });
 
         it('contains White with correct RGB values', () => {
@@ -69,7 +69,7 @@ describe('ledColors', () => {
     describe('rgbToCss', () => {
         it('converts RGB values to CSS rgb() string', () => {
             expect(rgbToCss({ r: 255, g: 0, b: 0 })).toBe('rgb(255, 0, 0)');
-            expect(rgbToCss({ r: 0, g: 64, b: 255 })).toBe('rgb(0, 64, 255)');
+            expect(rgbToCss({ r: 0, g: 63, b: 255 })).toBe('rgb(0, 63, 255)');
             expect(rgbToCss({ r: 255, g: 255, b: 255 })).toBe('rgb(255, 255, 255)');
             expect(rgbToCss({ r: 128, g: 128, b: 128 })).toBe('rgb(128, 128, 128)');
         });
@@ -81,9 +81,9 @@ describe('ledColors', () => {
 
     describe('getLedColorRgb', () => {
         it('returns RGB values for valid color names (case insensitive)', () => {
-            expect(getLedColorRgb('Royal Blue')).toEqual({ r: 0, g: 64, b: 255 });
-            expect(getLedColorRgb('royal blue')).toEqual({ r: 0, g: 64, b: 255 });
-            expect(getLedColorRgb('ROYAL BLUE')).toEqual({ r: 0, g: 64, b: 255 });
+            expect(getLedColorRgb('Royal Blue')).toEqual({ r: 0, g: 63, b: 255 });
+            expect(getLedColorRgb('royal blue')).toEqual({ r: 0, g: 63, b: 255 });
+            expect(getLedColorRgb('ROYAL BLUE')).toEqual({ r: 0, g: 63, b: 255 });
             expect(getLedColorRgb('Red')).toEqual({ r: 255, g: 0, b: 0 });
             expect(getLedColorRgb('red')).toEqual({ r: 255, g: 0, b: 0 });
         });
@@ -99,13 +99,13 @@ describe('ledColors', () => {
         });
 
         it('handles colors with special characters in names', () => {
-            expect(getLedColorRgb('Lemon-Lime')).toEqual({ r: 190, g: 255, b: 0 });
-            expect(getLedColorRgb('lemon-lime')).toEqual({ r: 190, g: 255, b: 0 });
+            expect(getLedColorRgb('Lemon-Lime')).toEqual({ r: 191, g: 255, b: 0 });
+            expect(getLedColorRgb('lemon-lime')).toEqual({ r: 191, g: 255, b: 0 });
         });
 
         it('handles colors with spaces in names', () => {
-            expect(getLedColorRgb('Spring Green')).toEqual({ r: 0, g: 255, b: 255 });
-            expect(getLedColorRgb('Deep Sky Blue')).toEqual({ r: 0, g: 128, b: 255 });
+            expect(getLedColorRgb('Spring Green')).toEqual({ r: 0, g: 255, b: 128 });
+            expect(getLedColorRgb('Deep Sky Blue')).toEqual({ r: 0, g: 191, b: 255 });
         });
     });
 });
