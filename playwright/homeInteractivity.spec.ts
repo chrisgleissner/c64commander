@@ -122,7 +122,7 @@ test.describe('Home interactions', () => {
     await page.goto('/');
     await waitForConnected(page);
 
-    await page.getByRole('button', { name: 'Reset Drives' }).click();
+    await page.getByTestId('home-drives-reset').click();
 
     await expect.poll(() =>
       hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/a:reset')),
@@ -197,7 +197,7 @@ test.describe('Home interactions', () => {
     expect(addresses).toContain('D432');
     expect(addresses).toContain('D438');
 
-    await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Volume');
+    await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Vol');
     await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Pan');
   });
 

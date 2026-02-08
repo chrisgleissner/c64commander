@@ -23,6 +23,10 @@ import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { SidCard } from './home/SidCard';
+import { DriveCard } from './home/DriveCard';
+import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
+import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import {
   Select,
   SelectContent,
@@ -101,7 +105,22 @@ const SID_AUDIO_ITEMS = [
 ] as const;
 const SID_DETECTED_ITEMS = ['SID Detected Socket 1', 'SID Detected Socket 2'] as const;
 const ULTISID_PROFILE_ITEMS = ['UltiSID 1 Filter Curve', 'UltiSID 2 Filter Curve'] as const;
-const HOME_SID_SOCKET_ITEMS = [...SID_SOCKETS_ITEMS, ...SID_DETECTED_ITEMS] as const;
+const SID_SOCKET_SHAPING_ITEMS = [
+  'SID Socket 1 1K Ohm Resistor',
+  'SID Socket 2 1K Ohm Resistor',
+  'SID Socket 1 Capacitors',
+  'SID Socket 2 Capacitors',
+] as const;
+const ULTISID_SHAPING_ITEMS = [
+  'UltiSID 1 Filter Resonance',
+  'UltiSID 2 Filter Resonance',
+  'UltiSID 1 Combined Waveforms',
+  'UltiSID 2 Combined Waveforms',
+  'UltiSID 1 Digis Level',
+  'UltiSID 2 Digis Level',
+] as const;
+const HOME_SID_SOCKET_ITEMS = [...SID_SOCKETS_ITEMS, ...SID_DETECTED_ITEMS, ...SID_SOCKET_SHAPING_ITEMS] as const;
+const HOME_ULTISID_ITEMS = [...ULTISID_PROFILE_ITEMS, ...ULTISID_SHAPING_ITEMS] as const;
 const HOME_SID_ADDRESSING_ITEMS = [
   ...SID_ADDRESSING_ITEMS,
   'SID Socket 1 Address',
@@ -229,6 +248,9 @@ const PRINTER_CONTROL_SPEC: DriveControlSpec = {
   busItem: 'Bus ID',
 };
 
+import { SectionHeader } from '@/components/SectionHeader';
+import { cn } from '@/lib/utils';
+
 export default function HomePage() {
   const api = getC64API();
   const queryClient = useQueryClient();
@@ -261,7 +283,7 @@ export default function HomePage() {
   );
   const { data: ultiSidCategory } = useC64ConfigItems(
     'UltiSID Configuration',
-    [...ULTISID_PROFILE_ITEMS],
+    [...HOME_ULTISID_ITEMS],
     status.isConnected || status.isConnecting,
   );
   const { data: sidAddressingCategory } = useC64ConfigItems(
@@ -277,6 +299,16 @@ export default function HomePage() {
   const { data: streamCategory } = useC64ConfigItems(
     'Data Streams',
     STREAM_ITEMS,
+    status.isConnected || status.isConnecting,
+  );
+  const { data: softIecConfig } = useC64ConfigItems(
+    'SoftIEC Drive Settings',
+    ['IEC Drive', 'Soft Drive Bus ID', 'Default Path'],
+    status.isConnected || status.isConnecting,
+  );
+  const { data: printerConfig } = useC64ConfigItems(
+    'Printer Settings',
+    ['IEC printer', 'Bus ID'],
     status.isConnected || status.isConnecting,
   );
   const controls = useC64MachineControl();
@@ -313,6 +345,49 @@ export default function HomePage() {
   const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
   const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
   const [activeSlider, setActiveSlider] = useState<{ id: string; value: number } | null>(null);
+  const [mountTarget, setMountTarget] = useState<{
+    spec: DriveControlSpec;
+    currentPath?: string;
+  } | null>(null);
+
+  const sourceGroups = useMemo(() => {
+    const groups: SourceGroup[] = [];
+    if (status.isConnected) {
+      groups.push({
+        label: 'C64 Ultimate',
+        sources: [createUltimateSourceLocation()],
+      });
+    }
+    return groups;
+  }, [status.isConnected]);
+
+  const handleMountClick = (spec: DriveControlSpec, currentPath?: string) => {
+    setMountTarget({ spec, currentPath });
+  };
+
+  const handleMountSelection = async (source: unknown, selections: { path: string }[]) => {
+    if (!mountTarget || selections.length === 0) return false;
+    const selected = selections[0];
+    const { spec } = mountTarget;
+
+    if (spec.class === 'SOFT_IEC_DRIVE') {
+      await updateConfigValue(
+        'SoftIEC Drive Settings',
+        'Default Path',
+        selected.path,
+        'HOME_SOFT_IEC_PATH',
+        'Soft IEC path updated'
+      );
+    } else if (spec.class === 'PHYSICAL_DRIVE_A' || spec.class === 'PHYSICAL_DRIVE_B') {
+      const driveId = spec.class === 'PHYSICAL_DRIVE_A' ? 'a' : 'b';
+      await handleAction(async () => {
+        await api.mountDrive(driveId, selected.path);
+        await refreshDrivesFromDevice();
+      }, `Mounted to Drive ${driveId.toUpperCase()}`);
+    }
+    setMountTarget(null);
+    return true;
+  };
 
   const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
@@ -371,8 +446,6 @@ export default function HomePage() {
 
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
-  const sidTypeTriggerClass =
-    'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-muted-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
 
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
@@ -1182,13 +1255,11 @@ export default function HomePage() {
           className="space-y-2"
           data-section-label="Machine"
         >
-          <h3 className="category-header">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Machine
+          <SectionHeader title="Machine">
             {machineTaskBusy && (
               <span className="ml-2 text-xs text-muted-foreground">Working…</span>
             )}
-          </h3>
+          </SectionHeader>
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground" data-testid="home-drive-summary">
               {driveSummaryItems.map((entry) => (
@@ -1291,10 +1362,7 @@ export default function HomePage() {
           className="space-y-2"
           data-section-label="Quick Config"
         >
-          <h3 className="category-header">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Quick Config
-          </h3>
+          <SectionHeader title="Quick Config" />
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="bg-card border border-border rounded-xl p-3 space-y-3" data-testid="home-quick-config">
               <ConfigItemRow
@@ -1613,127 +1681,80 @@ export default function HomePage() {
           className="space-y-3"
           data-section-label="Drives"
         >
-          <h3 className="category-header">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Drives
-          </h3>
-          <div className="bg-card border border-border rounded-xl p-3 space-y-2" data-testid="home-drives-group">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold text-primary uppercase tracking-wide">Drive mapping</p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void handleResetDrives()}
-                disabled={!status.isConnected || machineTaskBusy}
-              >
-                {machineTaskId === 'reset-drives' ? 'Resetting…' : 'Reset Drives'}
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {driveControlRows.map((row) => {
-                const label = row.device?.label
-                  ?? (row.spec.class === 'PHYSICAL_DRIVE_A'
-                    ? 'Drive A'
-                    : row.spec.class === 'PHYSICAL_DRIVE_B'
-                      ? 'Drive B'
-                      : 'Soft IEC Drive');
-                const testIdSuffix = row.spec.class === 'PHYSICAL_DRIVE_A'
-                  ? 'a'
+          <SectionHeader
+            title="Drives"
+            resetAction={() => void handleResetDrives()}
+            resetDisabled={!status.isConnected || machineTaskBusy}
+            isResetting={machineTaskId === 'reset-drives'}
+            resetTestId="home-drives-reset"
+          />
+          <div className="space-y-2" data-testid="home-drives-group">
+            {driveControlRows.map((row) => {
+              const label = row.device?.label
+                ?? (row.spec.class === 'PHYSICAL_DRIVE_A'
+                  ? 'Drive A'
                   : row.spec.class === 'PHYSICAL_DRIVE_B'
-                    ? 'b'
-                    : 'soft-iec';
-                return (
-                  <div
-                    key={row.spec.class}
-                    className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
-                    data-testid={`home-drive-row-${testIdSuffix}`}
-                    aria-label={`${label} Bus ${row.busValue} Type ${row.typeValue} ${row.enabled ? 'ON' : 'OFF'}`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="pr-2 text-sm font-semibold leading-tight">{label}</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void handleEnabledToggle(label, row.spec, row.enabled)}
-                          disabled={!status.isConnected || row.pendingEnabled}
-                          data-testid={`home-drive-toggle-${testIdSuffix}`}
-                          className={row.enabled ? 'text-success' : undefined}
-                        >
-                          {row.enabled ? 'ON' : 'OFF'}
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">Bus ID</span>
-                          <Select
-                            value={row.busValue}
-                            onValueChange={(value) =>
-                              void updateConfigValue(
-                                row.spec.category,
-                                row.spec.busItem,
-                                Number(value),
-                                'HOME_DRIVE_BUS',
-                                `${label} bus ID updated`,
-                                { refreshDrives: true },
-                              )}
-                            disabled={!status.isConnected || row.pendingBus}
-                          >
-                            <SelectTrigger
-                              className="h-8 w-full px-2 text-xs whitespace-nowrap"
-                              data-testid={`home-drive-bus-${testIdSuffix}`}
-                              aria-label={`${label} bus id`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {row.busOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground whitespace-nowrap">Type</span>
-                          <Select
-                            value={row.typeValue}
-                            onValueChange={(value) => {
-                              if (!row.spec.typeItem) return;
-                              void updateConfigValue(
-                                row.spec.category,
-                                row.spec.typeItem,
-                                value,
-                                'HOME_DRIVE_TYPE',
-                                `${label} type updated`,
-                                { refreshDrives: true },
-                              );
-                            }}
-                            disabled={!row.spec.typeItem || !status.isConnected || row.pendingType}
-                          >
-                            <SelectTrigger
-                              className="h-8 w-full px-2 text-xs whitespace-nowrap"
-                              data-testid={`home-drive-type-${testIdSuffix}`}
-                              aria-label={`${label} type`}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {row.typeOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                    ? 'Drive B'
+                    : 'Soft IEC Drive');
+              const testIdSuffix = row.spec.class === 'PHYSICAL_DRIVE_A'
+                ? 'a'
+                : row.spec.class === 'PHYSICAL_DRIVE_B'
+                  ? 'b'
+                  : 'soft-iec';
+
+              const isSoftIec = row.spec.class === 'SOFT_IEC_DRIVE';
+              const mountedPath = isSoftIec
+                ? String(resolveConfigValue(softIecConfig as Record<string, unknown> | undefined, 'SoftIEC Drive Settings', 'Default Path', '/USB0/'))
+                : (row.device?.imageFile);
+              const mountedPathLabel = isSoftIec ? 'Path' : 'Disk';
+              const onMountedPathClick = () => handleMountClick(row.spec, mountedPath);
+
+              const pathPending = isSoftIec
+                ? Boolean(configWritePending[buildConfigKey('SoftIEC Drive Settings', 'Default Path')])
+                : false;
+
+              return (
+                <DriveCard
+                  key={row.spec.class}
+                  name={label}
+                  enabled={row.enabled}
+                  onToggle={() => void handleEnabledToggle(label, row.spec, row.enabled)}
+                  togglePending={row.pendingEnabled}
+                  busIdValue={String(row.busValue)}
+                  busIdOptions={row.busOptions.map(String)}
+                  onBusIdChange={(value) =>
+                    void updateConfigValue(
+                      row.spec.category,
+                      row.spec.busItem,
+                      Number(value),
+                      'HOME_DRIVE_BUS',
+                      `${label} bus ID updated`,
+                      { refreshDrives: true },
+                    )}
+                  busIdPending={row.pendingBus}
+                  typeValue={!isSoftIec ? row.typeValue : undefined}
+                  typeOptions={!isSoftIec ? row.typeOptions : undefined}
+                  onTypeChange={!isSoftIec ? (value) => {
+                    if (!row.spec.typeItem) return;
+                    void updateConfigValue(
+                      row.spec.category,
+                      row.spec.typeItem,
+                      value,
+                      'HOME_DRIVE_TYPE',
+                      `${label} type updated`,
+                      { refreshDrives: true },
+                    );
+                  } : undefined}
+                  typePending={!isSoftIec ? row.pendingType : undefined}
+                  mountedPath={mountedPath}
+                  mountedPathLabel={mountedPathLabel}
+                  onMountedPathClick={onMountedPathClick}
+                  pathPending={pathPending}
+                  isConnected={status.isConnected}
+                  testIdSuffix={testIdSuffix}
+                />
+              );
+            })}
           </div>
         </motion.div>
 
@@ -1744,62 +1765,58 @@ export default function HomePage() {
           className="space-y-3"
           data-section-label="Printers"
         >
-          <h3 className="category-header">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Printers
-          </h3>
-          <div className="bg-card border border-border rounded-xl p-3 space-y-2" data-testid="home-printer-group">
-            <p className="text-xs text-muted-foreground">Serial bus device (typical bus IDs: 4 or 5)</p>
-            <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-semibold">Printer</span>
+          <SectionHeader
+            title="Printers"
+            resetAction={() => void handleResetPrinter()}
+            resetDisabled={!status.isConnected || machineTaskBusy}
+            isResetting={machineTaskId === 'reset-printer'}
+            resetTestId="home-printer-reset"
+          />
+          <div className="space-y-2" data-testid="home-printer-group">
+            <div className="bg-card border border-border rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => void handleEnabledToggle('Printer', PRINTER_CONTROL_SPEC, printerEnabled)}
                   disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)])}
                   data-testid="home-printer-toggle"
-                  className={printerEnabled ? 'text-success' : undefined}
+                  className={cn("h-6 px-2 text-xs", printerEnabled ? 'text-success' : undefined)}
                 >
                   {printerEnabled ? 'ON' : 'OFF'}
                 </Button>
               </div>
-              <div className="space-y-1">
-                <span className="text-xs text-muted-foreground">Bus ID</span>
-                <Select
-                  value={String(printerBusValue)}
-                  onValueChange={(value) =>
-                    void updateConfigValue(
-                      PRINTER_CONTROL_SPEC.category,
-                      PRINTER_CONTROL_SPEC.busItem,
-                      Number(value),
-                      'HOME_PRINTER_BUS',
-                      'Printer bus ID updated',
-                      { refreshDrives: true },
-                    )}
-                  disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.busItem)])}
-                >
-                  <SelectTrigger data-testid="home-printer-bus">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {printerBusOptions.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
+                  <Select
+                    value={String(printerBusValue)}
+                    onValueChange={(value) =>
+                      void updateConfigValue(
+                        PRINTER_CONTROL_SPEC.category,
+                        PRINTER_CONTROL_SPEC.busItem,
+                        Number(value),
+                        'HOME_PRINTER_BUS',
+                        'Printer bus ID updated',
+                        { refreshDrives: true },
+                      )}
+                    disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.busItem)])}
+                  >
+                    <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-printer-bus">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {printerBusOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleResetPrinter()}
-              disabled={!status.isConnected || machineTaskBusy}
-            >
-              {machineTaskId === 'reset-printer' ? 'Resetting…' : 'Reset Printer'}
-            </Button>
           </div>
         </motion.div>
 
@@ -1811,264 +1828,153 @@ export default function HomePage() {
           data-testid="home-sid-status"
           data-section-label="SID"
         >
-          <div className="flex items-center justify-between gap-2 text-xs font-semibold text-primary" data-testid="sid-status-label">
-            <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-              <span>SID</span>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleSidReset()}
-              disabled={!status.isConnected || machineTaskBusy}
-            >
-              Reset
-            </Button>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-3">
-            <div className="space-y-3">
-              {sidControlEntries.map((entry) => {
-                const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
-                const panKey = buildConfigKey('Audio Mixer', entry.panItem);
-                const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
-                const statusValue = sidStatusMap.get(entry.key);
-                const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
-                const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
-                const volumeIndex = resolveOptionIndex(volumeOptions, entry.volume);
-                const panIndex = resolveOptionIndex(panOptions, entry.pan);
-                const volumeCenterIndex = resolveVolumeCenterIndex(volumeOptions);
-                const panCenterIndex = resolvePanCenterIndex(panOptions);
-                const volumeMax = Math.max(volumeOptions.length - 1, 0);
-                const panMax = Math.max(panOptions.length - 1, 0);
-                const volumeSliderId = `sid-${entry.key}-volume`;
-                const panSliderId = `sid-${entry.key}-pan`;
-                const volumePending = Boolean(configWritePending[volumeKey]);
-                const panPending = Boolean(configWritePending[panKey]);
-                const isSidEnabled = statusValue !== false;
-                const isSilent = isSidEnabled && isSilentSidValue(entry.volume, volumeOptions);
-                const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
-                const isVolumeActive = activeSlider?.id === volumeSliderId;
-                const isPanActive = activeSlider?.id === panSliderId;
-                const volumeSliderValue = clampSliderValue(isVolumeActive ? activeSlider?.value ?? volumeIndex : volumeIndex, volumeMax);
-                const panSliderValue = clampSliderValue(isPanActive ? activeSlider?.value ?? panIndex : panIndex, panMax);
-                const volumeDisplayIndex = clampSliderValue(Math.round(volumeSliderValue), volumeMax);
-                const panDisplayIndex = clampSliderValue(Math.round(panSliderValue), panMax);
-                const volumeDisplayLabel = (volumeOptions[volumeDisplayIndex] ?? volumeOptions[0] ?? '—').trim();
-                const panDisplayLabel = (panOptions[panDisplayIndex] ?? panOptions[0] ?? '—').trim();
-                const volumePercent = volumeMax > 0 ? (volumeSliderValue / volumeMax) * 100 : 0;
-                const panPercent = panMax > 0 ? (panSliderValue / panMax) * 100 : 0;
-                const isUltiSid = entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
-                const sidTypeLabel = entry.key === 'socket1'
-                  ? sidDetectedSocket1
-                  : entry.key === 'socket2'
-                    ? sidDetectedSocket2
-                    : entry.key === 'ultiSid1'
-                      ? ultiSid1ProfileValue
-                      : ultiSid2ProfileValue;
-                const ultiSidProfileSelectValue = entry.key === 'ultiSid1'
-                  ? ultiSid1ProfileSelectValue
-                  : ultiSid2ProfileSelectValue;
-                const ultiSidProfileSelectOptions = entry.key === 'ultiSid1'
-                  ? ultiSid1ProfileSelectOptions
-                  : ultiSid2ProfileSelectOptions;
-                const ultiSidProfileItem = entry.key === 'ultiSid1'
-                  ? 'UltiSID 1 Filter Curve'
-                  : 'UltiSID 2 Filter Curve';
-                const ultiSidProfilePending = isUltiSid
-                  ? Boolean(configWritePending[buildConfigKey('UltiSID Configuration', ultiSidProfileItem)])
-                  : false;
-                const socketItemName = entry.key === 'socket1' ? 'SID Socket 1' : entry.key === 'socket2' ? 'SID Socket 2' : null;
-                const toggleKey = socketItemName
-                  ? buildConfigKey('SID Sockets Configuration', socketItemName)
-                  : addressKey;
-                const togglePending = Boolean(configWritePending[toggleKey]);
-                const sliderDisabled = !status.isConnected || !isSidEnabled;
-                return (
-                  <div
-                    key={entry.key}
-                    className="rounded-lg border border-border/60 bg-muted/40 p-2 space-y-2"
-                    data-testid={`home-sid-entry-${entry.key}`}
-                    aria-label={`${entry.label} ${baseAddressLabel} ${isSidEnabled ? 'ON' : 'OFF'}`}
-                  >
-                    <div className="grid grid-cols-[140px_1fr_80px_auto] items-center gap-2 min-h-[32px]">
-                      <div className="min-w-0">
-                        <span className="text-sm font-semibold truncate">{entry.label}</span>
-                      </div>
-                      <div className="min-w-0 flex justify-start">
-                        {isUltiSid ? (
-                          <Select
-                            value={ultiSidProfileSelectValue}
-                            onValueChange={(value) =>
-                              void updateConfigValue(
-                                'UltiSID Configuration',
-                                ultiSidProfileItem,
-                                resolveSelectValue(value),
-                                'HOME_ULTISID_PROFILE',
-                                `${entry.label} profile updated`,
-                              )}
-                            disabled={!status.isConnected || ultiSidProfilePending}
-                          >
-                            <SelectTrigger className={sidTypeTriggerClass} data-testid={`home-sid-type-${entry.key}`}>
-                              <SelectValue placeholder={sidTypeLabel} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ultiSidProfileSelectOptions.map((option) => (
-                                <SelectItem key={option} value={option}>
-                                  {formatSelectOptionLabel(option)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <span className="text-xs font-semibold text-muted-foreground" data-testid={`home-sid-type-${entry.key}`}>
-                            {sidTypeLabel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 min-w-0 justify-end">
-                        <span
-                          className={isSilent ? 'text-sm font-semibold font-mono tabular-nums text-amber-600' : 'text-sm font-semibold font-mono tabular-nums text-muted-foreground'}
-                          data-testid={`home-sid-address-${entry.key}`}
-                        >
-                          {baseAddressLabel}
-                        </span>
-                        {isSilent ? (
-                          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Silent</span>
-                        ) : null}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleSidEnableToggle(entry, isSidEnabled)}
-                        disabled={!status.isConnected || togglePending}
-                        data-testid={`home-sid-toggle-${entry.key}`}
-                        className={isSidEnabled ? 'text-success' : undefined}
-                      >
-                        {isSidEnabled ? 'ON' : 'OFF'}
-                      </Button>
-                    </div>
-                    <div className={`grid grid-cols-2 gap-3 min-h-[48px] ${isSidEnabled ? '' : 'opacity-60 grayscale'}`}>
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <span className="text-xs text-muted-foreground">Volume</span>
-                        <div className="relative">
-                          {isVolumeActive ? (
-                            <div
-                              className="pointer-events-none absolute -top-6 left-0 w-full"
-                              aria-hidden="true"
-                            >
-                              <div
-                                className="absolute -translate-x-1/2 rounded-md border border-border/70 bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm"
-                                style={{ left: `${volumePercent}%` }}
-                              >
-                                {volumeDisplayLabel}
-                              </div>
-                            </div>
-                          ) : null}
-                          <span
-                            className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60"
-                            aria-hidden="true"
-                          />
-                          <Slider
-                            value={[volumeSliderValue]}
-                            min={0}
-                            max={volumeMax}
-                            step={SID_SLIDER_STEP}
-                            disabled={!status.isConnected || volumePending || sliderDisabled}
-                            onPointerDown={() => setActiveSlider({ id: volumeSliderId, value: volumeSliderValue })}
-                            onPointerUp={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
-                            onPointerCancel={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
-                            onBlur={() => setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev))}
-                            onValueChange={(values) => {
-                              const rawValue = values[0] ?? volumeIndex;
-                              const snapped = clampSliderValue(applySoftDetent(rawValue, volumeCenterIndex), volumeMax);
-                              setActiveSlider({ id: volumeSliderId, value: snapped });
-                            }}
-                            onValueCommit={(values) => {
-                              const rawValue = values[0] ?? volumeIndex;
-                              const snapped = clampSliderValue(applySoftDetent(rawValue, volumeCenterIndex), volumeMax);
-                              const nextIndex = clampSliderValue(Math.round(snapped), volumeMax);
-                              const nextValue = volumeOptions[nextIndex] ?? volumeOptions[0];
-                              if (nextValue && normalizeOptionToken(nextValue) !== normalizeOptionToken(entry.volume)) {
-                                void updateConfigValue(
-                                  'Audio Mixer',
-                                  entry.volumeItem,
-                                  nextValue,
-                                  'HOME_SID_VOLUME',
-                                  `${entry.label} volume updated`,
-                                );
-                              }
-                              setActiveSlider((prev) => (prev?.id === volumeSliderId ? null : prev));
-                            }}
-                            aria-label={`${entry.label} volume slider`}
-                            data-testid={`home-sid-volume-${entry.key}`}
-                            className="h-12"
-                            thumbClassName="h-6 w-6"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <span className="text-xs text-muted-foreground">Pan</span>
-                        <div className="relative">
-                          {isPanActive ? (
-                            <div
-                              className="pointer-events-none absolute -top-6 left-0 w-full"
-                              aria-hidden="true"
-                            >
-                              <div
-                                className="absolute -translate-x-1/2 rounded-md border border-border/70 bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm"
-                                style={{ left: `${panPercent}%` }}
-                              >
-                                {panDisplayLabel}
-                              </div>
-                            </div>
-                          ) : null}
-                          <span
-                            className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/60"
-                            aria-hidden="true"
-                          />
-                          <Slider
-                            value={[panSliderValue]}
-                            min={0}
-                            max={panMax}
-                            step={SID_SLIDER_STEP}
-                            disabled={!status.isConnected || panPending || sliderDisabled}
-                            onPointerDown={() => setActiveSlider({ id: panSliderId, value: panSliderValue })}
-                            onPointerUp={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
-                            onPointerCancel={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
-                            onBlur={() => setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev))}
-                            onValueChange={(values) => {
-                              const rawValue = values[0] ?? panIndex;
-                              const snapped = clampSliderValue(applySoftDetent(rawValue, panCenterIndex), panMax);
-                              setActiveSlider({ id: panSliderId, value: snapped });
-                            }}
-                            onValueCommit={(values) => {
-                              const rawValue = values[0] ?? panIndex;
-                              const snapped = clampSliderValue(applySoftDetent(rawValue, panCenterIndex), panMax);
-                              const nextIndex = clampSliderValue(Math.round(snapped), panMax);
-                              const nextValue = panOptions[nextIndex] ?? panOptions[0];
-                              if (nextValue && normalizeOptionToken(nextValue) !== normalizeOptionToken(entry.pan)) {
-                                void updateConfigValue(
-                                  'Audio Mixer',
-                                  entry.panItem,
-                                  nextValue,
-                                  'HOME_SID_PAN',
-                                  `${entry.label} pan updated`,
-                                );
-                              }
-                              setActiveSlider((prev) => (prev?.id === panSliderId ? null : prev));
-                            }}
-                            aria-label={`${entry.label} pan slider`}
-                            data-testid={`home-sid-pan-${entry.key}`}
-                            className="h-12"
-                            thumbClassName="h-6 w-6"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <SectionHeader
+            title="SID"
+            resetAction={() => void handleSidReset()}
+            resetDisabled={!status.isConnected || machineTaskBusy}
+            resetTestId="home-sid-reset"
+          />
+          <div className="space-y-3">
+            {sidControlEntries.map((entry) => {
+              const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
+              const panKey = buildConfigKey('Audio Mixer', entry.panItem);
+              const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
+              const statusValue = sidStatusMap.get(entry.key);
+              const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
+              const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
+              const volumeIndex = resolveOptionIndex(volumeOptions, entry.volume);
+              const panIndex = resolveOptionIndex(panOptions, entry.pan);
+              const volumeCenterIndex = resolveVolumeCenterIndex(volumeOptions);
+              const panCenterIndex = resolvePanCenterIndex(panOptions);
+              const volumeMax = Math.max(volumeOptions.length - 1, 0);
+              const panMax = Math.max(panOptions.length - 1, 0);
+              const volumeSliderId = `sid-${entry.key}-volume`;
+              const panSliderId = `sid-${entry.key}-pan`;
+              const volumePending = Boolean(configWritePending[volumeKey]);
+              const panPending = Boolean(configWritePending[panKey]);
+              const isSidEnabled = statusValue !== false;
+              const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
+              const isVolumeActive = activeSlider?.id === volumeSliderId;
+              const isPanActive = activeSlider?.id === panSliderId;
+              const volumeSliderValue = clampSliderValue(isVolumeActive ? activeSlider?.value ?? volumeIndex : volumeIndex, volumeMax);
+              const panSliderValue = clampSliderValue(isPanActive ? activeSlider?.value ?? panIndex : panIndex, panMax);
+              const isUltiSid = entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
+
+              // Identity / Filter
+              const identityLabel = isUltiSid ? 'Filter' : 'SID';
+              const identityValue = entry.key === 'socket1'
+                ? sidDetectedSocket1
+                : entry.key === 'socket2'
+                  ? sidDetectedSocket2
+                  : entry.key === 'ultiSid1'
+                    ? ultiSid1ProfileValue
+                    : ultiSid2ProfileValue;
+              const identityOptions = isUltiSid
+                ? (entry.key === 'ultiSid1' ? ultiSid1ProfileSelectOptions : ultiSid2ProfileSelectOptions)
+                : undefined;
+              const identitySelectValue = isUltiSid
+                ? (entry.key === 'ultiSid1' ? ultiSid1ProfileSelectValue : ultiSid2ProfileSelectValue)
+                : undefined;
+              const identityPending = isUltiSid
+                ? Boolean(configWritePending[buildConfigKey('UltiSID Configuration', entry.key === 'ultiSid1' ? 'UltiSID 1 Filter Curve' : 'UltiSID 2 Filter Curve')])
+                : false;
+
+              // Address
+              const addressOptions = readItemOptions(sidAddressingCategory as Record<string, unknown> | undefined, 'SID Addressing', entry.addressItem).map(String);
+              const addressSelectValue = resolveSelectValue(String(entry.addressRaw ?? entry.address));
+              const addressPending = Boolean(configWritePending[addressKey]);
+
+              // Shaping Controls
+              const shapingControls = [];
+              if (isUltiSid) {
+                const ultiIndex = entry.key === 'ultiSid1' ? 1 : 2;
+                const resonanceItem = `UltiSID ${ultiIndex} Filter Resonance`;
+                const waveformItem = `UltiSID ${ultiIndex} Combined Waveforms`;
+                const digisItem = `UltiSID ${ultiIndex} Digis Level`;
+
+                shapingControls.push({
+                  label: 'Reson',
+                  value: String(resolveConfigValue(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', resonanceItem, '—')),
+                  options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', resonanceItem).map(String),
+                  onChange: (val: string) => void updateConfigValue('UltiSID Configuration', resonanceItem, resolveSelectValue(val), `HOME_ULTISID_RES_${ultiIndex}`, `UltiSID ${ultiIndex} resonance updated`),
+                  pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', resonanceItem)]),
+                });
+                shapingControls.push({
+                  label: 'Wave',
+                  value: String(resolveConfigValue(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', waveformItem, '—')),
+                  options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', waveformItem).map(String),
+                  onChange: (val: string) => void updateConfigValue('UltiSID Configuration', waveformItem, resolveSelectValue(val), `HOME_ULTISID_WAVE_${ultiIndex}`, `UltiSID ${ultiIndex} waveform updated`),
+                  pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', waveformItem)]),
+                });
+                shapingControls.push({
+                  label: 'Digis',
+                  value: String(resolveConfigValue(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', digisItem, '—')),
+                  options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', digisItem).map(String),
+                  onChange: (val: string) => void updateConfigValue('UltiSID Configuration', digisItem, resolveSelectValue(val), `HOME_ULTISID_DIGIS_${ultiIndex}`, `UltiSID ${ultiIndex} digis updated`),
+                  pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', digisItem)]),
+                });
+              } else {
+                const socketIndex = entry.key === 'socket1' ? 1 : 2;
+                const resistorItem = `SID Socket ${socketIndex} 1K Ohm Resistor`;
+                const capacitorItem = `SID Socket ${socketIndex} Capacitors`;
+
+                shapingControls.push({
+                  label: 'Resistor',
+                  value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', resistorItem, '—')),
+                  options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', resistorItem).map(String),
+                  onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', resistorItem, resolveSelectValue(val), `HOME_SID_RES_${socketIndex}`, `SID Socket ${socketIndex} resistor updated`),
+                  pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', resistorItem)]),
+                });
+                shapingControls.push({
+                  label: 'Cap.',
+                  value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem, '—')),
+                  options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem).map(String),
+                  onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', capacitorItem, resolveSelectValue(val), `HOME_SID_CAP_${socketIndex}`, `SID Socket ${socketIndex} capacitor updated`),
+                  pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', capacitorItem)]),
+                });
+              }
+
+              const socketItemName = entry.key === 'socket1' ? 'SID Socket 1' : entry.key === 'socket2' ? 'SID Socket 2' : null;
+              const toggleKey = socketItemName
+                ? buildConfigKey('SID Sockets Configuration', socketItemName)
+                : addressKey; // Fallback, though UltiSID doesn't have a toggle in config, we might need to handle it differently or disable the toggle.
+              const togglePending = Boolean(configWritePending[toggleKey]);
+
+              return (
+                <SidCard
+                  key={entry.key}
+                  name={entry.label}
+                  power={isSidEnabled}
+                  onPowerToggle={!isUltiSid ? () => void handleSidEnableToggle(entry, isSidEnabled) : undefined}
+                  powerPending={togglePending}
+                  identityLabel={identityLabel}
+                  identityValue={isUltiSid ? (identitySelectValue || identityValue) : identityValue}
+                  identityOptions={identityOptions}
+                  onIdentityChange={isUltiSid ? (val) => void updateConfigValue('UltiSID Configuration', entry.key === 'ultiSid1' ? 'UltiSID 1 Filter Curve' : 'UltiSID 2 Filter Curve', resolveSelectValue(val), 'HOME_ULTISID_PROFILE', `${entry.label} profile updated`) : undefined}
+                  identityPending={identityPending}
+                  isIdentityReadOnly={!isUltiSid}
+                  addressValue={addressSelectValue || baseAddressLabel}
+                  addressOptions={addressOptions}
+                  onAddressChange={(val) => void updateConfigValue('SID Addressing', entry.addressItem, resolveSelectValue(val), 'HOME_SID_ADDRESS', `${entry.label} address updated`)}
+                  addressPending={addressPending}
+                  shapingControls={shapingControls}
+                  volume={volumeSliderValue}
+                  onVolumeChange={(val) => {
+                    const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
+                    setActiveSlider({ id: volumeSliderId, value: snapped });
+                  }}
+                  volumePending={volumePending}
+                  pan={panSliderValue}
+                  onPanChange={(val) => {
+                    const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
+                    setActiveSlider({ id: panSliderId, value: snapped });
+                  }}
+                  panPending={panPending}
+                  isConnected={status.isConnected}
+                  testIdSuffix={entry.key}
+                />
+              );
+            })}
           </div>
         </motion.div>
 
@@ -2080,106 +1986,101 @@ export default function HomePage() {
           data-testid="home-stream-status"
           data-section-label="Streams"
         >
-          <div className="flex items-center gap-2 text-xs font-semibold text-primary" data-testid="stream-status-label">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            <span>Streams</span>
-          </div>
-          <div className="bg-card border border-border rounded-xl p-3">
-            <div className="space-y-2">
-              {streamControlEntries.map((entry) => {
-                const draft = streamDrafts[entry.key] ?? {
-                  enabled: entry.enabled,
-                  ip: entry.ip,
-                  port: entry.port,
-                  endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-                };
-                const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
-                return (
+          <SectionHeader title="Streams" />
+          <div className="space-y-2">
+            {streamControlEntries.map((entry) => {
+              const draft = streamDrafts[entry.key] ?? {
+                enabled: entry.enabled,
+                ip: entry.ip,
+                port: entry.port,
+                endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
+              };
+              const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]);
+              return (
+                <div
+                  key={entry.key}
+                  className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
+                  data-testid={`home-stream-row-${entry.key}`}
+                >
                   <div
-                    key={entry.key}
-                    className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
-                    data-testid={`home-stream-row-${entry.key}`}
+                    className="flex items-center justify-between gap-2 text-xs"
+                    aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port} ${draft.enabled ? 'ON' : 'OFF'}`}
                   >
-                    <div
-                      className="flex items-start justify-between gap-2 text-xs"
-                      aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port} ${draft.enabled ? 'ON' : 'OFF'}`}
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left flex items-center gap-2"
+                      onClick={() => handleStreamEditOpen(entry.key)}
+                      disabled={!status.isConnected || pending}
+                      data-testid={`home-stream-edit-toggle-${entry.key}`}
+                      aria-label={`Edit ${entry.label} stream target`}
                     >
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 text-left"
-                        onClick={() => handleStreamEditOpen(entry.key)}
-                        disabled={!status.isConnected || pending}
-                        data-testid={`home-stream-edit-toggle-${entry.key}`}
-                        aria-label={`Edit ${entry.label} stream target`}
-                      >
-                        <span className="font-semibold text-foreground">{entry.label.toUpperCase()}</span>
-                        <span className="ml-2 break-all font-mono text-foreground" data-testid={`home-stream-endpoint-display-${entry.key}`}>
-                          {buildStreamEndpointLabel(draft.ip, draft.port)}
-                        </span>
-                      </button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleStreamToggle(entry.key)}
-                        disabled={!status.isConnected || pending}
-                        data-testid={`home-stream-toggle-${entry.key}`}
-                        className={draft.enabled ? 'text-success' : undefined}
-                      >
-                        {draft.enabled ? 'ON' : 'OFF'}
-                      </Button>
-                    </div>
-                    {activeStreamEditorKey === entry.key && (
-                      <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
-                        <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
-                          <div className="space-y-1">
-                            <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">IP:PORT</label>
-                            <Input
-                              id={`home-stream-endpoint-${entry.key}`}
-                              value={draft.endpoint}
-                              onChange={(event) => handleStreamFieldChange(entry.key, event.target.value)}
-                              disabled={!status.isConnected || pending}
-                              data-testid={`home-stream-endpoint-${entry.key}`}
-                              aria-label={`${entry.label} stream endpoint`}
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleStreamEditCancel(entry.key)}
-                            disabled={!status.isConnected || pending}
-                            data-testid={`home-stream-cancel-${entry.key}`}
-                          >
-                            Cancel
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={() => {
-                              void (async () => {
-                                const updated = await handleStreamCommit(entry.key);
-                                if (updated) {
-                                  setActiveStreamEditorKey(null);
-                                }
-                              })();
-                            }}
-                            disabled={!status.isConnected || pending}
-                            data-testid={`home-stream-confirm-${entry.key}`}
-                          >
-                            OK
-                          </Button>
-                        </div>
-                        {streamEditorError && (
-                          <p className="mt-2 text-[11px] text-destructive" data-testid={`home-stream-error-${entry.key}`}>
-                            {streamEditorError}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      <span className="font-semibold text-foreground w-12">{entry.label.toUpperCase()}</span>
+                      <span className="font-semibold text-foreground truncate" data-testid={`home-stream-endpoint-display-${entry.key}`}>
+                        {buildStreamEndpointLabel(draft.ip, draft.port)}
+                      </span>
+                    </button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleStreamToggle(entry.key)}
+                      disabled={!status.isConnected || pending}
+                      data-testid={`home-stream-toggle-${entry.key}`}
+                      className={cn("h-6 px-2 text-xs", draft.enabled ? 'text-success' : undefined)}
+                    >
+                      {draft.enabled ? 'ON' : 'OFF'}
+                    </Button>
                   </div>
-                );
-              })}
-            </div>
+                  {activeStreamEditorKey === entry.key && (
+                    <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
+                      <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
+                        <div className="space-y-1">
+                          <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">IP:PORT</label>
+                          <Input
+                            id={`home-stream-endpoint-${entry.key}`}
+                            value={draft.endpoint}
+                            onChange={(event) => handleStreamFieldChange(entry.key, event.target.value)}
+                            disabled={!status.isConnected || pending}
+                            data-testid={`home-stream-endpoint-${entry.key}`}
+                            aria-label={`${entry.label} stream endpoint`}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleStreamEditCancel(entry.key)}
+                          disabled={!status.isConnected || pending}
+                          data-testid={`home-stream-cancel-${entry.key}`}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            void (async () => {
+                              const updated = await handleStreamCommit(entry.key);
+                              if (updated) {
+                                setActiveStreamEditorKey(null);
+                              }
+                            })();
+                          }}
+                          disabled={!status.isConnected || pending}
+                          data-testid={`home-stream-confirm-${entry.key}`}
+                        >
+                          OK
+                        </Button>
+                      </div>
+                      {streamEditorError && (
+                        <p className="mt-2 text-[11px] text-destructive" data-testid={`home-stream-error-${entry.key}`}>
+                          {streamEditorError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </motion.div>
 
@@ -2191,13 +2092,11 @@ export default function HomePage() {
           className="space-y-3"
           data-section-label="Config"
         >
-          <h3 className="category-header">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-            Config
+          <SectionHeader title="Config">
             {isApplying && (
               <span className="ml-2 text-xs text-muted-foreground">Applying…</span>
             )}
-          </h3>
+          </SectionHeader>
           <div className="grid grid-cols-4 gap-2">
             <QuickActionCard
               icon={Save}
@@ -2283,6 +2182,19 @@ export default function HomePage() {
           </motion.div>
         )}
       </main>
+
+      <ItemSelectionDialog
+        open={mountTarget !== null}
+        onOpenChange={(open) => !open && setMountTarget(null)}
+        title={mountTarget?.spec.class === 'SOFT_IEC_DRIVE' ? 'Mount Path' : 'Mount Disk'}
+        confirmLabel="Mount"
+        sourceGroups={mountTarget?.spec.class === 'SOFT_IEC_DRIVE'
+          ? sourceGroups.filter((g) => g.sources.some((s) => s.type === 'ultimate'))
+          : sourceGroups}
+        onConfirm={handleMountSelection}
+        onAddLocalSource={async () => null}
+        allowFolderSelection={mountTarget?.spec.class === 'SOFT_IEC_DRIVE'}
+      />
 
       <Dialog open={powerOffDialogOpen} onOpenChange={setPowerOffDialogOpen}>
         <DialogContent>
@@ -2411,6 +2323,6 @@ export default function HomePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

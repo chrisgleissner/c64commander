@@ -32,20 +32,15 @@ Track device status at a glance, control the machine and drives, and access quic
       <img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="480"/>
     </td>
     <td>
-      <img src="doc/img/app/home/sections/03-quick-config.png" alt="Home machine" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/home/sections/04-drives.png" alt="Home drives" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/home/sections/06-sid.png" alt="Home configuration" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
       <img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="480"/>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <img src="doc/img/app/home/sections/02-machine.png" alt="Home machine" width="480"/>
+    </td>
+    <td>
+      <img src="doc/img/app/home/sections/06-sid.png" alt="Home SID" width="480"/>
     </td>
   </tr>
 </table>

@@ -310,7 +310,7 @@ test.describe('HVSC Play page', () => {
                     percent: Math.round((bounded / baseline.songs.length) * 100),
                   });
                   if (progressSteps.length > 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 40));
+                    await new Promise((resolve) => setTimeout(resolve, 160));
                   }
                 }
               }
