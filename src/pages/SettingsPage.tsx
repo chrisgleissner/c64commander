@@ -1138,7 +1138,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-            The relaxed safety mode can impact hardware stability. Use only if you are comfortable with this.
+            Relaxed safety mode may affect hardware stability.
           </div>
 
           <div className="space-y-2">
