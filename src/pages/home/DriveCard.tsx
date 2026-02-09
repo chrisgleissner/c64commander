@@ -8,6 +8,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
 
 export interface DriveCardProps {
     name: string;
@@ -79,7 +80,7 @@ export function DriveCard({
                     size="sm"
                     onClick={onToggle}
                     disabled={!isConnected || togglePending}
-                    className={cn("h-6 px-2 text-xs", enabled ? 'text-success' : undefined)}
+                    className={cn("h-6 px-2 text-xs", getOnOffButtonClass(enabled))}
                     data-testid={`home-drive-toggle-${testIdSuffix}`}
                 >
                     {enabled ? 'ON' : 'OFF'}

@@ -9,6 +9,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
 
 export interface SidCardProps {
     name: string;
@@ -107,7 +108,7 @@ export function SidCard({
                         size="sm"
                         onClick={onPowerToggle}
                         disabled={!isConnected || powerPending}
-                        className={cn("h-6 px-2 text-xs", power ? 'text-success' : undefined)}
+                        className={cn("h-6 px-2 text-xs", getOnOffButtonClass(power))}
                         data-testid={`home-sid-toggle-${testIdSuffix}`}
                     >
                         {power ? 'ON' : 'OFF'}
@@ -117,7 +118,7 @@ export function SidCard({
                         variant="outline"
                         size="sm"
                         disabled={true}
-                        className={cn("h-6 px-2 text-xs", power ? 'text-success' : undefined)}
+                        className={cn("h-6 px-2 text-xs", getOnOffButtonClass(power))}
                         data-testid={`home-sid-toggle-${testIdSuffix}`}
                     >
                         {power ? 'ON' : 'OFF'}

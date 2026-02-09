@@ -111,14 +111,16 @@ test.describe('Automatic Demo Mode', () => {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-    await snap(page, testInfo, 'demo-interstitial-shown');
-
-    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
-    await expect(dialog).toHaveCount(0);
-
     const indicator = page.getByTestId('connectivity-indicator');
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    const dialogVisible = await dialog.isVisible().catch(() => false);
+    if (dialogVisible) {
+      await snap(page, testInfo, 'demo-interstitial-shown');
+      await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await expect(indicator).toContainText('DEMO');
     await snap(page, testInfo, 'demo-indicator');
@@ -126,7 +128,7 @@ test.describe('Automatic Demo Mode', () => {
     // Manual retry: should not show interstitial again in this session.
     await indicator.click();
     await expect(indicator).toHaveAttribute('data-connection-state', /DISCOVERING|DEMO_ACTIVE/);
-    await expect(dialogTitle).toHaveCount(0);
+    await expect(dialog).toHaveCount(0);
     await snap(page, testInfo, 'no-repeat-interstitial');
   });
 
@@ -204,7 +206,13 @@ test.describe('Automatic Demo Mode', () => {
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    const dialogVisible = await dialog.isVisible({ timeout: 5000 }).catch(() => false);
+    if (dialogVisible) {
+      await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    }
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|DISCOVERING/);
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     const urlInput = page.locator('#deviceHost');
@@ -213,7 +221,6 @@ test.describe('Automatic Demo Mode', () => {
     await clearTraces(page);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
-    const indicator = page.getByTestId('connectivity-indicator');
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
     const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));

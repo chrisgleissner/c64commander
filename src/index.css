@@ -158,9 +158,25 @@
   }
 }
 
+@keyframes focus-flash {
+  0% {
+    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsl(var(--background));
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent;
+  }
+}
+
 .progress-indeterminate {
   width: 40%;
   animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+button:focus-visible,
+.focus-flash:focus-visible {
+  animation: focus-flash 160ms ease-out;
+  outline: none;
+  box-shadow: none;
 }
 
 @layer base {

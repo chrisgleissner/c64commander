@@ -54,6 +54,7 @@ import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
 import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
+import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
 import {
   buildStreamConfigValue,
   buildStreamEndpointLabel,
@@ -1946,7 +1947,7 @@ export default function HomePage() {
                   onClick={() => void handleEnabledToggle('Printer', PRINTER_CONTROL_SPEC, printerEnabled)}
                   disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)])}
                   data-testid="home-printer-toggle"
-                  className={cn("h-6 px-2 text-xs", printerEnabled ? 'text-success' : undefined)}
+                  className={cn("h-6 px-2 text-xs", getOnOffButtonClass(printerEnabled))}
                 >
                   {printerEnabled ? 'ON' : 'OFF'}
                 </Button>
@@ -2137,7 +2138,7 @@ export default function HomePage() {
                   key={entry.key}
                   name={entry.label}
                   power={isSidEnabled}
-                  onPowerToggle={!isUltiSid ? () => void handleSidEnableToggle(entry, isSidEnabled) : undefined}
+                  onPowerToggle={() => void handleSidEnableToggle(entry, isSidEnabled)}
                   powerPending={togglePending}
                   identityLabel={identityLabel}
                   identityValue={isUltiSid ? (identitySelectValue || identityValue) : identityValue}

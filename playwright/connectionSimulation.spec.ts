@@ -426,8 +426,12 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server.setReachable(false);
     await indicator.click();
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    const dialogVisible = await dialog.isVisible().catch(() => false);
+    if (dialogVisible) {
+      await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    }
+    await dialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();

@@ -20,6 +20,7 @@ import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { cn } from '@/lib/utils';
 import { mountDiskToDrive } from '@/lib/disks/diskMount';
+import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
 import { createDiskEntry, getDiskFolderPath, getLeafFolderName, isDiskImagePath, normalizeDiskPath, type DiskEntry } from '@/lib/disks/diskTypes';
 import { assignDiskGroupsByPrefix } from '@/lib/disks/diskGrouping';
 import { pickDiskGroupColor } from '@/lib/disks/diskGroupColors';
@@ -1205,9 +1206,9 @@ export const HomeDiskManager = () => {
                 <span className="truncate text-sm font-semibold">{driveLabel}</span>
                 <div className="flex shrink-0 items-center gap-1.5">
                   <Button
-                    variant={powerEnabled ? 'secondary' : 'outline'}
+                    variant="outline"
                     size="sm"
-                    className={ROW1_CONTROL_CLASS}
+                    className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(powerEnabled))}
                     onClick={() => void handleToggleDrivePower(key, driveLabel, powerTarget, key)}
                     disabled={!status.isConnected || !hasPowerState || powerPending || configPending}
                     data-testid={`drive-status-toggle-${key}`}
@@ -1364,9 +1365,9 @@ export const HomeDiskManager = () => {
               <span className="truncate text-sm font-semibold">Soft IEC Drive</span>
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button
-                  variant={softIecPowerEnabled ? 'secondary' : 'outline'}
+                  variant="outline"
                   size="sm"
-                  className={ROW1_CONTROL_CLASS}
+                  className={cn(ROW1_CONTROL_CLASS, getOnOffButtonClass(softIecPowerEnabled))}
                   onClick={() =>
                     void handleSoftIecConfigUpdate(
                       'IEC Drive',
