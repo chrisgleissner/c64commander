@@ -278,6 +278,7 @@ export const ItemSelectionDialog = ({
                       setSelectedSourceId(c64UltimateSource.id);
                     }}
                     disabled={!c64UltimateSource?.isAvailable}
+                    id="import-option-c64u"
                     data-testid="import-option-c64u"
                     aria-label="Add file / folder from C64 Ultimate"
                   >
@@ -293,6 +294,7 @@ export const ItemSelectionDialog = ({
                     onClick={() => void handleAddLocalSource()}
                     disabled={pendingLocalSource}
                     aria-busy={pendingLocalSource}
+                    id="import-option-local"
                     data-testid="import-option-local"
                     aria-label="Add file / folder from this device"
                   >
