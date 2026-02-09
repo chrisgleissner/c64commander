@@ -1740,6 +1740,29 @@ export default function PlayFilesPage() {
     }
   }, [buildPlaylistItem, reportUserError, startPlaylist]);
 
+  const handleAddHvscToPlaylist = useCallback((entry: PlayableEntry) => {
+    try {
+      const item = buildPlaylistItem(entry);
+      if (!item) throw new Error('Unsupported file format.');
+      setPlaylist((prev) => [...prev, item]);
+      toast({
+        title: 'Added to playlist',
+        description: entry.name,
+      });
+    } catch (error) {
+      reportUserError({
+        operation: 'PLAYLIST_ADD',
+        title: 'Failed to add item',
+        description: (error as Error).message,
+        error,
+        context: {
+          source: entry.source,
+          path: entry.path,
+        },
+      });
+    }
+  }, [buildPlaylistItem, reportUserError]);
+
 
   const buildHvscFile = useCallback((song: { id: number; virtualPath: string; fileName: string }) => {
     return buildHvscLocalPlayFile(song.virtualPath, song.fileName) as LocalPlayFile;
@@ -2069,6 +2092,7 @@ export default function PlayFilesPage() {
               onSelectFolder={(folder) => void loadHvscFolder(folder)}
               onPlayFolder={(folder) => void handlePlayHvscFolder(folder)}
               onPlayEntry={(entry) => void handlePlayEntry(entry)}
+              onAddToPlaylist={(entry) => void handleAddHvscToPlaylist(entry)}
               buildHvscFile={buildHvscFile}
             />
           </div>
