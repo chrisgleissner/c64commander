@@ -8,17 +8,17 @@ import { addErrorLog } from '@/lib/logging';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/native/ftpClient', () => ({
-  FtpClient: {
-    listDirectory: vi.fn(),
-    readFile: vi.fn(),
-  },
+    FtpClient: {
+        listDirectory: vi.fn(),
+        readFile: vi.fn(),
+    },
 }));
 vi.mock('@/lib/deviceInteraction/deviceInteractionManager', () => ({
-  withFtpInteraction: vi.fn(async (_ctx, fn) => fn()),
+    withFtpInteraction: vi.fn(async (_ctx, fn) => fn()),
 }));
 vi.mock('@/lib/tracing/actionTrace', () => ({
-  getActiveAction: vi.fn(),
-  runWithImplicitAction: vi.fn(async (_name, fn) => fn({ id: 'implicit-action' })),
+    getActiveAction: vi.fn(),
+    runWithImplicitAction: vi.fn(async (_name, fn) => fn({ id: 'implicit-action' })),
 }));
 vi.mock('@/lib/tracing/traceSession');
 vi.mock('@/lib/diagnostics/diagnosticsActivity');
@@ -41,7 +41,7 @@ describe('ftpClient', () => {
 
             expect(result.path).toBe('/some/path');
             expect(result.entries).toEqual(mockEntries);
-            
+
             expect(incrementFtpInFlight).toHaveBeenCalled();
             expect(decrementFtpInFlight).toHaveBeenCalled();
             expect(recordFtpOperation).toHaveBeenCalledWith(
@@ -51,10 +51,10 @@ describe('ftpClient', () => {
         });
 
         it('handles list failure', async () => {
-             const error = new Error('FTP Error');
-             vi.mocked(FtpClient.listDirectory).mockRejectedValue(error);
+            const error = new Error('FTP Error');
+            vi.mocked(FtpClient.listDirectory).mockRejectedValue(error);
 
-             await expect(listFtpDirectory({ ...mockListOptions, path: '/' }))
+            await expect(listFtpDirectory({ ...mockListOptions, path: '/' }))
                 .rejects.toThrow('FTP Error');
 
             expect(addErrorLog).toHaveBeenCalled();
@@ -81,26 +81,26 @@ describe('ftpClient', () => {
         const mockReadOptions = { ...mockListOptions, path: '/test.txt' };
 
         it('reads file successfully', async () => {
-             const mockResponse = { data: 'content', sizeBytes: 7 };
-             vi.mocked(FtpClient.readFile).mockResolvedValue(mockResponse);
+            const mockResponse = { data: 'content', sizeBytes: 7 };
+            vi.mocked(FtpClient.readFile).mockResolvedValue(mockResponse);
 
-             const result = await readFtpFile(mockReadOptions);
-             
-             expect(result).toBe(mockResponse);
-             expect(incrementFtpInFlight).toHaveBeenCalled();
-             expect(recordFtpOperation).toHaveBeenCalledWith(
-                 expect.anything(),
-                 expect.objectContaining({ operation: 'read', result: 'success' })
-             );
+            const result = await readFtpFile(mockReadOptions);
+
+            expect(result).toBe(mockResponse);
+            expect(incrementFtpInFlight).toHaveBeenCalled();
+            expect(recordFtpOperation).toHaveBeenCalledWith(
+                expect.anything(),
+                expect.objectContaining({ operation: 'read', result: 'success' })
+            );
         });
 
         it('handles read failure', async () => {
-             vi.mocked(FtpClient.readFile).mockRejectedValue(new Error('Read failed'));
+            vi.mocked(FtpClient.readFile).mockRejectedValue(new Error('Read failed'));
 
-             await expect(readFtpFile(mockReadOptions)).rejects.toThrow('Read failed');
-             
-             expect(addErrorLog).toHaveBeenCalled();
-             expect(recordTraceError).toHaveBeenCalled();
+            await expect(readFtpFile(mockReadOptions)).rejects.toThrow('Read failed');
+
+            expect(addErrorLog).toHaveBeenCalled();
+            expect(recordTraceError).toHaveBeenCalled();
         });
     });
 });
