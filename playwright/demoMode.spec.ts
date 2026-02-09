@@ -113,13 +113,14 @@ test.describe('Automatic Demo Mode', () => {
 
     const indicator = page.getByTestId('connectivity-indicator');
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
-    const dialogVisible = await dialog.isVisible().catch(() => false);
-    if (dialogVisible) {
-      await snap(page, testInfo, 'demo-interstitial-shown');
-      await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
-      await expect(dialog).toHaveCount(0);
-    }
+
+    // Dialog must appear in a fresh session
+    await expect(dialog).toBeVisible({ timeout: 10000 });
+    await snap(page, testInfo, 'demo-interstitial-shown');
+
+    // Dismiss it
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(dialog).toBeHidden();
 
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await expect(indicator).toContainText('DEMO');
@@ -128,7 +129,7 @@ test.describe('Automatic Demo Mode', () => {
     // Manual retry: should not show interstitial again in this session.
     await indicator.click();
     await expect(indicator).toHaveAttribute('data-connection-state', /DISCOVERING|DEMO_ACTIVE/);
-    await expect(dialog).toHaveCount(0);
+    await expect(dialog).toBeHidden();
     await snap(page, testInfo, 'no-repeat-interstitial');
   });
 
@@ -167,7 +168,7 @@ test.describe('Automatic Demo Mode', () => {
       const unreachableBaseUrl = 'http://127.0.0.1:1';
       (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = unreachableBaseUrl;
       (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [unreachableBaseUrl];
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.removeItem('c64u_password');
@@ -178,9 +179,9 @@ test.describe('Automatic Demo Mode', () => {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
     await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
-    await expect(dialog).toHaveCount(0);
+    await expect(dialog).toBeHidden();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     const urlInput = page.locator('#deviceHost');

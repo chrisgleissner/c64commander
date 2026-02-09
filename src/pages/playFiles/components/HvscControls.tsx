@@ -307,6 +307,9 @@ export const HvscControls = ({
                 <div className="min-w-0">
                   <p className="text-sm font-medium break-words whitespace-normal">{song.fileName}</p>
                   <p className="text-xs text-muted-foreground break-words whitespace-normal">{song.virtualPath}</p>
+                  {song.durationSeconds ? (
+                    <p className="text-xs text-muted-foreground">{formatHvscDuration(song.durationSeconds * 1000)}</p>
+                  ) : null}
                 </div>
                 <Button
                   variant="default"

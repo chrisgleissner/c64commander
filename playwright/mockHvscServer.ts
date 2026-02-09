@@ -44,7 +44,7 @@ export function createMockHvscServer(): Promise<MockHvscServer> {
         return `${path} ${formatDuration(song.durationSeconds)}`;
       })
       .join('\n');
-    files['HVSC/Songlengths.txt'] = strToU8(songlengths);
+    files['C64Music/DOCUMENTS/Songlengths.txt'] = strToU8(songlengths);
     return Buffer.from(zipSync(files));
   };
   const baselineArchive = buildArchive(baseline);
