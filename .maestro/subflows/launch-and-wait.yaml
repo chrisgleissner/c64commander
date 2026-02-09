@@ -17,11 +17,23 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      - tapOn:
+          text: "Allow"
+          optional: true
+      - tapOn:
+          text: "Allow access"
+          optional: true
+      - tapOn:
+          text: "Allow all the time"
+          optional: true
+      - tapOn:
+          text: "Allow only while using the app"
+          optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
             id: "tab-home"
-          timeout: ${TIMEOUT}
+          timeout: ${LONG_TIMEOUT}
 - tapOn:
     id: "tab-home"
 - extendedWaitUntil:

@@ -13,3 +13,6 @@ excludeTags:
   - slow
   - edge
   - hvsc
+platform:
+  android:
+    disableAnimations: true

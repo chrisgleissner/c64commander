@@ -30,6 +30,16 @@ declare global {
 export const registerTraceBridge = () => {
   if (typeof window === 'undefined') return;
 
+  if (window.__c64uTracing) {
+    if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1' && !window.__c64uTracing.seedTraces) {
+      window.__c64uTracing.seedTraces = (events) => {
+        resetActionTrace();
+        replaceTraceEvents(events);
+      };
+    }
+    return;
+  }
+
   // Restore any traces from previous navigation
   restoreTracesFromSession();
 

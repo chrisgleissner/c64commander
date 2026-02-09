@@ -32,30 +32,29 @@ env:
 - tapOn:
     text: "Allow all the time"
     optional: true
-
 - extendedWaitUntil:
     visible:
       id: com.google.android.documentsui:id/toolbar
     timeout: ${SHORT_TIMEOUT}
-
-- swipe:
-    direction: RIGHT
-    duration: 800
+- waitForAnimationToEnd
+- takeScreenshot: picker-roots
 - tapOn:
-    text: "Browse"
+    id: com.google.android.documentsui:id/sub_menu
     optional: true
 - tapOn:
-    id: com.google.android.documentsui:id/roots_toggle
+    id: com.google.android.documentsui:id/header_container
     optional: true
 - tapOn:
-    text: "Show roots"
+    text: "Files in media"
+    optional: true
+- waitForAnimationToEnd
+- tapOn:
+    text: "Download"
     optional: true
 - tapOn:
     text: "Downloads"
     optional: true
-- tapOn:
-    text: "Download"
-    optional: true
+- waitForAnimationToEnd
 - scrollUntilVisible:
     element: "C64Music"
     direction: DOWN

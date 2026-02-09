@@ -43,6 +43,39 @@ require_cmd() {
   fi
 }
 
+cleanup_maestro_processes() {
+  local port="7001"
+  local deadline
+  local pids
+  pids=$(ps -eo pid=,cmd= | awk '/\.maestro\// {print $1}')
+  if [[ -n "$pids" ]]; then
+    log "Stopping stale Maestro process(es): $pids"
+    for pid in $pids; do
+      kill "$pid" >/dev/null 2>&1 || true
+    done
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    pids=$(ss -ltnp 2>/dev/null | awk -v port=":${port}" '$4 ~ port {print $NF}' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u)
+    if [[ -n "$pids" ]]; then
+      log "Stopping process(es) holding port ${port}: $pids"
+      for pid in $pids; do
+        kill "$pid" >/dev/null 2>&1 || true
+      done
+    fi
+  fi
+  deadline=$((SECONDS + 5))
+  if command -v ss >/dev/null 2>&1; then
+    while [[ $SECONDS -lt $deadline ]]; do
+      if ! ss -ltnp 2>/dev/null | grep -q ":${port} "; then
+        break
+      fi
+      sleep 1
+    done
+  else
+    sleep 1
+  fi
+}
+
 wait_for_boot() {
   local serial="$1"
   local deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECS ))
@@ -207,6 +240,13 @@ require_cmd adb
 require_cmd maestro
 require_cmd node
 
+cleanup_maestro_processes
+
+if [[ -z "${JAVA_HOME:-}" && -d "/usr/lib/jvm/java-17-openjdk-amd64" ]]; then
+  export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+
 if ! resolve_apk_path; then
   echo "Unable to locate APK at $APK_PATH" >&2
   exit 1
@@ -215,6 +255,8 @@ fi
 mkdir -p "$OUTPUT_DIR" "$DEBUG_DIR"
 
 pick_device
+
+adb -s "$DEVICE_ID" forward --remove-all >/dev/null 2>&1 || true
 
 if ! wait_for_boot "$DEVICE_ID"; then
   echo "Device $DEVICE_ID did not finish booting within ${BOOT_TIMEOUT_SECS}s" >&2

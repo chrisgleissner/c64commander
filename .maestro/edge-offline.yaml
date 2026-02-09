@@ -3,7 +3,7 @@ tags:
   - edge
   - slow
   - device
-    - real-network
+  - real-network
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
   TIMEOUT: ${TIMEOUT || "30000"}

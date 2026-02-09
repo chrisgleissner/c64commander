@@ -3,6 +3,7 @@ import App from "./App.tsx";
 import { installAsyncContextPropagation } from "./lib/tracing/traceActionContextStore";
 import { registerFetchTrace } from "./lib/tracing/fetchTrace";
 import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
+import { registerTraceBridge } from "./lib/tracing/traceBridge";
 import { primeStoredPassword } from "./lib/secureStorage";
 import "./index.css";
 
@@ -17,6 +18,7 @@ const loadFonts = () => {
 loadFonts();
 // Install async context propagation first - must be before any tracing setup
 installAsyncContextPropagation();
+registerTraceBridge();
 registerFetchTrace();
 registerUserInteractionCapture();
 void primeStoredPassword();
