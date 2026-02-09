@@ -105,7 +105,7 @@ describe('ramDumpStorage', () => {
   it('throws when folder selection returns invalid result', async () => {
     folderPickerMock.pickDirectory.mockResolvedValue(null);
     await expect(selectRamDumpFolder()).rejects.toThrow('permission could not be persisted');
-    
+
     folderPickerMock.pickDirectory.mockResolvedValue({ treeUri: 'uri', permissionPersisted: false });
     await expect(selectRamDumpFolder()).rejects.toThrow('permission could not be persisted');
   });
@@ -133,7 +133,7 @@ describe('ramDumpStorage', () => {
 
   it('logs and throws write errors', async () => {
     folderPickerMock.writeFileToTree.mockRejectedValue(new Error('Write failed'));
-    
+
     await expect(writeRamDumpToFolder(
       { treeUri: 'content://folder', rootName: 'RAM', selectedAt: '' },
       'file.bin',
@@ -184,7 +184,7 @@ describe('ramDumpStorage', () => {
       const call = () => pickRamDumpFile();
       folderPickerMock.pickFile.mockResolvedValue(null);
       await expect(call()).rejects.toThrow('No RAM dump file selected');
-      
+
       folderPickerMock.pickFile.mockResolvedValue({ uri: 'ue', permissionPersisted: false });
       await expect(call()).rejects.toThrow('permission was not granted');
     });
@@ -196,22 +196,22 @@ describe('ramDumpStorage', () => {
         name: 'test.txt'
       });
       folderPickerMock.readFile.mockResolvedValue({ data: 'base64' });
-      
+
       await expect(pickRamDumpFile()).rejects.toThrow('Select a .bin');
     });
 
     it('picks file on web (fallback)', async () => {
       platformMock.isNativePlatform.mockReturnValue(false);
-      
+
       const file = new File(['123'], 'test.bin', { type: 'application/octet-stream' });
       file.arrayBuffer = vi.fn().mockResolvedValue(new Uint8Array([49, 50, 51]).buffer);
       // Stub input element
       const inputMock = {
         click: vi.fn(),
         addEventListener: vi.fn((event, cb) => {
-           // Simulate file selection
-           Object.defineProperty(inputMock, 'files', { value: [file] });
-           cb();
+          // Simulate file selection
+          Object.defineProperty(inputMock, 'files', { value: [file] });
+          cb();
         }),
         files: []
       } as any;
@@ -228,8 +228,8 @@ describe('ramDumpStorage', () => {
       const inputMock = {
         click: vi.fn(),
         addEventListener: vi.fn((event, cb) => {
-           Object.defineProperty(inputMock, 'files', { value: [file] });
-           cb();
+          Object.defineProperty(inputMock, 'files', { value: [file] });
+          cb();
         }),
         files: []
       } as any;

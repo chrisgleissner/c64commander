@@ -60,7 +60,7 @@ describe('hvscService', () => {
     const stubWindow = (overrides: Record<string, any> = {}) => {
         vi.stubGlobal('window', {
             dispatchEvent: vi.fn(),
-            CustomEvent: class CustomEvent { constructor(public type: string) {} },
+            CustomEvent: class CustomEvent { constructor(public type: string) { } },
             ...overrides
         });
     };
@@ -83,10 +83,10 @@ describe('hvscService', () => {
         });
 
         it('returns true if Filesystem plugin available', () => {
-             stubWindow({});
-             vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
-             vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-             expect(hvscService.isHvscBridgeAvailable()).toBe(true);
+            stubWindow({});
+            vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+            vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+            expect(hvscService.isHvscBridgeAvailable()).toBe(true);
         });
 
         it('returns false otherwise', () => {
@@ -98,21 +98,21 @@ describe('hvscService', () => {
     });
 
     describe('getHvscStatus', () => {
-         it('uses mock bridge if available', async () => {
-             const mockStatus = { version: '1.0' };
-             stubWindow({ __hvscMock__: { getHvscStatus: vi.fn().mockReturnValue(mockStatus) } });
-             const result = await hvscService.getHvscStatus();
-             expect(result).toBe(mockStatus);
-         });
+        it('uses mock bridge if available', async () => {
+            const mockStatus = { version: '1.0' };
+            stubWindow({ __hvscMock__: { getHvscStatus: vi.fn().mockReturnValue(mockStatus) } });
+            const result = await hvscService.getHvscStatus();
+            expect(result).toBe(mockStatus);
+        });
 
-         it('uses runtime if no mock bridge', async () => {
-             stubWindow({});
-             const runtimeStatus = { version: '2.0' } as any;
-             vi.mocked(runtime.getHvscStatus).mockResolvedValue(runtimeStatus);
-             const result = await hvscService.getHvscStatus();
-             expect(result).toBe(runtimeStatus);
-             expect(runtime.getHvscStatus).toHaveBeenCalled();
-         });
+        it('uses runtime if no mock bridge', async () => {
+            stubWindow({});
+            const runtimeStatus = { version: '2.0' } as any;
+            vi.mocked(runtime.getHvscStatus).mockResolvedValue(runtimeStatus);
+            const result = await hvscService.getHvscStatus();
+            expect(result).toBe(runtimeStatus);
+            expect(runtime.getHvscStatus).toHaveBeenCalled();
+        });
     });
 
     describe('getHvscFolderListing', () => {
@@ -120,9 +120,9 @@ describe('hvscService', () => {
             mocks.mockIndex.getAll.mockReturnValue([
                 { path: '/HVSC/foo.sid', name: 'foo.sid' }
             ]);
-            
+
             const result = await hvscService.getHvscFolderListing('/HVSC');
-            
+
             expect(result.songs).toHaveLength(1);
             expect(result.songs[0].fileName).toBe('foo.sid');
             expect(mocks.mockIndex.load).toHaveBeenCalled();
@@ -132,24 +132,24 @@ describe('hvscService', () => {
 
         it('falls back to mock bridge if index empty', async () => {
             mocks.mockIndex.getAll.mockReturnValue([]);
-            stubWindow({ 
-                __hvscMock__: { 
-                    getHvscFolderListing: vi.fn().mockReturnValue({ mock: true }) 
-                } 
+            stubWindow({
+                __hvscMock__: {
+                    getHvscFolderListing: vi.fn().mockReturnValue({ mock: true })
+                }
             });
-            
+
             const result = await hvscService.getHvscFolderListing('/path');
             expect(result).toEqual({ mock: true });
         });
 
         it('falls back to runtime if index empty and no mock bridge', async () => {
             mocks.mockIndex.getAll.mockReturnValue([]);
-             stubWindow({});
-             vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-             vi.mocked(runtime.getHvscFolderListing).mockResolvedValue({ runtime: true } as any);
+            stubWindow({});
+            vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+            vi.mocked(runtime.getHvscFolderListing).mockResolvedValue({ runtime: true } as any);
 
-             const result = await hvscService.getHvscFolderListing('/path');
-             expect(result).toEqual({ runtime: true });
+            const result = await hvscService.getHvscFolderListing('/path');
+            expect(result).toEqual({ runtime: true });
         });
     });
 

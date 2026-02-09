@@ -160,7 +160,7 @@ describe('ramOperations', () => {
     expect(image.length).toBe(FULL_RAM_SIZE_BYTES);
     expect(api.readMemory).toHaveBeenCalled();
   });
-  
+
   it('aborts dump if C64 is wedged', async () => {
     livenessMock.checkC64Liveness.mockResolvedValue({ decision: 'wedged' });
     const api = buildApi();
@@ -178,10 +178,10 @@ describe('ramOperations', () => {
     const api = buildApi();
     const error = new Error('Persistent failure');
     api.readMemory.mockRejectedValue(error);
-    
+
     // Override delay to speed up test? Not easy without fake timers or mock.
     // However, with only 2 retries and 120ms wait, it's 240ms. Acceptable.
-    
+
     await expect(dumpFullRamImage(api as any)).rejects.toThrow(/Save RAM failed: Read RAM chunk at \$0000 failed after 2 attempt/);
     expect(loggingMock.addErrorLog).toHaveBeenCalledTimes(1); // 1 retry recorded for 2 attempts
   });
