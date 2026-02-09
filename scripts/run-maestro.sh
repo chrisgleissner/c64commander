@@ -139,9 +139,35 @@ ensure_hvsc_library() {
   local serial="$1"
   local base="/sdcard/Download/C64Music"
   local track="$base/DEMOS/0-9/35_Years.sid"
-  if ! adb -s "$serial" shell "mkdir -p '$base/DEMOS/0-9' && if [ ! -f '$track' ]; then echo 'SIDDATA-35' > '$track'; fi" >/dev/null 2>&1; then
-    log "Failed to prepare C64Music test data"
+  local root_track="$base/35_Years.sid"
+  local fixture="$ROOT_DIR/android/app/src/test/fixtures/hvsc/baseline/C64Music/DEMOS/0-9/35_Years.sid"
+  log "Resetting C64Music test data at $base"
+  if ! adb -s "$serial" shell "rm -rf '$base'" >/dev/null 2>&1; then
+    log "Failed to remove C64Music test directory"
     return 1
+  fi
+  if ! adb -s "$serial" shell "mkdir -p '$base/DEMOS/0-9'" >/dev/null 2>&1; then
+    log "Failed to create C64Music test directory"
+    return 1
+  fi
+  if [[ -f "$fixture" ]]; then
+    if ! adb -s "$serial" push "$fixture" "$track" >/dev/null 2>&1; then
+      log "Failed to push HVSC fixture to device"
+      return 1
+    fi
+    if ! adb -s "$serial" push "$fixture" "$root_track" >/dev/null 2>&1; then
+      log "Failed to push HVSC fixture to root"
+      return 1
+    fi
+  else
+    if ! adb -s "$serial" shell "echo 'SIDDATA-35' > '$track'" >/dev/null 2>&1; then
+      log "Failed to prepare C64Music test data"
+      return 1
+    fi
+    if ! adb -s "$serial" shell "echo 'SIDDATA-35' > '$root_track'" >/dev/null 2>&1; then
+      log "Failed to prepare root C64Music test data"
+      return 1
+    fi
   fi
 }
 
@@ -242,9 +268,12 @@ require_cmd node
 
 cleanup_maestro_processes
 
-if [[ -z "${JAVA_HOME:-}" && -d "/usr/lib/jvm/java-17-openjdk-amd64" ]]; then
-  export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-  export PATH="$JAVA_HOME/bin:$PATH"
+if [[ -d "/usr/lib/jvm/java-17-openjdk-amd64" ]]; then
+  if [[ "${JAVA_HOME:-}" != "/usr/lib/jvm/java-17-openjdk-amd64" ]]; then
+    log "Using Java 17 for Maestro (JAVA_HOME override)"
+    export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+    export PATH="$JAVA_HOME/bin:$PATH"
+  fi
 fi
 
 if ! resolve_apk_path; then
@@ -265,14 +294,22 @@ fi
 
 install_apk
 
-adb -s "$DEVICE_ID" shell am force-stop "$APP_ID" >/dev/null 2>&1 || true
-adb -s "$DEVICE_ID" shell pm clear "$APP_ID" >/dev/null 2>&1 || true
+adb -s "$DEVICE_ID" shell "am force-stop '$APP_ID' >/dev/null 2>&1; \
+  pm clear '$APP_ID' >/dev/null 2>&1; \
+  pm grant '$APP_ID' android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
+  pm grant '$APP_ID' android.permission.WRITE_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
+  pm grant '$APP_ID' android.permission.READ_MEDIA_AUDIO >/dev/null 2>&1 || true; \
+  pm grant '$APP_ID' android.permission.READ_MEDIA_IMAGES >/dev/null 2>&1 || true; \
+  pm grant '$APP_ID' android.permission.READ_MEDIA_VIDEO >/dev/null 2>&1 || true; \
+  pm grant '$APP_ID' android.permission.MANAGE_EXTERNAL_STORAGE >/dev/null 2>&1 || true; \
+  appops set '$APP_ID' MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1 || true" || true
 
 write_smoke_config
 
 ensure_hvsc_library "$DEVICE_ID"
 
 MAESTRO_ARGS=("$ROOT_DIR/.maestro" --udid "$DEVICE_ID" --format JUNIT --output "$REPORT_PATH" --test-output-dir "$OUTPUT_DIR" --debug-output "$DEBUG_DIR")
+MAESTRO_ARGS+=(-e LONG_TIMEOUT=20000 -e TIMEOUT=15000 -e SHORT_TIMEOUT=5000)
 
 TEMP_CONFIG=""
 TAG_INCLUDE=""

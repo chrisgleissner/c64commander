@@ -199,3 +199,7 @@ export const resolveHvscSonglength = async (query: SongLengthResolveQuery): Prom
   }
   return resolveHvscSonglengthDuration(query);
 };
+
+export const __test__ = {
+  buildFolderListingFromIndex,
+};

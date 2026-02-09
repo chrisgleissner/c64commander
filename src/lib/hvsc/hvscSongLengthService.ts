@@ -157,3 +157,8 @@ export const resetHvscSonglengths = (reason = 'manual-reset') => {
   hasAttemptedColdStartLoad = false;
   facade.reset(reason);
 };
+
+export const __test__ = {
+  decodeBase64Text,
+  discoverSonglengthFiles,
+};

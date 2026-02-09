@@ -1,0 +1,41 @@
+appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+tags:
+  - device
+---
+# Verify JS continues executing while the screen is locked.
+# Requires VITE_ENABLE_TEST_PROBES=1 in the build.
+
+- runFlow: subflows/launch-and-wait.yaml
+
+# Read the initial heartbeat counter value
+- copyTextFrom:
+    id: "test-heartbeat"
+- evalScript: ${output.initialHeartbeat = Number(maestro.copiedText)}
+
+# Lock the screen
+- pressKey: Lock
+
+# Wait for JS to advance the heartbeat while screen is off
+- evalScript: ${sleep(5000)}
+
+# Unlock the screen
+- pressKey: Lock
+
+# Wait for UI to become responsive again
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: ${TIMEOUT}
+
+# Read the heartbeat again
+- copyTextFrom:
+    id: "test-heartbeat"
+- evalScript: ${output.finalHeartbeat = Number(maestro.copiedText)}
+
+# Assert the heartbeat advanced (JS kept running while screen was locked)
+- assertTrue: ${output.finalHeartbeat > output.initialHeartbeat}
+- takeScreenshot: background-execution-verified

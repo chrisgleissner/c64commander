@@ -74,6 +74,13 @@ export default defineConfig({
         "**/node_modules/**",
       ],
       thresholds: {
+        // High coverage required for HVSC logic
+        "src/lib/hvsc/**": {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Current baseline thresholds - aim to increase over time
         statements: 10,
         branches: 55,

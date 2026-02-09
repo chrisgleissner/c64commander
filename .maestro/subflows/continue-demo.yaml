@@ -1,6 +1,6 @@
 appId: uk.gleissner.c64commander
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
 tags:
   - subflow
 ---

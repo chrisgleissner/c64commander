@@ -1,51 +1,58 @@
-# PLANS.md
+# HVSC Refactoring and Testing Plan
 
-## 1. Global Slider Responsiveness - Full Async Rest Decoupling
-- [x] Inventory all slider usages and current REST handlers
-- [x] Implement shared async coalescing + final commit behavior
-- [x] Ensure no cross-coupling between concurrent slider updates
-- [x] Preserve trace and notification observability for slider REST calls
+## Phase 0: Refactor Ingestion Pipeline for Testability
+- [ ] Extract duplicated ingestion logic into `ingestArchiveBuffer` in `hvscIngestionRuntime.ts`
+- [ ] Refactor `installOrUpdateHvsc` to use `ingestArchiveBuffer`
+- [ ] Refactor `ingestCachedHvsc` to use `ingestArchiveBuffer`
+- [ ] Fix WASM singleton poisoning in `hvscArchiveExtraction.ts` (reject handling)
+- [ ] Allow WASM retries after transient failures
+- [ ] Add unit test verifying WASM retry behavior
+- [ ] Split `hvscIngestionRuntime.ts` by moving download/streaming helpers to `hvscDownload.ts`
 
-## 2. Global Slider UX Consistency (Value Display, Midpoint Notch, Haptics)
-- [x] Add dynamic value display behavior with fade-out on release
-- [x] Implement midpoint notch, cling, and haptic tick logic
-- [x] Centralize styling and behavior in a shared slider component/hook
-- [x] Migrate all sliders to the shared implementation
+## Phase 1: Archive Caching Infrastructure
+- [ ] Extract `ensureUpdate84Archive()` into `tests/fixtures/hvsc/ensureHvscUpdateArchive.ts`
+- [ ] Implement resolution order: Env var -> Cache dir -> Download
+- [ ] Update CI configuration to cache the archive
 
-## 3. Ram Save And Load Correctness (Reference Python Scripts)
-- [x] Compare TypeScript RAM operations with scripts/ram_read.py and scripts/ram_write.py
-- [x] Fix address ranges, chunking, and freeze/unfreeze flow discrepancies
-- [x] Add logging and error context for RAM operations
-- [ ] Verify round-trip RAM read/write correctness against c64u
+## Phase 2: Tier 1 - Unit Tests (Pure, Fully Mocked)
+- [ ] Create `tests/unit/hvsc/hvscService.test.ts` (10 tests)
+- [ ] Create `tests/unit/hvsc/hvscSongLengthService.test.ts` (10 tests)
+- [ ] Create `tests/unit/hvsc/hvscSource.test.ts` (7 tests)
+- [ ] Create `hvscIngestionRuntime.test.ts` (Status/Active checks)
+- [ ] Create `hvscArchiveExtraction.test.ts` (WASM retry)
 
-## 4. Ram Snapshot Filename Specification
-- [x] Implement ISO-8601 filename generation with optional sanitized context
-- [x] Keep backward compatibility for loading older filenames
-- [x] Add tests for filename formatting and context sanitization
+## Phase 3: Tier 2 - Integration Tests (Real 7z Extraction)
+- [ ] Enhance `hvscArchiveExtraction.test.ts` using `ensureUpdate84Archive`
+- [ ] Run assertions against `HVSC_Update_84.7z` (Entry paths, normalization, count, consistency, progress, SIDs, songlengths, deletions)
+- [ ] Run assertions against `HVSC_Update_mock.7z` (No network)
 
-## 5. Android UX Constraints
-- [x] Confirm Android file picker usage remains native
-- [x] Ensure filenames are meaningful without metadata reliance
+## Phase 4: Tier 3 - Pipeline Integration Tests
+- [ ] Create `tests/unit/hvsc/hvscIngestionPipeline.test.ts` calling `ingestArchiveBuffer`
+- [ ] Test happy path, classification, normalization, cancellation, corruption, persistence
+- [ ] Create `tests/unit/hvsc/hvscDownload.test.ts`
+- [ ] Test chunk concat, length mismatch, progress, cancellation, HTTP errors
 
-## 6. Ram Dump Folder Display Path
-- [x] Derive and persist a user-friendly display path for SAF tree URIs
-- [x] Prevent content:// or DocumentsProvider prefixes in UI
-- [x] Add unit tests for display path derivation
-- [x] Add UI test coverage for Home page path rendering
+## Phase 5: Tier 4 - Playwright E2E
+- [ ] Enhance `hvsc.spec.ts` with songlength display test
+- [ ] Enhance `hvsc.spec.ts` with multi-subsong expansion test
 
-## 7. Hvsc Download Crash And Ingestion Reliability
-- [x] Identify and fix the download crash
-- [x] Implement mock HVSC hosting via HVSC mock server + cache
-- [x] Add config switch for HVSC base URL
-- [x] Ensure ingestion reliability and guard against repeated downloads
-- [x] Add logging across download, extract, and ingest
-- [x] Add tests covering crash fix, mock download, ingestion, and no-real-host usage
+## Phase 6: Tier 5 - Maestro Performance
+- [ ] Reduce Maestro timeouts (LONG 20s, 15s, SHORT 5s)
+- [ ] Eliminate retry-based file picker navigation (targeted scroll or adb intent)
+- [ ] Consolidate adb commands in `run-maestro.sh`
+- [ ] Pre-grant SAF permissions via adb
 
-## 8. Testing And Validation
-- [x] Add tests for slider async behavior and final commit semantics
-- [x] Add tests for value display show/hide and midpoint behavior + haptics gating
-- [x] Add tests for RAM save/load round-trip and filename generation
-- [x] Run unit tests, lint, and full build; fix any failures
+## Phase 7: Cleanup and Guardrails
+- [ ] Remove duplicate test files
+- [ ] Consolidate `hvscStatusStore` tests
+- [ ] Raise coverage thresholds in `vitest.config.ts` for `src/lib/hvsc/**` to >=90%
+- [ ] Update `AGENTS.md` (remove invalid Java paths)
+- [ ] Update `doc/testing/maestro.md` (fixture/permission guidance)
 
-## 9. Completion Criteria
-- [ ] Verify all requirements satisfied and PLANS.md reflects completion
+## Verification
+- [x] npm run test
+- [x] npm run test -- --coverage
+- [ ] npm run test:e2e
+- [ ] Maestro smoke-hvsc-mounted < 90 seconds
+- [x] npm run lint
+- [ ] npm run build

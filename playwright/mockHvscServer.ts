@@ -5,7 +5,7 @@ import { strToU8, zipSync } from 'fflate';
 
 export type HvscFixture = {
   version: number;
-  songs: Array<{ virtualPath: string; fileName: string; dataBase64: string; durationSeconds?: number }>;
+  songs: Array<{ virtualPath: string; fileName: string; dataBase64: string; durationSeconds?: number; durations?: number[] }>;
 };
 
 export interface MockHvscServer {
@@ -36,7 +36,13 @@ export function createMockHvscServer(): Promise<MockHvscServer> {
       files[`HVSC/${pathPart}`] = Buffer.from(song.dataBase64, 'base64');
     });
     const songlengths = fixture.songs
-      .map((song) => `${song.virtualPath.replace(/^\//, '')} ${formatDuration(song.durationSeconds)}`)
+      .map((song) => {
+        const path = song.virtualPath.replace(/^\//, '');
+        if (song.durations?.length) {
+          return `${path}= ${song.durations.map(d => formatDuration(d)).join(' ')}`;
+        }
+        return `${path} ${formatDuration(song.durationSeconds)}`;
+      })
       .join('\n');
     files['HVSC/Songlengths.txt'] = strToU8(songlengths);
     return Buffer.from(zipSync(files));

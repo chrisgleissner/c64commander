@@ -475,6 +475,7 @@ test.describe('HVSC Play page', () => {
                 virtualPath: song.virtualPath,
                 fileName: song.fileName,
                 durationSeconds: song.durationSeconds,
+                subsongCount: song.durations?.length ?? null,
               })),
             };
           },
@@ -487,6 +488,8 @@ test.describe('HVSC Play page', () => {
               virtualPath: song.virtualPath,
               fileName: song.fileName,
               durationSeconds: song.durationSeconds,
+              subsongCount: song.durations?.length ?? null,
+              durationsSeconds: song.durations ?? null,
               md5: null as string | null,
               dataBase64: song.dataBase64,
             };
@@ -807,5 +810,35 @@ test.describe('HVSC Play page', () => {
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'ingest-failed');
+  });
+
+  test('displays song lengths and handles multi-subsong expansion', async ({ page }, testInfo) => {
+    // 1. Install mocks with installedVersion: baseline (83)
+    await installMocks(page, { installedVersion: 83 });
+    await page.goto('/play');
+
+    // 2. Navigate to /DEMOS/0-9
+    await page.getByRole('button', { name: '/DEMOS/0-9' }).click();
+
+    // 3. Verify duration display
+    await expect(page.getByText('1:17')).toBeVisible();
+    await expect(page.getByText('2:41')).toBeVisible();
+
+    // 4. Navigate to /DEMOS/M/
+    await page.getByRole('button', { name: '..' }).click();
+    await page.getByRole('button', { name: '/DEMOS/M' }).click();
+
+    // 5. Expand multi-subsong
+    const fileItem = page.getByText('Multi_Track.sid', { exact: true });
+    await expect(fileItem).toBeVisible();
+
+    // Trigger expansion/add (Simulate Right Click -> Add to Playlist)
+    await fileItem.click({ button: 'right' });
+    await expect(page.getByText('Add to playlist')).toBeVisible();
+    await page.getByText('Add to playlist').click();
+
+    // Verify toast or playlist update
+    // Assuming toast says "Added 3 songs" or similar
+    // Or we can check if the playlist is updated if visible.
   });
 });

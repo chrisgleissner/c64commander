@@ -8,9 +8,9 @@ tags:
   - file-picker
   - device
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "15000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
 ---
 - runFlow: subflows/open-play-add-items.yaml
 - scrollUntilVisible:
@@ -20,7 +20,6 @@ env:
     timeout: ${TIMEOUT}
 - tapOn:
     id: "import-option-local"
-- takeScreenshot: picker-open
 
 # Handle permission dialogs (optional - may not appear on all devices)
 - tapOn:
@@ -32,36 +31,41 @@ env:
 - tapOn:
     text: "Allow all the time"
     optional: true
+
 - extendedWaitUntil:
     visible:
       id: com.google.android.documentsui:id/toolbar
     timeout: ${SHORT_TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: picker-roots
+
+# Navigate file picker to Downloads/C64Music
 - tapOn:
-    id: com.google.android.documentsui:id/sub_menu
-    optional: true
-- tapOn:
-    id: com.google.android.documentsui:id/header_container
-    optional: true
-- tapOn:
-    text: "Files in media"
+    text: "Browse"
     optional: true
 - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Internal storage"
+    direction: DOWN
+    timeout: ${TIMEOUT}
 - tapOn:
-    text: "Download"
+    text: "Internal storage"
     optional: true
+- scrollUntilVisible:
+    element: "Downloads"
+    direction: DOWN
+    timeout: ${TIMEOUT}
 - tapOn:
     text: "Downloads"
     optional: true
-- waitForAnimationToEnd
+- tapOn:
+    text: "Download"
+    optional: true
 - scrollUntilVisible:
     element: "C64Music"
     direction: DOWN
     timeout: ${TIMEOUT}
-- takeScreenshot: picker-downloads
 - tapOn: "C64Music"
-- takeScreenshot: picker-c64music
 - extendedWaitUntil:
     visible: "Use this folder"
     timeout: ${SHORT_TIMEOUT}
@@ -85,7 +89,6 @@ env:
 - tapOn: "PRG program"
 - tapOn: "CRT cartridge"
 - tapOn: "Disk image"
-- takeScreenshot: filter-sid-only
 
 - scrollUntilVisible:
     element: "35_Years.sid"
@@ -93,12 +96,49 @@ env:
     timeout: ${TIMEOUT}
 - tapOn: "35_Years.sid"
 
-# Assert playback is active
 - extendedWaitUntil:
-    visible: "Stop"
+    visible: "Add items to playlist"
+    timeout: ${SHORT_TIMEOUT}
+- tapOn: "Add items to playlist"
+- waitForAnimationToEnd
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "tab-play"
+    timeout: ${SHORT_TIMEOUT}
+- tapOn:
+    id: "tab-play"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
+- scrollUntilVisible:
+    element: "35_Years.sid"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn: "35_Years.sid"
+
+# Assert playback is active
+- tapOn: "Play"
+- extendedWaitUntil:
+    visible: "Pause"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "35_Years.sid"
 - assertNotVisible: "Playback failed"
 - assertNotVisible: "No supported files"
 - assertNotVisible: "Add items failed"
 - takeScreenshot: now-playing
+
+# Cleanup: pause playback and clear the playlist for downstream flows.
+- tapOn:
+    text: "Pause"
+    optional: true
+- tapOn:
+    text: "Clear playlist"
+    optional: true
+- tapOn:
+    text: "Clear"
+    optional: true
+- tapOn:
+    text: "Remove"
+    optional: true

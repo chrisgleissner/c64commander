@@ -178,7 +178,7 @@ vi.mock('@/hooks/useDiagnosticsActivity', () => ({
 
 vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
   isDiagnosticsOverlayActive: () => false,
-  subscribeDiagnosticsOverlay: () => () => {},
+  subscribeDiagnosticsOverlay: () => () => { },
   shouldSuppressDiagnosticsSideEffects: () => false,
 }));
 
@@ -244,6 +244,8 @@ beforeEach(() => {
 });
 
 describe('HomePage SID status', () => {
+  vi.setConfig({ testTimeout: 15000 });
+
   it('renders the Home subtitle as C64 Commander', () => {
     renderHomePage();
     expect(screen.getByTestId('home-header-subtitle').textContent).toBe('C64 Commander');

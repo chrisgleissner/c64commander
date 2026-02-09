@@ -7,8 +7,8 @@ appId: uk.gleissner.c64commander
 tags:
   - probe
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
 ---
 # Step 1: Launch app and handle demo mode if needed
 - runFlow: subflows/launch-and-wait.yaml

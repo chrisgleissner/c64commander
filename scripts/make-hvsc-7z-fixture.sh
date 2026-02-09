@@ -62,6 +62,22 @@ with open(p, "w", encoding="utf-8") as f:
         f.write(f"Announcement {i}: synthetic HVSC fixture exercising PPMD\n")
 PY
 
+python3 - <<'PY' "$CONTENT_DIR/update/DOCUMENTS/Songlengths.txt"
+import sys
+p = sys.argv[1]
+with open(p, "w", encoding="utf-8") as f:
+  f.write("/MUSICIANS/A/Adrock_and_Deadeye/James_Bond.sid=0:32\n")
+  f.write("/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid=1:05\n")
+PY
+
+python3 - <<'PY' "$CONTENT_DIR/update/DOCUMENTS/Delete_files.txt"
+import sys
+p = sys.argv[1]
+with open(p, "w", encoding="utf-8") as f:
+  f.write("/MUSICIANS/B/Bjerregaard_Johannes/Old_Tune.sid\n")
+  f.write("/MUSICIANS/B/Bjerregaard_Johannes/Gone.sid\n")
+PY
+
 python3 - <<'PY' "$CONTENT_DIR/readme.1st"
 import sys
 p = sys.argv[1]
@@ -75,32 +91,32 @@ PY
 # ---------------------------------------------------------------------------
 
 python3 - <<'PY' "$CONTENT_DIR/update/fix/MUSICIANS/A/Adrock_and_Deadeye/James_Bond.sid"
-import os
+import sys
 size = 12 * 1024 * 1024
 buf = bytearray()
 while len(buf) < size:
-    buf += b"\xE8\x01\x00\x00\x00"  # CALL rel32
-    buf += b"\x90\x90\x90"          # NOPs
-with open(__file__.replace(".py",""), "wb") as f:
-    f.write(buf[:size])
+  buf += b"\xE8\x01\x00\x00\x00"  # CALL rel32
+  buf += b"\x90\x90\x90"          # NOPs
+with open(sys.argv[1], "wb") as f:
+  f.write(buf[:size])
 PY
 
 python3 - <<'PY' "$CONTENT_DIR/update/fix/MUSICIANS/B/Bjerregaard_Johannes/Cute_Tune.sid"
-import os
+import sys
 size = 12 * 1024 * 1024
-with open(__file__.replace(".py",""), "wb") as f:
-    f.write(b"CUTE_TUNE_X86_" * (size // 14))
+with open(sys.argv[1], "wb") as f:
+  f.write(b"CUTE_TUNE_X86_" * (size // 14))
 PY
 
 python3 - <<'PY' "$CONTENT_DIR/update/fix/MUSICIANS/B/Bjerregaard_Johannes/Fat_6.sid"
-import os, random
+import sys, random
 size = 12 * 1024 * 1024
 random.seed(6006)
 buf = bytearray(random.getrandbits(8) for _ in range(size))
 for i in range(0, size, 4096):
-    buf[i:i+8] = b"FAT_6___"
-with open(__file__.replace(".py",""), "wb") as f:
-    f.write(buf)
+  buf[i:i+8] = b"FAT_6___"
+with open(sys.argv[1], "wb") as f:
+  f.write(buf)
 PY
 
 # ---------------------------------------------------------------------------
@@ -121,7 +137,9 @@ pushd "$CONTENT_DIR" >/dev/null
 7z u -t7z -mx=9 -ms=8m \
   -m0=PPMd:o=11:mem=16m \
   "$ARCHIVE_PATH" \
-  readme.1st
+  readme.1st \
+  update/DOCUMENTS/Songlengths.txt \
+  update/DOCUMENTS/Delete_files.txt
 
 # Block 2: BCJ2 + LZMA:9m (forced separate solid block)
 7z u -t7z -mx=9 -ms=64m \

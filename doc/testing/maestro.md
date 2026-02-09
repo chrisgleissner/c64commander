@@ -39,6 +39,20 @@ Use the repo build helper to run Maestro flows locally with consistent filtering
 
 Tag filters are comma-separated. Prefix `+` to include and `-` to exclude. Unprefixed tags are treated as includes.
 
+### HVSC fixtures + SAF permissions
+
+- The synthetic update archive lives at android/app/src/test/fixtures/HVSC_Update_mock.7z.
+- Regenerate it with scripts/make-hvsc-7z-fixture.sh (keeps codec structure compatible with the real update).
+- Unit/integration tests download HVSC_Update_84.7z once per machine via $HVSC_UPDATE_84_CACHE or ~/.cache/c64commander/hvsc.
+- scripts/run-maestro.sh pre-grants storage/SAF permissions (including MANAGE_EXTERNAL_STORAGE via appops) to reduce picker dialogs.
+
+### Timeouts
+
+Maestro configured with stricter timeouts to ensure performance:
+- LONG_TIMEOUT: 20s
+- TIMEOUT: 15s
+- SHORT_TIMEOUT: 5s
+
 ### Use env defaults for config-like values
 
 Define config-like constants (app id, timeouts, fixture names, screenshot names) in `env` with fallbacks. Use the variables in commands so values can be overridden by CI or local runs.

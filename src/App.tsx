@@ -27,6 +27,7 @@ import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from '@/components/TraceContextBridge';
 import { GlobalDiagnosticsOverlay } from '@/components/diagnostics/GlobalDiagnosticsOverlay';
+import { TestHeartbeat } from '@/components/TestHeartbeat';
 import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 
@@ -88,6 +89,7 @@ const AppRoutes = () => (
     <GlobalDiagnosticsOverlay />
     <ConnectionController />
     <DemoModeInterstitial />
+    {shouldEnableCoverageProbe() && <TestHeartbeat />}
     <Routes>
       {shouldEnableCoverageProbe() ? (
         <Route path="/__coverage__" element={<CoverageProbePage />} />

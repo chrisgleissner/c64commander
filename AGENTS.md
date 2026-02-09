@@ -21,7 +21,7 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - **UI**: `src/pages/`, `src/components/`, `src/components/ui/`
 - **App config state**: `src/hooks/useAppConfigState.ts`, `src/lib/config/`
 - **Song sources**: `src/lib/sources/`
-- **HVSC module**: `src/lib/hvsc/`, `android/app/src/main/java/com/c64/commander/hvsc/`
+- **HVSC module**: `src/lib/hvsc/`
 - **SID player**: `src/pages/MusicPlayerPage.tsx`, `src/hooks/useSidPlayer.tsx`, `src/lib/sid/`
 
 ## Architecture map
@@ -31,7 +31,6 @@ This repository is **C64 Commander**, a React + Vite + Capacitor app for managin
 - **Song sources**: `src/lib/sources/` (local FS + HVSC)
 - **HVSC ingestion + metadata**: `src/lib/hvsc/` (service/types/native bridge)
 - **Native bridges**: `src/lib/native/`, `src/lib/hvsc/native/`
-- **Android HVSC engine**: `android/app/src/main/java/com/c64/commander/hvsc/`
 - **SID playback utilities**: `src/lib/sid/`
 
 ## Tests and fixtures
@@ -128,6 +127,8 @@ npm run build
 ```bash
 npm run cap:build
 ```
+
+Set `JAVA_HOME` to a valid JDK install and avoid hardcoded system paths.
 
 ### Full local helper (if applicable)
 
