@@ -16,7 +16,7 @@ describe('hvscRootLocator', () => {
   });
 
   afterAll(() => {
-      vi.unstubAllGlobals();
+    vi.unstubAllGlobals();
   });
 
   it('returns default root when storage is empty', () => {
@@ -33,30 +33,30 @@ describe('hvscRootLocator', () => {
   });
 
   it('returns default if stored JSON is valid but incomplete', () => {
-      localStorage.setItem('c64u_hvsc_root:v1', JSON.stringify({ path: '/foo' })); // missing label
-      expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
+    localStorage.setItem('c64u_hvsc_root:v1', JSON.stringify({ path: '/foo' })); // missing label
+    expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
   });
 
   it('returns default if stored content is malformed', () => {
-      localStorage.setItem('c64u_hvsc_root:v1', '{ invalid json ');
-      expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
+    localStorage.setItem('c64u_hvsc_root:v1', '{ invalid json ');
+    expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
   });
 
   it('handles missing localStorage (load)', () => {
-      vi.stubGlobal('localStorage', undefined);
-      expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
+    vi.stubGlobal('localStorage', undefined);
+    expect(loadHvscRoot()).toEqual(getDefaultHvscRoot());
   });
 
   it('handles missing localStorage (save)', () => {
-      vi.stubGlobal('localStorage', undefined);
-      // Should not throw
-      saveHvscRoot({ path: '/a', label: 'b' });
+    vi.stubGlobal('localStorage', undefined);
+    // Should not throw
+    saveHvscRoot({ path: '/a', label: 'b' });
   });
 
   it('handles missing localStorage (clear)', () => {
-      vi.stubGlobal('localStorage', undefined);
-      // Should not throw
-      clearHvscRoot();
+    vi.stubGlobal('localStorage', undefined);
+    // Should not throw
+    clearHvscRoot();
   });
 });
 

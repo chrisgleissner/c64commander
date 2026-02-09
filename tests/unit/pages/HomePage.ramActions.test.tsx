@@ -165,6 +165,14 @@ vi.mock('@tanstack/react-query', () => ({
   }),
 }));
 
+vi.mock('@/pages/home/SidCard', () => ({
+  SidCard: () => <div data-testid="sid-card" />,
+}));
+
+vi.mock('@/pages/home/DriveCard', () => ({
+  DriveCard: () => <div data-testid="drive-card" />,
+}));
+
 describe('HomePage RAM actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();

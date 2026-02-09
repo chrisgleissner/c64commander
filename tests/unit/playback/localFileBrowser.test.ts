@@ -19,10 +19,10 @@ const makeFile = (path: string, size = 100, lastModified = 1000) => {
 
 // Fallback for files without webkitRelativePath
 const makeSimpleFile = (name: string) => {
-    const file = new File([''], name);
-    // Ensure no webkitRelativePath or empty
-    Object.defineProperty(file, 'webkitRelativePath', { value: '' });
-    return file;
+  const file = new File([''], name);
+  // Ensure no webkitRelativePath or empty
+  Object.defineProperty(file, 'webkitRelativePath', { value: '' });
+  return file;
 };
 
 describe('localFileBrowser', () => {
@@ -49,16 +49,16 @@ describe('localFileBrowser', () => {
       const folders = listLocalFolders(files, '/Music/Album/');
       expect(folders).toEqual([]);
     });
-    
+
     it('handles empty path as root', () => {
-        const folders = listLocalFolders(files, '');
-        expect(folders).toEqual(['/Docs/', '/Music/']);
+      const folders = listLocalFolders(files, '');
+      expect(folders).toEqual(['/Docs/', '/Music/']);
     });
 
     it('ignores files that do not match prefix', () => {
-        // Files in specific path only
-        const f = [makeFile('A/B/C.txt')];
-        expect(listLocalFolders(f, '/Z/')).toEqual([]);
+      // Files in specific path only
+      const f = [makeFile('A/B/C.txt')];
+      expect(listLocalFolders(f, '/Z/')).toEqual([]);
     });
   });
 
@@ -66,57 +66,57 @@ describe('localFileBrowser', () => {
     it('includes size and modified timestamp for listed files', () => {
       const file = new File(['data'], 'song.sid', { lastModified: 123456 });
       Object.defineProperty(file, 'webkitRelativePath', { value: 'Music/song.sid' });
-      
+
       const results = listLocalFiles([file], '/Music/');
       expect(results[0]?.sizeBytes).toBe(4);
       expect(results[0]?.modifiedAt).toBe(new Date(123456).toISOString());
     });
 
     it('lists files in root', () => {
-        const results = listLocalFiles(files, '/');
-        expect(results.map(f => f.name)).toEqual(['Root.txt']);
+      const results = listLocalFiles(files, '/');
+      expect(results.map(f => f.name)).toEqual(['Root.txt']);
     });
 
     it('lists files in subfolder', () => {
-        const results = listLocalFiles(files, '/Music/');
-        expect(results.map(f => f.name)).toEqual(['Other.sid', 'Song.sid']); 
+      const results = listLocalFiles(files, '/Music/');
+      expect(results.map(f => f.name)).toEqual(['Other.sid', 'Song.sid']);
     });
 
     it('falls back to name if relative path missing', () => {
-        const f = makeSimpleFile('simple.txt');
-        const results = listLocalFiles([f], '/');
-        expect(results).toHaveLength(1);
-        expect(results[0].path).toBe('/simple.txt');
+      const f = makeSimpleFile('simple.txt');
+      const results = listLocalFiles([f], '/');
+      expect(results).toHaveLength(1);
+      expect(results[0].path).toBe('/simple.txt');
     });
 
     it('handles weird paths', () => {
-        // Path normalization logic in getLocalPath
-        const f = { name: 'foo.txt', webkitRelativePath: 'foo.txt' } as any; // manually mock structure
-        const results = listLocalFiles([f], '/');
-        expect(results[0].path).toBe('/foo.txt');
+      // Path normalization logic in getLocalPath
+      const f = { name: 'foo.txt', webkitRelativePath: 'foo.txt' } as any; // manually mock structure
+      const results = listLocalFiles([f], '/');
+      expect(results[0].path).toBe('/foo.txt');
     });
   });
 
   describe('getParentPath', () => {
     it('returns root for root', () => {
-        expect(getParentPath('/')).toBe('/');
-        expect(getParentPath('')).toBe('/');
+      expect(getParentPath('/')).toBe('/');
+      expect(getParentPath('')).toBe('/');
     });
 
     it('returns root for top level folders', () => {
-        expect(getParentPath('/Music/')).toBe('/');
+      expect(getParentPath('/Music/')).toBe('/');
     });
 
     it('returns parent for nested folders', () => {
-        expect(getParentPath('/Music/Album/')).toBe('/Music/');
+      expect(getParentPath('/Music/Album/')).toBe('/Music/');
     });
-    
+
     it('handles paths without trailing slash', () => {
-        expect(getParentPath('/Music')).toBe('/'); 
+      expect(getParentPath('/Music')).toBe('/');
     });
-    
+
     it('handles various depths', () => {
-        expect(getParentPath('/A/B/C/')).toBe('/A/B/');
+      expect(getParentPath('/A/B/C/')).toBe('/A/B/');
     });
   });
 });
