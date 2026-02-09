@@ -10,9 +10,10 @@ export type VolumeControlsProps = {
   volumeStepsCount: number;
   volumeIndex: number;
   onVolumeChange: (value: number[]) => void;
+  onVolumeChangeAsync: (value: number) => void;
   onVolumeCommit: (value: number) => void;
-  onVolumeInteraction: () => void;
   volumeLabel: string;
+  volumeValueFormatter?: (value: number) => string;
 };
 
 export const VolumeControls = ({
@@ -23,9 +24,10 @@ export const VolumeControls = ({
   volumeStepsCount,
   volumeIndex,
   onVolumeChange,
+  onVolumeChangeAsync,
   onVolumeCommit,
-  onVolumeInteraction,
   volumeLabel,
+  volumeValueFormatter,
 }: VolumeControlsProps) => (
   <div className="flex flex-wrap items-center gap-3">
     <Button
@@ -48,8 +50,9 @@ export const VolumeControls = ({
           step={1}
           value={[volumeIndex]}
           onValueChange={onVolumeChange}
-          onValueCommit={(value) => onVolumeCommit(value[0] ?? 0)}
-          onPointerDown={onVolumeInteraction}
+          onValueChangeAsync={onVolumeChangeAsync}
+          onValueCommitAsync={onVolumeCommit}
+          valueFormatter={volumeValueFormatter}
           disabled={!canControlVolume}
           data-testid="volume-slider"
         />

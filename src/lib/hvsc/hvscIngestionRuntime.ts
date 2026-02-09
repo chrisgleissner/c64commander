@@ -380,6 +380,11 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
 };
 
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
+  if (activeIngestionRunning) {
+    const error = new Error('HVSC ingestion already running');
+    addErrorLog('HVSC install/update blocked', { error: error.message });
+    throw error;
+  }
   summaryLastStage = null;
   activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
@@ -463,6 +468,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       pipeline.transition('DOWNLOADING', { cached: Boolean(cached) });
       currentPipelineState = pipeline.current();
       if (!cached) {
+        ensureNotCancelled(cancelToken);
         emitProgress({ stage: 'download', message: `Downloading ${archiveName}…`, archiveName, percent: 0 });
         await deleteCachedArchive(archivePath);
         const downloadUrl = plan.type === 'baseline'
@@ -501,9 +507,11 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
                 }
               },
             });
+            ensureNotCancelled(cancelToken);
           } catch (error) {
             await deleteCachedArchive(archivePath);
             if (!isExistsError(error)) throw error;
+            ensureNotCancelled(cancelToken);
             const response = await fetch(downloadUrl, { cache: 'no-store' });
             if (!response.ok) {
               throw new Error(`Download failed: ${response.status} ${response.statusText}`);
@@ -515,6 +523,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
             if (pollingTimer) clearInterval(pollingTimer);
           }
         } else {
+          ensureNotCancelled(cancelToken);
           const response = await fetch(downloadUrl, { cache: 'no-store' });
           if (!response.ok) {
             throw new Error(`Download failed: ${response.status} ${response.statusText}`);
@@ -536,6 +545,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
                 loaded += value.length;
                 emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
               }
+              ensureNotCancelled(cancelToken);
             }
             const buffer = concatChunks(chunks, totalBytes ?? undefined);
             await writeCachedArchive(archivePath, buffer);
@@ -750,6 +760,11 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 };
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
+  if (activeIngestionRunning) {
+    const error = new Error('HVSC ingestion already running');
+    addErrorLog('HVSC cached ingestion blocked', { error: error.message });
+    throw error;
+  }
   activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createEmitter(ingestionId);

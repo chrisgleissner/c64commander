@@ -163,6 +163,28 @@ const readRanges = async (api: C64API, ranges: RamRange[]) => {
   return image;
 };
 
+const writeFullImage = async (api: C64API, image: Uint8Array) => {
+  recordRamTrace({
+    operation: 'ram-write',
+    status: 'start',
+    address: toHexAddress(0),
+    expectedLength: image.length,
+  });
+  await withRetry(
+    'Write full RAM image at $0000',
+    () => api.writeMemoryBlock(toHexAddress(0), image),
+    DEFAULT_RETRY_ATTEMPTS,
+    async () => recoverFromLivenessFailure(api, 'Load RAM'),
+  );
+  recordRamTrace({
+    operation: 'ram-write',
+    status: 'success',
+    address: toHexAddress(0),
+    expectedLength: image.length,
+    actualLength: image.length,
+  });
+};
+
 const writeRanges = async (api: C64API, image: Uint8Array, ranges: RamRange[]) => {
   for (const range of ranges) {
     for (let address = range.start; address < range.endExclusive; address += WRITE_CHUNK_SIZE_BYTES) {
@@ -248,7 +270,7 @@ export const loadFullRamImage = async (api: C64API, image: Uint8Array) => {
   }
   await ensureLiveness(api, 'Load RAM');
   await runPaused(api, 'Load RAM', async () => {
-    await writeRanges(api, image, FULL_RAM_RANGE);
+    await writeFullImage(api, image);
   });
 };
 

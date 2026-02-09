@@ -261,7 +261,6 @@ export default function PlayFilesPage() {
   const previousVolumeIndexRef = useRef<number | null>(null);
   const volumeUpdateTimerRef = useRef<number | null>(null);
   const volumeUpdateSeqRef = useRef(0);
-  const volumeDragRef = useRef(false);
   const volumeUiTargetRef = useRef<{ index: number; setAtMs: number } | null>(null);
   const reshuffleTimerRef = useRef<number | null>(null);
   const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
@@ -1473,8 +1472,30 @@ export default function PlayFilesPage() {
     volumeUpdateTimerRef.current = window.setTimeout(runUpdate, 200);
   }, [applyAudioMixerUpdates, buildEnabledSidVolumeUpdates, dispatchVolume, ensureVolumeSessionSnapshot, reserveVolumeUiTarget, sidEnablement, sidVolumeItems, volumeSteps]);
 
-  const handleVolumeChange = useCallback((value: number[]) => {
+  const handleVolumeLocalChange = useCallback((value: number[]) => {
     const nextIndex = value[0] ?? 0;
+    dispatchVolume({ type: 'set-index', index: nextIndex });
+    reserveVolumeUiTarget(nextIndex);
+    if (!volumeMuted) return;
+    previousVolumeIndexRef.current = nextIndex;
+    const snapshot = manualMuteSnapshotRef.current;
+    const target = volumeSteps[nextIndex]?.option;
+    if (snapshot && target) {
+      manualMuteSnapshotRef.current = {
+        ...snapshot,
+        volumes: Object.fromEntries(
+          Object.keys(snapshot.volumes).map((key) => [key, target]),
+        ),
+      };
+    }
+  }, [dispatchVolume, reserveVolumeUiTarget, volumeMuted, volumeSteps]);
+
+  const handleVolumeAsyncChange = useCallback((nextIndex: number) => {
+    if (volumeMuted) return;
+    scheduleVolumeUpdate(nextIndex);
+  }, [scheduleVolumeUpdate, volumeMuted]);
+
+  const handleVolumeCommit = useCallback(async (nextIndex: number) => {
     dispatchVolume({ type: 'set-index', index: nextIndex });
     reserveVolumeUiTarget(nextIndex);
     if (volumeMuted) {
@@ -1491,34 +1512,8 @@ export default function PlayFilesPage() {
       }
       return;
     }
-    if (volumeDragRef.current) return;
-    scheduleVolumeUpdate(nextIndex);
-  }, [dispatchVolume, reserveVolumeUiTarget, scheduleVolumeUpdate, volumeMuted, volumeSteps]);
-
-  const handleVolumeCommit = useCallback(async (nextIndex: number) => {
-    volumeDragRef.current = false;
-    reserveVolumeUiTarget(nextIndex);
-    if (volumeMuted) {
-      previousVolumeIndexRef.current = nextIndex;
-      const snapshot = manualMuteSnapshotRef.current;
-      const target = volumeSteps[nextIndex]?.option;
-      if (snapshot && target) {
-        manualMuteSnapshotRef.current = {
-          ...snapshot,
-          volumes: Object.fromEntries(
-            Object.keys(snapshot.volumes).map((key) => [key, target]),
-          ),
-        };
-      }
-      return;
-    }
     scheduleVolumeUpdate(nextIndex, true);
-  }, [reserveVolumeUiTarget, scheduleVolumeUpdate, volumeMuted, volumeSteps]);
-
-  const handleVolumeInteraction = useCallback(() => {
-    volumeDragRef.current = true;
-    if (!volumeMuted) return;
-  }, [volumeMuted]);
+  }, [dispatchVolume, reserveVolumeUiTarget, scheduleVolumeUpdate, volumeMuted, volumeSteps]);
 
   const handleToggleMute = useCallback(async () => {
     const items = await resolveEnabledSidVolumeItems(true);
@@ -1891,10 +1886,11 @@ export default function PlayFilesPage() {
                 onToggleMute={() => void handleToggleMute()}
                 volumeStepsCount={volumeSteps.length}
                 volumeIndex={volumeIndex}
-                onVolumeChange={handleVolumeChange}
+                onVolumeChange={handleVolumeLocalChange}
+                onVolumeChangeAsync={handleVolumeAsyncChange}
                 onVolumeCommit={(value) => void handleVolumeCommit(value)}
-                onVolumeInteraction={handleVolumeInteraction}
                 volumeLabel={volumeLabel}
+                volumeValueFormatter={(value) => volumeSteps[Math.round(value)]?.label ?? '—'}
               />
             )}
             recurseFolders={recurseFolders}

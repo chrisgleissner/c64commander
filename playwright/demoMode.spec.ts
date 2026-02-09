@@ -164,13 +164,15 @@ test.describe('Automatic Demo Mode', () => {
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
     await page.addInitScript(() => {
-      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://192.168.1.13';
-      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = ['http://192.168.1.13'];
+      const unreachableBaseUrl = 'http://127.0.0.1:1';
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = unreachableBaseUrl;
+      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [unreachableBaseUrl];
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
-      localStorage.setItem('c64u_device_host', '192.168.1.13');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
@@ -178,10 +180,11 @@ test.describe('Automatic Demo Mode', () => {
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
     await expect(dialog).toBeVisible({ timeout: 5000 });
     await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(dialog).toHaveCount(0);
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     const urlInput = page.locator('#deviceHost');
-    await expect(urlInput).toHaveValue('192.168.1.13');
+    await expect(urlInput).toHaveValue('127.0.0.1:1');
 
     const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
     expect(stored).toBeNull();

@@ -425,6 +425,9 @@ export function ConfigItemRow({
 
     const currentLabelRaw = sliderOptions[selectedIndex] ?? displayValue;
     const currentLabel = formatOption(String(currentLabelRaw));
+    const resolveSliderOption = (index: number) =>
+      sliderOptions[Math.round(index)] ?? sliderOptions[0] ?? '';
+    const formatSliderLabel = (index: number) => formatOption(String(resolveSliderOption(index)));
 
     return (
       <div
@@ -458,19 +461,28 @@ export function ConfigItemRow({
               onValueChange={(values) => {
                 if (isReadOnly) return;
                 const nextIndex = values[0] ?? 0;
-                const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
+                const nextValue = resolveSliderOption(nextIndex);
                 setInputValue(String(nextValue));
-                onValueChange(nextValue);
               }}
               onValueCommit={(values) => {
                 if (isReadOnly) return;
                 const nextIndex = values[0] ?? 0;
-                const nextValue = sliderOptions[nextIndex] ?? sliderOptions[0];
-                if (String(nextValue) === lastCommittedRef.current) return;
-                lastCommittedRef.current = String(nextValue);
+                const nextValue = resolveSliderOption(nextIndex);
                 setInputValue(String(nextValue));
+              }}
+              onValueChangeAsync={(nextIndex) => {
+                if (isReadOnly) return;
+                const nextValue = resolveSliderOption(nextIndex);
                 onValueChange(nextValue);
               }}
+              onValueCommitAsync={(nextIndex) => {
+                if (isReadOnly) return;
+                const nextValue = resolveSliderOption(nextIndex);
+                if (String(nextValue) === lastCommittedRef.current) return;
+                lastCommittedRef.current = String(nextValue);
+                onValueChange(nextValue);
+              }}
+              valueFormatter={formatSliderLabel}
               aria-label={`${displayLabel} slider`}
               data-testid={sliderTestId}
             />

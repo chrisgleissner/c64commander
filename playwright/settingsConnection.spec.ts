@@ -191,4 +191,23 @@ test.describe('Settings connection management', () => {
       'About',
     ]);
   });
+
+  test('developer HVSC base url override persists', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/settings');
+    await snap(page, testInfo, 'settings-open');
+
+    const aboutCard = page.getByRole('button', { name: /about/i });
+    for (let i = 0; i < 7; i += 1) {
+      await aboutCard.click();
+    }
+
+    const hvscUrlInput = page.getByTestId('hvsc-base-url');
+    await expect(hvscUrlInput).toBeVisible();
+    await hvscUrlInput.fill('http://example.com/hvsc');
+    await hvscUrlInput.press('Enter');
+    await snap(page, testInfo, 'hvsc-base-url-set');
+
+    const stored = await page.evaluate(() => localStorage.getItem('c64u_hvsc_base_url'));
+    expect(stored).toBe('http://example.com/hvsc/');
+  });
 });

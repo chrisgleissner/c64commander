@@ -147,6 +147,7 @@ vi.mock('@/lib/machine/ramDumpStorage', () => ({
 vi.mock('@/lib/config/ramDumpFolderStore', () => ({
   loadRamDumpFolderConfig: () => ramDumpFolderConfigRef.current,
   saveRamDumpFolderConfig: saveRamDumpFolderConfigSpy,
+  deriveRamDumpFolderDisplayPath: (treeUri: string) => treeUri,
 }));
 
 vi.mock('@tanstack/react-query', () => ({

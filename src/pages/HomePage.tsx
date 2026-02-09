@@ -55,6 +55,7 @@ import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
 import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
 import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
+import { formatDbValue, formatPanValue } from '@/lib/ui/sliderValueFormat';
 import {
   buildStreamConfigValue,
   buildStreamEndpointLabel,
@@ -81,6 +82,7 @@ import {
 import {
   loadRamDumpFolderConfig,
   saveRamDumpFolderConfig,
+  deriveRamDumpFolderDisplayPath,
   type RamDumpFolderConfig,
 } from '@/lib/config/ramDumpFolderStore';
 import {
@@ -89,7 +91,6 @@ import {
   normalizeDriveDevices,
   type DriveDeviceClass,
 } from '@/lib/drives/driveDevices';
-import { redactTreeUri } from '@/lib/native/safUtils';
 
 const DRIVE_A_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
 const DRIVE_B_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
@@ -528,9 +529,14 @@ export default function HomePage() {
   }, [audioMixerCategory, configOverrides, sidAddressingCategory]);
   const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
-  const ramDumpFolderLabel = ramDumpFolder?.rootName ?? (ramDumpFolder ? 'Folder access granted' : 'Not configured');
+  const ramDumpFolderDisplayPath = ramDumpFolder
+    ? (ramDumpFolder.displayPath ?? deriveRamDumpFolderDisplayPath(ramDumpFolder.treeUri, ramDumpFolder.rootName))
+    : null;
+  const ramDumpFolderLabel = ramDumpFolder?.rootName
+    ?? ramDumpFolderDisplayPath
+    ?? (ramDumpFolder ? 'Folder access granted' : 'Not configured');
   const ramDumpFolderDetail = ramDumpFolder
-    ? (redactTreeUri(ramDumpFolder.treeUri) ?? 'Folder access granted')
+    ? (ramDumpFolderDisplayPath ?? ramDumpFolder.rootName ?? 'Folder access granted')
     : 'Select a folder before first Save RAM action.';
 
   const inlineSelectTriggerClass =
@@ -1746,15 +1752,28 @@ export default function HomePage() {
                     onValueChange={(values) => {
                       const nextValue = clampToRange(values[0] ?? ledIntensityMin, ledIntensityMin, ledIntensityMax);
                       setLedIntensityDraft(nextValue);
-                      void updateConfigValue('LED Strip Settings', 'Strip Intensity', Math.round(nextValue), 'HOME_LED_INTENSITY', 'LED intensity updated', { suppressToast: true });
                     }}
                     onValueCommit={(values) => {
                       const nextValue = clampToRange(values[0] ?? ledIntensityMin, ledIntensityMin, ledIntensityMax);
                       setLedIntensityDraft(null);
+                    }}
+                    onValueChangeAsync={(nextValue) => {
+                      const clamped = clampToRange(nextValue, ledIntensityMin, ledIntensityMax);
                       void updateConfigValue(
                         'LED Strip Settings',
                         'Strip Intensity',
-                        Math.round(nextValue),
+                        Math.round(clamped),
+                        'HOME_LED_INTENSITY',
+                        'LED intensity updated',
+                        { suppressToast: true },
+                      );
+                    }}
+                    onValueCommitAsync={(nextValue) => {
+                      const clamped = clampToRange(nextValue, ledIntensityMin, ledIntensityMax);
+                      void updateConfigValue(
+                        'LED Strip Settings',
+                        'Strip Intensity',
+                        Math.round(clamped),
                         'HOME_LED_INTENSITY',
                         'LED intensity updated',
                       );
@@ -1822,7 +1841,7 @@ export default function HomePage() {
                   <p className="text-sm font-medium break-words" data-testid="ram-dump-folder-value">
                     {ramDumpFolderLabel}
                   </p>
-                  <p className="text-[11px] text-muted-foreground break-words">
+                  <p className="text-[11px] text-muted-foreground break-words" data-testid="ram-dump-folder-detail">
                     {ramDumpFolderDetail}
                   </p>
                 </div>
@@ -2052,6 +2071,56 @@ export default function HomePage() {
               const volumeSliderValue = clampSliderValue(activeVolumeValue ?? volumeIndex, volumeMax);
               const panSliderValue = clampSliderValue(activePanValue ?? panIndex, panMax);
               const isUltiSid = entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
+              const resolveVolumeIndexValue = (value: number) =>
+                resolveSliderIndex(applySoftDetent(value, volumeCenterIndex), volumeMax);
+              const resolvePanIndexValue = (value: number) =>
+                resolveSliderIndex(applySoftDetent(value, panCenterIndex), panMax);
+              const resolveVolumeOption = (value: number) =>
+                volumeOptions[resolveVolumeIndexValue(value)] ?? volumeOptions[0] ?? entry.volume;
+              const resolvePanOption = (value: number) =>
+                panOptions[resolvePanIndexValue(value)] ?? panOptions[0] ?? entry.pan;
+              const volumeValueFormatter = (value: number) =>
+                formatDbValue(String(volumeOptions[Math.round(value)] ?? volumeOptions[0] ?? ''));
+              const panValueFormatter = (value: number) =>
+                formatPanValue(String(panOptions[Math.round(value)] ?? panOptions[0] ?? ''));
+              const handleVolumeLocalChange = (val: number) => {
+                const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
+                setActiveSliders((prev) => ({ ...prev, [volumeSliderId]: snapped }));
+              };
+              const handleVolumeLocalCommit = (_val: number) => {
+                setActiveSliders((prev) => {
+                  const next = { ...prev };
+                  delete next[volumeSliderId];
+                  return next;
+                });
+              };
+              const handleVolumeAsyncChange = (val: number) => {
+                const v = resolveVolumeOption(val);
+                void updateConfigValue('Audio Mixer', entry.volumeItem, v, 'HOME_SID_VOLUME', `${entry.label} volume updated`, { suppressToast: true });
+              };
+              const handleVolumeAsyncCommit = (val: number) => {
+                const v = resolveVolumeOption(val);
+                void updateConfigValue('Audio Mixer', entry.volumeItem, v, 'HOME_SID_VOLUME', `${entry.label} volume updated`);
+              };
+              const handlePanLocalChange = (val: number) => {
+                const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
+                setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
+              };
+              const handlePanLocalCommit = (_val: number) => {
+                setActiveSliders((prev) => {
+                  const next = { ...prev };
+                  delete next[panSliderId];
+                  return next;
+                });
+              };
+              const handlePanAsyncChange = (val: number) => {
+                const v = resolvePanOption(val);
+                void updateConfigValue('Audio Mixer', entry.panItem, v, 'HOME_SID_PAN', `${entry.label} pan updated`, { suppressToast: true });
+              };
+              const handlePanAsyncCommit = (val: number) => {
+                const v = resolvePanOption(val);
+                void updateConfigValue('Audio Mixer', entry.panItem, v, 'HOME_SID_PAN', `${entry.label} pan updated`);
+              };
 
               // Identity / Filter
               const identityLabel = isUltiSid ? 'Filter' : 'SID';
@@ -2119,7 +2188,7 @@ export default function HomePage() {
                   pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', resistorItem)]),
                 });
                 shapingControls.push({
-                  label: 'Cap.',
+                  label: 'Cap',
                   value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem, '—')),
                   options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem).map(String),
                   onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', capacitorItem, resolveSelectValue(val), `HOME_SID_CAP_${socketIndex}`, `SID Socket ${socketIndex} capacitor updated`),
@@ -2154,56 +2223,22 @@ export default function HomePage() {
                   volume={volumeSliderValue}
                   volumeMax={volumeMax}
                   volumeStep={SID_SLIDER_STEP}
-                  onVolumeChange={(val) => {
-                    const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
-                    setActiveSliders((prev) => ({ ...prev, [volumeSliderId]: snapped }));
-                    const idx = resolveSliderIndex(snapped, volumeMax);
-                    const v = volumeOptions[idx] ?? volumeOptions[0] ?? entry.volume;
-                    void updateConfigValue('Audio Mixer', entry.volumeItem, v, 'HOME_SID_VOLUME', `${entry.label} volume updated`, { suppressToast: true });
-                  }}
-                  onVolumeCommit={(val) => {
-                    const nextIndex = resolveSliderIndex(applySoftDetent(val, volumeCenterIndex), volumeMax);
-                    const nextValue = volumeOptions[nextIndex] ?? volumeOptions[0] ?? entry.volume;
-                    setActiveSliders((prev) => {
-                      const next = { ...prev };
-                      delete next[volumeSliderId];
-                      return next;
-                    });
-                    void updateConfigValue(
-                      'Audio Mixer',
-                      entry.volumeItem,
-                      nextValue,
-                      'HOME_SID_VOLUME',
-                      `${entry.label} volume updated`,
-                    );
-                  }}
+                  onVolumeChange={handleVolumeLocalChange}
+                  onVolumeCommit={handleVolumeLocalCommit}
+                  onVolumeChangeAsync={handleVolumeAsyncChange}
+                  onVolumeCommitAsync={handleVolumeAsyncCommit}
+                  volumeValueFormatter={volumeValueFormatter}
+                  volumeMidpoint={volumeCenterIndex}
                   volumePending={volumePending}
                   pan={panSliderValue}
                   panMax={panMax}
                   panStep={SID_SLIDER_STEP}
-                  onPanChange={(val) => {
-                    const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
-                    setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
-                    const idx = resolveSliderIndex(snapped, panMax);
-                    const v = panOptions[idx] ?? panOptions[0] ?? entry.pan;
-                    void updateConfigValue('Audio Mixer', entry.panItem, v, 'HOME_SID_PAN', `${entry.label} pan updated`, { suppressToast: true });
-                  }}
-                  onPanCommit={(val) => {
-                    const nextIndex = resolveSliderIndex(applySoftDetent(val, panCenterIndex), panMax);
-                    const nextValue = panOptions[nextIndex] ?? panOptions[0] ?? entry.pan;
-                    setActiveSliders((prev) => {
-                      const next = { ...prev };
-                      delete next[panSliderId];
-                      return next;
-                    });
-                    void updateConfigValue(
-                      'Audio Mixer',
-                      entry.panItem,
-                      nextValue,
-                      'HOME_SID_PAN',
-                      `${entry.label} pan updated`,
-                    );
-                  }}
+                  onPanChange={handlePanLocalChange}
+                  onPanCommit={handlePanLocalCommit}
+                  onPanChangeAsync={handlePanAsyncChange}
+                  onPanCommitAsync={handlePanAsyncCommit}
+                  panValueFormatter={panValueFormatter}
+                  panMidpoint={panCenterIndex}
                   panPending={panPending}
                   isConnected={status.isConnected}
                   testIdSuffix={entry.key}

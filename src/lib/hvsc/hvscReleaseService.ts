@@ -28,6 +28,24 @@ const resolveHvscBaseUrl = (override?: string) => {
   return DEFAULT_BASE_URL;
 };
 
+export const getHvscBaseUrl = () => resolveHvscBaseUrl();
+
+export const getHvscBaseUrlOverride = () => {
+  if (typeof localStorage === 'undefined') return null;
+  const stored = localStorage.getItem(HVSC_BASE_URL_KEY);
+  return stored ? normalizeBaseUrl(stored) : null;
+};
+
+export const setHvscBaseUrlOverride = (value?: string | null) => {
+  if (typeof localStorage === 'undefined') return;
+  const trimmed = value?.trim() ?? '';
+  if (!trimmed) {
+    localStorage.removeItem(HVSC_BASE_URL_KEY);
+    return;
+  }
+  localStorage.setItem(HVSC_BASE_URL_KEY, normalizeBaseUrl(trimmed));
+};
+
 const fetchHvscIndex = async (baseUrl: string) => {
   if (isNativePlatform()) {
     const response = await CapacitorHttp.request({

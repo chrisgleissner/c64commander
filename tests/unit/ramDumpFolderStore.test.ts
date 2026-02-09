@@ -27,6 +27,7 @@ describe('ramDumpFolderStore', () => {
       treeUri: 'content://folder',
       rootName: 'RAM',
       selectedAt: '2026-02-07T00:00:00.000Z',
+      displayPath: 'RAM',
     });
   });
 

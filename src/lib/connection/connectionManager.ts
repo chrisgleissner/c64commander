@@ -278,7 +278,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
-  (trigger === 'startup' || trigger === 'manual') && !demoInterstitialShownThisSession;
+  trigger !== 'background' && !demoInterstitialShownThisSession;
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   if (stickyRealDeviceLock) {
@@ -440,7 +440,6 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     void (async () => {
       if (cancelled) return;
       windowExpired = true;
-      if (probeInFlight) return;
       await handleWindowExpiry();
     })();
   }, windowMs);

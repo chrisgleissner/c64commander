@@ -20,6 +20,8 @@ const { folderPickerMock, storeMock, platformMock } = vi.hoisted(() => ({
   storeMock: {
     loadRamDumpFolderConfig: vi.fn(),
     saveRamDumpFolderConfig: vi.fn(),
+    deriveRamDumpFolderDisplayPath: vi.fn((treeUri: string, rootName?: string | null) =>
+      rootName ? `Derived/${rootName}` : `Derived/${treeUri}`),
   },
   platformMock: {
     getPlatform: vi.fn(),
@@ -43,8 +45,8 @@ describe('ramDumpStorage', () => {
   });
 
   it('builds RAM dump filename with expected format', () => {
-    const name = buildRamDumpFileName(new Date('2026-02-07T03:04:05'));
-    expect(name).toBe('c64u-ram-03-04-05.bin');
+    const name = buildRamDumpFileName(new Date('2026-02-07T03:04:05Z'));
+    expect(name).toBe('c64u-ram-2026-02-07T03-04-05Z.bin');
   });
 
   it('returns stored folder when available', async () => {
@@ -71,6 +73,7 @@ describe('ramDumpStorage', () => {
     const folder = await selectRamDumpFolder();
 
     expect(folder.treeUri).toBe('content://new');
+    expect(folder.displayPath).toBe('Derived/New Folder');
     expect(storeMock.saveRamDumpFolderConfig).toHaveBeenCalled();
   });
 

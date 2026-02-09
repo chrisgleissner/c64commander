@@ -341,7 +341,7 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
 
-  it('probe success after discovery timeout completes when still in flight', async () => {
+  it('discovery timeout falls back to demo even if a probe is still in flight', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');
 
@@ -366,10 +366,10 @@ describe('connectionManager', () => {
     void discoverConnection('startup');
 
     await vi.advanceTimersByTimeAsync(250);
-    expect(getConnectionSnapshot().state).toBe('DISCOVERING');
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
 
     await vi.advanceTimersByTimeAsync(400);
-    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
   });
 
   it('switches from demo to real device on background probe success', async () => {

@@ -46,6 +46,10 @@ export interface SidCardProps {
     volumeStep?: number;
     onVolumeChange: (value: number) => void;
     onVolumeCommit?: (value: number) => void;
+    onVolumeChangeAsync?: (value: number) => void;
+    onVolumeCommitAsync?: (value: number) => void;
+    volumeValueFormatter?: (value: number) => string;
+    volumeMidpoint?: number | null;
     volumePending?: boolean;
 
     pan: number;
@@ -53,6 +57,10 @@ export interface SidCardProps {
     panStep?: number;
     onPanChange: (value: number) => void;
     onPanCommit?: (value: number) => void;
+    onPanChangeAsync?: (value: number) => void;
+    onPanCommitAsync?: (value: number) => void;
+    panValueFormatter?: (value: number) => string;
+    panMidpoint?: number | null;
     panPending?: boolean;
 
     isConnected: boolean;
@@ -84,12 +92,20 @@ export function SidCard({
     volumeStep,
     onVolumeChange,
     onVolumeCommit,
+    onVolumeChangeAsync,
+    onVolumeCommitAsync,
+    volumeValueFormatter,
+    volumeMidpoint,
     volumePending,
     pan,
     panMax,
     panStep,
     onPanChange,
     onPanCommit,
+    onPanChangeAsync,
+    onPanCommitAsync,
+    panValueFormatter,
+    panMidpoint,
     panPending,
     isConnected,
     className,
@@ -212,6 +228,10 @@ export function SidCard({
                         step={volumeStep ?? 1}
                         onValueChange={(vals) => onVolumeChange(vals[0])}
                         onValueCommit={(vals) => onVolumeCommit?.(vals[0])}
+                        onValueChangeAsync={onVolumeChangeAsync}
+                        onValueCommitAsync={onVolumeCommitAsync}
+                        valueFormatter={volumeValueFormatter}
+                        midpoint={volumeMidpoint !== null && volumeMidpoint !== undefined ? { value: volumeMidpoint, haptics: true, notch: true } : undefined}
                         disabled={!isConnected || volumePending}
                         className="flex-1"
                         data-testid={`home-sid-volume-${testIdSuffix}`}
@@ -226,6 +246,10 @@ export function SidCard({
                         step={panStep ?? 1}
                         onValueChange={(vals) => onPanChange(vals[0])}
                         onValueCommit={(vals) => onPanCommit?.(vals[0])}
+                        onValueChangeAsync={onPanChangeAsync}
+                        onValueCommitAsync={onPanCommitAsync}
+                        valueFormatter={panValueFormatter}
+                        midpoint={panMidpoint !== null && panMidpoint !== undefined ? { value: panMidpoint, haptics: true, notch: true } : undefined}
                         disabled={!isConnected || panPending}
                         className="flex-1"
                         data-testid={`home-sid-pan-${testIdSuffix}`}
