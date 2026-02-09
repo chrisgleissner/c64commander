@@ -1,0 +1,13 @@
+appId: uk.gleissner.c64commander
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+tags:
+  - subflow
+---
+- extendedWaitUntil:
+    visible: "Browse HVSC folders"
+    timeout: ${SHORT_TIMEOUT}
+- extendedWaitUntil:
+    visible: "Filter folders…"
+    timeout: ${SHORT_TIMEOUT}
+- takeScreenshot: hvsc-browse

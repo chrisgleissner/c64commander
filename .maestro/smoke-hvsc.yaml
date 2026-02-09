@@ -24,10 +24,7 @@ env:
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
 - takeScreenshot: hvsc-actions
-- extendedWaitUntil:
-    visible: "Browse HVSC folders"
-    timeout: ${SHORT_TIMEOUT}
-- extendedWaitUntil:
-    visible: "Filter folders…"
-    timeout: ${SHORT_TIMEOUT}
-- takeScreenshot: hvsc-browse
+- runFlow:
+    when:
+      visible: "Browse HVSC folders"
+    file: subflows/hvsc-browse-assert.yaml

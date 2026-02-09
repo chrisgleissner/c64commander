@@ -44,7 +44,15 @@ tags:
 - tapOn:
     text: "Add more items"
     optional: true
-- assertVisible: "Choose source"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
+- scrollUntilVisible:
+    element:
+      id: "import-option-local"
+    direction: DOWN
+    timeout: ${TIMEOUT}
 - assertVisible:
-  id: "import-option-local"
+    id: "import-option-local"
 - takeScreenshot: choose-source

@@ -8,6 +8,7 @@ OUTPUT_DIR="$ROOT_DIR/test-results/maestro"
 DEBUG_DIR="$OUTPUT_DIR/debug"
 REPORT_PATH="$OUTPUT_DIR/maestro-report.xml"
 CONFIG_PATH="$ROOT_DIR/.maestro/config.yaml"
+BOOT_TIMEOUT_SECS=${BOOT_TIMEOUT_SECS:-180}
 
 MODE=""
 TAG_FILTERS=""
@@ -40,6 +41,20 @@ require_cmd() {
     echo "Missing command: $1" >&2
     exit 1
   fi
+}
+
+wait_for_boot() {
+  local serial="$1"
+  local deadline=$(( $(date +%s) + BOOT_TIMEOUT_SECS ))
+  log "Waiting for device to finish booting (timeout ${BOOT_TIMEOUT_SECS}s)"
+  adb -s "$serial" wait-for-device >/dev/null 2>&1 || true
+  while [[ $(date +%s) -lt $deadline ]]; do
+    if adb -s "$serial" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q "1"; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
 }
 
 resolve_apk_path() {
@@ -190,6 +205,11 @@ fi
 mkdir -p "$OUTPUT_DIR" "$DEBUG_DIR"
 
 pick_device
+
+if ! wait_for_boot "$DEVICE_ID"; then
+  echo "Device $DEVICE_ID did not finish booting within ${BOOT_TIMEOUT_SECS}s" >&2
+  exit 1
+fi
 
 install_apk
 

@@ -35,6 +35,7 @@ Use the repo build helper to run Maestro flows locally with consistent filtering
 - `./build --test-maestro-tags "+device,+file-picker,-slow"` runs with tag filters.
 - `--test-apk-path <path>` overrides the APK used for Maestro runs.
 - `--test-device-id <id>` targets a specific adb device.
+- Maestro runs started via `./build --test-maestro-*` automatically start the Android emulator if none is running, and will prefer the emulator unless `--test-device-id` is provided.
 
 Tag filters are comma-separated. Prefix `+` to include and `-` to exclude. Unprefixed tags are treated as includes.
 

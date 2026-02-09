@@ -14,11 +14,12 @@ env:
 ---
 - runFlow: subflows/open-play-add-items.yaml
 - scrollUntilVisible:
-    element: "Add file / folder from device"
+    element:
+      id: "import-option-local"
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
-    text: "Add file / folder from device"
+    id: "import-option-local"
 - takeScreenshot: picker-open
 
 # Handle permission dialogs (optional - may not appear on all devices)

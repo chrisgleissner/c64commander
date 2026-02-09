@@ -17,7 +17,7 @@ env:
     value: enabled
 - extendedWaitUntil:
     visible: "Offline"
-    timeout: ${SHORT_TIMEOUT}
+    timeout: ${TIMEOUT}
 - takeScreenshot: offline-mode
 - setAirplaneMode:
     value: disabled

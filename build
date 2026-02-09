@@ -427,6 +427,35 @@ run_android_instrumentation() {
   (cd "$ROOT_DIR" && timeout 30m ./android/gradlew -p android connectedDebugAndroidTest)
 }
 
+ensure_maestro_emulator() {
+  if [[ -n "$TEST_DEVICE_ID" ]]; then
+    return
+  fi
+  require_cmd adb
+  adb start-server >/dev/null 2>&1 || true
+  local emulator_id
+  emulator_id=$(adb devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1; exit}')
+  if [[ -z "$emulator_id" ]]; then
+    log "No Android emulator detected; starting emulator for Maestro"
+    "$ROOT_DIR/scripts/android-emulator.sh" --no-prereqs --no-build --no-apk --no-install
+  fi
+
+  local deadline=$((SECONDS + 180))
+  while [[ -z "$emulator_id" && $SECONDS -lt $deadline ]]; do
+    emulator_id=$(adb devices | awk 'NR>1 && $2=="device" && $1 ~ /^emulator-/ {print $1; exit}')
+    if [[ -z "$emulator_id" ]]; then
+      sleep 2
+    fi
+  done
+
+  if [[ -z "$emulator_id" ]]; then
+    echo "No Android emulator detected for Maestro after start attempt." >&2
+    exit 1
+  fi
+
+  TEST_DEVICE_ID="$emulator_id"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test-unit)
@@ -1124,6 +1153,7 @@ if [[ "$RUN_APK" == "true" ]]; then
 fi
 
 if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "$RUN_TEST_MAESTRO_TAGS" == "true" ]]; then
+  ensure_maestro_emulator
   log "Running Maestro tests"
   MAESTRO_MODE=""
   if [[ "$RUN_TEST_MAESTRO_CI" == "true" ]]; then
