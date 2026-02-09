@@ -11,7 +11,7 @@ env:
 
 # Add a known SID from the C64 Ultimate mock source.
 - tapOn:
-    text: "Add file / folder"
+    id: "import-option-c64u"
 - extendedWaitUntil:
     visible: "Select items"
     timeout: ${SHORT_TIMEOUT}

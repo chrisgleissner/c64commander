@@ -102,6 +102,16 @@ install_apk() {
   fi
 }
 
+ensure_hvsc_library() {
+  local serial="$1"
+  local base="/sdcard/Download/C64Music"
+  local track="$base/DEMOS/0-9/35_Years.sid"
+  if ! adb -s "$serial" shell "mkdir -p '$base/DEMOS/0-9' && if [ ! -f '$track' ]; then echo 'SIDDATA-35' > '$track'; fi" >/dev/null 2>&1; then
+    log "Failed to prepare C64Music test data"
+    return 1
+  fi
+}
+
 write_smoke_config() {
   local payload
   payload=$(node -e "const target=process.argv[1];const host=process.argv[2];const payload={target,readOnly:target==='real',debugLogging:true};if(target==='real'&&host){payload.host=host;}process.stdout.write(JSON.stringify(payload));" "$C64U_TARGET" "$C64U_HOST")
@@ -218,6 +228,8 @@ adb -s "$DEVICE_ID" shell pm clear "$APP_ID" >/dev/null 2>&1 || true
 
 write_smoke_config
 
+ensure_hvsc_library "$DEVICE_ID"
+
 MAESTRO_ARGS=("$ROOT_DIR/.maestro" --udid "$DEVICE_ID" --format JUNIT --output "$REPORT_PATH" --test-output-dir "$OUTPUT_DIR" --debug-output "$DEBUG_DIR")
 
 TEMP_CONFIG=""
@@ -245,6 +257,14 @@ case "$MODE" in
     exit 1
     ;;
 esac
+
+if [[ "$C64U_TARGET" == "mock" ]]; then
+  if [[ -n "$TAG_EXCLUDE" ]]; then
+    TAG_EXCLUDE="${TAG_EXCLUDE},real-network"
+  else
+    TAG_EXCLUDE="real-network"
+  fi
+fi
 
 if [[ -n "$TAG_INCLUDE" ]]; then
   MAESTRO_ARGS+=(--include-tags "$TAG_INCLUDE")
