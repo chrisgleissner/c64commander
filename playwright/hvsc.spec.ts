@@ -825,7 +825,7 @@ test.describe('HVSC Play page', () => {
     await expect(page.getByText('2:41')).toBeVisible();
 
     // 4. Navigate to /DEMOS/M/
-    await page.getByRole('button', { name: '..' }).click();
+    await page.getByRole('button', { name: 'Up' }).click();
     await page.getByRole('button', { name: '/DEMOS/M' }).click();
 
     // 5. Expand multi-subsong
