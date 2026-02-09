@@ -1138,8 +1138,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-            Lower safety settings can overwhelm or destabilize real hardware. Use relaxed settings only if you
-            understand the risks and are willing to accept potential device instability.
+            The relaxed safety mode can impact hardware stability. Use only if you are comfortable with this.
           </div>
 
           <div className="space-y-2">

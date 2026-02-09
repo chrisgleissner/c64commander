@@ -50,6 +50,12 @@ env:
 - tapOn:
     text: "Show roots"
     optional: true
+- tapOn:
+    text: "Downloads"
+    optional: true
+- tapOn:
+    text: "Download"
+    optional: true
 - scrollUntilVisible:
     element: "C64Music"
     direction: DOWN
