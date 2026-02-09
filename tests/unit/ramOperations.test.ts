@@ -1,10 +1,40 @@
-import { describe, expect, it, vi } from 'vitest';
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   FULL_RAM_SIZE_BYTES,
   clearRamAndReboot,
   dumpFullRamImage,
   loadFullRamImage,
 } from '@/lib/machine/ramOperations';
+
+const { livenessMock, traceSessionMock, loggingMock } = vi.hoisted(() => ({
+  livenessMock: {
+    checkC64Liveness: vi.fn(),
+  },
+  traceSessionMock: {
+    recordDeviceGuard: vi.fn(),
+    getActiveAction: vi.fn(),
+    createActionContext: vi.fn(() => ({ id: 'ctx' })),
+  },
+  loggingMock: {
+    addErrorLog: vi.fn(),
+  },
+}));
+
+vi.mock('@/lib/machine/c64Liveness', () => livenessMock);
+vi.mock('@/lib/tracing/traceSession', () => traceSessionMock);
+vi.mock('@/lib/tracing/actionTrace', () => ({
+  getActiveAction: traceSessionMock.getActiveAction,
+  createActionContext: traceSessionMock.createActionContext,
+}));
+vi.mock('@/lib/logging', () => loggingMock);
 
 const buildApi = () => {
   let jiffy = 0;
@@ -31,6 +61,11 @@ const buildApi = () => {
 };
 
 describe('ramOperations', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    livenessMock.checkC64Liveness.mockResolvedValue({ decision: 'ok' });
+  });
+
   it('dumps full RAM while paused and resumes afterwards', async () => {
     const api = buildApi();
 
@@ -124,5 +159,30 @@ describe('ramOperations', () => {
     expect(failed).toBe(true);
     expect(image.length).toBe(FULL_RAM_SIZE_BYTES);
     expect(api.readMemory).toHaveBeenCalled();
+  });
+  
+  it('aborts dump if C64 is wedged', async () => {
+    livenessMock.checkC64Liveness.mockResolvedValue({ decision: 'wedged' });
+    const api = buildApi();
+    await expect(dumpFullRamImage(api as any)).rejects.toThrow('aborted: C64 appears wedged');
+  });
+
+  it('reports liveness check failure but proceeds if not explicitly wedged/unknown', async () => {
+    livenessMock.checkC64Liveness.mockRejectedValue(new Error('Liveness check failed'));
+    const api = buildApi();
+    // It should throw the error because recoverFromLivenessFailure logic rethrows
+    await expect(dumpFullRamImage(api as any)).rejects.toThrow('Liveness check failed');
+  });
+
+  it('fails after max retries', async () => {
+    const api = buildApi();
+    const error = new Error('Persistent failure');
+    api.readMemory.mockRejectedValue(error);
+    
+    // Override delay to speed up test? Not easy without fake timers or mock.
+    // However, with only 2 retries and 120ms wait, it's 240ms. Acceptable.
+    
+    await expect(dumpFullRamImage(api as any)).rejects.toThrow(/Save RAM failed: Read RAM chunk at \$0000 failed after 2 attempt/);
+    expect(loggingMock.addErrorLog).toHaveBeenCalledTimes(1); // 1 retry recorded for 2 attempts
   });
 });

@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { addErrorLog } from '@/lib/logging';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
@@ -169,10 +177,10 @@ export const pickRamDumpFile = async (
   if (!file) {
     throw new Error('No RAM dump file selected.');
   }
-  const buffer = await file.arrayBuffer();
   if (!file.name.toLowerCase().endsWith('.bin')) {
     throw new Error('Select a .bin RAM dump file.');
   }
+  const buffer = await file.arrayBuffer();
   return {
     name: file.name,
     sizeBytes: file.size,

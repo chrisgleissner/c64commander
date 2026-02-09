@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { loadDiskLibrary, saveDiskLibrary } from '@/lib/disks/diskStore';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
 import { describe, it, expect, beforeEach, vi } from 'vitest';

@@ -1,69 +1,107 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { triggerSliderHaptic } from '@/lib/ui/sliderHaptics';
 import { Capacitor } from '@capacitor/core';
 import { addErrorLog } from '@/lib/logging';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@capacitor/core');
-vi.mock('@/lib/logging');
+vi.mock('@capacitor/core', () => ({
+    Capacitor: {
+        isNativePlatform: vi.fn(),
+        isPluginAvailable: vi.fn(),
+        Plugins: {} // Mock global Plugins property on Capacitor class
+    }
+}));
+
+vi.mock('@/lib/logging', () => ({
+    addErrorLog: vi.fn(),
+}));
 
 describe('sliderHaptics', () => {
     beforeEach(() => {
-        vi.clearAllMocks();
+        vi.resetAllMocks();
+        vi.unstubAllGlobals();
     });
 
-    it('does nothing if not native platform', async () => {
+    it('returns early if haptics not available (web)', async () => {
         vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
         await triggerSliderHaptic();
-        // No explicit expectation, just ensures no error and coverage lines hit
+        // Nothing happens
     });
 
-    it('triggers haptics impact on native', async () => {
+    it('returns early if native but Haptics plugin missing', async () => {
+        vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+        vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(false);
+        await triggerSliderHaptic();
+    });
+    
+    it('catches and logs error in availability check', async () => {
+        vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => { throw new Error('Fail'); });
+        await triggerSliderHaptic();
+        expect(addErrorLog).toHaveBeenCalledWith('Haptics availability probe failed', expect.any(Object));
+    });
+
+    it('uses Capacitor Haptics plugin if available', async () => {
         vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
         vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-
-        // Valid mocking of Capacitor.Plugins structure is tricky as it is accessed somewhat dynamically in the code
-        // The code casts `Capacitor as unknown as { Plugins ... }`
-
-        // We can try to mock the dynamically accessed property if possible,
-        // or we might need to rely on how vitest mocks module exports.
-
-        // Let's assume we can mock the module export 'Capacitor' to have Plugins.
-        // However, `vi.mock` creates the mock object.
-
-        const mockImpact = vi.fn();
-        (Capacitor as any).Plugins = {
-            Haptics: {
-                impact: mockImpact,
-                ImpactStyle: { Light: 'LIGHT' }
-            }
-        };
+        
+        const impactMock = vi.fn();
+        const HapticsMock = { impact: impactMock, ImpactStyle: { Light: 'LIGHT' } };
+        
+        // Mocking the complex property access
+        // const haptics = plugins?.Haptics ...
+        (Capacitor as any).Plugins = { Haptics: HapticsMock };
 
         await triggerSliderHaptic();
-        expect(mockImpact).toHaveBeenCalledWith({ style: 'LIGHT' });
+        
+        expect(impactMock).toHaveBeenCalledWith({ style: 'LIGHT' });
     });
 
-    it('logs error if probe fails', async () => {
-        vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
-            throw new Error('Probe error');
+    it('uses window.Capacitor fallback if global Capacitor missing plugins', async () => {
+        vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+        vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+        (Capacitor as any).Plugins = undefined;
+
+        const impactMock = vi.fn();
+        const HapticsMock = { impact: impactMock, ImpactStyle: { Light: 'LIGHT' } };
+        
+        vi.stubGlobal('window', {
+            Capacitor: { Plugins: { Haptics: HapticsMock } }
         });
 
         await triggerSliderHaptic();
-        expect(addErrorLog).toHaveBeenCalledWith('Haptics availability probe failed', expect.anything());
+        expect(impactMock).toHaveBeenCalled();
     });
-
-    it('logs error if impact fails', async () => {
+    
+    it('uses navigator.vibrate if haptics plugin is declared available but impact method missing', async () => {
         vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
         vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-
-        const mockImpact = vi.fn().mockRejectedValue(new Error('Impact failed'));
-        (Capacitor as any).Plugins = {
-            Haptics: {
-                impact: mockImpact,
-                ImpactStyle: { Light: 'LIGHT' }
-            }
-        };
-
+        
+        // Setup Haptics object without impact
+        (Capacitor as any).Plugins = { Haptics: {} }; 
+        
+        const vibrateMock = vi.fn();
+        vi.stubGlobal('navigator', { vibrate: vibrateMock });
+        
         await triggerSliderHaptic();
-        expect(addErrorLog).toHaveBeenCalledWith('Haptics impact failed', expect.anything());
+        expect(vibrateMock).toHaveBeenCalledWith(8);
+    });
+
+    it('catches errors during impact execution', async () => {
+        vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+        vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+        
+        const impactMock = vi.fn().mockRejectedValue(new Error('Impact failed'));
+        (Capacitor as any).Plugins = { Haptics: { impact: impactMock } };
+        
+        await triggerSliderHaptic();
+        
+        expect(addErrorLog).toHaveBeenCalledWith('Haptics impact failed', expect.any(Object));
     });
 });

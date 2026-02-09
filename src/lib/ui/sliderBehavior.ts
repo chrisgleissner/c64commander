@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 export const DEFAULT_SLIDER_ASYNC_THROTTLE_MS = 120;
 export const DEFAULT_MIDPOINT_SNAP_RATIO = 0.02;
 export const DEFAULT_MIDPOINT_HAPTIC_INTERVAL_MS = 200;
