@@ -148,13 +148,6 @@ Read in-app documentation, getting started guides, and per-page walkthroughs wit
       <img src="doc/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="480"/>
     </td>
   </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/docs/sections/02-home.png" alt="Docs home" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/docs/sections/03-play-files.png" alt="Docs play files" width="480"/>
-    </td>
   </tr>
 </table>
 
