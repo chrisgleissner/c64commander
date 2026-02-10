@@ -8,6 +8,7 @@
 
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { addErrorLog } from '@/lib/logging';
+import { computeSidMd5 } from '@/lib/sid/sidUtils';
 
 export type SonglengthsData = {
   // Values are 1-based sub-tune durations (index 0 is song #1).
@@ -63,7 +64,6 @@ export const resolveSonglengthsDurationMs = async (
 
   try {
     const buffer = await file.arrayBuffer();
-    const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
     const md5 = await computeSidMd5(buffer);
     const md5Seconds = resolveSonglengthsSeconds(data, path, md5, songNr);
     return md5Seconds !== null ? md5Seconds * 1000 : null;

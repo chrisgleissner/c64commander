@@ -28,6 +28,7 @@ import {
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { getLocalFilePath, normalizeLocalPath } from '@/pages/playFiles/playFilesUtils';
 import type { PlaylistItem } from '@/pages/playFiles/types';
+import { computeSidMd5 } from '@/lib/sid/sidUtils';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 
 export type SonglengthsFileEntry = {
@@ -433,7 +434,6 @@ export const useSonglengths = ({ playlist }: UseSonglengthsParams): UseSonglengt
     if (!file) return null;
     try {
       const buffer = await file.arrayBuffer();
-      const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
       const md5 = await computeSidMd5(buffer);
       const resolvedByMd5 = service.resolveDurationSeconds({
         virtualPath: normalizedPath,

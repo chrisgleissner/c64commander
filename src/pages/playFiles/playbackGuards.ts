@@ -8,12 +8,6 @@
 
 export type BooleanRef = { current: boolean };
 
-export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: number): number | null => {
-  if (playlistLength <= 0) return null;
-  if (currentIndex < 0) return 0;
-  return currentIndex < playlistLength ? currentIndex : 0;
-};
-
 export const tryAcquireSingleFlight = (ref: BooleanRef): boolean => {
   if (ref.current) return false;
   ref.current = true;
