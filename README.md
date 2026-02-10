@@ -28,20 +28,14 @@ Track device status at a glance, control the machine and drives, and access quic
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="480"/>
-    </td>
+    <td><img src="doc/img/app/home/00-overview-light.png" alt="Home overview (Light)" width="360"/></td>
+    <td><img src="doc/img/app/home/01-overview-dark.png" alt="Home overview (Dark)" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/03-quick-config.png" alt="Home quick config" width="360"/></td>
   </tr>
   <tr>
-    <td>
-      <img src="doc/img/app/home/sections/03-quick-config.png" alt="Home machine" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/home/sections/05-printers.png" alt="Home SID" width="480"/>
-    </td>
+    <td><img src="doc/img/app/home/sections/04-drives.png" alt="Home drives" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/06-sid.png" alt="Home SID" width="360"/></td>
+    <td><img src="doc/img/app/home/sections/07-streams.png" alt="Home streams" width="360"/></td>
   </tr>
 </table>
 
@@ -51,20 +45,9 @@ Control SID playback, adjust playback settings, manage playlists, select SID sub
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/play/01-overview.png" alt="Play overview" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/play/sections/03-hvsc-library.png" alt="Play HVSC library" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/play/05-demo-mode.png" alt="Play demo mode" width="480"/>
-    </td>
+    <td><img src="doc/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
+    <td><img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
+    <td><img src="doc/img/app/play/sections/03-hvsc-library.png" alt="Play HVSC library" width="360"/></td>
   </tr>
 </table>
 
@@ -74,12 +57,9 @@ Monitor drive status, mount images, and browse your disk collections.
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/disks/01-overview.png" alt="Disks overview" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="480"/>
-    </td>
+    <td><img src="doc/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
+    <td><img src="doc/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
+    <td></td>
   </tr>
 </table>
 
@@ -89,12 +69,9 @@ Browse configuration categories, tune audio and SID settings, and edit drive-spe
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="480"/>
-    </td>
+    <td><img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
+    <td><img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
+    <td></td>
   </tr>
 </table>
 
@@ -104,28 +81,14 @@ Adjust appearance, connections, diagnostics, playback defaults, HVSC library acc
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/settings/sections/02-connection.png" alt="Settings connection" width="480"/>
-    </td>
+    <td><img src="doc/img/app/settings/sections/01-appearance.png" alt="Settings appearance" width="360"/></td>
+    <td><img src="doc/img/app/settings/sections/02-connection.png" alt="Settings connection" width="360"/></td>
+    <td><img src="doc/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="360"/></td>
   </tr>
   <tr>
-    <td>
-      <img src="doc/img/app/settings/sections/03-diagnostics.png" alt="Settings diagnostics" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/settings/sections/05-config.png" alt="Settings configuration" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/settings/sections/06-hvsc-library.png" alt="Settings HVSC library" width="480"/>
-    </td>
+    <td><img src="doc/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
+    <td><img src="doc/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
+    <td><img src="doc/img/app/settings/sections/06-hvsc-library.png" alt="Settings HVSC library" width="360"/></td>
   </tr>
 </table>
 
@@ -135,13 +98,9 @@ Read in-app documentation, getting started guides, and per-page walkthroughs wit
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/docs/01-overview.png" alt="Docs overview" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="480"/>
-    </td>
-  </tr>
+    <td><img src="doc/img/app/docs/01-overview.png" alt="Docs overview" width="360"/></td>
+    <td><img src="doc/img/app/docs/sections/01-getting-started.png" alt="Docs getting started" width="360"/></td>
+    <td><img src="doc/img/app/docs/sections/05-swapping-disks.png" alt="Docs swapping disks" width="360"/></td>
   </tr>
 </table>
 
@@ -151,20 +110,9 @@ Trigger diagnostic actions, inspect traces, review logs, and triage errors.
 
 <table>
   <tr>
-    <td>
-      <img src="doc/img/app/diagnostics/01-actions-expanded.png" alt="Diagnostics actions" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/diagnostics/02-traces-expanded.png" alt="Diagnostics traces" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/diagnostics/03-logs.png" alt="Diagnostics logs" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/diagnostics/04-errors.png" alt="Diagnostics errors" width="480"/>
-    </td>
+    <td><img src="doc/img/app/diagnostics/01-actions-expanded.png" alt="Diagnostics actions" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/02-traces-expanded.png" alt="Diagnostics traces" width="360"/></td>
+    <td><img src="doc/img/app/diagnostics/03-logs.png" alt="Diagnostics logs" width="360"/></td>
   </tr>
 </table>
 
@@ -174,20 +122,20 @@ Full screenshot set lives under [doc/img/app/](doc/img/app/).
 
 1. Download the APK from the latest GitHub release (`c64commander-<version>.apk` for normal installs; use `c64commander-<version>-debug.apk` only if you need a debug build).
 2. Open the downloaded file on your phone (Files app or notification).
-3. If prompted, allow installs from unknown sources for the browser/files app.
+3. If prompted, allow installs from unknown sources for the browser or files app.
 4. Tap Install to finish.
 
 ## Device safety settings
 
-C64 Commander includes a configurable device safety system to reduce REST/FTP overload on fragile hardware.
+C64 Commander includes a configurable device safety system to reduce REST and FTP overload on fragile hardware.
 You can find these controls in Settings → Device Safety.
 
 - **Safety mode presets**: Relaxed, Balanced (default), and Conservative.
-- **Advanced controls**: REST/FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit breaker thresholds, and discovery probe interval.
+- **Advanced controls**: REST and FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit breaker thresholds, and discovery probe interval.
 - **Warning**: Lower safety settings can overwhelm the device. Use relaxed settings only if you understand the risks.
 
 ## Developer documentation
 
 For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).
 
-Chaos/fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).
+Fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).
