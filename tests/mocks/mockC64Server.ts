@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import * as http from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { getMockConfigPayload, setMockConfigLoader } from '../../src/lib/mock/mockConfig.js';
@@ -488,6 +496,11 @@ export async function createMockC64Server(
           errors: [],
         });
       }
+    }
+
+    const streamMatch = parsed.pathname.match(/^\/v1\/streams\/([^/]+):(start|stop)$/);
+    if (method === 'PUT' && streamMatch) {
+      return sendJson(200, { errors: [] });
     }
 
     return sendJson(404, { errors: ['Not found'] });

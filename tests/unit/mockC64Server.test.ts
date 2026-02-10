@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import http from 'node:http';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createMockC64Server } from '../mocks/mockC64Server';
@@ -214,5 +222,34 @@ describe('createMockC64Server', () => {
     expect(timeoutElapsed).toBeGreaterThanOrEqual(1400);
     expect(timeoutElapsed).toBeLessThan(5000);
     server.setFaultMode('none');
+  });
+
+  it('syncs drive state when configs update', async () => {
+    // Drive A enabled check
+    await requestJson(`${server.baseUrl}/v1/configs/Drive%20A%20Settings/Drive?value=Disabled`, { method: 'PUT' });
+    let drives = await requestJson(`${server.baseUrl}/v1/drives`);
+    expect(drives.json.drives[0].a.enabled).toBe(false);
+
+    // SoftIEC
+    await requestJson(`${server.baseUrl}/v1/configs/SoftIEC%20Drive%20Settings/IEC%20Drive?value=Enabled`, { method: 'PUT' });
+    drives = await requestJson(`${server.baseUrl}/v1/drives`);
+    expect(drives.json.drives[2]['IEC Drive'].enabled).toBe(true);
+
+    // Batch update
+    await requestJson(`${server.baseUrl}/v1/configs`, {
+      method: 'POST',
+      body: JSON.stringify({
+        'Drive B Settings': { 'Drive': 'Disabled' },
+        'Printer Settings': { 'IEC printer': 'Enabled' }
+      })
+    });
+    drives = await requestJson(`${server.baseUrl}/v1/drives`);
+    expect(drives.json.drives[1].b.enabled).toBe(false);
+    expect(drives.json.drives[3]['Printer Emulation'].enabled).toBe(true);
+  });
+
+  it('handles server close redundantly', async () => {
+    await server.close();
+    await expect(server.close()).resolves.toBeUndefined();
   });
 });

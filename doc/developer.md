@@ -124,6 +124,9 @@ All common development tasks use `./build`:
 ./build --test-smoke --c64u-target real --c64u-host auto  # External mock for emulator
 ```
 
+Notes:
+- `./build --test-maestro-*` auto-starts the Android emulator if none is running and uses it unless `--test-device-id` is provided.
+
 Read `doc/testing/maestro.md` before writing or editing Maestro flows.
 
 You can also run the Maestro flows directly from repo root:

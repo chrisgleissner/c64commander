@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
@@ -143,9 +151,9 @@ test.describe('Item Selection Dialog UX', () => {
     const dialog = page.locator('[role="dialog"]').first();
     // Count visible close buttons in top-right area
     const headerCloseButtons = await dialog.locator('button[aria-label*="Close"], button[class*="absolute"][class*="right"]').count();
-    
+
     await snap(page, testInfo, 'close-buttons-check');
-    
+
     // Should have exactly one close button
     expect(headerCloseButtons).toBeLessThanOrEqual(1);
   });
@@ -169,10 +177,10 @@ test.describe('Item Selection Dialog UX', () => {
       // Modal should leave at least 10% margin at top and bottom combined
       const heightRatio = dialogBox.height / viewport.height;
       expect(heightRatio).toBeLessThan(0.90);
-      
+
       // Modal should not start at viewport top
       expect(dialogBox.y).toBeGreaterThan(viewport.height * 0.05);
-      
+
       await snap(page, testInfo, 'modal-sizing-verified');
     }
   });
@@ -199,17 +207,34 @@ test.describe('Item Selection Dialog UX', () => {
     await snap(page, testInfo, 'c64u-file-picker');
   });
 
+  test('add items dialog resets to interstitial on reopen', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/play');
+    await openAddItemsDialog(page);
+
+    const dialog = page.getByRole('dialog');
+    await dialog.getByTestId('import-option-c64u').click();
+    await waitForFtpIdle(dialog);
+    await expect(dialog.getByTestId('c64u-file-picker')).toBeVisible();
+    await snap(page, testInfo, 'c64u-picker-open');
+
+    await dialog.getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    await openAddItemsDialog(page);
+    const reopened = page.getByRole('dialog');
+    await expect(reopened.getByTestId('import-selection-interstitial')).toBeVisible();
+    await snap(page, testInfo, 'interstitial-reset');
+  });
+
   test('local file picker is reachable from playlist flow', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await seedLocalSource(page);
     await page.goto('/play');
     await openAddItemsDialog(page);
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
-    await dialog.getByTestId('browse-source-seed-local-source').click();
-    await expect(dialog.getByTestId('local-file-picker')).toBeVisible();
-    await expect(dialog.getByText('seed.sid')).toBeVisible();
-    await snap(page, testInfo, 'local-file-picker');
+    await expect(dialog.getByTestId('import-option-local')).toBeVisible();
+    await expect(dialog.getByTestId('import-option-c64u')).toBeVisible();
+    await snap(page, testInfo, 'local-file-picker-interstitial');
   });
 
   test('add items modal content is scrollable', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -218,7 +243,7 @@ test.describe('Item Selection Dialog UX', () => {
 
     await openAddItemsDialog(page);
     await page.waitForSelector('[role="dialog"]');
-    
+
     // Select C64 Ultimate source to get file list
     const dialog = page.getByRole('dialog');
     await clickSourceSelectionButton(dialog, 'C64 Ultimate');
@@ -233,7 +258,7 @@ test.describe('Item Selection Dialog UX', () => {
     });
 
     await snap(page, testInfo, 'scrollable-check');
-    
+
     // Content should either be scrollable or have overflow classes
     expect(isScrollable || (await scrollableContent.getAttribute('class'))?.includes('overflow')).toBeTruthy();
   });
@@ -261,7 +286,7 @@ test.describe('Item Selection Dialog UX', () => {
     const confirmButton = page.getByTestId('add-items-confirm');
     await expect(confirmButton).toBeVisible();
     await expect(confirmButton).toBeEnabled();
-    
+
     await snap(page, testInfo, 'confirm-button-visible');
   });
 

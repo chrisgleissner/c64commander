@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 /**
  * Golden bronze tone for demo mode indicator.
  * Uses CSS custom properties to adapt contrast for light and dark modes.

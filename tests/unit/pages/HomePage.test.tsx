@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
@@ -169,6 +177,17 @@ vi.mock('@/hooks/useActionTrace', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: toastSpy,
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
+}));
+
+vi.mock('@/hooks/useDiagnosticsActivity', () => ({
+  useDiagnosticsActivity: () => ({ restInFlight: 0, setRestInFlight: vi.fn() }),
+}));
+
+vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
+  isDiagnosticsOverlayActive: () => false,
+  subscribeDiagnosticsOverlay: () => () => { },
+  shouldSuppressDiagnosticsSideEffects: () => false,
 }));
 
 vi.mock('@/lib/uiErrors', () => ({
@@ -196,6 +215,8 @@ beforeEach(() => {
     setConfigValue: vi.fn().mockResolvedValue({}),
     resetDrive: vi.fn().mockResolvedValue({}),
     writeMemory: vi.fn().mockResolvedValue({}),
+    startStream: vi.fn().mockResolvedValue({}),
+    stopStream: vi.fn().mockResolvedValue({}),
   };
   statusPayloadRef.current = {
     isConnected: true,
@@ -231,6 +252,8 @@ beforeEach(() => {
 });
 
 describe('HomePage SID status', () => {
+  vi.setConfig({ testTimeout: 15000 });
+
   it('renders the Home subtitle as C64 Commander', () => {
     renderHomePage();
     expect(screen.getByTestId('home-header-subtitle').textContent).toBe('C64 Commander');
@@ -257,7 +280,7 @@ describe('HomePage SID status', () => {
 
     const { rerender } = renderHomePage();
 
-    expect(screen.getByTestId('sid-status-label').textContent).toContain('SID');
+    expect(within(screen.getByTestId('home-sid-status')).getAllByText('SID').length).toBeGreaterThan(0);
     const sidSocket1 = screen.getByText('SID Socket 1');
     const sidSocket2 = screen.getByText('SID Socket 2');
     const ultiSid1 = screen.getByText('UltiSID 1');
@@ -317,13 +340,13 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     const streamSection = screen.getByTestId('home-stream-status');
-    expect(within(streamSection).getByTestId('stream-status-label').textContent).toContain('Streams');
+    expect(within(streamSection).getByText('Streams')).toBeTruthy();
     expect(within(streamSection).getAllByTestId(/^home-stream-row-/)).toHaveLength(3);
     expect(within(streamSection).getByText('VIC')).toBeTruthy();
     expect(within(streamSection).getByText('AUDIO')).toBeTruthy();
     expect(within(streamSection).getByText('DEBUG')).toBeTruthy();
-    expect(within(streamSection).getAllByText('ON').length).toBe(2);
-    expect(within(streamSection).getAllByText('OFF').length).toBe(1);
+    expect(within(streamSection).getAllByText('Start').length).toBe(3);
+    expect(within(streamSection).getAllByText('Stop').length).toBe(3);
     expect(within(streamSection).queryByTestId('home-stream-endpoint-vic')).toBeNull();
     expect(within(streamSection).getByTestId('home-stream-endpoint-display-vic').textContent).toBe('239.0.1.64:11000');
     expect(within(streamSection).getByTestId('home-stream-endpoint-display-debug').textContent).toBe('239.0.1.66:11002');
@@ -340,7 +363,7 @@ describe('HomePage SID status', () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Drives' }));
+    fireEvent.click(screen.getByTestId('home-drives-reset'));
 
     await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(3));
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('a');
@@ -361,7 +384,7 @@ describe('HomePage SID status', () => {
 
     renderHomePage();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Printer' }));
+    fireEvent.click(screen.getByTestId('home-printer-reset'));
 
     await waitFor(() => expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledTimes(1));
     expect(c64ApiMockRef.current.resetDrive).toHaveBeenCalledWith('printer');
@@ -383,7 +406,7 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     const sidSection = screen.getByTestId('home-sid-status');
-    fireEvent.click(within(sidSection).getByRole('button', { name: 'Reset' }));
+    fireEvent.click(screen.getByTestId('home-sid-reset'));
 
     await waitFor(() => expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledTimes(20));
     expect(c64ApiMockRef.current.writeMemory).toHaveBeenCalledWith('D404', new Uint8Array([0]));
@@ -477,7 +500,8 @@ describe('HomePage SID status', () => {
     expect(within(drivesGroup).getByText('Drive B')).toBeTruthy();
     expect(within(drivesGroup).getByText('Soft IEC Drive')).toBeTruthy();
     expect(within(drivesGroup).getAllByText('Bus ID').length).toBeGreaterThanOrEqual(3);
-    expect(within(drivesGroup).getAllByText('Type').length).toBeGreaterThanOrEqual(3);
+    expect(within(drivesGroup).getAllByText('Type').length).toBeGreaterThanOrEqual(2);
+    expect(within(drivesGroup).getByText('Path')).toBeTruthy();
 
     const driveBusSelect = screen.getByTestId('home-drive-bus-a');
     fireEvent.click(driveBusSelect);

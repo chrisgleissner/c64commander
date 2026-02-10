@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest';
@@ -268,7 +276,7 @@ describe('ConfigItemRow slider and input behaviors', () => {
         name="Fan Speed"
         value="Low"
         options={['Off', 'Low', 'Medium', 'High']}
-        onValueChange={() => {}}
+        onValueChange={() => { }}
       />,
     );
 
@@ -283,7 +291,7 @@ describe('ConfigItemRow slider and input behaviors', () => {
         name="Gain"
         value="0"
         options={['0 dB', '+6 dB']}
-        onValueChange={() => {}}
+        onValueChange={() => { }}
       />,
     );
 
@@ -298,7 +306,7 @@ describe('ConfigItemRow slider and input behaviors', () => {
         name="Pan"
         value="Center"
         options={['Left 40', 'Right 20', 'Center']}
-        onValueChange={() => {}}
+        onValueChange={() => { }}
       />,
     );
 
@@ -376,7 +384,7 @@ describe('ConfigItemRow adaptive layout', () => {
       right: metrics.labelWidth,
       x: 0,
       y: 0,
-      toJSON: () => {},
+      toJSON: () => { },
     } as DOMRect);
   };
 
@@ -387,7 +395,7 @@ describe('ConfigItemRow adaptive layout', () => {
         name="VolUltiSid1+6dB"
         value="0 dB"
         options={['-6 dB', '0 dB', '+6 dB']}
-        onValueChange={() => {}}
+        onValueChange={() => { }}
       />,
     );
 
@@ -409,7 +417,7 @@ describe('ConfigItemRow adaptive layout', () => {
         name="VolUltiSid1+6dB"
         value="0 dB"
         options={['-6 dB', '0 dB', '+6 dB']}
-        onValueChange={() => {}}
+        onValueChange={() => { }}
       />,
     );
 
@@ -431,7 +439,7 @@ describe('ConfigItemRow adaptive layout', () => {
         name="DriveType123456"
         value="1541"
         options={['1541', '1571', '1581']}
-        onValueChange={() => {}}
+        onValueChange={() => { }}
       />,
     );
 

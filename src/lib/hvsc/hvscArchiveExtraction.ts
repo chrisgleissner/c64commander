@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { unzipSync } from 'fflate';
 import { addErrorLog } from '@/lib/logging';
 
@@ -22,19 +30,25 @@ let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 
 const getSevenZipModule = async () => {
   if (!sevenZipModulePromise) {
-    const { default: SevenZip } = await import('7z-wasm');
-    let wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
-    if (typeof process !== 'undefined' && process.versions?.node) {
-      const [{ createRequire }, { pathToFileURL }] = await Promise.all([
-        import('module'),
-        import('url'),
-      ]);
-      const require = createRequire(import.meta.url);
-      const wasmPath = require.resolve('7z-wasm/7zz.wasm');
-      wasmUrl = pathToFileURL(wasmPath).toString();
-    }
-    sevenZipModulePromise = (SevenZip as SevenZipFactory)({
-      locateFile: (url) => (url.endsWith('.wasm') ? wasmUrl : url),
+    const initPromise = (async () => {
+      const { default: SevenZip } = await import('7z-wasm');
+      let wasmUrl = new URL('7z-wasm/7zz.wasm', import.meta.url).toString();
+      if (typeof process !== 'undefined' && process.versions?.node) {
+        const [{ createRequire }, { pathToFileURL }] = await Promise.all([
+          import('module'),
+          import('url'),
+        ]);
+        const require = createRequire(import.meta.url);
+        const wasmPath = require.resolve('7z-wasm/7zz.wasm');
+        wasmUrl = pathToFileURL(wasmPath).toString();
+      }
+      return (SevenZip as SevenZipFactory)({
+        locateFile: (url) => (url.endsWith('.wasm') ? wasmUrl : url),
+      });
+    })();
+    sevenZipModulePromise = initPromise.catch((error) => {
+      sevenZipModulePromise = null;
+      throw error;
     });
   }
   return sevenZipModulePromise;
@@ -84,7 +98,10 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
     module.FS.write(stream, buffer, 0, buffer.length);
     module.FS.close(stream);
 
-    module.callMain(['x', archivePath, `-o${outputDir}`, '-y']);
+    const exitCode = module.callMain(['x', archivePath, `-o${outputDir}`, '-y']);
+    if (exitCode && exitCode !== 0) {
+      throw new Error(`7zip exited with code ${exitCode}`);
+    }
 
     const files: Array<{ path: string; fullPath: string }> = [];
     const walkDir = (dir: string, prefix: string) => {

@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { resetActionTrace } from '@/lib/tracing/actionTrace';
 import {
   clearTraceEvents,
@@ -29,6 +37,16 @@ declare global {
 
 export const registerTraceBridge = () => {
   if (typeof window === 'undefined') return;
+
+  if (window.__c64uTracing) {
+    if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1' && !window.__c64uTracing.seedTraces) {
+      window.__c64uTracing.seedTraces = (events) => {
+        resetActionTrace();
+        replaceTraceEvents(events);
+      };
+    }
+    return;
+  }
 
   // Restore any traces from previous navigation
   restoreTracesFromSession();

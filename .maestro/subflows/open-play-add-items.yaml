@@ -1,8 +1,8 @@
 appId: uk.gleissner.c64commander
 env:
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - subflow
 ---
@@ -44,6 +44,15 @@ tags:
 - tapOn:
     text: "Add more items"
     optional: true
-- assertVisible: "Choose source"
-- assertVisible: "This device"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: "Choose source"
+    timeout: ${TIMEOUT}
+- scrollUntilVisible:
+    element:
+      id: "import-option-local"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- assertVisible:
+    id: "import-option-local"
 - takeScreenshot: choose-source

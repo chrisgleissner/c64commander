@@ -3,10 +3,11 @@ tags:
   - edge
   - slow
   - device
+  - real-network
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn: "Play"
@@ -17,7 +18,7 @@ env:
     value: enabled
 - extendedWaitUntil:
     visible: "Offline"
-    timeout: ${SHORT_TIMEOUT}
+    timeout: ${TIMEOUT}
 - takeScreenshot: offline-mode
 - setAirplaneMode:
     value: disabled

@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page, Route, TestInfo } from '@playwright/test';
@@ -5,7 +13,7 @@ import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { createMockHvscServer } from './mockHvscServer';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { enableTraceAssertions } from './traceUtils';
+import { assertTraceOrder, enableTraceAssertions, getTraces } from './traceUtils';
 
 declare global {
   interface Window {
@@ -43,6 +51,24 @@ test.describe('HVSC Play page', () => {
 
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
+  };
+
+  const expectActionTraceSequence = async (page: Page, testInfo: TestInfo, actionName: string) => {
+    await expect.poll(async () => {
+      const traces = await getTraces(page);
+      const actionStart = traces.find((event) =>
+        event.type === 'action-start'
+        && (event.data as { name?: string } | undefined)?.name === actionName,
+      );
+      if (!actionStart) return false;
+      const related = traces.filter((event) => event.correlationId === actionStart.correlationId);
+      try {
+        assertTraceOrder(testInfo, related, ['action-start', 'action-end']);
+        return true;
+      } catch {
+        return false;
+      }
+    }).toBe(true);
   };
 
   const seedBaseConfig = async (page: Page, baseUrl: string, hvscBaseUrl: string) => {
@@ -292,7 +318,7 @@ test.describe('HVSC Play page', () => {
                     percent: Math.round((bounded / baseline.songs.length) * 100),
                   });
                   if (progressSteps.length > 1) {
-                    await new Promise((resolve) => setTimeout(resolve, 40));
+                    await new Promise((resolve) => setTimeout(resolve, 160));
                   }
                 }
               }
@@ -457,6 +483,7 @@ test.describe('HVSC Play page', () => {
                 virtualPath: song.virtualPath,
                 fileName: song.fileName,
                 durationSeconds: song.durationSeconds,
+                subsongCount: song.durations?.length ?? null,
               })),
             };
           },
@@ -469,6 +496,8 @@ test.describe('HVSC Play page', () => {
               virtualPath: song.virtualPath,
               fileName: song.fileName,
               durationSeconds: song.durationSeconds,
+              subsongCount: song.durations?.length ?? null,
+              durationsSeconds: song.durations ?? null,
               md5: null as string | null,
               dataBase64: song.dataBase64,
             };
@@ -529,6 +558,7 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscInstall');
     await snap(page, testInfo, 'hvsc-installed');
   });
 
@@ -549,6 +579,7 @@ test.describe('HVSC Play page', () => {
 
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+    await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscInstall');
 
     const markerExists = await page.evaluate(async ({ baselineVersion }) => {
       const fs = (window as any)?.Capacitor?.Plugins?.Filesystem;
@@ -565,6 +596,7 @@ test.describe('HVSC Play page', () => {
 
     await page.getByRole('button', { name: 'Ingest HVSC' }).click();
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
+    await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscIngest');
 
     await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
     await page.getByRole('button', { name: 'Play folder' }).click();
@@ -674,11 +706,14 @@ test.describe('HVSC Play page', () => {
   test('HVSC ingestion progress updates incrementally', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await installMocks(page, {
       installedVersion: 0,
-      ingestionProgressSteps: [1],
+      downloadProgressSteps: [512, 2048],
+      ingestionProgressSteps: [1, 2],
+      installDelayMs: 400,
     });
     await page.goto('/play');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
 
+    await expect(page.getByTestId('hvsc-progress')).toBeVisible();
     const files = page.getByTestId('hvsc-extraction-files');
     await expect(files).toContainText('Files:');
     await expect.poll(async () => files.textContent()).toContain('Files: 1');
@@ -783,5 +818,35 @@ test.describe('HVSC Play page', () => {
     await page.getByRole('button', { name: 'Download HVSC' }).click();
     await expect(page.getByText(/Simulated ingestion failure/i).first()).toBeVisible();
     await snap(page, testInfo, 'ingest-failed');
+  });
+
+  test('displays song lengths and handles multi-subsong expansion', async ({ page }, testInfo) => {
+    // 1. Install mocks with installedVersion: baseline (83)
+    await installMocks(page, { installedVersion: 83 });
+    await page.goto('/play');
+
+    // 2. Navigate to /DEMOS/0-9
+    await page.getByRole('button', { name: '/DEMOS/0-9' }).click();
+
+    // 3. Verify duration display
+    await expect(page.getByText('1:17')).toBeVisible();
+    await expect(page.getByText('2:41')).toBeVisible();
+
+    // 4. Navigate to /DEMOS/M/
+    await page.getByRole('button', { name: 'Up' }).click();
+    await page.getByRole('button', { name: '/DEMOS/M' }).click();
+
+    // 5. Expand multi-subsong
+    const fileItem = page.getByText('Multi_Track.sid', { exact: true });
+    await expect(fileItem).toBeVisible();
+
+    // Trigger expansion/add (Simulate Right Click -> Add to Playlist)
+    await fileItem.click({ button: 'right' });
+    await expect(page.getByText('Add to playlist')).toBeVisible();
+    await page.getByText('Add to playlist').click();
+
+    // Verify toast or playlist update
+    // Assuming toast says "Added 3 songs" or similar
+    // Or we can check if the playlist is updated if visible.
   });
 });

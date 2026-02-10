@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
@@ -110,6 +118,10 @@ export async function seedUiMocks(page: Page, baseUrl: string) {
           ingestionState: 'ready',
           lastUpdateCheckUtcMs: Date.now(),
           ingestionError: null as string | null,
+        }),
+        getHvscCacheStatus: async () => ({
+          baselineVersion: null as number | null,
+          updateVersions: [] as number[],
         }),
         checkForHvscUpdates: async () => ({
           latestVersion: 84,

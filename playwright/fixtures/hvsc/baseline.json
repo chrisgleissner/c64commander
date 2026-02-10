@@ -12,6 +12,16 @@
       "fileName": "35_Years.sid",
       "dataBase64": "AQIDBAUGBwgJCgs=",
       "durationSeconds": 161
+    },
+    {
+      "virtualPath": "/DEMOS/M/Multi_Track.sid",
+      "fileName": "Multi_Track.sid",
+      "dataBase64": "PSU=",
+      "durations": [
+        60,
+        120,
+        180
+      ]
     }
   ]
 }

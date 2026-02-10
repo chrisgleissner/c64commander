@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { addErrorLog } from '@/lib/logging';
 
 const RAM_DUMP_FOLDER_KEY = 'c64u_ram_dump_folder:v1';
@@ -6,6 +14,7 @@ export type RamDumpFolderConfig = {
   treeUri: string;
   rootName: string | null;
   selectedAt: string;
+  displayPath?: string | null;
 };
 
 const isValidFolderConfig = (value: unknown): value is RamDumpFolderConfig => {
@@ -15,7 +24,39 @@ const isValidFolderConfig = (value: unknown): value is RamDumpFolderConfig => {
     typeof candidate.treeUri === 'string'
     && (candidate.rootName === null || typeof candidate.rootName === 'string')
     && typeof candidate.selectedAt === 'string'
+    && (candidate.displayPath === undefined
+      || candidate.displayPath === null
+      || typeof candidate.displayPath === 'string')
   );
+};
+
+export const deriveRamDumpFolderDisplayPath = (treeUri: string, rootName?: string | null) => {
+  const trimmed = treeUri?.trim();
+  const fallback = rootName?.trim() || null;
+  if (!trimmed) return fallback;
+  let decoded = trimmed;
+  try {
+    decoded = decodeURIComponent(trimmed);
+  } catch (error) {
+    addErrorLog('Failed to decode RAM dump folder URI', {
+      error: (error as Error).message,
+    });
+  }
+  const match = decoded.match(/tree\/([^?]+)/i);
+  const treeId = match?.[1] ?? '';
+  if (!treeId) return fallback;
+  const parts = treeId.split(':');
+  const volume = parts.shift() ?? treeId;
+  const rawPath = parts.join(':');
+  const volumeLabel = volume === 'primary' ? 'Internal storage' : volume;
+  const normalizedPath = rawPath
+    .replace(/\\/g, '/')
+    .replace(/\/+/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+  if (!normalizedPath) {
+    return fallback ? `${volumeLabel}/${fallback}` : volumeLabel;
+  }
+  return `${volumeLabel}/${normalizedPath}`;
 };
 
 export const loadRamDumpFolderConfig = (): RamDumpFolderConfig | null => {
@@ -28,7 +69,8 @@ export const loadRamDumpFolderConfig = (): RamDumpFolderConfig | null => {
       addErrorLog('Invalid RAM dump folder config payload', { payloadType: typeof parsed });
       return null;
     }
-    return parsed;
+    const displayPath = parsed.displayPath ?? deriveRamDumpFolderDisplayPath(parsed.treeUri, parsed.rootName);
+    return { ...parsed, displayPath };
   } catch (error) {
     addErrorLog('Failed to parse RAM dump folder config', {
       error: (error as Error).message,

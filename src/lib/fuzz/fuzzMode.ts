@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 const FUZZ_MODE_KEY = 'c64u_fuzz_mode_enabled';
 const FUZZ_MOCK_BASE_URL_KEY = 'c64u_fuzz_mock_base_url';
 const FUZZ_STORAGE_SEEDED_KEY = 'c64u_fuzz_storage_seeded';

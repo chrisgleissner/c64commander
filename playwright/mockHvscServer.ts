@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import * as http from 'node:http';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -5,7 +13,7 @@ import { strToU8, zipSync } from 'fflate';
 
 export type HvscFixture = {
   version: number;
-  songs: Array<{ virtualPath: string; fileName: string; dataBase64: string; durationSeconds?: number }>;
+  songs: Array<{ virtualPath: string; fileName: string; dataBase64: string; durationSeconds?: number; durations?: number[] }>;
 };
 
 export interface MockHvscServer {
@@ -36,9 +44,15 @@ export function createMockHvscServer(): Promise<MockHvscServer> {
       files[`HVSC/${pathPart}`] = Buffer.from(song.dataBase64, 'base64');
     });
     const songlengths = fixture.songs
-      .map((song) => `${song.virtualPath.replace(/^\//, '')} ${formatDuration(song.durationSeconds)}`)
+      .map((song) => {
+        const path = song.virtualPath.replace(/^\//, '');
+        if (song.durations?.length) {
+          return `${path}= ${song.durations.map(d => formatDuration(d)).join(' ')}`;
+        }
+        return `${path} ${formatDuration(song.durationSeconds)}`;
+      })
       .join('\n');
-    files['HVSC/Songlengths.txt'] = strToU8(songlengths);
+    files['C64Music/DOCUMENTS/Songlengths.txt'] = strToU8(songlengths);
     return Buffer.from(zipSync(files));
   };
   const baselineArchive = buildArchive(baseline);

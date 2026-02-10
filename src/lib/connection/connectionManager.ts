@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import {
   C64API,
   applyC64APIConfigFromStorage,
@@ -278,7 +286,7 @@ const transitionToOfflineNoDemo = async (trigger: DiscoveryTrigger) => {
 };
 
 const shouldShowDemoInterstitial = (trigger: DiscoveryTrigger) =>
-  (trigger === 'startup' || trigger === 'manual') && !demoInterstitialShownThisSession;
+  trigger !== 'background' && !demoInterstitialShownThisSession;
 
 const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   if (stickyRealDeviceLock) {
@@ -440,7 +448,6 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     void (async () => {
       if (cancelled) return;
       windowExpired = true;
-      if (probeInFlight) return;
       await handleWindowExpiry();
     })();
   }, windowMs);

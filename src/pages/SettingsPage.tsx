@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -72,6 +80,7 @@ import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { clampListPreviewLimit } from '@/lib/uiPreferences';
 import { getBuildInfo, getBuildInfoRows } from '@/lib/buildInfo';
+import { getHvscBaseUrl, getHvscBaseUrlOverride, setHvscBaseUrlOverride } from '@/lib/hvsc/hvscReleaseService';
 import {
   clampConfigWriteIntervalMs,
   clampDiscoveryProbeTimeoutMs,
@@ -170,6 +179,8 @@ export default function SettingsPage() {
   const activeDiagnosticsFilter = diagnosticsFilters[diagnosticsTab] ?? '';
   const [listPreviewInput, setListPreviewInput] = useState(String(listPreviewLimit));
   const [debugLoggingEnabled, setDebugLoggingEnabled] = useState(loadDebugLoggingEnabled());
+  const [hvscBaseUrlInput, setHvscBaseUrlInput] = useState(() => getHvscBaseUrlOverride() ?? '');
+  const [hvscBaseUrlPreview, setHvscBaseUrlPreview] = useState(() => getHvscBaseUrl());
   const [configWriteIntervalMs, setConfigWriteIntervalMs] = useState(loadConfigWriteIntervalMs());
   const [automaticDemoModeEnabled, setAutomaticDemoModeEnabled] = useState(loadAutomaticDemoModeEnabled());
   const [diskAutostartMode, setDiskAutostartMode] = useState<DiskAutostartMode>(loadDiskAutostartMode());
@@ -207,6 +218,14 @@ export default function SettingsPage() {
   const devTapTimestamps = useRef<number[]>([]);
   const settingsFileInputRef = useRef<HTMLInputElement | null>(null);
   const isAndroid = getPlatform() === 'android';
+
+  const commitHvscBaseUrl = useCallback(() => {
+    const trimmed = hvscBaseUrlInput.trim();
+    setHvscBaseUrlOverride(trimmed || null);
+    const resolved = getHvscBaseUrl();
+    setHvscBaseUrlInput(trimmed ? resolved : '');
+    setHvscBaseUrlPreview(resolved);
+  }, [hvscBaseUrlInput]);
 
   const setDiagnosticsDialogOpen = useCallback((open: boolean) => {
     setLogsDialogOpen(open);
@@ -1091,6 +1110,24 @@ export default function SettingsPage() {
                 }}
               />
             </div>
+            {isDeveloperModeEnabled ? (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">HVSC base URL override</Label>
+                <Input
+                  value={hvscBaseUrlInput}
+                  onChange={(event) => setHvscBaseUrlInput(event.target.value)}
+                  onBlur={commitHvscBaseUrl}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') commitHvscBaseUrl();
+                  }}
+                  placeholder={hvscBaseUrlPreview}
+                  data-testid="hvsc-base-url"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the default HVSC mirror. Current base URL: {hvscBaseUrlPreview}
+                </p>
+              </div>
+            ) : null}
           </div>
         </motion.div>
 
@@ -1109,8 +1146,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-            Lower safety settings can overwhelm or destabilize real hardware. Use relaxed settings only if you
-            understand the risks and are willing to accept potential device instability.
+            Relaxed safety mode may affect hardware stability.
           </div>
 
           <div className="space-y-2">

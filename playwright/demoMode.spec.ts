@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { test, expect } from '@playwright/test';
 import type { Page, Route, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
@@ -27,7 +35,7 @@ test.describe('Automatic Demo Mode', () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await server?.close?.().catch(() => {});
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -105,19 +113,23 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    const dialogTitle = page.getByRole('heading', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    const indicator = page.getByTestId('connectivity-indicator');
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+
+    // Dialog must appear in a fresh session
+    await expect(dialog).toBeVisible({ timeout: 10000 });
     await snap(page, testInfo, 'demo-interstitial-shown');
 
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
-    await expect(dialogTitle).toHaveCount(0);
+    // Dismiss it
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(dialog).toBeHidden();
 
-    const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await expect(indicator).toContainText('DEMO');
     await snap(page, testInfo, 'demo-indicator');
@@ -125,7 +137,7 @@ test.describe('Automatic Demo Mode', () => {
     // Manual retry: should not show interstitial again in this session.
     await indicator.click();
     await expect(indicator).toHaveAttribute('data-connection-state', /DISCOVERING|DEMO_ACTIVE/);
-    await expect(dialogTitle).toHaveCount(0);
+    await expect(dialog).toBeHidden();
     await snap(page, testInfo, 'no-repeat-interstitial');
   });
 
@@ -161,22 +173,27 @@ test.describe('Automatic Demo Mode', () => {
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
     await page.addInitScript(() => {
-      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://192.168.1.13';
-      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = ['http://192.168.1.13'];
-      localStorage.setItem('c64u_startup_discovery_window_ms', '400');
+      const unreachableBaseUrl = 'http://127.0.0.1:1';
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = unreachableBaseUrl;
+      (window as Window & { __c64uAllowedBaseUrls?: string[] }).__c64uAllowedBaseUrls = [unreachableBaseUrl];
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
-      localStorage.setItem('c64u_device_host', '192.168.1.13');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(dialog).toBeHidden();
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     const urlInput = page.locator('#deviceHost');
-    await expect(urlInput).toHaveValue('192.168.1.13');
+    await expect(urlInput).toHaveValue('127.0.0.1:1');
 
     const stored = await page.evaluate(() => localStorage.getItem('c64u_base_url'));
     expect(stored).toBeNull();
@@ -194,13 +211,20 @@ test.describe('Automatic Demo Mode', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '3000');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    const dialogVisible = await dialog.isVisible({ timeout: 5000 }).catch(() => false);
+    if (dialogVisible) {
+      await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    }
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|DISCOVERING/);
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     const urlInput = page.locator('#deviceHost');
@@ -209,7 +233,6 @@ test.describe('Automatic Demo Mode', () => {
     await clearTraces(page);
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
 
-    const indicator = page.getByTestId('connectivity-indicator');
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
     const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));

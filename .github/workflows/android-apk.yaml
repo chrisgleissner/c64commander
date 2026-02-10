@@ -91,6 +91,10 @@ jobs:
           path: ${{ github.workspace }}/.cache/hvsc
           key: hvsc-update-84-${{ runner.os }}
 
+      - name: Fix broken apt repos
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         with:
@@ -203,6 +207,14 @@ jobs:
           npm ci
           end=$(date +%s)
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fix broken apt repos
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
+
+      - name: Fix broken apt repos
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4

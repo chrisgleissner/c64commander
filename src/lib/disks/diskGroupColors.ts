@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 export const diskGroupColors = [
   { chip: 'bg-blue-500/20 border-blue-500/40', text: 'text-blue-700' },
   { chip: 'bg-emerald-500/20 border-emerald-500/40', text: 'text-emerald-700' },

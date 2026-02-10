@@ -1,5 +1,17 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { addErrorLog, addLog } from '@/lib/logging';
 import type { C64API } from '@/lib/c64api';
+import { getC64APIConfigSnapshot } from '@/lib/c64api';
+import { readFtpFile } from '@/lib/ftp/ftpClient';
+import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
+import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import {
   formatPlayCategory,
@@ -10,7 +22,7 @@ import {
 } from './fileTypes';
 import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
 import { createDiskEntry } from '@/lib/disks/diskTypes';
-import { createSslPayload } from '@/lib/sid/sidUtils';
+import { base64ToUint8, createSslPayload } from '@/lib/sid/sidUtils';
 import { loadDiskAutostartMode, type DiskAutostartMode } from '@/lib/config/appSettings';
 import { loadFirstDiskPrgViaDma, type DiskImageType } from './diskFirstPrg';
 
@@ -58,6 +70,38 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const normalizeUltimatePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+
+export const tryFetchUltimateSidBlob = async (path: string) => {
+  const normalizedPath = normalizeUltimatePath(path);
+  const { deviceHost: rawHost, password = '' } = getC64APIConfigSnapshot();
+  const host = normalizeFtpHost(rawHost);
+  try {
+    const response = await readFtpFile({
+      host,
+      port: getStoredFtpPort(),
+      password,
+      path: normalizedPath,
+    });
+    const bytes = base64ToUint8(response.data);
+    if (typeof response.sizeBytes === 'number' && response.sizeBytes !== bytes.length) {
+      addLog('warn', 'FTP SID payload size mismatch', {
+        path: normalizedPath,
+        expectedBytes: response.sizeBytes,
+        actualBytes: bytes.length,
+      });
+      return null;
+    }
+    return new Blob([bytes], { type: 'application/octet-stream' });
+  } catch (error) {
+    addLog('debug', 'FTP SID fetch failed', {
+      path: normalizedPath,
+      error: (error as Error).message,
+    });
+    return null;
+  }
+};
 
 const injectDiskAutostart = async (api: C64API, payload: Uint8Array) => {
   const baseDelayMs = 250;
@@ -122,6 +166,15 @@ export const executePlayPlan = async (
     switch (plan.category) {
       case 'sid': {
         if (plan.source === 'ultimate') {
+          const hasDuration = Boolean(plan.durationMs && plan.durationMs > 0);
+          if (hasDuration) {
+            const ftpBlob = await tryFetchUltimateSidBlob(plan.path);
+            if (ftpBlob) {
+              const sslBlob = new Blob([createSslPayload(plan.durationMs!)], { type: 'application/octet-stream' });
+              await api.playSidUpload(ftpBlob, plan.songNr, sslBlob);
+              return;
+            }
+          }
           await api.playSid(plan.path, plan.songNr);
           return;
         }

@@ -1,8 +1,16 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Music, Shuffle, SkipBack, SkipForward, Play, Folder, FolderOpen } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, StatefulButton } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -750,15 +758,15 @@ export default function MusicPlayerPage() {
             <Button variant="outline" size="icon" onClick={() => previous()} disabled={!queue.length}>
               <SkipBack className="h-4 w-4" />
             </Button>
-            <Button
-              variant="default"
+            <StatefulButton
+              variant={isPlaying ? 'default' : 'outline'}
               size="lg"
               onClick={handlePlayCurrentTrack}
               disabled={!currentTrack}
             >
               <Play className="h-4 w-4 mr-2" />
               {isPlaying ? 'Restart' : 'Play'}
-            </Button>
+            </StatefulButton>
             <Button variant="outline" size="icon" onClick={() => next()} disabled={!queue.length}>
               <SkipForward className="h-4 w-4" />
             </Button>

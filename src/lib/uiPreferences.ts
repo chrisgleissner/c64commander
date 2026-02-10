@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 const LIST_PREVIEW_LIMIT_KEY = 'c64u_list_preview_limit';
 
 export const DEFAULT_LIST_PREVIEW_LIMIT = 50;

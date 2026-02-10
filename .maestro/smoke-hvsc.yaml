@@ -3,9 +3,9 @@ tags:
   - hvsc
   - slow
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "15000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
 - tapOn:
@@ -24,10 +24,7 @@ env:
 - assertVisible: "Download HVSC"
 - assertVisible: "Ingest HVSC"
 - takeScreenshot: hvsc-actions
-- extendedWaitUntil:
-    visible: "Browse HVSC folders"
-    timeout: ${SHORT_TIMEOUT}
-- extendedWaitUntil:
-    visible: "Filter folders…"
-    timeout: ${SHORT_TIMEOUT}
-- takeScreenshot: hvsc-browse
+- runFlow:
+    when:
+      visible: "Browse HVSC folders"
+    file: subflows/hvsc-browse-assert.yaml

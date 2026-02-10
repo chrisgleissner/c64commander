@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { addErrorLog } from '@/lib/logging';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
@@ -6,11 +14,26 @@ import {
   loadRamDumpFolderConfig,
   saveRamDumpFolderConfig,
   type RamDumpFolderConfig,
+  deriveRamDumpFolderDisplayPath,
 } from '@/lib/config/ramDumpFolderStore';
 
 const RAM_DUMP_MIME_TYPE = 'application/octet-stream';
 
-const toPadded = (value: number) => String(value).padStart(2, '0');
+const sanitizeRamDumpContext = (value?: string | null) => {
+  if (!value) return '';
+  const sanitized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '');
+  return sanitized;
+};
+
+const formatRamDumpTimestamp = (date: Date) => {
+  const iso = date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return iso.replace(/:/g, '-');
+};
 
 const uint8ToBase64 = (value: Uint8Array) => {
   let binary = '';
@@ -50,10 +73,12 @@ const readFileFromPickerResult = async (result: {
   const parentFolder = (() => {
     const treeUri = result.parentTreeUri?.trim() ?? '';
     if (!treeUri) return null;
+    const displayPath = deriveRamDumpFolderDisplayPath(treeUri, result.parentRootName);
     return {
       treeUri,
       rootName: result.parentRootName?.trim() ? result.parentRootName : null,
       selectedAt: new Date().toISOString(),
+      displayPath,
     } satisfies RamDumpFolderConfig;
   })();
   return {
@@ -65,8 +90,11 @@ const readFileFromPickerResult = async (result: {
   };
 };
 
-export const buildRamDumpFileName = (date = new Date()) =>
-  `c64u-ram-${toPadded(date.getHours())}-${toPadded(date.getMinutes())}-${toPadded(date.getSeconds())}.bin`;
+export const buildRamDumpFileName = (date = new Date(), context?: string | null) => {
+  const timestamp = formatRamDumpTimestamp(date);
+  const safeContext = sanitizeRamDumpContext(context);
+  return `c64u-ram-${timestamp}${safeContext ? `-${safeContext}` : ''}.bin`;
+};
 
 export const selectRamDumpFolder = async (): Promise<RamDumpFolderConfig> => {
   if (!isAndroidNative()) {
@@ -80,6 +108,7 @@ export const selectRamDumpFolder = async (): Promise<RamDumpFolderConfig> => {
     treeUri: result.treeUri,
     rootName: result.rootName?.trim() ? result.rootName : null,
     selectedAt: new Date().toISOString(),
+    displayPath: deriveRamDumpFolderDisplayPath(result.treeUri, result.rootName),
   };
   saveRamDumpFolderConfig(config);
   return config;
@@ -148,10 +177,10 @@ export const pickRamDumpFile = async (
   if (!file) {
     throw new Error('No RAM dump file selected.');
   }
-  const buffer = await file.arrayBuffer();
   if (!file.name.toLowerCase().endsWith('.bin')) {
     throw new Error('Select a .bin RAM dump file.');
   }
+  const buffer = await file.arrayBuffer();
   return {
     name: file.name,
     sizeBytes: file.size,

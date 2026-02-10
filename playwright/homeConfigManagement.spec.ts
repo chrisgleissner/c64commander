@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
@@ -287,16 +295,14 @@ test.describe('Home page app config management', () => {
     await expect(page.getByRole('heading', { name: 'HOME' })).toBeVisible({ timeout: 20000 });
     const sidGroup = page.getByTestId('home-sid-status');
     await expect(sidGroup).toBeVisible({ timeout: 20000 });
-    await expect(sidGroup.getByTestId('sid-status-label')).toContainText('SID');
-    await expect(sidGroup.getByRole('button', { name: 'Reset' })).toBeVisible();
-    await expect(sidGroup.locator('[data-testid="sid-status-dot"]')).toHaveCount(0);
+    await expect(sidGroup.locator('h3').filter({ hasText: 'SID' })).toBeVisible();
+    await expect(page.getByTestId('home-sid-reset')).toBeVisible();
     await expect(sidGroup).toContainText('SID Socket 1');
     await expect(sidGroup).toContainText('ON');
     await expect(sidGroup).toContainText('SID Socket 2');
-    await expect(sidGroup).toContainText('$----');
     await expect(sidGroup).toContainText('UltiSID 1');
-    await expect(sidGroup).toContainText('$----');
     await expect(sidGroup).toContainText('UltiSID 2');
+    await expect(sidGroup).toContainText('$D400');
     await snap(page, testInfo, 'sid-status');
   });
 });

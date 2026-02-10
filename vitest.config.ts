@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -74,11 +82,10 @@ export default defineConfig({
         "**/node_modules/**",
       ],
       thresholds: {
-        // Current baseline thresholds - aim to increase over time
-        statements: 10,
-        branches: 55,
-        functions: 35,
-        lines: 10,
+        statements: 80,
+        branches: 80,
+        functions: 80,
+        lines: 80,
       },
     },
   },

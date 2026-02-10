@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 const DEBUG_LOGGING_KEY = 'c64u_debug_logging_enabled';
 const CONFIG_WRITE_INTERVAL_KEY = 'c64u_config_write_min_interval_ms';
 const AUTO_DEMO_MODE_KEY = 'c64u_automatic_demo_mode_enabled';

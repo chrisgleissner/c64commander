@@ -1,14 +1,27 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FolderPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import { reportUserError } from '@/lib/uiErrors';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
 import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import { ItemSelectionView } from './ItemSelectionView';
+
+const isLocalAutoConfirmDisabled = () =>
+  typeof window !== 'undefined'
+  && Boolean((window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm);
 
 export type SourceGroup = {
   label: string;
@@ -99,6 +112,7 @@ export const ItemSelectionDialog = ({
     setPendingLocalSource(false);
     setPendingLocalSourceCount(0);
     setPendingLocalSourceId(null);
+    setAutoConfirming(false);
   }, [open]);
 
   const confirmLocalSource = useCallback(async (target: SourceLocation) => {
@@ -144,7 +158,7 @@ export const ItemSelectionDialog = ({
     setSelectedSourceId(targetSource.id);
     setPendingLocalSource(false);
     setPendingLocalSourceId(null);
-    if (autoConfirmLocalSource) {
+    if (autoConfirmLocalSource && !isLocalAutoConfirmDisabled()) {
       void confirmLocalSource(targetSource);
     }
   }, [autoConfirmLocalSource, confirmLocalSource, localSourceCount, localSources, open, pendingLocalSource, pendingLocalSourceCount, pendingLocalSourceId, selectedSourceId]);
@@ -235,8 +249,13 @@ export const ItemSelectionDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showClose={false} className="max-w-3xl w-[calc(100%-2rem)] h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl">
-        <div className="flex h-full min-h-0 flex-col">
+      <DialogContent showClose={false} className={cn(
+        "w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl",
+        source
+          ? "max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]"
+          : "max-w-md"
+      )}>
+        <div className={cn("flex min-h-0 flex-col", source && "h-full")}>
           <DialogHeader className="border-b border-border px-6 pb-3 pt-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -267,10 +286,15 @@ export const ItemSelectionDialog = ({
                       setSelectedSourceId(c64UltimateSource.id);
                     }}
                     disabled={!c64UltimateSource?.isAvailable}
+                    id="import-option-c64u"
                     data-testid="import-option-c64u"
+                    aria-label="Add file / folder from C64 Ultimate"
                   >
                     <FolderPlus className="h-4 w-4 mr-1" />
-                    <span className="truncate">C64U file import</span>
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">C64 Ultimate</span>
+                      <span className="text-[11px] text-muted-foreground">Add file / folder</span>
+                    </span>
                   </Button>
                   <Button
                     variant="outline"
@@ -278,69 +302,17 @@ export const ItemSelectionDialog = ({
                     onClick={() => void handleAddLocalSource()}
                     disabled={pendingLocalSource}
                     aria-busy={pendingLocalSource}
+                    id="import-option-local"
                     data-testid="import-option-local"
+                    aria-label="Add file / folder from this device"
                   >
                     <FolderPlus className="h-4 w-4 mr-1" />
-                    <span className="truncate">Local file import</span>
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">This device</span>
+                      <span className="text-[11px] text-muted-foreground">Add file / folder</span>
+                    </span>
                   </Button>
                 </div>
-                {sourceGroups.map((group) => (
-                  <div key={group.label} className="space-y-3">
-                    <p className="text-base font-semibold text-foreground">{group.label}</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {group.label === 'C64 Ultimate' ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            const target = group.sources[0];
-                            if (!target) return;
-                            setPendingLocalSource(false);
-                            setSelectedSourceId(target.id);
-                          }}
-                          disabled={!group.sources[0]?.isAvailable}
-                          className="justify-start min-w-0"
-                        >
-                          <FolderPlus className="h-4 w-4 mr-1" />
-                          <span className="truncate">Add file / folder</span>
-                        </Button>
-                      ) : null}
-                      {group.label === 'This device' ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => void handleAddLocalSource()}
-                          className="justify-start min-w-0"
-                          disabled={pendingLocalSource}
-                          aria-busy={pendingLocalSource}
-                          aria-label="Add file / folder from device"
-                          data-testid="add-local-source"
-                          id="add-local-source"
-                        >
-                          <FolderPlus className="h-4 w-4 mr-1" />
-                          <span className="truncate">Add file / folder</span>
-                        </Button>
-                      ) : null}
-                    </div>
-                    {group.sources.length ? (
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {group.sources.map((item) => (
-                          <Button
-                            key={item.id}
-                            variant="secondary"
-                            className="justify-start min-w-0"
-                            onClick={() => {
-                              setPendingLocalSource(false);
-                              setSelectedSourceId(item.id);
-                            }}
-                            disabled={!item.isAvailable}
-                            data-testid={`browse-source-${item.id}`}
-                          >
-                            <span className="truncate">{item.name}</span>
-                          </Button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ))}
               </div>
             )}
 

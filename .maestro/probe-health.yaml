@@ -6,26 +6,41 @@
 appId: uk.gleissner.c64commander
 tags:
   - probe
+env:
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
 ---
-# Step 1: Verify app launches
-- launchApp
+# Step 1: Launch app and handle demo mode if needed
+- runFlow: subflows/launch-and-wait.yaml
 
-# Step 2: Verify main UI is visible (app title)
+# Step 2: Verify main UI is visible
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Home"
 
 # Step 3: Take a screenshot to prove UI is rendered
 - takeScreenshot: probe-health-home
 
 # Step 4: Verify navigation is responsive - tap a tab
-- tapOn: "Play"
+- tapOn:
+    id: "tab-play"
 
 # Step 5: Verify navigation worked
-- assertVisible: "Play Files"
+- extendedWaitUntil:
+    visible: "Play Files"
+    timeout: ${TIMEOUT}
 
 # Step 6: Return to home
-- tapOn: "Home"
+- tapOn:
+    id: "tab-home"
 
 # Step 7: Final verification
+- extendedWaitUntil:
+    visible:
+      id: "tab-home"
+    timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Home"
 
 - takeScreenshot: probe-health-complete

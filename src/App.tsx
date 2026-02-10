@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,6 +35,7 @@ import { SidPlayerProvider } from "@/hooks/useSidPlayer";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { TraceContextBridge } from '@/components/TraceContextBridge';
 import { GlobalDiagnosticsOverlay } from '@/components/diagnostics/GlobalDiagnosticsOverlay';
+import { TestHeartbeat } from '@/components/TestHeartbeat';
 import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 
@@ -88,6 +97,7 @@ const AppRoutes = () => (
     <GlobalDiagnosticsOverlay />
     <ConnectionController />
     <DemoModeInterstitial />
+    {shouldEnableCoverageProbe() && <TestHeartbeat />}
     <Routes>
       {shouldEnableCoverageProbe() ? (
         <Route path="/__coverage__" element={<CoverageProbePage />} />

@@ -1,5 +1,14 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getC64API } from '@/lib/c64api';
+import { BackgroundExecution } from '@/lib/native/backgroundExecution';
 import { createSslPayload } from '@/lib/sid/sidUtils';
 
 export type SidTrack = {
@@ -75,6 +84,9 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     await api.playSidUpload(blob, track.songNr, sslBlob);
     startedAtRef.current = Date.now();
     setIsPlaying(true);
+    BackgroundExecution.start().catch(() => {
+      /* best-effort — playback still works without background anchor */
+    });
   }, []);
 
   const playTrack = useCallback(async (track: SidTrack) => {
@@ -131,6 +143,12 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     if (elapsedMs < durationMs) return;
     void next();
   }, [elapsedMs, durationMs, isPlaying, next]);
+
+  useEffect(() => {
+    return () => {
+      BackgroundExecution.stop().catch(() => { });
+    };
+  }, []);
 
   const value: SidPlayerContextValue = {
     queue,

@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
@@ -156,4 +164,9 @@ export const getHvscSonglengthsStats = () => facade.stats();
 export const resetHvscSonglengths = (reason = 'manual-reset') => {
   hasAttemptedColdStartLoad = false;
   facade.reset(reason);
+};
+
+export const __test__ = {
+  decodeBase64Text,
+  discoverSonglengthFiles,
 };

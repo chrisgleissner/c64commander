@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { useCallback, useEffect, useState } from 'react';
 import {
   createLocalSourceFromFileList,
@@ -17,11 +25,15 @@ export type UseLocalSourcesState = {
 };
 
 export const useLocalSources = (): UseLocalSourcesState => {
-  const [sources, setSources] = useState<LocalSourceRecord[]>([]);
+  const [sources, setSources] = useState<LocalSourceRecord[]>(() => loadLocalSources());
 
   useEffect(() => {
-    setSources(loadLocalSources());
-  }, []);
+    if (sources.length) return;
+    const stored = loadLocalSources();
+    if (stored.length) {
+      setSources(stored);
+    }
+  }, [sources.length]);
 
   const persist = useCallback((next: LocalSourceRecord[]) => {
     setSources(next);

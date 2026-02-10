@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
@@ -119,6 +127,7 @@ const renderHomePage = () => renderWithRouter(<HomePage />);
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: toastSpy,
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
 vi.mock('@/lib/uiErrors', () => ({
@@ -146,6 +155,7 @@ vi.mock('@/lib/machine/ramDumpStorage', () => ({
 vi.mock('@/lib/config/ramDumpFolderStore', () => ({
   loadRamDumpFolderConfig: () => ramDumpFolderConfigRef.current,
   saveRamDumpFolderConfig: saveRamDumpFolderConfigSpy,
+  deriveRamDumpFolderDisplayPath: (treeUri: string) => treeUri,
 }));
 
 vi.mock('@tanstack/react-query', () => ({
@@ -153,6 +163,14 @@ vi.mock('@tanstack/react-query', () => ({
     invalidateQueries: vi.fn().mockResolvedValue(undefined),
     fetchQuery: vi.fn().mockResolvedValue(undefined),
   }),
+}));
+
+vi.mock('@/pages/home/SidCard', () => ({
+  SidCard: () => <div data-testid="sid-card" />,
+}));
+
+vi.mock('@/pages/home/DriveCard', () => ({
+  DriveCard: () => <div data-testid="drive-card" />,
 }));
 
 describe('HomePage RAM actions', () => {

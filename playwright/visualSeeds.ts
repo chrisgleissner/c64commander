@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import type { Page } from '@playwright/test';
 import type { TraceEvent } from '../src/lib/tracing/types';
 
@@ -244,6 +252,25 @@ export const installStableStorage = async (page: Page) => {
             localStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
             sessionStorage.setItem('c64u_feature_flag:hvsc_enabled', '1');
             localStorage.setItem('c64u_demo_clock', fixedNowIso);
+            if (!localStorage.getItem('c64u_local_sources:v1')) {
+                localStorage.setItem('c64u_local_sources:v1', JSON.stringify([
+                    {
+                        id: 'seed-local-source',
+                        name: 'Seed Local',
+                        rootName: 'Local',
+                        rootPath: '/Local/',
+                        createdAt: '2024-03-20T12:00:00.000Z',
+                        entries: [
+                            {
+                                name: 'seed.sid',
+                                relativePath: 'Local/seed.sid',
+                                sizeBytes: 1024,
+                                modifiedAt: '2024-03-20T12:00:00.000Z',
+                            },
+                        ],
+                    },
+                ]));
+            }
         },
         {
             playlist: PLAYLIST_SEED,

@@ -1,51 +1,58 @@
-# PLANS.md
+# HVSC Refactoring and Testing Plan
 
-This file is the authoritative execution contract for the Home page SID compact redesign.
-Strict loop: plan -> execute -> verify. A task is checked only after implementation and verification.
+## Phase 0: Refactor Ingestion Pipeline for Testability
+- [ ] Extract duplicated ingestion logic into `ingestArchiveBuffer` in `hvscIngestionRuntime.ts`
+- [ ] Refactor `installOrUpdateHvsc` to use `ingestArchiveBuffer`
+- [ ] Refactor `ingestCachedHvsc` to use `ingestArchiveBuffer`
+- [ ] Fix WASM singleton poisoning in `hvscArchiveExtraction.ts` (reject handling)
+- [ ] Allow WASM retries after transient failures
+- [ ] Add unit test verifying WASM retry behavior
+- [ ] Split `hvscIngestionRuntime.ts` by moving download/streaming helpers to `hvscDownload.ts`
 
-## 1. Objective
-- [ ] Confirm current Home SID layout and drive toggle styling references.
-- [ ] Define compact two-row SID layout targets and verify space reduction goal.
-- [ ] Enumerate data sources needed for SID enablement, address display, volume, and pan.
+## Phase 1: Archive Caching Infrastructure
+- [ ] Extract `ensureUpdate84Archive()` into `tests/fixtures/hvsc/ensureHvscUpdateArchive.ts`
+- [ ] Implement resolution order: Env var -> Cache dir -> Download
+- [ ] Update CI configuration to cache the archive
 
-## 2. Core Design Decision (Mandatory)
-- [ ] Implement two-row compact SID layout for all SID sockets (no single-row, no collapsible sections).
-- [ ] Ensure layout is static (no dynamic height changes).
+## Phase 2: Tier 1 - Unit Tests (Pure, Fully Mocked)
+- [ ] Create `tests/unit/hvsc/hvscService.test.ts` (10 tests)
+- [ ] Create `tests/unit/hvsc/hvscSongLengthService.test.ts` (10 tests)
+- [ ] Create `tests/unit/hvsc/hvscSource.test.ts` (7 tests)
+- [ ] Create `hvscIngestionRuntime.test.ts` (Status/Active checks)
+- [ ] Create `hvscArchiveExtraction.test.ts` (WASM retry)
 
-## 3. Per-SID Layout (Authoritative Spec)
-- [ ] Row 1: render label, base address (hex-only, monospaced), right-aligned ON/OFF toggle matching drive styling.
-- [ ] Row 2: render labeled volume and pan sliders with center detent and touch-safe sizes.
-- [ ] Ensure sliders are disabled (visible) when SID is OFF.
-- [ ] Provide live value feedback during drag only (tooltip/value bubble).
+## Phase 3: Tier 2 - Integration Tests (Real 7z Extraction)
+- [ ] Enhance `hvscArchiveExtraction.test.ts` using `ensureUpdate84Archive`
+- [ ] Run assertions against `HVSC_Update_84.7z` (Entry paths, normalization, count, consistency, progress, SIDs, songlengths, deletions)
+- [ ] Run assertions against `HVSC_Update_mock.7z` (No network)
 
-## 4. Strict Exclusions From Home Page
-- [ ] Remove editable base address controls from Home SID section.
-- [ ] Remove model/filter/register/persistent numeric or dropdown SID controls from Home.
+## Phase 4: Tier 3 - Pipeline Integration Tests
+- [ ] Create `tests/unit/hvsc/hvscIngestionPipeline.test.ts` calling `ingestArchiveBuffer`
+- [ ] Test happy path, classification, normalization, cancellation, corruption, persistence
+- [ ] Create `tests/unit/hvsc/hvscDownload.test.ts`
+- [ ] Test chunk concat, length mismatch, progress, cancellation, HTTP errors
 
-## 5. Base Address Handling (Critical Safety Rule)
-- [ ] Always display base address as hex-only text and keep it read-only.
-- [ ] Confirm Home SID rows do not add long-press navigation (optional behavior not implemented).
+## Phase 5: Tier 4 - Playwright E2E
+- [ ] Enhance `hvsc.spec.ts` with songlength display test
+- [ ] Enhance `hvsc.spec.ts` with multi-subsong expansion test
 
-## 6. Error and Diagnostic Behavior
-- [ ] Detect enabled-but-silent SID condition and apply non-destructive visual indicator on base address.
+## Phase 6: Tier 5 - Maestro Performance
+- [ ] Reduce Maestro timeouts (LONG 20s, 15s, SHORT 5s)
+- [ ] Eliminate retry-based file picker navigation (targeted scroll or adb intent)
+- [ ] Consolidate adb commands in `run-maestro.sh`
+- [ ] Pre-grant SAF permissions via adb
 
-## 7. Accessibility and Ergonomics (Non-Negotiable)
-- [ ] Enforce >= 48 dp touch targets and sufficient contrast.
-- [ ] Ensure disabled state uses opacity + desaturation, not color alone.
-- [ ] Avoid relying on color-only state indicators.
+## Phase 7: Cleanup and Guardrails
+- [ ] Remove duplicate test files
+- [ ] Consolidate `hvscStatusStore` tests
+- [ ] Raise coverage thresholds in `vitest.config.ts` for `src/lib/hvsc/**` to >=90%
+- [ ] Update `AGENTS.md` (remove invalid Java paths)
+- [ ] Update `doc/testing/maestro.md` (fixture/permission guidance)
 
-## 8. Technical Constraints
-- [ ] Use CSS Grid/Flexbox only; no expand/collapse behavior.
-- [ ] Keep layout static in Capacitor and avoid dynamic height on interaction.
-
-## 9. Verification Requirements
-- [ ] Verify phone-sized viewport layout and one-hand slider usability.
-- [ ] Verify center detent is soft and does not block any supported values.
-- [ ] Verify live value feedback appears only during slider interaction.
-- [ ] Verify SID ON/OFF toggle matches Drive A/B behavior and base address remains visible.
-- [ ] Ensure no regressions to Drive, Play, or Config pages.
-
-## 10. Completion Criteria
-- [ ] All PLANS.md tasks checked off.
-- [ ] Home SID section matches the two-row layout and space reduction goals.
-- [ ] All tests pass locally (unit + integration/E2E) and CI is green.
+## Verification
+- [x] npm run test
+- [x] npm run test -- --coverage
+- [ ] npm run test:e2e
+- [ ] Maestro smoke-hvsc-mounted < 90 seconds
+- [x] npm run lint
+- [ ] npm run build

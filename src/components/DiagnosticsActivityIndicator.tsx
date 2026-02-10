@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { cn } from '@/lib/utils';
 import { useDiagnosticsActivity } from '@/hooks/useDiagnosticsActivity';
 
@@ -36,6 +44,7 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
     const { restCount, ftpCount, errorCount, restInFlight, ftpInFlight } = useDiagnosticsActivity();
     const restActive = restInFlight > 0;
     const ftpActive = ftpInFlight > 0;
+    const restDisplayCount = restCount > 0 ? restCount : restInFlight;
 
     return (
         <button
@@ -46,10 +55,10 @@ export const DiagnosticsActivityIndicator = ({ onClick, className }: Props) => {
             data-testid="diagnostics-activity-indicator"
             data-diagnostics-open-trigger="true"
         >
-            {restCount > 0 ? (
+            {restCount > 0 || restInFlight > 0 ? (
                 <IndicatorDot
                     colorClass="bg-diagnostics-rest"
-                    count={restCount}
+                    count={restDisplayCount}
                     animate={restActive}
                     testId="diagnostics-activity-rest"
                     ariaLabel="REST activity"

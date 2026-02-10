@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLocalFsSongSource, type LocalSidFile } from '@/lib/sources/LocalFsSongSource';
 
@@ -122,5 +130,113 @@ describe('createLocalFsSongSource', () => {
     expect(secondPass).toHaveLength(1);
     expect(secondPass[0].durationMs).toBe(111_000);
     expect(sidUtilsMocks.computeSidMd5).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles fallback when File.slice is missing', async () => {
+    const payload = createPsidPayload(1);
+    const file = {
+      name: 'noslice.sid',
+      lastModified: 1000,
+      arrayBuffer: async () => payload.buffer.slice(0), // Full buffer
+      // no slice method
+    } as LocalSidFile;
+
+    const source = createLocalFsSongSource([file], {});
+    const list = await source.listSongs('/');
+    expect(list).toHaveLength(1);
+
+    // Trigger enrichment check
+    await new Promise(r => setTimeout(r, 10));
+    expect(sidUtilsMocks.getSidSongCount).toHaveBeenCalled();
+  });
+
+  it('correctly handles multi-song files with missing durations', async () => {
+    sidUtilsMocks.getSidSongCount.mockReturnValue(2);
+    const file = createLocalFile('/demo.sid', 'demo.sid', createPsidPayload(2));
+    const onResolved = vi.fn();
+
+    const resolveSonglength = vi.fn(async () => Promise.resolve({
+      strategy: 'default' as const,
+      durationSeconds: null,
+      durations: null, // No durations
+    }));
+
+    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    await source.listSongs('/');
+
+    await waitForCondition(() => onResolved.mock.calls.length > 0);
+    const entries = onResolved.mock.calls[0][0].entries;
+    expect(entries).toHaveLength(2);
+    expect(entries[0].durationMs).toBeUndefined();
+    expect(entries[1].durationMs).toBeUndefined();
+  });
+
+  it('handling of files at root path vs nested', async () => {
+    const rootFile = createLocalFile('/root.sid', 'root.sid', createPsidPayload(1));
+    const nestedFile = createLocalFile('/folder/nested.sid', 'nested.sid', createPsidPayload(1));
+
+    const source = createLocalFsSongSource([rootFile, nestedFile], {});
+
+    const rootList = await source.listSongs('/');
+    expect(rootList.some(e => e.title === 'root.sid')).toBe(true);
+
+    const folderList = await source.listSongs('/folder');
+    expect(folderList.some(e => e.title === 'nested.sid')).toBe(true);
+  });
+
+  it('handles durations array mismatch and single duration fallback', async () => {
+    sidUtilsMocks.getSidSongCount.mockReturnValue(2);
+    const file = createLocalFile('/short.sid', 'short.sid', createPsidPayload(2));
+    const onResolved = vi.fn();
+
+    // Case 1: durations array shorter than song count
+    const resolveSonglength = vi.fn()
+      .mockResolvedValueOnce({
+        strategy: 'default' as const,
+        durations: [10], // Only 1 duration for 2 songs
+      });
+
+    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    await source.listSongs('/');
+    await waitForCondition(() => onResolved.mock.calls.length > 0);
+
+    let entries = onResolved.mock.calls[0][0].entries;
+    expect(entries[0].durationMs).toBe(10000);
+    expect(entries[1].durationMs).toBeUndefined();
+  });
+
+  it('uses durationSeconds if durations array is missing', async () => {
+    sidUtilsMocks.getSidSongCount.mockReturnValue(1);
+    const file = createLocalFile('/single.sid', 'single.sid', createPsidPayload(1));
+    const onResolved = vi.fn();
+
+    const resolveSonglength = vi.fn().mockResolvedValueOnce({
+      strategy: 'default' as const,
+      durationSeconds: 50,
+      durations: [], // Empty
+    });
+
+    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    await source.listSongs('/');
+    await waitForCondition(() => onResolved.mock.calls.length > 0);
+
+    const entries = onResolved.mock.calls[0][0].entries;
+    expect(entries[0].durationMs).toBe(50000);
+  });
+
+  it('does not re-compute MD5 if strategy is unavailable', async () => {
+    const file = createLocalFile('/ignore.sid', 'ignore.sid', createPsidPayload(1));
+    const onResolved = vi.fn();
+
+    const resolveSonglength = vi.fn().mockResolvedValue({
+      strategy: 'unavailable' as const,
+      durationSeconds: null,
+    });
+
+    const source = createLocalFsSongSource([file], { onSongMetadataResolved: onResolved, resolveSonglength });
+    await source.listSongs('/');
+    await waitForCondition(() => onResolved.mock.calls.length > 0);
+
+    expect(sidUtilsMocks.computeSidMd5).not.toHaveBeenCalled();
   });
 });

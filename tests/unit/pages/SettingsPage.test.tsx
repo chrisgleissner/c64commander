@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -121,6 +129,7 @@ vi.mock('@/hooks/useListPreviewLimit', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
+  useToast: () => ({ toasts: [], dismiss: vi.fn() }),
 }));
 
 const buildRouter = (ui: JSX.Element) => createMemoryRouter(

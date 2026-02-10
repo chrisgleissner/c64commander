@@ -3,15 +3,15 @@ tags:
   - edge
   - slow
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 ---
 - runFlow: subflows/open-play-add-items.yaml
 
 # Add a known SID from the C64 Ultimate mock source.
 - tapOn:
-    text: "Add file / folder"
+    id: "import-option-c64u"
 - extendedWaitUntil:
     visible: "Select items"
     timeout: ${SHORT_TIMEOUT}

@@ -1,6 +1,23 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { motion } from 'framer-motion';
+import type { MouseEvent } from 'react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const blurOnPointerClick = (event: MouseEvent<HTMLElement>) => {
+  if (event.detail === 0) return;
+  const target = event.currentTarget as HTMLElement | null;
+  if (target?.blur && document.activeElement === target) {
+    target.blur();
+  }
+};
 
 interface QuickActionCardProps {
   icon: LucideIcon;
@@ -36,7 +53,10 @@ export function QuickActionCard({
   return (
     <motion.button
       whileTap={{ scale: 0.95 }}
-      onClick={onClick}
+      onClick={(event) => {
+        onClick();
+        blurOnPointerClick(event);
+      }}
       disabled={disabled || loading}
       data-testid={dataTestId}
       className={cn(

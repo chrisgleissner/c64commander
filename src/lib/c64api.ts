@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 // C64 Ultimate REST API Client
 
 import {
@@ -766,10 +774,38 @@ export class C64API {
     return this.request('/v1/machine:menu_button', { method: 'PUT', timeoutMs: CONTROL_REQUEST_TIMEOUT_MS });
   }
 
+  async startStream(stream: string, ip: string): Promise<{ errors: string[] }> {
+    return this.request(`/v1/streams/${encodeURIComponent(stream)}:start?ip=${encodeURIComponent(ip)}`, {
+      method: 'PUT',
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+    });
+  }
+
+  async stopStream(stream: string): Promise<{ errors: string[] }> {
+    return this.request(`/v1/streams/${encodeURIComponent(stream)}:stop`, {
+      method: 'PUT',
+      timeoutMs: CONTROL_REQUEST_TIMEOUT_MS,
+    });
+  }
+
   async readMemory(address: string, length = 1): Promise<Uint8Array> {
-    const payload = await this.request<{ data?: string | number[] }>(
-      `/v1/machine:readmem?address=${address}&length=${length}`
-    );
+    const path = `/v1/machine:readmem?address=${address}&length=${length}`;
+    const baseUrl = this.getBaseUrl();
+    const url = `${baseUrl}${path}`;
+    const headers: Record<string, string> = {
+      ...this.buildAuthHeaders(),
+    };
+    const response = await this.fetchWithTimeout(url, { headers }, CONTROL_REQUEST_TIMEOUT_MS);
+    if (!response.ok) {
+      throw new Error(`readMemory failed: HTTP ${response.status}`);
+    }
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+    if (contentType.includes('application/octet-stream') || contentType.includes('application/binary')) {
+      const buffer = await response.arrayBuffer();
+      return new Uint8Array(buffer);
+    }
+    // Fall back to JSON parsing
+    const payload = await response.json() as { data?: string | number[] };
     const data = payload.data;
     if (!data) return new Uint8Array();
     if (typeof data === 'string') {
@@ -809,7 +845,7 @@ export class C64API {
           },
           body: payload,
         },
-        CONTROL_REQUEST_TIMEOUT_MS,
+        UPLOAD_REQUEST_TIMEOUT_MS,
       );
       status = response.status;
     } finally {

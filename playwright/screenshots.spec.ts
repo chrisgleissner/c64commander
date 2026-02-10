@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { test, expect } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
@@ -20,7 +28,6 @@ import { registerScreenshotSections, sanitizeSegment } from './screenshotCatalog
 import {
   installFixedClock,
   installListPreviewLimit,
-  installLocalSourceSeed,
   installStableStorage,
   seedDiagnosticsTraces,
 } from './visualSeeds';
@@ -234,6 +241,7 @@ test.describe('App screenshots', () => {
     await captureLabeledSections(page, testInfo, 'home');
 
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'home/01-overview-dark.png');
     await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   });
@@ -243,7 +251,7 @@ test.describe('App screenshots', () => {
     await waitForConnected(page);
     await expect(page.getByTestId('home-stream-endpoint-display-audio')).toHaveText(/\d+\.\d+\.\d+\.\d+:\d+/);
 
-    await page.getByTestId('home-stream-toggle-audio').click();
+    await page.getByTestId('home-stream-start-audio').click();
     await scrollAndCapture(page, testInfo, page.getByTestId('home-stream-status'), 'home/interactions/01-toggle.png');
 
     await page.getByTestId('home-drive-type-a').click();
@@ -317,7 +325,9 @@ test.describe('App screenshots', () => {
   });
 
   test('capture import flow screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    await installLocalSourceSeed(page);
+    await page.addInitScript(() => {
+      (window as Window & { __c64uDisableLocalAutoConfirm?: boolean }).__c64uDisableLocalAutoConfirm = true;
+    });
     await page.goto('/play');
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
@@ -334,8 +344,10 @@ test.describe('App screenshots', () => {
 
     await page.getByRole('button', { name: /Add items|Add more items/i }).click();
     const localDialog = page.getByRole('dialog');
-    await expect(localDialog.getByTestId('browse-source-seed-local-source')).toBeVisible();
-    await localDialog.getByTestId('browse-source-seed-local-source').click();
+    await localDialog.getByTestId('import-option-local').click();
+    const input = page.locator('input[type="file"][webkitdirectory]');
+    await expect(input).toHaveCount(1);
+    await input.setInputFiles([path.resolve('playwright/fixtures/local-play')]);
     await expect(localDialog.getByTestId('local-file-picker')).toBeVisible();
     await captureScreenshot(page, testInfo, 'play/import/03-local-file-picker.png');
   });
@@ -438,9 +450,9 @@ test.describe('App screenshots', () => {
     }, { baseUrl: server.baseUrl });
 
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
-    const demoDialog = page.getByRole('heading', { name: 'Demo Mode' });
+    const demoDialog = page.getByRole('dialog', { name: 'Demo Mode' });
     if (await demoDialog.isVisible()) {
-      await page.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+      await demoDialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
       await expect(demoDialog).toHaveCount(0);
     }
     await expect(page.getByTestId('connectivity-indicator')).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');

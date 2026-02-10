@@ -7,18 +7,18 @@ tags:
   - device
   - ci-critical
 env:
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
-  TIMEOUT: ${TIMEOUT || "30000"}
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 ---
 - runFlow: subflows/open-play-add-items.yaml
 - scrollUntilVisible:
     element:
-      id: "add-local-source"
+      id: "import-option-local"
     direction: DOWN
     timeout: ${SHORT_TIMEOUT}
 - tapOn:
-    id: "add-local-source"
+    id: "import-option-local"
 - takeScreenshot: file-picker-open
 
 # Try to dismiss the file picker

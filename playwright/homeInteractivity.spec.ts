@@ -1,3 +1,11 @@
+/*
+ * C64 Commander - Configure and control your Commodore 64 Ultimate over your local network
+ * Copyright (C) 2026 Christian Gleissner
+ *
+ * Licensed under the GNU General Public License v2.0 or later.
+ * See <https://www.gnu.org/licenses/> for details.
+ */
+
 import { test, expect } from '@playwright/test';
 import type { Page, TestInfo } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
@@ -40,16 +48,25 @@ test.describe('Home interactions', () => {
     }
   });
 
-  test('toggle interactions update stream config', async ({ page }: { page: Page }) => {
+  test('start/stop interactions send stream commands', async ({ page }: { page: Page }) => {
     await page.goto('/');
     await waitForStreamsReady(page);
 
-    await page.getByTestId('home-stream-toggle-audio').click();
+    await page.getByTestId('home-stream-start-audio').click();
 
     await expect.poll(() =>
       hasRequest(
         server.requests,
-        (req) => req.method === 'PUT' && req.url.includes('/v1/configs/Data%20Streams/Stream%20Audio%20to?value=off'),
+        (req) => req.method === 'PUT' && req.url.includes('/v1/streams/audio:start'),
+      ),
+    ).toBe(true);
+
+    await page.getByTestId('home-stream-stop-audio').click();
+
+    await expect.poll(() =>
+      hasRequest(
+        server.requests,
+        (req) => req.method === 'PUT' && req.url.includes('/v1/streams/audio:stop'),
       ),
     ).toBe(true);
   });
@@ -122,7 +139,7 @@ test.describe('Home interactions', () => {
     await page.goto('/');
     await waitForConnected(page);
 
-    await page.getByRole('button', { name: 'Reset Drives' }).click();
+    await page.getByTestId('home-drives-reset').click();
 
     await expect.poll(() =>
       hasRequest(server.requests, (req) => req.method === 'PUT' && req.url.startsWith('/v1/drives/a:reset')),
@@ -197,7 +214,56 @@ test.describe('Home interactions', () => {
     expect(addresses).toContain('D432');
     expect(addresses).toContain('D438');
 
-    await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Volume');
+    await expect(page.getByTestId('home-sid-entry-socket1')).toContainText('Vol');
     await expect(page.getByTestId('home-sid-entry-ultiSid1')).toContainText('Pan');
+  });
+
+  test('SID type column renders and LED controls stay inline', async ({ page }: { page: Page }) => {
+    await page.goto('/');
+    await waitForConnected(page);
+
+    const socketType = page.getByTestId('home-sid-type-socket1');
+    await expect(socketType).toBeVisible();
+    const socketTag = await socketType.evaluate((el) => el.tagName);
+    expect(socketTag).toBe('SPAN');
+
+    const ultiType = page.getByTestId('home-sid-type-ultiSid1');
+    await expect(ultiType).toBeVisible();
+    const ultiTag = await ultiType.evaluate((el) => el.tagName);
+    expect(ultiTag).toBe('BUTTON');
+
+    const ledControls = [
+      'home-led-mode',
+      'home-led-color',
+      'home-led-intensity-slider',
+      'home-led-sid-select',
+      'home-led-tint',
+    ];
+
+    for (const control of ledControls) {
+      await expect(page.getByTestId(control)).toBeVisible();
+    }
+
+    const beforePath = await page.evaluate(() => window.location.pathname);
+    await page.getByTestId('home-led-mode').click();
+    await page.keyboard.press('Escape');
+    const afterPath = await page.evaluate(() => window.location.pathname);
+    expect(afterPath).toBe(beforePath);
+  });
+
+  test('stateless actions clear focus after click', async ({ page }: { page: Page }) => {
+    await page.goto('/');
+    await waitForConnected(page);
+
+    const action = page.getByTestId('home-config-save-app');
+    await action.scrollIntoViewIfNeeded();
+    await action.click();
+
+    const activeTestId = await page.evaluate(() => {
+      const active = document.activeElement as HTMLElement | null;
+      return active?.dataset?.testid ?? null;
+    });
+
+    expect(activeTestId).not.toBe('home-config-save-app');
   });
 });
