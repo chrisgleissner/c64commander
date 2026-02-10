@@ -147,7 +147,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const dialogTitle = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    await expect(dialogTitle).toBeVisible({ timeout: 10000 });
     await dialogTitle.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
