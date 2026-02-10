@@ -41,6 +41,13 @@ type ConfigListItem = {
   details?: NormalizedConfigItem['details'];
 };
 
+const DHCP_STATIC_FIELDS = new Set([
+  'Static IP',
+  'Static Netmask',
+  'Static Gateway',
+  'Static DNS',
+]);
+
 function CategorySection({
   categoryName,
   onOpenChange,
@@ -91,6 +98,17 @@ function CategorySection({
         ...normalizeConfigItem(config),
       }));
   }, [categoryData, categoryName]);
+
+  const dhcpStatus = useMemo(() => {
+    if (categoryName !== 'Ethernet Settings' && categoryName !== 'WiFi settings') return null;
+    const dhcpItem = items.find((item) => item.name === 'Use DHCP');
+    if (!dhcpItem) return null;
+    return String(dhcpItem.value).trim().toLowerCase();
+  }, [categoryName, items]);
+
+  const isDhcpEnabled = dhcpStatus
+    ? ['enabled', 'on', 'true', 'yes', '1'].includes(dhcpStatus)
+    : false;
 
   const syncAudioConfiguredItems = useCallback((next: ConfigListItem[]) => {
     setAudioConfiguredItems(next);
@@ -495,6 +513,10 @@ function CategorySection({
                     const isSidVolume = isAudioMixer && isSidVolumeName(item.name);
                     const isSoloed = isSidVolume && soloState.soloItem === item.name;
                     const isMutedBySolo = isSidVolume && soloState.soloItem && soloState.soloItem !== item.name;
+                    const isDhcpStaticField =
+                      (categoryName === 'Ethernet Settings' || categoryName === 'WiFi settings')
+                      && DHCP_STATIC_FIELDS.has(item.name);
+                    const isReadOnly = isDhcpEnabled && isDhcpStaticField;
                     const testIdBase = item.name.toLowerCase().replace(/\s+/g, '-');
                     const rowClassName = cn(
                       isSidVolume && 'rounded-md px-3',
@@ -535,6 +557,7 @@ function CategorySection({
                           isSidVolume ? handleAudioValueChange(item.name, v) : handleValueChange(item.name, v)
                         }
                         isLoading={setConfig.isPending}
+                        readOnly={isReadOnly}
                         className={rowClassName}
                         rightAccessory={rightAccessory}
                         valueTestId={isSidVolume ? `audio-mixer-value-${testIdBase}` : undefined}

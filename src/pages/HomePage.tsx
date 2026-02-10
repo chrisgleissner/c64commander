@@ -30,6 +30,7 @@ import { AppBar } from '@/components/AppBar';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 
@@ -218,6 +219,7 @@ function HomePageContent() {
     resolveConfigValue,
   } = useSharedConfigActions();
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
+  const [ledFixedColorDraftIndex, setLedFixedColorDraftIndex] = useState<number | null>(null);
   const [ledIntensityDraft, setLedIntensityDraft] = useState<number | null>(null);
 
 
@@ -241,6 +243,14 @@ function HomePageContent() {
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
 
+  const resolveToggleOption = (options: string[], enabled: boolean) => {
+    const candidates = enabled
+      ? ['enabled', 'on', 'true', 'yes', '1']
+      : ['disabled', 'off', 'false', 'no', '0'];
+    return options.find((option) => candidates.includes(normalizeOptionToken(option)))
+      ?? (enabled ? 'Enabled' : 'Disabled');
+  };
+
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
   const videoModeOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'System Mode').map((value) => String(value));
@@ -251,6 +261,8 @@ function HomePageContent() {
   const digitalVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Digital Video Mode', '—'));
   const hdmiScanOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'HDMI Scan lines').map((value) => String(value));
   const hdmiScanValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'HDMI Scan lines', 'Disabled'));
+  const joystickSwapOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Joystick Swapper').map((value) => String(value));
+  const joystickSwapValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Joystick Swapper', 'Normal'));
   const turboControlOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Turbo Control').map((value) => String(value));
   const turboControlValue = String(resolveConfigValue(
     u64Category,
@@ -287,6 +299,10 @@ function HomePageContent() {
   useEffect(() => {
     setLedIntensityDraft(null);
   }, [ledIntensityValue]);
+
+  useEffect(() => {
+    setLedFixedColorDraftIndex(null);
+  }, [ledFixedColorValue]);
 
 
 
@@ -366,17 +382,24 @@ function HomePageContent() {
   const effectiveAnalogVideoOptions = analogVideoOptions.length ? analogVideoOptions : [analogVideoValue];
   const effectiveDigitalVideoOptions = digitalVideoOptions.length ? digitalVideoOptions : [digitalVideoValue];
   const effectiveHdmiScanOptions = hdmiScanOptions.length ? hdmiScanOptions : [hdmiScanValue];
+  const effectiveJoystickSwapOptions = joystickSwapOptions.length ? joystickSwapOptions : [joystickSwapValue];
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
   const effectiveLedModeOptions = ledModeOptions.length ? ledModeOptions : [ledModeValue];
   const effectiveLedFixedColorOptions = ledFixedColorOptions.length ? ledFixedColorOptions : [ledFixedColorValue];
   const effectiveLedSidSelectOptions = ledSidSelectOptions.length ? ledSidSelectOptions : [ledSidSelectValue];
   const effectiveLedTintOptions = ledTintOptions.length ? ledTintOptions : [ledTintValue];
 
+  const hdmiScanEnabledValue = resolveToggleOption(effectiveHdmiScanOptions, true);
+  const hdmiScanDisabledValue = resolveToggleOption(effectiveHdmiScanOptions, false);
+  const hdmiScanChecked = normalizeOptionToken(hdmiScanValue) === normalizeOptionToken(hdmiScanEnabledValue);
+
+  const joystickSwapEnabledValue = resolveToggleOption(effectiveJoystickSwapOptions, true);
+  const joystickSwapDisabledValue = resolveToggleOption(effectiveJoystickSwapOptions, false);
+  const joystickSwapChecked = normalizeOptionToken(joystickSwapValue) === normalizeOptionToken(joystickSwapEnabledValue);
 
   const videoModeSelectOptions = normalizeSelectOptions(effectiveVideoModeOptions, videoModeValue);
   const analogVideoSelectOptions = normalizeSelectOptions(effectiveAnalogVideoOptions, analogVideoValue);
   const digitalVideoSelectOptions = normalizeSelectOptions(effectiveDigitalVideoOptions, digitalVideoValue);
-  const hdmiScanSelectOptions = normalizeSelectOptions(effectiveHdmiScanOptions, hdmiScanValue);
   const ledModeSelectOptions = normalizeSelectOptions(effectiveLedModeOptions, ledModeValue);
   const ledFixedColorSelectOptions = normalizeSelectOptions(effectiveLedFixedColorOptions, ledFixedColorValue);
   const ledSidSelectSelectOptions = normalizeSelectOptions(effectiveLedSidSelectOptions, ledSidSelectValue);
@@ -386,11 +409,36 @@ function HomePageContent() {
   const videoModeSelectValue = normalizeSelectValue(videoModeValue);
   const analogVideoSelectValue = normalizeSelectValue(analogVideoValue);
   const digitalVideoSelectValue = normalizeSelectValue(digitalVideoValue);
-  const hdmiScanSelectValue = normalizeSelectValue(hdmiScanValue);
   const ledModeSelectValue = normalizeSelectValue(ledModeValue);
   const ledFixedColorSelectValue = normalizeSelectValue(ledFixedColorValue);
   const ledSidSelectSelectValue = normalizeSelectValue(ledSidSelectValue);
   const ledTintSelectValue = normalizeSelectValue(ledTintValue);
+
+  const ledFixedColorSliderOptions = ledFixedColorSelectOptions.length
+    ? ledFixedColorSelectOptions
+    : [ledFixedColorValue];
+  const ledFixedColorSliderMax = Math.max(0, ledFixedColorSliderOptions.length - 1);
+  const ledFixedColorSliderIndex = Math.max(
+    0,
+    ledFixedColorSliderOptions.findIndex(
+      (option) => normalizeOptionToken(option) === normalizeOptionToken(ledFixedColorValue),
+    ),
+  );
+  const ledFixedColorGradient = useMemo(() => {
+    const colors = ledFixedColorSliderOptions.map((option) => getLedColorRgb(option));
+    if (colors.length < 2 || colors.some((value) => !value)) return null;
+    const segmentSize = 100 / colors.length;
+    const stops = colors.map((rgb, index) => {
+      const color = rgbToCss(rgb!);
+      const start = index * segmentSize;
+      const end = (index + 1) * segmentSize;
+      return `${color} ${start}%, ${color} ${end}%`;
+    });
+    return `linear-gradient(90deg, ${stops.join(', ')})`;
+  }, [ledFixedColorSliderOptions]);
+  const resolveLedFixedColorOption = (index: number) =>
+    ledFixedColorSliderOptions[Math.round(index)] ?? ledFixedColorSliderOptions[0] ?? '';
+  const ledFixedColorDisplayIndex = ledFixedColorDraftIndex ?? ledFixedColorSliderIndex;
 
 
   const cpuSpeedPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'CPU Speed')]);
@@ -398,11 +446,13 @@ function HomePageContent() {
   const analogVideoPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Analog Video Mode')]);
   const digitalVideoPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Digital Video Mode')]);
   const hdmiScanPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'HDMI Scan lines')]);
+  const joystickSwapPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Joystick Swapper')]);
   const ledModePending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip Mode')]);
   const ledFixedColorPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Fixed Color')]);
   const ledIntensityPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Strip Intensity')]);
   const ledSidSelectPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip SID Select')]);
   const ledTintPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Color tint')]);
+  const ledFixedColorSliderDisabled = !status.isConnected || ledFixedColorPending || ledFixedColorSliderMax === 0;
 
 
 
@@ -554,29 +604,47 @@ function HomePageContent() {
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">HDMI Scan Lines</span>
-                  <Select
-                    value={hdmiScanSelectValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        'U64 Specific Settings',
-                        'HDMI Scan lines',
-                        resolveSelectValue(value),
-                        'HOME_HDMI_SCAN',
-                        'HDMI scan lines updated',
-                      )}
-                    disabled={!status.isConnected || hdmiScanPending}
-                  >
-                    <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-video-scanlines">
-                      <SelectValue placeholder={hdmiScanValue} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {hdmiScanSelectOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {formatSelectOptionLabel(option)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-end">
+                    <Checkbox
+                      checked={hdmiScanChecked}
+                      onCheckedChange={(checked) => {
+                        const nextValue = checked === true ? hdmiScanEnabledValue : hdmiScanDisabledValue;
+                        void updateConfigValue(
+                          'U64 Specific Settings',
+                          'HDMI Scan lines',
+                          nextValue,
+                          'HOME_HDMI_SCAN',
+                          'HDMI scan lines updated',
+                        );
+                      }}
+                      disabled={!status.isConnected || hdmiScanPending}
+                      className="h-4 w-4"
+                      aria-label="HDMI Scan Lines"
+                      data-testid="home-video-scanlines"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Joystick Swap</span>
+                  <div className="flex items-center justify-end">
+                    <Checkbox
+                      checked={joystickSwapChecked}
+                      onCheckedChange={(checked) => {
+                        const nextValue = checked === true ? joystickSwapEnabledValue : joystickSwapDisabledValue;
+                        void updateConfigValue(
+                          'U64 Specific Settings',
+                          'Joystick Swapper',
+                          nextValue,
+                          'HOME_JOYSTICK_SWAP',
+                          'Joystick swap updated',
+                        );
+                      }}
+                      disabled={!status.isConnected || joystickSwapPending}
+                      className="h-4 w-4"
+                      aria-label="Joystick Swap"
+                      data-testid="home-joystick-swap"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -661,6 +729,50 @@ function HomePageContent() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <Slider
+                    value={[ledFixedColorDisplayIndex]}
+                    min={0}
+                    max={ledFixedColorSliderMax}
+                    step={1}
+                    onValueChange={(values) => {
+                      const nextIndex = clampToRange(values[0] ?? 0, 0, ledFixedColorSliderMax);
+                      setLedFixedColorDraftIndex(nextIndex);
+                    }}
+                    onValueCommit={(values) => {
+                      setLedFixedColorDraftIndex(null);
+                    }}
+                    onValueChangeAsync={(nextValue) => {
+                      const nextIndex = clampToRange(nextValue, 0, ledFixedColorSliderMax);
+                      const nextOption = resolveLedFixedColorOption(nextIndex);
+                      void updateConfigValue(
+                        'LED Strip Settings',
+                        'Fixed Color',
+                        nextOption,
+                        'HOME_LED_COLOR',
+                        'LED color updated',
+                        { suppressToast: true },
+                      );
+                    }}
+                    onValueCommitAsync={(nextValue) => {
+                      const nextIndex = clampToRange(nextValue, 0, ledFixedColorSliderMax);
+                      const nextOption = resolveLedFixedColorOption(nextIndex);
+                      void updateConfigValue(
+                        'LED Strip Settings',
+                        'Fixed Color',
+                        nextOption,
+                        'HOME_LED_COLOR',
+                        'LED color updated',
+                      );
+                    }}
+                    disabled={ledFixedColorSliderDisabled}
+                    valueFormatter={(value) =>
+                      formatSelectOptionLabel(resolveLedFixedColorOption(value))
+                    }
+                    trackClassName={ledFixedColorGradient ? 'bg-transparent' : undefined}
+                    rangeClassName={ledFixedColorGradient ? 'bg-transparent' : undefined}
+                    trackStyle={ledFixedColorGradient ? { backgroundImage: ledFixedColorGradient } : undefined}
+                    data-testid="home-led-color-slider"
+                  />
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Intensity</span>
                     <span className="text-xs font-semibold text-foreground" data-testid="home-led-intensity-value">

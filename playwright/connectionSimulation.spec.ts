@@ -108,7 +108,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
-      sessionStorage.removeItem('c64u_demo_interstitial_shown');
+      if (!sessionStorage.getItem('c64u_demo_interstitial_reset_once')) {
+        sessionStorage.removeItem('c64u_demo_interstitial_shown');
+        sessionStorage.setItem('c64u_demo_interstitial_reset_once', '1');
+      }
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 

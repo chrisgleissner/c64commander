@@ -25,6 +25,8 @@ type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> &
   thumbClassName?: string;
   trackClassName?: string;
   rangeClassName?: string;
+  trackStyle?: React.CSSProperties;
+  rangeStyle?: React.CSSProperties;
   valueFormatter?: (value: number) => string;
   valueLabelClassName?: string;
   showValueOnDrag?: boolean;
@@ -55,6 +57,8 @@ const Slider = React.forwardRef<
       thumbClassName,
       trackClassName,
       rangeClassName,
+      trackStyle,
+      rangeStyle,
       valueFormatter,
       valueLabelClassName,
       showValueOnDrag = true,
@@ -179,8 +183,14 @@ const Slider = React.forwardRef<
         className={cn("relative flex w-full touch-none select-none items-center", className)}
         {...props}
       >
-        <SliderPrimitive.Track className={cn("relative h-2 w-full grow overflow-hidden rounded-full bg-secondary", trackClassName)}>
-          <SliderPrimitive.Range className={cn("absolute h-full bg-primary", rangeClassName)} />
+        <SliderPrimitive.Track
+          className={cn("relative h-2 w-full grow overflow-hidden rounded-full bg-secondary", trackClassName)}
+          style={trackStyle}
+        >
+          <SliderPrimitive.Range
+            className={cn("absolute h-full bg-primary", rangeClassName)}
+            style={rangeStyle}
+          />
           {midpoint && midpoint.notch !== false && midpointPercent !== null ? (
             <span
               aria-hidden="true"

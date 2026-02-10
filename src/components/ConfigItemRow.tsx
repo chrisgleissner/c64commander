@@ -36,6 +36,7 @@ interface ConfigItemRowProps {
   };
   onValueChange: (value: string | number) => void;
   isLoading?: boolean;
+  readOnly?: boolean;
   className?: string;
   rightAccessory?: React.ReactNode;
   valueTestId?: string;
@@ -100,6 +101,7 @@ export function ConfigItemRow({
   details,
   onValueChange,
   isLoading = false,
+  readOnly = false,
   className,
   rightAccessory,
   valueTestId,
@@ -239,7 +241,7 @@ export function ConfigItemRow({
   );
 
   const displayValue = inputValue;
-  const isReadOnly = name.startsWith('SID Detected Socket');
+  const isReadOnly = readOnly || name.startsWith('SID Detected Socket');
   const normalizeOption = (option: string) => option.trim().replace(/\s+/g, ' ').toLowerCase();
   const parseNumeric = (option: string) => {
     const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
