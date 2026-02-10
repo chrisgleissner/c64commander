@@ -96,12 +96,6 @@ Browse configuration categories, tune audio and SID settings, and edit drive-spe
       <img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="480"/>
     </td>
   </tr>
-  <tr>
-    <td>
-      <img src="doc/img/app/config/sections/15-drive-a-settings.png" alt="Configuration drive A settings" width="480"/>
-    </td>
-    <td></td>
-  </tr>
 </table>
 
 ### Settings
