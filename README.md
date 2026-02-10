@@ -127,7 +127,7 @@ Full screenshot set lives under [doc/img/app/](doc/img/app/).
 
 ## Device safety settings
 
-C64 Commander includes a configurable device safety system to reduce REST and FTP overload on fragile hardware.
+C64 Commander includes a configurable device safety system to reduce REST and FTP load.
 You can find these controls in Settings → Device Safety.
 
 - **Safety mode presets**: Relaxed, Balanced (default), and Conservative.
