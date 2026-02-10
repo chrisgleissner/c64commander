@@ -93,7 +93,7 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   await fs.mkdir(screenshotsDir, { recursive: true });
   const filePath = path.join(screenshotsDir, name);
   await page.screenshot({ path: filePath, fullPage: true, timeout: 60000 });
-  
+
   // Note: We no longer call testInfo.attach() to avoid creating duplicate evidence
   // in Playwright's outputDir. All evidence is now in the canonical structure:
   // test-results/evidence/playwright/<testId>/<deviceId>/
@@ -199,7 +199,7 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
       requestLogSnapshot = [...tracker.requestLog];
     }
 
-    await saveTracesFromPage(page, testInfo, traces).catch(() => {});
+    await saveTracesFromPage(page, testInfo, traces).catch(() => { });
   }
 
   if (requestLogSnapshot.length) {
@@ -337,7 +337,7 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
     }
   }
 
-  
+
 
   const tracePath = testInfo.outputPath('trace.zip');
   await copyIfExists(tracePath, path.join(evidenceDir, 'trace.zip'));
@@ -386,7 +386,7 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     routingIssues: [],
     traceResetAt: undefined,
     accumulatedTraces: [],
-    detach: () => {},
+    detach: () => { },
   };
 
   const recordRequest = (request: {
