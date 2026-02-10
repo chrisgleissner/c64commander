@@ -37,7 +37,7 @@ Track device status at a glance, control the machine and drives, and access quic
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/home/sections/02-machine.png" alt="Home machine" width="480"/>
+      <img src="doc/img/app/home/sections/04-drives.png" alt="Home machine" width="480"/>
     </td>
     <td>
       <img src="doc/img/app/home/sections/06-sid.png" alt="Home SID" width="480"/>
