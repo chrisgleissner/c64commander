@@ -61,7 +61,8 @@ import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from '@/lib/config/configItems';
 import { useHomeActions } from './home/hooks/useHomeActions';
 import { useDriveData } from './home/hooks/useDriveData';
-import { useConfigActions } from './home/hooks/useConfigActions';
+import { useSharedConfigActions } from './home/hooks/ConfigActionsContext';
+import { ConfigActionsProvider } from './home/hooks/ConfigActionsContext';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
@@ -144,6 +145,14 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { cn } from '@/lib/utils';
 
 export default function HomePage() {
+  return (
+    <ConfigActionsProvider>
+      <HomePageContent />
+    </ConfigActionsProvider>
+  );
+}
+
+function HomePageContent() {
   const api = getC64API();
   const queryClient = useQueryClient();
   const { status } = useC64Connection();
@@ -207,7 +216,7 @@ export default function HomePage() {
     configWritePending,
     updateConfigValue,
     resolveConfigValue,
-  } = useConfigActions();
+  } = useSharedConfigActions();
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
   const [ledIntensityDraft, setLedIntensityDraft] = useState<number | null>(null);
 

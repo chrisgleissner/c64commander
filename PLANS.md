@@ -1,88 +1,42 @@
-# Refactoring Plan: Modularize Core Pages
+# Refactoring Execution Plan: Restore Build + Finish Modularization
 
 ## Objective
-Modularize `HomePage.tsx`, `PlayFilesPage.tsx`, and `SettingsPage.tsx` to improve maintainability reliability, and testability without altering behavior.
+Restore a fully working local build and eliminate refactor regressions while completing any remaining modularization for oversized pages, without changing production behavior.
 
-## Phases
+## Execution Plan (Authoritative)
+1. **Audit failures**
+	- Run `./build` to surface lint, type, and packaging errors.
+	- Run unit tests, Playwright tests, and Maestro flows (if present).
+	- Capture any TypeScript, ESLint, or test regressions.
 
-### Phase 1: HomePage
-**Target File**: `src/pages/HomePage.tsx` (Logic moves to `src/pages/home/*`)
+2. **Fix regressions deterministically**
+	- Resolve lint failures, including `@typescript-eslint/ban-ts-comment` violations.
+	- Fix type errors instead of suppressing unless an expectation is clearly required.
+	- Repair any unit, Playwright, or Maestro test failures without weakening coverage.
 
-- [x] **Step 1: Constants Extraction**
-  - Create `src/pages/home/constants.ts`
-  - Move static command strings, configuration defaults, and magic numbers.
-  - Verify: Build & Test
-- [x] **Step 2: Utilities Extraction**
-  - Create `src/pages/home/utils/`
-  - Move pure helper functions (e.g., formatting, parsing).
-  - Verify: Build & Test
-- [x] **Step 3: Component Extraction**
-  - Create `src/pages/home/components/`
-  - Extract inline UI components (headers, action cards not yet separated).
-  - Verify: Build & Test
-- [x] **Step 4: Hooks Extraction**
-  - Create `src/pages/home/hooks/`
-  - Extract `useHomeState`, `use...` logic modules.
-  - Verify: Build & Test
-- [x] **Step 5: Dialogs Extraction**
-  - Create `src/pages/home/dialogs/`
-  - Extract Modal/Dialog components.
-  - Verify: Build & Test
-- [ ] **Step 6: Final Review**
-  - Ensure main file < 600 lines.
-  - Ensure no circular deps.
-  - Verify: Full Test Suite
+3. **Finish modularization**
+	- Identify oversized pages or mixed-concern modules.
+	- Extract focused subcomponents/hooks/utilities while preserving behavior.
+	- Keep files under size limits and aligned with architecture boundaries.
 
-### Phase 2: PlayFilesPage
-**Target File**: `src/pages/PlayFilesPage.tsx` (Logic moves to `src/pages/playFiles/*`)
+4. **Verify end state**
+	- Re-run `./build` successfully.
+	- Re-run unit tests, Playwright tests, and Maestro flows to green.
+	- Update this plan with completion notes and results.
 
-- [ ] **Step 1: Constants Extraction**
-  - Create `src/pages/playFiles/constants.ts`
-  - Verify: Build & Test
-- [ ] **Step 2: Utilities Extraction**
-  - Create `src/pages/playFiles/utils/`
-  - Verify: Build & Test
-- [ ] **Step 3: Component Extraction**
-  - Create `src/pages/playFiles/components/`
-  - Verify: Build & Test
-- [ ] **Step 4: Hooks Extraction**
-  - Create `src/pages/playFiles/hooks/`
-  - Verify: Build & Test
-- [ ] **Step 5: Dialogs Extraction**
-  - Create `src/pages/playFiles/dialogs/`
-  - Verify: Build & Test
-- [ ] **Step 6: Final Review**
-  - Verify: Full Test Suite
-
-### Phase 3: SettingsPage
-**Target File**: `src/pages/SettingsPage.tsx` (Logic moves to `src/pages/settings/*`)
-
-- [ ] **Step 1: Constants Extraction**
-  - Create `src/pages/settings/constants.ts`
-  - Verify: Build & Test
-- [ ] **Step 2: Utilities Extraction**
-  - Create `src/pages/settings/utils/`
-  - Verify: Build & Test
-- [ ] **Step 3: Component Extraction**
-  - Create `src/pages/settings/components/`
-  - Verify: Build & Test
-- [ ] **Step 4: Hooks Extraction**
-  - Create `src/pages/settings/hooks/`
-  - Verify: Build & Test
-- [ ] **Step 5: Dialogs Extraction**
-  - Create `src/pages/settings/dialogs/`
-  - Verify: Build & Test
-- [ ] **Step 6: Final Review**
-  - Verify: Full Test Suite
+## Known Failures (To Verify)
+- ESLint `@typescript-eslint/ban-ts-comment` violations previously reported in unit tests.
+- Potential TypeScript or test failures caused by refactoring.
 
 ## Definition of Done
-- No behavior changes.
-- All tests pass (`npm run test`).
-- Type check passes (`npm run build` / `tsc`).
-- Files follow strict strict separation of concerns.
-
-## Verification Commands
-- `npm run typecheck` (if available) or `npx tsc --noEmit`
-- `npm run test`
+- `./build` succeeds locally with no parameters.
+- All unit tests pass (`npm run test`).
+- All Playwright tests pass (`npm run test:e2e`).
+- All Maestro tests pass (if present).
+- No tests weakened or removed.
+- Production behavior unchanged.
+- Modularization complete for oversized pages.
+- PLANS.md reflects the final executed plan.
 
 ## Progress Log
+- Updated plan to a strict audit → fix → modularize → verify loop.

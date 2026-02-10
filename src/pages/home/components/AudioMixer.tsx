@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { getC64API } from '@/lib/c64api';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { SectionHeader } from '@/components/SectionHeader';
-import { useConfigActions } from '../hooks/useConfigActions';
+import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
 import { useSidData } from '../hooks/useSidData';
 import { SidCard } from '../SidCard';
 import { silenceSidTargets } from '@/lib/sid/sidSilence';
@@ -42,7 +42,7 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
         configWritePending,
         updateConfigValue,
         resolveConfigValue,
-    } = useConfigActions();
+    } = useSharedConfigActions();
 
     const {
         sidControlEntries,
@@ -310,6 +310,25 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
                             options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', digisItem).map(String),
                             onChange: (val: string) => void updateConfigValue('UltiSID Configuration', digisItem, resolveSelectValue(val), `HOME_ULTISID_DIGIS_${ultiIndex}`, `UltiSID ${ultiIndex} digis updated`),
                             pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', digisItem)]),
+                        });
+                    } else {
+                        const socketIndex = entry.key === 'socket1' ? 1 : 2;
+                        const resistorItem = `SID Socket ${socketIndex} 1K Ohm Resistor`;
+                        const capacitorItem = `SID Socket ${socketIndex} Capacitors`;
+
+                        shapingControls.push({
+                            label: 'Resistor',
+                            value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', resistorItem, '—')),
+                            options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', resistorItem).map(String),
+                            onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', resistorItem, resolveSelectValue(val), `HOME_SID_RES_${socketIndex}`, `SID Socket ${socketIndex} resistor updated`),
+                            pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', resistorItem)]),
+                        });
+                        shapingControls.push({
+                            label: 'Cap',
+                            value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem, '—')),
+                            options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem).map(String),
+                            onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', capacitorItem, resolveSelectValue(val), `HOME_SID_CAP_${socketIndex}`, `SID Socket ${socketIndex} capacitor updated`),
+                            pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', capacitorItem)]),
                         });
                     }
 

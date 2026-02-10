@@ -312,7 +312,7 @@ describe('localSourcesStore', () => {
 
     it('uses label when first file has no relative path root', () => {
       const file = createFile('test.sid');
-      // @ts-ignore
+      // @ts-expect-error - intentionally deleting property for test
       delete file.webkitRelativePath;
       const result = createLocalSourceFromFileList([file], 'MyLabel');
       expect(result.source.name).toBe('MyLabel');
@@ -352,7 +352,7 @@ describe('localSourcesStore', () => {
   describe('Random ID Generation', () => {
     it('falls back to timestamp when crypto is unavailable', () => {
       const originalCrypto = globalThis.crypto;
-      // @ts-ignore
+      // @ts-expect-error - intentionally deleting global for test
       delete globalThis.crypto;
 
       // Trigger creation which calls safeRandomId

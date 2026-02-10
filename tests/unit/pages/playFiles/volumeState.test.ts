@@ -45,7 +45,7 @@ describe('reduceVolumeState', () => {
     });
 
     it('handles unknown action', () => {
-        // @ts-ignore
+        // @ts-expect-error - intentionally passing unknown action type
         const result = reduceVolumeState(baseState, { type: 'UNKNOWN' });
         expect(result).toBe(baseState);
     });

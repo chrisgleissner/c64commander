@@ -8,14 +8,6 @@
 
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
-console.log('PlayFilesPage loading...');
-try {
-  // test some vars
-  console.log('PlayFilesPage vars check');
-} catch (e) {
-  console.error('PlayFilesPage vars check failed', e);
-}
-
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -194,13 +186,19 @@ export default function PlayFilesPage() {
     handleVolumeAsyncChange,
     handleVolumeCommit,
     handleToggleMute,
+    restoreVolumeOverridesRef,
   } = useVolumeOverride({ isPlaying, isPaused });
+  const volumeIndex = volumeState.index;
+  const volumeMuted = volumeState.muted;
+
   const {
     hvscStatus,
     hvscRoot,
     hvscLibraryAvailable,
     buildHvscLocalPlayFile,
   } = useHvscLibrary();
+
+  const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);
 
 
   const localSourceInputRef = useRef<HTMLInputElement | null>(null);
@@ -324,13 +322,6 @@ export default function PlayFilesPage() {
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
 
-  useEffect(() => () => {
-    if (reshuffleTimerRef.current) {
-      window.clearTimeout(reshuffleTimerRef.current);
-      reshuffleTimerRef.current = null;
-    }
-  }, []);
-
   useEffect(() => {
     if (addItemsProgress.status !== 'scanning') return undefined;
     const interval = window.setInterval(() => {
@@ -410,7 +401,7 @@ export default function PlayFilesPage() {
     return groups;
   }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
 
-  const { localEntriesBySourceId, localSourceTreeUris } = useLocalEntries(localSources);
+
 
   const handleLocalSourceInput = useCallback((files: FileList | File[] | null) => {
     if (!files || (Array.isArray(files) ? files.length === 0 : files.length === 0)) return;
@@ -644,7 +635,13 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef,
   });
 
-
+  useEffect(() => {
+    if (!isPlaying || isPaused) return;
+    const guard = autoAdvanceGuardRef.current;
+    if (!guard || guard.autoFired || guard.userCancelled) return;
+    if (Date.now() < guard.dueAtMs) return;
+    void handleNext('auto', guard.trackInstanceId);
+  }, [elapsedMs, handleNext, isPaused, isPlaying]);
 
   useEffect(() => {
     if (isPlaying || isPaused) return;

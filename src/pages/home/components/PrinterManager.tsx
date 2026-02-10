@@ -1,6 +1,6 @@
 import { getC64API } from '@/lib/c64api';
 import { useActionTrace } from '@/hooks/useActionTrace';
-import { useConfigActions } from '../hooks/useConfigActions';
+import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
 import { usePrinterData } from '../hooks/usePrinterData';
 import {
     PRINTER_CONTROL_SPEC,
@@ -36,7 +36,7 @@ export function PrinterManager({
     onResetPrinter
 }: PrinterManagerProps) {
     const trace = useActionTrace('PrinterManager');
-    const { updateConfigValue, resolveConfigValue, configWritePending } = useConfigActions();
+    const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
     const { refetchDrives, printerConfig, printerDevice } = usePrinterData(isConnected);
 
     const printerEnabledValue = String(

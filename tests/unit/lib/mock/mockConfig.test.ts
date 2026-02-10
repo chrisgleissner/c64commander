@@ -62,7 +62,7 @@ describe('mockConfig', () => {
                     Test: {
                         items: {
                             BadVal: {
-                                // @ts-ignore
+                                // @ts-expect-error - intentionally passing null for test
                                 selected: null,
                                 details: { min: 'invalid' }
                             }

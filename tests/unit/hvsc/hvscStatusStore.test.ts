@@ -159,7 +159,7 @@ describe('hvscStatusStore', () => {
 
     it('ignores non-complete events', () => {
       const initial = getDefaultHvscStatusSummary();
-      // @ts-ignore - simulating unknown stage
+      // @ts-expect-error - simulating unknown stage
       const result = applyHvscProgressEventToSummary(initial, {
         stage: 'unknown_stage',
         message: 'test',

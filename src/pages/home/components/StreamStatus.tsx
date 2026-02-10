@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { SectionHeader } from '@/components/SectionHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useConfigActions } from '../hooks/useConfigActions';
+import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
 import { useStreamData } from '../hooks/useStreamData';
 import { buildConfigKey } from '@/pages/home/utils/HomeConfigUtils';
 import { buildStreamEndpointLabel } from '@/lib/config/homeStreams';
@@ -15,7 +15,7 @@ export function StreamStatus({ isConnected }: StreamStatusProps) {
     const {
         configWritePending,
         updateConfigValue,
-    } = useConfigActions();
+    } = useSharedConfigActions();
 
     const {
         streamControlEntries,

@@ -52,12 +52,14 @@ export type DriveControlSpec = {
     enabledItem: string;
     busItem: string;
     typeItem?: string;
+    testIdSuffix: string;
+    label: string;
 };
 
 export const DRIVE_CONTROL_SPECS: DriveControlSpec[] = [
-    { class: 'PHYSICAL_DRIVE_A', category: 'Drive A Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type' },
-    { class: 'PHYSICAL_DRIVE_B', category: 'Drive B Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type' },
-    { class: 'SOFT_IEC_DRIVE', category: 'SoftIEC Drive Settings', enabledItem: 'IEC Drive', busItem: 'Soft Drive Bus ID' },
+    { class: 'PHYSICAL_DRIVE_A', category: 'Drive A Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type', testIdSuffix: 'a', label: 'Drive A' },
+    { class: 'PHYSICAL_DRIVE_B', category: 'Drive B Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type', testIdSuffix: 'b', label: 'Drive B' },
+    { class: 'SOFT_IEC_DRIVE', category: 'SoftIEC Drive Settings', enabledItem: 'IEC Drive', busItem: 'Soft Drive Bus ID', testIdSuffix: 'soft-iec', label: 'Soft IEC Drive' },
 ];
 
 export const PRINTER_CONTROL_SPEC: DriveControlSpec = {
@@ -65,6 +67,8 @@ export const PRINTER_CONTROL_SPEC: DriveControlSpec = {
     category: 'Printer Settings',
     enabledItem: 'IEC printer',
     busItem: 'Bus ID',
+    testIdSuffix: 'printer',
+    label: 'Printer',
 };
 
 export const PRINTER_HOME_ITEMS = [

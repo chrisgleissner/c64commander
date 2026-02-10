@@ -3,10 +3,10 @@ import { getC64API } from '@/lib/c64api';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob, type LocalPlayFile, type PlayRequest } from '@/lib/playback/playbackRouter';
+import { getHvscDurationByMd5Seconds } from '@/lib/hvsc';
 import { getLocalFilePath, isSongCategory, resolvePlayTargetIndex, tryAcquireSingleFlight, releaseSingleFlight } from '@/pages/playFiles/playFilesUtils';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
-import { computeSidMd5, getSidSongCount } from '@/lib/sid/sidUtils';
-import { getHvscDurationByMd5Seconds } from '@/lib/hvsc';
+
 import { buildLocalPlayFileFromUri, buildLocalPlayFileFromTree } from '@/lib/playback/fileLibraryUtils';
 import type { PlaylistItem } from '@/pages/playFiles/types';
 import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
@@ -140,6 +140,7 @@ export function usePlaybackController({
             } catch {
                 return { durationMs: durationFallbackMs, subsongCount: undefined, readable: false } as const;
             }
+            const { getSidSongCount } = await import('@/lib/sid/sidUtils');
             const subsongCount = getSidSongCount(buffer);
 
             try {
@@ -149,6 +150,7 @@ export function usePlaybackController({
                     return { durationMs: localDurationMs, subsongCount, readable: true } as const;
                 }
 
+                const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
                 const md5 = await computeSidMd5(buffer);
                 const seconds = await getHvscDurationByMd5Seconds(md5);
                 const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
@@ -166,6 +168,7 @@ export function usePlaybackController({
                 const blob = await tryFetchUltimateSidBlob(path);
                 if (!blob) return null;
                 const buffer = await blob.arrayBuffer();
+                const { computeSidMd5 } = await import('@/lib/sid/sidUtils');
                 const md5 = await computeSidMd5(buffer);
                 const seconds = await getHvscDurationByMd5Seconds(md5);
                 if (seconds === undefined || seconds === null) return null;

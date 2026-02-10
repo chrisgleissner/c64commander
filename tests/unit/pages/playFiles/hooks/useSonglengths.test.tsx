@@ -58,14 +58,14 @@ describe('useSonglengths', () => {
         const file = new File(['md5=123'], 'Songlengths.txt', { type: 'text/plain' });
         // Mock arrayBuffer/text if missing in environment
         if (!file.text) {
-            // @ts-ignore
+            // @ts-expect-error - polyfilling text() for test environment
             file.text = async () => 'md5=123';
-            // @ts-ignore
+            // @ts-expect-error - polyfilling arrayBuffer() for test environment
             file.arrayBuffer = async () => new TextEncoder().encode('md5=123').buffer;
         }
 
         act(() => {
-            // @ts-ignore
+            // @ts-expect-error - passing File[] instead of FileList for test
             result.current.handleSonglengthsInput([file]);
         });
 
@@ -95,7 +95,7 @@ describe('useSonglengths', () => {
         const { result } = renderHook(() => useSonglengths({ playlist: [] }));
         const file = new File([''], 'readme.md', { type: 'text/plain' });
         act(() => {
-            // @ts-ignore
+            // @ts-expect-error - passing File[] instead of FileList for test
             result.current.handleSonglengthsInput([file]);
         });
         // Should ignore

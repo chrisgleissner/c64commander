@@ -470,5 +470,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         handleVolumeAsyncChange,
         handleVolumeCommit,
         handleToggleMute,
+        restoreVolumeOverridesRef,
     };
 }

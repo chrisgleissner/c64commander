@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { getC64API } from '@/lib/c64api';
 import { useActionTrace } from '@/hooks/useActionTrace';
-import { useConfigActions } from '../hooks/useConfigActions';
+import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
 import { useDriveData } from '../hooks/useDriveData';
 import { DriveCard } from '../DriveCard';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -39,7 +39,7 @@ export function DriveManager({
 }: DriveManagerProps) {
     const api = getC64API();
     const trace = useActionTrace('DriveManager');
-    const { updateConfigValue, resolveConfigValue, configWritePending } = useConfigActions();
+    const { updateConfigValue, resolveConfigValue, configWritePending } = useSharedConfigActions();
 
     const {
         refetchDrives,
@@ -119,7 +119,7 @@ export function DriveManager({
                 isResetting={machineTaskId === 'reset-drives'}
                 resetTestId="home-drives-reset"
             />
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2" data-testid="home-drives-group">
 
                 {DRIVE_CONTROL_SPECS.map((spec) => {
                     let category: Record<string, unknown> | undefined;
@@ -136,8 +136,8 @@ export function DriveManager({
                         summary = driveSummaryItems.find((s) => s.key === 'softiec');
                     }
 
-                    const label = spec.label;
                     const device = drivesByClass.get(spec.class) ?? null;
+                    const label = device?.label ?? spec.label;
                     const payload = category;
                     const enabledValue = String(
                         resolveConfigValue(payload, spec.category, spec.enabledItem, device?.enabled ? 'Enabled' : 'Disabled'),
@@ -182,7 +182,7 @@ export function DriveManager({
                         : false;
 
 
-                    const testIdSuffix = spec.class.toLowerCase().replace(/_/g, '-');
+                    const testIdSuffix = spec.testIdSuffix;
 
                     return (
                         <DriveCard

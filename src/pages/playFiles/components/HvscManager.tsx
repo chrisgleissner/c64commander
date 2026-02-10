@@ -105,6 +105,12 @@ export function HvscManager({
             formatBytes={formatBytes}
             formatHvscDuration={formatHvscDuration}
             formatHvscTimestamp={formatHvscTimestamp}
+            onInstall={() => void hvsc.handleHvscInstall()}
+            onIngest={() => void hvsc.handleHvscIngest()}
+            onCancel={() => void hvsc.handleHvscCancel()}
+            onReset={hvsc.handleHvscReset}
+            onFolderFilterChange={hvsc.setHvscFolderFilter}
+            onSelectFolder={(folder) => void hvsc.loadHvscFolder(folder)}
             onPlayEntry={onPlayEntry}
             onAddToPlaylist={onAddToPlaylist}
             onPlayFolder={handlePlayHvscFolder}

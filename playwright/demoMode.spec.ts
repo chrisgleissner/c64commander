@@ -122,8 +122,14 @@ test.describe('Automatic Demo Mode', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
 
+    // Wait for DEMO_ACTIVE state first – Playwright's locator polling reliably
+    // detects attribute changes on existing elements but is slow to observe new
+    // Portal-rendered elements inserted into document.body during heavy initial
+    // render cycles.
+    await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE', { timeout: 10000 });
+
     // Dialog must appear in a fresh session
-    await expect(dialog).toBeVisible({ timeout: 10000 });
+    await expect(dialog).toBeVisible();
     await snap(page, testInfo, 'demo-interstitial-shown');
 
     // Dismiss it
@@ -186,8 +192,10 @@ test.describe('Automatic Demo Mode', () => {
     });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const indicator = page.getByTestId('connectivity-indicator');
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialog).toBeVisible({ timeout: 10000 });
+    await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE', { timeout: 10000 });
+    await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     await expect(dialog).toBeHidden();
 
