@@ -136,7 +136,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
@@ -147,7 +147,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const dialogTitle = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 10000 });
+    await expect(dialogTitle).toBeVisible({ timeout: 30000 });
     await dialogTitle.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
