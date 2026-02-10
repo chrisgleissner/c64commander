@@ -64,7 +64,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
-      sessionStorage.removeItem('c64u_demo_interstitial_shown');
+      if (!sessionStorage.getItem('c64u_demo_interstitial_reset_once')) {
+        sessionStorage.removeItem('c64u_demo_interstitial_shown');
+        sessionStorage.setItem('c64u_demo_interstitial_reset_once', '1');
+      }
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
@@ -434,12 +437,12 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server.setReachable(false);
     await indicator.click();
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => { });
     const dialogVisible = await dialog.isVisible().catch(() => false);
     if (dialogVisible) {
       await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     }
-    await dialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+    await dialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { });
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();
