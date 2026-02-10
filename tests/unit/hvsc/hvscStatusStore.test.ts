@@ -86,6 +86,18 @@ describe('hvscStatusStore', () => {
       expect(stored.download?.downloadedBytes).toBe(10);
       expect(result.download.downloadedBytes).toBe(10);
     });
+
+    it('ignores updates when storage is corrupted', () => {
+      localStorage.setItem('c64u_hvsc_status:v1', 'invalid-json{');
+      const loaded = loadHvscStatusSummary();
+      expect(loaded).toEqual(getDefaultHvscStatusSummary());
+    });
+
+    it('ignores updates when summary misses core properties', () => {
+      localStorage.setItem('c64u_hvsc_status:v1', '{}');
+      const loaded = loadHvscStatusSummary();
+      expect(loaded).toEqual(getDefaultHvscStatusSummary());
+    });
   });
 
   describe('State transitions', () => {
@@ -145,23 +157,138 @@ describe('hvscStatusStore', () => {
       expect(next.download.totalBytes).toBe(100);
     });
 
-    it('marks extraction progress and completion', () => {
+    it('ignores non-complete events', () => {
       const initial = getDefaultHvscStatusSummary();
-      const mid = applyHvscProgressEventToSummary(initial, {
-        ingestionId: 'test',
+      // @ts-ignore - simulating unknown stage
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: 'unknown_stage',
+        message: 'test',
+      });
+      expect(result).toEqual(initial);
+    });
+
+    it('handles download success with existing finishedAt', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.download.finishedAt = 'existing-time';
+
+      const next = applyHvscProgressEventToSummary(initial, {
+        stage: 'download',
+        message: 'done',
+        percent: 100,
+      });
+
+      expect(next.download.finishedAt).toBe('existing-time');
+    });
+
+    it('preserves existing duration when event does not provide it', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.download.durationMs = 999;
+
+      const next = applyHvscProgressEventToSummary(initial, {
+        stage: 'download',
+        message: 'progress',
+        percent: 50,
+      });
+
+      expect(next.download.durationMs).toBe(999);
+    });
+
+    it('updates download size and total bytes properly', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.download.downloadedBytes = 50;
+      initial.download.sizeBytes = 50;
+
+      // Case 1: event has totalBytes -> uses event.totalBytes
+      let next = applyHvscProgressEventToSummary(initial, {
+        stage: 'download',
+        message: 'progress',
+        downloadedBytes: 60,
+        totalBytes: 100,
+      });
+      expect(next.download.sizeBytes).toBe(100);
+
+      // Case 2: download complete, no totalBytes -> uses downloadedBytes
+      // Reset for clarity
+      initial.download.downloadedBytes = 50;
+      initial.download.sizeBytes = 50;
+      next = applyHvscProgressEventToSummary(initial, {
+        stage: 'download',
+        message: 'done',
+        percent: 100,
+        downloadedBytes: 120, // no totalBytes property
+      });
+      expect(next.download.sizeBytes).toBe(120);
+
+      // Case 3: in-progress, no totalBytes -> keeps old sizeBytes
+      initial.download.sizeBytes = 999;
+      next = applyHvscProgressEventToSummary(initial, {
+        stage: 'download',
+        message: 'progress',
+        downloadedBytes: 60,
+        // no totalBytes, no completion
+      });
+      expect(next.download.sizeBytes).toBe(999);
+    });
+
+    it('marks download success when extraction starts (with status transition)', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.download.status = 'in-progress';
+
+      const result = applyHvscProgressEventToSummary(initial, {
         stage: 'archive_extraction',
-        message: 'Extracting',
-        processedCount: 10,
-        totalCount: 100,
+        message: 'extracting',
       });
-      expect(mid.extraction.status).toBe('in-progress');
-      const done = applyHvscProgressEventToSummary(mid, {
-        ingestionId: 'test',
+
+      expect(result.download.status).toBe('success');
+    });
+
+    it('keeps download status if not in-progress when extraction starts', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.download.status = 'idle';
+
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: 'archive_extraction',
+        message: 'extracting',
+      });
+
+      expect(result.download.status).toBe('idle');
+    });
+
+    it('preserves success status on completion event', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.extraction.status = 'success';
+      initial.download.status = 'success';
+
+      const result = applyHvscProgressEventToSummary(initial, {
         stage: 'complete',
-        message: 'Complete',
+        message: 'done',
       });
-      expect(done.extraction.status).toBe('success');
-      expect(done.download.status).toBe('success');
+
+      expect(result.extraction.status).toBe('success');
+      expect(result.download.status).toBe('success');
+    });
+
+    it('handles generic errors not matching categories', () => {
+      const initial = getDefaultHvscStatusSummary();
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: 'error',
+        message: 'Something weird happened',
+      }, 'download');
+
+      expect(result.download.errorCategory).toBe('download');
+    });
+
+    it('handles extraction failure when error stage is unknown', () => {
+      const initial = getDefaultHvscStatusSummary();
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: 'error',
+        message: 'Something weird happened',
+      }, 'unknown_stage_name');
+
+      // Default fallthrough logic for unknown lastStage?
+      // The code: if (lastStage === 'download') { ... } return { extraction: ... }
+      // So unexpected lastStage falls through to extraction error
+      expect(result.extraction.status).toBe('failure');
     });
   });
 

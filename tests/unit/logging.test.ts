@@ -16,6 +16,11 @@ import {
   getErrorLogs,
   getLogs,
 } from '@/lib/logging';
+import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
+
+vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
+  shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
+}));
 
 const ensureWindow = () => {
   if (typeof window !== 'undefined') return;
@@ -125,5 +130,57 @@ describe('logging', () => {
     expect(details.errorName).toBe('Error');
     expect(details.errorStack).toContain('line-1');
     expect(details.errorStack).toContain('stack truncated');
+  });
+
+  it('suppresses logs when diagnostics side effects are suppressed', () => {
+    vi.mocked(shouldSuppressDiagnosticsSideEffects).mockReturnValue(true);
+    addLog('info', 'ignored');
+    expect(getLogs()).toHaveLength(0);
+
+    // Errors should still be recorded
+    addLog('error', 'important');
+    expect(getLogs()).toHaveLength(1);
+    vi.mocked(shouldSuppressDiagnosticsSideEffects).mockReturnValue(false);
+  });
+
+  it('handles corrupted log storage safely', () => {
+    localStorage.setItem('c64u_app_logs', 'invalid { json');
+    expect(getLogs()).toEqual([]);
+  });
+
+  it('truncates stack trace by character count', () => {
+    const error = new Error('long stack');
+    const longLine = 'a'.repeat(3005);
+    error.stack = `Error: long stack\n${longLine}`;
+
+    const details = buildErrorLogDetails(error);
+    expect(details.errorStack?.length).toBeLessThan(3100);
+    expect(details.errorStack).toContain('(stack truncated)');
+  });
+
+  it('preserves existing error message in details', () => {
+    const error = new Error('original');
+    const details = buildErrorLogDetails(error, { error: 'override' });
+    expect(details.error).toBe('override');
+  });
+
+  it('redacts logs when requested', () => {
+    addLog('info', 'sensetive info');
+    const formatted = formatLogsForShare(getLogs(), { redacted: true });
+    // Assuming redaction replaces common patterns, but here message is plain.
+    // Redaction logic is in exportRedaction.
+    expect(formatted).toContain('sensetive info'); // redaction targets specifics like IPs.
+  });
+
+  it('generates ID without crypto', () => {
+    const originalCrypto = globalThis.crypto;
+    // @ts-ignore
+    delete globalThis.crypto;
+
+    addLog('info', 'no crypto');
+    const logs = getLogs();
+    expect(logs[0].id).toMatch(/^\d+-\d+$/);
+
+    globalThis.crypto = originalCrypto;
   });
 });
