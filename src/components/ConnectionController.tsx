@@ -64,6 +64,10 @@ export function ConnectionController() {
     const intervalMs = loadBackgroundRediscoveryIntervalMs();
     clearTimer();
     backgroundTimerRef.current = window.setInterval(() => {
+      if (!allowBackgroundRediscovery()) {
+        clearTimer();
+        return;
+      }
       void discoverConnection('background');
     }, intervalMs);
 
@@ -116,7 +120,13 @@ export function ConnectionController() {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail as { key?: string } | undefined;
       if (detail?.key !== 'c64u_background_rediscovery_interval_ms') return;
-      if (!allowBackgroundRediscovery()) return;
+      if (!allowBackgroundRediscovery()) {
+        if (backgroundTimerRef.current) {
+          window.clearInterval(backgroundTimerRef.current);
+          backgroundTimerRef.current = null;
+        }
+        return;
+      }
       if (state !== 'DEMO_ACTIVE' && state !== 'OFFLINE_NO_DEMO') return;
       // Restart timer with new interval.
       if (backgroundTimerRef.current) {

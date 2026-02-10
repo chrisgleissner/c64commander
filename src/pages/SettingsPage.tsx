@@ -126,7 +126,7 @@ import { exportSettingsJson, importSettingsJson } from '@/lib/config/settingsTra
 import { FolderPicker, type SafPersistedUri } from '@/lib/native/folderPicker';
 import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
-import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
+import { discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
 
 const diagnosticsTabTriggerClass =
@@ -243,10 +243,6 @@ export default function SettingsPage() {
     }
     setDeviceHostInput(deviceHost);
   }, [deviceHost, isDemoActive]);
-
-  useEffect(() => {
-    dismissDemoInterstitial();
-  }, []);
 
   useEffect(() => {
     setListPreviewInput(String(listPreviewLimit));
