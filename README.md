@@ -98,14 +98,6 @@ Browse configuration categories, tune audio and SID settings, and edit drive-spe
   </tr>
   <tr>
     <td>
-      <img src="doc/img/app/config/sections/01-audio-mixer.png" alt="Configuration audio mixer" width="480"/>
-    </td>
-    <td>
-      <img src="doc/img/app/config/sections/03-ultisid-configuration.png" alt="Configuration UltiSID" width="480"/>
-    </td>
-  </tr>
-  <tr>
-    <td>
       <img src="doc/img/app/config/sections/15-drive-a-settings.png" alt="Configuration drive A settings" width="480"/>
     </td>
     <td></td>
