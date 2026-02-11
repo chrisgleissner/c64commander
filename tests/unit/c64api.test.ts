@@ -493,33 +493,78 @@ describe('c64api', () => {
   });
 
   it('retries one idle GET request after a network failure', async () => {
-    const fetchMock = getFetchMock();
-    fetchMock
-      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ errors: [] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        }),
-      );
-    deviceStateSnapshotMock.mockReturnValue({
-      state: 'READY',
-      connectionState: 'REAL_CONNECTED',
-      busyCount: 0,
-      lastUpdatedAtMs: Date.now() - 15000,
-      lastErrorMessage: null,
-      lastSuccessAtMs: Date.now() - 15000,
-      circuitOpenUntilMs: null,
-    });
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      deviceStateSnapshotMock.mockReturnValue({
+        state: 'READY',
+        connectionState: 'REAL_CONNECTED',
+        busyCount: 0,
+        lastUpdatedAtMs: Date.now() - 15000,
+        lastErrorMessage: null,
+        lastSuccessAtMs: Date.now() - 15000,
+        circuitOpenUntilMs: null,
+      });
 
-    const api = new C64API('http://c64u');
-    await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(addLogMock).toHaveBeenCalledWith(
-      'warn',
-      'C64 API retry scheduled after idle failure',
-      expect.objectContaining({ wasIdle: true }),
-    );
+      const api = new C64API('http://c64u');
+      const pending = api.getInfo();
+      await vi.advanceTimersByTimeAsync(200);
+      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(addLogMock).toHaveBeenCalledWith(
+        'warn',
+        'C64 API retry scheduled after idle failure',
+        expect.objectContaining({ wasIdle: true }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts idle retry backoff immediately when caller aborts the request', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      deviceStateSnapshotMock.mockReturnValue({
+        state: 'READY',
+        connectionState: 'REAL_CONNECTED',
+        busyCount: 0,
+        lastUpdatedAtMs: Date.now() - 15000,
+        lastErrorMessage: null,
+        lastSuccessAtMs: Date.now() - 15000,
+        circuitOpenUntilMs: null,
+      });
+
+      const api = new C64API('http://c64u');
+      const controller = new AbortController();
+      const pending = api.getInfo({ signal: controller.signal });
+      void pending.catch(() => {});
+
+      await Promise.resolve();
+      controller.abort();
+      await vi.runAllTimersAsync();
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('builds request urls for config writes and machine actions', async () => {

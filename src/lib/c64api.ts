@@ -60,6 +60,38 @@ const wait = (ms: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, ms);
 });
 
+const createAbortError = () => {
+  const error = new Error('The operation was aborted');
+  (error as { name: string }).name = 'AbortError';
+  return error;
+};
+
+const waitWithAbortSignal = async (ms: number, signal?: AbortSignal) => {
+  if (!signal) {
+    await wait(ms);
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      reject(createAbortError());
+    };
+
+    const timeoutId = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+};
+
 const getIdleContext = () => {
   const snapshot = getDeviceStateSnapshot();
   const now = Date.now();
@@ -618,7 +650,8 @@ export class C64API {
             }));
           }
 
-          const shouldRetry = attempt < maxAttempts && (isAbort || isNetworkFailure);
+          const callerAborted = requestOptions.signal?.aborted === true;
+          const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
           if (shouldRetry) {
             const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
             addLog('warn', 'C64 API retry scheduled after idle failure', {
@@ -639,8 +672,12 @@ export class C64API {
               maxAttempts,
               retryDelayMs,
             }));
-            await wait(retryDelayMs);
+            await waitWithAbortSignal(retryDelayMs, requestOptions.signal);
             continue;
+          }
+
+          if (callerAborted) {
+            throw createAbortError();
           }
 
           if (isAbort || isNetworkFailure) {

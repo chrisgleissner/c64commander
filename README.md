@@ -6,7 +6,7 @@
 
 Control your Commodore 64 Ultimate from your Android device.
 
-<img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="500"/>
+<img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="600"/>
 
 > [!NOTE]
 > This project is under active development. Some features are still being finalised.
