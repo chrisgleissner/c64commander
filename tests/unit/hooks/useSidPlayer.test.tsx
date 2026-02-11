@@ -10,20 +10,22 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 
-const playSidUpload = vi.fn(async () => undefined);
-const start = vi.fn(async () => {
-  throw new Error('start-failed');
-});
-const stop = vi.fn(async () => {
-  throw new Error('stop-failed');
-});
+const mocks = vi.hoisted(() => ({
+  playSidUpload: vi.fn(async () => undefined),
+  start: vi.fn(async () => {
+    throw new Error('start-failed');
+  }),
+  stop: vi.fn(async () => {
+    throw new Error('stop-failed');
+  }),
+}));
 
 vi.mock('@/lib/c64api', () => ({
-  getC64API: () => ({ playSidUpload }),
+  getC64API: () => ({ playSidUpload: mocks.playSidUpload }),
 }));
 
 vi.mock('@/lib/native/backgroundExecution', () => ({
-  BackgroundExecution: { start, stop },
+  BackgroundExecution: { start: mocks.start, stop: mocks.stop },
 }));
 
 import { SidPlayerProvider, useSidPlayer } from '@/hooks/useSidPlayer';
@@ -50,7 +52,7 @@ describe('useSidPlayer', () => {
       });
     });
 
-    expect(playSidUpload).toHaveBeenCalled();
+    expect(mocks.playSidUpload).toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(
       'Background execution start failed',
       expect.objectContaining({ trackId: 'track-1' }),

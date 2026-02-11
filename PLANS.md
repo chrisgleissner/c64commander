@@ -17,9 +17,9 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 1. **Q1 (useSidPlayer legacy status)**: Requires research. Phase 2 begins with a code-level audit of all `useSidPlayer` consumers to determine if it has any active, non-trace responsibilities. The likely outcome is deprecation and migration, but the audit must confirm this before removal. No new consumers should be added regardless.
 2. **Q2 (authoritative completion signal)**: Requires research. Phase 3 begins with a code-level investigation of what signals are available (JS timers, C64U device status polling, native service callbacks) and selects the most reliable primary signal. The plan assumes JS guard timers + native watchdog as a starting point but the research step may revise this.
-3. **Q3 (lock-screen auto-skip scope)**: Required for **all** source types (local, SAF, ultimate, HVSC). Phase 3 implements source-agnostic lock survival.
+3. **Q3 (lock-screen auto-skip scope)**: Required for all playback source kinds (`local`, `ultimate`, `hvsc`). On Android, `local` can be SAF-backed; this is an access mode, not a separate source kind. Phase 3 implements source-agnostic lock survival.
 4. **Q4 (ultimate SID without SSL)**: **Not acceptable.** The app must always attempt to propagate song-length information (SSL) to the C64U. Failure to propagate SSL when a `Songlengths.md5` file is available and contains the relevant entry is classified as an **error**. However, playback must still proceed — the song must play even if SSL propagation fails, and the error must be logged with full context. Phase 4 implements strict error handling for this path.
-5. **Q5 (SAF process recreation guarantees)**: Best-effort. Playlists must survive app restarts and phone restarts. URI rebinding is attempted on restore; if permissions are revoked, the affected items are marked unavailable with a user-facing indicator. Phase 5 implements this.
+5. **Q5 (Android SAF process recreation guarantees for local sources)**: Best-effort. Playlists must survive app restarts and phone restarts. URI rebinding is attempted on restore for SAF-backed local items; if permissions are revoked, the affected items are marked unavailable with a user-facing indicator. Phase 5 implements this.
 6. **Q6 (HVSC partial failure acceptance)**: **No partial failures are accepted.** Every song in the archive must be ingested. The ingestion result must report the exact count of songs successfully ingested and the count that failed. Ingestion is considered **unsuccessful** (state = `failed`) if even a single song cannot be ingested — with one exception: syntax errors in `Songlengths.md5` are tolerated. Songlength syntax errors are ignored during ingestion, shown in the UI as a warning with the count of affected entries, and the import is still considered a success. Phase 6 implements this strict contract.
 7. **Q7 (native crash envelope)**: As much detail as possible. Every native failure log must include: operation phase, correlation ID, source kind, error class, affected file/URI, plugin method name, and full stack trace. The more context, the better — do not economize on diagnostic detail. Phase 1 and Phase 2 establish this contract.
 8. **Q8 (HVSC source identity in UI)**: **Hugely important.** HVSC must be a fully first-class source. The user should never need to know or care whether a song came from the C64U, a local Android download, or HVSC. All sources feed into a single unified playlist experience. The source distinction must be **transparent** to the user — they simply add songs from C64U, local storage, or HVSC, and the playlist treats them identically. Source-specific icons/labels may appear in browse/source-selection views, but the playlist itself must present a unified, source-agnostic experience. Phase 7 (elevated to High severity) implements this.
@@ -32,9 +32,11 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 **Severity**: Critical (release-blocking per repository standards).
 
+**Status (2026-02-11)**: Completed.
+
 ### Subtasks
 
-- [ ] **1.1 Audit and catalog all silent catches in JS/TS**
+- [x] **1.1 Audit and catalog all silent catches in JS/TS**
   - Grep for `catch` blocks across `src/` and classify each as: silent, logging-only-no-context, rethrowing, or compliant.
   - Known locations from research (non-exhaustive, full grep required):
     - `src/lib/sid/sidUtils.ts:45`
@@ -47,36 +49,36 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
     - `src/lib/hvsc/hvscStatusStore.ts:68`
   - Produce a tracking list with file, line, current behavior, and planned fix.
 
-- [ ] **1.2 Fix silent catches in HVSC module (`src/lib/hvsc/`)**
+- [x] **1.2 Fix silent catches in HVSC module (`src/lib/hvsc/`)**
   - For each silent catch in `hvscFilesystem.ts`, `hvscDownload.ts`, `hvscStateStore.ts`, `hvscStatusStore.ts`:
     - Add `console.warn` or `console.error` with: operation name, relevant identifiers (e.g. file path, URL, archive entry), and full error object.
     - Where the function returns a default/fallback value, add a log at WARN level before returning.
     - Where the catch swallows a potentially corrupting error (e.g., filesystem write failure), rethrow with enriched context instead.
   - Do NOT change control flow unless the silent catch masks a state-corruption risk.
 
-- [ ] **1.3 Fix silent catches in source navigation and SID utilities**
+- [x] **1.3 Fix silent catches in source navigation and SID utilities**
   - `src/lib/sourceNavigation/ftpSourceAdapter.ts:39`, `:48`: Log error with FTP host, path, and operation context at WARN.
   - `src/lib/sid/sidUtils.ts:45`: Log parse failure with input context (file size, header bytes if available) at WARN.
 
-- [ ] **1.4 Fix silent catches in connection manager**
+- [x] **1.4 Fix silent catches in connection manager**
   - `src/lib/connection/connectionManager.ts:233`, `:536`: Log with connection state, host, and operation phase at WARN.
 
-- [ ] **1.5 Fix silent catches in legacy SID player hook**
+- [x] **1.5 Fix silent catches in legacy SID player hook**
   - `src/hooks/useSidPlayer.tsx:87`, `:149`: Log with playback state context at WARN. If `BackgroundExecution.start/stop` fails, log the error; do not swallow.
 
-- [ ] **1.6 Fix silent catches in Android Kotlin plugins**
+- [x] **1.6 Fix silent catches in Android Kotlin plugins**
   - `android/app/src/main/java/uk/gleissner/c64commander/FtpClientPlugin.kt:145`: Replace silent catch with `Log.e(TAG, "...", e)` including operation phase and connection identifiers.
   - `android/app/src/main/java/uk/gleissner/c64commander/FolderPickerPlugin.kt:71`, `:183`: Replace silent catches with `Log.e(TAG, "...", e)` including URI and operation context.
   - Ensure all `call.reject(...)` calls include the exception message string, not just a generic label.
 
-- [ ] **1.7 Add unit tests asserting error logging for previously-silent paths**
+- [x] **1.7 Add unit tests asserting error logging for previously-silent paths**
   - For each fixed catch, add or extend a unit test that:
     - Triggers the failure condition (mock the dependency to throw).
     - Asserts that `console.warn`/`console.error` was called (use `vi.spyOn`).
     - Asserts that the error log contains expected context fields (operation, identifier, error message).
   - For Kotlin: add JVM unit tests asserting that plugin methods produce structured log output on failure.
 
-- [ ] **1.8 Run full build and test suite**
+- [x] **1.8 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - `cd android && ./gradlew test`
   - Fix any regressions before proceeding to Phase 2.
@@ -96,11 +98,12 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
   - For each consumer, determine: is it active production code, trace-only, or dead code?
   - Known consumers from research: `src/components/TraceContextBridge.tsx:27`, `src/App.tsx:98` (provider), `src/hooks/useSidPlayer.tsx` (definition).
   - Determine if `useSidPlayer` holds any runtime state that is not also held by `usePlaybackController` (e.g., background execution start/stop, audio context). Document findings.
-  - **Decision gate**: if all active responsibilities can be migrated to `usePlaybackController`, mark `useSidPlayer` as deprecated and plan removal in subtask 2.7. If it has unique active responsibilities, document them and integrate rather than remove.
+  - **Decision gate**: if all active responsibilities can be migrated to `usePlaybackController`, mark `useSidPlayer` as deprecated and plan removal in subtask 2.8. If it has unique active responsibilities, document them and integrate rather than remove.
 
 - [ ] **2.2 Migrate TraceContextBridge away from legacy useSidPlayer**
   - In `src/components/TraceContextBridge.tsx`: replace `useSidPlayer()` context reads with state sourced from the active playback engine (`usePlaybackController` or its exposed state).
-  - The bridge must read: current track ID/path, playback state (playing/paused/stopped), source kind (local/ultimate/hvsc/saf), elapsed time, and queue position.
+  - The bridge must read: current track ID/path, playback state (playing/paused/stopped), source kind (`local` | `ultimate` | `hvsc`), elapsed time, and queue position.
+  - For Android diagnostics, include an optional `localAccessMode` field when source kind is `local` (`entries` | `saf`), instead of adding a new source kind.
   - Verify that `src/App.tsx` still provides the bridge with correct context after the change.
 
 - [ ] **2.3 Define and implement a cross-layer failure taxonomy enum**
@@ -137,7 +140,8 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
   - Emit lifecycle state in all playback-related trace events.
 
 - [ ] **2.7 Add source-kind and queue-identifier context to trace events**
-  - Ensure every playback trace event includes: `sourceKind` (`local` | `ultimate` | `hvsc` | `saf`), `trackInstanceId`, and `playlistItemId`.
+  - Ensure every playback trace event includes: `sourceKind` (`local` | `ultimate` | `hvsc`), `trackInstanceId`, and `playlistItemId`.
+  - For Android local playback diagnostics, include optional `localAccessMode` (`entries` | `saf`) when source kind is `local`.
   - Update `src/lib/tracing/traceBridge.ts` and `TraceContextBridge.tsx` to populate these fields from the active playback engine state.
 
 - [ ] **2.8 Remove or gate legacy SidPlayerProvider wrapping**
@@ -162,7 +166,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 ## Phase 3: Locked-Device Auto-Skip Reliability [Critical C1 + Medium M3]
 
-**Goal**: Ensure song completion triggers auto-advance reliably when the device is locked or the app is backgrounded, across **all** source types (local, SAF, ultimate, HVSC — per Q3). Integrate the existing Android foreground service with the active playback path as a timer-watchdog.
+**Goal**: Ensure song completion triggers auto-advance reliably when the device is locked or the app is backgrounded across all playback source kinds (`local`, `ultimate`, `hvsc`), including SAF-backed Android local playback.
 
 **Severity**: Critical (C1) + Medium (M3).
 
@@ -179,14 +183,12 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 - [ ] **3.2 Analyze current timer and lifecycle hook behavior**
   - Read and document the exact auto-skip timing mechanism in `src/pages/PlayFilesPage.tsx` (lines ~464-500, ~652-658).
   - Read and document the `setInterval`/`setTimeout` usage and `visibilitychange`/`pageshow`/`focus` event handlers.
-  - Identify which timers are subject to browser throttling when the page is hidden or the device is locked (Chromium WebView throttles `setInterval` to 1-minute minimum for hidden pages).
+  - Identify which timers are subject to browser throttling or suspension when the page is hidden or the device is locked (behavior varies by Android version, OEM, and power state).
 
-- [ ] **3.3 Implement visibility-aware timer reconciliation**
-  - In `PlayFilesPage.tsx` or `usePlaybackController.ts`:
-    - On `visibilitychange` to `visible`: immediately check if `dueAtMs` has passed and trigger auto-next if so. Do not wait for the next interval tick.
-    - On `pageshow` (for bfcache restoration): same immediate check.
-    - On `focus` regain: same immediate check.
-  - This ensures that even if the interval was throttled/suspended during lock, the auto-next fires immediately upon resuming.
+- [ ] **3.3 Validate and harden visibility-aware timer reconciliation**
+  - `PlayFilesPage.tsx` already wires `visibilitychange`, `focus`, and `pageshow` to `syncPlaybackTimeline()`.
+  - Verify this path reliably triggers immediate auto-next when `dueAtMs` has passed (without waiting for an interval tick) and make behavior consistent if logic is split between page and hook layers.
+  - Consolidate timer-reconciliation ownership (page vs controller) so there is one authoritative auto-next path.
 
 - [ ] **3.4 Integrate Android foreground service with active playback path**
   - In `usePlaybackController.ts` (or a new hook `useBackgroundPlayback.ts`):
@@ -260,8 +262,8 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 - [ ] **4.4 Harden SSL computation edge cases**
   - In `src/lib/sid/sidUtils.ts`:
-    - Ensure `encodeSongLength` handles edge cases: zero duration, very long durations (>99:59), negative inputs.
-    - For invalid inputs, throw a descriptive error (not return garbage bytes).
+    - Ensure `createSslPayload` has an explicit, tested contract for: zero duration, very long durations (>99:59), negative inputs, and non-finite values.
+    - Keep behavior deterministic and fail-fast for invalid input classes where clamping is not acceptable.
     - Add boundary-value unit tests for these cases.
 
 - [ ] **4.5 Add end-to-end tests for duration propagation failure modes**
@@ -282,7 +284,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 ## Phase 5: Cross-Source Lifecycle Resilience [High H2 + Medium M1, M2]
 
-**Goal**: Harden pause/resume parity across all source types, ensure playlists survive app restarts and phone restarts (per Q5: best-effort persistence, SAF URI rebinding with user-facing errors on permission loss), and close auto-next race conditions.
+**Goal**: Harden pause/resume parity across all playback source kinds (`local`, `ultimate`, `hvsc`), ensure playlists survive app restarts and phone restarts (per Q5: best-effort persistence, SAF URI rebinding for local Android items with user-facing errors on permission loss), and close auto-next race conditions.
 
 **Severity**: High (H2) + Medium (M1, M2).
 
@@ -305,7 +307,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 - [ ] **5.2 Add persistence lifecycle E2E tests**
   - In Playwright:
     - Simulate app restart by navigating away and back to `/play` with a pre-populated persisted state.
-    - Assert playlist items from local, SAF (mocked), ultimate, and HVSC sources are correctly rehydrated with full queue position and elapsed time.
+    - Assert playlist items from local (entries and SAF-backed), ultimate, and HVSC sources are correctly rehydrated with full queue position and elapsed time.
     - Assert that an item with a revoked SAF URI shows the unavailable indicator.
     - Assert that an HVSC item with a missing HVSC database shows the unavailable indicator.
   - Add unit tests for `usePlaybackPersistence` rehydration logic covering: valid URIs, revoked URIs, missing files, missing HVSC database, offline C64U.
@@ -315,11 +317,12 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
     - On resume, recompute `dueAtMs` based on `Date.now() + (durationMs - elapsedMs)`.
     - For HVSC source: ensure `durationMs` is resolved from pre-applied metadata (same as local path). If `durationMs` is absent (no songlength entry), log at WARN and either skip auto-advance (infinite play) or use a configurable default timeout.
     - For ultimate source: ensure `durationMs` is sourced from the router's resolved duration, not re-fetched on resume.
-    - For SAF source: ensure elapsed tracking persists across pause correctly (no double-count or reset).
+    - For local source via SAF-backed URI: ensure elapsed tracking persists across pause correctly (no double-count or reset).
 
 - [ ] **5.4 Add pause/resume parity tests per source type**
   - In unit tests (`usePlaybackController` test file):
-    - Test pause/resume for each source type: local, SAF, ultimate, HVSC.
+    - Test pause/resume for each source kind: local, ultimate, HVSC.
+    - For `local`, include both local entries and SAF-backed URI variants.
     - Assert that `dueAtMs` after resume equals `now + remainingDuration` in each case.
     - Assert that elapsed time does not jump or reset across pause/resume.
   - In Playwright:
@@ -432,7 +435,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 ### Subtasks
 
 - [ ] **7.1 Audit current source-identity leakage in playlist views**
-  - Grep for all places where source kind (`local`, `ultimate`, `hvsc`, `saf`) is surfaced to the user in playlist-related UI (not source-browsing UI).
+  - Grep for all places where source kind (`local`, `ultimate`, `hvsc`) is surfaced to the user in playlist-related UI (not source-browsing UI).
   - Known locations from research:
     - `src/pages/playFiles/hooks/usePlaylistListItems.tsx:75`: HVSC items shown as "This device".
     - `src/components/FileOriginIcon.tsx:11`: HVSC items use the local icon.
@@ -456,7 +459,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
   - In the playback UI (`PlayFilesPage.tsx` or its sub-components):
     - When a multi-subsong SID is playing, display the current subsong number and total subsong count (e.g., "Subsong 2/5").
     - When duration is unavailable (no HVSC songlength entry, no computed SSL), display "—:—" instead of "0:00" or blank.
-    - Ensure this behavior is identical across local, SAF, ultimate, and HVSC sources. The user should not be able to tell the source from the playback display.
+    - Ensure this behavior is identical across local (including SAF-backed items), ultimate, and HVSC sources. The user should not be able to tell the source from the playback display.
 
 - [ ] **7.5 Ensure drag/reorder, remove, and queue operations are source-agnostic**
   - Verify that all playlist manipulation operations (add, remove, reorder, clear, shuffle) work identically regardless of item source.
@@ -499,7 +502,7 @@ After all phases are complete:
 - [ ] `cd android && ./gradlew test` passes (all Android JVM tests).
 - [ ] Manual Maestro lock-screen flow passes on emulator.
 - [ ] No silent catches remain (grep validation).
-- [ ] Trace events contain `sourceKind`, `lifecycleState`, `correlationId`, and `trackInstanceId` fields.
+- [ ] Trace events contain `sourceKind`, `lifecycleState`, `correlationId`, and `trackInstanceId` fields (and `localAccessMode` when sourceKind is `local` on Android).
 - [ ] HVSC ingestion reports exact song counts (ingested / failed / songlength syntax errors).
 - [ ] HVSC ingestion fails if any song (other than songlength syntax errors) cannot be ingested.
 - [ ] SSL propagation failure with available `Songlengths.md5` emits an error-level trace event.
