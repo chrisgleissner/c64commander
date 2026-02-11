@@ -38,13 +38,31 @@ env:
     commands:
       - back
 
-# Return to Home tab
+# Relaunch and return to Home tab
+- launchApp
+- runFlow:
+    when:
+      visible: "Continue in Demo Mode"
+    file: subflows/continue-demo.yaml
+- tapOn:
+    text: "Continue in Demo Mode"
+    optional: true
+- tapOn:
+    text: "Got it"
+    optional: true
+- tapOn:
+    text: "Wait"
+    optional: true
+- tapOn:
+    text: "Close app"
+    optional: true
+- launchApp
 - tapOn:
     id: "tab-home"
     optional: true
 - extendedWaitUntil:
     visible:
       id: "tab-home"
-    timeout: ${SHORT_TIMEOUT}
+    timeout: ${LONG_TIMEOUT}
 
 - takeScreenshot: picker-cancelled

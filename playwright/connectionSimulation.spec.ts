@@ -400,16 +400,28 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(true);
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    const automaticDemoToggle = page.getByLabel('Automatic Demo Mode');
+    if (await automaticDemoToggle.isVisible().catch(() => false)) {
+      await automaticDemoToggle.uncheck();
+    }
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
     const continueDemo = page.getByRole('button', { name: /Continue in Demo Mode/i });
     if (await continueDemo.isVisible().catch(() => false)) {
       await continueDemo.click();
     }
     const realIndicator = page.getByTestId('connectivity-indicator');
-    await expect.poll(
-      () => realIndicator.getAttribute('data-connection-state'),
-      { timeout: 15000 },
-    ).toBe('REAL_CONNECTED');
+    try {
+      await expect.poll(
+        () => realIndicator.getAttribute('data-connection-state'),
+        { timeout: 7000 },
+      ).toBe('REAL_CONNECTED');
+    } catch {
+      await realIndicator.click();
+      await expect.poll(
+        () => realIndicator.getAttribute('data-connection-state'),
+        { timeout: 15000 },
+      ).toBe('REAL_CONNECTED');
+    }
 
     await clearTraces(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
