@@ -46,6 +46,20 @@ const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts
   }
 };
 
+const withTimeout = async (promise: Promise<void>, label: string, timeoutMs = 60000) => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = await Promise.race([
+    promise.then(() => false),
+    new Promise<boolean>((resolve) => {
+      timeoutId = setTimeout(() => resolve(true), timeoutMs);
+    }),
+  ]);
+  if (timeoutId) clearTimeout(timeoutId);
+  if (timedOut) {
+    console.warn(`${label} timed out after ${timeoutMs}ms`);
+  }
+};
+
 // Seed once per test; allowed base URLs cover both real and demo, so no paired call is required.
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string, demoBaseUrl?: string | null) => {
   await page.addInitScript(({ realBaseUrl: realArg, demoBaseUrl: demoArg }: { realBaseUrl: string; demoBaseUrl: string | null }) => {
@@ -67,7 +81,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       if (!page.isClosed()) {
-        await finalizeEvidence(page, testInfo);
+        await withTimeout(finalizeEvidence(page, testInfo), 'finalizeEvidence');
       }
       await demoServer?.close?.().catch((error) => {
         console.warn('Failed to close demo mock server', error);

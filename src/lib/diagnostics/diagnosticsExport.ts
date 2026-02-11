@@ -27,6 +27,10 @@ type DiagnosticsShareOverrideWindow = Window & { __c64uDiagnosticsShareOverride?
 
 const isTestProbeEnabled = () => {
     try {
+        if (typeof window !== 'undefined') {
+            const enabled = (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
+            if (enabled) return true;
+        }
         return import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
     } catch (error) {
         addErrorLog('Diagnostics export test probe check failed', {
@@ -37,8 +41,11 @@ const isTestProbeEnabled = () => {
 };
 
 const getShareOverride = (): DiagnosticsShareOverride | null => {
-    if (typeof window === 'undefined' || !isTestProbeEnabled()) return null;
-    return (window as DiagnosticsShareOverrideWindow).__c64uDiagnosticsShareOverride ?? null;
+    if (typeof window === 'undefined') return null;
+    const override = (window as DiagnosticsShareOverrideWindow).__c64uDiagnosticsShareOverride ?? null;
+    if (override) return override;
+    if (!isTestProbeEnabled()) return null;
+    return null;
 };
 
 const blobToBase64 = (blob: Blob): Promise<string> => {

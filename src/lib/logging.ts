@@ -32,6 +32,7 @@ const buildId = () =>
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const readLogs = (): LogEntry[] => {
+  if (typeof localStorage === 'undefined') return [];
   const raw = localStorage.getItem(LOG_KEY);
   if (!raw) return [];
   try {
@@ -43,10 +44,12 @@ const readLogs = (): LogEntry[] => {
 };
 
 const writeLogs = (logs: LogEntry[]) => {
+  if (typeof localStorage === 'undefined') return;
   localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   if (shouldSuppressDiagnosticsSideEffects() && level !== 'error') return;
   if (level === 'debug' && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {
@@ -90,6 +93,7 @@ export const getLogs = (): LogEntry[] => readLogs();
 export const getErrorLogs = (): LogEntry[] => readLogs().filter((entry) => entry.level === 'error');
 
 export const clearLogs = () => {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   writeLogs([]);
   window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
 };

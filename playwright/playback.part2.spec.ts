@@ -353,6 +353,7 @@ test.describe('Playback file browser (part 2)', () => {
 
   test('native folder picker adds local files to playlist', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.addInitScript(() => {
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
       (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
       (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
 
@@ -421,6 +422,7 @@ test.describe('Playback file browser (part 2)', () => {
   test('SAF scan shows no supported files only after enumeration', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected destructive toast for empty SAF scan.' });
     await page.addInitScript(() => {
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
       (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
       (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
 
@@ -461,6 +463,7 @@ test.describe('Playback file browser (part 2)', () => {
   test('SAF scan failures are logged and do not crash the page', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     testInfo.annotations.push({ type: 'allow-warnings', description: 'Expected destructive toast for SAF scan failure.' });
     await page.addInitScript(() => {
+      (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
       (window as Window & { __c64uPlatformOverride?: string }).__c64uPlatformOverride = 'android';
       (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride = true;
 

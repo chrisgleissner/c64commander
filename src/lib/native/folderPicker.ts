@@ -67,10 +67,13 @@ type FolderPickerPlugin = {
 
 type FolderPickerOverride = Partial<FolderPickerPlugin>;
 
-const allowAndroidOverride = () =>
-  import.meta.env.VITE_ENABLE_TEST_PROBES === '1'
-  && typeof window !== 'undefined'
-  && (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride === true;
+const allowAndroidOverride = () => {
+  if (typeof window === 'undefined') return false;
+  const testProbeEnabled = import.meta.env.VITE_ENABLE_TEST_PROBES === '1'
+    || (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true;
+  return testProbeEnabled
+    && (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride === true;
+};
 
 const resolveOverride = (): FolderPickerOverride | null => {
   if (typeof window === 'undefined') return null;
