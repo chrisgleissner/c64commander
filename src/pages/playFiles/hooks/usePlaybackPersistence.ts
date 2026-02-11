@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from '../types';
 import {
     PLAYBACK_SESSION_KEY,
@@ -12,6 +12,7 @@ import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapt
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
 import type { PlaybackClock } from '@/lib/playback/playbackClock';
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
+import { addErrorLog } from '@/lib/logging';
 
 interface UsePlaybackPersistenceProps {
     playlist: PlaylistItem[];
@@ -126,8 +127,8 @@ export function usePlaybackPersistence({
             const parsed = JSON.parse(raw) as StoredPlaybackSession;
             if (!parsed || typeof parsed !== 'object') return;
             pendingPlaybackRestoreRef.current = parsed;
-        } catch {
-            // Ignore invalid session payloads.
+        } catch (error) {
+            addErrorLog('Failed to restore playback session', { error: (error as Error).message });
         }
     }, []);
 
@@ -165,8 +166,11 @@ export function usePlaybackPersistence({
                 try {
                     const parsed = JSON.parse(raw) as StoredPlaylistState;
                     candidates.push({ key, parsed });
-                } catch {
-                    // Ignore invalid stored playlists.
+                } catch (error) {
+                    addErrorLog('Failed to parse stored playlist candidate', {
+                        key,
+                        error: (error as Error).message,
+                    });
                 }
             }
 
@@ -181,12 +185,23 @@ export function usePlaybackPersistence({
             }
             setPlaylist(restored.items);
             setCurrentIndex(restored.index);
-        } catch {
-            // Ignore invalid stored playlists.
+        } catch (error) {
+            addErrorLog('Failed to hydrate stored playlist', {
+                playlistStorageKey,
+                resolvedDeviceId,
+                error: (error as Error).message,
+            });
         } finally {
             hasHydratedPlaylistRef.current = true;
         }
-    }, [playlistStorageKey, resolvedDeviceId]); // Reduced dependencies as hydration depends on props mostly
+    }, [
+        playlistStorageKey,
+        resolvedDeviceId,
+        localEntriesBySourceId,
+        localSourceTreeUris,
+        buildHvscLocalPlayFile,
+        buildPlaylistItem,
+    ]);
 
     // Apply Session Restore (after Playlist Restore)
     useEffect(() => {
@@ -263,8 +278,11 @@ export function usePlaybackPersistence({
             if (playlistStorageKey !== defaultKey) {
                 localStorage.setItem(defaultKey, payload);
             }
-        } catch {
-            // Ignore storage failures.
+        } catch (error) {
+            addErrorLog('Failed to persist playlist', {
+                playlistStorageKey,
+                error: (error as Error).message,
+            });
         }
     }, [currentIndex, playlist, playlistStorageKey]);
 
@@ -289,8 +307,11 @@ export function usePlaybackPersistence({
         };
         try {
             sessionStorage.setItem(PLAYBACK_SESSION_KEY, JSON.stringify(payload));
-        } catch {
-            // Ignore storage failures.
+        } catch (error) {
+            addErrorLog('Failed to persist playback session', {
+                playlistStorageKey,
+                error: (error as Error).message,
+            });
         }
     }, [currentIndex, durationMs, elapsedMs, isPaused, isPlaying, playedMs, playlist, playlistStorageKey]);
 }

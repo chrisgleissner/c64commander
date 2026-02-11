@@ -545,7 +545,6 @@ describe('HomePage SID status', () => {
     };
 
     renderHomePage();
-    screen.debug(undefined, 200000);
 
     const systemInfo = screen.getByTestId('home-system-info');
     fireEvent.click(systemInfo);

@@ -1,4 +1,3 @@
-import { getC64API } from '@/lib/c64api';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { useSharedConfigActions } from '../hooks/ConfigActionsContext';
 import { usePrinterData } from '../hooks/usePrinterData';

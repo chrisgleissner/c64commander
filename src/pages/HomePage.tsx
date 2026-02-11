@@ -59,7 +59,6 @@ import { addErrorLog } from '@/lib/logging';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
-import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS } from '@/lib/config/configItems';
 import { useHomeActions } from './home/hooks/useHomeActions';
 import { useDriveData } from './home/hooks/useDriveData';
 import { useSharedConfigActions } from './home/hooks/ConfigActionsContext';
@@ -96,44 +95,21 @@ import {
 
 
 import {
-  HOME_SID_ADDRESSING_ITEMS,
-  HOME_SID_SOCKET_ITEMS,
-  HOME_ULTISID_ITEMS,
   LED_STRIP_HOME_ITEMS,
-  SID_AUDIO_ITEMS,
-  SID_DETECTED_ITEMS,
-  SID_SLIDER_DETENT_RANGE,
-  SID_SLIDER_STEP,
-  SID_SOCKET_SHAPING_ITEMS,
   U64_HOME_ITEMS,
-  ULTISID_PROFILE_ITEMS,
-  ULTISID_SHAPING_ITEMS,
 } from './home/constants';
 
 
 import {
-  applySoftDetent,
-  clampSliderValue,
   clampToRange,
   formatSelectOptionLabel,
-  formatSidBaseAddress,
-  isSilentSidValue,
   normalizeOptionToken,
   normalizeSelectOptions,
   normalizeSelectValue,
-  parseNumericOption,
-  resolveOptionIndex,
-  resolvePanCenterIndex,
   resolveSelectValue,
-  resolveSidAddressDisableValue,
-  resolveSidAddressEnableValue,
-  resolveSidSocketToggleValue,
-  resolveSliderIndex,
-  resolveVolumeCenterIndex,
 } from './home/utils/uiLogic';
 import {
   buildConfigKey,
-  readItemValue,
   readItemOptions,
   readItemDetails,
   parseNumericValue,
@@ -213,7 +189,6 @@ function HomePageContent() {
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
 
   const {
-    configOverrides,
     configWritePending,
     updateConfigValue,
     resolveConfigValue,

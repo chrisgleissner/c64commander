@@ -26,7 +26,7 @@ import {
     readItemOptions,
 } from '../utils/HomeConfigUtils';
 import { formatDbValue, formatPanValue } from '@/lib/ui/sliderValueFormat';
-import { SID_SLIDER_STEP, SID_DETECTED_ITEMS, ULTISID_PROFILE_ITEMS } from '../constants';
+import { SID_SLIDER_STEP } from '../constants';
 
 interface AudioMixerProps {
     isConnected: boolean;
@@ -60,7 +60,6 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
     const ultiSid1ProfileSelectOptions = readItemOptions(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 1 Filter Curve').map((value) => String(value));
     const ultiSid2ProfileSelectOptions = readItemOptions(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 2 Filter Curve').map((value) => String(value));
 
-    // For Select compatibility (labels = values)
     const ultiSid1ProfileSelectValue = ultiSid1ProfileValue;
     const ultiSid2ProfileSelectValue = ultiSid2ProfileValue;
 
@@ -133,34 +132,11 @@ export function AudioMixer({ isConnected, machineTaskBusy, runMachineTask }: Aud
             'reset-sid',
             async () => {
                 await silenceSidTargets(api, sidSilenceTargets);
-                // Force config refresh after silence
-                // But silence doesn't change config items?
-                // It writes to memory.
-
-                // Original code check:
-                /*
-                 await silenceSidTargets(api, sidSilenceTargets);
-                 // We don't need to refresh config here
-                */
             },
             'SID silence command sent',
             'Volume set to zero, then restored settings.',
         );
     });
-
-    // Helper to resolve values using the utility from hook or we can use our own helper wrapper
-    // The hook returns resolveConfigValue which handles overrides.
-
-
-
-    // We need logic to map sidStatusMap?
-    // Original code: const statusValue = sidStatusMap.get(entry.key);
-    // sidStatusMap was in HomePage?
-    // It came from `useSidStatus()` ? No.
-    // Let's check HomePage.tsx for sidStatusMap.
-    // It is `buildSidStatusMap(sidDetectedSocket1, sidDetectedSocket2, ultiSid1ProfileValue, ultiSid2ProfileValue)`?
-
-    // I need to find where sidStatusMap is defined in HomePage.tsx
 
     return (
         <motion.div

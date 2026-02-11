@@ -12,6 +12,19 @@ import type { PlaylistItem } from '@/pages/playFiles/types';
 import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
 import type { AudioMixerItem } from '@/pages/playFiles/playFilesUtils';
 import type { VolumeAction } from '@/pages/playFiles/volumeState';
+import type { SidEnablement } from '@/lib/config/sidVolumeControl';
+
+type SidMuteSnapshot = {
+    volumes: Record<string, string | number>;
+    enablement: SidEnablement;
+};
+
+type AutoAdvanceGuard = {
+    trackInstanceId: number;
+    dueAtMs: number;
+    autoFired: boolean;
+    userCancelled: boolean;
+};
 
 interface UsePlaybackControllerProps {
     playlist: PlaylistItem[];
@@ -44,14 +57,17 @@ interface UsePlaybackControllerProps {
 
     // Volume Control
     restoreVolumeOverrides: (reason: string) => Promise<void>;
-    applyAudioMixerUpdates: (updates: any[], reason: string) => Promise<void>;
-    buildEnabledSidMuteUpdates: (items: AudioMixerItem[], enablement: Record<string, boolean>) => any[];
-    captureSidMuteSnapshot: (items: AudioMixerItem[], enablement: Record<string, boolean>) => any;
-    snapshotToUpdates: (snapshot: any, currentItems: AudioMixerItem[]) => any[];
+    applyAudioMixerUpdates: (updates: Record<string, string | number>, reason: string) => Promise<void>;
+    buildEnabledSidMuteUpdates: (items: AudioMixerItem[], enablement: SidEnablement) => Record<string, string | number>;
+    captureSidMuteSnapshot: (items: AudioMixerItem[], enablement: SidEnablement) => SidMuteSnapshot;
+    snapshotToUpdates: (
+        snapshot: SidMuteSnapshot | null | undefined,
+        currentItems?: AudioMixerItem[],
+    ) => Record<string, string | number>;
     resolveEnabledSidVolumeItems: (includeDisabled?: boolean) => Promise<AudioMixerItem[]>;
     dispatchVolume: React.Dispatch<VolumeAction>;
-    sidEnablement: Record<string, boolean>;
-    pauseMuteSnapshotRef: MutableRefObject<any>;
+    sidEnablement: SidEnablement;
+    pauseMuteSnapshotRef: MutableRefObject<SidMuteSnapshot | null>;
 
     // Refs
     playedClockRef: MutableRefObject<{
@@ -64,7 +80,7 @@ interface UsePlaybackControllerProps {
     }>;
     trackStartedAtRef: MutableRefObject<number | null>;
     trackInstanceIdRef: MutableRefObject<number>;
-    autoAdvanceGuardRef: MutableRefObject<any>;
+    autoAdvanceGuardRef: MutableRefObject<AutoAdvanceGuard | null>;
     playStartInFlightRef: MutableRefObject<boolean>;
 
     cancelAutoAdvance: () => void;
@@ -137,7 +153,8 @@ export function usePlaybackController({
             let buffer: ArrayBuffer;
             try {
                 buffer = await file.arrayBuffer();
-            } catch {
+            } catch (error) {
+                addErrorLog('Failed to read local SID file', { error: (error as Error).message });
                 return { durationMs: durationFallbackMs, subsongCount: undefined, readable: false } as const;
             }
             const { getSidSongCount } = await import('@/lib/sid/sidUtils');
@@ -155,7 +172,11 @@ export function usePlaybackController({
                 const seconds = await getHvscDurationByMd5Seconds(md5);
                 const durationMs = seconds !== undefined && seconds !== null ? seconds * 1000 : durationFallbackMs;
                 return { durationMs, subsongCount, readable: true } as const;
-            } catch {
+            } catch (error) {
+                addErrorLog('Failed to resolve SID metadata', {
+                    error: (error as Error).message,
+                    file: file.name,
+                });
                 return { durationMs: durationFallbackMs, subsongCount, readable: true } as const;
             }
         },
@@ -173,8 +194,12 @@ export function usePlaybackController({
                 const seconds = await getHvscDurationByMd5Seconds(md5);
                 if (seconds === undefined || seconds === null) return null;
                 return seconds * 1000;
-            } catch {
+            } catch (error) {
                 addLog('debug', 'Ultimate SID MD5 duration lookup failed', { path });
+                addErrorLog('Ultimate SID MD5 duration lookup failed', {
+                    path,
+                    error: (error as Error).message,
+                });
                 return null;
             }
         },
@@ -217,8 +242,12 @@ export function usePlaybackController({
                             const md5Ms = await resolveUltimateSidDurationByMd5(item.path, item.request.songNr ?? null);
                             if (md5Ms !== null) durationOverride = md5Ms;
                         }
-                    } catch {
+                    } catch (error) {
                         addLog('debug', 'Ultimate SID duration resolution failed', { path: item.path });
+                        addErrorLog('Ultimate SID duration resolution failed', {
+                            path: item.path,
+                            error: (error as Error).message,
+                        });
                     }
                 }
                 try {

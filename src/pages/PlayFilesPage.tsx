@@ -118,7 +118,6 @@ export default function PlayFilesPage() {
     isPlaylistLoading,
     setIsPlaylistLoading,
     reshuffleActive,
-    setReshuffleActive,
     handleReshuffle,
   } = usePlaylistManager();
   const hasPlaylistRef = useRef(false);
@@ -168,17 +167,12 @@ export default function PlayFilesPage() {
     volumeState,
     dispatchVolume,
     volumeSteps,
-    sidVolumeItems,
     sidEnablement,
     enabledSidVolumeItems,
-    resolveVolumeIndex,
     resolveEnabledSidVolumeItems,
     restoreVolumeOverrides,
-    ensureVolumeSessionSnapshot,
-    reserveVolumeUiTarget,
     applyAudioMixerUpdates,
     pauseMuteSnapshotRef,
-    volumeSessionSnapshotRef,
     volumeSessionActiveRef,
     captureSidMuteSnapshot,
     snapshotToUpdates,
@@ -186,7 +180,6 @@ export default function PlayFilesPage() {
     handleVolumeAsyncChange,
     handleVolumeCommit,
     handleToggleMute,
-    restoreVolumeOverridesRef,
   } = useVolumeOverride({ isPlaying, isPaused });
   const volumeIndex = volumeState.index;
   const volumeMuted = volumeState.muted;
@@ -255,10 +248,7 @@ export default function PlayFilesPage() {
     handlePauseResume,
     handleNext,
     handlePrevious,
-    resolveSidMetadata,
-    resolveUltimateSidDurationByMd5,
     playlistItemDuration,
-    withTimeout,
   } = usePlaybackController({
     playlist,
     setPlaylist,
@@ -350,8 +340,8 @@ export default function PlayFilesPage() {
     setLastKnownDeviceId(deviceInfoId);
     try {
       localStorage.setItem(LAST_DEVICE_ID_KEY, deviceInfoId);
-    } catch {
-      // Ignore storage failures.
+    } catch (error) {
+      addErrorLog('Failed to persist last known device id', { error: (error as Error).message });
     }
   }, [deviceInfoId]);
 
@@ -650,10 +640,10 @@ export default function PlayFilesPage() {
   }, [isPaused, isPlaying, restoreVolumeOverrides]);
 
   useEffect(() => () => {
-    void restoreVolumeOverridesRef.current('navigate').catch((error) => {
+    void restoreVolumeOverrides('navigate').catch((error) => {
       addErrorLog('Volume restore failed during navigation', { error: (error as Error).message });
     });
-  }, []);
+  }, [restoreVolumeOverrides]);
 
 
 

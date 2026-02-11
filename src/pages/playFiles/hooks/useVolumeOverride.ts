@@ -263,12 +263,6 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         volumeUiTargetRef.current = null;
     }, [applyAudioMixerUpdates, buildEnabledSidRestoreUpdates, defaultVolumeIndex, resolveEnabledSidVolumeItems, sidEnablement, status.isConnected, status.isConnecting, status.state]);
 
-    const restoreVolumeOverridesRef = useRef(restoreVolumeOverrides);
-
-    useEffect(() => {
-        restoreVolumeOverridesRef.current = restoreVolumeOverrides;
-    }, [restoreVolumeOverrides]);
-
     const scheduleVolumeUpdate = useCallback((nextIndex: number, immediate = false) => {
         if (!volumeSteps.length || !sidVolumeItems.length) return;
         const target = volumeSteps[nextIndex]?.option;
@@ -470,6 +464,5 @@ export function useVolumeOverride({ isPlaying, isPaused }: UseVolumeOverrideProp
         handleVolumeAsyncChange,
         handleVolumeCommit,
         handleToggleMute,
-        restoreVolumeOverridesRef,
     };
 }

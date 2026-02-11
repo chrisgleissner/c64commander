@@ -53,25 +53,7 @@ export function useStreamData(
             streamControlEntries.forEach((entry) => {
                 const configKey = buildConfigKey('Data Streams', entry.itemName);
                 if (configWritePending[configKey]) return;
-
-                // Only update if we are not editing this key, OR if we want live updates regardless?
-                // The original code check configWritePending.
-                // It does NOT check activeStreamEditorKey.
-                // This means if we are editing, and a config update comes in (unlikely unless polling), it might overwrite?
-                // The original code was:
-                /*
-                streamControlEntries.forEach((entry) => {
-                    if (configWritePending[`Data Streams::${entry.itemName}`]) return;
-                    next[entry.key] = { ... }
-                */
-                // Wait, if I am typing in the input, `streamDrafts` drives the input value.
-                // If this effect runs on every render/entry change, it might reset my typing if I am not careful.
-                // `streamControlEntries` changes when `streamCategory` changes.
-                // If I am typing, `streamCategory` (from network) shouldn't change unless I saved or background refresh happened.
-
-                // However, I should probably prevent overwrite if I am editing THAT key?
-                // Original code didn't check `activeStreamEditorKey`. I'll stick to original logic to minimize regression risk,
-                // but note that if `streamControlEntries` changes while editing, your edit might be lost.
+                if (activeStreamEditorKey === entry.key) return;
 
                 next[entry.key] = {
                     ip: entry.ip,
@@ -81,7 +63,7 @@ export function useStreamData(
             });
             return next;
         });
-    }, [streamControlEntries, configWritePending]);
+    }, [activeStreamEditorKey, streamControlEntries, configWritePending]);
 
     const handleStreamStart = trace(async function handleStreamStart(key: StreamKey) {
         const entry = streamControlEntries.find((value) => value.key === key);

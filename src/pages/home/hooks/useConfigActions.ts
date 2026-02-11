@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useActionTrace } from '@/hooks/useActionTrace';
 import { getC64API } from '@/lib/c64api';
-import { buildConfigKey } from '../utils/HomeConfigUtils';
+import { buildConfigKey, readItemValue } from '../utils/HomeConfigUtils';
 import { reportUserError } from '@/lib/uiErrors';
 import { toast } from '@/hooks/use-toast';
 
@@ -75,32 +75,16 @@ export function useConfigActions() {
         itemName: string,
         fallback: string | number,
     ) => {
-        // We need to readItemValue here.
-        // But readItemValue depends on imported utils.
-        // Let's import readItemValue.
-        return resolveConfigValueWithOverrides(payload, category, itemName, fallback, configOverrides);
+        const override = configOverrides[buildConfigKey(category, itemName)];
+        if (override !== undefined) return override;
+        const value = readItemValue(payload, category, itemName);
+        return value === undefined ? fallback : (value as string | number);
     };
 
     return {
         configOverrides,
         configWritePending,
         updateConfigValue,
-        resolveConfigValue
+        resolveConfigValue,
     };
-}
-
-// Helper to avoid circular dependency or context issues
-import { readItemValue } from '../utils/HomeConfigUtils';
-
-function resolveConfigValueWithOverrides(
-    payload: unknown,
-    category: string,
-    itemName: string,
-    fallback: string | number,
-    overrides: Record<string, string | number>
-) {
-    const override = overrides[buildConfigKey(category, itemName)];
-    if (override !== undefined) return override;
-    const value = readItemValue(payload, category, itemName);
-    return value === undefined ? fallback : (value as string | number);
 }
