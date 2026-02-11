@@ -19,16 +19,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
 import org.mockito.Mockito.any
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowLog
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+@RunWith(RobolectricTestRunner::class)
 class FtpClientPluginTest {
   @get:Rule
   val tempFolder = TemporaryFolder()
@@ -144,9 +148,12 @@ class FtpClientPluginTest {
       null
     }.`when`(call).reject(any(String::class.java), any(Exception::class.java))
 
+    ShadowLog.clear()
     plugin.listDirectory(call)
 
     assertTrue(latch.await(3, TimeUnit.SECONDS))
+    val logs = ShadowLog.getLogsForTag("FtpClientPlugin")
+    assertTrue(logs.any { it.msg?.contains("FTP listDirectory failed") == true })
   }
 
   @Test

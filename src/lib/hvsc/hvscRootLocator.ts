@@ -26,7 +26,8 @@ export const loadHvscRoot = (): HvscRootLocation => {
     const parsed = JSON.parse(raw) as HvscRootLocation;
     if (!parsed?.path || !parsed?.label) return getDefaultHvscRoot();
     return parsed;
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load HVSC root from storage', { error });
     return getDefaultHvscRoot();
   }
 };

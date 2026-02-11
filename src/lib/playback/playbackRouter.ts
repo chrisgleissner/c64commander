@@ -277,7 +277,11 @@ export const executePlayPlan = async (
             const blob = await resolveLocalDiskBlob(diskEntry);
             const image = new Uint8Array(await blob.arrayBuffer());
             await loadFirstDiskPrgViaDma(api, image, diskType as DiskImageType);
-          } catch {
+          } catch (error) {
+            addLog('warn', 'DMA disk autostart fallback to injection', {
+              path: plan.path,
+              error: (error as Error).message,
+            });
             await injectDiskAutostart(api, AUTOSTART_SEQUENCE);
           }
         } else {

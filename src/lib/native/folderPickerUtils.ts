@@ -68,7 +68,8 @@ export const coerceFolderPickerEntries = (files: unknown): PickedFolderEntry[] |
       const parsed = JSON.parse(files) as unknown;
       if (Array.isArray(parsed)) return normalizeEntries(parsed);
       if (parsed && typeof parsed === 'object') return entriesFromObject(parsed as object);
-    } catch {
+    } catch (error) {
+      console.warn('Failed to parse folder picker entries', { error });
       return null;
     }
   }

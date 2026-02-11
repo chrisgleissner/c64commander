@@ -24,7 +24,8 @@ export const loadDiskLibrary = (uniqueId: string): DiskLibraryState => {
     return {
       disks: Array.isArray(parsed.disks) ? parsed.disks : [],
     };
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load disk library', { uniqueId, error });
     return { disks: [] };
   }
 };

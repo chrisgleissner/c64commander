@@ -181,7 +181,11 @@ export const extractArchiveEntries = async (options: ExtractArchiveOptions) => {
     } catch (error) {
       try {
         return await extractZip(options);
-      } catch {
+      } catch (fallbackError) {
+        addErrorLog('7z fallback zip extraction failed', {
+          archiveName: options.archiveName,
+          error: (fallbackError as Error).message,
+        });
         throw error;
       }
     }

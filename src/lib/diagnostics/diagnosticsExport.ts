@@ -28,7 +28,10 @@ type DiagnosticsShareOverrideWindow = Window & { __c64uDiagnosticsShareOverride?
 const isTestProbeEnabled = () => {
     try {
         return import.meta.env.VITE_ENABLE_TEST_PROBES === '1';
-    } catch {
+    } catch (error) {
+        addErrorLog('Diagnostics export test probe check failed', {
+            error: (error as Error).message,
+        });
         return false;
     }
 };

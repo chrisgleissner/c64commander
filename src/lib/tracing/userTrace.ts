@@ -78,7 +78,8 @@ export const wrapValueChange = <T, R>(
         } else {
             valueStr = String(value);
         }
-    } catch {
+    } catch (error) {
+      console.warn('Failed to stringify traced value', { error });
         valueStr = '[complex]';
     }
     const actionName = `${actionType} ${label} [${valueStr}]`;

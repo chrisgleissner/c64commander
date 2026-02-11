@@ -26,7 +26,8 @@ class MockC64UServerTest {
       try {
         Socket("127.0.0.1", server.port).use { }
         return
-      } catch (_: Exception) {
+      } catch (error: Exception) {
+        System.err.println("MockC64UServerTest waitForServer failed: ${error.message}")
         Thread.sleep(25)
       }
     }

@@ -792,7 +792,12 @@ export const HomeDiskManager = () => {
         if (!listingCache.has(parent)) {
           try {
             listingCache.set(parent, await source.listEntries(parent));
-          } catch {
+          } catch (error) {
+            console.warn('Failed to list source entries for selection', {
+              path: parent,
+              sourceId: source.id,
+              error,
+            });
             listingCache.set(parent, []);
           }
         }

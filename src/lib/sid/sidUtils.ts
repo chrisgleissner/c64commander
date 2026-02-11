@@ -42,7 +42,13 @@ export const getSidSongCount = (buffer: ArrayBuffer) => {
     if (magic !== 'PSID' && magic !== 'RSID') return 1;
     const songs = view.getUint16(14, false);
     return songs > 0 ? songs : 1;
-  } catch {
+  } catch (error) {
+    const headerBytes = Array.from(new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength)));
+    console.warn('Failed to read SID song count', {
+      byteLength: buffer.byteLength,
+      headerBytes,
+      error,
+    });
     return 1;
   }
 };

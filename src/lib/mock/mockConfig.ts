@@ -127,7 +127,8 @@ const loadBundledConfigYaml = async () => {
   try {
     const module = await import('../../../doc/c64/c64u-config.yaml?raw');
     bundledConfigYaml = typeof module.default === 'string' ? module.default : '';
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load bundled mock config YAML', { error });
     bundledConfigYaml = '';
   }
   return bundledConfigYaml;
@@ -144,7 +145,8 @@ const loadRawConfig = async (): Promise<RawConfig> => {
     }
     const yamlText = await loadYamlFromAssets();
     return (yaml.load(yamlText) as RawConfig) ?? {};
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load mock config YAML', { error });
     const bundled = await loadBundledConfigYaml();
     if (bundled) {
       return (yaml.load(bundled) as RawConfig) ?? {};

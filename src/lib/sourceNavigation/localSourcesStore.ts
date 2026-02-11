@@ -90,7 +90,8 @@ export const loadLocalSources = (): LocalSourceRecord[] => {
   try {
     const parsed = JSON.parse(raw) as LocalSourceRecord[];
     return Array.isArray(parsed) ? parsed.map((source) => normalizeLocalSource(source)) : [];
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load local sources from storage', { error });
     return [];
   }
 };

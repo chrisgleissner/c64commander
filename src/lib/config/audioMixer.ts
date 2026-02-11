@@ -7,6 +7,7 @@
  */
 
 import { ConfigResponse, getC64API } from '@/lib/c64api';
+import { addLog } from '@/lib/logging';
 
 const normalizeOption = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -79,8 +80,12 @@ export const resolveAudioMixerResetValue = async (
       const api = getC64API();
       const response = await api.getConfigItem(category, itemName);
       options = extractOptions(response, category, itemName);
-    } catch {
-      // Fall back to defaults below.
+    } catch (error) {
+      addLog('warn', 'Failed to fetch audio mixer options', {
+        category,
+        itemName,
+        error,
+      });
     }
   }
 

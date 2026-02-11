@@ -32,7 +32,8 @@ const safeParse = <T>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
   try {
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse app config snapshot', { error });
     return fallback;
   }
 };

@@ -44,7 +44,8 @@ export const isNativePlatform = () => {
     if (typeof capacitor?.isNativePlatform === 'function') {
       return capacitor.isNativePlatform();
     }
-  } catch {
+  } catch (error) {
+    console.warn('Failed to detect native platform', { error });
     return false;
   }
   return false;

@@ -51,7 +51,8 @@ export const loadHvscState = (): HvscState => {
       ingestionError: parsed.ingestionError ?? null,
       updates: parsed.updates ?? {},
     };
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load HVSC state from storage', { error });
     return defaultState();
   }
 };

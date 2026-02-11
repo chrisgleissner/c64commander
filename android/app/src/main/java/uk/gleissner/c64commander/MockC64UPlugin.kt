@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Log
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -18,6 +19,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 class MockC64UPlugin : Plugin() {
   private var server: MockC64UServer? = null
   private var ftpServer: MockFtpServer? = null
+  private val logTag = "MockC64UPlugin"
 
   @PluginMethod
   fun startServer(call: PluginCall) {
@@ -54,6 +56,7 @@ class MockC64UPlugin : Plugin() {
       payload.put("ftpPort", ftpPort)
       call.resolve(payload)
     } catch (error: Exception) {
+      Log.e(logTag, "Failed to start mock C64U server", error)
       call.reject(error.message, error)
     }
   }
@@ -67,6 +70,7 @@ class MockC64UPlugin : Plugin() {
       ftpServer = null
       call.resolve()
     } catch (error: Exception) {
+      Log.e(logTag, "Failed to stop mock C64U server", error)
       call.reject(error.message, error)
     }
   }

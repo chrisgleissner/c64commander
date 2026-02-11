@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Log
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
@@ -19,6 +20,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
  */
 @CapacitorPlugin(name = "BackgroundExecution")
 class BackgroundExecutionPlugin : Plugin() {
+    private val logTag = "BackgroundExecutionPlugin"
 
     @PluginMethod
     fun start(call: PluginCall) {
@@ -26,6 +28,7 @@ class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.start(context)
             call.resolve()
         } catch (e: Exception) {
+            Log.e(logTag, "Failed to start background execution", e)
             call.reject("Failed to start background execution", e)
         }
     }
@@ -36,6 +39,7 @@ class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.stop(context)
             call.resolve()
         } catch (e: Exception) {
+            Log.e(logTag, "Failed to stop background execution", e)
             call.reject("Failed to stop background execution", e)
         }
     }

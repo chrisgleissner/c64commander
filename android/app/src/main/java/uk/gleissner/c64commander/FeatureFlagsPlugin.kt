@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Log
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -29,6 +30,7 @@ private val Context.featureFlagsDataStore by preferencesDataStore(name = "featur
 @CapacitorPlugin(name = "FeatureFlags")
 class FeatureFlagsPlugin : Plugin() {
   private val scope = CoroutineScope(Dispatchers.IO)
+  private val logTag = "FeatureFlagsPlugin"
 
   @PluginMethod
   fun getFlag(call: PluginCall) {
@@ -50,6 +52,7 @@ class FeatureFlagsPlugin : Plugin() {
           call.resolve(payload)
         }
       } catch (error: Exception) {
+        Log.e(logTag, "Failed to get feature flag", error)
         withContext(Dispatchers.Main) {
           call.reject(error.message, error)
         }
@@ -79,6 +82,7 @@ class FeatureFlagsPlugin : Plugin() {
           call.resolve()
         }
       } catch (error: Exception) {
+        Log.e(logTag, "Failed to set feature flag", error)
         withContext(Dispatchers.Main) {
           call.reject(error.message, error)
         }
@@ -112,6 +116,7 @@ class FeatureFlagsPlugin : Plugin() {
           call.resolve(payload)
         }
       } catch (error: Exception) {
+        Log.e(logTag, "Failed to get feature flags", error)
         withContext(Dispatchers.Main) {
           call.reject(error.message, error)
         }

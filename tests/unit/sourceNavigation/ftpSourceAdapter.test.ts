@@ -116,4 +116,16 @@ describe('ftpSourceAdapter', () => {
     await expect(source.listFilesRecursive('/', { signal: controller.signal })).rejects.toThrow(/Aborted/);
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
   });
+
+  it('logs when cached FTP listing is corrupted', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    localStorage.setItem('c64u_ftp_cache:v1', '{bad-json');
+    listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+
+    const source = createUltimateSourceLocation();
+    await source.listEntries('/');
+
+    expect(warnSpy).toHaveBeenCalledWith('Failed to load FTP cache', expect.any(Object));
+    warnSpy.mockRestore();
+  });
 });

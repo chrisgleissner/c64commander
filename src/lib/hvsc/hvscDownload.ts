@@ -39,8 +39,10 @@ export const isExistsError = (error: unknown) => /exists|already exists/i.test(g
 export const isTestProbeEnabled = () => {
     try {
         if (import.meta.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
-    } catch {
-        // ignore
+    } catch (error) {
+        addLog('warn', 'Failed to read test probe flag', {
+            error: (error as Error).message,
+        });
     }
     return typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1';
 };
@@ -49,7 +51,10 @@ export const shouldUseNativeDownload = () => {
     if (isTestProbeEnabled()) return false;
     try {
         return Capacitor.isNativePlatform();
-    } catch {
+    } catch (error) {
+        addLog('warn', 'Failed to detect native platform for HVSC download', {
+            error: (error as Error).message,
+        });
         return false;
     }
 };
@@ -67,7 +72,11 @@ export const fetchContentLength = async (url: string) => {
         const response = await fetch(url, { method: 'HEAD', cache: 'no-store' });
         if (!response.ok) return null;
         return parseContentLength(response.headers.get('content-length'));
-    } catch {
+    } catch (error) {
+        addLog('warn', 'Failed to read HVSC content length', {
+            url,
+            error: (error as Error).message,
+        });
         return null;
     }
 };
@@ -188,8 +197,11 @@ export const resolveCachedArchive = async (prefix: string, version: number) => {
                 if (marker) return name;
                 await deleteCachedArchive(name);
             }
-        } catch {
-            // ignore
+        } catch (error) {
+            addLog('warn', 'HVSC cache stat failed', {
+                name,
+                error: (error as Error).message,
+            });
         }
     }
     return null;
@@ -201,7 +213,11 @@ export const getCacheStatusInternal = async () => {
     try {
         const result = await Filesystem.readdir({ directory: Directory.Data, path: cacheDir });
         files = result.files ?? [];
-    } catch {
+    } catch (error) {
+        addLog('warn', 'HVSC cache directory read failed', {
+            cacheDir,
+            error: (error as Error).message,
+        });
         return { baselineVersion: null, updateVersions: [] as number[] };
     }
     const names = files.map((entry) => (typeof entry === 'string' ? entry : entry.name ?? '')).filter(Boolean);
@@ -269,6 +285,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
         let lastReported = 0;
         let pollingTimer: ReturnType<typeof setInterval> | null = null;
         let totalBytes = totalBytesHint ?? null;
+        let pollErrorLogged = false;
         const pollSize = async () => {
             try {
                 const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${archivePath}` });
@@ -277,8 +294,14 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
                     lastReported = size;
                     emitDownloadProgress(emitProgress, archiveName, size, totalBytes);
                 }
-            } catch {
-                // ignore
+            } catch (error) {
+                if (!pollErrorLogged) {
+                    pollErrorLogged = true;
+                    addLog('warn', 'HVSC download progress stat failed', {
+                        archivePath,
+                        error: (error as Error).message,
+                    });
+                }
             }
         };
         try {
@@ -367,7 +390,11 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
             totalBytes: stat.size,
             percent: 100,
         });
-    } catch {
+    } catch (error) {
+        addLog('warn', 'Failed to write HVSC cache marker', {
+            archivePath,
+            error: (error as Error).message,
+        });
         await writeCachedArchiveMarker(archivePath, {
             version: plan.version,
             type: plan.type,

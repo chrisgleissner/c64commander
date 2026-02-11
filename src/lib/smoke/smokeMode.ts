@@ -46,7 +46,10 @@ const readSmokeConfigFromStorage = (): SmokeConfig | null => {
   if (!raw) return null;
   try {
     return parseSmokeConfig(JSON.parse(raw));
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse smoke config from storage', {
+      error: (error as Error).message,
+    });
     return null;
   }
 };
@@ -76,7 +79,10 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
         encoding: Encoding.UTF8,
       });
       config = parseSmokeConfig(JSON.parse(result.data));
-    } catch {
+    } catch (error) {
+      addLog('warn', 'Failed to read smoke config from filesystem', {
+        error: (error as Error).message,
+      });
       config = null;
     }
   }
@@ -112,7 +118,9 @@ export const recordSmokeStatus = async (status: { state: string; mode?: string; 
       }),
       encoding: Encoding.UTF8,
     });
-  } catch {
-    // ignore
+  } catch (error) {
+    addLog('warn', 'Failed to write smoke status', {
+      error: (error as Error).message,
+    });
   }
 };

@@ -15,7 +15,8 @@ const normalizeUrlPath = (url: string) => {
   try {
     const parsed = new URL(url);
     return `${parsed.pathname}${parsed.search}`;
-  } catch {
+  } catch (error) {
+    console.warn('Failed to normalize fetch trace URL', { url, error });
     return url;
   }
 };
@@ -43,7 +44,8 @@ const extractBody = (body: BodyInit | null | undefined) => {
   if (typeof body === 'string') {
     try {
       return JSON.parse(body);
-    } catch {
+    } catch (error) {
+      console.warn('Failed to parse fetch trace body', { error });
       return body;
     }
   }
@@ -96,7 +98,8 @@ const shouldTraceUrl = (url: string) => {
   try {
     const parsed = new URL(url);
     return parsed.pathname.includes('/v1/');
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse fetch trace URL for filtering', { url, error });
     return url.includes('/v1/');
   }
 };
@@ -133,7 +136,8 @@ export const registerFetchTrace = () => {
       try {
         const clone = response.clone();
         responseBody = await clone.json().catch(() => null);
-      } catch {
+      } catch (error) {
+        console.warn('Failed to parse traced fetch response body', { error });
         responseBody = null;
       }
       if (!response.ok) {
@@ -164,7 +168,8 @@ export const registerFetchTrace = () => {
         try {
           const clone = error.clone();
           responseBody = await clone.json().catch(() => null);
-        } catch {
+        } catch (errorBody) {
+          console.warn('Failed to parse traced error response body', { error: errorBody });
           responseBody = null;
         }
       } else if (error instanceof Error) {

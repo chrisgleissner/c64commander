@@ -75,6 +75,7 @@ class FtpClientPlugin : Plugin() {
         result.put("entries", entries)
         call.resolve(result)
       } catch (error: Exception) {
+        Log.e(logTag, "FTP listDirectory failed", error)
         call.reject(error.message, error)
       } finally {
         try {
@@ -127,6 +128,7 @@ class FtpClientPlugin : Plugin() {
         result.put("sizeBytes", bytes.size)
         call.resolve(result)
       } catch (error: Exception) {
+        Log.e(logTag, "FTP readFile failed", error)
         call.reject(error.message, error)
       } finally {
         try {
@@ -142,7 +144,8 @@ class FtpClientPlugin : Plugin() {
     return try {
       val mlist = client.mlistDir(path)
       if (mlist != null && mlist.isNotEmpty()) mlist else client.listFiles(path)
-    } catch (_: Exception) {
+    } catch (error: Exception) {
+      Log.w(logTag, "FTP MLSD failed; falling back to LIST", error)
       client.listFiles(path)
     }
   }

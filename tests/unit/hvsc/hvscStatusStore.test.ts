@@ -7,7 +7,7 @@
  */
 
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   applyHvscProgressEventToSummary,
   clearHvscStatusSummary,
@@ -88,9 +88,12 @@ describe('hvscStatusStore', () => {
     });
 
     it('ignores updates when storage is corrupted', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       localStorage.setItem('c64u_hvsc_status:v1', 'invalid-json{');
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
+      expect(warnSpy).toHaveBeenCalledWith('Failed to load HVSC status summary', expect.any(Object));
+      warnSpy.mockRestore();
     });
 
     it('ignores updates when summary misses core properties', () => {

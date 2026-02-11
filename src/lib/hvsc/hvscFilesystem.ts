@@ -10,6 +10,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import type { HvscFolderListing, HvscSong } from './hvscTypes';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
+import { addLog } from '@/lib/logging';
 import {
   ensureHvscSonglengthsReadyOnColdStart,
   resetHvscSonglengths,
@@ -21,6 +22,10 @@ const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
 const HVSC_CACHE_DIR = `${HVSC_WORK_DIR}/cache`;
 
 const normalizeFilePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+
+const logFilesystemWarning = (message: string, details?: Record<string, unknown>) => {
+  addLog('warn', `HVSC filesystem: ${message}`, details);
+};
 
 const uint8ToBase64 = (data: Uint8Array) => {
   let binary = '';
@@ -34,7 +39,10 @@ const decodeBase64Text = (raw: string) => {
   try {
     const bytes = base64ToUint8(raw);
     return new TextDecoder().decode(bytes);
-  } catch {
+  } catch (error) {
+    logFilesystemWarning('Failed to decode base64 text', {
+      error,
+    });
     return raw;
   }
 };
@@ -67,7 +75,11 @@ const encodeText = (value: string) => {
 const statPath = async (path: string) => {
   try {
     return await Filesystem.stat({ directory: Directory.Data, path });
-  } catch {
+  } catch (error) {
+    logFilesystemWarning('Filesystem stat failed', {
+      path,
+      error,
+    });
     return null;
   }
 };
@@ -77,18 +89,28 @@ const writeFileWithRetry = async (path: string, data: string) => {
     await Filesystem.writeFile({ directory: Directory.Data, path, data });
     return;
   } catch (error) {
+    logFilesystemWarning('Initial write failed; attempting recovery', {
+      path,
+      error,
+    });
     if (!isExistsError(error)) throw error;
     const existing = await statPath(path);
     if (existing?.type === 'file') return;
     try {
       await Filesystem.rmdir({ directory: Directory.Data, path, recursive: true });
-    } catch {
-      // ignore
+    } catch (error) {
+      logFilesystemWarning('Failed to remove conflicting directory', {
+        path,
+        error,
+      });
     }
     try {
       await Filesystem.deleteFile({ directory: Directory.Data, path });
-    } catch {
-      // ignore
+    } catch (error) {
+      logFilesystemWarning('Failed to delete conflicting file', {
+        path,
+        error,
+      });
     }
     try {
       await Filesystem.writeFile({ directory: Directory.Data, path, data });
@@ -97,6 +119,10 @@ const writeFileWithRetry = async (path: string, data: string) => {
         const retryExisting = await statPath(path);
         if (retryExisting?.type === 'file') return;
       }
+      logFilesystemWarning('Failed to write file after retry', {
+        path,
+        error: retryError,
+      });
       throw retryError;
     }
   }
@@ -108,14 +134,24 @@ const ensureDir = async (path: string) => {
   if (existing?.type === 'file') {
     try {
       await Filesystem.deleteFile({ directory: Directory.Data, path });
-    } catch {
-      // ignore
+    } catch (error) {
+      logFilesystemWarning('Failed to delete file while ensuring directory', {
+        path,
+        error,
+      });
     }
   }
   try {
     await Filesystem.mkdir({ directory: Directory.Data, path, recursive: true });
   } catch (error) {
-    if (!isExistsError(error)) throw error;
+    if (!isExistsError(error)) {
+      logFilesystemWarning('Failed to create directory', {
+        path,
+        error,
+      });
+      throw error;
+    }
+    logFilesystemWarning('Directory already exists', { path });
   }
 };
 
@@ -143,7 +179,11 @@ const listEntries = async (path: string) => {
   try {
     const result = await Filesystem.readdir({ directory: Directory.Data, path });
     return result.files ?? [];
-  } catch {
+  } catch (error) {
+    logFilesystemWarning('Filesystem read directory failed', {
+      path,
+      error,
+    });
     return [];
   }
 };
@@ -230,7 +270,11 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
       md5: null,
       dataBase64: result.data,
     };
-  } catch {
+  } catch (error) {
+    logFilesystemWarning('Failed to read HVSC song by path', {
+      virtualPath,
+      error,
+    });
     return null;
   }
 };
@@ -259,8 +303,11 @@ export const resetLibraryRoot = async () => {
   resetSonglengthsCache();
   try {
     await Filesystem.rmdir({ directory: Directory.Data, path: HVSC_LIBRARY_DIR, recursive: true });
-  } catch {
-    // ignore missing dir
+  } catch (error) {
+    logFilesystemWarning('Failed to remove HVSC library root', {
+      path: HVSC_LIBRARY_DIR,
+      error,
+    });
   }
   await ensureDir(HVSC_LIBRARY_DIR);
 };
@@ -299,7 +346,11 @@ export const readCachedArchiveMarker = async (relativePath: string): Promise<Hvs
     const parsed = JSON.parse(decodeBase64Text(result.data)) as HvscArchiveMarker;
     if (!parsed?.completedAt) return null;
     return parsed;
-  } catch {
+  } catch (error) {
+    logFilesystemWarning('Failed to read cached archive marker', {
+      relativePath,
+      error,
+    });
     return null;
   }
 };
@@ -307,16 +358,26 @@ export const readCachedArchiveMarker = async (relativePath: string): Promise<Hvs
 export const deleteCachedArchive = async (relativePath: string) => {
   try {
     await Filesystem.deleteFile({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}` });
-  } catch {
+  } catch (error) {
+    logFilesystemWarning('Failed to delete cached archive file', {
+      relativePath,
+      error,
+    });
     try {
       await Filesystem.rmdir({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}`, recursive: true });
-    } catch {
-      // ignore
+    } catch (nestedError) {
+      logFilesystemWarning('Failed to remove cached archive directory', {
+        relativePath,
+        error: nestedError,
+      });
     }
   }
   try {
     await Filesystem.deleteFile({ directory: Directory.Data, path: getHvscCacheMarkerPath(relativePath) });
-  } catch {
-    // ignore
+  } catch (error) {
+    logFilesystemWarning('Failed to delete cached archive marker', {
+      relativePath,
+      error,
+    });
   }
 };

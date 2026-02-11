@@ -14,7 +14,8 @@ const safeParse = (raw: string | null): MediaIndexSnapshot | null => {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as MediaIndexSnapshot;
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse media index snapshot', { error });
     return null;
   }
 };

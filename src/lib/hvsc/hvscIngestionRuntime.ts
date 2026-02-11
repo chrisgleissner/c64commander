@@ -385,7 +385,11 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
             totalBytes: stat.size,
             percent: 100,
           });
-        } catch {
+        } catch (error) {
+          addLog('warn', 'HVSC cached archive stat failed', {
+            archiveName: cached,
+            error: (error as Error).message,
+          });
           emitProgress({
             stage: 'download',
             message: `Using cached ${archiveName}`,
@@ -551,7 +555,11 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
           totalBytes: stat.size,
           percent: 100,
         });
-      } catch {
+      } catch (error) {
+        addLog('warn', 'HVSC cached archive stat failed', {
+          archiveName: cached,
+          error: (error as Error).message,
+        });
         emitProgress({ stage: 'download', message: `Using cached ${cached}`, archiveName: cached, percent: 100 });
       }
       pipeline.transition('DOWNLOADED', { cached: true });

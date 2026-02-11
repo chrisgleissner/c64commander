@@ -36,7 +36,8 @@ const loadCache = (): FtpCacheState => {
       entries: parsed.entries ?? {},
       order: Array.isArray(parsed.order) ? parsed.order : [],
     };
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load FTP cache', { error });
     return { entries: {}, order: [] };
   }
 };
@@ -45,8 +46,11 @@ const saveCache = (state: FtpCacheState) => {
   if (typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(state));
-  } catch {
-    // Ignore cache persistence errors.
+  } catch (error) {
+    console.warn('Failed to persist FTP cache', {
+      error,
+      entryCount: Object.keys(state.entries).length,
+    });
   }
 };
 

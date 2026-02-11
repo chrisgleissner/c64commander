@@ -84,8 +84,11 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     await api.playSidUpload(blob, track.songNr, sslBlob);
     startedAtRef.current = Date.now();
     setIsPlaying(true);
-    BackgroundExecution.start().catch(() => {
-      /* best-effort — playback still works without background anchor */
+    BackgroundExecution.start().catch((error) => {
+      console.warn('Background execution start failed', {
+        trackId: track.id,
+        error,
+      });
     });
   }, []);
 
@@ -146,7 +149,9 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     return () => {
-      BackgroundExecution.stop().catch(() => { });
+      BackgroundExecution.stop().catch((error) => {
+        console.warn('Background execution stop failed', { error });
+      });
     };
   }, []);
 

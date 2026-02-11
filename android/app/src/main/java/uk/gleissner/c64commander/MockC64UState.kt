@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URI
@@ -78,7 +79,8 @@ class MockC64UState private constructor(
       val baseUrl = generalObj.opt("baseUrl")?.toString()?.takeIf { it.isNotBlank() } ?: "http://c64u"
       val hostname = try {
         URI(baseUrl).host ?: "c64u"
-      } catch (_: Exception) {
+      } catch (error: Exception) {
+        Log.w("MockC64UState", "Failed to parse mock base URL: $baseUrl", error)
         "c64u"
       }
       val general = MockGeneralInfo(

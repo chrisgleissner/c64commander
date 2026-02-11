@@ -36,7 +36,8 @@ const readLogs = (): LogEntry[] => {
   if (!raw) return [];
   try {
     return JSON.parse(raw) as LogEntry[];
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse stored logs', { error });
     return [];
   }
 };

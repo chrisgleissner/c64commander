@@ -45,7 +45,11 @@ const normalizeUrlPath = (url: string) => {
   try {
     const parsed = new URL(url);
     return `${parsed.pathname}${parsed.search}`;
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to normalize API URL path', {
+      url,
+      error: (error as Error).message,
+    });
     return url;
   }
 };
@@ -109,7 +113,10 @@ const extractRequestBody = (body: unknown) => {
   if (typeof body === 'string') {
     try {
       return JSON.parse(body);
-    } catch {
+    } catch (error) {
+      addLog('warn', 'Failed to parse request body JSON', {
+        error: (error as Error).message,
+      });
       return body;
     }
   }
@@ -169,7 +176,10 @@ const readResponseBody = async (response: Response) => {
   if (!contentType.includes('application/json')) return null;
   try {
     return await response.clone().json();
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse API response JSON', {
+      error: (error as Error).message,
+    });
     return null;
   }
 };
@@ -181,7 +191,11 @@ const sanitizeHostInput = (input?: string) => {
     try {
       const url = new URL(raw);
       return url.host || url.hostname || '';
-    } catch {
+    } catch (error) {
+      addLog('warn', 'Failed to parse host from URL input', {
+        input: raw,
+        error: (error as Error).message,
+      });
       return '';
     }
   }
@@ -198,7 +212,11 @@ export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
   try {
     const url = new URL(baseUrl);
     return url.host || DEFAULT_DEVICE_HOST;
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse device host from base URL', {
+      baseUrl,
+      error: (error as Error).message,
+    });
     return normalizeDeviceHost(baseUrl);
   }
 };
@@ -229,7 +247,11 @@ const isLocalProxy = (baseUrl: string) => {
   try {
     const url = new URL(baseUrl);
     return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse base URL for proxy detection', {
+      baseUrl,
+      error: (error as Error).message,
+    });
     return false;
   }
 };
@@ -308,7 +330,10 @@ const isNativePlatform = () => {
       }
     }
     return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to detect native platform in API client', {
+      error: (error as Error).message,
+    });
     return false;
   }
 };
@@ -712,7 +737,11 @@ export class C64API {
       baseUrl: (() => {
         try {
           return new URL(url).origin;
-        } catch {
+        } catch (error) {
+          addLog('warn', 'Failed to parse base URL origin for upload', {
+            url,
+            error: (error as Error).message,
+          });
           return '';
         }
       })(),

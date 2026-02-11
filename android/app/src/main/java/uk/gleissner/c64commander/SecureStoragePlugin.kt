@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.util.Log
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -21,6 +22,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
 class SecureStoragePlugin : Plugin() {
   private val prefsName = "c64_secure_storage"
   private val passwordStorageKey = "c64u_password"
+  private val logTag = "SecureStoragePlugin"
 
   private fun getPrefs() = EncryptedSharedPreferences.create(
     context,
@@ -43,6 +45,7 @@ class SecureStoragePlugin : Plugin() {
       getPrefs().edit().putString(passwordStorageKey, value).apply()
       call.resolve()
     } catch (error: Exception) {
+      Log.e(logTag, "Failed to set secure password", error)
       call.reject(error.message, error)
     }
   }
@@ -55,6 +58,7 @@ class SecureStoragePlugin : Plugin() {
       payload.put("value", value)
       call.resolve(payload)
     } catch (error: Exception) {
+      Log.e(logTag, "Failed to read secure password", error)
       call.reject(error.message, error)
     }
   }
@@ -65,6 +69,7 @@ class SecureStoragePlugin : Plugin() {
       getPrefs().edit().remove(passwordStorageKey).apply()
       call.resolve()
     } catch (error: Exception) {
+      Log.e(logTag, "Failed to clear secure password", error)
       call.reject(error.message, error)
     }
   }

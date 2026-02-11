@@ -20,7 +20,8 @@ const HVSC_BASE_URL_KEY = 'c64u_hvsc_base_url';
 const isNativePlatform = () => {
   try {
     return Capacitor.isNativePlatform();
-  } catch {
+  } catch (error) {
+    console.warn('Failed to detect native platform for HVSC release service', { error });
     return false;
   }
 };

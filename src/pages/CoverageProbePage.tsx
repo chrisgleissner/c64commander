@@ -37,6 +37,7 @@ import {
 import { clampListPreviewLimit, getListPreviewLimit, setListPreviewLimit } from '@/lib/uiPreferences';
 import { startMockServer, stopMockServer } from '@/lib/mock/mockServer';
 import { FeatureFlags } from '@/lib/native/featureFlags';
+import { addLog } from '@/lib/logging';
 
 type ProbeStatus = 'idle' | 'running' | 'done' | 'error';
 
@@ -205,8 +206,8 @@ export default function CoverageProbePage() {
       await runProbe('mock server errors', async () => {
         try {
           await startMockServer();
-        } catch {
-          // Expected on web.
+        } catch (error) {
+            addLog('warn', 'Mock server start failed during coverage probe', { error });
         }
         await stopMockServer();
       }, failures);
