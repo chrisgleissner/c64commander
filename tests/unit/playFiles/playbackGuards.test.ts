@@ -9,11 +9,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   releaseSingleFlight,
-  resolvePlayTargetIndex,
   resolveVolumeSyncDecision,
   tryAcquireSingleFlight,
   type BooleanRef,
 } from '@/pages/playFiles/playbackGuards';
+import { resolvePlayTargetIndex } from '@/pages/playFiles/playFilesUtils';
 
 describe('playbackGuards', () => {
   it('starts from first item when playlist has items and no prior playback', () => {

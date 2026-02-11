@@ -174,7 +174,7 @@ describe('logging', () => {
 
   it('generates ID without crypto', () => {
     const originalCrypto = globalThis.crypto;
-    // @ts-ignore
+    // @ts-expect-error - intentionally deleting global for test
     delete globalThis.crypto;
 
     addLog('info', 'no crypto');

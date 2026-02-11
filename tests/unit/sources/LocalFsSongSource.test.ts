@@ -200,7 +200,7 @@ describe('createLocalFsSongSource', () => {
     await source.listSongs('/');
     await waitForCondition(() => onResolved.mock.calls.length > 0);
 
-    let entries = onResolved.mock.calls[0][0].entries;
+    const entries = onResolved.mock.calls[0][0].entries;
     expect(entries[0].durationMs).toBe(10000);
     expect(entries[1].durationMs).toBeUndefined();
   });

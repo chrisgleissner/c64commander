@@ -141,6 +141,7 @@ vi.mock('@/hooks/useC64Connection', () => ({
   }),
   useC64Drives: () => ({
     data: drivesPayloadRef.current,
+    refetch: vi.fn().mockImplementation(() => queryClientMockRef.current.fetchQuery()),
   }),
   useC64ConfigItem: () => ({ data: undefined, isLoading: false }),
   useC64ConfigItems: (category: string) => {
@@ -178,6 +179,25 @@ vi.mock('@/hooks/useActionTrace', () => ({
 vi.mock('@/hooks/use-toast', () => ({
   toast: toastSpy,
   useToast: () => ({ toasts: [], dismiss: vi.fn() }),
+}));
+
+vi.mock('framer-motion', () => ({
+  motion: {
+    div: ({ children, ...props }: any) => {
+      // Filter out framer-motion props to avoid React warnings in tests and ensure clean DOM
+      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      return <div {...validProps}>{children}</div>;
+    },
+    button: ({ children, ...props }: any) => {
+      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      return <button {...validProps}>{children}</button>;
+    },
+    span: ({ children, ...props }: any) => {
+      const { initial, animate, exit, transition, variants, ...validProps } = props;
+      return <span {...validProps}>{children}</span>;
+    },
+  },
+  AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
 
 vi.mock('@/hooks/useDiagnosticsActivity', () => ({

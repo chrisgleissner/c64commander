@@ -25,14 +25,21 @@ import {
 } from 'lucide-react';
 import { getC64API } from '@/lib/c64api';
 import { useC64ConfigItems, useC64Connection, useC64MachineControl, useC64Drives } from '@/hooks/useC64Connection';
+import { useActionTrace } from '@/hooks/useActionTrace';
 import { AppBar } from '@/components/AppBar';
 import { QuickActionCard } from '@/components/QuickActionCard';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
-import { SidCard } from './home/SidCard';
-import { DriveCard } from './home/DriveCard';
+
+import { SystemInfo } from './home/components/SystemInfo';
+import { MachineControls } from './home/components/MachineControls';
+import { AudioMixer } from './home/components/AudioMixer';
+import { StreamStatus } from './home/components/StreamStatus';
+import { DriveManager } from './home/components/DriveManager';
+import { PrinterManager } from './home/components/PrinterManager';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import {
@@ -42,37 +49,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { PowerOffDialog } from './home/dialogs/PowerOffDialog';
+import { SaveConfigDialog } from './home/dialogs/SaveConfigDialog';
+import { LoadConfigDialog } from './home/dialogs/LoadConfigDialog';
+import { ManageConfigDialog } from './home/dialogs/ManageConfigDialog';
 import { toast } from '@/hooks/use-toast';
 import { reportUserError } from '@/lib/uiErrors';
 import { addErrorLog } from '@/lib/logging';
 import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { buildSidEnablement } from '@/lib/config/sidVolumeControl';
 import { resolveAudioMixerMuteValue } from '@/lib/config/audioMixerSolo';
-import { SID_ADDRESSING_ITEMS, SID_SOCKETS_ITEMS, STREAM_ITEMS } from '@/lib/config/configItems';
-import { useActionTrace } from '@/hooks/useActionTrace';
+import { useHomeActions } from './home/hooks/useHomeActions';
+import { useDriveData } from './home/hooks/useDriveData';
+import { useSharedConfigActions } from './home/hooks/ConfigActionsContext';
+import { ConfigActionsProvider } from './home/hooks/ConfigActionsContext';
 import { getBuildInfo } from '@/lib/buildInfo';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
 import { getLedColorRgb, rgbToCss } from '@/lib/config/ledColors';
 import { buildSidControlEntries, parseSidBaseAddress } from '@/lib/config/sidDetails';
 import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
 import { formatDbValue, formatPanValue } from '@/lib/ui/sliderValueFormat';
-import {
-  buildStreamConfigValue,
-  buildStreamEndpointLabel,
-  buildStreamControlEntries,
-  parseStreamEndpoint,
-  validateStreamHost,
-  validateStreamPort,
-  type StreamKey,
-} from '@/lib/config/homeStreams';
 import { resetDiskDevices, resetPrinterDevice } from '@/lib/disks/resetDrives';
 import { buildSidSilenceTargets, silenceSidTargets } from '@/lib/sid/sidSilence';
 import {
@@ -94,197 +90,51 @@ import {
   type RamDumpFolderConfig,
 } from '@/lib/config/ramDumpFolderStore';
 import {
-  buildBusIdOptions,
-  buildTypeOptions,
-  normalizeDriveDevices,
   type DriveDeviceClass,
 } from '@/lib/drives/driveDevices';
 
-const DRIVE_A_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
-const DRIVE_B_HOME_ITEMS = ['Drive', 'Drive Bus ID', 'Drive Type'] as const;
-const U64_HOME_ITEMS = ['System Mode', 'Turbo Control', 'CPU Speed', 'Analog Video Mode', 'Digital Video Mode', 'HDMI Scan lines'] as const;
-const LED_STRIP_HOME_ITEMS = ['LedStrip Mode', 'Fixed Color', 'Strip Intensity', 'LedStrip SID Select', 'Color tint'] as const;
-const SID_AUDIO_ITEMS = [
-  'Vol Socket 1',
-  'Vol Socket 2',
-  'Vol UltiSid 1',
-  'Vol UltiSid 2',
-  'Pan Socket 1',
-  'Pan Socket 2',
-  'Pan UltiSID 1',
-  'Pan UltiSID 2',
-] as const;
-const SID_DETECTED_ITEMS = ['SID Detected Socket 1', 'SID Detected Socket 2'] as const;
-const ULTISID_PROFILE_ITEMS = ['UltiSID 1 Filter Curve', 'UltiSID 2 Filter Curve'] as const;
-const SID_SOCKET_SHAPING_ITEMS = [
-  'SID Socket 1 1K Ohm Resistor',
-  'SID Socket 2 1K Ohm Resistor',
-  'SID Socket 1 Capacitors',
-  'SID Socket 2 Capacitors',
-] as const;
-const ULTISID_SHAPING_ITEMS = [
-  'UltiSID 1 Filter Resonance',
-  'UltiSID 2 Filter Resonance',
-  'UltiSID 1 Combined Waveforms',
-  'UltiSID 2 Combined Waveforms',
-  'UltiSID 1 Digis Level',
-  'UltiSID 2 Digis Level',
-] as const;
-const HOME_SID_SOCKET_ITEMS = [...SID_SOCKETS_ITEMS, ...SID_DETECTED_ITEMS, ...SID_SOCKET_SHAPING_ITEMS] as const;
-const HOME_ULTISID_ITEMS = [...ULTISID_PROFILE_ITEMS, ...ULTISID_SHAPING_ITEMS] as const;
-const HOME_SID_ADDRESSING_ITEMS = [
-  ...SID_ADDRESSING_ITEMS,
-  'SID Socket 1 Address',
-  'SID Socket 2 Address',
-] as const;
-const DISK_BUS_ID_DEFAULTS = [8, 9, 10, 11];
-const PRINTER_BUS_ID_DEFAULTS = [4, 5];
-const PHYSICAL_DRIVE_TYPE_DEFAULTS = ['1541', '1571', '1581'];
-const EMPTY_SELECT_VALUE = '__empty__';
-const EMPTY_SELECT_LABEL = 'Default';
-const SID_SLIDER_DETENT_RANGE = 0.2;
-const SID_SLIDER_STEP = 0.01;
 
-const normalizeSelectValue = (value: string) => (value.trim().length === 0 ? EMPTY_SELECT_VALUE : value);
+import {
+  LED_STRIP_HOME_ITEMS,
+  U64_HOME_ITEMS,
+} from './home/constants';
 
-const resolveSelectValue = (value: string) => (value === EMPTY_SELECT_VALUE ? '' : value);
 
-const formatSelectOptionLabel = (value: string) => (value === EMPTY_SELECT_VALUE ? EMPTY_SELECT_LABEL : value);
+import {
+  clampToRange,
+  formatSelectOptionLabel,
+  normalizeOptionToken,
+  normalizeSelectOptions,
+  normalizeSelectValue,
+  resolveSelectValue,
+} from './home/utils/uiLogic';
+import {
+  buildConfigKey,
+  readItemOptions,
+  readItemDetails,
+  parseNumericValue,
+  resolveTurboControlValue,
+} from './home/utils/HomeConfigUtils';
 
-const normalizeSelectOptions = (options: string[], currentValue: string) => {
-  const cleaned = options
-    .map((option) => String(option))
-    .filter((option) => option.trim().length > 0);
-  const unique = Array.from(new Set(cleaned));
-  if (currentValue.trim().length > 0 && !unique.includes(currentValue)) {
-    unique.push(currentValue);
-  }
-  const includesEmpty = options.some((option) => String(option).trim().length === 0)
-    || currentValue.trim().length === 0;
-  return includesEmpty ? [...unique, EMPTY_SELECT_VALUE] : unique;
-};
 
-const normalizeOptionToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
-
-const parseNumericOption = (value: string) => {
-  const match = value.trim().match(/[+-]?\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : null;
-};
-
-const resolveOptionIndex = (options: string[], currentValue: string) => {
-  const normalizedValue = normalizeOptionToken(currentValue);
-  let index = options.findIndex((option) => normalizeOptionToken(option) === normalizedValue);
-  if (index >= 0) return index;
-  const numericValue = parseNumericOption(currentValue);
-  if (numericValue !== null) {
-    index = options.findIndex((option) => parseNumericOption(option) === numericValue);
-  }
-  return index >= 0 ? index : 0;
-};
-
-const resolveVolumeCenterIndex = (options: string[]) => {
-  const numericIndex = options.findIndex((option) => parseNumericOption(option) === 0);
-  if (numericIndex >= 0) return numericIndex;
-  const normalizedIndex = options.findIndex((option) => normalizeOptionToken(option) === '0 db');
-  return normalizedIndex >= 0 ? normalizedIndex : null;
-};
-
-const resolvePanCenterIndex = (options: string[]) => {
-  const centerIndex = options.findIndex((option) => normalizeOptionToken(option) === 'center');
-  return centerIndex >= 0 ? centerIndex : null;
-};
-
-const clampSliderValue = (value: number, max: number) => Math.min(Math.max(value, 0), max);
-
-const clampToRange = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-const resolveSliderIndex = (value: number, max: number) => clampSliderValue(Math.round(value), max);
-
-const applySoftDetent = (value: number, centerIndex: number | null) => {
-  if (centerIndex === null) return value;
-  const distance = Math.abs(value - centerIndex);
-  return distance <= SID_SLIDER_DETENT_RANGE ? centerIndex : value;
-};
-
-const formatSidBaseAddress = (value: unknown) => {
-  const parsed = parseSidBaseAddress(value);
-  if (parsed === null) return '$----';
-  return `$${parsed.toString(16).toUpperCase().padStart(4, '0')}`;
-};
-
-const resolveSidSocketToggleValue = (options: string[], enable: boolean) => {
-  const enabledTokens = ['enabled', 'on', 'true'];
-  const disabledTokens = ['disabled', 'off', 'false'];
-  const match = options.find((option) => {
-    const normalized = normalizeOptionToken(option);
-    return enable ? enabledTokens.includes(normalized) : disabledTokens.includes(normalized);
-  });
-  if (match) return match;
-  if (options.length) return enable ? options[0] : options[options.length - 1];
-  return enable ? 'Enabled' : 'Disabled';
-};
-
-const resolveSidAddressEnableValue = (options: string[]) => {
-  const enableOption = options.find((option) => parseSidBaseAddress(option) !== null);
-  return enableOption ?? options[0] ?? 'Unmapped';
-};
-
-const resolveSidAddressDisableValue = (options: string[]) => {
-  const disableOption = options.find((option) => {
-    const normalized = normalizeOptionToken(option);
-    return normalized === 'unmapped' || normalized === 'disabled' || normalized === 'off';
-  });
-  return disableOption ?? 'Unmapped';
-};
-
-const isSilentSidValue = (value: string, options: string[]) => {
-  const muteValue = resolveAudioMixerMuteValue(options);
-  return normalizeOptionToken(value) === normalizeOptionToken(muteValue);
-};
-
-type DriveControlSpec = {
-  class: DriveDeviceClass;
-  category: string;
-  enabledItem: string;
-  busItem: string;
-  typeItem?: string;
-};
-
-const DRIVE_CONTROL_SPECS: DriveControlSpec[] = [
-  { class: 'PHYSICAL_DRIVE_A', category: 'Drive A Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type' },
-  { class: 'PHYSICAL_DRIVE_B', category: 'Drive B Settings', enabledItem: 'Drive', busItem: 'Drive Bus ID', typeItem: 'Drive Type' },
-  { class: 'SOFT_IEC_DRIVE', category: 'SoftIEC Drive Settings', enabledItem: 'IEC Drive', busItem: 'Soft Drive Bus ID' },
-];
-
-const PRINTER_CONTROL_SPEC: DriveControlSpec = {
-  class: 'PRINTER',
-  category: 'Printer Settings',
-  enabledItem: 'IEC printer',
-  busItem: 'Bus ID',
-};
-
-const PRINTER_HOME_ITEMS = [
-  'IEC printer',
-  'Bus ID',
-  'Output file',
-  'Output type',
-  'Ink density',
-  'Page top margin (default is 5)',
-  'Page height (default is 60)',
-  'Emulation',
-  'Commodore charset',
-  'Epson charset',
-  'IBM table 2',
-] as const;
 
 import { SectionHeader } from '@/components/SectionHeader';
 import { cn } from '@/lib/utils';
 
 export default function HomePage() {
+  return (
+    <ConfigActionsProvider>
+      <HomePageContent />
+    </ConfigActionsProvider>
+  );
+}
+
+function HomePageContent() {
   const api = getC64API();
   const queryClient = useQueryClient();
   const { status } = useC64Connection();
-  const { data: drivesData } = useC64Drives();
+  const { driveSummaryItems } = useDriveData(status.isConnected || status.isConnecting);
+
   const { data: u64SettingsCategory } = useC64ConfigItems(
     'U64 Specific Settings',
     [...U64_HOME_ITEMS],
@@ -295,52 +145,30 @@ export default function HomePage() {
     [...LED_STRIP_HOME_ITEMS],
     status.isConnected || status.isConnecting,
   );
-  const { data: driveASettingsCategory } = useC64ConfigItems(
-    'Drive A Settings',
-    [...DRIVE_A_HOME_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: driveBSettingsCategory } = useC64ConfigItems(
-    'Drive B Settings',
-    [...DRIVE_B_HOME_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: sidSocketsCategory } = useC64ConfigItems(
-    'SID Sockets Configuration',
-    [...HOME_SID_SOCKET_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: ultiSidCategory } = useC64ConfigItems(
-    'UltiSID Configuration',
-    [...HOME_ULTISID_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: sidAddressingCategory } = useC64ConfigItems(
-    'SID Addressing',
-    [...HOME_SID_ADDRESSING_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: audioMixerCategory } = useC64ConfigItems(
-    'Audio Mixer',
-    [...SID_AUDIO_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: streamCategory } = useC64ConfigItems(
-    'Data Streams',
-    STREAM_ITEMS,
-    status.isConnected || status.isConnecting,
-  );
-  const { data: softIecConfig } = useC64ConfigItems(
-    'SoftIEC Drive Settings',
-    ['IEC Drive', 'Soft Drive Bus ID', 'Default Path'],
-    status.isConnected || status.isConnecting,
-  );
-  const { data: printerConfig } = useC64ConfigItems(
-    'Printer Settings',
-    [...PRINTER_HOME_ITEMS],
-    status.isConnected || status.isConnecting,
-  );
-  const controls = useC64MachineControl();
+
+
+  const {
+    controls,
+    machineTaskId,
+    machineExecutionState,
+    setMachineExecutionState,
+    pauseResumePending,
+    folderTaskPending,
+    powerOffDialogOpen,
+    setPowerOffDialogOpen,
+    ramDumpFolder,
+    handleAction,
+    handlePauseResume,
+    handleSaveRam,
+    handleLoadRam,
+    handleRebootClearMemory,
+    handlePowerOff,
+    confirmPowerOff,
+    handleSelectRamDumpFolder,
+    handleResetDrives,
+    handleResetPrinter,
+    runMachineTask,
+  } = useHomeActions();
   const {
     appConfigs,
     hasChanges,
@@ -357,185 +185,25 @@ export default function HomePage() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [loadDialogOpen, setLoadDialogOpen] = useState(false);
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
-  const [saveName, setSaveName] = useState('');
-  const [systemInfoExpanded, setSystemInfoExpanded] = useState(false);
-  const [renameValues, setRenameValues] = useState<Record<string, string>>({});
+
   const [applyingConfigId, setApplyingConfigId] = useState<string | null>(null);
-  const [ramDumpFolder, setRamDumpFolder] = useState<RamDumpFolderConfig | null>(() => loadRamDumpFolderConfig());
-  const [machineTaskId, setMachineTaskId] = useState<string | null>(null);
-  const machineTaskInFlightRef = useRef<string | null>(null);
-  const [folderTaskPending, setFolderTaskPending] = useState(false);
-  const [powerOffDialogOpen, setPowerOffDialogOpen] = useState(false);
-  const [machineExecutionState, setMachineExecutionState] = useState<'running' | 'paused'>('running');
-  const [pauseResumePending, setPauseResumePending] = useState(false);
-  const [configWritePending, setConfigWritePending] = useState<Record<string, boolean>>({});
-  const [configOverrides, setConfigOverrides] = useState<Record<string, string | number>>({});
-  const [streamDrafts, setStreamDrafts] = useState<Record<string, { ip: string; port: string; endpoint: string }>>({});
-  const [activeStreamEditorKey, setActiveStreamEditorKey] = useState<StreamKey | null>(null);
-  const [streamEditorError, setStreamEditorError] = useState<string | null>(null);
-  const [streamActionPending, setStreamActionPending] = useState<Record<string, boolean>>({});
+
+  const {
+    configWritePending,
+    updateConfigValue,
+    resolveConfigValue,
+  } = useSharedConfigActions();
   const [activeSliders, setActiveSliders] = useState<Record<string, number>>({});
+  const [ledFixedColorDraftIndex, setLedFixedColorDraftIndex] = useState<number | null>(null);
   const [ledIntensityDraft, setLedIntensityDraft] = useState<number | null>(null);
-  const [mountTarget, setMountTarget] = useState<{
-    spec: DriveControlSpec;
-    currentPath?: string;
-  } | null>(null);
 
-  const sourceGroups = useMemo(() => {
-    const groups: SourceGroup[] = [];
-    if (status.isConnected) {
-      groups.push({
-        label: 'C64 Ultimate',
-        sources: [createUltimateSourceLocation()],
-      });
-    }
-    return groups;
-  }, [status.isConnected]);
 
-  const handleMountClick = (spec: DriveControlSpec, currentPath?: string) => {
-    setMountTarget({ spec, currentPath });
-  };
 
-  const handleMountSelection = async (source: unknown, selections: { path: string }[]) => {
-    if (!mountTarget || selections.length === 0) return false;
-    const selected = selections[0];
-    const { spec } = mountTarget;
 
-    if (spec.class === 'SOFT_IEC_DRIVE') {
-      await updateConfigValue(
-        'SoftIEC Drive Settings',
-        'Default Path',
-        selected.path,
-        'HOME_SOFT_IEC_PATH',
-        'Soft IEC path updated'
-      );
-    } else if (spec.class === 'PHYSICAL_DRIVE_A' || spec.class === 'PHYSICAL_DRIVE_B') {
-      const driveId = spec.class === 'PHYSICAL_DRIVE_A' ? 'a' : 'b';
-      await handleAction(async () => {
-        await api.mountDrive(driveId, selected.path);
-        await refreshDrivesFromDevice();
-      }, `Mounted to Drive ${driveId.toUpperCase()}`);
-    }
-    setMountTarget(null);
-    return true;
-  };
 
-  const buildConfigKey = (category: string, itemName: string) => `${category}::${itemName}`;
 
-  const readItemValue = (payload: unknown, categoryName: string, itemName: string) => {
-    const record = payload as Record<string, unknown> | undefined;
-    const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
-    const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
-    if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
-    return normalizeConfigItem(items[itemName]).value;
-  };
 
-  const readItemOptions = (payload: unknown, categoryName: string, itemName: string) => {
-    const record = payload as Record<string, unknown> | undefined;
-    const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
-    const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
-    if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return [];
-    return normalizeConfigItem(items[itemName]).options ?? [];
-  };
 
-  const readItemDetails = (payload: unknown, categoryName: string, itemName: string) => {
-    const record = payload as Record<string, unknown> | undefined;
-    const categoryBlock = (record?.[categoryName] ?? record) as Record<string, unknown> | undefined;
-    const items = (categoryBlock?.items ?? categoryBlock) as Record<string, unknown> | undefined;
-    if (!items || !Object.prototype.hasOwnProperty.call(items, itemName)) return undefined;
-    return normalizeConfigItem(items[itemName]).details;
-  };
-
-  const resolveConfigValue = (
-    payload: unknown,
-    category: string,
-    itemName: string,
-    fallback: string | number,
-  ) => {
-    const override = configOverrides[buildConfigKey(category, itemName)];
-    if (override !== undefined) return override;
-    const value = readItemValue(payload, category, itemName);
-    return value === undefined ? fallback : value;
-  };
-
-  const parseNumericValue = (value: string | number, fallback: number) => {
-    const match = String(value).trim().match(/[+-]?\d+(?:\.\d+)?/);
-    if (!match) return fallback;
-    const parsed = Number(match[0]);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  };
-
-  const resolveTurboControlValue = (cpuSpeed: string, options: string[]) => {
-    const speed = parseNumericValue(cpuSpeed, 1);
-    const desired = speed <= 1 ? 'Off' : 'Manual';
-    const match = options.find((option) => normalizeOptionToken(option) === normalizeOptionToken(desired));
-    return match ?? options[0] ?? desired;
-  };
-
-  const formatPrinterLabel = (itemName: string) => {
-    if (itemName === 'Page top margin (default is 5)') return 'Margin';
-    if (itemName === 'Page height (default is 60)') return 'Height';
-    if (itemName === 'Output file') return 'Output';
-    if (itemName === 'Output type') return 'Type';
-    if (itemName === 'Ink density') return 'Ink';
-    if (itemName === 'Commodore charset') return 'CBM charset';
-    if (itemName === 'Epson charset') return 'Epson set';
-    if (itemName === 'IBM table 2') return 'IBM set';
-    return itemName;
-  };
-
-  const formatPrinterOptionLabel = (value: string) => {
-    const normalized = value.trim();
-    if (normalized === 'PNG B&W') return 'PNG B/W';
-    if (normalized === 'PNG COLOR') return 'PNG Color';
-    if (normalized === 'IBM Graphics Printer') return 'IBM Graphics';
-    if (normalized === 'Commodore MPS') return 'MPS';
-    if (normalized === 'Epson FX-80/JX-80') return 'Epson FX';
-    if (normalized === 'IBM Proprinter') return 'IBM Pro';
-    if (normalized === 'USA/UK') return 'US/UK';
-    if (normalized === 'France/Italy') return 'FR/IT';
-    if (normalized === 'Germany') return 'DE';
-    if (normalized === 'Denmark') return 'DK';
-    if (normalized === 'Denmark I') return 'DK I';
-    if (normalized === 'Denmark II') return 'DK II';
-    if (normalized === 'Spain') return 'ES';
-    if (normalized === 'Sweden') return 'SE';
-    if (normalized === 'Switzerland') return 'CH';
-    if (normalized === 'France') return 'FR';
-    if (normalized === 'Italy') return 'IT';
-    if (normalized === 'Norway') return 'NO';
-    if (normalized === 'Portugal') return 'PT';
-    if (normalized === 'Greece') return 'GR';
-    if (normalized === 'Israel') return 'IL';
-    if (normalized === 'Japan') return 'JP';
-    if (normalized === 'International 1') return 'Intl 1';
-    if (normalized === 'International 2') return 'Intl 2';
-    return normalized;
-  };
-
-  const buildInfo = getBuildInfo();
-  const streamControlEntries = useMemo(
-    () => buildStreamControlEntries(streamCategory as Record<string, unknown> | undefined),
-    [streamCategory],
-  );
-  const sidControlEntries = useMemo(() => {
-    const entries = buildSidControlEntries(
-      audioMixerCategory as Record<string, unknown> | undefined,
-      sidAddressingCategory as Record<string, unknown> | undefined,
-    );
-    return entries.map((entry) => {
-      const volumeOverride = configOverrides[buildConfigKey('Audio Mixer', entry.volumeItem)];
-      const panOverride = configOverrides[buildConfigKey('Audio Mixer', entry.panItem)];
-      const addressOverride = configOverrides[buildConfigKey('SID Addressing', entry.addressItem)];
-      return {
-        ...entry,
-        volume: volumeOverride !== undefined ? String(volumeOverride) : entry.volume,
-        pan: panOverride !== undefined ? String(panOverride) : entry.pan,
-        addressRaw: addressOverride !== undefined ? String(addressOverride) : entry.addressRaw,
-      };
-    });
-  }, [audioMixerCategory, configOverrides, sidAddressingCategory]);
-  const sidSilenceTargets = useMemo(() => buildSidSilenceTargets(sidControlEntries), [sidControlEntries]);
   const machineTaskBusy = machineTaskId !== null || pauseResumePending;
   const ramDumpFolderDisplayPath = ramDumpFolder
     ? (ramDumpFolder.displayPath ?? deriveRamDumpFolderDisplayPath(ramDumpFolder.treeUri, ramDumpFolder.rootName))
@@ -550,6 +218,14 @@ export default function HomePage() {
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
 
+  const resolveToggleOption = (options: string[], enabled: boolean) => {
+    const candidates = enabled
+      ? ['enabled', 'on', 'true', 'yes', '1']
+      : ['disabled', 'off', 'false', 'no', '0'];
+    return options.find((option) => candidates.includes(normalizeOptionToken(option)))
+      ?? (enabled ? 'Enabled' : 'Disabled');
+  };
+
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
   const videoModeOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'System Mode').map((value) => String(value));
@@ -560,6 +236,8 @@ export default function HomePage() {
   const digitalVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Digital Video Mode', '—'));
   const hdmiScanOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'HDMI Scan lines').map((value) => String(value));
   const hdmiScanValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'HDMI Scan lines', 'Disabled'));
+  const joystickSwapOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Joystick Swapper').map((value) => String(value));
+  const joystickSwapValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Joystick Swapper', 'Normal'));
   const turboControlOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Turbo Control').map((value) => String(value));
   const turboControlValue = String(resolveConfigValue(
     u64Category,
@@ -585,162 +263,27 @@ export default function HomePage() {
   const ledIntensityNumber = parseNumericValue(ledIntensityValue, ledIntensityMin);
   const ledIntensityDisplayValue = ledIntensityDraft ?? ledIntensityNumber;
 
-  const ultiSidConfig = ultiSidCategory as Record<string, unknown> | undefined;
-  const ultiSid1ProfileValue = String(resolveConfigValue(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 1 Filter Curve', '—'));
-  const ultiSid2ProfileValue = String(resolveConfigValue(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 2 Filter Curve', '—'));
-  const ultiSid1ProfileOptions = readItemOptions(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 1 Filter Curve').map((value) => String(value));
-  const ultiSid2ProfileOptions = readItemOptions(ultiSidConfig, 'UltiSID Configuration', 'UltiSID 2 Filter Curve').map((value) => String(value));
 
-  const sidDetectedSocket1 = String(resolveConfigValue(
-    sidSocketsCategory as Record<string, unknown> | undefined,
-    'SID Sockets Configuration',
-    'SID Detected Socket 1',
-    'None',
-  ));
-  const sidDetectedSocket2 = String(resolveConfigValue(
-    sidSocketsCategory as Record<string, unknown> | undefined,
-    'SID Sockets Configuration',
-    'SID Detected Socket 2',
-    'None',
-  ));
 
-  const handleAction = trace(async function handleAction(action: () => Promise<unknown>, successMessage: string) {
-    try {
-      await action();
-      toast({ title: successMessage });
-    } catch (error) {
-      reportUserError({
-        operation: 'HOME_ACTION',
-        title: 'Error',
-        description: (error as Error).message,
-        error,
-        context: { action: successMessage },
-      });
-    }
-  });
 
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent).detail as RamDumpFolderConfig | null;
-      if (!detail) {
-        setRamDumpFolder(null);
-        return;
-      }
-      setRamDumpFolder(detail);
-    };
-    window.addEventListener('c64u-ram-dump-folder-updated', handler as EventListener);
-    return () => window.removeEventListener('c64u-ram-dump-folder-updated', handler as EventListener);
-  }, []);
 
-  useEffect(() => {
-    setStreamDrafts((previous) => {
-      const next = { ...previous };
-      streamControlEntries.forEach((entry) => {
-        if (configWritePending[`Data Streams::${entry.itemName}`]) return;
-        next[entry.key] = {
-          ip: entry.ip,
-          port: entry.port,
-          endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-        };
-      });
-      return next;
-    });
-  }, [configWritePending, streamControlEntries]);
+
+
+
 
   useEffect(() => {
     setLedIntensityDraft(null);
   }, [ledIntensityValue]);
 
-  const runMachineTask = trace(async function runMachineTask(
-    taskId: string,
-    task: () => Promise<void>,
-    successTitle: string,
-    successDescription?: string,
-  ) {
-    if (machineTaskInFlightRef.current !== null || machineTaskBusy) return;
-    machineTaskInFlightRef.current = taskId;
-    setMachineTaskId(taskId);
-    try {
-      await task();
-      toast({
-        title: successTitle,
-        description: successDescription,
-      });
-    } catch (error) {
-      reportUserError({
-        operation: 'HOME_MACHINE_TASK',
-        title: 'Machine action failed',
-        description: (error as Error).message,
-        error,
-        context: { taskId },
-      });
-    } finally {
-      if (machineTaskInFlightRef.current === taskId) {
-        machineTaskInFlightRef.current = null;
-      }
-      setMachineTaskId(null);
-    }
-  });
+  useEffect(() => {
+    setLedFixedColorDraftIndex(null);
+  }, [ledFixedColorValue]);
 
-  const refreshDrivesFromDevice = trace(async function refreshDrivesFromDevice() {
-    await queryClient.fetchQuery({
-      queryKey: ['c64-drives'],
-      queryFn: () => api.getDrives(),
-      staleTime: 0,
-    });
-  });
 
-  const updateConfigValue = trace(async function updateConfigValue(
-    category: string,
-    itemName: string,
-    value: string | number,
-    operation: string,
-    successTitle: string,
-    options: { refreshDrives?: boolean; suppressToast?: boolean } = {},
-  ) {
-    const key = buildConfigKey(category, itemName);
-    const previousValue = configOverrides[key];
-    setConfigOverrides((previous) => ({ ...previous, [key]: value }));
-    setConfigWritePending((previous) => ({ ...previous, [key]: true }));
-    try {
-      await api.setConfigValue(category, itemName, value);
-      if (!options.suppressToast) {
-        toast({ title: successTitle });
-      }
-      await queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey)
-          && query.queryKey[0] === 'c64-config-items'
-          && query.queryKey[1] === category,
-      });
-      if (options.refreshDrives) {
-        await queryClient.fetchQuery({
-          queryKey: ['c64-drives'],
-          queryFn: () => api.getDrives(),
-          staleTime: 0,
-        });
-      }
-    } catch (error) {
-      setConfigOverrides((previous) => {
-        const next = { ...previous };
-        if (previousValue === undefined) {
-          delete next[key];
-        } else {
-          next[key] = previousValue;
-        }
-        return next;
-      });
-      reportUserError({
-        operation,
-        title: 'Update failed',
-        description: (error as Error).message,
-        error,
-        context: { category, itemName, value },
-      });
-    } finally {
-      setConfigWritePending((previous) => ({ ...previous, [key]: false }));
-    }
-  });
+
+
+
+
 
   const handleCpuSpeedChange = trace(async function handleCpuSpeedChange(nextValue: string) {
     await updateConfigValue(
@@ -764,399 +307,25 @@ export default function HomePage() {
     );
   });
 
-  const handleSelectRamDumpFolder = trace(async function handleSelectRamDumpFolder() {
-    setFolderTaskPending(true);
+
+
+
+
+
+
+
+  const handleSaveToApp = trace(async function handleSaveToApp(name: string) {
     try {
-      const folder = await selectRamDumpFolder();
-      setRamDumpFolder(folder);
-      toast({
-        title: 'RAM dump folder set',
-        description: folder.rootName ?? 'Folder access granted',
-      });
-    } catch (error) {
-      reportUserError({
-        operation: 'RAM_DUMP_FOLDER_SELECT',
-        title: 'Folder selection failed',
-        description: (error as Error).message,
-        error,
-      });
-    } finally {
-      setFolderTaskPending(false);
-    }
-  });
-
-  const handleRebootClearMemory = trace(async function handleRebootClearMemory() {
-    await runMachineTask(
-      'reboot-clear-memory',
-      async () => {
-        await clearRamAndReboot(api);
-      },
-      'Machine rebooting',
-      'RAM cleared (excluding I/O region).',
-    );
-    setMachineExecutionState('running');
-  });
-
-  const handlePauseResume = trace(async function handlePauseResume() {
-    if (!status.isConnected || machineTaskId !== null || pauseResumePending) return;
-    const targetState = machineExecutionState === 'running' ? 'paused' : 'running';
-    setPauseResumePending(true);
-    try {
-      if (targetState === 'paused') {
-        await controls.pause.mutateAsync();
-      } else {
-        await controls.resume.mutateAsync();
-      }
-      setMachineExecutionState(targetState);
-      toast({ title: targetState === 'paused' ? 'Machine paused' : 'Machine resumed' });
-    } catch (error) {
-      addErrorLog('Machine pause/resume failed', {
-        targetState,
-        error: (error as Error).message,
-      });
-      reportUserError({
-        operation: 'HOME_MACHINE_PAUSE_RESUME',
-        title: 'Machine action failed',
-        description: (error as Error).message,
-        error,
-        context: { targetState },
-      });
-    } finally {
-      setPauseResumePending(false);
-    }
-  });
-
-  const handleSaveRam = trace(async function handleSaveRam() {
-    await runMachineTask(
-      'save-ram',
-      async () => {
-        const folder = ramDumpFolder ?? await selectRamDumpFolder();
-        if (!ramDumpFolder) {
-          setRamDumpFolder(folder);
-        }
-        const image = await dumpFullRamImage(api);
-        const fileName = buildRamDumpFileName();
-        await writeRamDumpToFolder(folder, fileName, image);
-      },
-      'RAM dump saved',
-      'Saved to selected folder.',
-    );
-    setMachineExecutionState('running');
-  });
-
-  const handleLoadRam = trace(async function handleLoadRam() {
-    await runMachineTask(
-      'load-ram',
-      async () => {
-        const pickedFile = await pickRamDumpFile({ preferredFolder: ramDumpFolder ?? undefined });
-        if (!ramDumpFolder && pickedFile.parentFolder) {
-          saveRamDumpFolderConfig(pickedFile.parentFolder);
-          setRamDumpFolder(pickedFile.parentFolder);
-        }
-        if (pickedFile.bytes.length !== FULL_RAM_SIZE_BYTES) {
-          throw new Error(
-            `Invalid RAM dump size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${pickedFile.bytes.length} bytes`,
-          );
-        }
-        await loadFullRamImage(api, pickedFile.bytes);
-      },
-      'RAM loaded',
-      'Memory image applied successfully.',
-    );
-    setMachineExecutionState('running');
-  });
-
-  const handlePowerOff = trace(async function handlePowerOff() {
-    setPowerOffDialogOpen(true);
-  });
-
-  const confirmPowerOff = trace(async function confirmPowerOff() {
-    setPowerOffDialogOpen(false);
-    await handleAction(() => controls.powerOff.mutateAsync(), 'Powering off...');
-  });
-
-  const handleResetDrives = trace(async function handleResetDrives() {
-    await runMachineTask(
-      'reset-drives',
-      async () => {
-        await resetDiskDevices(api, drivesData ?? null);
-        await refreshDrivesFromDevice();
-      },
-      'Drives reset',
-      'Drive A, Drive B, and Soft IEC Drive were reset.',
-    );
-  });
-
-  const handleResetPrinter = trace(async function handleResetPrinter() {
-    await runMachineTask(
-      'reset-printer',
-      async () => {
-        await resetPrinterDevice(api, drivesData ?? null);
-        await refreshDrivesFromDevice();
-      },
-      'Printer reset',
-      'Printer emulation was reset.',
-    );
-  });
-
-  const handleEnabledToggle = trace(async function handleEnabledToggle(
-    label: string,
-    spec: DriveControlSpec,
-    enabled: boolean,
-  ) {
-    const nextValue = enabled ? 'Disabled' : 'Enabled';
-    await updateConfigValue(
-      spec.category,
-      spec.enabledItem,
-      nextValue,
-      'HOME_DRIVE_ENABLED',
-      `${label} ${enabled ? 'disabled' : 'enabled'}`,
-      { refreshDrives: true },
-    );
-  });
-
-  const handleSidEnableToggle = trace(async function handleSidEnableToggle(
-    entry: ReturnType<typeof buildSidControlEntries>[number],
-    enabled: boolean,
-  ) {
-    if (entry.key === 'socket1' || entry.key === 'socket2') {
-      const socketIndex = entry.key === 'socket1' ? 1 : 2;
-      const socketItem = `SID Socket ${socketIndex}`;
-      const socketOptions = readItemOptions(
-        sidSocketsCategory as Record<string, unknown> | undefined,
-        'SID Sockets Configuration',
-        socketItem,
-      ).map((value) => String(value));
-      const nextValue = resolveSidSocketToggleValue(socketOptions, !enabled);
-      await updateConfigValue(
-        'SID Sockets Configuration',
-        socketItem,
-        nextValue,
-        'HOME_SID_ENABLED',
-        `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
-      );
-      return;
-    }
-
-    const addressOptions = entry.addressOptions.length ? entry.addressOptions : [entry.address];
-    const nextValue = enabled
-      ? resolveSidAddressDisableValue(addressOptions)
-      : resolveSidAddressEnableValue(addressOptions);
-    await updateConfigValue(
-      'SID Addressing',
-      entry.addressItem,
-      nextValue,
-      'HOME_SID_ADDRESS',
-      `${entry.label} ${enabled ? 'disabled' : 'enabled'}`,
-    );
-  });
-
-  const handleSidReset = trace(async function handleSidReset() {
-    await runMachineTask(
-      'sid-reset',
-      async () => {
-        await silenceSidTargets(api, sidSilenceTargets);
-      },
-      'SID reset complete',
-      'All configured SID chips were silenced.',
-    );
-  });
-
-  const handleStreamStart = trace(async function handleStreamStart(key: StreamKey) {
-    const entry = streamControlEntries.find((value) => value.key === key);
-    if (!entry) return;
-    const draft = streamDrafts[key] ?? {
-      ip: entry.ip,
-      port: entry.port,
-      endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-    };
-    const hostError = validateStreamHost(draft.ip);
-    const portError = validateStreamPort(draft.port);
-    if (hostError || portError) {
-      reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream target',
-        description: hostError ?? portError ?? 'Invalid stream target',
-        context: { stream: key, ip: draft.ip, port: draft.port },
-      });
-      setStreamEditorError(hostError ?? portError ?? 'Invalid stream target');
-      return;
-    }
-    setStreamEditorError(null);
-    const ipPort = `${draft.ip.trim()}:${draft.port.trim()}`;
-    setStreamActionPending((prev) => ({ ...prev, [key]: true }));
-    try {
-      await api.startStream(entry.restName, ipPort);
-      toast({ title: `${entry.label} start command sent` });
-    } catch (error) {
-      reportUserError({
-        operation: 'STREAM_START',
-        title: 'Stream start failed',
-        description: (error as Error).message,
-        error,
-        context: { stream: key, ip: ipPort },
-      });
-    } finally {
-      setStreamActionPending((prev) => ({ ...prev, [key]: false }));
-    }
-  });
-
-  const handleStreamStop = trace(async function handleStreamStop(key: StreamKey) {
-    const entry = streamControlEntries.find((value) => value.key === key);
-    if (!entry) return;
-    setStreamEditorError(null);
-    setStreamActionPending((prev) => ({ ...prev, [key]: true }));
-    try {
-      await api.stopStream(entry.restName);
-      toast({ title: `${entry.label} stop command sent` });
-    } catch (error) {
-      reportUserError({
-        operation: 'STREAM_STOP',
-        title: 'Stream stop failed',
-        description: (error as Error).message,
-        error,
-        context: { stream: key },
-      });
-    } finally {
-      setStreamActionPending((prev) => ({ ...prev, [key]: false }));
-    }
-  });
-
-  const handleStreamFieldChange = (key: StreamKey, value: string) => {
-    const parsed = parseStreamEndpoint(value);
-    setStreamEditorError(null);
-    setStreamDrafts((previous) => {
-      const fallback = { ip: '', port: '', endpoint: '' };
-      const current = previous[key] ?? fallback;
-      return {
-        ...previous,
-        [key]: {
-          ...current,
-          endpoint: value,
-          ip: parsed.ip,
-          port: parsed.port,
-        },
-      };
-    });
-  };
-
-  const handleStreamEditOpen = (key: StreamKey) => {
-    const entry = streamControlEntries.find((value) => value.key === key);
-    if (!entry) return;
-    setStreamDrafts((previous) => ({
-      ...previous,
-      [key]: {
-        ip: entry.ip,
-        port: entry.port,
-        endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-      },
-    }));
-    setStreamEditorError(null);
-    setActiveStreamEditorKey(key);
-  };
-
-  const handleStreamEditCancel = (key: StreamKey) => {
-    const entry = streamControlEntries.find((value) => value.key === key);
-    if (entry) {
-      setStreamDrafts((previous) => ({
-        ...previous,
-        [key]: {
-          ip: entry.ip,
-          port: entry.port,
-          endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-        },
-      }));
-    }
-    setStreamEditorError(null);
-    setActiveStreamEditorKey((previous) => (previous === key ? null : previous));
-  };
-
-  const handleStreamCommit = trace(async function handleStreamCommit(key: StreamKey) {
-    const entry = streamControlEntries.find((value) => value.key === key);
-    if (!entry) return false;
-    const current = streamDrafts[key] ?? {
-      ip: entry.ip,
-      port: entry.port,
-      endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-    };
-    const parsed = parseStreamEndpoint(current.endpoint);
-    if (parsed.error) {
-      reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream endpoint',
-        description: parsed.error,
-        context: { stream: key, endpoint: current.endpoint },
-      });
-      setStreamEditorError(parsed.error);
-      return false;
-    }
-    const nextIp = parsed.ip;
-    const nextPort = parsed.port;
-    setStreamDrafts((previous) => ({
-      ...previous,
-      [key]: {
-        ...current,
-        ip: nextIp,
-        port: nextPort,
-        endpoint: buildStreamEndpointLabel(nextIp, nextPort),
-      },
-    }));
-    const hostError = validateStreamHost(nextIp);
-    if (hostError) {
-      reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream host',
-        description: hostError,
-        context: { stream: key, ip: nextIp },
-      });
-      setStreamEditorError(hostError);
-      return false;
-    }
-    const portError = validateStreamPort(nextPort);
-    if (portError) {
-      reportUserError({
-        operation: 'STREAM_VALIDATE',
-        title: 'Invalid stream port',
-        description: portError,
-        context: { stream: key, port: nextPort },
-      });
-      setStreamEditorError(portError);
-      return false;
-    }
-    setStreamEditorError(null);
-    await updateConfigValue(
-      'Data Streams',
-      entry.itemName,
-      buildStreamConfigValue(true, nextIp, nextPort),
-      'HOME_STREAM_UPDATE',
-      `${entry.label} stream target updated`,
-    );
-    return true;
-  });
-
-  const handleSaveToApp = trace(async function handleSaveToApp() {
-    const trimmed = saveName.trim();
-    if (!trimmed) {
-      toast({ title: 'Name required', description: 'Enter a config name first.' });
-      return;
-    }
-    if (appConfigs.some((entry) => entry.name === trimmed)) {
-      toast({ title: 'Name already used', description: 'Choose a unique config name.' });
-      return;
-    }
-
-    try {
-      await saveCurrentConfig(trimmed);
-      toast({ title: 'Saved to app', description: trimmed });
+      await saveCurrentConfig(name);
+      toast({ title: 'Saved to app', description: name });
       setSaveDialogOpen(false);
-      setSaveName('');
     } catch (error) {
       reportUserError({
         operation: 'APP_CONFIG_SAVE',
         title: 'Error',
         description: (error as Error).message,
         error,
-        context: { name: trimmed },
+        context: { name },
       });
     }
   });
@@ -1182,170 +351,89 @@ export default function HomePage() {
     }
   });
 
-  const normalizedDriveModel = useMemo(
-    () => normalizeDriveDevices(drivesData ?? null),
-    [drivesData],
-  );
-  const drivesByClass = useMemo(
-    () => new Map(normalizedDriveModel.devices.map((entry) => [entry.class, entry])),
-    [normalizedDriveModel.devices],
-  );
-  const driveSummaryItems = useMemo(() => {
-    const entries = [
-      { key: 'a', label: 'Drive A', device: drivesByClass.get('PHYSICAL_DRIVE_A') ?? null },
-      { key: 'b', label: 'Drive B', device: drivesByClass.get('PHYSICAL_DRIVE_B') ?? null },
-      { key: 'softiec', label: 'Soft IEC', device: drivesByClass.get('SOFT_IEC_DRIVE') ?? null },
-    ];
-    return entries.map((entry) => ({
-      ...entry,
-      mountedLabel: entry.device?.imageFile || 'No disk mounted',
-      isMounted: Boolean(entry.device?.imageFile),
-    }));
-  }, [drivesByClass]);
+
 
   const effectiveVideoModeOptions = videoModeOptions.length ? videoModeOptions : [videoModeValue];
   const effectiveAnalogVideoOptions = analogVideoOptions.length ? analogVideoOptions : [analogVideoValue];
   const effectiveDigitalVideoOptions = digitalVideoOptions.length ? digitalVideoOptions : [digitalVideoValue];
   const effectiveHdmiScanOptions = hdmiScanOptions.length ? hdmiScanOptions : [hdmiScanValue];
+  const effectiveJoystickSwapOptions = joystickSwapOptions.length ? joystickSwapOptions : [joystickSwapValue];
   const effectiveCpuSpeedOptions = cpuSpeedOptions.length ? cpuSpeedOptions : [cpuSpeedValue];
   const effectiveLedModeOptions = ledModeOptions.length ? ledModeOptions : [ledModeValue];
   const effectiveLedFixedColorOptions = ledFixedColorOptions.length ? ledFixedColorOptions : [ledFixedColorValue];
   const effectiveLedSidSelectOptions = ledSidSelectOptions.length ? ledSidSelectOptions : [ledSidSelectValue];
   const effectiveLedTintOptions = ledTintOptions.length ? ledTintOptions : [ledTintValue];
-  const effectiveUltiSid1ProfileOptions = ultiSid1ProfileOptions.length ? ultiSid1ProfileOptions : [ultiSid1ProfileValue];
-  const effectiveUltiSid2ProfileOptions = ultiSid2ProfileOptions.length ? ultiSid2ProfileOptions : [ultiSid2ProfileValue];
+
+  const hdmiScanEnabledValue = resolveToggleOption(effectiveHdmiScanOptions, true);
+  const hdmiScanDisabledValue = resolveToggleOption(effectiveHdmiScanOptions, false);
+  const hdmiScanChecked = normalizeOptionToken(hdmiScanValue) === normalizeOptionToken(hdmiScanEnabledValue);
+
+  const joystickSwapEnabledValue = resolveToggleOption(effectiveJoystickSwapOptions, true);
+  const joystickSwapDisabledValue = resolveToggleOption(effectiveJoystickSwapOptions, false);
+  const joystickSwapChecked = normalizeOptionToken(joystickSwapValue) === normalizeOptionToken(joystickSwapEnabledValue);
 
   const videoModeSelectOptions = normalizeSelectOptions(effectiveVideoModeOptions, videoModeValue);
   const analogVideoSelectOptions = normalizeSelectOptions(effectiveAnalogVideoOptions, analogVideoValue);
   const digitalVideoSelectOptions = normalizeSelectOptions(effectiveDigitalVideoOptions, digitalVideoValue);
-  const hdmiScanSelectOptions = normalizeSelectOptions(effectiveHdmiScanOptions, hdmiScanValue);
   const ledModeSelectOptions = normalizeSelectOptions(effectiveLedModeOptions, ledModeValue);
   const ledFixedColorSelectOptions = normalizeSelectOptions(effectiveLedFixedColorOptions, ledFixedColorValue);
   const ledSidSelectSelectOptions = normalizeSelectOptions(effectiveLedSidSelectOptions, ledSidSelectValue);
   const ledTintSelectOptions = normalizeSelectOptions(effectiveLedTintOptions, ledTintValue);
-  const ultiSid1ProfileSelectOptions = normalizeSelectOptions(effectiveUltiSid1ProfileOptions, ultiSid1ProfileValue);
-  const ultiSid2ProfileSelectOptions = normalizeSelectOptions(effectiveUltiSid2ProfileOptions, ultiSid2ProfileValue);
+
 
   const videoModeSelectValue = normalizeSelectValue(videoModeValue);
   const analogVideoSelectValue = normalizeSelectValue(analogVideoValue);
   const digitalVideoSelectValue = normalizeSelectValue(digitalVideoValue);
-  const hdmiScanSelectValue = normalizeSelectValue(hdmiScanValue);
   const ledModeSelectValue = normalizeSelectValue(ledModeValue);
   const ledFixedColorSelectValue = normalizeSelectValue(ledFixedColorValue);
   const ledSidSelectSelectValue = normalizeSelectValue(ledSidSelectValue);
   const ledTintSelectValue = normalizeSelectValue(ledTintValue);
-  const ultiSid1ProfileSelectValue = normalizeSelectValue(ultiSid1ProfileValue);
-  const ultiSid2ProfileSelectValue = normalizeSelectValue(ultiSid2ProfileValue);
+
+  const ledFixedColorSliderOptions = ledFixedColorSelectOptions.length
+    ? ledFixedColorSelectOptions
+    : [ledFixedColorValue];
+  const ledFixedColorSliderMax = Math.max(0, ledFixedColorSliderOptions.length - 1);
+  const ledFixedColorSliderIndex = Math.max(
+    0,
+    ledFixedColorSliderOptions.findIndex(
+      (option) => normalizeOptionToken(option) === normalizeOptionToken(ledFixedColorValue),
+    ),
+  );
+  const ledFixedColorGradient = useMemo(() => {
+    const colors = ledFixedColorSliderOptions.map((option) => getLedColorRgb(option));
+    if (colors.length < 2 || colors.some((value) => !value)) return null;
+    const segmentSize = 100 / colors.length;
+    const stops = colors.map((rgb, index) => {
+      const color = rgbToCss(rgb!);
+      const start = index * segmentSize;
+      const end = (index + 1) * segmentSize;
+      return `${color} ${start}%, ${color} ${end}%`;
+    });
+    return `linear-gradient(90deg, ${stops.join(', ')})`;
+  }, [ledFixedColorSliderOptions]);
+  const resolveLedFixedColorOption = (index: number) =>
+    ledFixedColorSliderOptions[Math.round(index)] ?? ledFixedColorSliderOptions[0] ?? '';
+  const ledFixedColorDisplayIndex = ledFixedColorDraftIndex ?? ledFixedColorSliderIndex;
+
 
   const cpuSpeedPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'CPU Speed')]);
   const videoModePending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'System Mode')]);
   const analogVideoPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Analog Video Mode')]);
   const digitalVideoPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Digital Video Mode')]);
   const hdmiScanPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'HDMI Scan lines')]);
+  const joystickSwapPending = Boolean(configWritePending[buildConfigKey('U64 Specific Settings', 'Joystick Swapper')]);
   const ledModePending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip Mode')]);
   const ledFixedColorPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Fixed Color')]);
   const ledIntensityPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Strip Intensity')]);
   const ledSidSelectPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip SID Select')]);
   const ledTintPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Color tint')]);
+  const ledFixedColorSliderDisabled = !status.isConnected || ledFixedColorPending || ledFixedColorSliderMax === 0;
 
-  const sidEnablement = useMemo(
-    () => buildSidEnablement(
-      sidSocketsCategory as Record<string, unknown> | undefined,
-      sidAddressingCategory as Record<string, unknown> | undefined,
-    ),
-    [sidAddressingCategory, sidSocketsCategory],
-  );
-  const sidStatusMap = useMemo(() => new Map([
-    ['socket1', sidEnablement.socket1],
-    ['socket2', sidEnablement.socket2],
-    ['ultiSid1', sidEnablement.ultiSid1],
-    ['ultiSid2', sidEnablement.ultiSid2],
-  ]), [sidEnablement]);
 
-  const driveControlRows = DRIVE_CONTROL_SPECS.map((spec) => {
-    const device = drivesByClass.get(spec.class) ?? null;
-    const payload = spec.class === 'PHYSICAL_DRIVE_A'
-      ? driveASettingsCategory
-      : spec.class === 'PHYSICAL_DRIVE_B'
-        ? driveBSettingsCategory
-        : undefined;
-    const enabledValue = String(
-      resolveConfigValue(payload, spec.category, spec.enabledItem, device?.enabled ? 'Enabled' : 'Disabled'),
-    );
-    const enabled = enabledValue.trim().toLowerCase() === 'enabled';
-    const busFallback = device?.busId ?? (spec.class === 'PHYSICAL_DRIVE_A' ? 8 : spec.class === 'PHYSICAL_DRIVE_B' ? 9 : 11);
-    const busValue = Number(resolveConfigValue(payload, spec.category, spec.busItem, busFallback));
-    const busOptions = buildBusIdOptions(DISK_BUS_ID_DEFAULTS, Number.isFinite(busValue) ? busValue : null);
 
-    const typeValue = spec.typeItem
-      ? String(resolveConfigValue(payload, spec.category, spec.typeItem, device?.type ?? '1541'))
-      : (device?.type ?? 'DOS emulation');
-    const typeOptions = spec.typeItem
-      ? buildTypeOptions(
-        readItemOptions(payload, spec.category, spec.typeItem).map((value) => String(value)).length
-          ? readItemOptions(payload, spec.category, spec.typeItem).map((value) => String(value))
-          : PHYSICAL_DRIVE_TYPE_DEFAULTS,
-        typeValue,
-      )
-      : [typeValue];
 
-    return {
-      spec,
-      device,
-      enabled,
-      enabledValue,
-      busValue: String(busValue),
-      busOptions,
-      typeValue,
-      typeOptions,
-      pendingEnabled: Boolean(configWritePending[buildConfigKey(spec.category, spec.enabledItem)]),
-      pendingBus: Boolean(configWritePending[buildConfigKey(spec.category, spec.busItem)]),
-      pendingType: spec.typeItem ? Boolean(configWritePending[buildConfigKey(spec.category, spec.typeItem)]) : false,
-    };
-  });
 
-  const printerDevice = drivesByClass.get('PRINTER') ?? null;
-  const printerEnabledValue = String(
-    resolveConfigValue(
-      undefined,
-      PRINTER_CONTROL_SPEC.category,
-      PRINTER_CONTROL_SPEC.enabledItem,
-      printerDevice?.enabled ? 'Enabled' : 'Disabled',
-    ),
-  );
-  const printerEnabled = printerEnabledValue.trim().toLowerCase() === 'enabled';
-  const printerBusValue = Number(
-    resolveConfigValue(
-      undefined,
-      PRINTER_CONTROL_SPEC.category,
-      PRINTER_CONTROL_SPEC.busItem,
-      printerDevice?.busId ?? 4,
-    ),
-  );
-  const printerBusOptions = buildBusIdOptions(PRINTER_BUS_ID_DEFAULTS, Number.isFinite(printerBusValue) ? printerBusValue : null);
-  const printerConfigPayload = printerConfig as Record<string, unknown> | undefined;
-  const buildPrinterControl = (itemName: typeof PRINTER_HOME_ITEMS[number], fallback: string | number) => {
-    const value = resolveConfigValue(printerConfigPayload, 'Printer Settings', itemName, fallback);
-    const options = readItemOptions(printerConfigPayload, 'Printer Settings', itemName).map((entry) => String(entry));
-    const details = readItemDetails(printerConfigPayload, 'Printer Settings', itemName);
-    return {
-      itemName,
-      label: formatPrinterLabel(itemName),
-      value: String(value),
-      options,
-      details,
-      pending: Boolean(configWritePending[buildConfigKey('Printer Settings', itemName)]),
-    };
-  };
 
-  const printerControlRows = [
-    buildPrinterControl('Output type', 'PNG B&W'),
-    buildPrinterControl('Ink density', 'Medium'),
-    buildPrinterControl('Emulation', 'Commodore MPS'),
-    buildPrinterControl('Commodore charset', 'USA/UK'),
-    buildPrinterControl('Epson charset', 'Basic'),
-    buildPrinterControl('IBM table 2', 'International 1'),
-  ];
 
   return (
     <div className="min-h-screen pb-24 pt-[var(--app-bar-height)]">
@@ -1368,174 +456,26 @@ export default function HomePage() {
       />
 
       <main className="container py-5 space-y-4">
-        {/* System Info (collapsed by default) */}
-        <motion.button
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          type="button"
-          onClick={() => setSystemInfoExpanded((prev) => !prev)}
-          className="w-full text-left px-1 py-1"
-          aria-expanded={systemInfoExpanded}
-          data-testid="home-system-info"
-          data-section-label="System info"
-        >
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-            <span className="text-muted-foreground">App</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-version">
-              {buildInfo.versionLabel || '—'}
-            </span>
-            <span className="text-muted-foreground">Device</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-device">
-              {status.deviceInfo?.hostname || status.deviceInfo?.product || '—'}
-            </span>
-            <span className="text-muted-foreground">Firmware</span>
-            <span className="font-semibold text-foreground" data-testid="home-system-firmware">
-              {status.deviceInfo?.firmware_version || '—'}
-            </span>
-          </div>
-          {systemInfoExpanded && (
-            <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <span>Git</span>
-                <span className="font-semibold text-foreground" data-testid="home-system-git">
-                  {buildInfo.gitShaShort || '—'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>Build</span>
-                <span className="font-semibold text-foreground" data-testid="home-system-build-time">
-                  {buildInfo.buildTimeUtc}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>FPGA</span>
-                <span className="font-semibold text-foreground" data-testid="home-system-fpga">
-                  {status.deviceInfo?.fpga_version || '—'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>Core</span>
-                <span className="font-semibold text-foreground" data-testid="home-system-core">
-                  {status.deviceInfo?.core_version || '—'}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>Core ID</span>
-                <span className="font-semibold text-foreground" data-testid="home-system-core-id">
-                  {status.deviceInfo?.unique_id || '—'}
-                </span>
-              </div>
-            </div>
-          )}
-        </motion.button>
+        {/* System Info */}
+        <SystemInfo />
 
         {/* Machine */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="space-y-2"
-          data-section-label="Machine"
-        >
-          <SectionHeader title="Machine">
-            {machineTaskBusy && (
-              <span className="ml-2 text-xs text-muted-foreground">Working…</span>
-            )}
-          </SectionHeader>
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground" data-testid="home-drive-summary">
-              {driveSummaryItems.map((entry) => (
-                <span key={entry.key} className="flex min-w-0 items-center gap-1">
-                  <span className="font-semibold text-foreground whitespace-nowrap">{entry.label}:</span>
-                  <span className={entry.isMounted ? 'text-foreground truncate' : 'text-muted-foreground truncate'}>
-                    {entry.mountedLabel}
-                  </span>
-                </span>
-              ))}
-            </div>
-            <div className="grid grid-cols-4 gap-2" data-testid="home-machine-controls">
-              <QuickActionCard
-                icon={RotateCcw}
-                label="Reset"
-                compact
-                variant="danger"
-                className="border-destructive/40 bg-destructive/[0.04]"
-                onClick={() =>
-                  handleAction(async () => {
-                    await controls.reset.mutateAsync();
-                    setMachineExecutionState('running');
-                  }, 'Machine reset')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.reset.isPending}
-              />
-              <QuickActionCard
-                icon={Power}
-                label="Reboot"
-                compact
-                variant="danger"
-                className="border-destructive/40 bg-destructive/[0.04]"
-                onClick={() =>
-                  handleAction(async () => {
-                    await controls.reboot.mutateAsync();
-                    setMachineExecutionState('running');
-                  }, 'Machine rebooting...')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.reboot.isPending}
-              />
-              <QuickActionCard
-                icon={machineExecutionState === 'paused' ? Play : Pause}
-                label={machineExecutionState === 'paused' ? 'Resume' : 'Pause'}
-                compact
-                className={machineExecutionState === 'paused' ? 'border-primary/60 bg-primary/10' : undefined}
-                onClick={() => void handlePauseResume()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={pauseResumePending}
-              />
-              <QuickActionCard
-                icon={Menu}
-                label="Menu"
-                compact
-                onClick={() => handleAction(() => controls.menuButton.mutateAsync(), 'Menu toggled')}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.menuButton.isPending}
-              />
-              <QuickActionCard
-                icon={Download}
-                label="Save RAM"
-                compact
-                onClick={() => void handleSaveRam()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'save-ram'}
-              />
-              <QuickActionCard
-                icon={Upload}
-                label="Load RAM"
-                compact
-                onClick={() => void handleLoadRam()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'load-ram'}
-              />
-              <QuickActionCard
-                icon={RotateCcw}
-                label="Reboot (Clear RAM)"
-                compact
-                onClick={() => void handleRebootClearMemory()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={machineTaskId === 'reboot-clear-memory'}
-              />
-              <QuickActionCard
-                icon={PowerOff}
-                label="Power Off"
-                compact
-                variant="danger"
-                className="border-destructive/30 bg-destructive/[0.03] opacity-80"
-                onClick={() => void handlePowerOff()}
-                disabled={!status.isConnected || machineTaskBusy}
-                loading={controls.powerOff.isPending}
-              />
-            </div>
-          </div>
-        </motion.div>
+        <MachineControls
+          status={status}
+          machineTaskBusy={machineTaskBusy}
+          machineExecutionState={machineExecutionState}
+          setMachineExecutionState={setMachineExecutionState}
+          controls={controls}
+          pauseResumePending={pauseResumePending}
+          machineTaskId={machineTaskId}
+          onPauseResume={handlePauseResume}
+          onSaveRam={handleSaveRam}
+          onLoadRam={handleLoadRam}
+          onRebootClearMemory={handleRebootClearMemory}
+          onPowerOff={handlePowerOff}
+          onAction={handleAction}
+          driveSummaryItems={driveSummaryItems}
+        />
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -1639,29 +579,47 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">HDMI Scan Lines</span>
-                  <Select
-                    value={hdmiScanSelectValue}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        'U64 Specific Settings',
-                        'HDMI Scan lines',
-                        resolveSelectValue(value),
-                        'HOME_HDMI_SCAN',
-                        'HDMI scan lines updated',
-                      )}
-                    disabled={!status.isConnected || hdmiScanPending}
-                  >
-                    <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-video-scanlines">
-                      <SelectValue placeholder={hdmiScanValue} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {hdmiScanSelectOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {formatSelectOptionLabel(option)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-end">
+                    <Checkbox
+                      checked={hdmiScanChecked}
+                      onCheckedChange={(checked) => {
+                        const nextValue = checked === true ? hdmiScanEnabledValue : hdmiScanDisabledValue;
+                        void updateConfigValue(
+                          'U64 Specific Settings',
+                          'HDMI Scan lines',
+                          nextValue,
+                          'HOME_HDMI_SCAN',
+                          'HDMI scan lines updated',
+                        );
+                      }}
+                      disabled={!status.isConnected || hdmiScanPending}
+                      className="h-4 w-4"
+                      aria-label="HDMI Scan Lines"
+                      data-testid="home-video-scanlines"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Joystick Swap</span>
+                  <div className="flex items-center justify-end">
+                    <Checkbox
+                      checked={joystickSwapChecked}
+                      onCheckedChange={(checked) => {
+                        const nextValue = checked === true ? joystickSwapEnabledValue : joystickSwapDisabledValue;
+                        void updateConfigValue(
+                          'U64 Specific Settings',
+                          'Joystick Swapper',
+                          nextValue,
+                          'HOME_JOYSTICK_SWAP',
+                          'Joystick swap updated',
+                        );
+                      }}
+                      disabled={!status.isConnected || joystickSwapPending}
+                      className="h-4 w-4"
+                      aria-label="Joystick Swap"
+                      data-testid="home-joystick-swap"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1746,6 +704,50 @@ export default function HomePage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <Slider
+                    value={[ledFixedColorDisplayIndex]}
+                    min={0}
+                    max={ledFixedColorSliderMax}
+                    step={1}
+                    onValueChange={(values) => {
+                      const nextIndex = clampToRange(values[0] ?? 0, 0, ledFixedColorSliderMax);
+                      setLedFixedColorDraftIndex(nextIndex);
+                    }}
+                    onValueCommit={(values) => {
+                      setLedFixedColorDraftIndex(null);
+                    }}
+                    onValueChangeAsync={(nextValue) => {
+                      const nextIndex = clampToRange(nextValue, 0, ledFixedColorSliderMax);
+                      const nextOption = resolveLedFixedColorOption(nextIndex);
+                      void updateConfigValue(
+                        'LED Strip Settings',
+                        'Fixed Color',
+                        nextOption,
+                        'HOME_LED_COLOR',
+                        'LED color updated',
+                        { suppressToast: true },
+                      );
+                    }}
+                    onValueCommitAsync={(nextValue) => {
+                      const nextIndex = clampToRange(nextValue, 0, ledFixedColorSliderMax);
+                      const nextOption = resolveLedFixedColorOption(nextIndex);
+                      void updateConfigValue(
+                        'LED Strip Settings',
+                        'Fixed Color',
+                        nextOption,
+                        'HOME_LED_COLOR',
+                        'LED color updated',
+                      );
+                    }}
+                    disabled={ledFixedColorSliderDisabled}
+                    valueFormatter={(value) =>
+                      formatSelectOptionLabel(resolveLedFixedColorOption(value))
+                    }
+                    trackClassName={ledFixedColorGradient ? 'bg-transparent' : undefined}
+                    rangeClassName={ledFixedColorGradient ? 'bg-transparent' : undefined}
+                    trackStyle={ledFixedColorGradient ? { backgroundImage: ledFixedColorGradient } : undefined}
+                    data-testid="home-led-color-slider"
+                  />
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Intensity</span>
                     <span className="text-xs font-semibold text-foreground" data-testid="home-led-intensity-value">
@@ -1873,81 +875,13 @@ export default function HomePage() {
           className="space-y-3"
           data-section-label="Drives"
         >
-          <SectionHeader
-            title="Drives"
-            resetAction={() => void handleResetDrives()}
-            resetDisabled={!status.isConnected || machineTaskBusy}
-            isResetting={machineTaskId === 'reset-drives'}
-            resetTestId="home-drives-reset"
+          <DriveManager
+            isConnected={status.isConnected}
+            handleAction={handleAction}
+            machineTaskBusy={machineTaskBusy}
+            machineTaskId={machineTaskId}
+            onResetDrives={handleResetDrives}
           />
-          <div className="space-y-2" data-testid="home-drives-group">
-            {driveControlRows.map((row) => {
-              const label = row.device?.label
-                ?? (row.spec.class === 'PHYSICAL_DRIVE_A'
-                  ? 'Drive A'
-                  : row.spec.class === 'PHYSICAL_DRIVE_B'
-                    ? 'Drive B'
-                    : 'Soft IEC Drive');
-              const testIdSuffix = row.spec.class === 'PHYSICAL_DRIVE_A'
-                ? 'a'
-                : row.spec.class === 'PHYSICAL_DRIVE_B'
-                  ? 'b'
-                  : 'soft-iec';
-
-              const isSoftIec = row.spec.class === 'SOFT_IEC_DRIVE';
-              const mountedPath = isSoftIec
-                ? String(resolveConfigValue(softIecConfig as Record<string, unknown> | undefined, 'SoftIEC Drive Settings', 'Default Path', '/USB0/'))
-                : (row.device?.imageFile);
-              const mountedPathLabel = isSoftIec ? 'Path' : 'Disk';
-              const onMountedPathClick = () => handleMountClick(row.spec, mountedPath);
-
-              const pathPending = isSoftIec
-                ? Boolean(configWritePending[buildConfigKey('SoftIEC Drive Settings', 'Default Path')])
-                : false;
-
-              return (
-                <DriveCard
-                  key={row.spec.class}
-                  name={label}
-                  enabled={row.enabled}
-                  onToggle={() => void handleEnabledToggle(label, row.spec, row.enabled)}
-                  togglePending={row.pendingEnabled}
-                  busIdValue={String(row.busValue)}
-                  busIdOptions={row.busOptions.map(String)}
-                  onBusIdChange={(value) =>
-                    void updateConfigValue(
-                      row.spec.category,
-                      row.spec.busItem,
-                      Number(value),
-                      'HOME_DRIVE_BUS',
-                      `${label} bus ID updated`,
-                      { refreshDrives: true },
-                    )}
-                  busIdPending={row.pendingBus}
-                  typeValue={!isSoftIec ? row.typeValue : undefined}
-                  typeOptions={!isSoftIec ? row.typeOptions : undefined}
-                  onTypeChange={!isSoftIec ? (value) => {
-                    if (!row.spec.typeItem) return;
-                    void updateConfigValue(
-                      row.spec.category,
-                      row.spec.typeItem,
-                      value,
-                      'HOME_DRIVE_TYPE',
-                      `${label} type updated`,
-                      { refreshDrives: true },
-                    );
-                  } : undefined}
-                  typePending={!isSoftIec ? row.pendingType : undefined}
-                  mountedPath={mountedPath}
-                  mountedPathLabel={mountedPathLabel}
-                  onMountedPathClick={onMountedPathClick}
-                  pathPending={pathPending}
-                  isConnected={status.isConnected}
-                  testIdSuffix={testIdSuffix}
-                />
-              );
-            })}
-          </div>
         </motion.div>
 
         <motion.div
@@ -1957,421 +891,22 @@ export default function HomePage() {
           className="space-y-3"
           data-section-label="Printers"
         >
-          <SectionHeader
-            title="Printers"
-            resetAction={() => void handleResetPrinter()}
-            resetDisabled={!status.isConnected || machineTaskBusy}
-            isResetting={machineTaskId === 'reset-printer'}
-            resetTestId="home-printer-reset"
+          <PrinterManager
+            isConnected={status.isConnected}
+            machineTaskBusy={machineTaskBusy}
+            machineTaskId={machineTaskId}
+            onResetPrinter={handleResetPrinter}
           />
-          <div className="space-y-2" data-testid="home-printer-group">
-            <div className="bg-card border border-border rounded-xl p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-primary uppercase tracking-wide">Printer</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleEnabledToggle('Printer', PRINTER_CONTROL_SPEC, printerEnabled)}
-                  disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.enabledItem)])}
-                  data-testid="home-printer-toggle"
-                  className={cn("h-6 px-2 text-xs", getOnOffButtonClass(printerEnabled))}
-                >
-                  {printerEnabled ? 'ON' : 'OFF'}
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground whitespace-nowrap">Bus ID</span>
-                  <Select
-                    value={String(printerBusValue)}
-                    onValueChange={(value) =>
-                      void updateConfigValue(
-                        PRINTER_CONTROL_SPEC.category,
-                        PRINTER_CONTROL_SPEC.busItem,
-                        Number(value),
-                        'HOME_PRINTER_BUS',
-                        'Printer bus ID updated',
-                        { refreshDrives: true },
-                      )}
-                    disabled={!status.isConnected || Boolean(configWritePending[buildConfigKey(PRINTER_CONTROL_SPEC.category, PRINTER_CONTROL_SPEC.busItem)])}
-                  >
-                    <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-printer-bus">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {printerBusOptions.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {printerControlRows.filter((entry) => entry.options.length > 0).map((entry) => (
-                  <div key={entry.itemName} className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground whitespace-nowrap">{entry.label}</span>
-                    <Select
-                      value={entry.value}
-                      onValueChange={(value) =>
-                        void updateConfigValue(
-                          'Printer Settings',
-                          entry.itemName,
-                          value,
-                          'HOME_PRINTER_CONFIG',
-                          `${entry.label} updated`,
-                        )}
-                      disabled={!status.isConnected || entry.pending}
-                    >
-                      <SelectTrigger className={inlineSelectTriggerClass} data-testid={`home-printer-${entry.itemName.toLowerCase().replace(/\s+/g, '-')}`}>
-                        <SelectValue>{formatPrinterOptionLabel(entry.value)}</SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {entry.options.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {formatPrinterOptionLabel(option)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.36 }}
-          className="space-y-2"
-          data-testid="home-sid-status"
-          data-section-label="SID"
-        >
-          <SectionHeader
-            title="SID"
-            resetAction={() => void handleSidReset()}
-            resetDisabled={!status.isConnected || machineTaskBusy}
-            resetTestId="home-sid-reset"
-          />
-          <div className="space-y-3">
-            {sidControlEntries.map((entry) => {
-              const volumeKey = buildConfigKey('Audio Mixer', entry.volumeItem);
-              const panKey = buildConfigKey('Audio Mixer', entry.panItem);
-              const addressKey = buildConfigKey('SID Addressing', entry.addressItem);
-              const statusValue = sidStatusMap.get(entry.key);
-              const volumeOptions = entry.volumeOptions.length ? entry.volumeOptions : [entry.volume];
-              const panOptions = entry.panOptions.length ? entry.panOptions : [entry.pan];
-              const volumeIndex = resolveOptionIndex(volumeOptions, entry.volume);
-              const panIndex = resolveOptionIndex(panOptions, entry.pan);
-              const volumeCenterIndex = resolveVolumeCenterIndex(volumeOptions);
-              const panCenterIndex = resolvePanCenterIndex(panOptions);
-              const volumeMax = Math.max(volumeOptions.length - 1, 0);
-              const panMax = Math.max(panOptions.length - 1, 0);
-              const volumeSliderId = `sid-${entry.key}-volume`;
-              const panSliderId = `sid-${entry.key}-pan`;
-              const volumePending = Boolean(configWritePending[volumeKey]);
-              const panPending = Boolean(configWritePending[panKey]);
-              const isSidEnabled = statusValue !== false;
-              const baseAddressLabel = formatSidBaseAddress(entry.addressRaw ?? entry.address);
-              const activeVolumeValue = activeSliders[volumeSliderId];
-              const activePanValue = activeSliders[panSliderId];
-              const volumeSliderValue = clampSliderValue(activeVolumeValue ?? volumeIndex, volumeMax);
-              const panSliderValue = clampSliderValue(activePanValue ?? panIndex, panMax);
-              const isUltiSid = entry.key === 'ultiSid1' || entry.key === 'ultiSid2';
-              const resolveVolumeIndexValue = (value: number) =>
-                resolveSliderIndex(applySoftDetent(value, volumeCenterIndex), volumeMax);
-              const resolvePanIndexValue = (value: number) =>
-                resolveSliderIndex(applySoftDetent(value, panCenterIndex), panMax);
-              const resolveVolumeOption = (value: number) =>
-                volumeOptions[resolveVolumeIndexValue(value)] ?? volumeOptions[0] ?? entry.volume;
-              const resolvePanOption = (value: number) =>
-                panOptions[resolvePanIndexValue(value)] ?? panOptions[0] ?? entry.pan;
-              const volumeValueFormatter = (value: number) =>
-                formatDbValue(String(volumeOptions[Math.round(value)] ?? volumeOptions[0] ?? ''));
-              const panValueFormatter = (value: number) =>
-                formatPanValue(String(panOptions[Math.round(value)] ?? panOptions[0] ?? ''));
-              const handleVolumeLocalChange = (val: number) => {
-                const snapped = clampSliderValue(applySoftDetent(val, volumeCenterIndex), volumeMax);
-                setActiveSliders((prev) => ({ ...prev, [volumeSliderId]: snapped }));
-              };
-              const handleVolumeLocalCommit = (_val: number) => {
-                setActiveSliders((prev) => {
-                  const next = { ...prev };
-                  delete next[volumeSliderId];
-                  return next;
-                });
-              };
-              const handleVolumeAsyncChange = (val: number) => {
-                const v = resolveVolumeOption(val);
-                void updateConfigValue('Audio Mixer', entry.volumeItem, v, 'HOME_SID_VOLUME', `${entry.label} volume updated`, { suppressToast: true });
-              };
-              const handleVolumeAsyncCommit = (val: number) => {
-                const v = resolveVolumeOption(val);
-                void updateConfigValue('Audio Mixer', entry.volumeItem, v, 'HOME_SID_VOLUME', `${entry.label} volume updated`);
-              };
-              const handlePanLocalChange = (val: number) => {
-                const snapped = clampSliderValue(applySoftDetent(val, panCenterIndex), panMax);
-                setActiveSliders((prev) => ({ ...prev, [panSliderId]: snapped }));
-              };
-              const handlePanLocalCommit = (_val: number) => {
-                setActiveSliders((prev) => {
-                  const next = { ...prev };
-                  delete next[panSliderId];
-                  return next;
-                });
-              };
-              const handlePanAsyncChange = (val: number) => {
-                const v = resolvePanOption(val);
-                void updateConfigValue('Audio Mixer', entry.panItem, v, 'HOME_SID_PAN', `${entry.label} pan updated`, { suppressToast: true });
-              };
-              const handlePanAsyncCommit = (val: number) => {
-                const v = resolvePanOption(val);
-                void updateConfigValue('Audio Mixer', entry.panItem, v, 'HOME_SID_PAN', `${entry.label} pan updated`);
-              };
 
-              // Identity / Filter
-              const identityLabel = isUltiSid ? 'Filter' : 'SID';
-              const identityValue = entry.key === 'socket1'
-                ? sidDetectedSocket1
-                : entry.key === 'socket2'
-                  ? sidDetectedSocket2
-                  : entry.key === 'ultiSid1'
-                    ? ultiSid1ProfileValue
-                    : ultiSid2ProfileValue;
-              const identityOptions = isUltiSid
-                ? (entry.key === 'ultiSid1' ? ultiSid1ProfileSelectOptions : ultiSid2ProfileSelectOptions)
-                : undefined;
-              const identitySelectValue = isUltiSid
-                ? (entry.key === 'ultiSid1' ? ultiSid1ProfileSelectValue : ultiSid2ProfileSelectValue)
-                : undefined;
-              const identityPending = isUltiSid
-                ? Boolean(configWritePending[buildConfigKey('UltiSID Configuration', entry.key === 'ultiSid1' ? 'UltiSID 1 Filter Curve' : 'UltiSID 2 Filter Curve')])
-                : false;
+        <AudioMixer
+          isConnected={status.isConnected}
+          machineTaskBusy={machineTaskBusy}
+          runMachineTask={runMachineTask}
+        />
 
-              // Address
-              const addressOptions = readItemOptions(sidAddressingCategory as Record<string, unknown> | undefined, 'SID Addressing', entry.addressItem).map(String);
-              const addressSelectValue = resolveSelectValue(String(entry.addressRaw ?? entry.address));
-              const addressPending = Boolean(configWritePending[addressKey]);
-
-              // Shaping Controls
-              const shapingControls = [];
-              if (isUltiSid) {
-                const ultiIndex = entry.key === 'ultiSid1' ? 1 : 2;
-                const resonanceItem = `UltiSID ${ultiIndex} Filter Resonance`;
-                const waveformItem = `UltiSID ${ultiIndex} Combined Waveforms`;
-                const digisItem = `UltiSID ${ultiIndex} Digis Level`;
-
-                shapingControls.push({
-                  label: 'Reson',
-                  value: String(resolveConfigValue(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', resonanceItem, '—')),
-                  options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', resonanceItem).map(String),
-                  onChange: (val: string) => void updateConfigValue('UltiSID Configuration', resonanceItem, resolveSelectValue(val), `HOME_ULTISID_RES_${ultiIndex}`, `UltiSID ${ultiIndex} resonance updated`),
-                  pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', resonanceItem)]),
-                });
-                shapingControls.push({
-                  label: 'Wave',
-                  value: String(resolveConfigValue(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', waveformItem, '—')),
-                  options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', waveformItem).map(String),
-                  onChange: (val: string) => void updateConfigValue('UltiSID Configuration', waveformItem, resolveSelectValue(val), `HOME_ULTISID_WAVE_${ultiIndex}`, `UltiSID ${ultiIndex} waveform updated`),
-                  pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', waveformItem)]),
-                });
-                shapingControls.push({
-                  label: 'Digis',
-                  value: String(resolveConfigValue(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', digisItem, '—')),
-                  options: readItemOptions(ultiSidCategory as Record<string, unknown> | undefined, 'UltiSID Configuration', digisItem).map(String),
-                  onChange: (val: string) => void updateConfigValue('UltiSID Configuration', digisItem, resolveSelectValue(val), `HOME_ULTISID_DIGIS_${ultiIndex}`, `UltiSID ${ultiIndex} digis updated`),
-                  pending: Boolean(configWritePending[buildConfigKey('UltiSID Configuration', digisItem)]),
-                });
-              } else {
-                const socketIndex = entry.key === 'socket1' ? 1 : 2;
-                const resistorItem = `SID Socket ${socketIndex} 1K Ohm Resistor`;
-                const capacitorItem = `SID Socket ${socketIndex} Capacitors`;
-
-                shapingControls.push({
-                  label: 'Resistor',
-                  value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', resistorItem, '—')),
-                  options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', resistorItem).map(String),
-                  onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', resistorItem, resolveSelectValue(val), `HOME_SID_RES_${socketIndex}`, `SID Socket ${socketIndex} resistor updated`),
-                  pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', resistorItem)]),
-                });
-                shapingControls.push({
-                  label: 'Cap',
-                  value: String(resolveConfigValue(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem, '—')),
-                  options: readItemOptions(sidSocketsCategory as Record<string, unknown> | undefined, 'SID Sockets Configuration', capacitorItem).map(String),
-                  onChange: (val: string) => void updateConfigValue('SID Sockets Configuration', capacitorItem, resolveSelectValue(val), `HOME_SID_CAP_${socketIndex}`, `SID Socket ${socketIndex} capacitor updated`),
-                  pending: Boolean(configWritePending[buildConfigKey('SID Sockets Configuration', capacitorItem)]),
-                });
-              }
-
-              const socketItemName = entry.key === 'socket1' ? 'SID Socket 1' : entry.key === 'socket2' ? 'SID Socket 2' : null;
-              const toggleKey = socketItemName
-                ? buildConfigKey('SID Sockets Configuration', socketItemName)
-                : addressKey; // Fallback, though UltiSID doesn't have a toggle in config, we might need to handle it differently or disable the toggle.
-              const togglePending = Boolean(configWritePending[toggleKey]);
-
-              return (
-                <SidCard
-                  key={entry.key}
-                  name={entry.label}
-                  power={isSidEnabled}
-                  onPowerToggle={() => void handleSidEnableToggle(entry, isSidEnabled)}
-                  powerPending={togglePending}
-                  identityLabel={identityLabel}
-                  identityValue={isUltiSid ? (identitySelectValue || identityValue) : identityValue}
-                  identityOptions={identityOptions}
-                  onIdentityChange={isUltiSid ? (val) => void updateConfigValue('UltiSID Configuration', entry.key === 'ultiSid1' ? 'UltiSID 1 Filter Curve' : 'UltiSID 2 Filter Curve', resolveSelectValue(val), 'HOME_ULTISID_PROFILE', `${entry.label} profile updated`) : undefined}
-                  identityPending={identityPending}
-                  isIdentityReadOnly={!isUltiSid}
-                  addressValue={addressSelectValue || baseAddressLabel}
-                  addressOptions={addressOptions}
-                  onAddressChange={(val) => void updateConfigValue('SID Addressing', entry.addressItem, resolveSelectValue(val), 'HOME_SID_ADDRESS', `${entry.label} address updated`)}
-                  addressPending={addressPending}
-                  shapingControls={shapingControls}
-                  volume={volumeSliderValue}
-                  volumeMax={volumeMax}
-                  volumeStep={SID_SLIDER_STEP}
-                  onVolumeChange={handleVolumeLocalChange}
-                  onVolumeCommit={handleVolumeLocalCommit}
-                  onVolumeChangeAsync={handleVolumeAsyncChange}
-                  onVolumeCommitAsync={handleVolumeAsyncCommit}
-                  volumeValueFormatter={volumeValueFormatter}
-                  volumeMidpoint={volumeCenterIndex}
-                  volumePending={volumePending}
-                  pan={panSliderValue}
-                  panMax={panMax}
-                  panStep={SID_SLIDER_STEP}
-                  onPanChange={handlePanLocalChange}
-                  onPanCommit={handlePanLocalCommit}
-                  onPanChangeAsync={handlePanAsyncChange}
-                  onPanCommitAsync={handlePanAsyncCommit}
-                  panValueFormatter={panValueFormatter}
-                  panMidpoint={panCenterIndex}
-                  panPending={panPending}
-                  isConnected={status.isConnected}
-                  testIdSuffix={entry.key}
-                />
-              );
-            })}
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.38 }}
-          className="space-y-2"
-          data-testid="home-stream-status"
-          data-section-label="Streams"
-        >
-          <SectionHeader title="Streams" />
-          <div className="space-y-2">
-            {streamControlEntries.map((entry) => {
-              const draft = streamDrafts[entry.key] ?? {
-                ip: entry.ip,
-                port: entry.port,
-                endpoint: buildStreamEndpointLabel(entry.ip, entry.port),
-              };
-              const pending = Boolean(configWritePending[buildConfigKey('Data Streams', entry.itemName)]) || Boolean(streamActionPending[entry.key]);
-              return (
-                <div
-                  key={entry.key}
-                  className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2"
-                  data-testid={`home-stream-row-${entry.key}`}
-                >
-                  <div
-                    className="flex items-center justify-between gap-2 text-xs"
-                    aria-label={`${entry.label.toUpperCase()} stream ${draft.ip}:${draft.port}`}
-                  >
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 text-left flex items-center gap-2"
-                      onClick={() => handleStreamEditOpen(entry.key)}
-                      disabled={!status.isConnected || pending}
-                      data-testid={`home-stream-edit-toggle-${entry.key}`}
-                      aria-label={`Edit ${entry.label} stream target`}
-                    >
-                      <span className="font-semibold text-foreground w-12">{entry.label.toUpperCase()}</span>
-                      <span className="font-semibold text-foreground truncate" data-testid={`home-stream-endpoint-display-${entry.key}`}>
-                        {buildStreamEndpointLabel(draft.ip, draft.port)}
-                      </span>
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleStreamStart(entry.key)}
-                        disabled={!status.isConnected || pending}
-                        data-testid={`home-stream-start-${entry.key}`}
-                        className="h-6 px-2 text-xs"
-                      >
-                        Start
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => void handleStreamStop(entry.key)}
-                        disabled={!status.isConnected || pending}
-                        data-testid={`home-stream-stop-${entry.key}`}
-                        className="h-6 px-2 text-xs"
-                      >
-                        Stop
-                      </Button>
-                    </div>
-                  </div>
-                  {activeStreamEditorKey === entry.key && (
-                    <div className="mt-2 rounded-md border border-border/60 bg-background p-2.5">
-                      <div className="grid grid-cols-1 gap-2 text-[11px] md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-end">
-                        <div className="space-y-1">
-                          <label htmlFor={`home-stream-endpoint-${entry.key}`} className="text-muted-foreground">IP:PORT</label>
-                          <Input
-                            id={`home-stream-endpoint-${entry.key}`}
-                            value={draft.endpoint}
-                            onChange={(event) => handleStreamFieldChange(entry.key, event.target.value)}
-                            disabled={!status.isConnected || pending}
-                            data-testid={`home-stream-endpoint-${entry.key}`}
-                            aria-label={`${entry.label} stream endpoint`}
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleStreamEditCancel(entry.key)}
-                          disabled={!status.isConnected || pending}
-                          data-testid={`home-stream-cancel-${entry.key}`}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          onClick={() => {
-                            void (async () => {
-                              const updated = await handleStreamCommit(entry.key);
-                              if (updated) {
-                                setActiveStreamEditorKey(null);
-                              }
-                            })();
-                          }}
-                          disabled={!status.isConnected || pending}
-                          data-testid={`home-stream-confirm-${entry.key}`}
-                        >
-                          OK
-                        </Button>
-                      </div>
-                      {streamEditorError && (
-                        <p className="mt-2 text-[11px] text-destructive" data-testid={`home-stream-error-${entry.key}`}>
-                          {streamEditorError}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
+        <StreamStatus isConnected={status.isConnected} />
 
         {/* Config Actions */}
         <motion.div
@@ -2472,146 +1007,38 @@ export default function HomePage() {
         )}
       </main>
 
-      <ItemSelectionDialog
-        open={mountTarget !== null}
-        onOpenChange={(open) => !open && setMountTarget(null)}
-        title={mountTarget?.spec.class === 'SOFT_IEC_DRIVE' ? 'Mount Path' : 'Mount Disk'}
-        confirmLabel="Mount"
-        sourceGroups={mountTarget?.spec.class === 'SOFT_IEC_DRIVE'
-          ? sourceGroups.filter((g) => g.sources.some((s) => s.type === 'ultimate'))
-          : sourceGroups}
-        onConfirm={handleMountSelection}
-        onAddLocalSource={async () => null}
-        allowFolderSelection={mountTarget?.spec.class === 'SOFT_IEC_DRIVE'}
+
+
+      <PowerOffDialog
+        open={powerOffDialogOpen}
+        onOpenChange={setPowerOffDialogOpen}
+        onConfirm={() => void confirmPowerOff()}
+        isPending={controls.powerOff.isPending}
       />
 
-      <Dialog open={powerOffDialogOpen} onOpenChange={setPowerOffDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Power Off</DialogTitle>
-            <DialogDescription>
-              Once powered off, this machine cannot be powered on again via software.
-              Use the physical power button on the device to power it back on.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPowerOffDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void confirmPowerOff()}
-              disabled={controls.powerOff.isPending}
-            >
-              {controls.powerOff.isPending ? 'Powering off…' : 'Power Off'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SaveConfigDialog
+        open={saveDialogOpen}
+        onOpenChange={setSaveDialogOpen}
+        existingNames={appConfigs.map((c) => c.name)}
+        onSave={handleSaveToApp}
+        isSaving={isSaving}
+      />
 
-      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save to App</DialogTitle>
-            <DialogDescription>Store the current C64U configuration in this app.</DialogDescription>
-          </DialogHeader>
-          <Input
-            placeholder="Config name"
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveToApp} disabled={isSaving}>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <LoadConfigDialog
+        open={loadDialogOpen}
+        onOpenChange={setLoadDialogOpen}
+        configs={appConfigs}
+        onLoad={handleLoadFromApp}
+        applyingConfigId={applyingConfigId}
+      />
 
-      <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Load from App</DialogTitle>
-            <DialogDescription>Select a saved configuration to apply to the C64U.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2">
-            {appConfigs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
-            ) : (
-              appConfigs.map((config) => (
-                <Button
-                  key={config.id}
-                  variant="outline"
-                  className="w-full justify-between"
-                  onClick={() => handleLoadFromApp(config.id)}
-                  disabled={isApplying || applyingConfigId !== null}
-                >
-                  <span className="text-left">
-                    <span className="block font-medium">{config.name}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {new Date(config.savedAt).toLocaleString()}
-                    </span>
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {applyingConfigId === config.id ? 'Applying…' : 'Load'}
-                  </span>
-                </Button>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLoadDialogOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={manageDialogOpen} onOpenChange={setManageDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Manage App Configs</DialogTitle>
-            <DialogDescription>Rename or delete saved configurations.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            {appConfigs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No saved configurations yet.</p>
-            ) : (
-              appConfigs.map((config) => (
-                <div key={config.id} className="flex flex-col gap-2 border border-border rounded-lg p-3">
-                  <Input
-                    value={renameValues[config.id] ?? config.name}
-                    onChange={(e) =>
-                      setRenameValues((prev) => ({ ...prev, [config.id]: e.target.value }))
-                    }
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(config.savedAt).toLocaleString()}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => renameAppConfig(config.id, renameValues[config.id]?.trim() || config.name)}
-                      >
-                        Rename
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteAppConfig(config.id)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setManageDialogOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ManageConfigDialog
+        open={manageDialogOpen}
+        onOpenChange={setManageDialogOpen}
+        configs={appConfigs}
+        onRename={renameAppConfig}
+        onDelete={deleteAppConfig}
+      />
     </div >
   );
 }

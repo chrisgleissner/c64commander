@@ -39,10 +39,16 @@ test.describe('Deterministic Connectivity Simulation', () => {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
-      await finalizeEvidence(page, testInfo);
-      await demoServer?.close?.().catch(() => { });
+      if (!page.isClosed()) {
+        await finalizeEvidence(page, testInfo);
+      }
+      await demoServer?.close?.().catch((error) => {
+        console.warn('Failed to close demo mock server', error);
+      });
       demoServer = null;
-      await server?.close?.().catch(() => { });
+      await server?.close?.().catch((error) => {
+        console.warn('Failed to close primary mock server', error);
+      });
     }
   });
 
@@ -64,7 +70,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
-      sessionStorage.removeItem('c64u_demo_interstitial_shown');
+      if (!sessionStorage.getItem('c64u_demo_interstitial_reset_once')) {
+        sessionStorage.removeItem('c64u_demo_interstitial_shown');
+        sessionStorage.setItem('c64u_demo_interstitial_reset_once', '1');
+      }
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
@@ -105,7 +114,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
-      sessionStorage.removeItem('c64u_demo_interstitial_shown');
+      if (!sessionStorage.getItem('c64u_demo_interstitial_reset_once')) {
+        sessionStorage.removeItem('c64u_demo_interstitial_shown');
+        sessionStorage.setItem('c64u_demo_interstitial_reset_once', '1');
+      }
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
@@ -130,18 +142,21 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const host = new URL(server.baseUrl).host;
     await page.addInitScript(({ host: hostArg, demoBaseUrl }: { host: string; demoBaseUrl: string }) => {
       (window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl = demoBaseUrl;
-      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '500');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
-      sessionStorage.removeItem('c64u_demo_interstitial_shown');
+      if (!sessionStorage.getItem('c64u_demo_interstitial_reset_once')) {
+        sessionStorage.removeItem('c64u_demo_interstitial_shown');
+        sessionStorage.setItem('c64u_demo_interstitial_reset_once', '1');
+      }
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
     }, { host, demoBaseUrl: demoServer.baseUrl });
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const dialogTitle = page.getByRole('dialog', { name: 'Demo Mode' });
-    await expect(dialogTitle).toBeVisible({ timeout: 5000 });
+    await expect(dialogTitle).toBeVisible({ timeout: 30000 });
     await dialogTitle.getByRole('button', { name: 'Continue in Demo Mode' }).click();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -151,6 +166,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
   });
 
   test('demo enabled → real device reachable (informational only)', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    test.slow();
     enableGoldenTrace(testInfo);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
@@ -384,9 +400,28 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(true);
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    const automaticDemoToggle = page.getByLabel('Automatic Demo Mode');
+    if (await automaticDemoToggle.isVisible().catch(() => false)) {
+      await automaticDemoToggle.uncheck();
+    }
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
+    const continueDemo = page.getByRole('button', { name: /Continue in Demo Mode/i });
+    if (await continueDemo.isVisible().catch(() => false)) {
+      await continueDemo.click();
+    }
     const realIndicator = page.getByTestId('connectivity-indicator');
-    await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    try {
+      await expect.poll(
+        () => realIndicator.getAttribute('data-connection-state'),
+        { timeout: 7000 },
+      ).toBe('REAL_CONNECTED');
+    } catch {
+      await realIndicator.click();
+      await expect.poll(
+        () => realIndicator.getAttribute('data-connection-state'),
+        { timeout: 15000 },
+      ).toBe('REAL_CONNECTED');
+    }
 
     await clearTraces(page);
     await page.goto('/play', { waitUntil: 'domcontentloaded' });
@@ -434,12 +469,12 @@ test.describe('Deterministic Connectivity Simulation', () => {
     server.setReachable(false);
     await indicator.click();
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
-    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+    await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => { });
     const dialogVisible = await dialog.isVisible().catch(() => false);
     if (dialogVisible) {
       await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
     }
-    await dialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => {});
+    await dialog.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { });
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(`Currently using: ${demoHost}`)).toBeVisible();

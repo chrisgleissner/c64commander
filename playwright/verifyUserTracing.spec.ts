@@ -60,8 +60,7 @@ test('verify comprehensive user tracing', async ({ page }) => {
     }
   };
 
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
 
   // Wait for tracing bridge
   await page.waitForFunction(() => (window as any).__c64uTracing);

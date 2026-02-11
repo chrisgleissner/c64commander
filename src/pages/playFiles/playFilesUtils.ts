@@ -101,6 +101,24 @@ export const sliderToDurationSeconds = (value: number) => {
   return clampDurationSeconds(Math.round(seconds));
 };
 
+export const resolvePlayTargetIndex = (playlistLength: number, currentIndex: number): number | null => {
+  if (playlistLength <= 0) return null;
+  if (currentIndex < 0) return 0;
+  return currentIndex < playlistLength ? currentIndex : 0;
+};
+
+export type BooleanRef = { current: boolean };
+
+export const tryAcquireSingleFlight = (ref: BooleanRef): boolean => {
+  if (ref.current) return false;
+  ref.current = true;
+  return true;
+};
+
+export const releaseSingleFlight = (ref: BooleanRef): void => {
+  ref.current = false;
+};
+
 export const parseVolumeOption = (option: string) => {
   const match = option.trim().match(/[+-]?\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : undefined;

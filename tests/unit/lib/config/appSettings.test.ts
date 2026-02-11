@@ -134,7 +134,7 @@ describe('appSettings', () => {
         let originalLocalStorage: any;
         beforeEach(() => {
             originalLocalStorage = global.localStorage;
-            // @ts-ignore
+            // @ts-expect-error - intentionally deleting global for test
             delete global.localStorage;
         });
         afterEach(() => {

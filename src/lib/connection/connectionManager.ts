@@ -213,6 +213,16 @@ export function subscribeConnection(listener: () => void) {
 }
 
 export function dismissDemoInterstitial() {
+  demoInterstitialShownThisSession = true;
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, '1');
+    } catch (error) {
+      addLog('warn', 'Failed to persist demo interstitial session marker', {
+        error: (error as Error).message,
+      });
+    }
+  }
   setSnapshot({ demoInterstitialVisible: false });
 }
 
@@ -299,6 +309,13 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   transitionTo('DEMO_ACTIVE', trigger);
   logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 
+  const shouldShowInterstitial = shouldShowDemoInterstitial(trigger);
+  if (shouldShowInterstitial) {
+    demoInterstitialShownThisSession = true;
+    sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, '1');
+    setSnapshot({ demoInterstitialVisible: true });
+  }
+
   if (isFuzzModeEnabled()) {
     const fuzzBaseUrl = getFuzzMockBaseUrl();
     if (fuzzBaseUrl) {
@@ -309,7 +326,11 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     }
   }
 
-  if (!demoServerStartedThisSession) {
+  const hasMockServerOverride = typeof window !== 'undefined'
+    && Boolean((window as Window & { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl);
+  const shouldStartDemoServer = !demoServerStartedThisSession && (!isTestProbeEnabled() || hasMockServerOverride);
+
+  if (shouldStartDemoServer) {
     try {
       const { baseUrl, ftpPort } = await startMockServer();
       demoServerStartedThisSession = true;
@@ -340,11 +361,7 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     addLog('info', 'Demo mode using stored device host', { trigger, baseUrl: fallbackBaseUrl });
   }
 
-  if (shouldShowDemoInterstitial(trigger)) {
-    demoInterstitialShownThisSession = true;
-    sessionStorage.setItem(DEMO_INTERSTITIAL_SESSION_KEY, '1');
-    setSnapshot({ demoInterstitialVisible: true });
-  }
+  // Interstitial is already surfaced above to avoid waiting on mock server startup.
 };
 
 const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {

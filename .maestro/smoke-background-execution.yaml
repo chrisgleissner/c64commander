@@ -5,6 +5,7 @@ env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 tags:
   - device
+  - probe
 ---
 # Verify JS continues executing while the screen is locked.
 # Requires VITE_ENABLE_TEST_PROBES=1 in the build.

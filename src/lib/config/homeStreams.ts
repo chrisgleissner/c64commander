@@ -21,11 +21,13 @@ export type StreamControlEntry = {
   rawValue: string;
 };
 
-const STREAM_LAYOUT: Array<{ key: StreamKey; label: string; itemName: string; defaultPort: string; restName: string }> = [
+export const STREAM_LAYOUT: Array<{ key: StreamKey; label: string; itemName: string; defaultPort: string; restName: string }> = [
   { key: 'vic', label: 'VIC', itemName: 'Stream VIC to', defaultPort: '11000', restName: 'video' },
   { key: 'audio', label: 'Audio', itemName: 'Stream Audio to', defaultPort: '11001', restName: 'audio' },
   { key: 'debug', label: 'Debug', itemName: 'Stream Debug to', defaultPort: '11002', restName: 'debug' },
 ];
+
+export const STREAM_ITEMS = STREAM_LAYOUT.map((item) => item.itemName);
 
 const OFF_TOKENS = new Set([
   '',
