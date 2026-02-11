@@ -40,13 +40,15 @@ env:
 - takeScreenshot: playlist-item-added
 
 # Start playback via transport controls and verify it is active.
-- tapOn: "Play"
+- tapOn:
+    id: "playlist-play"
 - extendedWaitUntil:
     visible: "Stop"
     timeout: ${SHORT_TIMEOUT}
 
 # Stop playback before manipulating selections.
-- tapOn: "Stop"
+- tapOn:
+    id: "playlist-play"
 - extendedWaitUntil:
     visible: "Play"
     timeout: ${SHORT_TIMEOUT}

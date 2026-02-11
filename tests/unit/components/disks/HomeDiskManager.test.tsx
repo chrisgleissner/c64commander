@@ -206,6 +206,34 @@ describe('HomeDiskManager', () => {
         expect(screen.getByText('mounted-demo.d64')).toBeInTheDocument();
     });
 
+    it('suppresses non-actionable Soft IEC service error baseline text', () => {
+        useC64DrivesMock.data = {
+          drives: [
+            { a: { bus_id: 8, enabled: true } },
+            { b: { bus_id: 9, enabled: true } },
+            { softiec: { bus_id: 11, enabled: true, last_error: 'service error reported' } },
+          ],
+        } as any;
+
+        renderComponent();
+
+        expect(screen.queryByText(/service error reported/i)).not.toBeInTheDocument();
+    });
+
+    it('renders actionable Soft IEC errors from device state', () => {
+        useC64DrivesMock.data = {
+          drives: [
+            { a: { bus_id: 8, enabled: true } },
+            { b: { bus_id: 9, enabled: true } },
+            { softiec: { bus_id: 11, enabled: true, last_error: 'Directory unavailable' } },
+          ],
+        } as any;
+
+        renderComponent();
+
+        expect(screen.getByText('Directory unavailable')).toBeInTheDocument();
+    });
+
     it('handles mount flow', async () => {
         renderComponent();
         

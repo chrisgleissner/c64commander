@@ -8,7 +8,8 @@ env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Settings"
+- tapOn:
+    point: "75%,95%"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
@@ -33,7 +34,8 @@ env:
 - launchApp:
     stopApp: true
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Settings"
+- tapOn:
+    point: "75%,95%"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}

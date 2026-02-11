@@ -8,5 +8,5 @@ tags:
     text: "Continue in Demo Mode"
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${SHORT_TIMEOUT}

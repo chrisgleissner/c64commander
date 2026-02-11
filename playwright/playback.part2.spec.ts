@@ -167,8 +167,10 @@ test.describe('Playback file browser (part 2)', () => {
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths')]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
-    const songlengthsPath = page.getByText('/local-play-songlengths/songlengths.md5');
+    const songlengthsPath = page.getByTestId('songlengths-path-label');
     await expect(songlengthsPath).toBeVisible();
+    await expect(songlengthsPath).toHaveAttribute('title', '/local-play-songlengths/songlengths.md5');
+    await expect(songlengthsPath).toContainText('songlengths.md5');
 
     const list = page.getByTestId('playlist-list');
     await expect(list).toContainText('demo.sid');
@@ -184,8 +186,10 @@ test.describe('Playback file browser (part 2)', () => {
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths-txt')]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
-    const songlengthsPath = page.getByText('/local-play-songlengths-txt/songlengths.txt');
+    const songlengthsPath = page.getByTestId('songlengths-path-label');
     await expect(songlengthsPath).toBeVisible();
+    await expect(songlengthsPath).toHaveAttribute('title', '/local-play-songlengths-txt/songlengths.txt');
+    await expect(songlengthsPath).toContainText('songlengths.txt');
 
     const list = page.getByTestId('playlist-list');
     await expect(list).toContainText('demo.sid');
@@ -201,8 +205,10 @@ test.describe('Playback file browser (part 2)', () => {
     await input.setInputFiles([path.resolve('playwright/fixtures/local-play-songlengths-documents')]);
     await expect(page.getByRole('dialog')).toBeHidden();
 
-    const songlengthsPath = page.getByText('/DOCUMENTS/songlengths.md5');
+    const songlengthsPath = page.getByTestId('songlengths-path-label');
     await expect(songlengthsPath).toBeVisible();
+    await expect(songlengthsPath).toHaveAttribute('title', /\/DOCUMENTS\/songlengths\.md5$/);
+    await expect(songlengthsPath).toContainText('songlengths.md5');
     await snap(page, testInfo, 'documents-songlengths');
   });
 

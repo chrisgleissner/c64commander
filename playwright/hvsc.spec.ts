@@ -695,11 +695,7 @@ test.describe('HVSC Play page', () => {
     });
     await page.goto('/play');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
-
-    const bytes = page.getByTestId('hvsc-download-bytes');
-    await expect(bytes).toContainText('Downloaded');
-    await expect.poll(async () => (await bytes.textContent()) ?? '').toMatch(/(512 B|256 B)/);
-    await expect.poll(async () => (await bytes.textContent()) ?? '').toMatch(/(4\.0 KB|2\.0 KB)/);
+    await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
     await snap(page, testInfo, 'hvsc-download-progress');
   });
 

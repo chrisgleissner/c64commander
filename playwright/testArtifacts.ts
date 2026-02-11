@@ -92,7 +92,18 @@ export const attachStepScreenshot = async (page: Page, testInfo: TestInfo, label
   const screenshotsDir = path.join(evidenceDir, 'screenshots');
   await fs.mkdir(screenshotsDir, { recursive: true });
   const filePath = path.join(screenshotsDir, name);
-  await page.screenshot({ path: filePath, fullPage: true, timeout: 60000 });
+  try {
+    await page.screenshot({ path: filePath, fullPage: true, timeout: 60000 });
+  } catch (error) {
+    if (page.isClosed()) return;
+    console.warn(`Screenshot capture failed for "${label}" (full page):`, error);
+    try {
+      await page.screenshot({ path: filePath, fullPage: false, timeout: 10000 });
+    } catch (fallbackError) {
+      console.warn(`Screenshot capture failed for "${label}" (viewport fallback):`, fallbackError);
+      return;
+    }
+  }
 
   // Note: We no longer call testInfo.attach() to avoid creating duplicate evidence
   // in Playwright's outputDir. All evidence is now in the canonical structure:
@@ -191,15 +202,18 @@ export const finalizeEvidence = async (page: Page, testInfo: TestInfo) => {
 
   let traces: Awaited<ReturnType<typeof getTraces>> = [];
   if (!page.isClosed()) {
-    traces = await waitForTraceStability(page);
-    if (hasPendingRestRequests(traces)) {
-      traces = await waitForTraceStability(page, 12, 250);
+    try {
+      traces = await waitForTraceStability(page);
+      if (hasPendingRestRequests(traces)) {
+        traces = await waitForTraceStability(page, 12, 250);
+      }
+      if (tracker?.requestLog) {
+        requestLogSnapshot = [...tracker.requestLog];
+      }
+      await saveTracesFromPage(page, testInfo, traces).catch(() => { });
+    } catch (error) {
+      console.warn('Failed to finalize trace evidence for test:', testInfo.title, error);
     }
-    if (tracker?.requestLog) {
-      requestLogSnapshot = [...tracker.requestLog];
-    }
-
-    await saveTracesFromPage(page, testInfo, traces).catch(() => { });
   }
 
   if (requestLogSnapshot.length) {

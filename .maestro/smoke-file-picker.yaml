@@ -60,11 +60,11 @@ env:
 # Verify we're back in the app - check for any of the main UI elements
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${SHORT_TIMEOUT}
 - extendedWaitUntil:
     visible:
-      id: "tab-play"
+      text: "Play"
     timeout: ${SHORT_TIMEOUT}
 
 - takeScreenshot: play-return

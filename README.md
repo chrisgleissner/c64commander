@@ -4,9 +4,9 @@
 [![codecov](https://codecov.io/gh/chrisgleissner/c64commander/graph/badge.svg?token=hGEe09SZch)](https://codecov.io/gh/chrisgleissner/c64commander)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 
-Control your Commodore 64 Ultimate from your Android device
+Control your Commodore 64 Ultimate from your Android device.
 
-<img src="./doc/img/c64commander.png" alt="C64 Commander Logo" width="200"/>
+<img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="600"/>
 
 > [!NOTE]
 > This project is under active development. Some features are still being finalised.

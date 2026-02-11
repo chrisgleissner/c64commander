@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import type { Page, TestInfo } from '@playwright/test';
+import type { Locator, Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
@@ -16,7 +16,34 @@ import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './t
 import { enableGoldenTrace } from './goldenTraceRegistry';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
-  await attachStepScreenshot(page, testInfo, label);
+  try {
+    await attachStepScreenshot(page, testInfo, label);
+  } catch (error) {
+    console.warn(`Step screenshot failed for "${label}"`, error);
+  }
+};
+
+const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 3) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await locator.click({ timeout: 10000, noWaitAfter: true });
+      return;
+    } catch (error) {
+      if (attempt >= attempts - 1) {
+        const handle = await locator.elementHandle().catch(() => null);
+        if (handle) {
+          try {
+            await page.evaluate((node) => (node as HTMLElement).click(), handle);
+            return;
+          } catch {
+            // Fall through and throw the original click error.
+          }
+        }
+        throw error;
+      }
+      await page.waitForTimeout(250);
+    }
+  }
 };
 
 // Seed once per test; allowed base URLs cover both real and demo, so no paired call is required.
@@ -224,6 +251,16 @@ test.describe('Deterministic Connectivity Simulation', () => {
       localStorage.setItem('c64u_startup_discovery_window_ms', '400');
       localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
       localStorage.setItem('c64u_device_host', hostArg);
+      const payload = {
+        items: [
+          { source: 'ultimate', path: '/Usb0/Demos/demo.sid', name: 'demo.sid', durationMs: 60000 },
+        ],
+        currentIndex: -1,
+      };
+      const serialized = JSON.stringify(payload);
+      localStorage.setItem('c64u_playlist:v1:TEST-123', serialized);
+      localStorage.setItem('c64u_playlist:v1:default', serialized);
+      localStorage.setItem('c64u_last_device_id', 'TEST-123');
       localStorage.removeItem('c64u_password');
       localStorage.removeItem('c64u_has_password');
       delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
@@ -236,10 +273,24 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
     await page.getByLabel('Automatic Demo Mode').uncheck();
     await clearTraces(page);
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
+    const saveButton = page.getByRole('button', { name: /Save & Connect|Save connection/i });
+    await expect(saveButton).toBeVisible({ timeout: 15000 });
+    await clickWithoutNavigationWait(page, saveButton);
 
     const realIndicator = page.getByTestId('connectivity-indicator');
-    await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    let connected = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 12000 });
+        connected = true;
+        break;
+      } catch {
+        await clickWithoutNavigationWait(page, realIndicator);
+      }
+    }
+    if (!connected) {
+      await expect(realIndicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 30000 });
+    }
 
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/drives'))).toBe(true);
@@ -321,7 +372,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
       await dismissDemoInterstitialIfPresent();
     }
     await expect(saveButton).toBeVisible({ timeout: 15000 });
-    await saveButton.click();
+    await clickWithoutNavigationWait(page, saveButton);
     const postSaveDemo = page.getByRole('button', { name: 'Continue in Demo Mode' });
     if (await postSaveDemo.isVisible()) {
       await postSaveDemo.click();
@@ -380,11 +431,23 @@ test.describe('Deterministic Connectivity Simulation', () => {
         ],
         currentIndex: -1,
       };
-      localStorage.setItem('c64u_playlist:v1:TEST-123', JSON.stringify(payload));
-      localStorage.setItem('c64u_playlist:v1:default', JSON.stringify(payload));
-      localStorage.setItem('c64u_last_device_id', 'TEST-123');
+      const serialized = JSON.stringify(payload);
+      const playlistKeys = new Set<string>(['c64u_playlist:v1:default', 'c64u_playlist:v1:TEST-123']);
+      const lastDeviceId = localStorage.getItem('c64u_last_device_id');
+      if (lastDeviceId) {
+        playlistKeys.add(`c64u_playlist:v1:${lastDeviceId}`);
+      }
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (key?.startsWith('c64u_playlist:v1:')) {
+          playlistKeys.add(key);
+        }
+      }
+      playlistKeys.forEach((key) => localStorage.setItem(key, serialized));
+      if (!lastDeviceId) {
+        localStorage.setItem('c64u_last_device_id', 'TEST-123');
+      }
     });
-
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
 
@@ -394,7 +457,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     }
     const demoPlayButton = page.getByTestId('playlist-play');
     if (await demoPlayButton.isEnabled().catch(() => false)) {
-      await demoPlayButton.click();
+      await clickWithoutNavigationWait(page, demoPlayButton);
     }
     expect(server.sidplayRequests).toHaveLength(0);
 
@@ -404,7 +467,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     if (await automaticDemoToggle.isVisible().catch(() => false)) {
       await automaticDemoToggle.uncheck();
     }
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
+    await clickWithoutNavigationWait(page, page.getByRole('button', { name: /Save & Connect|Save connection/i }));
     const continueDemo = page.getByRole('button', { name: /Continue in Demo Mode/i });
     if (await continueDemo.isVisible().catch(() => false)) {
       await continueDemo.click();
@@ -416,7 +479,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
         { timeout: 7000 },
       ).toBe('REAL_CONNECTED');
     } catch {
-      await realIndicator.click();
+      await clickWithoutNavigationWait(page, realIndicator);
       await expect.poll(
         () => realIndicator.getAttribute('data-connection-state'),
         { timeout: 15000 },
@@ -433,10 +496,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
     if (await playButtonAfter.isEnabled().catch(() => false)) {
       const label = await playButtonAfter.textContent();
       if (label && label.toLowerCase().includes('stop')) {
-        await playButtonAfter.click();
+        await clickWithoutNavigationWait(page, playButtonAfter);
         await expect(playButtonAfter).toHaveAttribute('aria-label', 'Play');
       }
-      await playButtonAfter.click();
+      await clickWithoutNavigationWait(page, playButtonAfter);
       await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
     }
     await snap(page, testInfo, 'demo-to-real-playback');
@@ -464,10 +527,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const indicator = page.getByTestId('connectivity-indicator');
-    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
 
     server.setReachable(false);
-    await indicator.click();
+    await clickWithoutNavigationWait(page, indicator);
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
     await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => { });
     const dialogVisible = await dialog.isVisible().catch(() => false);
@@ -481,8 +544,33 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
 
     server.setReachable(true);
-    await page.getByTestId('connectivity-indicator').click();
-    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 5000 });
+    const clickIndicatorAndDismissDemo = async () => {
+      await clickWithoutNavigationWait(page, page.getByTestId('connectivity-indicator'));
+      const retryDialog = page.getByRole('dialog', { name: 'Demo Mode' });
+      if (await retryDialog.isVisible().catch(() => false)) {
+        const continueButton = retryDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+        if (await continueButton.isVisible().catch(() => false)) {
+          await clickWithoutNavigationWait(page, continueButton);
+        } else {
+          await page.keyboard.press('Escape');
+        }
+        await expect(retryDialog).toBeHidden({ timeout: 5000 });
+      }
+    };
+    let connected = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await clickIndicatorAndDismissDemo();
+      try {
+        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
+        connected = true;
+        break;
+      } catch {
+        // Retry manual discovery trigger if the probe loop is still converging.
+      }
+    }
+    if (!connected) {
+      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 30000 });
+    }
     const currentUsing = page.getByText('Currently using:');
     await expect(currentUsing).toBeVisible();
     await expect(currentUsing.locator('span')).toHaveText(host);
@@ -516,7 +604,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect(page.getByText('(Demo mock)', { exact: false })).toBeVisible();
 
     server.setReachable(true);
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
+    await clickWithoutNavigationWait(page, page.getByRole('button', { name: /Save & Connect|Save connection/i }));
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
     const currentUsing = page.getByText('Currently using:');

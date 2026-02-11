@@ -106,6 +106,7 @@ import {
   normalizeOptionToken,
   normalizeSelectOptions,
   normalizeSelectValue,
+  resolveToggleOption,
   resolveSelectValue,
 } from './home/utils/uiLogic';
 import {
@@ -217,14 +218,6 @@ function HomePageContent() {
 
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
-
-  const resolveToggleOption = (options: string[], enabled: boolean) => {
-    const candidates = enabled
-      ? ['enabled', 'on', 'true', 'yes', '1']
-      : ['disabled', 'off', 'false', 'no', '0'];
-    return options.find((option) => candidates.includes(normalizeOptionToken(option)))
-      ?? (enabled ? 'Enabled' : 'Disabled');
-  };
 
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
@@ -368,8 +361,14 @@ function HomePageContent() {
   const hdmiScanDisabledValue = resolveToggleOption(effectiveHdmiScanOptions, false);
   const hdmiScanChecked = normalizeOptionToken(hdmiScanValue) === normalizeOptionToken(hdmiScanEnabledValue);
 
-  const joystickSwapEnabledValue = resolveToggleOption(effectiveJoystickSwapOptions, true);
-  const joystickSwapDisabledValue = resolveToggleOption(effectiveJoystickSwapOptions, false);
+  const joystickSwapEnabledValue = resolveToggleOption(effectiveJoystickSwapOptions, true, {
+    enabled: ['Swapped', 'Swap'],
+    disabled: ['Normal'],
+  });
+  const joystickSwapDisabledValue = resolveToggleOption(effectiveJoystickSwapOptions, false, {
+    enabled: ['Swapped', 'Swap'],
+    disabled: ['Normal'],
+  });
   const joystickSwapChecked = normalizeOptionToken(joystickSwapValue) === normalizeOptionToken(joystickSwapEnabledValue);
 
   const videoModeSelectOptions = normalizeSelectOptions(effectiveVideoModeOptions, videoModeValue);

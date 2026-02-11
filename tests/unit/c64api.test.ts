@@ -23,6 +23,7 @@ import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
+import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore';
 
 const ensureWindow = () => {
   if (typeof window !== 'undefined') return;
@@ -122,6 +123,22 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
 
+vi.mock('@/lib/deviceInteraction/deviceStateStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/deviceInteraction/deviceStateStore')>();
+  return {
+    ...actual,
+    getDeviceStateSnapshot: vi.fn(() => ({
+      state: 'READY',
+      connectionState: 'REAL_CONNECTED',
+      busyCount: 0,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: null,
+      circuitOpenUntilMs: null,
+    })),
+  };
+});
+
 vi.mock('@/lib/secureStorage', () => ({
   setPassword: vi.fn(async () => {
     localStorage.setItem('c64u_has_password', '1');
@@ -140,6 +157,7 @@ const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
 const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
+const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
 const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
 const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
@@ -159,6 +177,15 @@ describe('c64api', () => {
     fuzzSafeMock.mockReturnValue(true);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
+    deviceStateSnapshotMock.mockReturnValue({
+      state: 'READY',
+      connectionState: 'REAL_CONNECTED',
+      busyCount: 0,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: null,
+      circuitOpenUntilMs: null,
+    });
     (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     resetConfigWriteThrottle();
@@ -465,6 +492,81 @@ describe('c64api', () => {
     await expect(api.machineReset()).rejects.toThrow('Host unreachable');
   });
 
+  it('retries one idle GET request after a network failure', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      deviceStateSnapshotMock.mockReturnValue({
+        state: 'READY',
+        connectionState: 'REAL_CONNECTED',
+        busyCount: 0,
+        lastUpdatedAtMs: Date.now() - 15000,
+        lastErrorMessage: null,
+        lastSuccessAtMs: Date.now() - 15000,
+        circuitOpenUntilMs: null,
+      });
+
+      const api = new C64API('http://c64u');
+      const pending = api.getInfo();
+      await vi.advanceTimersByTimeAsync(200);
+      await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(addLogMock).toHaveBeenCalledWith(
+        'warn',
+        'C64 API retry scheduled after idle failure',
+        expect.objectContaining({ wasIdle: true }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('aborts idle retry backoff immediately when caller aborts the request', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+      deviceStateSnapshotMock.mockReturnValue({
+        state: 'READY',
+        connectionState: 'REAL_CONNECTED',
+        busyCount: 0,
+        lastUpdatedAtMs: Date.now() - 15000,
+        lastErrorMessage: null,
+        lastSuccessAtMs: Date.now() - 15000,
+        circuitOpenUntilMs: null,
+      });
+
+      const api = new C64API('http://c64u');
+      const controller = new AbortController();
+      const pending = api.getInfo({ signal: controller.signal });
+      void pending.catch(() => {});
+
+      await Promise.resolve();
+      controller.abort();
+      await vi.runAllTimersAsync();
+
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('builds request urls for config writes and machine actions', async () => {
     const fetchMock = getFetchMock();
     const okResponse = () =>
@@ -491,6 +593,26 @@ describe('c64api', () => {
     expect(calls).toContain('http://c64u/v1/configs/Audio%20Mixer/Vol%20UltiSid%201?value=%2B6%20dB');
     expect(calls).toContain('http://c64u/v1/configs:save_to_flash');
     expect(calls).toContain('http://c64u/v1/machine:resume');
+  });
+
+  it('encodes joystick swap config writes with the expected category and item', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    await api.setConfigValue('U64 Specific Settings', 'Joystick Swapper', 'Swapped');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://c64u/v1/configs/U64%20Specific%20Settings/Joystick%20Swapper?value=Swapped',
+      expect.objectContaining({
+        method: 'PUT',
+      }),
+    );
   });
 
   it('covers reads, writes, and drive endpoints', async () => {

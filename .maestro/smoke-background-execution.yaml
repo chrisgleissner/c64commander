@@ -29,7 +29,7 @@ tags:
 # Wait for UI to become responsive again
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${TIMEOUT}
 
 # Read the heartbeat again

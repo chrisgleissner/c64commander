@@ -23,6 +23,28 @@ export const normalizeSelectOptions = (options: string[], currentValue: string) 
 
 export const normalizeOptionToken = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
+type ToggleOptionHints = {
+    enabled?: string[];
+    disabled?: string[];
+};
+
+const DEFAULT_ENABLED_TOKENS = ['enabled', 'on', 'true', 'yes', '1', 'swap', 'swapped'];
+const DEFAULT_DISABLED_TOKENS = ['disabled', 'off', 'false', 'no', '0', 'normal', 'default', 'unswapped'];
+
+const hasNormalizedMatch = (option: string, candidates: string[]) => {
+    const normalizedOption = normalizeOptionToken(option);
+    return candidates.some((candidate) => normalizedOption === normalizeOptionToken(candidate));
+};
+
+export const resolveToggleOption = (options: string[], enabled: boolean, hints?: ToggleOptionHints) => {
+    const preferred = enabled ? hints?.enabled ?? [] : hints?.disabled ?? [];
+    const defaults = enabled ? DEFAULT_ENABLED_TOKENS : DEFAULT_DISABLED_TOKENS;
+    const match = options.find((option) => hasNormalizedMatch(option, [...preferred, ...defaults]));
+    if (match) return match;
+    if (options.length) return enabled ? options[0] : options[options.length - 1];
+    return enabled ? 'Enabled' : 'Disabled';
+};
+
 export const parseNumericOption = (value: string) => {
     const match = value.trim().match(/[+-]?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : null;

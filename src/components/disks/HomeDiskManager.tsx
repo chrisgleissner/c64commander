@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Disc, ArrowLeftRight, ArrowRightLeft, HardDrive, X, Folder, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ResponsivePathText } from '@/components/ResponsivePathText';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -117,6 +118,13 @@ const formatDate = (value?: string | null) => {
     month: 'short',
     day: '2-digit',
   }).format(date);
+};
+
+const resolveSoftIecServiceError = (value?: string | null) => {
+  const message = value?.trim();
+  if (!message) return '';
+  if (/^service error reported\.?$/i.test(message)) return '';
+  return message;
 };
 
 export const HomeDiskManager = () => {
@@ -1198,7 +1206,7 @@ export const HomeDiskManager = () => {
   const softIecResetPending = Boolean(driveResetPending.softiec);
   const softIecPowerPending = Boolean(drivePowerPending.softiec);
   const softIecEndpointKey = softIecDevice?.endpointKey ?? 'softiec';
-  const softIecErrorMessage = driveErrors.softiec || (softIecDevice?.lastError ? 'Service error reported.' : '');
+  const softIecErrorMessage = driveErrors.softiec || resolveSoftIecServiceError(softIecDevice?.lastError);
 
   return (
     <div className="space-y-6">
@@ -1305,7 +1313,12 @@ export const HomeDiskManager = () => {
 
               <div className="flex min-w-0 items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-1.5">
-                  <p className="truncate text-xs text-muted-foreground">{mountedLabel}</p>
+                  <ResponsivePathText
+                    path={mountedLabel}
+                    mode="start-and-filename"
+                    className="min-w-0 flex-1 text-xs text-muted-foreground"
+                    dataTestId={`drive-mounted-label-${key}`}
+                  />
                   {mountedDisk?.group ? (
                     <span className={cn('h-2 w-2 shrink-0 rounded-full border', pickDiskGroupColor(mountedDisk.group).chip)} aria-hidden="true" />
                   ) : null}
@@ -1445,7 +1458,12 @@ export const HomeDiskManager = () => {
             </div>
 
             <div className="flex min-w-0 items-center justify-between gap-2">
-              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{softIecMountedLabel}</p>
+              <ResponsivePathText
+                path={softIecMountedLabel}
+                mode="start-and-filename"
+                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                dataTestId="drive-mounted-label-soft-iec"
+              />
               <div className="flex shrink-0 items-center gap-1.5">
                 <Button
                   variant="outline"
