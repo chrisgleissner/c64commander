@@ -147,6 +147,15 @@ export function usePlaybackController({
         }
     }, []);
 
+    const resumeMachineWithRetry = useCallback(async (api: ReturnType<typeof getC64API>) => {
+        try {
+            await withTimeout(api.machineResume(), 6000, 'Resume');
+        } catch (error) {
+            addErrorLog('Machine resume first attempt failed', { error: (error as Error).message });
+            await withTimeout(api.machineResume(), 6000, 'Resume');
+        }
+    }, [withTimeout]);
+
     const resolveSidMetadata = useCallback(
         async (file?: LocalPlayFile, songNr?: number | null) => {
             if (!file) return { durationMs: undefined, subsongCount: undefined, readable: false } as const;
@@ -388,7 +397,7 @@ export function usePlaybackController({
             const api = getC64API();
             if (isPaused) {
                 try {
-                    await withTimeout(api.machineResume(), 2000, 'Resume');
+                    await resumeMachineWithRetry(api);
                 } catch (error) {
                     addErrorLog('Resume before stop failed', { error: (error as Error).message });
                 }
@@ -421,7 +430,7 @@ export function usePlaybackController({
         setCurrentSubsongCount(null);
         trackStartedAtRef.current = null;
         autoAdvanceGuardRef.current = null;
-    }), [currentIndex, isPaused, isPlaying, playlist, restoreVolumeOverrides, withTimeout, trace, playedClockRef, setPlayedMs, setIsPlaying, setIsPaused, setElapsedMs, setDurationMs, setCurrentSubsongCount, trackStartedAtRef, autoAdvanceGuardRef]);
+    }), [currentIndex, isPaused, isPlaying, playlist, restoreVolumeOverrides, resumeMachineWithRetry, withTimeout, trace, playedClockRef, setPlayedMs, setIsPlaying, setIsPaused, setElapsedMs, setDurationMs, setCurrentSubsongCount, trackStartedAtRef, autoAdvanceGuardRef]);
 
     const handlePauseResume = useCallback(trace(async function handlePauseResume() {
         if (!isPlaying) return;
@@ -433,10 +442,17 @@ export function usePlaybackController({
                 const wasMuted = resumeSnapshot && resumeItems.length
                     ? resumeItems.every((item) => resumeSnapshot.volumes[item.name] === resolveAudioMixerMuteValue(item.options))
                     : false;
+                await resumeMachineWithRetry(api);
                 if (pauseMuteSnapshotRef.current && resumeItems.length) {
-                    await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), 'Resume');
+                    try {
+                        await applyAudioMixerUpdates(snapshotToUpdates(pauseMuteSnapshotRef.current, resumeItems), 'Resume');
+                    } catch (error) {
+                        addErrorLog('Failed to reapply audio mixer settings after resume', {
+                            error: (error as Error).message,
+                            itemCount: resumeItems.length,
+                        });
+                    }
                 }
-                await withTimeout(api.machineResume(), 3000, 'Resume');
                 pauseMuteSnapshotRef.current = null;
                 setIsPaused(false);
                 dispatchVolume({ type: wasMuted ? 'mute' : 'unmute', reason: 'pause' });
@@ -476,7 +492,7 @@ export function usePlaybackController({
                 },
             });
         }
-    }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, dispatchVolume, durationMs, elapsedMs, isPaused, isPlaying, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, withTimeout, trace, pauseMuteSnapshotRef, playedClockRef, setPlayedMs, setIsPaused, trackStartedAtRef, autoAdvanceGuardRef]);
+    }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, dispatchVolume, durationMs, elapsedMs, isPaused, isPlaying, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, trace, pauseMuteSnapshotRef, playedClockRef, resumeMachineWithRetry, setPlayedMs, setIsPaused, trackStartedAtRef, autoAdvanceGuardRef]);
 
     const handleNext = useCallback(async (source: 'auto' | 'user' = 'user', expectedTrackInstanceId?: number) => {
         if (!playlist.length) return;

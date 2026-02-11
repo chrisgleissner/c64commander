@@ -9,6 +9,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { ResponsivePathText } from '@/components/ResponsivePathText';
 import { formatDurationSeconds, sliderToDurationSeconds } from '../playFilesUtils';
 
 export type PlaybackSettingsPanelProps = {
@@ -57,11 +58,12 @@ export const PlaybackSettingsPanel = ({
   onCloseSongPicker,
 }: PlaybackSettingsPanelProps) => {
   const songlengthsMetadata = [
-    songlengthsSizeLabel,
     songlengthsEntryCount !== null ? `${songlengthsEntryCount} Entries` : null,
+    songlengthsSizeLabel,
   ]
     .filter(Boolean)
     .join(', ');
+  const songlengthsPath = activeSonglengthsPath ?? songlengthsName;
 
   return (
     <>
@@ -93,37 +95,35 @@ export const PlaybackSettingsPanel = ({
 
       <div className="space-y-2">
         <p className="text-xs text-muted-foreground">Songlengths file</p>
-        {songlengthsName ? (
-          <button
-            type="button"
-            className="text-xs font-semibold text-primary hover:underline text-left break-all"
-            onClick={onChooseSonglengthsFile}
-          >
-            {songlengthsName}
-          </button>
-        ) : (
-          <p className="text-xs text-muted-foreground">Not selected.</p>
-        )}
-        {songlengthsName && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
-          <p className="text-[11px] text-muted-foreground">
-            ({songlengthsMetadata})
-          </p>
-        ) : null}
-        {songlengthsError ? (
-          <p className="text-xs text-destructive">{songlengthsError}</p>
-        ) : null}
-        {activeSonglengthsPath && songlengthsName !== activeSonglengthsPath ? (
-          <p className="text-[11px] text-muted-foreground break-all">{activeSonglengthsPath}</p>
-        ) : null}
-        <div className="flex">
+        <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-2">
+          <div className="min-w-0 flex-1 space-y-1">
+            {songlengthsPath ? (
+              <ResponsivePathText
+                path={songlengthsPath}
+                mode="start-and-filename"
+                className="text-xs font-semibold text-primary"
+                dataTestId="songlengths-path-label"
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground">Not selected.</p>
+            )}
+            {songlengthsPath && (songlengthsSizeLabel || songlengthsEntryCount !== null) ? (
+              <p className="text-[11px] text-muted-foreground">
+                {songlengthsMetadata}
+              </p>
+            ) : null}
+          </div>
           <Button
             variant="outline"
             size="sm"
             onClick={onChooseSonglengthsFile}
           >
-            Choose file
+            Change
           </Button>
         </div>
+        {songlengthsError ? (
+          <p className="text-xs text-destructive">{songlengthsError}</p>
+        ) : null}
       </div>
 
       <div className="space-y-3">

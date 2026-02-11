@@ -179,6 +179,15 @@ button:focus-visible,
   box-shadow: none;
 }
 
+:where(button, [role='button']) {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, [role='button'])[data-c64-tap-flash='true'] {
+  border-color: hsl(var(--ring) / 0.65);
+  box-shadow: 0 0 0 1px hsl(var(--ring) / 0.35);
+}
+
 @layer base {
   * {
     @apply border-border;

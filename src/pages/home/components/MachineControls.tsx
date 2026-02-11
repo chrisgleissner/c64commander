@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { SectionHeader } from '@/components/SectionHeader';
 import { QuickActionCard } from '@/components/QuickActionCard';
+import { ResponsivePathText } from '@/components/ResponsivePathText';
 
 export interface MachineControlsProps {
     status: { isConnected: boolean; isConnecting: boolean };
@@ -73,9 +74,12 @@ export function MachineControls({
                     {driveSummaryItems.map((entry) => (
                         <span key={entry.key} className="flex min-w-0 items-center gap-1">
                             <span className="font-semibold text-foreground whitespace-nowrap">{entry.label}:</span>
-                            <span className={entry.isMounted ? 'text-foreground truncate' : 'text-muted-foreground truncate'}>
-                                {entry.mountedLabel}
-                            </span>
+                            <ResponsivePathText
+                                path={entry.mountedLabel}
+                                mode="filename-fallback"
+                                className={entry.isMounted ? 'text-foreground truncate' : 'text-muted-foreground truncate'}
+                                dataTestId={`home-drive-summary-label-${entry.key}`}
+                            />
                         </span>
                     ))}
                 </div>

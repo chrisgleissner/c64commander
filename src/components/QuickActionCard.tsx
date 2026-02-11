@@ -6,18 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { motion } from 'framer-motion';
-import type { MouseEvent } from 'react';
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const blurOnPointerClick = (event: MouseEvent<HTMLElement>) => {
-  if (event.detail === 0) return;
-  const target = event.currentTarget as HTMLElement | null;
-  if (target?.blur && document.activeElement === target) {
-    target.blur();
-  }
-};
+import { handlePointerButtonClick } from '@/lib/ui/buttonInteraction';
 
 interface QuickActionCardProps {
   icon: LucideIcon;
@@ -51,11 +42,10 @@ export function QuickActionCard({
   };
 
   return (
-    <motion.button
-      whileTap={{ scale: 0.95 }}
+    <button
       onClick={(event) => {
         onClick();
-        blurOnPointerClick(event);
+        handlePointerButtonClick(event);
       }}
       disabled={disabled || loading}
       data-testid={dataTestId}
@@ -82,6 +72,6 @@ export function QuickActionCard({
       {description && (
         <span className={cn('text-muted-foreground', compact ? 'text-[11px] leading-tight' : 'text-xs')}>{description}</span>
       )}
-    </motion.button>
+    </button>
   );
 }

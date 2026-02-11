@@ -23,6 +23,7 @@ import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
+import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore';
 
 const ensureWindow = () => {
   if (typeof window !== 'undefined') return;
@@ -122,6 +123,22 @@ vi.mock('@/lib/smoke/smokeMode', () => ({
   isSmokeReadOnlyEnabled: vi.fn(() => true),
 }));
 
+vi.mock('@/lib/deviceInteraction/deviceStateStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/deviceInteraction/deviceStateStore')>();
+  return {
+    ...actual,
+    getDeviceStateSnapshot: vi.fn(() => ({
+      state: 'READY',
+      connectionState: 'REAL_CONNECTED',
+      busyCount: 0,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: null,
+      circuitOpenUntilMs: null,
+    })),
+  };
+});
+
 vi.mock('@/lib/secureStorage', () => ({
   setPassword: vi.fn(async () => {
     localStorage.setItem('c64u_has_password', '1');
@@ -140,6 +157,7 @@ const fuzzEnabledMock = isFuzzModeEnabled as unknown as ReturnType<typeof vi.fn>
 const fuzzSafeMock = isFuzzSafeBaseUrl as unknown as ReturnType<typeof vi.fn>;
 const smokeEnabledMock = isSmokeModeEnabled as unknown as ReturnType<typeof vi.fn>;
 const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof vi.fn>;
+const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
 const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
 const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
@@ -159,6 +177,15 @@ describe('c64api', () => {
     fuzzSafeMock.mockReturnValue(true);
     smokeEnabledMock.mockReturnValue(false);
     smokeReadOnlyMock.mockReturnValue(true);
+    deviceStateSnapshotMock.mockReturnValue({
+      state: 'READY',
+      connectionState: 'REAL_CONNECTED',
+      busyCount: 0,
+      lastUpdatedAtMs: Date.now(),
+      lastErrorMessage: null,
+      lastSuccessAtMs: null,
+      circuitOpenUntilMs: null,
+    });
     (globalThis as { __c64uAllowNativePlatform?: boolean }).__c64uAllowNativePlatform = false;
     (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor = undefined;
     resetConfigWriteThrottle();
@@ -463,6 +490,36 @@ describe('c64api', () => {
 
     const api = new C64API('http://c64u');
     await expect(api.machineReset()).rejects.toThrow('Host unreachable');
+  });
+
+  it('retries one idle GET request after a network failure', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ errors: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    deviceStateSnapshotMock.mockReturnValue({
+      state: 'READY',
+      connectionState: 'REAL_CONNECTED',
+      busyCount: 0,
+      lastUpdatedAtMs: Date.now() - 15000,
+      lastErrorMessage: null,
+      lastSuccessAtMs: Date.now() - 15000,
+      circuitOpenUntilMs: null,
+    });
+
+    const api = new C64API('http://c64u');
+    await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(addLogMock).toHaveBeenCalledWith(
+      'warn',
+      'C64 API retry scheduled after idle failure',
+      expect.objectContaining({ wasIdle: true }),
+    );
   });
 
   it('builds request urls for config writes and machine actions', async () => {

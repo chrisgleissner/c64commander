@@ -461,19 +461,43 @@ export default function PlayFilesPage() {
   );
 
 
+  const syncPlaybackTimeline = useCallback(() => {
+    if (!isPlaying || isPaused || currentIndex < 0) return;
+    const now = Date.now();
+    if (trackStartedAtRef.current) {
+      setElapsedMs(now - trackStartedAtRef.current);
+    }
+    setPlayedMs(playedClockRef.current.current(now));
+    const guard = autoAdvanceGuardRef.current;
+    if (guard && !guard.autoFired && !guard.userCancelled && now >= guard.dueAtMs) {
+      void handleNext('auto', guard.trackInstanceId);
+    }
+  }, [currentIndex, handleNext, isPaused, isPlaying, playedClockRef]);
+
   useEffect(() => {
     if (!isPlaying || isPaused || currentIndex < 0) return;
-    const tick = () => {
-      const now = Date.now();
-      if (trackStartedAtRef.current) {
-        setElapsedMs(now - trackStartedAtRef.current);
-      }
-      setPlayedMs(playedClockRef.current.current(now));
-    };
-    tick();
-    const timer = window.setInterval(tick, 1000);
+    syncPlaybackTimeline();
+    const timer = window.setInterval(syncPlaybackTimeline, 1000);
     return () => window.clearInterval(timer);
-  }, [currentIndex, isPaused, isPlaying]);
+  }, [currentIndex, isPaused, isPlaying, syncPlaybackTimeline]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden) return;
+      syncPlaybackTimeline();
+    };
+    const onFocus = () => {
+      syncPlaybackTimeline();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onFocus);
+    };
+  }, [syncPlaybackTimeline]);
 
 
 

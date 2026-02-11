@@ -38,6 +38,7 @@ import { GlobalDiagnosticsOverlay } from '@/components/diagnostics/GlobalDiagnos
 import { TestHeartbeat } from '@/components/TestHeartbeat';
 import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
+import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,7 @@ const shouldEnableCoverageProbe = () => {
 const AppRoutes = () => (
   <BrowserRouter>
     <GlobalErrorListener />
+    <GlobalButtonInteractionModel />
     <RouteRefresher />
     <DebugStartupLogger />
     <TraceContextBridge />
@@ -178,6 +180,13 @@ const GlobalErrorListener = () => {
     };
   }, []);
 
+  return null;
+};
+
+const GlobalButtonInteractionModel = () => {
+  useEffect(() => {
+    return registerGlobalButtonInteractionModel();
+  }, []);
   return null;
 };
 

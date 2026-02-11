@@ -22,6 +22,7 @@ import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
 import { withRestInteraction, type InteractionIntent } from '@/lib/deviceInteraction/deviceInteractionManager';
+import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore';
 
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
@@ -29,6 +30,10 @@ const DEFAULT_PROXY_URL = 'http://127.0.0.1:8787';
 const CONTROL_REQUEST_TIMEOUT_MS = 3000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
+const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
+const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
+const NETWORK_RETRY_DELAY_MS = 180;
+const RETRYABLE_IDLE_RECOVERY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
@@ -43,6 +48,27 @@ const normalizeUrlPath = (url: string) => {
   } catch {
     return url;
   }
+};
+
+let requestSequence = 0;
+const buildRequestId = () => {
+  requestSequence = (requestSequence + 1) % 1_000_000;
+  return `c64req-${Date.now().toString(36)}-${requestSequence.toString(36)}`;
+};
+
+const wait = (ms: number) => new Promise<void>((resolve) => {
+  setTimeout(resolve, ms);
+});
+
+const getIdleContext = () => {
+  const snapshot = getDeviceStateSnapshot();
+  const now = Date.now();
+  const idleMs = snapshot.lastSuccessAtMs !== null ? Math.max(0, now - snapshot.lastSuccessAtMs) : null;
+  return {
+    deviceState: snapshot.state,
+    idleMs,
+    wasIdle: idleMs !== null && idleMs >= IDLE_RECOVERY_THRESHOLD_MS,
+  };
 };
 
 
@@ -450,126 +476,183 @@ export class C64API {
       bypassCooldown,
       bypassBackoff,
     }, async () => {
-      const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-      let status: number | 'error' = 'error';
+      const requestId = buildRequestId();
+      const idleContext = getIdleContext();
+      const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
+      const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
       const bodyPayload = extractRequestBody(requestOptions.body);
-      recordRestRequest(action, {
-        method,
-        url,
-        normalizedUrl: normalizeUrlPath(url),
-        headers,
-        body: bodyPayload,
-      });
-      let responseRecorded = false;
+      let lastError: unknown = null;
 
-      try {
-        if (shouldBlockSmokeMutation(method)) {
-          addErrorLog('Smoke mode blocked mutating request', buildErrorLogDetails(new Error('Smoke mode blocked mutating request'), {
-            path,
-            url,
-            method,
-            baseUrl,
-            deviceHost: this.deviceHost,
-          }));
-          console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url }));
-          throw new Error('Smoke mode blocked mutating request');
-        }
-        if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
-          addErrorLog('Fuzz mode blocked real device request', buildErrorLogDetails(new Error('Fuzz mode blocked request'), {
-            path,
-            url,
-            baseUrl,
-            deviceHost: this.deviceHost,
-          }));
-          const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
-          blocked.__fuzzBlocked = true;
-          throw blocked;
-        }
-
-        if (isSmokeModeEnabled()) {
-          console.info('C64U_HTTP', JSON.stringify({ method, path, url }));
-        }
-
-        // Use web fetch for all requests - CapacitorHttp patches it on native platforms
-        const outerSignal = requestOptions.signal;
-        const controller = timeoutMs ? new AbortController() : null;
-        const abortFromOuter = () => controller?.abort();
-        if (outerSignal && controller) {
-          if (outerSignal.aborted) {
-            controller.abort();
-          } else {
-            outerSignal.addEventListener('abort', abortFromOuter, { once: true });
-          }
-        }
-        const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
-        const signal = controller ? controller.signal : outerSignal;
-        const responsePromise = fetch(url, {
-          ...requestOptions,
+      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        let status: number | 'error' = 'error';
+        let responseRecorded = false;
+        recordRestRequest(action, {
+          method,
+          url,
+          normalizedUrl: normalizeUrlPath(url),
           headers,
-          ...(signal ? { signal } : {}),
+          body: bodyPayload,
         });
-        let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
-        const timeoutPromise = timeoutMs
-          ? new Promise<never>((_, reject) => {
-            timeoutPromiseId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
-          })
-          : null;
-        let response: Response;
+
         try {
-          response = timeoutPromise
-            ? await Promise.race([responsePromise, timeoutPromise])
-            : await responsePromise;
-        } finally {
-          if (timeoutId) clearTimeout(timeoutId);
-          if (outerSignal && controller) {
-            outerSignal.removeEventListener('abort', abortFromOuter);
+          if (shouldBlockSmokeMutation(method)) {
+            addErrorLog('Smoke mode blocked mutating request', buildErrorLogDetails(new Error('Smoke mode blocked mutating request'), {
+              path,
+              url,
+              method,
+              baseUrl,
+              deviceHost: this.deviceHost,
+            }));
+            console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url, requestId }));
+            throw new Error('Smoke mode blocked mutating request');
           }
-          if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
-        }
+          if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
+            addErrorLog('Fuzz mode blocked real device request', buildErrorLogDetails(new Error('Fuzz mode blocked request'), {
+              path,
+              url,
+              baseUrl,
+              deviceHost: this.deviceHost,
+            }));
+            const blocked = new Error('Fuzz mode blocked request') as Error & { __fuzzBlocked?: boolean };
+            blocked.__fuzzBlocked = true;
+            throw blocked;
+          }
 
-        status = response.status;
-        const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
-        if (!response.ok) {
-          const responseBody = await readResponseBody(response);
-          const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
-          recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: err });
-          recordTraceError(action, err);
+          if (isSmokeModeEnabled()) {
+            console.info('C64U_HTTP', JSON.stringify({ method, path, url, requestId, attempt }));
+          }
+
+          // Use web fetch for all requests - CapacitorHttp patches it on native platforms
+          const outerSignal = requestOptions.signal;
+          const controller = timeoutMs ? new AbortController() : null;
+          const abortFromOuter = () => controller?.abort();
+          if (outerSignal && controller) {
+            if (outerSignal.aborted) {
+              controller.abort();
+            } else {
+              outerSignal.addEventListener('abort', abortFromOuter, { once: true });
+            }
+          }
+          const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
+          const signal = controller ? controller.signal : outerSignal;
+          const responsePromise = fetch(url, {
+            ...requestOptions,
+            headers,
+            ...(signal ? { signal } : {}),
+          });
+          let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
+          const timeoutPromise = timeoutMs
+            ? new Promise<never>((_, reject) => {
+              timeoutPromiseId = setTimeout(() => reject(new Error('Request timed out')), timeoutMs);
+            })
+            : null;
+          let response: Response;
+          try {
+            response = timeoutPromise
+              ? await Promise.race([responsePromise, timeoutPromise])
+              : await responsePromise;
+          } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (outerSignal && controller) {
+              outerSignal.removeEventListener('abort', abortFromOuter);
+            }
+            if (timeoutPromiseId) clearTimeout(timeoutPromiseId);
+          }
+
+          status = response.status;
+          const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+          if (!response.ok) {
+            const responseBody = await readResponseBody(response);
+            const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
+            recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: err });
+            recordTraceError(action, err);
+            responseRecorded = true;
+            throw err;
+          }
+
+          const parsedBody = await this.parseResponseJson<T>(response);
+          recordRestResponse(action, { status: response.status, body: parsedBody, durationMs, error: null });
           responseRecorded = true;
-          throw err;
-        }
 
-        const parsedBody = await this.parseResponseJson<T>(response);
-        recordRestResponse(action, { status: response.status, body: parsedBody, durationMs, error: null });
-        responseRecorded = true;
+          return parsedBody;
+        } catch (error) {
+          lastError = error;
+          const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
+          const rawMessage = (error as Error).message || 'Request failed';
+          const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
+          const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+          const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
+          const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+          if (!responseRecorded) {
+            recordRestResponse(action, { status: status === 'error' ? null : status, body: null, durationMs, error: error as Error });
+            recordTraceError(action, error as Error);
+          }
+          if (!fuzzBlocked) {
+            addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
+              path,
+              url,
+              requestId,
+              attempt,
+              maxAttempts,
+              retryCount: attempt - 1,
+              method,
+              deviceState: idleContext.deviceState,
+              idleMs: idleContext.idleMs,
+              wasIdle: idleContext.wasIdle,
+              durationMs,
+              error: normalizedError,
+              rawError: rawMessage,
+              errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
+            }));
+            console.error('C64U_HTTP_FAILURE', JSON.stringify({
+              requestId,
+              method,
+              path,
+              attempt,
+              maxAttempts,
+              idleMs: idleContext.idleMs,
+              wasIdle: idleContext.wasIdle,
+              durationMs,
+              error: normalizedError,
+            }));
+          }
 
-        return parsedBody;
-      } catch (error) {
-        const fuzzBlocked = (error as { __fuzzBlocked?: boolean }).__fuzzBlocked;
-        const rawMessage = (error as Error).message || 'Request failed';
-        const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
-        const isNetworkFailure = isNetworkFailureMessage(rawMessage);
-        const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
-        const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
-        if (!responseRecorded) {
-          recordRestResponse(action, { status: status === 'error' ? null : status, body: null, durationMs, error: error as Error });
-          recordTraceError(action, error as Error);
+          const shouldRetry = attempt < maxAttempts && (isAbort || isNetworkFailure);
+          if (shouldRetry) {
+            const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
+            addLog('warn', 'C64 API retry scheduled after idle failure', {
+              requestId,
+              method,
+              path,
+              attempt,
+              maxAttempts,
+              retryDelayMs,
+              idleMs: idleContext.idleMs,
+              wasIdle: idleContext.wasIdle,
+            });
+            console.warn('C64U_HTTP_RETRY', JSON.stringify({
+              requestId,
+              method,
+              path,
+              attempt,
+              maxAttempts,
+              retryDelayMs,
+            }));
+            await wait(retryDelayMs);
+            continue;
+          }
+
+          if (isAbort || isNetworkFailure) {
+            throw new Error(resolveHostErrorMessage(rawMessage));
+          }
+          throw error;
+        } finally {
+          this.logRestCall(method, path, status, startedAt);
         }
-        if (!fuzzBlocked) {
-          addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
-            path,
-            url,
-            error: normalizedError,
-            rawError: rawMessage,
-            errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
-          }));
-        }
-        if (isAbort || isNetworkFailure) {
-          throw new Error(resolveHostErrorMessage(rawMessage));
-        }
-        throw error;
-      } finally {
-        this.logRestCall(method, path, status, startedAt);
       }
+
+      throw lastError as Error;
     }));
   }
 
@@ -598,6 +681,8 @@ export class C64API {
       })(),
     }, async () => {
       const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const requestId = buildRequestId();
+      const idleContext = getIdleContext();
       const headers = (options.headers as Record<string, string>) || {};
       recordRestRequest(action, {
         method,
@@ -637,12 +722,30 @@ export class C64API {
         const rawMessage = (error as Error).message || 'Request failed';
         const isAbort = (error as { name?: string }).name === 'AbortError' || /timed out/i.test(rawMessage);
         const isNetworkFailure = isNetworkFailureMessage(rawMessage);
+        const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
         const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
         recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
         recordTraceError(action, error as Error);
         addErrorLog('C64 API upload failed', buildErrorLogDetails(error as Error, {
           url,
-          error: rawMessage,
+          requestId,
+          method,
+          path: normalizeUrlPath(url),
+          deviceState: idleContext.deviceState,
+          idleMs: idleContext.idleMs,
+          wasIdle: idleContext.wasIdle,
+          durationMs,
+          error: normalizedError,
+          rawError: rawMessage,
+        }));
+        console.error('C64U_HTTP_FAILURE', JSON.stringify({
+          requestId,
+          method,
+          path: normalizeUrlPath(url),
+          idleMs: idleContext.idleMs,
+          wasIdle: idleContext.wasIdle,
+          durationMs,
+          error: normalizedError,
         }));
         if (isAbort || isNetworkFailure) {
           throw new Error(resolveHostErrorMessage(rawMessage));
@@ -845,7 +948,7 @@ export class C64API {
           },
           body: payload,
         },
-        UPLOAD_REQUEST_TIMEOUT_MS,
+        RAM_BLOCK_WRITE_TIMEOUT_MS,
       );
       status = response.status;
     } finally {
