@@ -1,4 +1,4 @@
-# Chaos / Fuzz Testing (Playwright)
+# Fuzz Testing (Playwright)
 
 This document describes the platform-agnostic chaos/fuzz runner built on Playwright. It is designed to run identically in local and CI contexts, and to emit compact, LLM-ready issue summaries.
 
@@ -9,7 +9,7 @@ This document describes the platform-agnostic chaos/fuzz runner built on Playwri
 - **Artifacts**: `test-results/fuzz/run-<runMode>-<platform>-<seed>-<runId>/`
 - **App contract**: [src/lib/fuzz/fuzzMode.ts](../../src/lib/fuzz/fuzzMode.ts)
 
-The runner executes a series of **fuzz sessions**. Each session starts from a clean app state, records a Playwright video, performs weighted UI actions, and **terminates immediately** on the first detected issue. The session is reset and a new session begins until the run reaches its step or time budget.
+The runner executes a series of **fuzz sessions**. Each session starts from a clean app state, records a Playwright video, performs weighted UI actions, and **terminates immediately** on the first detected issue or unrecoverable stall. The session is reset and a new session begins until the run reaches its step or time budget.
 
 ## Fuzz mode contract (app-side)
 
@@ -131,14 +131,15 @@ Each session runs for at least **200 steps** by default. It will end early if no
 - `FUZZ_NO_PROGRESS_STEPS` (default: 20)
 - `FUZZ_PROGRESS_TIMEOUT_MS` (default: 5000)
 
-Progress signals are explicitly defined as:
+Interaction progress signals are explicitly defined as:
 
 - Screen change (route/title/primary headings)
 - Navigation stack change (history state)
-- Event trace delta (backend/FTP/guard/error trace activity)
 - State machine transition (device + playback state)
 
-When the watchdog fires, the runner switches to **structured recovery** (fills required inputs, confirms dialogs, acknowledges prompts) and returns to chaos once progress resumes.
+Event trace deltas are still captured for diagnostics, but they do not reset stall counters by themselves.
+
+When the watchdog fires, the runner switches to **structured recovery** (fills required inputs, confirms dialogs, acknowledges prompts) and returns to chaos once interaction progress resumes. If recovery is exhausted, the runner records a freeze issue, captures screenshot/video, closes the session, and starts a fresh one.
 
 ### Consolidated artifacts
 

@@ -200,7 +200,7 @@ const mergeReports = async () => {
   await fs.mkdir(outputRoot, { recursive: true });
   await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
 
-  const summaryLines = ['# Chaos Fuzz Summary', ''];
+  const summaryLines = ['# Fuzz Test Summary', ''];
   if (!merged.issueGroups.length) {
     summaryLines.push('No issues detected.');
   } else {

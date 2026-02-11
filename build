@@ -1130,7 +1130,7 @@ if [[ "$RUN_VIDEO" == "true" ]]; then
 fi
 
 if [[ "$RUN_FUZZ" == "true" ]]; then
-  log "Running chaos fuzz runner"
+  log "Running fuzz test runner"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
   FUZZ_ARGS=()
   if [[ -n "$FUZZ_SEED" ]]; then FUZZ_ARGS+=(--fuzz-seed "$FUZZ_SEED"); fi

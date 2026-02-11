@@ -437,7 +437,7 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
   return `Inspect ${signature.exception} at ${signature.topFrames[0] || 'top frame'} and add safe handling.`;
 };
 
-test.describe('Chaos fuzz', () => {
+test.describe('Fuzz Test', () => {
   test('run', async ({ page }, testInfo) => {
     void page;
     const infraMode = !FUZZ_ENABLED;
@@ -445,8 +445,12 @@ test.describe('Chaos fuzz', () => {
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     const timeBudgetMs = infraMode ? undefined : toNumber(process.env.FUZZ_TIME_BUDGET_MS);
     const maxSteps = infraMode ? 10 : maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
+    const progressTimeoutMs = infraMode
+      ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
+      : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
     const baseTimeout = infraMode ? 20_000 : timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000);
-    const timeoutMs = baseTimeout + 60_000;
+    const timeoutGraceMs = infraMode ? 30_000 : 5 * 60 * 1000;
+    const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
     testInfo.setTimeout(timeoutMs);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
@@ -464,9 +468,6 @@ test.describe('Chaos fuzz', () => {
     const noProgressLimit = infraMode
       ? maxSteps
       : Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
-    const progressTimeoutMs = infraMode
-      ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
-      : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;
 
@@ -495,6 +496,13 @@ test.describe('Chaos fuzz', () => {
     let sessionIndex = 0;
     const startTime = Date.now();
     const deadline = timeBudgetMs ? startTime + timeBudgetMs : Number.POSITIVE_INFINITY;
+    const requestedShutdownBufferMs = infraMode ? 1_000 : Math.max(30_000, Math.min(180_000, progressTimeoutMs * 6));
+    const shutdownBufferMs = timeBudgetMs
+      ? Math.min(requestedShutdownBufferMs, Math.max(1_000, Math.floor(timeBudgetMs / 4)))
+      : requestedShutdownBufferMs;
+    const runDeadline = Number.isFinite(deadline)
+      ? Math.max(startTime + 1_000, deadline - shutdownBufferMs)
+      : Number.POSITIVE_INFINITY;
     let externalClickUsed = false;
     const clickActionsDisabled = false;
     const retainedSuccess: Array<{ logPath: string; videoPath?: string }> = [];
@@ -651,6 +659,15 @@ test.describe('Chaos fuzz', () => {
       const recordIssueOnce = (payload: IssueRecord) => {
         if (issue) return;
         issue = payload;
+      };
+      const recordStuckSessionIssue = (reason: string, detail: string) => {
+        recordIssueOnce({
+          severity: 'freeze',
+          message: `Session stalled (${reason}): ${detail}`,
+          source: 'session.stalled',
+          interactionIndex: totalSteps,
+          lastInteractions: interactions.slice(-lastInteractionCount),
+        });
       };
 
       page.on('pageerror', (error) => {
@@ -1382,7 +1399,7 @@ test.describe('Chaos fuzz', () => {
         return eligible[eligible.length - 1];
       };
 
-      while (!infraMode && Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
+      while (!infraMode && Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
         totalSteps += 1;
         sessionSteps += 1;
@@ -1423,7 +1440,11 @@ test.describe('Chaos fuzz', () => {
           actionLogged = true;
         } else {
           const action = await pickAction();
-          if (!action) break;
+          if (!action) {
+            logInteraction(`s=${totalSteps}\ta=session\tno-action`);
+            recordStuckSessionIssue('no-action', 'No eligible action was available.');
+            break;
+          }
           try {
             const result = await action.run();
             logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
@@ -1456,11 +1477,15 @@ test.describe('Chaos fuzz', () => {
           if (issue) break;
           const nextSnapshot = await readProgressSnapshot(page);
           const delta = diffProgress(progressSnapshot, nextSnapshot);
-          progressed = hasMeaningfulProgress(delta);
+          const anyProgress = hasMeaningfulProgress(delta);
+          const interactionProgress = delta.screenChanged || delta.navigationChanged || delta.stateChanged;
+          progressed = interactionProgress;
+          if (anyProgress) {
+            progressSnapshot = nextSnapshot;
+          }
           if (progressed) {
             lastProgressAt = Date.now();
             noProgressCount = 0;
-            progressSnapshot = nextSnapshot;
             if (mode === 'recovery') {
               logInteraction(
                 `s=${totalSteps}\ta=recovery\tprogress screen=${Number(delta.screenChanged)} nav=${Number(delta.navigationChanged)} trace=${Number(delta.traceChanged)} state=${Number(delta.stateChanged)}`,
@@ -1475,10 +1500,18 @@ test.describe('Chaos fuzz', () => {
 
         if (mode === 'recovery' && recoveryAttempted && recoveryAttempts >= recoveryStepLimit && !progressed) {
           logInteraction(`s=${totalSteps}\ta=session\trecovery-exhausted`);
+          recordStuckSessionIssue(
+            'recovery-exhausted',
+            `No structured recovery progress after ${recoveryAttempts} attempts.`,
+          );
           break;
         }
         if (noProgressCount >= noProgressLimit) {
           logInteraction(`s=${totalSteps}\ta=session\tno-progress`);
+          recordStuckSessionIssue(
+            'no-progress',
+            `No interaction progress after ${noProgressCount} steps in chaos mode.`,
+          );
           break;
         }
         if (sessionSteps >= minSessionSteps) {
@@ -1571,7 +1604,7 @@ test.describe('Chaos fuzz', () => {
       server.setLatencyMs(null);
     };
 
-    while (Date.now() < deadline && (maxSteps ? totalSteps < maxSteps : true)) {
+    while (Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
       await runSession();
       if (maxSteps && totalSteps >= maxSteps) break;
     }
@@ -1617,7 +1650,7 @@ test.describe('Chaos fuzz', () => {
 
     await writeJson(path.join(outputRoot, 'fuzz-issue-report.json'), report);
 
-    const summaryLines: string[] = ['# Chaos Fuzz Summary', ''];
+    const summaryLines: string[] = ['# Fuzz Test Summary', ''];
     if (!issueGroups.size) {
       summaryLines.push('No issues detected.');
     } else {

@@ -12,7 +12,7 @@
 - **Web unit tests**: Vitest via `npm run test` / `npm run test:coverage` (see package.json).
 - **Web E2E**: Playwright against Vite preview (`npm run test:e2e` / `npm run screenshots`), with mobile device emulation (“android-phone”, “android-tablet”) but still web-only (see playwright.config.ts).
 - **Playwright evidence**: traces, videos, screenshots, and metadata are collected and validated (playwright/testArtifacts.ts, scripts/validate-playwright-evidence.mjs).
-- **Playwright fuzz**: nightly chaos fuzz in web-only mode with `VITE_FUZZ_MODE=1` (see .github/workflows/fuzz-chaos.yaml, scripts/run-fuzz.mjs, src/lib/fuzz/fuzzMode.ts).
+- **Playwright fuzz**: nightly Fuzz Test in web-only mode with `VITE_FUZZ_MODE=1` (see .github/workflows/fuzz-chaos.yaml, scripts/run-fuzz.mjs, src/lib/fuzz/fuzzMode.ts).
 - **Android tests**: Gradle JVM unit tests + JaCoCo coverage (`./gradlew testDebugUnitTest`) in CI (see .github/workflows/android-apk.yaml). No Android instrumentation tests are executed in CI. build supports `--android-tests` for connected devices/emulators.
 - **Mocking strategy**:
   - Web E2E uses Node-based mock servers (`tests/mocks/mockC64Server.ts`) and injects configuration via localStorage (`playwright/demoMode.spec.ts`, `playwright/connectionSimulation.spec.ts`, `playwright/uiMocks.ts`).
@@ -40,7 +40,7 @@
 - .github/workflows/android-apk.yaml
   - CI runs Playwright in web mode and Android JVM unit tests only. **No Android emulator** or UI tests executed.
 - .github/workflows/fuzz-chaos.yaml
-  - Nightly Playwright chaos fuzz for web using `VITE_FUZZ_MODE`.
+  - Nightly Playwright Fuzz Test for web using `VITE_FUZZ_MODE`.
 - build
   - Provides local-only hooks for Android instrumentation tests and emulator startup, but not used in CI.
 - scripts/android-emulator.sh

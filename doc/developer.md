@@ -108,7 +108,7 @@ All common development tasks use `./build`:
 ./build --test-e2e --validate-evidence  # Validate Playwright evidence structure
 ./build --test-unit --android-tests  # Run Android instrumentation tests (requires device/emulator)
 ./build --test-unit --coverage       # Web + Android coverage checks
-./build --test-fuzz      # Chaos fuzz runner (mock target only)
+./build --test-fuzz      # Fuzz Test runner (mock target only)
 ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off  # Contract test harness
 ```
 
@@ -547,7 +547,7 @@ flowchart TB
     Screenshots["Screenshot Tests<br/>(Playwright)"]
     Android["Android Tests<br/>(JUnit)"]
     Maestro["Maestro Smoke<br/>(Android Emulator)"]
-    Fuzz["Chaos Fuzz<br/>(Playwright)"]
+    Fuzz["Fuzz Test<br/>(Playwright)"]
   end
 
   subgraph Evidence["Test Evidence"]

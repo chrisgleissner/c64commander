@@ -1,4 +1,4 @@
-name: Chaos Fuzz (Nightly)
+name: Fuzz Test (Nightly)
 
 on:
   schedule:
@@ -12,7 +12,7 @@ on:
 
 jobs:
   fuzz:
-    name: Chaos fuzz (Playwright)
+    name: Fuzz Test (Playwright)
     runs-on: ubuntu-latest
 
     steps:
@@ -37,7 +37,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Run chaos fuzz
+      - name: Run fuzz test
         env:
           FUZZ_RUN_MODE: ci
           VITE_FUZZ_MODE: "1"
@@ -50,5 +50,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: chaos-fuzz-artifacts
+          name: fuzz-test-artifacts
           path: test-results/fuzz/**
