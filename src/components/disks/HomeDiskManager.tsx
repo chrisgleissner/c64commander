@@ -1316,7 +1316,7 @@ export const HomeDiskManager = () => {
                   <ResponsivePathText
                     path={mountedLabel}
                     mode="start-and-filename"
-                    className="truncate text-xs text-muted-foreground"
+                    className="min-w-0 flex-1 text-xs text-muted-foreground"
                     dataTestId={`drive-mounted-label-${key}`}
                   />
                   {mountedDisk?.group ? (

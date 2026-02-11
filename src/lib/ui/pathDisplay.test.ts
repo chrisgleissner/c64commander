@@ -29,9 +29,14 @@ describe('pathDisplay', () => {
     expect(display).toBe('/C64Music/.../file.sid');
   });
 
-  it('falls back to filename tail when width is very small', () => {
+  it('does not prepend ellipsis for plain filenames', () => {
+    const display = fitPathToWidth('Disk 1.d64', 20, monoMeasure, 'start-and-filename');
+    expect(display).toBe('Disk 1.d64');
+  });
+
+  it('preserves full filename when width is very small', () => {
     const path = '/C64Music/DEMOS/Very/Long/Folder/superlongfilename.sid';
     const display = fitPathToWidth(path, 10, monoMeasure, 'start-and-filename');
-    expect(display).toBe('...ame.sid');
+    expect(display).toBe('superlongfilename.sid');
   });
 });

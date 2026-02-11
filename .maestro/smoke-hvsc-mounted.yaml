@@ -76,7 +76,7 @@ env:
 
 # Back in app: wait for playlist to populate
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Playlist"
     timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element: "35_Years.sid"
@@ -105,12 +105,12 @@ env:
     clearState: false
 - extendedWaitUntil:
     visible:
-      id: "tab-play"
+      text: "Play"
     timeout: ${SHORT_TIMEOUT}
 - tapOn:
-    id: "tab-play"
+    point: "25%,95%"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Playlist"
     timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element: "35_Years.sid"
@@ -119,7 +119,8 @@ env:
 - tapOn: "35_Years.sid"
 
 # Assert playback is active
-- tapOn: "Play"
+- tapOn:
+    id: "playlist-play"
 - extendedWaitUntil:
     visible: "Pause"
     timeout: ${SHORT_TIMEOUT}

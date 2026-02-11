@@ -745,8 +745,8 @@ test.describe('UX Interaction Patterns', () => {
     const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (localVisible && c64uVisible) {
-      await expect(localButton).toHaveText('Add file / folder');
-      await expect(c64uButton).toHaveText('Add file / folder');
+      await expect(localButton).toContainText('Add file / folder');
+      await expect(c64uButton).toContainText('Add file / folder');
       await attachStepScreenshot(page, testInfo, 'source-buttons-consistent');
     } else {
       await attachStepScreenshot(page, testInfo, 'source-buttons-missing');

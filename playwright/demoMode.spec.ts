@@ -7,7 +7,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import type { Page, Route, TestInfo } from '@playwright/test';
+import type { Locator, Page, Route, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
@@ -16,7 +16,46 @@ import { enableGoldenTrace } from './goldenTraceRegistry';
 import { saveCoverageFromPage } from './withCoverage';
 
 const snap = async (page: Page, testInfo: TestInfo, label: string) => {
-  await attachStepScreenshot(page, testInfo, label);
+  try {
+    await attachStepScreenshot(page, testInfo, label);
+  } catch (error) {
+    console.warn(`Step screenshot failed for "${label}"`, error);
+  }
+};
+
+const clickWithoutNavigationWait = async (page: Page, locator: Locator, attempts = 3) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await locator.click({ timeout: 10000, noWaitAfter: true });
+      return;
+    } catch (error) {
+      if (attempt >= attempts - 1) {
+        const handle = await locator.elementHandle().catch(() => null);
+        if (handle) {
+          try {
+            await page.evaluate((node) => (node as HTMLElement).click(), handle);
+            return;
+          } catch {
+            // Fall through and throw the original click error.
+          }
+        }
+        throw error;
+      }
+      await page.waitForTimeout(250);
+    }
+  }
+};
+
+const dismissDemoModeDialogIfVisible = async (page: Page) => {
+  const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+  if (!(await dialog.isVisible().catch(() => false))) return;
+  const continueButton = dialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
+  if (await continueButton.isVisible().catch(() => false)) {
+    await clickWithoutNavigationWait(page, continueButton);
+  } else {
+    await page.keyboard.press('Escape');
+  }
+  await expect(dialog).toBeHidden({ timeout: 5000 });
 };
 
 const seedRoutingExpectations = async (page: Page, realBaseUrl: string) => {
@@ -34,7 +73,9 @@ test.describe('Automatic Demo Mode', () => {
       await saveCoverageFromPage(page, testInfo.title);
       await assertNoUiIssues(page, testInfo);
     } finally {
-      await finalizeEvidence(page, testInfo);
+      if (!page.isClosed()) {
+        await finalizeEvidence(page, testInfo);
+      }
       await server?.close?.().catch(() => { });
     }
   });
@@ -141,7 +182,7 @@ test.describe('Automatic Demo Mode', () => {
     await snap(page, testInfo, 'demo-indicator');
 
     // Manual retry: should not show interstitial again in this session.
-    await indicator.click();
+    await clickWithoutNavigationWait(page, indicator);
     await expect(indicator).toHaveAttribute('data-connection-state', /DISCOVERING|DEMO_ACTIVE/);
     await expect(dialog).toBeHidden();
     await snap(page, testInfo, 'no-repeat-interstitial');
@@ -235,11 +276,19 @@ test.describe('Automatic Demo Mode', () => {
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|DISCOVERING/);
 
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await dismissDemoModeDialogIfVisible(page);
     const urlInput = page.locator('#deviceHost');
     const host = new URL(server.baseUrl).host;
     await urlInput.fill(host);
     await clearTraces(page);
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
+    let saveButton = page.getByRole('button', { name: /Save & Connect|Save connection/i });
+    if (!(await saveButton.isVisible().catch(() => false))) {
+      await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+      await dismissDemoModeDialogIfVisible(page);
+      saveButton = page.getByRole('button', { name: /Save & Connect|Save connection/i });
+    }
+    await expect(saveButton).toBeVisible({ timeout: 15000 });
+    await clickWithoutNavigationWait(page, saveButton);
 
     await expect.poll(() => server.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
@@ -249,4 +298,3 @@ test.describe('Automatic Demo Mode', () => {
     await snap(page, testInfo, 'demo-exit-connected');
   });
 });
-

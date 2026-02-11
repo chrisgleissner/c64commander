@@ -10,9 +10,10 @@ env:
   LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 ---
 - runFlow: subflows/launch-and-wait.yaml
-- tapOn: "Play"
+- tapOn:
+    point: "25%,95%"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
 - setAirplaneMode:
     value: enabled

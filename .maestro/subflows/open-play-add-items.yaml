@@ -20,14 +20,14 @@ tags:
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            id: "tab-play"
+            text: "Play"
           timeout: ${TIMEOUT}
 - tapOn:
-    id: "tab-play"
+    point: "25%,95%"
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Playlist"
     timeout: ${TIMEOUT}
-- assertVisible: "Play Files"
+- assertVisible: "Playlist"
 - scrollUntilVisible:
     element:
       id: "add-items-to-playlist"

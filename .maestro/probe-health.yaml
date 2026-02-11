@@ -16,7 +16,7 @@ env:
 # Step 2: Verify main UI is visible
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Home"
 
@@ -25,21 +25,21 @@ env:
 
 # Step 4: Verify navigation is responsive - tap a tab
 - tapOn:
-    id: "tab-play"
+    point: "25%,95%"
 
 # Step 5: Verify navigation worked
 - extendedWaitUntil:
-    visible: "Play Files"
+    visible: "Playlist"
     timeout: ${TIMEOUT}
 
 # Step 6: Return to home
 - tapOn:
-    id: "tab-home"
+    point: "8%,95%"
 
 # Step 7: Final verification
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Home"
 

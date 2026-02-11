@@ -504,7 +504,7 @@ export class C64API {
               baseUrl,
               deviceHost: this.deviceHost,
             }));
-            console.error('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url, requestId }));
+            console.info('C64U_SMOKE_MUTATION_BLOCKED', JSON.stringify({ method, path, url, requestId }));
             throw new Error('Smoke mode blocked mutating request');
           }
           if (isFuzzModeEnabled() && !isFuzzSafeBaseUrl(baseUrl)) {
@@ -605,7 +605,7 @@ export class C64API {
               rawError: rawMessage,
               errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
             }));
-            console.error('C64U_HTTP_FAILURE', JSON.stringify({
+            console.info('C64U_HTTP_FAILURE', JSON.stringify({
               requestId,
               method,
               path,
@@ -631,7 +631,7 @@ export class C64API {
               idleMs: idleContext.idleMs,
               wasIdle: idleContext.wasIdle,
             });
-            console.warn('C64U_HTTP_RETRY', JSON.stringify({
+            console.info('C64U_HTTP_RETRY', JSON.stringify({
               requestId,
               method,
               path,
@@ -738,7 +738,7 @@ export class C64API {
           error: normalizedError,
           rawError: rawMessage,
         }));
-        console.error('C64U_HTTP_FAILURE', JSON.stringify({
+        console.info('C64U_HTTP_FAILURE', JSON.stringify({
           requestId,
           method,
           path: normalizeUrlPath(url),

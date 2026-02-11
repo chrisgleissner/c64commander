@@ -32,13 +32,13 @@ tags:
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            id: "tab-home"
+            text: "Home"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
-    id: "tab-home"
+    point: "8%,95%"
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: home

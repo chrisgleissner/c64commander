@@ -56,6 +56,9 @@ const buildStartAndFilenameCandidate = (
   prefixSegments: number,
   fileName: string,
 ) => {
+  if (directories.length === 0) {
+    return `${root}${fileName}`;
+  }
   const prefix = directories.slice(0, prefixSegments).join('/');
   if (prefix) {
     return `${root}${prefix}/${ELLIPSIS}/${fileName}`;
@@ -75,7 +78,9 @@ const fitStartAndFilename = (path: string, maxWidth: number, measure: TextMeasur
     }
   }
 
-  return trimFromStartToFit(fileName, maxWidth, measure);
+  // Preserve the full filename even when the container is very narrow.
+  // Drive mount labels must never lose the filename itself.
+  return fileName;
 };
 
 export const fitPathToWidth = (

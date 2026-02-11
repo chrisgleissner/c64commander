@@ -550,6 +550,26 @@ describe('c64api', () => {
     expect(calls).toContain('http://c64u/v1/machine:resume');
   });
 
+  it('encodes joystick swap config writes with the expected category and item', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    await api.setConfigValue('U64 Specific Settings', 'Joystick Swapper', 'Swapped');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://c64u/v1/configs/U64%20Specific%20Settings/Joystick%20Swapper?value=Swapped',
+      expect.objectContaining({
+        method: 'PUT',
+      }),
+    );
+  });
+
   it('covers reads, writes, and drive endpoints', async () => {
     const fetchMock = getFetchMock();
     fetchMock

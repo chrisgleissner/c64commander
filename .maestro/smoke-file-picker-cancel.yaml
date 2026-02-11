@@ -58,11 +58,11 @@ env:
     optional: true
 - launchApp
 - tapOn:
-    id: "tab-home"
+    point: "8%,95%"
     optional: true
 - extendedWaitUntil:
     visible:
-      id: "tab-home"
+      text: "Home"
     timeout: ${LONG_TIMEOUT}
 
 - takeScreenshot: picker-cancelled
