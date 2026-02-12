@@ -92,6 +92,11 @@ jobs:
           name: ios-prepared-workspace
           path: .
 
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+
       - name: Select simulator runtime and device
         id: simulator
         run: |
@@ -229,6 +234,11 @@ jobs:
         with:
           name: ios-prepared-workspace
           path: .
+
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
 
       - name: Select simulator runtime and device
         id: simulator
@@ -369,6 +379,11 @@ jobs:
         with:
           name: ios-prepared-workspace
           path: .
+
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
 
       - name: Select simulator runtime and device
         id: simulator
@@ -520,6 +535,11 @@ jobs:
           name: ios-prepared-workspace
           path: .
 
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+
       - name: Build unsigned iOS device app
         run: |
           set -euo pipefail
@@ -587,6 +607,11 @@ jobs:
         with:
           name: ios-prepared-workspace
           path: .
+
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
 
       - name: Paid signing lane guard
         run: |
