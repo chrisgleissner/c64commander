@@ -153,12 +153,12 @@ jobs:
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
           subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
 
-            github_output = os.environ.get("GITHUB_OUTPUT")
-            if not github_output:
+          github_output = os.environ.get("GITHUB_OUTPUT")
+          if not github_output:
               print("GITHUB_OUTPUT is not set", file=sys.stderr)
               sys.exit(1)
 
-            with open(github_output, "a", encoding="utf-8") as fh:
+          with open(github_output, "a", encoding="utf-8") as fh:
               fh.write(f"runtime={runtime_identifier}\n")
               fh.write(f"device_type={device_type_identifier}\n")
               fh.write(f"udid={udid}\n")
@@ -262,11 +262,11 @@ jobs:
               print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
               sys.exit(1)
 
-            run_id = os.environ.get("GITHUB_RUN_ID", "local")
-            run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-            sim_name = f"C64Commander-Maestro-{run_id}-{run_attempt}"
+          run_id = os.environ.get("GITHUB_RUN_ID", "local")
+          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          sim_name = f"C64Commander-Maestro-{run_id}-{run_attempt}"
 
-            udid = subprocess.check_output(
+          udid = subprocess.check_output(
               ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
               text=True,
             ).strip()
@@ -394,11 +394,11 @@ jobs:
               print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
               sys.exit(1)
 
-            run_id = os.environ.get("GITHUB_RUN_ID", "local")
-            run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-            sim_name = f"C64Commander-Screenshots-{run_id}-{run_attempt}"
+          run_id = os.environ.get("GITHUB_RUN_ID", "local")
+          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          sim_name = f"C64Commander-Screenshots-{run_id}-{run_attempt}"
 
-            udid = subprocess.check_output(
+          udid = subprocess.check_output(
               ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
               text=True,
             ).strip()
