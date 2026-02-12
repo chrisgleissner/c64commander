@@ -38,14 +38,6 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
-
-        - name: Install dependencies
-          run: npm ci
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -86,13 +78,13 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        - name: Install dependencies
-          run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Download prepared iOS workspace
         uses: actions/download-artifact@v4
@@ -224,13 +216,13 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        - name: Install dependencies
-          run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Download prepared iOS workspace
         uses: actions/download-artifact@v4
@@ -364,13 +356,13 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        - name: Install dependencies
-          run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Download prepared iOS workspace
         uses: actions/download-artifact@v4
@@ -514,13 +506,13 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-        - name: Setup Node.js
-          uses: actions/setup-node@v4
-          with:
-            node-version: '20'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        - name: Install dependencies
-          run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
       - name: Download prepared iOS workspace
         uses: actions/download-artifact@v4
