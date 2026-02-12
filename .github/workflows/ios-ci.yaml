@@ -136,7 +136,9 @@ jobs:
 
           runtime_identifier = selected["identifier"]
           device_type_identifier = iphone_13["identifier"]
-          sim_name = "C64Commander-CI"
+          run_id = os.environ.get("GITHUB_RUN_ID", "local")
+          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          sim_name = f"C64Commander-CI-{run_id}-{run_attempt}"
 
           create = subprocess.run(
               ["xcrun", "simctl", "create", sim_name, device_type_identifier, runtime_identifier],
@@ -260,10 +262,14 @@ jobs:
               print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
               sys.exit(1)
 
-          udid = subprocess.check_output(
-              ["xcrun", "simctl", "create", "C64Commander-Maestro", iphone_13["identifier"], runtime_identifier],
+            run_id = os.environ.get("GITHUB_RUN_ID", "local")
+            run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+            sim_name = f"C64Commander-Maestro-{run_id}-{run_attempt}"
+
+            udid = subprocess.check_output(
+              ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
               text=True,
-          ).strip()
+            ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
           subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
 
@@ -388,10 +394,14 @@ jobs:
               print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
               sys.exit(1)
 
-          udid = subprocess.check_output(
-              ["xcrun", "simctl", "create", "C64Commander-Screenshots", iphone_13["identifier"], runtime_identifier],
+            run_id = os.environ.get("GITHUB_RUN_ID", "local")
+            run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+            sim_name = f"C64Commander-Screenshots-{run_id}-{run_attempt}"
+
+            udid = subprocess.check_output(
+              ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
               text=True,
-          ).strip()
+            ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
           subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
 
@@ -478,16 +488,16 @@ jobs:
           name: ios-prepared-workspace
           path: .
 
-      - name: Archive unsigned iOS app
+      - name: Build unsigned iOS device app
         run: |
           set -euo pipefail
           mkdir -p ios/build
-          xcodebuild archive \
+          xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
             -configuration Release \
-            -destination generic/platform=iOS \
-            -archivePath ios/build/App.xcarchive \
+            -sdk iphoneos \
+            -derivedDataPath ios/build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
@@ -497,7 +507,7 @@ jobs:
           set -euo pipefail
           rm -rf ios/build/Payload
           mkdir -p ios/build/Payload
-          cp -R ios/build/App.xcarchive/Products/Applications/App.app ios/build/Payload/App.app
+          cp -R ios/build/Build/Products/Release-iphoneos/App.app ios/build/Payload/App.app
           (
             cd ios/build
             zip -qry c64commander-altstore-unsigned.ipa Payload
