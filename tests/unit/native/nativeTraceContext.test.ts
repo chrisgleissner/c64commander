@@ -11,34 +11,34 @@ import { describe, expect, it, vi } from 'vitest';
 const getTraceContextSnapshotMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/tracing/traceContext', () => ({
-  getTraceContextSnapshot: getTraceContextSnapshotMock,
+    getTraceContextSnapshot: getTraceContextSnapshotMock,
 }));
 
 import { resolveNativeTraceContext } from '@/lib/native/nativeTraceContext';
 
 describe('resolveNativeTraceContext', () => {
-  it('returns nulls when action and playback context are unavailable', () => {
-    getTraceContextSnapshotMock.mockReturnValue({ playback: null });
+    it('returns nulls when action and playback context are unavailable', () => {
+        getTraceContextSnapshotMock.mockReturnValue({ playback: null });
 
-    expect(resolveNativeTraceContext()).toEqual({
-      correlationId: null,
-      trackInstanceId: null,
-      playlistItemId: null,
-    });
-  });
-
-  it('returns action and playback identifiers when present', () => {
-    getTraceContextSnapshotMock.mockReturnValue({
-      playback: {
-        trackInstanceId: 42,
-        playlistItemId: 'item-42',
-      },
+        expect(resolveNativeTraceContext()).toEqual({
+            correlationId: null,
+            trackInstanceId: null,
+            playlistItemId: null,
+        });
     });
 
-    expect(resolveNativeTraceContext({ correlationId: 'corr-42' } as never)).toEqual({
-      correlationId: 'corr-42',
-      trackInstanceId: 42,
-      playlistItemId: 'item-42',
+    it('returns action and playback identifiers when present', () => {
+        getTraceContextSnapshotMock.mockReturnValue({
+            playback: {
+                trackInstanceId: 42,
+                playlistItemId: 'item-42',
+            },
+        });
+
+        expect(resolveNativeTraceContext({ correlationId: 'corr-42' } as never)).toEqual({
+            correlationId: 'corr-42',
+            trackInstanceId: 42,
+            playlistItemId: 'item-42',
+        });
     });
-  });
 });
