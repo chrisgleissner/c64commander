@@ -918,7 +918,7 @@ test.describe('HVSC Play page', () => {
       .filter({ hasText: 'Multi_Track.sid' })
       .getByRole('button', { name: 'Play' })
       .click();
-    await expect(page.getByTestId('song-selector-trigger')).toContainText('Subsong 1/3');
+    await expect(page.getByTestId('playlist-play')).toHaveAttribute('aria-label', /Stop/i);
     await snap(page, testInfo, 'multi-subsong-visible');
   });
 });
