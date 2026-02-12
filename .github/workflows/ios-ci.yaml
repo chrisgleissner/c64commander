@@ -168,18 +168,18 @@ jobs:
           udid = create.stdout.strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
 
-            print(f"Waiting for simulator {udid} to reach Booted state...")
-            booted = False
-            for attempt in range(1, 61):
+          print(f"Waiting for simulator {udid} to reach Booted state...")
+          booted = False
+          for attempt in range(1, 61):
               devices_output = subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True)
               if re.search(rf"\({re.escape(udid)}\) \(Booted\)", devices_output):
-                booted = True
-                print(f"Simulator booted after {attempt * 5}s")
-                break
+                  booted = True
+                  print(f"Simulator booted after {attempt * 5}s")
+                  break
               print(f"Simulator not booted yet ({attempt * 5}s elapsed)")
               time.sleep(5)
 
-            if not booted:
+          if not booted:
               print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
               sys.exit(1)
 
@@ -318,18 +318,18 @@ jobs:
             ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
 
-            print(f"Waiting for simulator {udid} to reach Booted state...")
-            booted = False
-            for attempt in range(1, 61):
+          print(f"Waiting for simulator {udid} to reach Booted state...")
+          booted = False
+          for attempt in range(1, 61):
               devices_output = subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True)
               if re.search(rf"\({re.escape(udid)}\) \(Booted\)", devices_output):
-                booted = True
-                print(f"Simulator booted after {attempt * 5}s")
-                break
+                  booted = True
+                  print(f"Simulator booted after {attempt * 5}s")
+                  break
               print(f"Simulator not booted yet ({attempt * 5}s elapsed)")
               time.sleep(5)
 
-            if not booted:
+          if not booted:
               print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
               sys.exit(1)
 
@@ -480,18 +480,18 @@ jobs:
             ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
 
-            print(f"Waiting for simulator {udid} to reach Booted state...")
-            booted = False
-            for attempt in range(1, 61):
+          print(f"Waiting for simulator {udid} to reach Booted state...")
+          booted = False
+          for attempt in range(1, 61):
               devices_output = subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True)
               if re.search(rf"\({re.escape(udid)}\) \(Booted\)", devices_output):
-                booted = True
-                print(f"Simulator booted after {attempt * 5}s")
-                break
+                  booted = True
+                  print(f"Simulator booted after {attempt * 5}s")
+                  break
               print(f"Simulator not booted yet ({attempt * 5}s elapsed)")
               time.sleep(5)
 
-            if not booted:
+          if not booted:
               print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
               sys.exit(1)
 
