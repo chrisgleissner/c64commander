@@ -145,5 +145,8 @@ iOS CI/bootstrap helpers:
 - `npm run ios:build:sim` to build the simulator app on macOS.
 - `npm run ios:build:device` to build a device-targeted app on macOS.
 - GitHub iOS simulator CI is defined in [.github/workflows/ios-ci.yaml](.github/workflows/ios-ci.yaml).
+- AltStore packaging lane publishes `c64commander-altstore-unsigned.ipa` plus `.sha256` as CI artifacts.
+- Paid-signing lane is disabled by default and only runs when `IOS_PAID_SIGNING_ENABLED=true`.
+- Paid-signing lane expects `IOS_BUILD_CERTIFICATE_BASE64`, `IOS_P12_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64`, `IOS_TEAM_ID`, and `IOS_SIGNING_IDENTITY` secrets.
 
 Fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).

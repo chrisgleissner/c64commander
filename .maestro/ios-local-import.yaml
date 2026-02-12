@@ -1,0 +1,16 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/open-play-add-items.yaml
+- assertVisible:
+    id: "import-option-local"
+- takeScreenshot: ios-local-import-source-picker
+- tapOn:
+    id: "import-option-local"
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: ios-local-import-after-tap

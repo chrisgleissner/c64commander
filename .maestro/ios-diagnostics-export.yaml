@@ -1,0 +1,22 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/ios-open-settings-tab.yaml
+- scrollUntilVisible:
+    element:
+      id: "diagnostics-share-errors"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- assertVisible:
+    id: "diagnostics-share-errors"
+- assertVisible:
+    id: "diagnostics-share-logs"
+- assertVisible:
+    id: "diagnostics-share-traces"
+- assertVisible:
+    id: "diagnostics-share-actions"
+- takeScreenshot: ios-diagnostics-export-actions

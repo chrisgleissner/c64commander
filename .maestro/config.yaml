@@ -2,6 +2,7 @@
 # On CI, only tests tagged with 'ci-critical' run to keep build times under 6 minutes.
 # The ci-critical tag identifies tests that verify native Android components requiring
 # a real emulator (e.g., file picker integration).
+# iOS CI uses the ci-critical-ios tag and explicit include filters in workflow jobs.
 #
 # Locally, tests tagged with 'device' run by default.
 # Tests tagged with 'slow', 'edge', 'hvsc' are excluded unless explicitly requested.
@@ -15,4 +16,6 @@ excludeTags:
   - hvsc
 platform:
   android:
+    disableAnimations: true
+  ios:
     disableAnimations: true

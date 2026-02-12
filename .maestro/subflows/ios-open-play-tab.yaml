@@ -1,0 +1,28 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - subflow
+---
+- runFlow: launch-and-wait.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue in Demo Mode"
+          file: continue-demo.yaml
+      - tapOn:
+          text: "Continue in Demo Mode"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            text: "Play"
+          timeout: ${TIMEOUT}
+- tapOn:
+    point: "25%,95%"
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- assertVisible: "Playlist"

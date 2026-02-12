@@ -1,0 +1,20 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/open-play-add-items.yaml
+- assertVisible:
+    id: "import-option-c64u"
+- tapOn:
+    id: "import-option-c64u"
+    optional: true
+- waitForAnimationToEnd
+- terminateApp
+- launchApp
+- runFlow: subflows/open-play-add-items.yaml
+- assertVisible:
+    id: "import-option-c64u"
+- takeScreenshot: ios-secure-storage-persist-relaunch
