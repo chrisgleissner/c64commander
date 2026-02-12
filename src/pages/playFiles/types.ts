@@ -34,6 +34,8 @@ export type PlaylistItem = {
   sizeBytes?: number | null;
   modifiedAt?: string | null;
   addedAt?: string | null;
+  status?: 'ready' | 'unavailable';
+  unavailableReason?: 'source-revoked' | 'file-inaccessible' | 'hvsc-unavailable' | null;
 };
 
 export type StoredPlaylistState = {
@@ -47,6 +49,8 @@ export type StoredPlaylistState = {
     sizeBytes?: number | null;
     modifiedAt?: string | null;
     addedAt?: string | null;
+    status?: 'ready' | 'unavailable';
+    unavailableReason?: 'source-revoked' | 'file-inaccessible' | 'hvsc-unavailable' | null;
   }>;
   currentIndex?: number;
 };

@@ -239,3 +239,32 @@ export const requireLocalSourceEntries = (source: LocalSourceRecord, context: st
   }
   return source.entries;
 };
+
+export const validateSource = async (sourceId: string): Promise<boolean> => {
+  const source = loadLocalSources().find((entry) => entry.id === sourceId);
+  if (!source) {
+    addLog('warn', 'Local source validation failed: source missing', { sourceId });
+    return false;
+  }
+
+  if (source.android?.treeUri) {
+    try {
+      await FolderPicker.listChildren({ treeUri: source.android.treeUri, path: '' });
+      return true;
+    } catch (error) {
+      addLog('warn', 'SAF source validation failed', {
+        sourceId,
+        treeUri: redactTreeUri(source.android.treeUri),
+        error: (error as Error).message,
+      });
+      return false;
+    }
+  }
+
+  if (!Array.isArray(source.entries)) {
+    addLog('warn', 'Local source validation failed: entries missing', { sourceId });
+    return false;
+  }
+
+  return true;
+};

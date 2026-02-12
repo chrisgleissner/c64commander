@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { getSidSongCount } from '@/lib/sid/sidUtils';
+import { createSslPayload, getSidSongCount } from '@/lib/sid/sidUtils';
 
 describe('sidUtils', () => {
   afterEach(() => {
@@ -31,5 +31,26 @@ describe('sidUtils', () => {
         byteLength: 4,
       }),
     );
+  });
+
+  it('encodes zero duration as 00:00', () => {
+    expect(Array.from(createSslPayload(0))).toEqual([0x00, 0x00]);
+  });
+
+  it('encodes maximum supported duration 99:59', () => {
+    expect(Array.from(createSslPayload((99 * 60 * 1000) + (59 * 1000)))).toEqual([0x99, 0x59]);
+  });
+
+  it('throws for negative duration', () => {
+    expect(() => createSslPayload(-1)).toThrow('non-negative');
+  });
+
+  it('throws for non-finite duration', () => {
+    expect(() => createSslPayload(Number.NaN)).toThrow('finite');
+    expect(() => createSslPayload(Number.POSITIVE_INFINITY)).toThrow('finite');
+  });
+
+  it('throws for values exceeding 99:59', () => {
+    expect(() => createSslPayload((100 * 60 * 1000))).toThrow('99:59');
   });
 });

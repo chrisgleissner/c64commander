@@ -13,9 +13,19 @@ export const computeSidMd5 = async (data: ArrayBuffer) => {
 };
 
 export const createSslPayload = (durationMs: number) => {
-  const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
-  const minutes = Math.min(99, Math.floor(totalSeconds / 60));
-  const seconds = Math.min(59, totalSeconds % 60);
+  if (!Number.isFinite(durationMs)) {
+    throw new Error('Invalid SID duration: value must be finite milliseconds');
+  }
+  if (durationMs < 0) {
+    throw new Error('Invalid SID duration: value must be non-negative milliseconds');
+  }
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const maxSeconds = (99 * 60) + 59;
+  if (totalSeconds > maxSeconds) {
+    throw new Error('Invalid SID duration: maximum supported value is 99:59');
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
   const bcd = (value: number) => ((Math.floor(value / 10) & 0xf) << 4) | (value % 10);
   return new Uint8Array([bcd(minutes), bcd(seconds)]);
 };

@@ -271,6 +271,8 @@ export function usePlaybackPersistence({
                 sizeBytes: item.sizeBytes ?? null,
                 modifiedAt: item.modifiedAt ?? null,
                 addedAt: item.addedAt ?? null,
+                status: item.status ?? 'ready',
+                unavailableReason: item.unavailableReason ?? null,
             })),
             currentIndex,
         };

@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { FolderPicker } from '@/lib/native/folderPicker';
 
 const platformState = { value: 'web', native: false };
 
@@ -38,6 +39,7 @@ import {
   saveLocalSources,
   setLocalSourceRuntimeFiles,
   prepareDirectoryInput,
+  validateSource,
 } from '@/lib/sourceNavigation/localSourcesStore';
 
 const createFile = (name: string, content: string, relativePath?: string) => {
@@ -54,6 +56,7 @@ describe('localSourcesStore', () => {
     pickDirectoryMock.mockReset();
     platformState.value = 'web';
     platformState.native = false;
+    (FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>).mockReset();
   });
 
   it('creates a local source from file list and tracks runtime files', () => {
@@ -300,6 +303,65 @@ describe('localSourcesStore', () => {
         permissionPersisted: false,
       });
       await expect(createLocalSourceFromPicker(null)).rejects.toThrow('Folder access permission could not be persisted');
+    });
+  });
+
+  describe('validateSource', () => {
+    it('returns false when source is missing', async () => {
+      await expect(validateSource('missing')).resolves.toBe(false);
+    });
+
+    it('validates SAF source via native listChildren', async () => {
+      const listChildrenMock = FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
+      listChildrenMock.mockResolvedValue({ entries: [] });
+
+      saveLocalSources([
+        {
+          id: 'saf',
+          name: 'SAF Source',
+          rootName: 'Phone',
+          rootPath: '/',
+          createdAt: new Date().toISOString(),
+          android: {
+            treeUri: 'content://tree/primary%3AMusic',
+            rootName: 'Phone',
+            permissionGrantedAt: new Date().toISOString(),
+          },
+        },
+      ] as any);
+
+      await expect(validateSource('saf')).resolves.toBe(true);
+      expect(listChildrenMock).toHaveBeenCalledWith({ treeUri: 'content://tree/primary%3AMusic', path: '' });
+    });
+
+    it('normalizes entries source with missing entries array as valid', async () => {
+      saveLocalSources([
+        {
+          id: 'local-missing',
+          name: 'Local Missing',
+          rootName: 'Folder',
+          rootPath: '/Folder/',
+          createdAt: new Date().toISOString(),
+          entries: undefined,
+        },
+      ] as any);
+
+      await expect(validateSource('local-missing')).resolves.toBe(true);
+    });
+
+    it('returns true for entries source with valid entries array', async () => {
+      saveLocalSources([
+        {
+          id: 'local-ok',
+          name: 'Local',
+          rootName: 'Folder',
+          rootPath: '/Folder/',
+          createdAt: new Date().toISOString(),
+          entries: [],
+        },
+      ] as any);
+
+      await expect(validateSource('local-ok')).resolves.toBe(true);
     });
   });
 

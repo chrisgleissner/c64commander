@@ -471,8 +471,11 @@ export default function PlayFilesPage() {
       sizeBytes: entry.sizeBytes ?? null,
       modifiedAt: entry.modifiedAt ?? null,
       addedAt: addedAtOverride ?? new Date().toISOString(),
+      status: 'ready',
+      unavailableReason: null,
     };
   }, [songNrInput]);
+
   const handleAddFileSelections = useMemo(
     () => createAddFileSelectionsHandler({
       addItemsStartedAtRef,

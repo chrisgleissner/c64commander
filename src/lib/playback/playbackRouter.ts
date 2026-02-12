@@ -13,7 +13,7 @@ import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { getActiveAction } from '@/lib/tracing/actionTrace';
-import { recordTraceError } from '@/lib/tracing/traceSession';
+import { recordDeviceGuard, recordTraceError } from '@/lib/tracing/traceSession';
 import { classifyError } from '@/lib/tracing/failureTaxonomy';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import {
@@ -75,6 +75,36 @@ export const buildPlayPlan = (request: PlayRequest): PlayPlan => {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeUltimatePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
+
+const emitDurationPropagationEvent = (payload: {
+  type: 'ssl-propagation-failure' | 'playback-no-duration';
+  level: 'error' | 'info';
+  reason: string;
+  path: string;
+  songlengthEntryMs?: number;
+  errorMessage?: string;
+}) => {
+  const eventContext = {
+    type: payload.type,
+    level: payload.level,
+    reason: payload.reason,
+    sourceKind: 'ultimate',
+    trackId: payload.path,
+    songlengthEntryMs: payload.songlengthEntryMs ?? null,
+    error: payload.errorMessage ?? null,
+  };
+
+  if (payload.level === 'error') {
+    addErrorLog('Ultimate SID SSL propagation failure', eventContext);
+  } else {
+    addLog('info', 'Ultimate SID has no duration metadata', eventContext);
+  }
+
+  const activeAction = getActiveAction();
+  if (activeAction) {
+    recordDeviceGuard(activeAction, eventContext);
+  }
+};
 
 export const tryFetchUltimateSidBlob = async (path: string) => {
   const normalizedPath = normalizeUltimatePath(path);
@@ -169,17 +199,66 @@ export const executePlayPlan = async (
     switch (plan.category) {
       case 'sid': {
         if (plan.source === 'ultimate') {
-          const hasDuration = Boolean(plan.durationMs && plan.durationMs > 0);
-          if (hasDuration) {
-            const ftpBlob = await tryFetchUltimateSidBlob(plan.path);
-            if (ftpBlob) {
-              const sslBlob = new Blob([createSslPayload(plan.durationMs!)], { type: 'application/octet-stream' });
-              await api.playSidUpload(ftpBlob, plan.songNr, sslBlob);
-              return;
-            }
+          const hasSonglengthData = typeof plan.durationMs === 'number' && plan.durationMs > 0;
+          if (!hasSonglengthData) {
+            emitDurationPropagationEvent({
+              type: 'playback-no-duration',
+              level: 'info',
+              reason: 'no-songlength-entry',
+              path: plan.path,
+            });
+            await api.playSid(plan.path, plan.songNr);
+            return;
           }
-          await api.playSid(plan.path, plan.songNr);
-          return;
+
+          let propagationFailure: Error | null = null;
+          try {
+            const ftpBlob = await tryFetchUltimateSidBlob(plan.path);
+            if (!ftpBlob) {
+              throw new Error('SID FTP fetch failed for SSL propagation');
+            }
+            const sslPayload = createSslPayload(plan.durationMs);
+            const sslBlob = new Blob([sslPayload], { type: 'application/octet-stream' });
+            await api.playSidUpload(ftpBlob, plan.songNr, sslBlob);
+            return;
+          } catch (error) {
+            propagationFailure = error as Error;
+            const message = propagationFailure.message;
+            const reason = /ftp/i.test(message)
+              ? 'ftp-fetch-failed'
+              : /invalid sid duration|duration/i.test(message)
+                ? 'ssl-payload-invalid'
+                : 'upload-failed-with-songlength-available';
+            emitDurationPropagationEvent({
+              type: 'ssl-propagation-failure',
+              level: 'error',
+              reason,
+              path: plan.path,
+              songlengthEntryMs: plan.durationMs,
+              errorMessage: message,
+            });
+            addLog('warn', 'Ultimate SID falling back to direct playback without SSL upload', {
+              path: plan.path,
+              reason,
+              error: message,
+            });
+          }
+
+          try {
+            await api.playSid(plan.path, plan.songNr);
+            return;
+          } catch (fallbackError) {
+            const err = fallbackError as Error;
+            const fallbackContext = new Error(
+              `Ultimate SID fallback playback failed after SSL propagation failure: ${err.message}`,
+            );
+            addErrorLog('Ultimate SID fallback playback failed', {
+              path: plan.path,
+              propagationError: propagationFailure?.message ?? null,
+              fallbackError: err.message,
+            });
+            throw fallbackContext;
+          }
         }
         const blob = await toBlob(plan.file);
         if (!blob) throw new Error('Missing local SID data.');
