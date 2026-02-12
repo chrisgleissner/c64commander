@@ -13,7 +13,7 @@ tags:
     optional: true
 - waitForAnimationToEnd
 - launchApp:
-  stopApp: true
+    stopApp: true
 - runFlow: subflows/open-play-add-items.yaml
 - assertVisible:
     id: "import-option-c64u"
