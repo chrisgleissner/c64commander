@@ -201,6 +201,46 @@ describe('logging', () => {
     expect(messages).toContain('bridge error');
   });
 
+  it('handles disabled and duplicate console bridge installation', () => {
+    const disabledUninstall = installConsoleDiagnosticsBridge({ enabled: false });
+    console.warn('disabled bridge');
+    expect(getLogs()).toHaveLength(0);
+    disabledUninstall();
+
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    const duplicateUninstall = installConsoleDiagnosticsBridge();
+    console.warn('active bridge');
+    duplicateUninstall();
+    uninstallBridge();
+
+    const messages = getLogs().map((entry) => entry.message);
+    expect(messages).toContain('active bridge');
+    expect(messages).not.toContain('disabled bridge');
+  });
+
+  it('normalizes non-string and error console messages', () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    console.warn({ kind: 'object-message' });
+    console.error(new Error('error-message'));
+    uninstallBridge();
+
+    const logs = getLogs();
+    expect(logs.map((entry) => entry.message)).toEqual(
+      expect.arrayContaining(['[object Object]', 'error-message']),
+    );
+  });
+
+  it('forwards logger info/debug to console by default', () => {
+    const infoSpy = vi.spyOn(console, 'info');
+    const debugSpy = vi.spyOn(console, 'debug');
+
+    logger.info('info-level');
+    logger.debug('debug-level');
+
+    expect(infoSpy).toHaveBeenCalled();
+    expect(debugSpy).toHaveBeenCalled();
+  });
+
   it('redacts logs when requested', () => {
     addLog('info', 'sensetive info');
     const formatted = formatLogsForShare(getLogs(), { redacted: true });

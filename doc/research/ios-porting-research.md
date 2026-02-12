@@ -231,7 +231,7 @@ Steps:
 - Boot simulator from created UDID (or recreate deterministically).
 - Run iOS-tagged flows only:
   - `maestro test .maestro --include-tags ios,ci-critical-ios --format junit --output test-results/maestro/ios-junit.xml`
-- Ensure `ci-critical-ios` includes a Demo Mode flow that validates mock startup + playable state.
+- Keep `ci-critical-ios` focused on real-device usage paths in the initial iOS scope (no iOS Demo Mode requirement).
 - Capture artifacts:
   - `test-results/maestro/**`
   - `test-results/evidence/maestro/**`
@@ -359,8 +359,6 @@ Implement these Maestro iOS flows first:
    - trigger diagnostics export/share path and verify no crash/error state.
 6. `ios-playback-basics`:
    - start playback, pause, next item.
-7. `ios-demo-mode-core`:
-   - force demo path, verify internal mock backend starts, and verify playable demo state.
 
 Tagging policy:
 
@@ -436,12 +434,12 @@ Done when:
 
 Deliverables:
 
-- iOS `SecureStorage`, `FeatureFlags`, `FolderPicker`, and `MockC64U` parity.
+- iOS `SecureStorage`, `FeatureFlags`, `FolderPicker`, and `FtpClient` parity.
 - ATS policy configured.
 
 Done when:
 
-- iOS launch + local import + storage persistence + Demo Mode internal mock flows pass.
+- iOS launch + local import + FTP browse + storage persistence flows pass.
 
 ## Phase 3: iOS CI gating flows and screenshots
 
@@ -479,8 +477,9 @@ Done when:
 ## 13. Clarifications and decisions to lock during implementation
 
 1. iOS mock target source for CI (decision):
-   - Decision: implement native iOS `MockC64U` plugin parity so Demo Mode works on iOS without external dependencies.
-   - `external Node mock server` remains optional for CI harness use (e.g., specific integration checks), not as the primary Demo Mode backend.
+   - Decision: initial iOS scope does not require Demo Mode; native iOS `MockC64U` parity is deferred.
+   - CI mock target source is `external Node mock server` only, used for deterministic integration checks where needed.
+   - Android Demo Mode remains unchanged in the current codebase and is not deprecated by this document.
 2. iOS 17 lane policy when runtime unavailable on hosted runners (clarified):
    - `hard fail` means the workflow fails immediately if iOS 17 runtime is missing.
    - `soft-skip with warning` means iOS 17-specific compatibility checks are skipped, a visible warning is emitted, and the rest of the workflow continues.
@@ -530,7 +529,7 @@ Rating scale used:
 
 | ID | Risk | Code evidence | Likelihood | Impact | Overall | Suggested solution | Done when |
 |---|---|---|---|---|---|---|---|
-| R1 | Missing iOS native plugin implementations will hard-fail key features | `src/lib/native/ftpClient.ts:43`, `src/lib/native/featureFlags.ts:17`, `src/lib/native/mockC64u.ts:21`, `src/lib/native/folderPicker.ts:101` | High | High | Critical | Implement iOS plugins with identical method contracts and payloads before enabling iOS gating | iOS simulator can complete local import, FTP browse, feature-flag read/write, and mock-mode startup flows |
+| R1 | Missing iOS native plugin implementations will hard-fail key features | `src/lib/native/ftpClient.ts:43`, `src/lib/native/featureFlags.ts:17`, `src/lib/native/folderPicker.ts:101` | High | High | Critical | Implement iOS plugins with identical method contracts and payloads before enabling iOS gating | iOS simulator can complete local import, FTP browse, and feature-flag read/write flows |
 | R2 | Credential persistence is not real on iOS (in-memory only) | `src/lib/native/secureStorage.ios.ts:11` | High | High | Critical | Replace TS fallback with native Keychain-backed `SecureStorage` plugin | Password survives app relaunch and simulator reboot test |
 | R3 | Local folder import semantics are Android/Web-centric; iOS picker behavior may diverge | `src/lib/sourceNavigation/localSourcesStore.ts:146`, `src/lib/sourceNavigation/localSourcesStore.ts:199`, `src/lib/playback/localFilePicker.ts:73`, `src/lib/disks/localDiskPicker.ts:100` | High | High | High | Implement iOS `FolderPicker` with security-scoped bookmarks and directory traversal parity; keep UI unchanged | Same local source/add-items UX works on iOS with persisted access after relaunch |
 | R4 | RAM dump folder write path is Android-only and will regress on iOS | `src/lib/machine/ramDumpStorage.ts:100`, `src/lib/machine/ramDumpStorage.ts:128` | High | Medium | High | Add iOS-capable folder/file write path (or explicitly gate feature in UI with clear message) | No broken settings actions on iOS; behavior is either functional or explicitly unavailable with rationale |
