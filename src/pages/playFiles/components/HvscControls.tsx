@@ -40,6 +40,10 @@ export type HvscControlsProps = {
   hvscSummaryDurationMs?: number | null;
   hvscSummaryUpdatedAt?: string | null;
   hvscSummaryFailureLabel: string;
+  hvscIngestionTotalSongs: number;
+  hvscIngestionIngestedSongs: number;
+  hvscIngestionFailedSongs: number;
+  hvscSonglengthSyntaxErrors: number;
   hvscActionLabel: string | null;
   hvscStage: string | null;
   hvscDownloadPercent: number | null | undefined;
@@ -86,6 +90,10 @@ export const HvscControls = ({
   hvscSummaryDurationMs,
   hvscSummaryUpdatedAt,
   hvscSummaryFailureLabel,
+  hvscIngestionTotalSongs,
+  hvscIngestionIngestedSongs,
+  hvscIngestionFailedSongs,
+  hvscSonglengthSyntaxErrors,
   hvscActionLabel,
   hvscStage,
   hvscDownloadPercent,
@@ -196,6 +204,12 @@ export const HvscControls = ({
           {hvscSummaryState === 'success' ? (
             <div className="space-y-1">
               <p className="text-sm font-medium">HVSC downloaded successfully</p>
+              <p>Ingested {hvscIngestionIngestedSongs} of {hvscIngestionTotalSongs} songs.</p>
+              {hvscSonglengthSyntaxErrors > 0 && (
+                <p className="text-amber-700 dark:text-amber-400">
+                  {hvscSonglengthSyntaxErrors} songlength entries had syntax errors and were ignored.
+                </p>
+              )}
               <p>Files extracted: {hvscSummaryFilesExtracted ?? '—'}</p>
               <p>Duration: {formatHvscDuration(hvscSummaryDurationMs)}</p>
               <p>Last updated: {formatHvscTimestamp(hvscSummaryUpdatedAt)}</p>
@@ -204,6 +218,9 @@ export const HvscControls = ({
             <div className="space-y-1">
               <p className="text-sm font-medium">HVSC download failed</p>
               <p>{hvscSummaryFailureLabel}</p>
+              {hvscIngestionFailedSongs > 0 && (
+                <p>{hvscIngestionFailedSongs} songs could not be imported. Check diagnostics logs for details.</p>
+              )}
             </div>
           )}
         </div>

@@ -9,7 +9,9 @@
 export type {
   HvscCacheStatus,
   HvscFolderListing,
+  HvscFolderListingPage,
   HvscIngestionState,
+  HvscIngestionSummary,
   HvscProgressEvent,
   HvscSong,
   HvscStatus,
@@ -23,6 +25,7 @@ export {
   getHvscDurationByMd5Seconds,
   getHvscDurationsByMd5Seconds,
   getHvscFolderListing,
+  getHvscFolderListingPaged,
   getHvscSong,
   getHvscStatus,
   ingestCachedHvsc,

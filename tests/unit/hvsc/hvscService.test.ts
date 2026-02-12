@@ -33,6 +33,16 @@ vi.mock('@/lib/hvsc/hvscMediaIndex', () => ({
         load: vi.fn(async () => undefined),
         getAll: vi.fn(() => []),
         scan: vi.fn(async () => undefined),
+        queryFolderPage: vi.fn(() => ({
+            path: '/',
+            folders: [],
+            songs: [],
+            totalFolders: 0,
+            totalSongs: 0,
+            offset: 0,
+            limit: 200,
+            query: '',
+        })),
     })),
 }));
 
@@ -47,6 +57,20 @@ vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
 
 vi.mock('@/lib/sourceNavigation/paths', () => ({
     normalizeSourcePath: vi.fn((p: string) => p || '/'),
+}));
+
+vi.mock('@/lib/hvsc/hvscBrowseIndexStore', () => ({
+    loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
+        schemaVersion: 1,
+        updatedAt: new Date().toISOString(),
+        songs: {},
+        folders: { '/': { path: '/', folders: [], songs: [] } },
+    })),
+    verifyHvscBrowseIndexIntegrity: vi.fn(async () => ({
+        isValid: true,
+        sampled: 0,
+        missingPaths: [],
+    })),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -65,6 +89,7 @@ import {
     cancelHvscInstall,
     addHvscProgressListener,
     getHvscFolderListing,
+    getHvscFolderListingPaged,
     getHvscSong,
     getHvscDurationByMd5Seconds,
     getHvscDurationsByMd5Seconds,
@@ -184,23 +209,30 @@ describe('hvscService', () => {
         });
     });
 
-    describe('buildFolderListingFromIndex', () => {
-        it('builds folder listing with folder and song data', () => {
-            const entries = [
-                { path: '/DEMOS/0-9/35_Years.sid', name: '35_Years.sid', durationSeconds: 161 },
-                { path: '/MUSICIANS/Rob_Hubbard/Commando.sid', name: 'Commando.sid', durationSeconds: 120 },
-            ];
+    describe('paged listing', () => {
+        it('returns paged runtime listing metadata', async () => {
+            const page = await getHvscFolderListingPaged({ path: '/', limit: 10, offset: 0 });
+            expect(page.limit).toBeGreaterThanOrEqual(10);
+            expect(page.offset).toBe(0);
+            expect(page.totalSongs).toBe(0);
+        });
 
-            const listing = __test__.buildFolderListingFromIndex('/DEMOS/0-9', entries);
+        it('maps paged results into compatibility listing', async () => {
+            const listing = await getHvscFolderListing('/');
+            expect(listing).toEqual({ path: '/', folders: [], songs: [] });
+        });
 
-            expect(listing.path).toBe('/DEMOS/0-9');
-            expect(listing.folders).toEqual(['/DEMOS/0-9', '/MUSICIANS/Rob_Hubbard']);
-            expect(listing.songs).toHaveLength(1);
-            expect(listing.songs[0]).toMatchObject({
-                virtualPath: '/DEMOS/0-9/35_Years.sid',
-                fileName: '35_Years.sid',
-                durationSeconds: 161,
-            });
+        it('filters runtime listing in page helper', () => {
+            const page = __test__.pageRuntimeListing({
+                path: '/DEMOS',
+                folders: ['/DEMOS/A', '/DEMOS/B'],
+                songs: [
+                    { id: 1, virtualPath: '/DEMOS/A/One.sid', fileName: 'One.sid' },
+                    { id: 2, virtualPath: '/DEMOS/B/Two.sid', fileName: 'Two.sid' },
+                ],
+            }, 'Two', 0, 50);
+            expect(page.totalSongs).toBe(1);
+            expect(page.songs[0]?.fileName).toBe('Two.sid');
         });
     });
 

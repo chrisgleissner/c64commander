@@ -428,28 +428,28 @@ Before executing a phase:
 
 ### Subtasks
 
-- [ ] **6.1 Profile current memory usage during extraction**
+- [x] **6.1 Profile current memory usage during extraction**
   - Instrument `src/lib/hvsc/hvscArchiveExtraction.ts` and `src/lib/hvsc/hvscDownload.ts` with memory usage logging (`performance.memory` where available, or `process.memoryUsage()` equivalent).
   - Document baseline peak memory for the current test fixture archive size and extrapolate for production HVSC archive (~70MB compressed, ~400MB extracted).
 
-- [ ] **6.2 Implement streaming/chunked extraction for ZIP archives**
+- [x] **6.2 Implement streaming/chunked extraction for ZIP archives**
   - Replace `unzipSync` (in-memory full decode at `hvscArchiveExtraction.ts:58`) with a streaming alternative:
     - Option A: Use `fflate`'s `Unzip` streaming API which processes entries one at a time.
     - Option B: Use the native `FileSystem` bridge to extract on the Kotlin side where memory is more controllable.
   - If Option A: process entries in batches (e.g., 100 files at a time), yielding to the event loop between batches to avoid blocking.
   - If Option B: add a `ZipExtractPlugin` Kotlin class that extracts to the app's cache directory and returns extracted paths.
 
-- [ ] **6.3 Implement chunked extraction for 7z archives**
+- [x] **6.3 Implement chunked extraction for 7z archives**
   - The current 7z path (`hvscArchiveExtraction.ts:101-133`) copies all files through WASM FS.
   - Implement batched reads: extract N entries at a time from the WASM FS, write them to the target filesystem, then free the WASM buffers before the next batch.
   - Add progress callbacks per batch for UI feedback.
 
-- [ ] **6.4 Reduce peak memory in archive download/readback**
+- [x] **6.4 Reduce peak memory in archive download/readback**
   - `src/lib/hvsc/hvscDownload.ts:224-230` decodes the full archive file to memory as base64.
   - Replace with: stream the download directly to a filesystem path (using `Filesystem.writeFile` or native bridge), then extract from the file path rather than from an in-memory blob.
   - If Capacitor `Filesystem` does not support streaming writes, use the `FolderPicker` native bridge or a new `FileWriter` plugin.
 
-- [ ] **6.5 Implement strict ingestion completeness contract**
+- [x] **6.5 Implement strict ingestion completeness contract**
   - In `src/lib/hvsc/hvscIngestionRuntime.ts`:
     - Track per-song ingestion outcomes: `{ total: number, ingested: number, failed: number, songlengthSyntaxErrors: number }`.
     - Every song extraction/indexing attempt must increment either `ingested` or `failed`. No songs may be silently skipped.
@@ -461,21 +461,21 @@ Before executing a phase:
     - Songlength reload failure: set state to `failed`, not `ready`, as duration data is critical for playback (per Q4).
   - Remove or replace the `degraded` state concept — ingestion is either `ready` (all songs OK) or `failed` (something went wrong) or `in-progress`.
 
-- [ ] **6.6 Implement Songlengths.md5 syntax error tolerance**
+- [x] **6.6 Implement Songlengths.md5 syntax error tolerance**
   - In the `Songlengths.md5` parser (locate in `src/lib/hvsc/` or `src/lib/sid/`):
     - When a line in `Songlengths.md5` cannot be parsed, do **not** abort ingestion.
     - Instead: increment `songlengthSyntaxErrors`, log at WARN with the line number and raw line content, and continue.
     - After parsing is complete, store the `songlengthSyntaxErrors` count in the HVSC status store.
   - Songs whose songlength entry has a syntax error will play without duration metadata. This is acceptable and does not count as an ingestion failure.
 
-- [ ] **6.7 Implement ingestion result reporting in UI**
+- [x] **6.7 Implement ingestion result reporting in UI**
   - In `src/pages/playFiles/hooks/useHvscLibrary.ts` and related UI components:
     - After ingestion completes, show a summary: "Ingested X of Y songs. Z songlength parsing errors."
     - If state is `failed`: show an error banner with the failure count and actionable message (e.g., "N songs could not be imported. Check logs for details.").
     - If `songlengthSyntaxErrors > 0` and state is `ready`: show a warning indicator (e.g., yellow badge): "Y songs have no duration data due to Z songlength file parsing errors."
     - If state is `ready` and no errors: show a success message with total song count.
 
-- [ ] **6.8 Add strict ingestion tests**
+- [x] **6.8 Add strict ingestion tests**
   - In `tests/unit/hvsc/`:
     - Test: extraction of N songs, all succeed -> state `ready`, counts match.
     - Test: extraction of N songs, 1 fails -> state `failed`, `failed: 1`, `ingested: N-1`.
@@ -484,7 +484,7 @@ Before executing a phase:
     - Test: songlength reload fails -> state `failed`.
   - Create a synthetic test fixture with intentionally malformed `Songlengths.md5` entries to validate syntax error tolerance.
 
-- [ ] **6.9 Add memory stress tests**
+- [x] **6.9 Add memory stress tests**
   - Create a test fixture: generate a synthetic archive with ~50,000 small files (representative of HVSC entry count) at ~100 bytes each, totaling ~5MB compressed. This simulates the file-count stress without requiring the full 70MB HVSC archive.
   - Add a Vitest test in `tests/unit/hvsc/` that:
     - Extracts the synthetic archive using the new streaming/chunked path.
@@ -492,7 +492,7 @@ Before executing a phase:
     - If `performance.memory` is available, asserts peak heap delta stays under a threshold (e.g., 200MB).
   - Add a Vitest test that simulates extraction failure mid-way (mock a write failure on the Nth file) and asserts the runtime transitions to `failed` state with correct counts.
 
-- [ ] **6.10 Replace localStorage HVSC index with scalable on-device index storage**
+- [x] **6.10 Replace localStorage HVSC index with scalable on-device index storage**
   - Current `createHvscMediaIndex()` uses `LocalStorageMediaIndexStorage` (`src/lib/hvsc/hvscMediaIndex.ts`, `src/lib/media-index/localStorageMediaIndex.ts`) and is not reliable for 100k+ entries.
   - Implement a durable HVSC index store in app data (or IndexedDB), not localStorage, with explicit schema/versioning aligned with `doc/db.md`.
   - Use app-owned tables from `doc/db.md` as implementation target:
@@ -501,16 +501,17 @@ Before executing a phase:
     - `hvsc_ingestion_runs`.
   - Keep writes batched during ingestion to avoid large single transactions.
 
-- [ ] **6.11 Build folder-level browse index during ingestion**
+- [x] **6.11 Build folder-level browse index during ingestion**
   - During `installOrUpdateHvsc` / `ingestCachedHvsc`, build and persist folder adjacency (`hvsc_folders`, `hvsc_folder_tracks`) while writing files so `getHvscFolderListing(path)` does not scan all songs for each call.
   - Remove O(totalSongs) per-request listing behavior in `src/lib/hvsc/hvscService.ts` (`buildFolderListingFromIndex` path).
   - Ensure update archives (deletions + additions) keep the browse index consistent.
 
-- [ ] **6.12 Parse SID header metadata during HVSC ingestion**
+- [x] **6.12 Parse SID header metadata during HVSC ingestion**
   - Parse PSID/RSID header fields for each SID file (v1-v4) and persist metadata in `sid_metadata` + `track_subsongs`:
     - `magicId`, `version`, `songs`, `startSong`, `clock`, `sid1Model`/`sid2Model`/`sid3Model`, `sid2Adress`, `sid2Address`,
     - `name`, `author`, `released` (Windows-1252 decoded),
     - speed/mus/player flags and parser warnings.
+  - SID spec can be found in doc/sid-file-format-spec.md
   - Validate RSID-required constraints; if invalid, store compatibility state (`rsid_valid`, warnings) and log classification context.
   - Ensure canonical `tracks` metadata (title/author/released/subsong count) is populated from parsed SID metadata.
   - Add explicit parser tests in `tests/unit/sid/` and ingestion integration tests in `tests/unit/hvsc/` for:
@@ -520,19 +521,19 @@ Before executing a phase:
     - Windows-1252 decoding for `name`/`author`/`released`,
     - RSID invalid-header rejection/flagging behavior.
 
-- [ ] **6.13 Add paged HVSC listing and search primitives**
+- [x] **6.13 Add paged HVSC listing and search primitives**
   - Extend HVSC service API to support deterministic paging/filtering:
     - Example: `getHvscFolderListing({ path, query?, offset, limit })`.
     - Response includes `totalSongs`, `totalFolders`, page slices, and SID metadata facets needed by playlist/search.
   - Keep existing non-paged API as a compatibility wrapper for small lists, but migrate UI callers to paged API.
 
-- [ ] **6.14 Add HVSC index migration and integrity checks**
+- [x] **6.14 Add HVSC index migration and integrity checks**
   - On startup after upgrade, detect old index format and rebuild/migrate once.
   - Add consistency checks: random spot-check that index entries exist in filesystem and vice versa (sampled, not full scan on hot path).
   - Verify schema/migration conformance with `doc/db.md` and playlist ingest/query contracts in `doc/architecture.md`.
   - If index corruption is detected, force deterministic rebuild and log at WARN with context.
 
-- [ ] **6.15 Run full build and test suite**
+- [x] **6.15 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - `cd android && ./gradlew test`
   - Fix any regressions.

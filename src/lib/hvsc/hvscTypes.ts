@@ -8,12 +8,49 @@
 
 export type HvscIngestionState = 'idle' | 'installing' | 'updating' | 'ready' | 'error';
 
+export type HvscSidClock = 'unknown' | 'pal' | 'ntsc' | 'pal_ntsc';
+export type HvscSidModel = 'unknown' | 'mos6581' | 'mos8580' | 'both';
+
+export type HvscSidMetadata = {
+  magicId: 'PSID' | 'RSID';
+  version: number;
+  songs: number;
+  startSong: number;
+  clock: HvscSidClock;
+  sid1Model: HvscSidModel;
+  sid2Model: HvscSidModel | null;
+  sid3Model: HvscSidModel | null;
+  sid2Adress: number | null;
+  sid2Address: number | null;
+  name: string;
+  author: string;
+  released: string;
+  rsidValid: boolean | null;
+  parserWarnings: string[];
+};
+
+export type HvscTrackSubsong = {
+  songNr: number;
+  isDefault: boolean;
+};
+
+export type HvscIngestionSummary = {
+  totalSongs: number;
+  ingestedSongs: number;
+  failedSongs: number;
+  songlengthSyntaxErrors: number;
+  failedPaths: string[];
+  completedAt: string;
+  archiveName?: string;
+};
+
 export type HvscStatus = {
   installedBaselineVersion?: number | null;
   installedVersion: number;
   ingestionState: HvscIngestionState;
   lastUpdateCheckUtcMs?: number | null;
   ingestionError?: string | null;
+  ingestionSummary?: HvscIngestionSummary | null;
 };
 
 export type HvscUpdateStatus = {
@@ -41,6 +78,24 @@ export type HvscFolderListing = {
   }>;
 };
 
+export type HvscFolderListingPage = {
+  path: string;
+  folders: string[];
+  songs: Array<{
+    id: number;
+    virtualPath: string;
+    fileName: string;
+    durationSeconds?: number | null;
+    sidMetadata?: HvscSidMetadata | null;
+    trackSubsongs?: HvscTrackSubsong[] | null;
+  }>;
+  totalFolders: number;
+  totalSongs: number;
+  offset: number;
+  limit: number;
+  query?: string;
+};
+
 export type HvscSong = {
   id: number;
   virtualPath: string;
@@ -66,6 +121,10 @@ export type HvscProgressEvent = {
   songsUpserted?: number;
   songsDeleted?: number;
   elapsedTimeMs?: number;
+  totalSongs?: number;
+  ingestedSongs?: number;
+  failedSongs?: number;
+  songlengthSyntaxErrors?: number;
   errorType?: string;
   errorCause?: string;
 };

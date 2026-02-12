@@ -25,6 +25,7 @@ vi.mock('@/lib/hvsc/hvscStateStore', () => ({
 
 vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
     reloadHvscSonglengthsOnConfigChange: vi.fn(async () => undefined),
+    getHvscSonglengthsStats: vi.fn(() => ({ backendStats: { rejectedLines: 0 } })),
 }));
 
 vi.mock('@/lib/logging', () => ({

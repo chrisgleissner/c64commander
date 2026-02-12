@@ -74,6 +74,23 @@ The script also accepts a direct Songlengths file path:
 python3 scripts/hvsc_filename_frequency.py /path/to/HVSC/DOCUMENTS/Songlengths.md5 --duplicates-only
 ```
 
+## HVSC ingestion completeness contract
+
+- HVSC ingestion now tracks strict counters for every SID candidate in each archive:
+  - `totalSongs`, `ingestedSongs`, `failedSongs`, `songlengthSyntaxErrors`.
+- Any SID write/index failure increments `failedSongs` and is treated as ingestion failure.
+- Cleanup deletion failures and songlength reload failures are fatal and move ingestion to `error`.
+- `Songlengths.md5` syntax errors are tolerated: they increment `songlengthSyntaxErrors`, are logged at WARN, and do not block a `ready` result when `failedSongs` is zero.
+- Result counters are stored in `HvscStatus.ingestionSummary` and surfaced in the HVSC controls UI and install/ingest toast messages.
+
+### HVSC index persistence
+
+- HVSC media index storage now uses app data filesystem persistence (`Directory.Data`) rather than localStorage.
+- The index exposes a paged folder listing primitive (`getHvscFolderListingPaged`) used as the scalable browse entrypoint; legacy `getHvscFolderListing(path)` remains as a compatibility wrapper.
+- Folder adjacency is now persisted in a dedicated browse index sidecar (`hvsc/index/hvsc-browse-index-v1.json`) and updated during ingestion (additions + deletions), removing O(totalSongs) scans for each folder listing request.
+- SID header metadata is parsed during ingestion (PSID/RSID v1-v4) and stored with browse index song rows, including model/clock fields, Windows-1252 text metadata, RSID validity, parser warnings, and generated subsong rows.
+- Startup now performs deterministic index migration/integrity flow: migrate legacy `c64u_media_index:v1` snapshots once, run sampled filesystem spot-checks against browse index entries, and force a rebuild when corruption is detected.
+
 ## Playback auto-advance under lock/background
 
 ### Completion signal decision (2026-02)

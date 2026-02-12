@@ -33,6 +33,7 @@ const defaultState = (): HvscState => ({
   ingestionState: 'idle',
   lastUpdateCheckUtcMs: null,
   ingestionError: null,
+  ingestionSummary: null,
   updates: {},
 });
 
@@ -49,6 +50,7 @@ export const loadHvscState = (): HvscState => {
       ingestionState: toIngestionState(parsed.ingestionState),
       lastUpdateCheckUtcMs: parsed.lastUpdateCheckUtcMs ?? null,
       ingestionError: parsed.ingestionError ?? null,
+      ingestionSummary: parsed.ingestionSummary ?? null,
       updates: parsed.updates ?? {},
     };
   } catch (error) {

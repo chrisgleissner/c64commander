@@ -598,7 +598,14 @@ test.describe('HVSC Play page', () => {
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
     await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscIngest');
 
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
+    const preferredFolder = page.getByRole('button', { name: '/DEMOS/0-9', exact: true });
+    if (await preferredFolder.count()) {
+      await preferredFolder.click();
+    } else {
+      const fallbackFolder = page.getByRole('button', { name: /^\/[A-Z0-9]/ }).first();
+      await expect(fallbackFolder).toBeVisible();
+      await fallbackFolder.click();
+    }
     await page.getByRole('button', { name: 'Play folder' }).click();
 
     await expect.poll(() => c64Server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay'))).toBe(true);

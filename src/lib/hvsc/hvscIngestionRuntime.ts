@@ -21,9 +21,11 @@ import {
 } from './hvscFilesystem';
 import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } from './hvscStateStore';
 import { loadHvscStatusSummary, saveHvscStatusSummary } from './hvscStatusStore';
-import { reloadHvscSonglengthsOnConfigChange } from './hvscSongLengthService';
+import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from './hvscSongLengthService';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { classifyError } from '@/lib/tracing/failureTaxonomy';
+import { buildSidTrackSubsongs, parseSidHeaderMetadata } from '@/lib/sid/sidUtils';
+import { createHvscBrowseIndexMutable } from './hvscBrowseIndexStore';
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -144,6 +146,13 @@ export type IngestArchiveBufferResult = {
 export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): Promise<IngestArchiveBufferResult> => {
   const { plan, archiveName, archiveBuffer, cancelToken, cancelTokens, emitProgress, pipeline } = options;
   let { baselineInstalled } = options;
+  const ingestionSummary = {
+    totalSongs: 0,
+    ingestedSongs: 0,
+    failedSongs: 0,
+    songlengthSyntaxErrors: 0,
+    failedPaths: [] as string[],
+  };
 
   const ensureNotCancelledLocal = () => {
     if (cancelTokens.get(cancelToken)?.cancelled) {
@@ -156,6 +165,8 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     await resetLibraryRoot();
     baselineInstalled = plan.version;
   }
+
+  const browseIndex = await createHvscBrowseIndexMutable(plan.type);
 
   const deletions: string[] = [];
   pipeline.transition('EXTRACTING');
@@ -212,22 +223,77 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
         ? normalizeVirtualPath(normalized)
         : normalizeUpdateVirtualPath(normalized);
       if (!virtualPath) return;
-      await writeLibraryFile(virtualPath, data);
-      emitProgress({
-        stage: 'sid_metadata_parsing',
-        message: `Parsed ${virtualPath}`,
-        archiveName,
-        currentFile: virtualPath,
-      });
+      ingestionSummary.totalSongs += 1;
+      try {
+        let sidMetadata = null;
+        let trackSubsongs = null;
+        try {
+          sidMetadata = parseSidHeaderMetadata(data);
+          trackSubsongs = buildSidTrackSubsongs(sidMetadata.songs, sidMetadata.startSong);
+        } catch (parseError) {
+          const failure = classifyError(parseError);
+          addLog('warn', 'HVSC SID metadata parse failed; continuing ingest', {
+            virtualPath,
+            archiveName,
+            errorCategory: failure.category,
+            errorExpected: failure.isExpected,
+            error: (parseError as Error).message,
+          });
+        }
+        await writeLibraryFile(virtualPath, data);
+        browseIndex.upsertSong({
+          virtualPath,
+          fileName: virtualPath.split('/').pop() ?? virtualPath,
+          sidMetadata,
+          trackSubsongs,
+        });
+        ingestionSummary.ingestedSongs += 1;
+        emitProgress({
+          stage: 'sid_metadata_parsing',
+          message: `Parsed ${virtualPath}`,
+          archiveName,
+          currentFile: virtualPath,
+          totalSongs: ingestionSummary.totalSongs,
+          ingestedSongs: ingestionSummary.ingestedSongs,
+          failedSongs: ingestionSummary.failedSongs,
+        });
+      } catch (error) {
+        const failure = classifyError(error);
+        ingestionSummary.failedSongs += 1;
+        ingestionSummary.failedPaths.push(virtualPath);
+        addErrorLog('HVSC song ingest failed', {
+          archiveName,
+          virtualPath,
+          errorCategory: failure.category,
+          errorExpected: failure.isExpected,
+          operation: 'writeLibraryFile',
+          error: {
+            name: (error as Error).name,
+            message: (error as Error).message,
+            stack: (error as Error).stack,
+          },
+        });
+        emitProgress({
+          stage: 'sid_metadata_parsing',
+          message: `Failed ${virtualPath}`,
+          archiveName,
+          currentFile: virtualPath,
+          totalSongs: ingestionSummary.totalSongs,
+          ingestedSongs: ingestionSummary.ingestedSongs,
+          failedSongs: ingestionSummary.failedSongs,
+        });
+      }
     },
   });
   pipeline.transition('EXTRACTED');
 
   pipeline.transition('INGESTING', { deletionCount: deletions.length });
+  const deletionFailures: string[] = [];
   if (deletions.length) {
     for (const path of deletions) {
       try {
         await deleteLibraryFile(path);
+        browseIndex.deleteSong(path);
       } catch (error) {
         const failure = classifyError(error);
         addErrorLog('HVSC deletion failed', {
@@ -240,8 +306,12 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
             stack: (error as Error).stack,
           },
         });
+        deletionFailures.push(path);
       }
     }
+  }
+  if (deletionFailures.length > 0) {
+    throw new Error(`HVSC ingestion cleanup failed for ${deletionFailures.length} file(s): ${deletionFailures.slice(0, 10).join(', ')}`);
   }
 
   resetSonglengthsCache();
@@ -259,19 +329,51 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
         stack: (error as Error).stack,
       },
     });
+    throw error;
   }
+  ingestionSummary.songlengthSyntaxErrors = getHvscSonglengthsStats().backendStats.rejectedLines;
+
+  if (ingestionSummary.failedSongs > 0) {
+    const failedMessage = `HVSC ingestion failed: ${ingestionSummary.failedSongs} of ${ingestionSummary.totalSongs} songs could not be ingested (${ingestionSummary.failedPaths.slice(0, 10).join(', ')})`;
+    updateHvscState({
+      ingestionState: 'error',
+      ingestionError: failedMessage,
+      ingestionSummary: {
+        ...ingestionSummary,
+        completedAt: new Date().toISOString(),
+        archiveName,
+      },
+    });
+    throw new Error(failedMessage);
+  }
+
+  await browseIndex.finalize();
 
   updateHvscState({
     installedBaselineVersion: baselineInstalled,
     installedVersion: plan.version,
     ingestionState: 'ready',
     ingestionError: null,
+    ingestionSummary: {
+      ...ingestionSummary,
+      completedAt: new Date().toISOString(),
+      archiveName,
+    },
   });
   if (plan.type === 'update') {
     markUpdateApplied(plan.version, 'success');
   }
   pipeline.transition('READY');
-  emitProgress({ stage: 'complete', message: `${archiveName} indexed`, archiveName, percent: 100 });
+  emitProgress({
+    stage: 'complete',
+    message: `${archiveName} indexed`,
+    archiveName,
+    percent: 100,
+    totalSongs: ingestionSummary.totalSongs,
+    ingestedSongs: ingestionSummary.ingestedSongs,
+    failedSongs: ingestionSummary.failedSongs,
+    songlengthSyntaxErrors: ingestionSummary.songlengthSyntaxErrors,
+  });
 
   return { baselineInstalled };
 };
@@ -369,7 +471,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         const downloadUrl = plan.type === 'baseline'
           ? buildHvscBaselineUrl(plan.version, baseUrl)
           : buildHvscUpdateUrl(plan.version, baseUrl);
-        await downloadArchive({
+        const downloadedBuffer = await downloadArchive({
           plan,
           archiveName,
           archivePath,
@@ -379,6 +481,31 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           emitProgress,
         });
         currentArchiveComplete = true;
+        pipeline.transition('DOWNLOADED', { cached: false });
+        currentPipelineState = pipeline.current();
+
+        ensureNotCancelled(cancelToken);
+        const archiveBuffer = downloadedBuffer ?? await readArchiveBuffer(archivePath);
+
+        emitProgress({
+          stage: 'archive_validation',
+          message: `Validated ${archiveName}`,
+          archiveName,
+        });
+
+        const result = await ingestArchiveBuffer({
+          plan,
+          archiveName: archivePath,
+          archiveBuffer,
+          cancelToken,
+          cancelTokens,
+          emitProgress,
+          pipeline,
+          baselineInstalled,
+        });
+        baselineInstalled = result.baselineInstalled;
+        currentPipelineState = pipeline.current();
+        continue;
       } else {
         currentArchiveComplete = true;
         try {
@@ -437,6 +564,9 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     return loadHvscState();
   } catch (error) {
     const failure = classifyError(error);
+    if (currentArchiveType === 'update' && currentArchiveVersion) {
+      markUpdateApplied(currentArchiveVersion, 'failed', (error as Error).message);
+    }
     if (currentArchive && !currentArchiveComplete) {
       const { deleteCachedArchive } = await import('./hvscFilesystem');
       await deleteCachedArchive(currentArchive);
@@ -604,6 +734,9 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     return loadHvscState();
   } catch (error) {
     const failure = classifyError(error);
+    if (currentArchiveType === 'update' && currentArchiveVersion) {
+      markUpdateApplied(currentArchiveVersion, 'failed', (error as Error).message);
+    }
     addErrorLog('HVSC cached ingest failed', {
       ingestionId,
       archiveName: currentArchive ?? undefined,

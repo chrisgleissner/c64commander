@@ -92,6 +92,17 @@ export const concatChunks = (chunks: Uint8Array[], totalLength?: number | null) 
     return buffer;
 };
 
+const readHeapUsageBytes = () => {
+    if (typeof performance !== 'undefined' && 'memory' in performance) {
+        const perf = performance as Performance & { memory?: { usedJSHeapSize?: number } };
+        return perf.memory?.usedJSHeapSize ?? null;
+    }
+    if (typeof process !== 'undefined' && typeof process.memoryUsage === 'function') {
+        return process.memoryUsage().heapUsed;
+    }
+    return null;
+};
+
 // ── Path normalization helpers ───────────────────────────────────
 
 export const normalizeEntryName = (raw: string) => raw.replace(/\\/g, '/').replace(/^\/+/, '');
@@ -238,12 +249,22 @@ export const getCacheStatusInternal = async () => {
 // ── Archive read-back ────────────────────────────────────────────
 
 export const readArchiveBuffer = async (archivePath: string) => {
+    const heapBefore = readHeapUsageBytes();
     const cacheDir = getHvscCacheDir();
     const archiveData = await Filesystem.readFile({
         directory: Directory.Data,
         path: `${cacheDir}/${archivePath}`,
     });
-    return base64ToUint8(archiveData.data);
+    const decoded = base64ToUint8(archiveData.data);
+    const heapAfter = readHeapUsageBytes();
+    addLog('info', 'HVSC archive read memory profile', {
+        archivePath,
+        bytes: decoded.byteLength,
+        heapBefore,
+        heapAfter,
+        heapDelta: (heapBefore !== null && heapAfter !== null) ? heapAfter - heapBefore : null,
+    });
+    return decoded;
 };
 
 // ── Download engine ──────────────────────────────────────────────
@@ -270,14 +291,16 @@ export const ensureNotCancelledWith = (
     }
 };
 
-export const downloadArchive = async (options: DownloadArchiveOptions) => {
+export const downloadArchive = async (options: DownloadArchiveOptions): Promise<Uint8Array | null> => {
     const { plan, archiveName, archivePath, downloadUrl, cancelToken, cancelTokens, emitProgress } = options;
     const ensureNotCancelled = () => ensureNotCancelledWith(cancelTokens, cancelToken);
+    let inMemoryBuffer: Uint8Array | null = null;
 
     ensureNotCancelled();
     emitProgress({ stage: 'download', message: `Downloading ${archiveName}…`, archiveName, percent: 0 });
     await deleteCachedArchive(archivePath);
     addLog('info', 'HVSC download started', { archiveName, url: downloadUrl });
+    const downloadHeapBefore = readHeapUsageBytes();
     const totalBytesHint = await fetchContentLength(downloadUrl);
 
     if (shouldUseNativeDownload()) {
@@ -331,6 +354,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
             const buffer = new Uint8Array(await response.arrayBuffer());
             await writeCachedArchive(archivePath, buffer);
             emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
+            inMemoryBuffer = buffer;
         } finally {
             if (pollingTimer) clearInterval(pollingTimer);
         }
@@ -348,6 +372,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
             }
             await writeCachedArchive(archivePath, buffer);
             emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
+            inMemoryBuffer = buffer;
         } else {
             const reader = response.body.getReader();
             const chunks: Uint8Array[] = [];
@@ -368,8 +393,19 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
             const buffer = concatChunks(chunks, totalBytes ?? undefined);
             await writeCachedArchive(archivePath, buffer);
             emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
+            inMemoryBuffer = buffer;
         }
     }
+
+    const downloadHeapAfter = readHeapUsageBytes();
+    addLog('info', 'HVSC download memory profile', {
+        archiveName,
+        heapBefore: downloadHeapBefore,
+        heapAfter: downloadHeapAfter,
+        heapDelta: (downloadHeapBefore !== null && downloadHeapAfter !== null)
+            ? downloadHeapAfter - downloadHeapBefore
+            : null,
+    });
 
     addLog('info', 'HVSC download completed', { archiveName });
 
@@ -402,4 +438,6 @@ export const downloadArchive = async (options: DownloadArchiveOptions) => {
             completedAt: new Date().toISOString(),
         });
     }
+
+    return inMemoryBuffer;
 };

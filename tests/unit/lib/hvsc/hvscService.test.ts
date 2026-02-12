@@ -14,6 +14,16 @@ const mocks = vi.hoisted(() => ({
         load: vi.fn(),
         getAll: vi.fn().mockReturnValue([]),
         scan: vi.fn(),
+        queryFolderPage: vi.fn().mockReturnValue({
+            path: '/HVSC',
+            folders: [],
+            songs: [],
+            totalFolders: 0,
+            totalSongs: 0,
+            offset: 0,
+            limit: 200,
+            query: '',
+        }),
     }
 }));
 
@@ -53,6 +63,20 @@ vi.mock('@/lib/hvsc/hvscRootLocator', () => ({
 vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
     ensureHvscSonglengthsReadyOnColdStart: vi.fn(),
     resolveHvscSonglengthDuration: vi.fn().mockReturnValue({}),
+}));
+
+vi.mock('@/lib/hvsc/hvscBrowseIndexStore', () => ({
+    loadHvscBrowseIndexSnapshot: vi.fn(async () => ({
+        schemaVersion: 1,
+        updatedAt: new Date().toISOString(),
+        songs: {},
+        folders: { '/': { path: '/', folders: [], songs: [] } },
+    })),
+    verifyHvscBrowseIndexIntegrity: vi.fn(async () => ({
+        isValid: true,
+        sampled: 0,
+        missingPaths: [],
+    })),
 }));
 
 describe('hvscService', () => {
@@ -117,9 +141,17 @@ describe('hvscService', () => {
 
     describe('getHvscFolderListing', () => {
         it('uses index if entries found', async () => {
-            mocks.mockIndex.getAll.mockReturnValue([
-                { path: '/HVSC/foo.sid', name: 'foo.sid' }
-            ]);
+            mocks.mockIndex.getAll.mockReturnValue([{ path: '/HVSC/foo.sid', name: 'foo.sid' }]);
+            mocks.mockIndex.queryFolderPage.mockReturnValue({
+                path: '/HVSC',
+                folders: [],
+                songs: [{ id: 1, virtualPath: '/HVSC/foo.sid', fileName: 'foo.sid' }],
+                totalFolders: 0,
+                totalSongs: 1,
+                offset: 0,
+                limit: 200,
+                query: '',
+            });
 
             const result = await hvscService.getHvscFolderListing('/HVSC');
 
@@ -132,43 +164,68 @@ describe('hvscService', () => {
 
         it('falls back to mock bridge if index empty', async () => {
             mocks.mockIndex.getAll.mockReturnValue([]);
+            mocks.mockIndex.queryFolderPage.mockReturnValue({
+                path: '/path',
+                folders: [],
+                songs: [],
+                totalFolders: 0,
+                totalSongs: 0,
+                offset: 0,
+                limit: 200,
+                query: '',
+            });
             stubWindow({
                 __hvscMock__: {
-                    getHvscFolderListing: vi.fn().mockReturnValue({ mock: true })
+                    getHvscFolderListing: vi.fn().mockReturnValue({ path: '/path', folders: [], songs: [] })
                 }
             });
 
             const result = await hvscService.getHvscFolderListing('/path');
-            expect(result).toEqual({ mock: true });
+            expect(result).toEqual({ path: '/path', folders: [], songs: [] });
         });
 
         it('falls back to runtime if index empty and no mock bridge', async () => {
             mocks.mockIndex.getAll.mockReturnValue([]);
+            mocks.mockIndex.queryFolderPage.mockReturnValue({
+                path: '/path',
+                folders: [],
+                songs: [],
+                totalFolders: 0,
+                totalSongs: 0,
+                offset: 0,
+                limit: 200,
+                query: '',
+            });
             stubWindow({});
             vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
-            vi.mocked(runtime.getHvscFolderListing).mockResolvedValue({ runtime: true } as any);
+            vi.mocked(runtime.getHvscFolderListing).mockResolvedValue({ path: '/path', folders: [], songs: [] } as any);
 
             const result = await hvscService.getHvscFolderListing('/path');
-            expect(result).toEqual({ runtime: true });
+            expect(result).toEqual({ path: '/path', folders: [], songs: [] });
         });
     });
 
-    describe('buildFolderListingFromIndex', () => {
-        const { buildFolderListingFromIndex } = hvscService.__test__;
+    describe('pageRuntimeListing', () => {
+        const { pageRuntimeListing } = hvscService.__test__;
 
-        it('groups songs and folders correctly', () => {
-            const entries = [
-                { path: '/HVSC/DEMOS/song.sid', name: 'song.sid' },
-                { path: '/HVSC/DEMOS/nested/other.sid', name: 'other.sid' },
-                { path: '/HVSC/GAMES/game.sid', name: 'game.sid' },
-            ];
+        it('filters runtime listings by query and paging', () => {
+            const page = pageRuntimeListing(
+                {
+                    path: '/HVSC/DEMOS',
+                    folders: ['/HVSC/DEMOS/A', '/HVSC/DEMOS/B'],
+                    songs: [
+                        { id: 1, virtualPath: '/HVSC/DEMOS/alpha.sid', fileName: 'alpha.sid' },
+                        { id: 2, virtualPath: '/HVSC/DEMOS/beta.sid', fileName: 'beta.sid' },
+                    ],
+                },
+                'beta',
+                0,
+                10,
+            );
 
-            const listing = buildFolderListingFromIndex('/HVSC/DEMOS', entries);
-
-            expect(listing.path).toBe('/HVSC/DEMOS');
-            expect(listing.folders).toContain('/HVSC/DEMOS/nested');
-            expect(listing.songs).toHaveLength(1);
-            expect(listing.songs[0].fileName).toBe('song.sid');
+            expect(page.path).toBe('/HVSC/DEMOS');
+            expect(page.totalSongs).toBe(1);
+            expect(page.songs[0]?.fileName).toBe('beta.sid');
         });
     });
 });
