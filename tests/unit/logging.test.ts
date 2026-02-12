@@ -230,6 +230,26 @@ describe('logging', () => {
     );
   });
 
+  it('captures empty console.warn invocations as empty message entries', () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    // exercise normalizeConsoleMessage no-args branch
+    console.warn();
+    uninstallBridge();
+
+    const log = getLogs().find((entry) => entry.level === 'warn' && entry.message === '');
+    expect(log).toBeDefined();
+  });
+
+  it('preserves non-Error error payload values in logger details', () => {
+    logger.error('plain object failure', {
+      details: { error: { code: 'E_OBJ' } },
+      includeConsole: false,
+    });
+
+    const details = getLogs()[0].details as { error?: { code?: string } };
+    expect(details.error?.code).toBe('E_OBJ');
+  });
+
   it('forwards logger info/debug to console by default', () => {
     const infoSpy = vi.spyOn(console, 'info');
     const debugSpy = vi.spyOn(console, 'debug');
