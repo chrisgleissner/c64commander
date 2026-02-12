@@ -783,7 +783,7 @@ export default function MusicPlayerPage() {
 
         <Tabs defaultValue="hvsc" className="space-y-4">
           <TabsList className="grid grid-cols-2 w-full">
-            <TabsTrigger value="hvsc">HVSC Library</TabsTrigger>
+            <TabsTrigger value="hvsc">HVSC</TabsTrigger>
             <TabsTrigger value="local">Local Library</TabsTrigger>
           </TabsList>
 

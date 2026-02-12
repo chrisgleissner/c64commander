@@ -62,4 +62,19 @@ describe('PlaybackSettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change' }));
     expect(onChooseSonglengthsFile).toHaveBeenCalledTimes(1);
   });
+
+  it('uses Subsong terminology for multi-subsong selector', () => {
+    render(
+      <PlaybackSettingsPanel
+        {...baseProps}
+        songSelectorVisible
+        songPickerOpen
+        clampedSongNr={2}
+        subsongCount={5}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Subsong 2/5' })).toBeInTheDocument();
+    expect(screen.getByText('Available subsongs: 1–5')).toBeInTheDocument();
+  });
 });

@@ -7,6 +7,7 @@ import { DriveCard } from '../DriveCard';
 import { SectionHeader } from '@/components/SectionHeader';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import { DRIVE_CONTROL_SPECS, DriveControlSpec } from '../constants';
 
 import {
@@ -59,7 +60,7 @@ export function DriveManager({
         const groups: SourceGroup[] = [];
         if (isConnected) {
             groups.push({
-                label: 'C64 Ultimate',
+                label: SOURCE_LABELS.c64u,
                 sources: [createUltimateSourceLocation()],
             });
         }

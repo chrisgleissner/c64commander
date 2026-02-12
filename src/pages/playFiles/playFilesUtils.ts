@@ -28,7 +28,7 @@ export const DURATION_MAX_SECONDS = 3600;
 export const DURATION_SLIDER_STEPS = 1000;
 
 export const formatTime = (ms?: number) => {
-  if (ms === undefined) return '—';
+  if (ms === undefined) return '—:—';
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;

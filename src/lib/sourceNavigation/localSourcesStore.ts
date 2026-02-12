@@ -12,6 +12,7 @@ import { addLog } from '@/lib/logging';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeSourcePath } from './paths';
 import { LocalSourceListingError } from './localSourceErrors';
+import { SOURCE_LABELS } from './sourceTerms';
 
 export type LocalSourceEntry = {
   name: string;
@@ -181,7 +182,7 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
     addLog('debug', 'SAF persistable permission granted', { treeUri: redactTreeUri(treeUri) });
     const source: LocalSourceRecord = {
       id: sourceId,
-      name: rootName || 'This device',
+      name: rootName || SOURCE_LABELS.local,
       rootName,
       rootPath: '/',
       createdAt,

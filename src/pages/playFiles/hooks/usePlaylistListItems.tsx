@@ -70,24 +70,35 @@ export const usePlaylistListItems = ({
         { type: 'label', label: 'Details' },
         { type: 'info', label: 'Type', value: formatPlayCategory(item.category) },
         { type: 'info', label: 'Duration', value: durationLabel },
+        {
+          type: 'info',
+          label: 'Status',
+          value: item.status === 'unavailable' ? 'Unavailable' : 'Available',
+        },
         { type: 'info', label: 'Size', value: formatBytes(item.sizeBytes) },
         { type: 'info', label: 'Date', value: formatDate(detailsDate) },
-        { type: 'info', label: 'Source', value: item.request.source === 'ultimate' ? 'C64 Ultimate' : 'This device' },
       ];
       items.push({
         id: item.id,
         title: item.label,
         titleClassName: 'whitespace-normal break-words block',
+        subtitle: item.path,
+        subtitleClassName: 'truncate block',
         meta: (
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
             <FileOriginIcon
-              origin={item.request.source === 'ultimate' ? 'ultimate' : 'local'}
-              label={item.request.source === 'hvsc' ? 'HVSC library file' : undefined}
+              origin={item.request.source === 'ultimate' ? 'ultimate' : item.request.source === 'hvsc' ? 'hvsc' : 'local'}
               className="h-3.5 w-3.5 shrink-0 opacity-60"
             />
             <span>{formatPlayCategory(item.category)}</span>
             <span>•</span>
             <span>{durationLabel}</span>
+            {item.status === 'unavailable' ? (
+              <>
+                <span>•</span>
+                <span>Unavailable</span>
+              </>
+            ) : null}
           </div>
         ),
         selected: selectedPlaylistIds.has(item.id),

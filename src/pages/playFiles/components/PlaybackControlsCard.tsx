@@ -14,8 +14,10 @@ import { Progress } from '@/components/ui/progress';
 
 export type PlaybackControlsCardProps = {
   hasCurrentItem: boolean;
+  currentItemIcon?: ReactNode;
   currentItemLabel: string | null;
   currentDurationLabel: string | null;
+  subsongLabel: string | null;
   canTransport: boolean;
   hasPrev: boolean;
   hasNext: boolean;
@@ -48,8 +50,10 @@ export type PlaybackControlsCardProps = {
 
 export const PlaybackControlsCard = ({
   hasCurrentItem,
+  currentItemIcon,
   currentItemLabel,
   currentDurationLabel,
+  subsongLabel,
   canTransport,
   hasPrev,
   hasNext,
@@ -83,9 +87,13 @@ export const PlaybackControlsCard = ({
     <div className="text-xs text-muted-foreground" data-testid="playback-current-track">
       {hasCurrentItem ? (
         <div className="flex flex-wrap items-center gap-1">
+          {currentItemIcon ? <span className="shrink-0">{currentItemIcon}</span> : null}
           <span className="text-sm font-medium text-foreground">{currentItemLabel}</span>
           {currentDurationLabel ? (
             <span className="text-xs text-muted-foreground">({currentDurationLabel})</span>
+          ) : null}
+          {subsongLabel ? (
+            <span className="text-xs text-muted-foreground">{subsongLabel}</span>
           ) : null}
         </div>
       ) : (

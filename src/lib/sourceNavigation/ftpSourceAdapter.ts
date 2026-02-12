@@ -10,6 +10,7 @@ import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import type { SourceEntry, SourceLocation } from './types';
+import { SOURCE_LABELS } from './sourceTerms';
 
 type FtpCacheRecord = {
   entries: SourceEntry[];
@@ -177,7 +178,7 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
 export const createUltimateSourceLocation = (): SourceLocation => ({
   id: 'ultimate',
   type: 'ultimate',
-  name: 'C64 Ultimate',
+  name: SOURCE_LABELS.c64u,
   rootPath: '/',
   isAvailable: true,
   listEntries,

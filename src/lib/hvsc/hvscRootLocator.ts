@@ -15,7 +15,7 @@ const STORAGE_KEY = 'c64u_hvsc_root:v1';
 
 export const getDefaultHvscRoot = (): HvscRootLocation => ({
   path: '/',
-  label: 'HVSC Library',
+  label: 'HVSC',
 });
 
 export const loadHvscRoot = (): HvscRootLocation => {

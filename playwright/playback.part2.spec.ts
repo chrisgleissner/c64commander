@@ -519,7 +519,7 @@ test.describe('Playback file browser (part 2)', () => {
     await expect(page.getByTestId('playlist-list')).toContainText('demo.sid');
     const playlistList = page.getByTestId('playlist-list');
     await expect(playlistList.getByTestId('playlist-item-header').filter({ hasText: '/local-play/' })).toBeVisible();
-    await expect(playlistList.getByText('/local-play/demo.sid')).toHaveCount(0);
+    await expect(playlistList.getByText('/local-play/demo.sid')).toHaveCount(1);
 
     const resetBefore = server.requests.filter((req) => req.url.startsWith('/v1/machine:reset')).length;
     await page

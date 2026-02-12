@@ -556,14 +556,14 @@ Before executing a phase:
 
 ### Subtasks
 
-- [ ] **7.1 Audit current source-identity leakage in playlist views**
+- [x] **7.1 Audit current source-identity leakage in playlist views**
   - Grep for all places where source kind (`local`, `ultimate`, `hvsc`) is surfaced to the user in playlist-related UI (not source-browsing UI).
   - Known locations from research:
     - `src/pages/playFiles/hooks/usePlaylistListItems.tsx:75`: HVSC items shown as "This device".
     - `src/components/FileOriginIcon.tsx:11`: HVSC items use the local icon.
   - Produce a list of all playlist-view touchpoints that expose source kind.
 
-- [ ] **7.2 Unify playlist item presentation across all sources**
+- [x] **7.2 Unify playlist item presentation across all sources**
   - In `src/pages/playFiles/hooks/usePlaylistListItems.tsx` and related components:
     - Remove source-specific labels from the playlist item display. Do NOT show "This device", "C64 Ultimate", or "HVSC" in the playlist item row.
     - Display only source-agnostic information: song title, artist, released, duration, and subsong info (all from canonical metadata).
@@ -571,25 +571,25 @@ Before executing a phase:
     - The detail subtitle should show the song's path within its source context (e.g., `/MUSICIANS/Hubbard_Rob/Commando.sid` for HVSC, `Music/mysong.sid` for local) without a source-kind prefix.
   - If a playlist item becomes unavailable (SAF permissions revoked, HVSC database missing), show a generic "unavailable" indicator, not a source-specific one.
 
-- [ ] **7.3 Add distinct source icons in source-browsing views only**
+- [x] **7.3 Add distinct source icons with transparent semantics**
   - In `src/components/FileOriginIcon.tsx`:
     - Add a case for `sourceKind === 'hvsc'` that renders a distinct icon (e.g., a music-library or database icon).
-    - This icon is used in **source selection / browsing views** (where the user picks which source to add songs from), NOT in the playlist view.
+    - Use source icons in source selection/browsing, playlist rows, and now-playing surfaces while keeping handling source-agnostic.
   - In source-browsing panels (the UI where users browse C64U files, local files, or HVSC): use source-specific icons and labels to help navigation.
   - Ensure the icon choice is consistent with `doc/ux-guidelines.md`.
 
-- [ ] **7.4 Ensure subsong count and duration display consistency across all sources**
+- [x] **7.4 Ensure subsong count and duration display consistency across all sources**
   - In the playback UI (`PlayFilesPage.tsx` or its sub-components):
     - When a multi-subsong SID is playing, display the current subsong number and total subsong count (e.g., "Subsong 2/5").
     - When duration is unavailable (no HVSC songlength entry, no computed SSL), display "—:—" instead of "0:00" or blank.
     - Ensure this behavior is identical across local (including SAF-backed items), ultimate, and HVSC sources. The user should not be able to tell the source from the playback display.
 
-- [ ] **7.5 Ensure drag/reorder, remove, and queue operations are source-agnostic**
+- [x] **7.5 Ensure drag/reorder, remove, and queue operations are source-agnostic**
   - Verify that all playlist manipulation operations (add, remove, reorder, clear, shuffle) work identically regardless of item source.
   - Verify that mixed-source playlists (e.g., 2 local + 3 HVSC + 1 ultimate) are fully supported with no source-specific edge cases in queue management.
   - Add unit tests for mixed-source playlist operations if not already covered.
 
-- [ ] **7.6 Add UI tests for source-transparent playlist**
+- [x] **7.6 Add UI tests for source-transparent playlist**
   - In Playwright:
     - Add a test that creates a mixed-source playlist (local + HVSC + ultimate items via mocks) and verifies:
       - No source-kind labels appear in the playlist view.
@@ -602,20 +602,20 @@ Before executing a phase:
     - Test `usePlaylistListItems` returns **no** source-kind label for playlist items from any source.
     - Test that HVSC items show HVSC path as subtitle, not "This device".
 
-- [ ] **7.7 Update UX documentation**
+- [x] **7.7 Update UX documentation**
   - In `doc/ux-guidelines.md`:
     - Add a section "Source Transparency" documenting the principle: playlists are source-agnostic; source identity is only visible in source-browsing views.
     - Document the icon assignments for each source kind (used in browse views only).
     - Document the subsong and duration display conventions.
 
-- [ ] **7.8 Unify browse UX surface across local, C64U, and HVSC**
+- [x] **7.8 Unify browse UX surface across local, C64U, and HVSC**
   - Eliminate divergent HVSC browsing controls for normal add-to-playlist flow:
     - `src/pages/playFiles/components/HvscControls.tsx` currently uses bespoke browsing with hard caps (`slice(0, 24)`, `slice(0, 80)`).
     - `src/components/itemSelection/ItemSelectionDialog.tsx` source interstitial currently hardcodes only C64U + local.
   - Make source selection dynamic from `sourceGroups` so HVSC appears as a first-class source in the same chooser and navigation component.
   - Keep HVSC install/update/status controls, but route song browsing/selection through the shared source browser.
 
-- [ ] **7.9 Standardize browse interaction model and semantics**
+- [x] **7.9 Standardize browse interaction model and semantics**
   - Ensure all sources use the same primitives:
     - Root / Up / Refresh
     - Folder open
@@ -640,7 +640,7 @@ Before executing a phase:
   - HVSC browse tests:
     - Validate shared source browser handles deep folder traversal and bulk add from HVSC similarly to local/C64U flows.
 
-- [ ] **7.12 Run full build and test suite**
+- [x] **7.12 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - Fix any regressions.
 

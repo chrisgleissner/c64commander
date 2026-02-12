@@ -27,7 +27,7 @@ export function DemoModeInterstitial() {
         <DialogHeader>
           <DialogTitle>Demo Mode</DialogTitle>
           <DialogDescription>
-            No C64 Ultimate was found during startup discovery. You can continue in Demo Mode using the built-in simulated device,
+            No C64U was found during startup discovery. You can continue in Demo Mode using the built-in simulated device,
             or retry connecting to real hardware.
           </DialogDescription>
         </DialogHeader>

@@ -47,6 +47,8 @@ import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/
 import { BackgroundExecution, onBackgroundAutoSkipDue } from '@/lib/native/backgroundExecution';
 
 import { AppBar } from '@/components/AppBar';
+import { FileOriginIcon } from '@/components/FileOriginIcon';
+import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import { VolumeControls } from '@/pages/playFiles/components/VolumeControls';
 import { PlaybackControlsCard } from '@/pages/playFiles/components/PlaybackControlsCard';
 import { PlaybackSettingsPanel } from '@/pages/playFiles/components/PlaybackSettingsPanel';
@@ -66,7 +68,7 @@ import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFi
 import {
   resolveVolumeSyncDecision,
 } from '@/pages/playFiles/playbackGuards';
-import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from '@/pages/playFiles/types';
+import type { PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from '@/pages/playFiles/types';
 import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
@@ -432,11 +434,11 @@ export default function PlayFilesPage() {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
-      { label: 'C64 Ultimate', sources: [ultimateSource] },
-      { label: 'This device', sources: localGroupSources },
+      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
+      { label: SOURCE_LABELS.local, sources: localGroupSources },
     ];
     if (hvscLibraryAvailable) {
-      groups.push({ label: 'HVSC Library', sources: [createHvscSourceLocation(hvscRoot.path)] });
+      groups.push({ label: SOURCE_LABELS.hvsc, sources: [createHvscSourceLocation(hvscRoot.path)] });
     }
     return groups;
   }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
@@ -593,7 +595,7 @@ export default function PlayFilesPage() {
   }, [playbackTraceContext]);
 
   useEffect(() => () => setPlaybackTraceSnapshot(null), []);
-  const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
+  const currentDurationLabel = formatTime(currentDurationMs);
   const progressPercent = currentDurationMs ? Math.min(100, (elapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - elapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : '—';
@@ -789,65 +791,6 @@ export default function PlayFilesPage() {
 
 
 
-  const handlePlayEntry = useCallback(async (entry: PlayableEntry) => {
-    try {
-      const item = buildPlaylistItem(entry);
-      if (!item) throw new Error('Unsupported file format.');
-      await startPlaylist([item]);
-      toast({
-        title: 'Playback started',
-        description: `${formatPlayCategory(item.category)} added to playlist`,
-      });
-    } catch (error) {
-      reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
-        description: (error as Error).message,
-        error,
-        context: {
-          source: entry.source,
-          path: entry.path,
-        },
-      });
-    }
-  }, [buildPlaylistItem, reportUserError, startPlaylist]);
-
-  const handleAddHvscToPlaylist = useCallback((entry: PlayableEntry) => {
-    try {
-      const item = buildPlaylistItem(entry);
-      if (!item) throw new Error('Unsupported file format.');
-      setPlaylist((prev) => [...prev, item]);
-      toast({
-        title: 'Added to playlist',
-        description: entry.name,
-      });
-    } catch (error) {
-      reportUserError({
-        operation: 'PLAYLIST_ADD',
-        title: 'Failed to add item',
-        description: (error as Error).message,
-        error,
-        context: {
-          source: entry.source,
-          path: entry.path,
-        },
-      });
-    }
-  }, [buildPlaylistItem, reportUserError]);
-
-  const handlePlayEntries = useCallback(async (entries: PlayableEntry[]) => {
-    const items = entries
-      .map((entry) => buildPlaylistItem(entry))
-      .filter((item): item is PlaylistItem => Boolean(item));
-    if (!items.length) return;
-    const playlistItems = shuffleEnabled ? shuffleArray(items) : items;
-    await startPlaylist(playlistItems);
-    toast({
-      title: 'Playback started',
-      description: `${playlistItems.length} files added to playlist`,
-    });
-  }, [buildPlaylistItem, shuffleEnabled, startPlaylist]);
-
   const playlistTotals = useMemo(() => {
     const durations = playlist.map((item, index) => playlistItemDuration(item, index));
     return calculatePlaylistTotals(durations, playedMs);
@@ -891,8 +834,15 @@ export default function PlayFilesPage() {
         >
           <PlaybackControlsCard
             hasCurrentItem={Boolean(currentItem)}
+            currentItemIcon={currentItem ? (
+              <FileOriginIcon
+                origin={currentItem.request.source === 'ultimate' ? 'ultimate' : currentItem.request.source === 'hvsc' ? 'hvsc' : 'local'}
+                className="h-3.5 w-3.5 shrink-0 opacity-70"
+              />
+            ) : undefined}
             currentItemLabel={currentItem?.label ?? null}
-            currentDurationLabel={currentDurationLabel ?? null}
+            currentDurationLabel={currentDurationLabel}
+            subsongLabel={knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null}
             canTransport={canTransport}
             hasPrev={hasPrev}
             hasNext={hasNext}
@@ -1059,12 +1009,8 @@ export default function PlayFilesPage() {
         ) : null}
 
         {hvscControlsEnabled && (
-          <div data-section-label="HVSC library" data-testid="play-section-hvsc">
+          <div data-section-label="HVSC" data-testid="play-section-hvsc">
             <HvscManager
-              recurseFolders={recurseFolders}
-              onPlayEntry={handlePlayEntry}
-              onPlayEntries={handlePlayEntries}
-              onAddToPlaylist={handleAddHvscToPlaylist}
               hvscControlsEnabled={true}
             />
           </div>

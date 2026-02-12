@@ -1063,7 +1063,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
 
-        {/* 6. HVSC Library */}
+        {/* 6. HVSC */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1074,7 +1074,7 @@ export default function SettingsPage() {
             <div className="p-2 rounded-lg bg-primary/10">
               <Cpu className="h-5 w-5 text-primary" />
             </div>
-            <h2 className="font-medium">HVSC Library</h2>
+            <h2 className="font-medium">HVSC</h2>
           </div>
           <div className="space-y-3 text-sm">
             <div className="flex items-start justify-between gap-3 min-w-0">

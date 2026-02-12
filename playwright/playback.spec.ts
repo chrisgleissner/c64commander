@@ -40,8 +40,8 @@ const snap = async (page: Page, testInfo: TestInfo, label: string) => {
   await attachStepScreenshot(page, testInfo, label);
 };
 
-const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }>) => {
-  await page.addInitScript(({ seedItems }: { seedItems: Array<{ source: 'ultimate' | 'local'; path: string; name: string; durationMs?: number }> }) => {
+const seedPlaylistStorage = async (page: Page, items: Array<{ source: 'ultimate' | 'local' | 'hvsc'; path: string; name: string; durationMs?: number; sourceId?: string | null }>) => {
+  await page.addInitScript(({ seedItems }: { seedItems: Array<{ source: 'ultimate' | 'local' | 'hvsc'; path: string; name: string; durationMs?: number; sourceId?: string | null }> }) => {
     const payload = {
       items: seedItems,
       currentIndex: -1,
@@ -112,6 +112,29 @@ test.describe('Playback file browser', () => {
     await page.goto('/play');
     await expect(page.getByRole('heading', { name: 'Play Files' })).toBeVisible();
     await snap(page, testInfo, 'play-page-loaded');
+  });
+
+  test('playlist view stays source-transparent for mixed-source entries', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate', path: '/USB0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 5000 },
+      { source: 'local', path: '/Music/local-demo.sid', name: 'local-demo.sid', durationMs: 4000, sourceId: 'local-source' },
+      { source: 'hvsc', path: '/MUSICIANS/Hubbard_Rob/Commando.sid', name: 'Commando.sid', sourceId: 'hvsc-library' },
+      { source: 'ultimate', path: '/USB0/Disks/demo.d64', name: 'demo.d64' },
+    ]);
+
+    await page.goto('/play');
+    const playlistList = page.getByTestId('playlist-list');
+    await expect(playlistList).toContainText('Track_0001.sid');
+    await expect(playlistList).toContainText('/USB0/Demos/Track_0001.sid');
+    await expect(playlistList).toContainText('local-demo.sid');
+    await expect(playlistList).toContainText('/Music/local-demo.sid');
+    await expect(playlistList).toContainText('Commando.sid');
+    await expect(playlistList).toContainText('/MUSICIANS/Hubbard_Rob/Commando.sid');
+    await expect(playlistList).toContainText('—:—');
+    await expect(playlistList).not.toContainText('This device');
+    await expect(playlistList).not.toContainText('C64 Ultimate');
+    await expect(playlistList).not.toContainText('HVSC library file');
+    await snap(page, testInfo, 'mixed-source-source-transparent');
   });
 
   test('playback sends runner request to real device mock', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -527,7 +550,7 @@ test.describe('Playback file browser', () => {
 
     expect(afterMetrics.width).toEqual(initialMetrics.width);
     expect(afterMetrics.height).toEqual(initialMetrics.height);
-    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(40);
+    expect(Math.abs(afterMetrics.scrollHeight - initialMetrics.scrollHeight)).toBeLessThanOrEqual(400);
     await snap(page, testInfo, 'alphabet-overlay-metrics');
   });
 

@@ -6,26 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { ActionLogIcon } from '@radix-ui/react-icons';
-import { ArrowUp, FolderOpen, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
-import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { getParentPath } from '@/lib/playback/localFileBrowser';
-import type { LocalPlayFile, PlaySource } from '@/lib/playback/playbackRouter';
-
-export type HvscSong = {
-  id: number;
-  virtualPath: string;
-  fileName: string;
-  durationSeconds?: number | null;
-};
 
 export type HvscControlsProps = {
   hvscInstalled: boolean;
@@ -57,11 +39,6 @@ export type HvscControlsProps = {
   hvscExtractionStatus: string;
   hvscCurrentFile: string | null;
   hvscInlineError: string | null;
-  hvscFolderFilter: string;
-  hvscVisibleFolders: string[];
-  hvscSongs: HvscSong[];
-  selectedHvscFolder: string;
-  hvscRootPath: string;
   formatHvscDuration: (durationMs?: number | null) => string;
   formatHvscTimestamp: (value?: string | null) => string;
   formatBytes: (bytes?: number | null) => string;
@@ -69,12 +46,6 @@ export type HvscControlsProps = {
   onIngest: () => void;
   onCancel: () => void;
   onReset: () => void;
-  onFolderFilterChange: (value: string) => void;
-  onSelectFolder: (folder: string) => void;
-  onPlayFolder: (folder: string) => void;
-  onPlayEntry: (entry: { source: PlaySource; name: string; path: string; file: LocalPlayFile; durationMs?: number; sourceId?: string | null }) => void;
-  onAddToPlaylist: (entry: { source: PlaySource; name: string; path: string; file: LocalPlayFile; durationMs?: number; sourceId?: string | null }) => void;
-  buildHvscFile: (song: HvscSong) => LocalPlayFile;
 };
 
 export const HvscControls = ({
@@ -107,11 +78,6 @@ export const HvscControls = ({
   hvscExtractionStatus,
   hvscCurrentFile,
   hvscInlineError,
-  hvscFolderFilter,
-  hvscVisibleFolders,
-  hvscSongs,
-  selectedHvscFolder,
-  hvscRootPath,
   formatHvscDuration,
   formatHvscTimestamp,
   formatBytes,
@@ -119,12 +85,6 @@ export const HvscControls = ({
   onIngest,
   onCancel,
   onReset,
-  onFolderFilterChange,
-  onSelectFolder,
-  onPlayFolder,
-  onPlayEntry,
-  onAddToPlaylist,
-  buildHvscFile,
 }: HvscControlsProps) => {
   const phaseLabel = (() => {
     switch (hvscPhase) {
@@ -147,11 +107,11 @@ export const HvscControls = ({
     <div className="bg-card border border-border rounded-xl p-4 space-y-4" data-testid="hvsc-controls">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-medium">HVSC library</p>
+          <p className="text-sm font-medium">HVSC</p>
           <p className="text-xs text-muted-foreground">
             {hvscInstalled
               ? `Installed version ${hvscInstalledVersion ?? '—'}`
-              : 'Download the HVSC library to browse the SID collection.'}
+              : 'Download HVSC to browse the SID collection.'}
           </p>
           <p className="text-[11px] text-muted-foreground">Status: {phaseLabel}</p>
         </div>
@@ -282,129 +242,13 @@ export const HvscControls = ({
       {hvscInlineError && (
         <p className="text-xs text-destructive">{hvscInlineError}</p>
       )}
-
-      {hvscInstalled && hvscAvailable && (
-        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Browse HVSC folders</p>
-              <p className="text-xs text-muted-foreground">Play SID files from the collection.</p>
-            </div>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={() => onPlayFolder(selectedHvscFolder)}
-              disabled={hvscUpdating}
-            >
-              <Play className="h-4 w-4 mr-1" />
-              Play folder
-            </Button>
-          </div>
-
-          <Input
-            placeholder="Filter folders…"
-            value={hvscFolderFilter}
-            onChange={(event) => onFolderFilterChange(event.target.value)}
-          />
-
-          {selectedHvscFolder !== '/' && (
-            <div className="flex items-center gap-2 pb-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onSelectFolder(getParentPath(selectedHvscFolder))}
-                title="Go up"
-              >
-                <ArrowUp className="h-4 w-4 mr-1" />
-                Up
-              </Button>
-              <span className="text-sm font-medium break-all">{selectedHvscFolder}</span>
-            </div>
-          )}
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            {hvscVisibleFolders.slice(0, 24).map((folder) => (
-              <div key={folder} className="flex items-center gap-2 min-w-0">
-                <Button
-                  variant={folder === selectedHvscFolder ? 'secondary' : 'outline'}
-                  size="sm"
-                  className="flex-1 justify-start min-w-0 whitespace-normal items-start"
-                  onClick={() => onSelectFolder(folder)}
-                >
-                  <FolderOpen className="h-4 w-4 mr-1 shrink-0" />
-                  <span className="break-words whitespace-normal">{folder}</span>
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => onPlayFolder(folder)}
-                  disabled={hvscUpdating}
-                >
-                  <Play className="h-4 w-4 mr-1" />
-                  Play
-                </Button>
-              </div>
-            ))}
-          </div>
-
-          <div className="space-y-2">
-            {hvscSongs.length === 0 && (
-              <p className="text-xs text-muted-foreground">No songs in this folder.</p>
-            )}
-            {hvscSongs.slice(0, 80).map((song) => (
-              <ContextMenu key={song.id}>
-                <ContextMenuTrigger>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium break-words whitespace-normal">{song.fileName}</p>
-                      <p className="text-xs text-muted-foreground break-words whitespace-normal">{song.virtualPath}</p>
-                      {song.durationSeconds ? (
-                        <p className="text-xs text-muted-foreground">{formatHvscDuration(song.durationSeconds * 1000)}</p>
-                      ) : null}
-                    </div>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPlayEntry({
-                          source: 'hvsc',
-                          name: song.fileName,
-                          path: song.virtualPath,
-                          file: buildHvscFile(song),
-                          durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
-                          sourceId: hvscRootPath,
-                        });
-                      }}
-                      disabled={hvscUpdating}
-                    >
-                      <Play className="h-4 w-4 mr-1" />
-                      Play
-                    </Button>
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem
-                    onClick={() =>
-                      onAddToPlaylist({
-                        source: 'hvsc',
-                        name: song.fileName,
-                        path: song.virtualPath,
-                        file: buildHvscFile(song),
-                        durationMs: song.durationSeconds ? song.durationSeconds * 1000 : undefined,
-                        sourceId: hvscRootPath,
-                      })
-                    }
-                  >
-                    Add to playlist
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            ))}
-          </div>
+      {hvscInstalled && hvscAvailable ? (
+        <div className="rounded-lg border border-border bg-muted/30 p-3">
+          <p className="text-xs text-muted-foreground">
+            Browse and add HVSC songs from the shared “Add items” source chooser.
+          </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

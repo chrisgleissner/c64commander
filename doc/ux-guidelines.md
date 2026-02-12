@@ -18,9 +18,9 @@ The UX is built around three distinct concepts that must never be conflated:
 1. **Sources**
    - Define *where items come from*.
    - Examples:
-     - C64 Ultimate
-     - Local device folders (multiple, user-defined)
-     - HVSC library
+     - C64U
+     - Local folders (multiple, user-defined)
+     - HVSC
    - Selected before navigation begins.
 
 2. **Selection (Scoped Navigation)**
@@ -49,8 +49,29 @@ There are exactly two collections:
 - Items are queued explicitly; adding items never auto-plays.
 - Playlist rows are source-agnostic:
   - Show canonical metadata (title, artist when available, duration, size, path, optional user metadata such as stars).
-  - Do not show source-kind labels (for example local/C64U/HVSC) in the playlist row.
+  - Do not show source-kind text labels (for example local/C64U/HVSC) in the playlist row.
+  - Show a small source icon in each row to indicate origin (Local/C64U/HVSC).
 - Mixed-source playlists must behave identically for play, reorder, remove, shuffle, and repeat.
+
+### Source Transparency
+
+- Source transparency means consistent handling across sources, not hidden origin.
+- Playlist rows must not show source-kind text labels (for example `Local`, `C64U`, `HVSC`).
+- Playlist rows render canonical track metadata (title, path, duration, and optional secondary metadata) plus a small source icon.
+- Now-playing surfaces also show a small source icon for the active item.
+- Source identity text is shown only during source selection and source browsing.
+
+Source icons:
+
+- `Local`: device icon.
+- `C64U`: C64U icon.
+- `HVSC`: library icon.
+
+Playback metadata conventions:
+
+- Multi-subsong SID playback shows `Subsong N/M`.
+- Unknown duration renders as `—:—`.
+- Availability issues render as generic `Unavailable` status, not source-specific errors.
 
 ### Disk Collection (Disks page)
 
@@ -87,7 +108,7 @@ The user never “browses the filesystem” as a primary goal.
 - Sources must be clearly identifiable and named.
 - Play page source chooser must expose exactly:
   - `Local`
-  - `C64 Ultimate`
+  - `C64U`
   - `HVSC`
 - Local device sources are added via the system folder picker; the source chooser shows only an “Add file / folder” action and does not list prior folders.
 - Adding a new local source requires the Android folder picker.
@@ -183,7 +204,7 @@ Language must express **intent**, not implementation.
 - Add to playlist
 - Remove from collection
 - Local
-- C64 Ultimate
+- C64U
 - HVSC
 
 ### Avoid
@@ -201,7 +222,7 @@ Menu titles, dialog titles, and action labels must match exactly.
 
 - The same selection UI must be used for all sources.
 - The same playlist UI must be used regardless of item origin.
-- Source-specific icons/labels are allowed in source-selection and source-browsing views, but not in playlist rows.
+- Source-specific icons are allowed in playlist and now-playing rows; source-specific text labels are not.
 - Source boundaries must never be crossed implicitly.
 - Users must never wonder whether they are:
   - Selecting items
@@ -231,7 +252,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 
 - Primary CTA: "Add items" or "Add more items"
 - Opens ItemSelectionDialog for source and file selection
-- Uses the same source chooser and browser flow for Local, C64 Ultimate, and HVSC
+- Uses the same source chooser and browser flow for Local, C64U, and HVSC
 - Playlist displayed with SelectableActionList component
 - Playlist list surface must remain query-driven and virtualized for large datasets
 - Transport controls: Play/Stop, Pause/Resume, Prev/Next
@@ -293,7 +314,7 @@ This model prioritizes clarity, predictability, and long-term maintainability.
 
 - Adding items to playlist
 - Adding disks to library
-- Source selection: Local vs C64 Ultimate vs HVSC (Play page)
+- Source selection: Local vs C64U vs HVSC (Play page)
 - Navigation within selected source (bounded by source root)
 - File type filtering
 - If the source picker is external (Android folder picker / OS dialog), the dialog closes and progress is shown on the destination page.
@@ -320,7 +341,14 @@ The following terms are consistently used across the UI:
 
 - "Add items" / "Add more items" - Primary acquisition CTA
 - "Choose source" - Source selection dialog heading
-- "Local" / "C64 Ultimate" / "HVSC" - Source names
+- "Local" / "C64U" / "HVSC" - Source names
+
+Terminology rule:
+
+- Use only `Local`, `C64U`, and `HVSC` when naming sources in code and user-facing text.
+- The long forms `Local Android Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in:
+  - the source-selection interstitial (as subtitles/explanations), and
+  - the Docs page (as explanatory text).
 - "Select all" / "Deselect all" - Bulk selection
 - "Remove selected" - Destructive bulk action
 - "View all" - List expansion

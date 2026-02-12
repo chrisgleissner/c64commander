@@ -38,6 +38,7 @@ export type ActionListItem = {
   titleSuffix?: string | null;
   titleClassName?: string | null;
   subtitle?: string | null;
+  subtitleClassName?: string | null;
   filterText?: string | null;
   meta?: React.ReactNode;
   icon?: React.ReactNode;
@@ -208,7 +209,7 @@ const ActionListRow = ({ item, rowTestId }: { item: ActionListItem; rowTestId?: 
           </button>
           {item.subtitle ? (
             <div
-              className="text-[11px] text-muted-foreground break-words whitespace-normal max-w-full"
+              className={cn('text-[11px] text-muted-foreground break-words whitespace-normal max-w-full', item.subtitleClassName)}
               data-testid={item.subtitleTestId}
             >
               {item.subtitle}

@@ -20,6 +20,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { AppBar } from '@/components/AppBar';
+import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
 interface DocSection {
@@ -37,18 +38,18 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          C64 Commander connects to your <strong>C64 Ultimate</strong> over the REST API. Stay on the same network and
+          C64 Commander connects to your <strong>{SOURCE_LABELS.c64u}</strong> over the REST API. Stay on the same network and
           make sure the device is reachable.
         </p>
         <p className="font-medium">Connect in 4 steps:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
           <li>Open <strong>Settings</strong> → <strong>Connection</strong>.</li>
-          <li>Enter the C64U hostname or IP address.</li>
+          <li>Enter the {SOURCE_LABELS.c64u} hostname or IP address.</li>
           <li>Enter the network password if your device uses one.</li>
           <li>Tap <strong>Save & Connect</strong>.</li>
         </ol>
         <p className="text-muted-foreground">
-          Use the C64U status pill in the header to see connection state and tap it to force a new discovery.
+          Use the {SOURCE_LABELS.c64u} status pill in the header to see connection state and tap it to force a new discovery.
           If no device is found, Demo Mode can be offered for exploration.
         </p>
       </div>
@@ -64,7 +65,7 @@ const docSections: DocSection[] = [
           Home is the operational dashboard: system info, machine controls, and high-value configuration shortcuts.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li><strong>Reset / Reboot</strong> control the C64U CPU and system state.</li>
+          <li><strong>Reset / Reboot</strong> control the {SOURCE_LABELS.c64u} CPU and system state.</li>
           <li><strong>Menu</strong> toggles the Ultimate menu (same as the hardware button).</li>
           <li><strong>Pause / Resume</strong> stops or restarts the CPU via DMA.</li>
           <li><strong>Power Off</strong> shuts down the machine.</li>
@@ -88,7 +89,8 @@ const docSections: DocSection[] = [
         <p className="font-medium">Find and play files:</p>
         <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
           <li>Open <strong>Play</strong> and tap <strong>Add items</strong>.</li>
-          <li>Pick a source: <strong>C64 Ultimate</strong>, <strong>This device</strong>, or <strong>HVSC</strong> (if enabled).</li>
+          <li>Pick a source: <strong>{SOURCE_LABELS.local}</strong>, <strong>{SOURCE_LABELS.c64u}</strong>, or <strong>{SOURCE_LABELS.hvsc}</strong> (if enabled).</li>
+          <li>Source terms in this app: <strong>{SOURCE_LABELS.local}</strong> = {SOURCE_EXPLANATIONS.local}, <strong>{SOURCE_LABELS.c64u}</strong> = {SOURCE_EXPLANATIONS.c64u}, <strong>{SOURCE_LABELS.hvsc}</strong> = {SOURCE_EXPLANATIONS.hvsc}.</li>
           <li>Browse folders, select files or folders, then confirm.</li>
           <li>Use <strong>Play</strong> on the playlist or a single item.</li>
         </ol>
@@ -118,7 +120,7 @@ const docSections: DocSection[] = [
         </ol>
         <p className="font-medium">Add disks to the collection:</p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-          <li>Tap <strong>Add disks</strong> and pick a source (C64U, local device, or FTP source).</li>
+          <li>Tap <strong>Add disks</strong> and pick a source ({SOURCE_LABELS.c64u} or {SOURCE_LABELS.local}).</li>
           <li>Use <strong>View all</strong> to search and manage large collections.</li>
           <li>Disk entries show size, date, and allow rename or delete actions.</li>
         </ul>
@@ -149,7 +151,7 @@ const docSections: DocSection[] = [
     content: (
       <div className="space-y-3 text-sm">
         <p>
-          Config exposes all C64U categories and items. Use search to find settings quickly.
+          Config exposes all {SOURCE_LABELS.c64u} categories and items. Use search to find settings quickly.
         </p>
         <ul className="list-disc list-inside space-y-1 text-muted-foreground">
           <li>Changes apply immediately to the device.</li>

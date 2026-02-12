@@ -14,6 +14,7 @@ import { createMockHvscServer } from './mockHvscServer';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
 import { assertTraceOrder, enableTraceAssertions, getTraces } from './traceUtils';
+import { clickSourceSelectionButton } from './sourceSelection';
 
 declare global {
   interface Window {
@@ -51,6 +52,70 @@ test.describe('HVSC Play page', () => {
 
   const snap = async (page: Page, testInfo: TestInfo, label: string) => {
     await attachStepScreenshot(page, testInfo, label);
+  };
+
+  const openHvscSourceBrowser = async (page: Page) => {
+    await page.getByRole('button', { name: /Add items|Add more items/i }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await expect.poll(async () => dialog.getByTestId('import-option-hvsc').count()).toBeGreaterThan(0);
+    await clickSourceSelectionButton(dialog, 'HVSC');
+    await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible();
+    return dialog;
+  };
+
+  const openFolderByToken = async (dialog: ReturnType<Page['getByRole']>, token: string) => {
+    const row = dialog
+      .getByTestId('source-entry-row')
+      .filter({ hasText: new RegExp(token, 'i') })
+      .first();
+    await expect(row).toBeVisible();
+    await row.click();
+  };
+
+  const tryOpenFolderByToken = async (dialog: ReturnType<Page['getByRole']>, token: string) => {
+    const row = dialog
+      .getByTestId('source-entry-row')
+      .filter({ hasText: new RegExp(token, 'i') })
+      .first();
+    if (await row.count() === 0) return false;
+    await row.click();
+    return true;
+  };
+
+  const openHvscDemoFolder = async (dialog: ReturnType<Page['getByRole']>) => {
+    if (await tryOpenFolderByToken(dialog, '0-9')) return true;
+    if (await tryOpenFolderByToken(dialog, 'DEMOS')) {
+      if (await tryOpenFolderByToken(dialog, '0-9')) return true;
+    }
+    return false;
+  };
+
+  const addHvscDemoTrackToPlaylist = async (page: Page, fileName = '10_Orbyte.sid') => {
+    const dialog = await openHvscSourceBrowser(page);
+    await openHvscDemoFolder(dialog);
+
+    const specificTrack = dialog.getByLabel(`Select ${fileName}`, { exact: true });
+    if (await specificTrack.count()) {
+      await specificTrack.click();
+    } else {
+      const fallbackTargets = ['0-9', 'DEMOS', '^M$'];
+      for (const target of fallbackTargets) {
+        await tryOpenFolderByToken(dialog, target);
+        if (await specificTrack.count()) break;
+      }
+
+      if (await specificTrack.count()) {
+        await specificTrack.click();
+      } else {
+        const firstTrack = dialog.getByLabel(/^Select .+/).first();
+        await expect(firstTrack).toBeVisible();
+        await firstTrack.click();
+      }
+    }
+
+    await dialog.getByTestId('add-items-confirm').click();
+    await expect(dialog).toBeHidden();
   };
 
   const expectActionTraceSequence = async (page: Page, testInfo: TestInfo, actionName: string) => {
@@ -557,7 +622,9 @@ test.describe('HVSC Play page', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
-    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    const hvscDialog = await openHvscSourceBrowser(page);
+    await expect(hvscDialog.getByTestId('source-entry-row').first()).toBeVisible();
+    await hvscDialog.getByRole('button', { name: 'Cancel' }).click();
     await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscInstall');
     await snap(page, testInfo, 'hvsc-installed');
   });
@@ -567,7 +634,9 @@ test.describe('HVSC Play page', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
-    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    const hvscDialog = await openHvscSourceBrowser(page);
+    await expect(hvscDialog.getByTestId('source-entry-row').first()).toBeVisible();
+    await hvscDialog.getByRole('button', { name: 'Cancel' }).click();
     await snap(page, testInfo, 'install-complete');
   });
 
@@ -598,15 +667,12 @@ test.describe('HVSC Play page', () => {
     await expect(page.getByTestId('hvsc-summary')).toContainText('HVSC downloaded successfully');
     await expectActionTraceSequence(page, testInfo, 'HvscLibrary.handleHvscIngest');
 
-    const preferredFolder = page.getByRole('button', { name: '/DEMOS/0-9', exact: true });
-    if (await preferredFolder.count()) {
-      await preferredFolder.click();
-    } else {
-      const fallbackFolder = page.getByRole('button', { name: /^\/[A-Z0-9]/ }).first();
-      await expect(fallbackFolder).toBeVisible();
-      await fallbackFolder.click();
-    }
-    await page.getByRole('button', { name: 'Play folder' }).click();
+    await addHvscDemoTrackToPlaylist(page);
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: '10_Orbyte.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
 
     await expect.poll(() => c64Server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay'))).toBe(true);
     await snap(page, testInfo, 'hvsc-playback-requested');
@@ -629,12 +695,12 @@ test.describe('HVSC Play page', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
-    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const firstTrack = page.getByText('10_Orbyte.sid', { exact: true });
-    await expect(firstTrack).toBeVisible();
-    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await addHvscDemoTrackToPlaylist(page);
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: '10_Orbyte.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'playlist-visible');
 
@@ -653,12 +719,12 @@ test.describe('HVSC Play page', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
-    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
-
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const firstTrack = page.getByText('10_Orbyte.sid', { exact: true });
-    await expect(firstTrack).toBeVisible();
-    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await addHvscDemoTrackToPlaylist(page);
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: '10_Orbyte.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'playlist-created');
 
@@ -733,13 +799,17 @@ test.describe('HVSC Play page', () => {
     await snap(page, testInfo, 'extract-failed');
 
     await page.getByRole('button', { name: 'Ingest HVSC', exact: true }).click();
-    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    const hvscDialog = await openHvscSourceBrowser(page);
+    await expect(hvscDialog.getByTestId('source-entry-row').first()).toBeVisible();
+    await hvscDialog.getByRole('button', { name: 'Cancel' }).click();
     await snap(page, testInfo, 'ingest-complete');
 
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const firstTrack = page.getByText('10_Orbyte.sid', { exact: true });
-    await expect(firstTrack).toBeVisible();
-    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await addHvscDemoTrackToPlaylist(page);
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: '10_Orbyte.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'playlist-visible');
 
@@ -760,11 +830,13 @@ test.describe('HVSC Play page', () => {
 
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    const firstTrack = page.getByText(/\.sid$/i).first();
-    await expect(firstTrack).toBeVisible();
+    await addHvscDemoTrackToPlaylist(page);
     await snap(page, testInfo, 'hvsc-list');
-    await firstTrack.locator('..').locator('..').getByRole('button', { name: 'Play' }).click();
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: '10_Orbyte.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
     await expect(page.getByText('Playlist', { exact: true })).toBeVisible();
     await snap(page, testInfo, 'playlist-visible');
   });
@@ -778,10 +850,14 @@ test.describe('HVSC Play page', () => {
     await page.goto('/play');
     await snap(page, testInfo, 'play-open');
     await page.getByRole('button', { name: 'Download HVSC' }).click();
-    await expect(page.getByRole('button', { name: '/DEMOS/0-9', exact: true })).toBeVisible();
+    const hvscDialog = await openHvscSourceBrowser(page);
+    await expect(hvscDialog.getByTestId('source-entry-row').first()).toBeVisible();
+    await hvscDialog.getByRole('button', { name: 'Cancel' }).click();
     await snap(page, testInfo, 'update-complete');
-    await page.getByRole('button', { name: '/DEMOS/0-9', exact: true }).click();
-    await expect(page.getByText(/\.sid$/i).first()).toBeVisible();
+    const hvscDialogAfterUpdate = await openHvscSourceBrowser(page);
+    await openHvscDemoFolder(hvscDialogAfterUpdate);
+    await expect(hvscDialogAfterUpdate.getByText(/\.sid$/i).first()).toBeVisible();
+    await hvscDialogAfterUpdate.getByRole('button', { name: 'Cancel' }).click();
     await snap(page, testInfo, 'hvsc-list');
   });
 
@@ -828,28 +904,21 @@ test.describe('HVSC Play page', () => {
     await installMocks(page, { installedVersion: 83 });
     await page.goto('/play');
 
-    // 2. Navigate to /DEMOS/0-9
-    await page.getByRole('button', { name: '/DEMOS/0-9' }).click();
+    const dialog = await openHvscSourceBrowser(page);
+    await openHvscDemoFolder(dialog);
 
-    // 3. Verify duration display
-    await expect(page.getByText('1:17')).toBeVisible();
-    await expect(page.getByText('2:41')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Root' }).click();
+    await openFolderByToken(dialog, '^M$');
+    await dialog.getByLabel('Select Multi_Track.sid', { exact: true }).click();
+    await dialog.getByTestId('add-items-confirm').click();
+    await expect(dialog).toBeHidden();
 
-    // 4. Navigate to /DEMOS/M/
-    await page.getByRole('button', { name: 'Up' }).click();
-    await page.getByRole('button', { name: '/DEMOS/M' }).click();
-
-    // 5. Expand multi-subsong
-    const fileItem = page.getByText('Multi_Track.sid', { exact: true });
-    await expect(fileItem).toBeVisible();
-
-    // Trigger expansion/add (Simulate Right Click -> Add to Playlist)
-    await fileItem.click({ button: 'right' });
-    await expect(page.getByText('Add to playlist')).toBeVisible();
-    await page.getByText('Add to playlist').click();
-
-    // Verify toast or playlist update
-    // Assuming toast says "Added 3 songs" or similar
-    // Or we can check if the playlist is updated if visible.
+    await page
+      .getByTestId('playlist-item')
+      .filter({ hasText: 'Multi_Track.sid' })
+      .getByRole('button', { name: 'Play' })
+      .click();
+    await expect(page.getByTestId('song-selector-trigger')).toContainText('Subsong 1/3');
+    await snap(page, testInfo, 'multi-subsong-visible');
   });
 });
