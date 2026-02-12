@@ -71,7 +71,6 @@ jobs:
     name: iOS | Build simulator
     runs-on: macos-15
     needs: ios-prepare
-    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE == 'A' }}
 
     steps:
       - name: Checkout
@@ -200,7 +199,6 @@ jobs:
     name: iOS | Maestro critical
     runs-on: macos-15
     needs: ios-prepare
-    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE == 'A' }}
 
     steps:
       - name: Checkout
@@ -329,7 +327,6 @@ jobs:
     name: iOS | Screenshots
     runs-on: macos-15
     needs: ios-prepare
-    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE == 'A' }}
 
     steps:
       - name: Checkout
@@ -468,7 +465,6 @@ jobs:
     name: iOS | Package AltStore IPA
     runs-on: macos-15
     needs: ios-prepare
-    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE != 'C' || !startsWith(github.ref, 'refs/tags/') }}
 
     steps:
       - name: Checkout
