@@ -71,6 +71,7 @@ jobs:
     name: iOS | Build simulator
     runs-on: macos-15
     needs: ios-prepare
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -107,8 +108,10 @@ jobs:
           python3 <<'PY'
           import json
           import os
+          import re
           import subprocess
           import sys
+          import time
 
           runtime_dump = subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
           runtimes = json.loads(runtime_dump).get("runtimes", [])
@@ -164,7 +167,21 @@ jobs:
 
           udid = create.stdout.strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
-          subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
+
+            print(f"Waiting for simulator {udid} to reach Booted state...")
+            booted = False
+            for attempt in range(1, 61):
+              devices_output = subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True)
+              if re.search(rf"\({re.escape(udid)}\) \(Booted\)", devices_output):
+                booted = True
+                print(f"Simulator booted after {attempt * 5}s")
+                break
+              print(f"Simulator not booted yet ({attempt * 5}s elapsed)")
+              time.sleep(5)
+
+            if not booted:
+              print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
+              sys.exit(1)
 
           github_output = os.environ.get("GITHUB_OUTPUT")
           if not github_output:
@@ -214,6 +231,7 @@ jobs:
     name: iOS | Maestro critical
     runs-on: macos-15
     needs: ios-prepare
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -248,8 +266,10 @@ jobs:
           python3 <<'PY'
           import json
           import os
+          import re
           import subprocess
           import sys
+          import time
 
           runtimes = json.loads(
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
@@ -297,7 +317,21 @@ jobs:
               text=True,
             ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
-          subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
+
+            print(f"Waiting for simulator {udid} to reach Booted state...")
+            booted = False
+            for attempt in range(1, 61):
+              devices_output = subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True)
+              if re.search(rf"\({re.escape(udid)}\) \(Booted\)", devices_output):
+                booted = True
+                print(f"Simulator booted after {attempt * 5}s")
+                break
+              print(f"Simulator not booted yet ({attempt * 5}s elapsed)")
+              time.sleep(5)
+
+            if not booted:
+              print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
+              sys.exit(1)
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
               fh.write(f"runtime={runtime_identifier}\n")
@@ -359,6 +393,7 @@ jobs:
     name: iOS | Screenshots
     runs-on: macos-15
     needs: ios-prepare
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -393,8 +428,10 @@ jobs:
           python3 <<'PY'
           import json
           import os
+          import re
           import subprocess
           import sys
+          import time
 
           runtimes = json.loads(
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
@@ -442,7 +479,21 @@ jobs:
               text=True,
             ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
-          subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
+
+            print(f"Waiting for simulator {udid} to reach Booted state...")
+            booted = False
+            for attempt in range(1, 61):
+              devices_output = subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True)
+              if re.search(rf"\({re.escape(udid)}\) \(Booted\)", devices_output):
+                booted = True
+                print(f"Simulator booted after {attempt * 5}s")
+                break
+              print(f"Simulator not booted yet ({attempt * 5}s elapsed)")
+              time.sleep(5)
+
+            if not booted:
+              print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
+              sys.exit(1)
 
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
               fh.write(f"runtime={runtime_identifier}\n")
