@@ -13,6 +13,19 @@ permissions:
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   APP_ID: uk.gleissner.c64commander
+  IOS_ROLLOUT_STAGE: ${{ vars.IOS_ROLLOUT_STAGE || 'A' }}
+
+# Rollout policy:
+# - Stage A (default): iOS jobs are informative (non-blocking).
+# - Stage B: ios-build-simulator and ios-maestro-critical become blocking required checks.
+# - Stage C: ios-package-altstore is required on tag refs.
+# Set repository variable IOS_ROLLOUT_STAGE to A, B, or C.
+#
+# iOS failure triage checklist:
+# 1) Runtime missing: inspect `xcrun simctl list runtimes` in job logs.
+# 2) Simulator unavailable: inspect `xcrun simctl list devicetypes` and selected device.
+# 3) Maestro selector drift: inspect `test-results/maestro/**` artifacts and update flows/selectors.
+# 4) Packaging errors: inspect archive/zip steps and verify `ios/build/App.xcarchive` content.
 
 jobs:
   ios-prepare:
@@ -58,6 +71,7 @@ jobs:
     name: iOS | Build simulator
     runs-on: macos-15
     needs: ios-prepare
+    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE == 'A' }}
 
     steps:
       - name: Checkout
@@ -138,12 +152,12 @@ jobs:
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
           subprocess.check_call(["xcrun", "simctl", "bootstatus", udid, "-b"])
 
-          github_output = os.environ.get("GITHUB_OUTPUT")
-          if not github_output:
+            github_output = os.environ.get("GITHUB_OUTPUT")
+            if not github_output:
               print("GITHUB_OUTPUT is not set", file=sys.stderr)
               sys.exit(1)
 
-          with open(github_output, "a", encoding="utf-8") as fh:
+            with open(github_output, "a", encoding="utf-8") as fh:
               fh.write(f"runtime={runtime_identifier}\n")
               fh.write(f"device_type={device_type_identifier}\n")
               fh.write(f"udid={udid}\n")
@@ -186,6 +200,7 @@ jobs:
     name: iOS | Maestro critical
     runs-on: macos-15
     needs: ios-prepare
+    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE == 'A' }}
 
     steps:
       - name: Checkout
@@ -314,6 +329,7 @@ jobs:
     name: iOS | Screenshots
     runs-on: macos-15
     needs: ios-prepare
+    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE == 'A' }}
 
     steps:
       - name: Checkout
@@ -452,6 +468,7 @@ jobs:
     name: iOS | Package AltStore IPA
     runs-on: macos-15
     needs: ios-prepare
+    continue-on-error: ${{ env.IOS_ROLLOUT_STAGE != 'C' || !startsWith(github.ref, 'refs/tags/') }}
 
     steps:
       - name: Checkout

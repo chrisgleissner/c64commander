@@ -261,5 +261,5 @@ The plan is complete when all conditions are true:
 - [x] Phase 3 complete
 - [x] Phase 4 complete
 - [x] Phase 5 complete
-- [ ] Phase 6 complete
-- [ ] Phase 7 complete
+- [x] Phase 6 complete
+- [x] Phase 7 complete
