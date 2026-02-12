@@ -140,6 +140,18 @@ android {
     }
     testOptions {
         unitTests.returnDefaultValues = true
+        unitTests.all {
+            jacoco {
+                includeNoLocationClasses = true
+                excludes = [
+                    'jdk.internal.*',
+                    'java.*',
+                    'javax.*',
+                    'sun.*',
+                    'com.sun.*',
+                ]
+            }
+        }
     }
     sourceSets {
         androidTest {
@@ -158,6 +170,7 @@ dependencies {
     implementation "androidx.security:security-crypto:1.1.0-alpha06"
     implementation "commons-net:commons-net:3.9.0"
     implementation project(':capacitor-android')
+    implementation project(':capacitor-cordova-android-plugins')
     testImplementation "junit:junit:$junitVersion"
     testImplementation "org.json:json:20240303"
     testImplementation "org.robolectric:robolectric:4.11.1"
@@ -167,23 +180,22 @@ dependencies {
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
-    implementation project(':capacitor-cordova-android-plugins')
 }
 
 // Jacoco configuration for code coverage
 jacoco {
-    toolVersion = "0.8.12"
+    toolVersion = "0.8.13"
 }
 
 tasks.register('jacocoTestReport', JacocoReport) {
     dependsOn "testDebugUnitTest", "testReleaseUnitTest"
-    
+
     reports {
         xml.required = true
         html.required = true
         csv.required = false
     }
-    
+
     def fileFilter = [
         '**/R.class',
         '**/R$*.class',
@@ -213,10 +225,10 @@ tasks.register('jacocoTestReport', JacocoReport) {
         '**/SevenZipJBindingArchiveReader*.class',
         'android/**/*.class'
     ]
-    
+
     def debugTree = fileTree(dir: "$buildDir/tmp/kotlin-classes/debug", excludes: fileFilter)
     def mainSrc = "$projectDir/src/main/java"
-    
+
     sourceDirectories.setFrom(files([mainSrc]))
     classDirectories.setFrom(files([debugTree]))
     executionData.setFrom(fileTree(dir: buildDir, includes: [

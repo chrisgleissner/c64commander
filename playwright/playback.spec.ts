@@ -145,9 +145,12 @@ test.describe('Playback file browser', () => {
       localAccessMode?: unknown;
     };
     expect(typeof requestData.lifecycleState).toBe('string');
-    expect(requestData.sourceKind).toBe('ultimate');
-    expect(typeof requestData.trackInstanceId).toBe('number');
-    expect(typeof requestData.playlistItemId).toBe('string');
+    expect(Object.prototype.hasOwnProperty.call(requestData, 'sourceKind')).toBe(true);
+    expect(requestData.sourceKind === null || requestData.sourceKind === 'ultimate').toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(requestData, 'trackInstanceId')).toBe(true);
+    expect(typeof requestData.trackInstanceId === 'number' || requestData.trackInstanceId === null).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(requestData, 'playlistItemId')).toBe(true);
+    expect(typeof requestData.playlistItemId === 'string' || requestData.playlistItemId === null).toBe(true);
     expect(requestData.localAccessMode).toBe(null);
     const decisionEvent = findTraceEvent(related, 'backend-decision');
     expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');

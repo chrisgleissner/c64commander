@@ -157,7 +157,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
   - Extend Playwright trace-related tests to assert that playback trace events contain `sourceKind`, `trackInstanceId`, and `lifecycleState` fields.
   - Verify correlation ID presence in mock-native-plugin test scenarios.
 
-- [ ] **2.10 Run full build and test suite**
+- [x] **2.10 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - `cd android && ./gradlew test`
   - Fix any regressions.
@@ -221,7 +221,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
     - Document a manual Maestro flow that locks the device (`adb shell input keyevent 26`), waits for song duration, unlocks, and verifies the queue advanced.
     - This cannot be fully automated in CI but should be runnable locally.
 
-- [ ] **3.8 Run full build and test suite**
+- [x] **3.8 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - `cd android && ./gradlew test`
   - Fix any regressions.
