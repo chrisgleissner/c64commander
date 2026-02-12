@@ -284,6 +284,41 @@ export const ItemSelectionDialog = ({
               <div className="space-y-5">
                 <p className="text-lg font-semibold text-foreground">Choose source</p>
                 <div className="grid gap-2 sm:grid-cols-2" data-testid="import-selection-interstitial">
+                  <Button
+                    variant="outline"
+                    className="justify-start min-w-0"
+                    onClick={() => void handleAddLocalSource()}
+                    disabled={pendingLocalSource}
+                    aria-busy={pendingLocalSource}
+                    id="import-option-local"
+                    data-testid="import-option-local"
+                    aria-label="Add file / folder from Local"
+                  >
+                    <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
+                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
+                    </span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start min-w-0"
+                    onClick={() => {
+                      if (!c64UltimateSource) return;
+                      setPendingLocalSource(false);
+                      setSelectedSourceId(c64UltimateSource.id);
+                    }}
+                    disabled={!c64UltimateSource?.isAvailable}
+                    id="import-option-c64u"
+                    data-testid="import-option-c64u"
+                    aria-label="Add file / folder from C64U"
+                  >
+                    <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
+                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                    </span>
+                  </Button>
                   {hvscSource ? (
                     <Button
                       variant="outline"
@@ -305,41 +340,6 @@ export const ItemSelectionDialog = ({
                       </span>
                     </Button>
                   ) : null}
-                  <Button
-                    variant="outline"
-                    className="justify-start min-w-0"
-                    onClick={() => {
-                      if (!c64UltimateSource) return;
-                      setPendingLocalSource(false);
-                      setSelectedSourceId(c64UltimateSource.id);
-                    }}
-                    disabled={!c64UltimateSource?.isAvailable}
-                    id="import-option-c64u"
-                    data-testid="import-option-c64u"
-                    aria-label="Add file / folder from C64U"
-                  >
-                    <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
-                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
-                    </span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start min-w-0"
-                    onClick={() => void handleAddLocalSource()}
-                    disabled={pendingLocalSource}
-                    aria-busy={pendingLocalSource}
-                    id="import-option-local"
-                    data-testid="import-option-local"
-                    aria-label="Add file / folder from Local"
-                  >
-                    <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
-                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
-                    </span>
-                  </Button>
                 </div>
               </div>
             )}

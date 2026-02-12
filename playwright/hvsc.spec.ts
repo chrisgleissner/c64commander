@@ -670,7 +670,7 @@ test.describe('HVSC Play page', () => {
     await addHvscDemoTrackToPlaylist(page);
     await page
       .getByTestId('playlist-item')
-      .filter({ hasText: '10_Orbyte.sid' })
+      .first()
       .getByRole('button', { name: 'Play' })
       .click();
 

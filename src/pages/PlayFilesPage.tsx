@@ -434,8 +434,8 @@ export default function PlayFilesPage() {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
-      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
       { label: SOURCE_LABELS.local, sources: localGroupSources },
+      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
     if (hvscLibraryAvailable) {
       groups.push({ label: SOURCE_LABELS.hvsc, sources: [createHvscSourceLocation(hvscRoot.path)] });

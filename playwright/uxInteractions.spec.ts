@@ -745,8 +745,10 @@ test.describe('UX Interaction Patterns', () => {
     const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (localVisible && c64uVisible) {
-      await expect(localButton).toContainText('Add file / folder');
-      await expect(c64uButton).toContainText('Add file / folder');
+      await expect(localButton).toContainText('Local');
+      await expect(localButton).toContainText('Local Android Device');
+      await expect(c64uButton).toContainText('C64U');
+      await expect(c64uButton).toContainText('Commodore 64 Ultimate');
       await attachStepScreenshot(page, testInfo, 'source-buttons-consistent');
     } else {
       await attachStepScreenshot(page, testInfo, 'source-buttons-missing');

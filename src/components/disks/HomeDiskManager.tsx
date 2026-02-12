@@ -222,8 +222,8 @@ export const HomeDiskManager = () => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     return [
-      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
       { label: SOURCE_LABELS.local, sources: localGroupSources },
+      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
   }, [localSources]);
   const softIecDirectorySourceGroups: SourceGroup[] = useMemo(() => {

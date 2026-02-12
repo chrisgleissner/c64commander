@@ -18,8 +18,8 @@ The UX is built around three distinct concepts that must never be conflated:
 1. **Sources**
    - Define *where items come from*.
    - Examples:
-     - C64U
      - Local folders (multiple, user-defined)
+     - C64U
      - HVSC
    - Selected before navigation begins.
 
@@ -106,10 +106,12 @@ The user never “browses the filesystem” as a primary goal.
 
 - Source selection always happens **before** navigation.
 - Sources must be clearly identifiable and named.
+- Canonical source order is always: `Local`, `C64U`, `HVSC`.
 - Play page source chooser must expose exactly:
   - `Local`
   - `C64U`
   - `HVSC`
+- Source chooser buttons and other multi-source ordered lists must present sources in that exact order.
 - Local device sources are added via the system folder picker; the source chooser shows only an “Add file / folder” action and does not list prior folders.
 - Adding a new local source requires the Android folder picker.
 
