@@ -16,5 +16,4 @@ export type SecureStoragePlugin = {
 
 export const SecureStorage = registerPlugin<SecureStoragePlugin>('SecureStorage', {
   web: () => import('./secureStorage.web').then((module) => new module.SecureStorageWeb()),
-  ios: () => import('./secureStorage.ios').then((module) => new module.SecureStorageIOS()),
 });

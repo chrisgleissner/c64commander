@@ -138,4 +138,12 @@ You can find these controls in Settings → Device Safety.
 
 For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).
 
+iOS CI/bootstrap helpers:
+
+- `npm run cap:add:ios` to generate the iOS platform.
+- `npm run cap:sync:ios` to sync web/native assets for iOS.
+- `npm run ios:build:sim` to build the simulator app on macOS.
+- `npm run ios:build:device` to build a device-targeted app on macOS.
+- GitHub iOS simulator CI is defined in [.github/workflows/ios-ci.yaml](.github/workflows/ios-ci.yaml).
+
 Fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).
