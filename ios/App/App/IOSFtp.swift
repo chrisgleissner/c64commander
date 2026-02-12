@@ -206,10 +206,10 @@ final class FtpSession {
             throw NativePluginError.operationFailed("FTP response timed out")
         }
 
-        if let expected, !expected.contains(code) {
+        if let expect, !expect.contains(code) {
             throw NativePluginError.operationFailed("FTP command failed (\(code))")
         }
-        if let expectedPrefix, !expectedPrefix.contains(code) {
+        if let expectPrefix, !expectPrefix.contains(code) {
             throw NativePluginError.operationFailed("FTP command failed (\(code))")
         }
 

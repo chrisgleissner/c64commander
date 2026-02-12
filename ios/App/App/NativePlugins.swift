@@ -30,6 +30,7 @@ enum NativePluginError: LocalizedError {
 
 enum IOSDiagnostics {
     static let notificationName = Notification.Name("C64CommanderDiagnosticsLog")
+    static let logger = OSLog(subsystem: "uk.gleissner.c64commander", category: "native")
 
     static func log(_ level: IOSDiagnosticsLevel, _ message: String, details: [String: Any] = [:], error: Error? = nil) {
         var payload: [String: Any] = details
@@ -41,16 +42,15 @@ enum IOSDiagnostics {
             ]
         }
 
-        let logger = Logger(subsystem: "uk.gleissner.c64commander", category: "native")
         switch level {
         case .debug:
-            logger.debug("\(message, privacy: .public)")
+            os_log("%{public}@", log: logger, type: .debug, message)
         case .info:
-            logger.info("\(message, privacy: .public)")
+            os_log("%{public}@", log: logger, type: .info, message)
         case .warn:
-            logger.warning("\(message, privacy: .public)")
+            os_log("%{public}@", log: logger, type: .default, message)
         case .error:
-            logger.error("\(message, privacy: .public)")
+            os_log("%{public}@", log: logger, type: .error, message)
         }
 
         NotificationCenter.default.post(
@@ -370,7 +370,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
         }
         defer { url.stopAccessingSecurityScopedResource() }
 
-        let bookmarkData = try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+        let bookmarkData = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
         var bookmarks = UserDefaults.standard.dictionary(forKey: FolderPickerConstants.bookmarksKey) as? [String: String] ?? [:]
         bookmarks[url.absoluteString] = bookmarkData.base64EncodedString()
         UserDefaults.standard.set(bookmarks, forKey: FolderPickerConstants.bookmarksKey)
@@ -404,7 +404,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
         }
 
         var stale = false
-        let scopedUrl = try URL(resolvingBookmarkData: bookmarkData, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale)
+        let scopedUrl = try URL(resolvingBookmarkData: bookmarkData, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
         if stale {
             _ = try persistSecurityScopedUrl(scopedUrl)
         }
@@ -746,11 +746,10 @@ public final class DiagnosticsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    public override func handleReset() {
+    deinit {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
             self.observer = nil
         }
-        super.handleReset()
     }
 }
