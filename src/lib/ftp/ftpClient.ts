@@ -9,6 +9,7 @@
 import { addErrorLog, buildErrorLogDetails } from '@/lib/logging';
 import { decrementFtpInFlight, incrementFtpInFlight } from '@/lib/diagnostics/diagnosticsActivity';
 import { FtpClient, type FtpEntry, type FtpListOptions, type FtpReadOptions } from '@/lib/native/ftpClient';
+import { resolveNativeTraceContext } from '@/lib/native/nativeTraceContext';
 import { getActiveAction, runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordFtpOperation, recordTraceError } from '@/lib/tracing/traceSession';
 import { withFtpInteraction, type InteractionIntent } from '@/lib/deviceInteraction/deviceInteractionManager';
@@ -71,11 +72,13 @@ export const listFtpDirectory = async (
   // If there's an active user action, record FTP within that context
   const activeAction = getActiveAction();
   if (activeAction) {
-    return executeFtpList(activeAction, ftpOptions, normalizedPath, intent);
+    const optionsWithTrace = { ...ftpOptions, traceContext: resolveNativeTraceContext(activeAction) };
+    return executeFtpList(activeAction, optionsWithTrace, normalizedPath, intent);
   }
   // Otherwise create an implicit system action for the FTP call
   return runWithImplicitAction('ftp.list', async (action) => {
-    return executeFtpList(action, ftpOptions, normalizedPath, intent);
+    const optionsWithTrace = { ...ftpOptions, traceContext: resolveNativeTraceContext(action) };
+    return executeFtpList(action, optionsWithTrace, normalizedPath, intent);
   });
 };
 
@@ -130,10 +133,12 @@ export const readFtpFile = async (
   // If there's an active user action, record FTP within that context
   const activeAction = getActiveAction();
   if (activeAction) {
-    return executeFtpRead(activeAction, ftpOptions, options.path, intent);
+    const optionsWithTrace = { ...ftpOptions, traceContext: resolveNativeTraceContext(activeAction) };
+    return executeFtpRead(activeAction, optionsWithTrace, options.path, intent);
   }
   // Otherwise create an implicit system action for the FTP call
   return runWithImplicitAction('ftp.read', async (action) => {
-    return executeFtpRead(action, ftpOptions, options.path, intent);
+    const optionsWithTrace = { ...ftpOptions, traceContext: resolveNativeTraceContext(action) };
+    return executeFtpRead(action, optionsWithTrace, options.path, intent);
   });
 };

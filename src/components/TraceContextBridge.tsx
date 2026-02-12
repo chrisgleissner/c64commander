@@ -6,10 +6,9 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { useSidPlayer } from '@/hooks/useSidPlayer';
 import { useC64Connection } from '@/hooks/useC64Connection';
 import {
   setTraceDeviceContext,
@@ -20,24 +19,13 @@ import {
 } from '@/lib/tracing/traceContext';
 import { getPlatform } from '@/lib/native/platform';
 import { registerTraceBridge } from '@/lib/tracing/traceBridge';
+import { usePlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
 
 export const TraceContextBridge = () => {
   const location = useLocation();
   const { flags } = useFeatureFlags();
-  const { queue, currentIndex, currentTrack, isPlaying, elapsedMs, durationMs } = useSidPlayer();
   const { status } = useC64Connection();
-
-  const playback = useMemo(() => {
-    if (!queue) return null;
-    return {
-      queueLength: queue.length,
-      currentIndex,
-      currentItemId: currentTrack?.id ?? null,
-      isPlaying,
-      elapsedMs,
-      durationMs: durationMs ?? null,
-    };
-  }, [queue, currentIndex, currentTrack, isPlaying, elapsedMs, durationMs]);
+  const playback = usePlaybackTraceSnapshot();
 
   useEffect(() => {
     setTraceUiContext(location.pathname, location.search);

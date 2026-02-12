@@ -8,6 +8,10 @@
 
 export type TraceOrigin = 'user' | 'automatic' | 'system';
 
+export type TraceLifecycleState = 'foreground' | 'background' | 'unknown';
+
+export type TraceSourceKind = 'local' | 'ultimate' | 'hvsc' | 'saf';
+
 export type TraceEventType =
   | 'action-start'
   | 'action-end'
@@ -20,6 +24,13 @@ export type TraceEventType =
   | 'ftp-operation'
   | 'error';
 
+export type TraceEventContextFields = {
+  lifecycleState: TraceLifecycleState;
+  sourceKind: TraceSourceKind | null;
+  trackInstanceId: number | null;
+  playlistItemId: string | null;
+};
+
 export type TraceEvent<T = Record<string, unknown>> = {
   id: string;
   timestamp: string;
@@ -27,7 +38,7 @@ export type TraceEvent<T = Record<string, unknown>> = {
   type: TraceEventType;
   origin: TraceOrigin;
   correlationId: string;
-  data: T;
+  data: T & TraceEventContextFields;
 };
 
 export type BackendTarget = 'internal-mock' | 'external-mock' | 'real-device';
@@ -53,6 +64,9 @@ export type TracePlaybackContext = {
   isPlaying: boolean;
   elapsedMs: number;
   durationMs?: number | null;
+  sourceKind?: TraceSourceKind | null;
+  trackInstanceId?: number | null;
+  playlistItemId?: string | null;
 };
 
 export type TraceDeviceContext = {

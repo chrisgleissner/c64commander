@@ -44,6 +44,7 @@ interface UsePlaybackPersistenceProps {
     trackStartedAtRef: React.MutableRefObject<number | null>;
     trackInstanceIdRef: React.MutableRefObject<number>;
     autoAdvanceGuardRef: React.MutableRefObject<any>; // Using any to avoid importing local type from Page
+    setTrackInstanceId: (value: number) => void;
 }
 
 export function usePlaybackPersistence({
@@ -72,6 +73,7 @@ export function usePlaybackPersistence({
     trackStartedAtRef,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
+    setTrackInstanceId,
 }: UsePlaybackPersistenceProps) {
     const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
     const hasHydratedPlaylistRef = useRef(false);
@@ -236,6 +238,7 @@ export function usePlaybackPersistence({
             if (typeof pending.durationMs === 'number' && pending.durationMs > 0) {
                 const restoredTrackInstanceId = trackInstanceIdRef.current + 1;
                 trackInstanceIdRef.current = restoredTrackInstanceId;
+                setTrackInstanceId(restoredTrackInstanceId);
                 autoAdvanceGuardRef.current = {
                     trackInstanceId: restoredTrackInstanceId,
                     dueAtMs: (trackStartedAtRef.current ?? now) + pending.durationMs,
@@ -251,7 +254,7 @@ export function usePlaybackPersistence({
             playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
         }
         pendingPlaybackRestoreRef.current = null;
-    }, [playlist, playlistStorageKey]); // Depends on playlist being set
+    }, [playlist, playlistStorageKey, setTrackInstanceId]); // Depends on playlist being set
 
     // Persist Playlist
     useEffect(() => {

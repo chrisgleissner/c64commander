@@ -12,6 +12,9 @@ import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { normalizeFtpHost } from '@/lib/sourceNavigation/ftpSourceAdapter';
+import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { recordTraceError } from '@/lib/tracing/traceSession';
+import { classifyError } from '@/lib/tracing/failureTaxonomy';
 import { AUTOSTART_SEQUENCE, injectAutostart } from './autostart';
 import {
   formatPlayCategory,
@@ -295,12 +298,20 @@ export const executePlayPlan = async (
       }
     }
   } catch (error) {
+    const err = error as Error;
+    const failure = classifyError(err);
     addErrorLog('Playback failed', {
       source: plan.source,
       path: plan.path,
       category: plan.category,
-      error: (error as Error).message,
+      error: err.message,
+      errorCategory: failure.category,
+      errorExpected: failure.isExpected,
     });
+    const activeAction = getActiveAction();
+    if (activeAction) {
+      recordTraceError(activeAction, err, failure);
+    }
     throw error;
   }
 };

@@ -1,8 +1,8 @@
 [
   {
     "id": "EVT-0000",
-    "timestamp": "2026-02-04T17:04:52.487Z",
-    "relativeMs": 302,
+    "timestamp": "2026-02-11T23:05:08.921Z",
+    "relativeMs": 205,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -18,56 +18,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "UNKNOWN"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0001",
-    "timestamp": "2026-02-04T17:04:52.488Z",
-    "relativeMs": 303,
+    "timestamp": "2026-02-11T23:05:08.922Z",
+    "relativeMs": 206,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0002",
-    "timestamp": "2026-02-04T17:04:52.489Z",
-    "relativeMs": 304,
+    "timestamp": "2026-02-11T23:05:08.922Z",
+    "relativeMs": 206,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0003",
-    "timestamp": "2026-02-04T17:04:52.513Z",
-    "relativeMs": 328,
+    "timestamp": "2026-02-11T23:05:08.933Z",
+    "relativeMs": 217,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -83,56 +88,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0004",
-    "timestamp": "2026-02-04T17:04:52.513Z",
-    "relativeMs": 328,
+    "timestamp": "2026-02-11T23:05:08.933Z",
+    "relativeMs": 217,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0005",
-    "timestamp": "2026-02-04T17:04:52.513Z",
-    "relativeMs": 328,
+    "timestamp": "2026-02-11T23:05:08.933Z",
+    "relativeMs": 217,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0006",
-    "timestamp": "2026-02-04T17:04:52.616Z",
-    "relativeMs": 431,
+    "timestamp": "2026-02-11T23:05:08.980Z",
+    "relativeMs": 264,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0000",
@@ -147,26 +157,34 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 67,
-      "error": null
+      "durationMs": 32,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0007",
-    "timestamp": "2026-02-04T17:04:52.616Z",
-    "relativeMs": 431,
+    "timestamp": "2026-02-11T23:05:08.981Z",
+    "relativeMs": 265,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0000",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0008",
-    "timestamp": "2026-02-04T17:04:52.634Z",
-    "relativeMs": 449,
+    "timestamp": "2026-02-11T23:05:08.990Z",
+    "relativeMs": 274,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0001",
@@ -181,26 +199,34 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 69,
-      "error": null
+      "durationMs": 30,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0009",
-    "timestamp": "2026-02-04T17:04:52.634Z",
-    "relativeMs": 449,
+    "timestamp": "2026-02-11T23:05:08.990Z",
+    "relativeMs": 274,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0001",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0010",
-    "timestamp": "2026-02-04T17:04:52.650Z",
-    "relativeMs": 465,
+    "timestamp": "2026-02-11T23:05:08.997Z",
+    "relativeMs": 281,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0002",
@@ -216,56 +242,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": "TEST-123",
           "connectionState": "REAL_CONNECTED"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0011",
-    "timestamp": "2026-02-04T17:04:52.650Z",
-    "relativeMs": 465,
+    "timestamp": "2026-02-11T23:05:08.997Z",
+    "relativeMs": 281,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0012",
-    "timestamp": "2026-02-04T17:04:52.650Z",
-    "relativeMs": 465,
+    "timestamp": "2026-02-11T23:05:08.997Z",
+    "relativeMs": 281,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0013",
-    "timestamp": "2026-02-04T17:04:52.674Z",
-    "relativeMs": 489,
+    "timestamp": "2026-02-11T23:05:09.005Z",
+    "relativeMs": 289,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0003",
@@ -281,56 +312,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0014",
-    "timestamp": "2026-02-04T17:04:52.674Z",
-    "relativeMs": 489,
+    "timestamp": "2026-02-11T23:05:09.006Z",
+    "relativeMs": 290,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0015",
-    "timestamp": "2026-02-04T17:04:52.674Z",
-    "relativeMs": 489,
+    "timestamp": "2026-02-11T23:05:09.006Z",
+    "relativeMs": 290,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0016",
-    "timestamp": "2026-02-04T17:04:52.675Z",
-    "relativeMs": 490,
+    "timestamp": "2026-02-11T23:05:09.006Z",
+    "relativeMs": 290,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0004",
@@ -346,56 +382,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0017",
-    "timestamp": "2026-02-04T17:04:52.675Z",
-    "relativeMs": 490,
+    "timestamp": "2026-02-11T23:05:09.007Z",
+    "relativeMs": 291,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0018",
-    "timestamp": "2026-02-04T17:04:52.675Z",
-    "relativeMs": 490,
+    "timestamp": "2026-02-11T23:05:09.007Z",
+    "relativeMs": 291,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0019",
-    "timestamp": "2026-02-04T17:04:52.675Z",
-    "relativeMs": 490,
+    "timestamp": "2026-02-11T23:05:09.007Z",
+    "relativeMs": 291,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0005",
@@ -411,56 +452,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0020",
-    "timestamp": "2026-02-04T17:04:52.675Z",
-    "relativeMs": 490,
+    "timestamp": "2026-02-11T23:05:09.008Z",
+    "relativeMs": 292,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0021",
-    "timestamp": "2026-02-04T17:04:52.675Z",
-    "relativeMs": 490,
+    "timestamp": "2026-02-11T23:05:09.008Z",
+    "relativeMs": 292,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0022",
-    "timestamp": "2026-02-04T17:04:52.683Z",
-    "relativeMs": 498,
+    "timestamp": "2026-02-11T23:05:09.008Z",
+    "relativeMs": 292,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0006",
@@ -476,82 +522,98 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0023",
-    "timestamp": "2026-02-04T17:04:52.684Z",
-    "relativeMs": 499,
+    "timestamp": "2026-02-11T23:05:09.008Z",
+    "relativeMs": 292,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0024",
-    "timestamp": "2026-02-04T17:04:52.684Z",
-    "relativeMs": 499,
+    "timestamp": "2026-02-11T23:05:09.008Z",
+    "relativeMs": 292,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0025",
-    "timestamp": "2026-02-04T17:04:52.685Z",
-    "relativeMs": 500,
+    "timestamp": "2026-02-11T23:05:09.010Z",
+    "relativeMs": 294,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 35,
-      "error": "signal is aborted without reason"
+      "durationMs": 13,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0026",
-    "timestamp": "2026-02-04T17:04:52.685Z",
-    "relativeMs": 500,
+    "timestamp": "2026-02-11T23:05:09.010Z",
+    "relativeMs": 294,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0002",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0027",
-    "timestamp": "2026-02-04T17:04:52.686Z",
-    "relativeMs": 501,
+    "timestamp": "2026-02-11T23:05:09.013Z",
+    "relativeMs": 297,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -567,56 +629,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0028",
-    "timestamp": "2026-02-04T17:04:52.686Z",
-    "relativeMs": 501,
+    "timestamp": "2026-02-11T23:05:09.013Z",
+    "relativeMs": 297,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0029",
-    "timestamp": "2026-02-04T17:04:52.686Z",
-    "relativeMs": 501,
+    "timestamp": "2026-02-11T23:05:09.013Z",
+    "relativeMs": 297,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0030",
-    "timestamp": "2026-02-04T17:04:52.687Z",
-    "relativeMs": 502,
+    "timestamp": "2026-02-11T23:05:09.014Z",
+    "relativeMs": 298,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -632,56 +699,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0031",
-    "timestamp": "2026-02-04T17:04:52.687Z",
-    "relativeMs": 502,
+    "timestamp": "2026-02-11T23:05:09.014Z",
+    "relativeMs": 298,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0032",
-    "timestamp": "2026-02-04T17:04:52.687Z",
-    "relativeMs": 502,
+    "timestamp": "2026-02-11T23:05:09.015Z",
+    "relativeMs": 299,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0033",
-    "timestamp": "2026-02-04T17:04:52.688Z",
-    "relativeMs": 503,
+    "timestamp": "2026-02-11T23:05:09.016Z",
+    "relativeMs": 300,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0009",
@@ -697,56 +769,61 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0034",
-    "timestamp": "2026-02-04T17:04:52.688Z",
-    "relativeMs": 503,
+    "timestamp": "2026-02-11T23:05:09.016Z",
+    "relativeMs": 300,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0035",
-    "timestamp": "2026-02-04T17:04:52.688Z",
-    "relativeMs": 503,
+    "timestamp": "2026-02-11T23:05:09.016Z",
+    "relativeMs": 300,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0036",
-    "timestamp": "2026-02-04T17:04:52.690Z",
-    "relativeMs": 505,
+    "timestamp": "2026-02-11T23:05:09.017Z",
+    "relativeMs": 301,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -762,256 +839,349 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0037",
-    "timestamp": "2026-02-04T17:04:52.690Z",
-    "relativeMs": 505,
+    "timestamp": "2026-02-11T23:05:09.017Z",
+    "relativeMs": 301,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0010",
     "data": {
       "selectedTarget": "external-mock",
-      "reason": "test-mode"
+      "reason": "test-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0038",
-    "timestamp": "2026-02-04T17:04:52.690Z",
-    "relativeMs": 505,
+    "timestamp": "2026-02-11T23:05:09.017Z",
+    "relativeMs": 301,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0010",
     "data": {
       "method": "GET",
-      "url": "http://127.0.0.1:38353/v1/info",
+      "url": "http://127.0.0.1:32961/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "127.0.0.1:38353"
+        "X-C64U-Host": "127.0.0.1:32961"
       },
       "body": null,
-      "target": "external-mock"
+      "target": "external-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0039",
-    "timestamp": "2026-02-04T17:04:52.691Z",
-    "relativeMs": 506,
+    "timestamp": "2026-02-11T23:05:09.017Z",
+    "relativeMs": 301,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 17,
-      "error": "signal is aborted without reason"
+      "durationMs": 12,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0040",
-    "timestamp": "2026-02-04T17:04:52.691Z",
-    "relativeMs": 506,
+    "timestamp": "2026-02-11T23:05:09.018Z",
+    "relativeMs": 302,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0041",
-    "timestamp": "2026-02-04T17:04:52.692Z",
-    "relativeMs": 507,
+    "timestamp": "2026-02-11T23:05:09.018Z",
+    "relativeMs": 302,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 17,
-      "error": "signal is aborted without reason"
+      "durationMs": 12,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0042",
-    "timestamp": "2026-02-04T17:04:52.692Z",
-    "relativeMs": 507,
+    "timestamp": "2026-02-11T23:05:09.018Z",
+    "relativeMs": 302,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0043",
-    "timestamp": "2026-02-04T17:04:52.692Z",
-    "relativeMs": 507,
+    "timestamp": "2026-02-11T23:05:09.019Z",
+    "relativeMs": 303,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0005",
-    "data": {
-      "status": null,
-      "body": null,
-      "durationMs": 17,
-      "error": "signal is aborted without reason"
-    }
-  },
-  {
-    "id": "EVT-0044",
-    "timestamp": "2026-02-04T17:04:52.692Z",
-    "relativeMs": 507,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0005",
-    "data": {
-      "message": "signal is aborted without reason",
-      "name": "AbortError"
-    }
-  },
-  {
-    "id": "EVT-0045",
-    "timestamp": "2026-02-04T17:04:52.694Z",
-    "relativeMs": 509,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0002",
-    "data": {
-      "message": "Host unreachable",
-      "name": "Error"
-    }
-  },
-  {
-    "id": "EVT-0046",
-    "timestamp": "2026-02-04T17:04:52.694Z",
-    "relativeMs": 509,
-    "type": "action-end",
-    "origin": "system",
-    "correlationId": "COR-0002",
-    "data": {
-      "status": "error",
-      "error": "Host unreachable"
-    }
-  },
-  {
-    "id": "EVT-0047",
-    "timestamp": "2026-02-04T17:04:52.694Z",
-    "relativeMs": 509,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0006",
     "data": {
       "status": null,
       "body": null,
       "durationMs": 11,
-      "error": "signal is aborted without reason"
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0044",
+    "timestamp": "2026-02-11T23:05:09.019Z",
+    "relativeMs": 303,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0005",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0045",
+    "timestamp": "2026-02-11T23:05:09.020Z",
+    "relativeMs": 304,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0046",
+    "timestamp": "2026-02-11T23:05:09.020Z",
+    "relativeMs": 304,
+    "type": "action-end",
+    "origin": "system",
+    "correlationId": "COR-0002",
+    "data": {
+      "status": "error",
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0047",
+    "timestamp": "2026-02-11T23:05:09.020Z",
+    "relativeMs": 304,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0006",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 12,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0048",
-    "timestamp": "2026-02-04T17:04:52.694Z",
-    "relativeMs": 509,
+    "timestamp": "2026-02-11T23:05:09.020Z",
+    "relativeMs": 304,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0049",
-    "timestamp": "2026-02-04T17:04:52.694Z",
-    "relativeMs": 509,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0050",
-    "timestamp": "2026-02-04T17:04:52.694Z",
-    "relativeMs": 509,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0003",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0051",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0052",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0004",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0053",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0054",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0005",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0055",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.021Z",
+    "relativeMs": 305,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0007",
@@ -1019,25 +1189,36 @@
       "status": null,
       "body": null,
       "durationMs": 9,
-      "error": "signal is aborted without reason"
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0056",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.022Z",
+    "relativeMs": 306,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0057",
-    "timestamp": "2026-02-04T17:04:52.695Z",
-    "relativeMs": 510,
+    "timestamp": "2026-02-11T23:05:09.022Z",
+    "relativeMs": 306,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0008",
@@ -1045,147 +1226,213 @@
       "status": null,
       "body": null,
       "durationMs": 8,
-      "error": "signal is aborted without reason"
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0058",
-    "timestamp": "2026-02-04T17:04:52.696Z",
-    "relativeMs": 511,
+    "timestamp": "2026-02-11T23:05:09.022Z",
+    "relativeMs": 306,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0059",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.023Z",
+    "relativeMs": 307,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 11,
-      "error": "signal is aborted without reason"
+      "durationMs": 7,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0060",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.024Z",
+    "relativeMs": 308,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0061",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.025Z",
+    "relativeMs": 309,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0062",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0006",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0063",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0064",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0007",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0065",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0066",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0008",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0067",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0068",
-    "timestamp": "2026-02-04T17:04:52.699Z",
-    "relativeMs": 514,
+    "timestamp": "2026-02-11T23:05:09.026Z",
+    "relativeMs": 310,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0009",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0069",
-    "timestamp": "2026-02-04T17:04:52.928Z",
-    "relativeMs": 743,
+    "timestamp": "2026-02-11T23:05:09.093Z",
+    "relativeMs": 377,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0010",
@@ -1200,26 +1447,34 @@
         "unique_id": "TEST-123",
         "errors": []
       },
-      "durationMs": 182,
-      "error": null
+      "durationMs": 66,
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0070",
-    "timestamp": "2026-02-04T17:04:52.928Z",
-    "relativeMs": 743,
+    "timestamp": "2026-02-11T23:05:09.093Z",
+    "relativeMs": 377,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0010",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0071",
-    "timestamp": "2026-02-04T17:04:56.402Z",
-    "relativeMs": 4217,
+    "timestamp": "2026-02-11T23:05:11.510Z",
+    "relativeMs": 2794,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0011",
@@ -1235,37 +1490,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "READY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0072",
-    "timestamp": "2026-02-04T17:04:56.408Z",
-    "relativeMs": 4223,
+    "timestamp": "2026-02-11T23:05:11.518Z",
+    "relativeMs": 2802,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0011",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0073",
-    "timestamp": "2026-02-04T17:04:57.894Z",
-    "relativeMs": 5709,
+    "timestamp": "2026-02-11T23:05:12.543Z",
+    "relativeMs": 3827,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0012",
@@ -1281,25 +1537,22 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "READY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0074",
-    "timestamp": "2026-02-04T17:04:57.895Z",
-    "relativeMs": 5710,
+    "timestamp": "2026-02-11T23:05:12.545Z",
+    "relativeMs": 3829,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0013",
@@ -1315,25 +1568,22 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "READY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0075",
-    "timestamp": "2026-02-04T17:04:57.896Z",
-    "relativeMs": 5711,
+    "timestamp": "2026-02-11T23:05:12.545Z",
+    "relativeMs": 3829,
     "type": "action-start",
     "origin": "user",
     "correlationId": "COR-0014",
@@ -1349,30 +1599,27 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "READY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0076",
-    "timestamp": "2026-02-04T17:04:57.896Z",
-    "relativeMs": 5711,
+    "timestamp": "2026-02-11T23:05:12.548Z",
+    "relativeMs": 3832,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
-      "name": "api.host-change:127.0.0.1:38353->localhost:8080",
+      "name": "api.host-change:127.0.0.1:32961->localhost:8080",
       "component": null,
       "context": {
         "ui": {
@@ -1383,25 +1630,22 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "READY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0077",
-    "timestamp": "2026-02-04T17:04:57.897Z",
-    "relativeMs": 5712,
+    "timestamp": "2026-02-11T23:05:12.550Z",
+    "relativeMs": 3834,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1417,37 +1661,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "READY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0078",
-    "timestamp": "2026-02-04T17:04:57.897Z",
-    "relativeMs": 5712,
+    "timestamp": "2026-02-11T23:05:12.551Z",
+    "relativeMs": 3835,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0079",
-    "timestamp": "2026-02-04T17:04:57.897Z",
-    "relativeMs": 5712,
+    "timestamp": "2026-02-11T23:05:12.551Z",
+    "relativeMs": 3835,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0016",
@@ -1460,13 +1705,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0080",
-    "timestamp": "2026-02-04T17:04:57.899Z",
-    "relativeMs": 5714,
+    "timestamp": "2026-02-11T23:05:12.555Z",
+    "relativeMs": 3839,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1482,37 +1731,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "BUSY"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0081",
-    "timestamp": "2026-02-04T17:04:57.899Z",
-    "relativeMs": 5714,
+    "timestamp": "2026-02-11T23:05:12.555Z",
+    "relativeMs": 3839,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0082",
-    "timestamp": "2026-02-04T17:04:57.899Z",
-    "relativeMs": 5714,
+    "timestamp": "2026-02-11T23:05:12.555Z",
+    "relativeMs": 3839,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0017",
@@ -1525,13 +1775,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0083",
-    "timestamp": "2026-02-04T17:04:57.900Z",
-    "relativeMs": 5715,
+    "timestamp": "2026-02-11T23:05:12.558Z",
+    "relativeMs": 3842,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -1547,37 +1801,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0084",
-    "timestamp": "2026-02-04T17:04:57.902Z",
-    "relativeMs": 5717,
+    "timestamp": "2026-02-11T23:05:12.558Z",
+    "relativeMs": 3842,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0018",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0085",
-    "timestamp": "2026-02-04T17:04:57.902Z",
-    "relativeMs": 5717,
+    "timestamp": "2026-02-11T23:05:12.558Z",
+    "relativeMs": 3842,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0018",
@@ -1590,13 +1845,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0086",
-    "timestamp": "2026-02-04T17:04:57.903Z",
-    "relativeMs": 5718,
+    "timestamp": "2026-02-11T23:05:12.561Z",
+    "relativeMs": 3845,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -1612,37 +1871,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0087",
-    "timestamp": "2026-02-04T17:04:57.903Z",
-    "relativeMs": 5718,
+    "timestamp": "2026-02-11T23:05:12.561Z",
+    "relativeMs": 3845,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0019",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0088",
-    "timestamp": "2026-02-04T17:04:57.903Z",
-    "relativeMs": 5718,
+    "timestamp": "2026-02-11T23:05:12.561Z",
+    "relativeMs": 3845,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0019",
@@ -1655,13 +1915,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0089",
-    "timestamp": "2026-02-04T17:04:57.904Z",
-    "relativeMs": 5719,
+    "timestamp": "2026-02-11T23:05:12.562Z",
+    "relativeMs": 3846,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -1677,37 +1941,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0090",
-    "timestamp": "2026-02-04T17:04:57.904Z",
-    "relativeMs": 5719,
+    "timestamp": "2026-02-11T23:05:12.562Z",
+    "relativeMs": 3846,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0091",
-    "timestamp": "2026-02-04T17:04:57.904Z",
-    "relativeMs": 5719,
+    "timestamp": "2026-02-11T23:05:12.562Z",
+    "relativeMs": 3846,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0020",
@@ -1720,13 +1985,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0092",
-    "timestamp": "2026-02-04T17:04:57.905Z",
-    "relativeMs": 5720,
+    "timestamp": "2026-02-11T23:05:12.562Z",
+    "relativeMs": 3846,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -1742,37 +2011,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0093",
-    "timestamp": "2026-02-04T17:04:57.905Z",
-    "relativeMs": 5720,
+    "timestamp": "2026-02-11T23:05:12.562Z",
+    "relativeMs": 3846,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0094",
-    "timestamp": "2026-02-04T17:04:57.905Z",
-    "relativeMs": 5720,
+    "timestamp": "2026-02-11T23:05:12.562Z",
+    "relativeMs": 3846,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0021",
@@ -1785,13 +2055,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0095",
-    "timestamp": "2026-02-04T17:04:57.917Z",
-    "relativeMs": 5732,
+    "timestamp": "2026-02-11T23:05:12.581Z",
+    "relativeMs": 3865,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -1807,37 +2081,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0096",
-    "timestamp": "2026-02-04T17:04:57.917Z",
-    "relativeMs": 5732,
+    "timestamp": "2026-02-11T23:05:12.582Z",
+    "relativeMs": 3866,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0097",
-    "timestamp": "2026-02-04T17:04:57.917Z",
-    "relativeMs": 5732,
+    "timestamp": "2026-02-11T23:05:12.582Z",
+    "relativeMs": 3866,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0022",
@@ -1850,25 +2125,33 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0098",
-    "timestamp": "2026-02-04T17:04:57.926Z",
-    "relativeMs": 5741,
+    "timestamp": "2026-02-11T23:05:12.586Z",
+    "relativeMs": 3870,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0099",
-    "timestamp": "2026-02-04T17:04:57.944Z",
-    "relativeMs": 5759,
+    "timestamp": "2026-02-11T23:05:12.594Z",
+    "relativeMs": 3878,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -1884,37 +2167,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0100",
-    "timestamp": "2026-02-04T17:04:57.944Z",
-    "relativeMs": 5759,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0023",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0101",
-    "timestamp": "2026-02-04T17:04:57.944Z",
-    "relativeMs": 5759,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0023",
@@ -1927,13 +2211,17 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0102",
-    "timestamp": "2026-02-04T17:04:57.944Z",
-    "relativeMs": 5759,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -1949,37 +2237,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0103",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0104",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0024",
@@ -1992,425 +2281,609 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0105",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0014",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0106",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0016",
-    "data": {
-      "status": null,
-      "body": null,
-      "durationMs": 48,
-      "error": "signal is aborted without reason"
-    }
-  },
-  {
-    "id": "EVT-0107",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0016",
-    "data": {
-      "message": "signal is aborted without reason",
-      "name": "AbortError"
-    }
-  },
-  {
-    "id": "EVT-0108",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0017",
-    "data": {
-      "status": null,
-      "body": null,
-      "durationMs": 46,
-      "error": "signal is aborted without reason"
-    }
-  },
-  {
-    "id": "EVT-0109",
-    "timestamp": "2026-02-04T17:04:57.945Z",
-    "relativeMs": 5760,
-    "type": "error",
-    "origin": "system",
-    "correlationId": "COR-0017",
-    "data": {
-      "message": "signal is aborted without reason",
-      "name": "AbortError"
-    }
-  },
-  {
-    "id": "EVT-0110",
-    "timestamp": "2026-02-04T17:04:57.946Z",
-    "relativeMs": 5761,
-    "type": "rest-response",
-    "origin": "system",
-    "correlationId": "COR-0018",
     "data": {
       "status": null,
       "body": null,
       "durationMs": 45,
-      "error": "signal is aborted without reason"
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0107",
+    "timestamp": "2026-02-11T23:05:12.595Z",
+    "relativeMs": 3879,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0016",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0108",
+    "timestamp": "2026-02-11T23:05:12.596Z",
+    "relativeMs": 3880,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0017",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 41,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0109",
+    "timestamp": "2026-02-11T23:05:12.596Z",
+    "relativeMs": 3880,
+    "type": "error",
+    "origin": "system",
+    "correlationId": "COR-0017",
+    "data": {
+      "message": "signal is aborted without reason",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
+    }
+  },
+  {
+    "id": "EVT-0110",
+    "timestamp": "2026-02-11T23:05:12.596Z",
+    "relativeMs": 3880,
+    "type": "rest-response",
+    "origin": "system",
+    "correlationId": "COR-0018",
+    "data": {
+      "status": null,
+      "body": null,
+      "durationMs": 38,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0111",
-    "timestamp": "2026-02-04T17:04:57.946Z",
-    "relativeMs": 5761,
+    "timestamp": "2026-02-11T23:05:12.596Z",
+    "relativeMs": 3880,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0018",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0112",
-    "timestamp": "2026-02-04T17:04:57.947Z",
-    "relativeMs": 5762,
+    "timestamp": "2026-02-11T23:05:12.597Z",
+    "relativeMs": 3881,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0019",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 44,
-      "error": "signal is aborted without reason"
+      "durationMs": 36,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0113",
-    "timestamp": "2026-02-04T17:04:57.947Z",
-    "relativeMs": 5762,
+    "timestamp": "2026-02-11T23:05:12.597Z",
+    "relativeMs": 3881,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0019",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0114",
-    "timestamp": "2026-02-04T17:04:57.947Z",
-    "relativeMs": 5762,
+    "timestamp": "2026-02-11T23:05:12.598Z",
+    "relativeMs": 3882,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 43,
-      "error": "signal is aborted without reason"
+      "durationMs": 36,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0115",
-    "timestamp": "2026-02-04T17:04:57.947Z",
-    "relativeMs": 5762,
+    "timestamp": "2026-02-11T23:05:12.598Z",
+    "relativeMs": 3882,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0116",
-    "timestamp": "2026-02-04T17:04:57.948Z",
-    "relativeMs": 5763,
+    "timestamp": "2026-02-11T23:05:12.598Z",
+    "relativeMs": 3882,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 43,
-      "error": "signal is aborted without reason"
+      "durationMs": 36,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0117",
-    "timestamp": "2026-02-04T17:04:57.948Z",
-    "relativeMs": 5763,
+    "timestamp": "2026-02-11T23:05:12.598Z",
+    "relativeMs": 3882,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0118",
-    "timestamp": "2026-02-04T17:04:57.948Z",
-    "relativeMs": 5763,
+    "timestamp": "2026-02-11T23:05:12.599Z",
+    "relativeMs": 3883,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 31,
-      "error": "signal is aborted without reason"
+      "durationMs": 17,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0119",
-    "timestamp": "2026-02-04T17:04:57.948Z",
-    "relativeMs": 5763,
+    "timestamp": "2026-02-11T23:05:12.599Z",
+    "relativeMs": 3883,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0120",
-    "timestamp": "2026-02-04T17:04:57.950Z",
-    "relativeMs": 5765,
+    "timestamp": "2026-02-11T23:05:12.600Z",
+    "relativeMs": 3884,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0023",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 6,
-      "error": "signal is aborted without reason"
+      "durationMs": 5,
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0121",
-    "timestamp": "2026-02-04T17:04:57.950Z",
-    "relativeMs": 5765,
+    "timestamp": "2026-02-11T23:05:12.600Z",
+    "relativeMs": 3884,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0023",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0122",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.600Z",
+    "relativeMs": 3884,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0123",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.600Z",
+    "relativeMs": 3884,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0016",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0124",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.600Z",
+    "relativeMs": 3884,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0125",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.600Z",
+    "relativeMs": 3884,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0017",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0126",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0018",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0127",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0018",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0128",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0019",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0129",
-    "timestamp": "2026-02-04T17:04:57.951Z",
-    "relativeMs": 5766,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0019",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0130",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0131",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0020",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0132",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0133",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0021",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0134",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0135",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0022",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0136",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0023",
     "data": {
-      "message": "Host unreachable",
-      "name": "Error"
+      "message": "The operation was aborted",
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0137",
-    "timestamp": "2026-02-04T17:04:57.952Z",
-    "relativeMs": 5767,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0023",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "The operation was aborted",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0138",
-    "timestamp": "2026-02-04T17:04:57.953Z",
-    "relativeMs": 5768,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2426,37 +2899,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0139",
-    "timestamp": "2026-02-04T17:04:57.953Z",
-    "relativeMs": 5768,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0025",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0140",
-    "timestamp": "2026-02-04T17:04:57.953Z",
-    "relativeMs": 5768,
+    "timestamp": "2026-02-11T23:05:12.601Z",
+    "relativeMs": 3885,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2466,13 +2940,17 @@
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0141",
-    "timestamp": "2026-02-04T17:04:57.953Z",
-    "relativeMs": 5768,
+    "timestamp": "2026-02-11T23:05:12.602Z",
+    "relativeMs": 3886,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0025",
@@ -2480,111 +2958,156 @@
       "status": null,
       "body": null,
       "durationMs": 0,
-      "error": "signal is aborted without reason"
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0142",
-    "timestamp": "2026-02-04T17:04:57.953Z",
-    "relativeMs": 5768,
+    "timestamp": "2026-02-11T23:05:12.602Z",
+    "relativeMs": 3886,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0025",
     "data": {
       "message": "signal is aborted without reason",
-      "name": "AbortError"
+      "name": "AbortError",
+      "errorCategory": "cancelled",
+      "isExpected": true,
+      "errorType": "AbortError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0143",
-    "timestamp": "2026-02-04T17:04:57.953Z",
-    "relativeMs": 5768,
+    "timestamp": "2026-02-11T23:05:12.602Z",
+    "relativeMs": 3886,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0025",
     "data": {
       "status": "error",
-      "error": "signal is aborted without reason"
+      "error": "signal is aborted without reason",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0144",
-    "timestamp": "2026-02-04T17:04:57.992Z",
-    "relativeMs": 5807,
+    "timestamp": "2026-02-11T23:05:12.614Z",
+    "relativeMs": 3898,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0012",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0145",
-    "timestamp": "2026-02-04T17:04:57.992Z",
-    "relativeMs": 5807,
+    "timestamp": "2026-02-11T23:05:12.614Z",
+    "relativeMs": 3898,
     "type": "action-end",
     "origin": "user",
     "correlationId": "COR-0013",
     "data": {
       "status": "success",
-      "error": null
+      "error": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0146",
-    "timestamp": "2026-02-04T17:04:58.012Z",
-    "relativeMs": 5827,
+    "timestamp": "2026-02-11T23:05:12.634Z",
+    "relativeMs": 3918,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 68,
-      "error": "Failed to fetch"
+      "durationMs": 39,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0147",
-    "timestamp": "2026-02-04T17:04:58.012Z",
-    "relativeMs": 5827,
+    "timestamp": "2026-02-11T23:05:12.635Z",
+    "relativeMs": 3919,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0148",
-    "timestamp": "2026-02-04T17:04:58.015Z",
-    "relativeMs": 5830,
+    "timestamp": "2026-02-11T23:05:12.638Z",
+    "relativeMs": 3922,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0149",
-    "timestamp": "2026-02-04T17:04:58.015Z",
-    "relativeMs": 5830,
+    "timestamp": "2026-02-11T23:05:12.638Z",
+    "relativeMs": 3922,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0024",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0150",
-    "timestamp": "2026-02-04T17:04:58.016Z",
-    "relativeMs": 5831,
+    "timestamp": "2026-02-11T23:05:12.638Z",
+    "relativeMs": 3922,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2600,37 +3123,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0151",
-    "timestamp": "2026-02-04T17:04:58.016Z",
-    "relativeMs": 5831,
+    "timestamp": "2026-02-11T23:05:12.638Z",
+    "relativeMs": 3922,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0026",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0152",
-    "timestamp": "2026-02-04T17:04:58.016Z",
-    "relativeMs": 5831,
+    "timestamp": "2026-02-11T23:05:12.638Z",
+    "relativeMs": 3922,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0026",
@@ -2640,51 +3164,70 @@
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0153",
-    "timestamp": "2026-02-04T17:04:58.113Z",
-    "relativeMs": 5928,
+    "timestamp": "2026-02-11T23:05:12.722Z",
+    "relativeMs": 4006,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0026",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 97,
-      "error": "Failed to fetch"
+      "durationMs": 84,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0154",
-    "timestamp": "2026-02-04T17:04:58.113Z",
-    "relativeMs": 5928,
+    "timestamp": "2026-02-11T23:05:12.722Z",
+    "relativeMs": 4006,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0026",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0155",
-    "timestamp": "2026-02-04T17:04:58.113Z",
-    "relativeMs": 5928,
+    "timestamp": "2026-02-11T23:05:12.722Z",
+    "relativeMs": 4006,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0026",
     "data": {
       "status": "error",
-      "error": "Failed to fetch"
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0156",
-    "timestamp": "2026-02-04T17:04:58.615Z",
-    "relativeMs": 6430,
+    "timestamp": "2026-02-11T23:05:13.275Z",
+    "relativeMs": 4559,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -2700,37 +3243,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0157",
-    "timestamp": "2026-02-04T17:04:58.618Z",
-    "relativeMs": 6433,
+    "timestamp": "2026-02-11T23:05:13.276Z",
+    "relativeMs": 4560,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0027",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0158",
-    "timestamp": "2026-02-04T17:04:58.618Z",
-    "relativeMs": 6433,
+    "timestamp": "2026-02-11T23:05:13.276Z",
+    "relativeMs": 4560,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0027",
@@ -2743,63 +3287,89 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0159",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.290Z",
+    "relativeMs": 4574,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0027",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 13,
-      "error": "Failed to fetch"
+      "durationMs": 15,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0160",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.290Z",
+    "relativeMs": 4574,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0027",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0161",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.292Z",
+    "relativeMs": 4576,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0027",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0162",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.293Z",
+    "relativeMs": 4577,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0027",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0163",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.293Z",
+    "relativeMs": 4577,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -2815,37 +3385,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0164",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.293Z",
+    "relativeMs": 4577,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0028",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0165",
-    "timestamp": "2026-02-04T17:04:58.631Z",
-    "relativeMs": 6446,
+    "timestamp": "2026-02-11T23:05:13.293Z",
+    "relativeMs": 4577,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0028",
@@ -2855,51 +3426,70 @@
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0166",
-    "timestamp": "2026-02-04T17:04:58.653Z",
-    "relativeMs": 6468,
+    "timestamp": "2026-02-11T23:05:13.322Z",
+    "relativeMs": 4606,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0028",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 22,
-      "error": "Failed to fetch"
+      "durationMs": 29,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0167",
-    "timestamp": "2026-02-04T17:04:58.653Z",
-    "relativeMs": 6468,
+    "timestamp": "2026-02-11T23:05:13.322Z",
+    "relativeMs": 4606,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0028",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0168",
-    "timestamp": "2026-02-04T17:04:58.653Z",
-    "relativeMs": 6468,
+    "timestamp": "2026-02-11T23:05:13.322Z",
+    "relativeMs": 4606,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0028",
     "data": {
       "status": "error",
-      "error": "Failed to fetch"
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0169",
-    "timestamp": "2026-02-04T17:04:59.313Z",
-    "relativeMs": 7128,
+    "timestamp": "2026-02-11T23:05:13.975Z",
+    "relativeMs": 5259,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0029",
@@ -2915,37 +3505,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0170",
-    "timestamp": "2026-02-04T17:04:59.313Z",
-    "relativeMs": 7128,
+    "timestamp": "2026-02-11T23:05:13.976Z",
+    "relativeMs": 5260,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0029",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0171",
-    "timestamp": "2026-02-04T17:04:59.313Z",
-    "relativeMs": 7128,
+    "timestamp": "2026-02-11T23:05:13.976Z",
+    "relativeMs": 5260,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0029",
@@ -2958,63 +3549,89 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0172",
-    "timestamp": "2026-02-04T17:04:59.886Z",
-    "relativeMs": 7701,
+    "timestamp": "2026-02-11T23:05:14.099Z",
+    "relativeMs": 5383,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0029",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 573,
-      "error": "Failed to fetch"
+      "durationMs": 123,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0173",
-    "timestamp": "2026-02-04T17:04:59.886Z",
-    "relativeMs": 7701,
+    "timestamp": "2026-02-11T23:05:14.099Z",
+    "relativeMs": 5383,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0029",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0174",
-    "timestamp": "2026-02-04T17:04:59.886Z",
-    "relativeMs": 7701,
+    "timestamp": "2026-02-11T23:05:14.103Z",
+    "relativeMs": 5387,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0029",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0175",
-    "timestamp": "2026-02-04T17:04:59.886Z",
-    "relativeMs": 7701,
+    "timestamp": "2026-02-11T23:05:14.104Z",
+    "relativeMs": 5388,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0029",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0176",
-    "timestamp": "2026-02-04T17:04:59.887Z",
-    "relativeMs": 7702,
+    "timestamp": "2026-02-11T23:05:14.104Z",
+    "relativeMs": 5388,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0030",
@@ -3030,37 +3647,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0177",
-    "timestamp": "2026-02-04T17:04:59.887Z",
-    "relativeMs": 7702,
+    "timestamp": "2026-02-11T23:05:14.104Z",
+    "relativeMs": 5388,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0030",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0178",
-    "timestamp": "2026-02-04T17:04:59.887Z",
-    "relativeMs": 7702,
+    "timestamp": "2026-02-11T23:05:14.104Z",
+    "relativeMs": 5388,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0030",
@@ -3070,51 +3688,70 @@
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0179",
-    "timestamp": "2026-02-04T17:04:59.951Z",
-    "relativeMs": 7766,
+    "timestamp": "2026-02-11T23:05:14.121Z",
+    "relativeMs": 5405,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0030",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 64,
-      "error": "Failed to fetch"
+      "durationMs": 17,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0180",
-    "timestamp": "2026-02-04T17:04:59.951Z",
-    "relativeMs": 7766,
+    "timestamp": "2026-02-11T23:05:14.121Z",
+    "relativeMs": 5405,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0030",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0181",
-    "timestamp": "2026-02-04T17:04:59.951Z",
-    "relativeMs": 7766,
+    "timestamp": "2026-02-11T23:05:14.121Z",
+    "relativeMs": 5405,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0030",
     "data": {
       "status": "error",
-      "error": "Failed to fetch"
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0182",
-    "timestamp": "2026-02-04T17:05:00.098Z",
-    "relativeMs": 7913,
+    "timestamp": "2026-02-11T23:05:14.687Z",
+    "relativeMs": 5971,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0031",
@@ -3130,37 +3767,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0183",
-    "timestamp": "2026-02-04T17:05:00.105Z",
-    "relativeMs": 7920,
+    "timestamp": "2026-02-11T23:05:14.687Z",
+    "relativeMs": 5971,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0031",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0184",
-    "timestamp": "2026-02-04T17:05:00.105Z",
-    "relativeMs": 7920,
+    "timestamp": "2026-02-11T23:05:14.693Z",
+    "relativeMs": 5977,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0031",
@@ -3173,63 +3811,89 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0185",
-    "timestamp": "2026-02-04T17:05:00.146Z",
-    "relativeMs": 7961,
+    "timestamp": "2026-02-11T23:05:14.708Z",
+    "relativeMs": 5992,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0031",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 42,
-      "error": "Failed to fetch"
+      "durationMs": 21,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0186",
-    "timestamp": "2026-02-04T17:05:00.146Z",
-    "relativeMs": 7961,
+    "timestamp": "2026-02-11T23:05:14.709Z",
+    "relativeMs": 5993,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0031",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0187",
-    "timestamp": "2026-02-04T17:05:00.147Z",
-    "relativeMs": 7962,
+    "timestamp": "2026-02-11T23:05:14.715Z",
+    "relativeMs": 5999,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0031",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0188",
-    "timestamp": "2026-02-04T17:05:00.147Z",
-    "relativeMs": 7962,
+    "timestamp": "2026-02-11T23:05:14.715Z",
+    "relativeMs": 5999,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0031",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0189",
-    "timestamp": "2026-02-04T17:05:00.147Z",
-    "relativeMs": 7962,
+    "timestamp": "2026-02-11T23:05:14.715Z",
+    "relativeMs": 5999,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0032",
@@ -3245,37 +3909,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0190",
-    "timestamp": "2026-02-04T17:05:00.147Z",
-    "relativeMs": 7962,
+    "timestamp": "2026-02-11T23:05:14.715Z",
+    "relativeMs": 5999,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0032",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0191",
-    "timestamp": "2026-02-04T17:05:00.147Z",
-    "relativeMs": 7962,
+    "timestamp": "2026-02-11T23:05:14.716Z",
+    "relativeMs": 6000,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0032",
@@ -3285,51 +3950,70 @@
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0192",
-    "timestamp": "2026-02-04T17:05:00.200Z",
-    "relativeMs": 8015,
+    "timestamp": "2026-02-11T23:05:14.749Z",
+    "relativeMs": 6033,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0032",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 53,
-      "error": "Failed to fetch"
+      "durationMs": 34,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0193",
-    "timestamp": "2026-02-04T17:05:00.200Z",
-    "relativeMs": 8015,
+    "timestamp": "2026-02-11T23:05:14.749Z",
+    "relativeMs": 6033,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0032",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0194",
-    "timestamp": "2026-02-04T17:05:00.200Z",
-    "relativeMs": 8015,
+    "timestamp": "2026-02-11T23:05:14.749Z",
+    "relativeMs": 6033,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0032",
     "data": {
       "status": "error",
-      "error": "Failed to fetch"
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0195",
-    "timestamp": "2026-02-04T17:05:00.748Z",
-    "relativeMs": 8563,
+    "timestamp": "2026-02-11T23:05:15.370Z",
+    "relativeMs": 6654,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0033",
@@ -3345,37 +4029,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0196",
-    "timestamp": "2026-02-04T17:05:00.748Z",
-    "relativeMs": 8563,
+    "timestamp": "2026-02-11T23:05:15.370Z",
+    "relativeMs": 6654,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0033",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0197",
-    "timestamp": "2026-02-04T17:05:00.748Z",
-    "relativeMs": 8563,
+    "timestamp": "2026-02-11T23:05:15.370Z",
+    "relativeMs": 6654,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0033",
@@ -3388,63 +4073,89 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0198",
-    "timestamp": "2026-02-04T17:05:00.811Z",
-    "relativeMs": 8626,
+    "timestamp": "2026-02-11T23:05:15.426Z",
+    "relativeMs": 6710,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0033",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 63,
-      "error": "Failed to fetch"
+      "durationMs": 56,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0199",
-    "timestamp": "2026-02-04T17:05:00.811Z",
-    "relativeMs": 8626,
+    "timestamp": "2026-02-11T23:05:15.426Z",
+    "relativeMs": 6710,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0033",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0200",
-    "timestamp": "2026-02-04T17:05:00.816Z",
-    "relativeMs": 8631,
+    "timestamp": "2026-02-11T23:05:15.431Z",
+    "relativeMs": 6715,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0033",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0201",
-    "timestamp": "2026-02-04T17:05:00.816Z",
-    "relativeMs": 8631,
+    "timestamp": "2026-02-11T23:05:15.432Z",
+    "relativeMs": 6716,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0033",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0202",
-    "timestamp": "2026-02-04T17:05:00.816Z",
-    "relativeMs": 8631,
+    "timestamp": "2026-02-11T23:05:15.432Z",
+    "relativeMs": 6716,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0034",
@@ -3460,37 +4171,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "DISCOVERING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0203",
-    "timestamp": "2026-02-04T17:05:00.816Z",
-    "relativeMs": 8631,
+    "timestamp": "2026-02-11T23:05:15.432Z",
+    "relativeMs": 6716,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0034",
     "data": {
       "selectedTarget": "real-device",
-      "reason": "reachable"
+      "reason": "reachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0204",
-    "timestamp": "2026-02-04T17:05:00.816Z",
-    "relativeMs": 8631,
+    "timestamp": "2026-02-11T23:05:15.432Z",
+    "relativeMs": 6716,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0034",
@@ -3500,51 +4212,70 @@
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
-      "target": "real-device"
+      "target": "real-device",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0205",
-    "timestamp": "2026-02-04T17:05:00.850Z",
-    "relativeMs": 8665,
+    "timestamp": "2026-02-11T23:05:15.465Z",
+    "relativeMs": 6749,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0034",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 34,
-      "error": "Failed to fetch"
+      "durationMs": 33,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0206",
-    "timestamp": "2026-02-04T17:05:00.850Z",
-    "relativeMs": 8665,
+    "timestamp": "2026-02-11T23:05:15.465Z",
+    "relativeMs": 6749,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0034",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0207",
-    "timestamp": "2026-02-04T17:05:00.850Z",
-    "relativeMs": 8665,
+    "timestamp": "2026-02-11T23:05:15.465Z",
+    "relativeMs": 6749,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0034",
     "data": {
       "status": "error",
-      "error": "Failed to fetch"
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0208",
-    "timestamp": "2026-02-04T17:05:00.923Z",
-    "relativeMs": 8738,
+    "timestamp": "2026-02-11T23:05:15.567Z",
+    "relativeMs": 6851,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0035",
@@ -3560,37 +4291,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "CONNECTING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0209",
-    "timestamp": "2026-02-04T17:05:00.923Z",
-    "relativeMs": 8738,
+    "timestamp": "2026-02-11T23:05:15.567Z",
+    "relativeMs": 6851,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0035",
     "data": {
       "selectedTarget": "internal-mock",
-      "reason": "demo-mode"
+      "reason": "demo-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0210",
-    "timestamp": "2026-02-04T17:05:00.926Z",
-    "relativeMs": 8741,
+    "timestamp": "2026-02-11T23:05:15.567Z",
+    "relativeMs": 6851,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0035",
@@ -3603,63 +4335,89 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "internal-mock"
+      "target": "internal-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0211",
-    "timestamp": "2026-02-04T17:05:00.960Z",
-    "relativeMs": 8775,
+    "timestamp": "2026-02-11T23:05:15.584Z",
+    "relativeMs": 6868,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0035",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 37,
-      "error": "Failed to fetch"
+      "durationMs": 16,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0212",
-    "timestamp": "2026-02-04T17:05:00.960Z",
-    "relativeMs": 8775,
+    "timestamp": "2026-02-11T23:05:15.584Z",
+    "relativeMs": 6868,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0035",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0213",
-    "timestamp": "2026-02-04T17:05:00.973Z",
-    "relativeMs": 8788,
+    "timestamp": "2026-02-11T23:05:15.585Z",
+    "relativeMs": 6869,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0035",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0214",
-    "timestamp": "2026-02-04T17:05:00.973Z",
-    "relativeMs": 8788,
+    "timestamp": "2026-02-11T23:05:15.585Z",
+    "relativeMs": 6869,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0035",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0215",
-    "timestamp": "2026-02-04T17:05:01.973Z",
-    "relativeMs": 9788,
+    "timestamp": "2026-02-11T23:05:16.585Z",
+    "relativeMs": 7869,
     "type": "action-start",
     "origin": "system",
     "correlationId": "COR-0036",
@@ -3675,37 +4433,38 @@
         "featureFlags": {
           "hvsc_enabled": true
         },
-        "playback": {
-          "queueLength": 0,
-          "currentIndex": -1,
-          "currentItemId": null,
-          "isPlaying": false,
-          "elapsedMs": 0,
-          "durationMs": null
-        },
+        "playback": null,
         "device": {
           "deviceId": null,
           "connectionState": "CONNECTING"
         }
-      }
+      },
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0216",
-    "timestamp": "2026-02-04T17:05:01.973Z",
-    "relativeMs": 9788,
+    "timestamp": "2026-02-11T23:05:16.586Z",
+    "relativeMs": 7870,
     "type": "backend-decision",
     "origin": "system",
     "correlationId": "COR-0036",
     "data": {
       "selectedTarget": "internal-mock",
-      "reason": "demo-mode"
+      "reason": "demo-mode",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0217",
-    "timestamp": "2026-02-04T17:05:01.973Z",
-    "relativeMs": 9788,
+    "timestamp": "2026-02-11T23:05:16.586Z",
+    "relativeMs": 7870,
     "type": "rest-request",
     "origin": "system",
     "correlationId": "COR-0036",
@@ -3718,57 +4477,83 @@
         "X-C64U-Host": "localhost:8080"
       },
       "body": null,
-      "target": "internal-mock"
+      "target": "internal-mock",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0218",
-    "timestamp": "2026-02-04T17:05:02.217Z",
-    "relativeMs": 10032,
+    "timestamp": "2026-02-11T23:05:16.594Z",
+    "relativeMs": 7878,
     "type": "rest-response",
     "origin": "system",
     "correlationId": "COR-0036",
     "data": {
       "status": null,
       "body": null,
-      "durationMs": 244,
-      "error": "Failed to fetch"
+      "durationMs": 8,
+      "error": "Failed to fetch",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0219",
-    "timestamp": "2026-02-04T17:05:02.223Z",
-    "relativeMs": 10038,
+    "timestamp": "2026-02-11T23:05:16.594Z",
+    "relativeMs": 7878,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0036",
     "data": {
       "message": "Failed to fetch",
-      "name": "TypeError"
+      "name": "TypeError",
+      "errorCategory": "network",
+      "isExpected": false,
+      "errorType": "TypeError",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0220",
-    "timestamp": "2026-02-04T17:05:02.224Z",
-    "relativeMs": 10039,
+    "timestamp": "2026-02-11T23:05:16.596Z",
+    "relativeMs": 7880,
     "type": "error",
     "origin": "system",
     "correlationId": "COR-0036",
     "data": {
       "message": "Host unreachable",
-      "name": "Error"
+      "name": "Error",
+      "errorCategory": "unknown",
+      "isExpected": false,
+      "errorType": null,
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   },
   {
     "id": "EVT-0221",
-    "timestamp": "2026-02-04T17:05:02.224Z",
-    "relativeMs": 10039,
+    "timestamp": "2026-02-11T23:05:16.596Z",
+    "relativeMs": 7880,
     "type": "action-end",
     "origin": "system",
     "correlationId": "COR-0036",
     "data": {
       "status": "error",
-      "error": "Host unreachable"
+      "error": "Host unreachable",
+      "lifecycleState": "foreground",
+      "sourceKind": null,
+      "trackInstanceId": null,
+      "playlistItemId": null
     }
   }
 ]

@@ -23,6 +23,7 @@ import { loadHvscState, updateHvscState, isUpdateApplied, markUpdateApplied } fr
 import { loadHvscStatusSummary, saveHvscStatusSummary } from './hvscStatusStore';
 import { reloadHvscSonglengthsOnConfigChange } from './hvscSongLengthService';
 import { addErrorLog, addLog } from '@/lib/logging';
+import { classifyError } from '@/lib/tracing/failureTaxonomy';
 import {
   resolveCachedArchive,
   getCacheStatusInternal,
@@ -228,8 +229,11 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
       try {
         await deleteLibraryFile(path);
       } catch (error) {
+        const failure = classifyError(error);
         addErrorLog('HVSC deletion failed', {
           path,
+          errorCategory: failure.category,
+          errorExpected: failure.isExpected,
           error: {
             name: (error as Error).name,
             message: (error as Error).message,
@@ -244,8 +248,11 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   try {
     await reloadHvscSonglengthsOnConfigChange();
   } catch (error) {
+    const failure = classifyError(error);
     addErrorLog('HVSC songlengths reload failed after ingestion', {
       archiveName,
+      errorCategory: failure.category,
+      errorExpected: failure.isExpected,
       error: {
         name: (error as Error).name,
         message: (error as Error).message,
@@ -386,9 +393,12 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
             percent: 100,
           });
         } catch (error) {
+          const failure = classifyError(error);
           addLog('warn', 'HVSC cached archive stat failed', {
             archiveName: cached,
             error: (error as Error).message,
+            errorCategory: failure.category,
+            errorExpected: failure.isExpected,
           });
           emitProgress({
             stage: 'download',
@@ -426,6 +436,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 
     return loadHvscState();
   } catch (error) {
+    const failure = classifyError(error);
     if (currentArchive && !currentArchiveComplete) {
       const { deleteCachedArchive } = await import('./hvscFilesystem');
       await deleteCachedArchive(currentArchive);
@@ -436,6 +447,8 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
       archiveType: currentArchiveType,
       archiveVersion: currentArchiveVersion,
       pipelineState: currentPipelineState,
+      errorCategory: failure.category,
+      errorExpected: failure.isExpected,
       error: {
         name: (error as Error).name,
         message: (error as Error).message,
@@ -556,9 +569,12 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
           percent: 100,
         });
       } catch (error) {
+        const failure = classifyError(error);
         addLog('warn', 'HVSC cached archive stat failed', {
           archiveName: cached,
           error: (error as Error).message,
+          errorCategory: failure.category,
+          errorExpected: failure.isExpected,
         });
         emitProgress({ stage: 'download', message: `Using cached ${cached}`, archiveName: cached, percent: 100 });
       }
@@ -587,12 +603,15 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
 
     return loadHvscState();
   } catch (error) {
+    const failure = classifyError(error);
     addErrorLog('HVSC cached ingest failed', {
       ingestionId,
       archiveName: currentArchive ?? undefined,
       archiveType: currentArchiveType,
       archiveVersion: currentArchiveVersion,
       pipelineState: currentPipelineState,
+      errorCategory: failure.category,
+      errorExpected: failure.isExpected,
       error: {
         name: (error as Error).name,
         message: (error as Error).message,

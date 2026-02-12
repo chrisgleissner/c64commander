@@ -8,7 +8,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getC64API } from '@/lib/c64api';
-import { BackgroundExecution } from '@/lib/native/backgroundExecution';
+import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/backgroundExecutionManager';
 import { createSslPayload } from '@/lib/sid/sidUtils';
 
 export type SidTrack = {
@@ -84,11 +84,10 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     await api.playSidUpload(blob, track.songNr, sslBlob);
     startedAtRef.current = Date.now();
     setIsPlaying(true);
-    BackgroundExecution.start().catch((error) => {
-      console.warn('Background execution start failed', {
-        trackId: track.id,
-        error,
-      });
+    void startBackgroundExecution({
+      source: 'sid-player',
+      reason: 'start',
+      context: { trackId: track.id },
     });
   }, []);
 
@@ -149,9 +148,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     return () => {
-      BackgroundExecution.stop().catch((error) => {
-        console.warn('Background execution stop failed', { error });
-      });
+      void stopBackgroundExecution({ source: 'sid-player', reason: 'cleanup' });
     };
   }, []);
 

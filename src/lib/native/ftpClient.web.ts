@@ -31,6 +31,7 @@ export class FtpClientWeb implements FtpClientPlugin {
           username: options.username,
           password: options.password,
           path: options.path,
+          traceContext: options.traceContext,
         }),
       });
     } catch (error) {

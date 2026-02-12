@@ -62,7 +62,14 @@ describe('FolderPicker overrides', () => {
 
     const result = await FolderPicker.pickDirectory({ extensions: ['sid'] });
 
-    expect(override.pickDirectory).toHaveBeenCalledWith({ extensions: ['sid'] });
+    expect(override.pickDirectory).toHaveBeenCalledWith({
+      extensions: ['sid'],
+      traceContext: {
+        correlationId: null,
+        playlistItemId: null,
+        trackInstanceId: null,
+      },
+    });
     expect(result.files?.[0].name).toBe('demo');
     expect(pickerMocks.pickDirectory).not.toHaveBeenCalled();
   });
@@ -76,9 +83,31 @@ describe('FolderPicker overrides', () => {
     await FolderPicker.readFileFromTree({ treeUri: 'content://tree', path: 'demo.sid' });
     await FolderPicker.listChildren({ treeUri: 'content://tree' });
 
-    expect(pickerMocks.readFile).toHaveBeenCalledWith({ uri: 'content://demo' });
-    expect(pickerMocks.readFileFromTree).toHaveBeenCalledWith({ treeUri: 'content://tree', path: 'demo.sid' });
-    expect(pickerMocks.listChildren).toHaveBeenCalledWith({ treeUri: 'content://tree' });
+    expect(pickerMocks.readFile).toHaveBeenCalledWith({
+      uri: 'content://demo',
+      traceContext: {
+        correlationId: null,
+        playlistItemId: null,
+        trackInstanceId: null,
+      },
+    });
+    expect(pickerMocks.readFileFromTree).toHaveBeenCalledWith({
+      treeUri: 'content://tree',
+      path: 'demo.sid',
+      traceContext: {
+        correlationId: null,
+        playlistItemId: null,
+        trackInstanceId: null,
+      },
+    });
+    expect(pickerMocks.listChildren).toHaveBeenCalledWith({
+      treeUri: 'content://tree',
+      traceContext: {
+        correlationId: null,
+        playlistItemId: null,
+        trackInstanceId: null,
+      },
+    });
   });
 
   it('blocks overrides on android unless explicitly allowed', async () => {

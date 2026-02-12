@@ -21,6 +21,7 @@ import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
+import { classifyError } from '@/lib/tracing/failureTaxonomy';
 import { withRestInteraction, type InteractionIntent } from '@/lib/deviceInteraction/deviceInteractionManager';
 import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore';
 
@@ -622,8 +623,9 @@ export class C64API {
           if (!response.ok) {
             const responseBody = await readResponseBody(response);
             const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const failure = classifyError(err, 'integration');
             recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: err });
-            recordTraceError(action, err);
+            recordTraceError(action, err, failure);
             responseRecorded = true;
             throw err;
           }
@@ -642,8 +644,9 @@ export class C64API {
           const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
           const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
           if (!responseRecorded) {
+            const failure = classifyError(error);
             recordRestResponse(action, { status: status === 'error' ? null : status, body: null, durationMs, error: error as Error });
-            recordTraceError(action, error as Error);
+            recordTraceError(action, error as Error, failure);
           }
           if (!fuzzBlocked) {
             addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
@@ -790,8 +793,9 @@ export class C64API {
         const isNetworkFailure = isNetworkFailureMessage(rawMessage);
         const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
         const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+        const failure = classifyError(error);
         recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
-        recordTraceError(action, error as Error);
+        recordTraceError(action, error as Error, failure);
         addErrorLog('C64 API upload failed', buildErrorLogDetails(error as Error, {
           url,
           requestId,

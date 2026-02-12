@@ -201,6 +201,15 @@ All trace events share a common envelope:
 - timestamp is absolute and diagnostic
 - relativeMs is milliseconds since session start and is the primary ordering key for tests
 
+### 6.1 Per-Event Context Fields
+
+Each trace event payload is automatically enriched with a minimal context block:
+
+- `lifecycleState`: `foreground | background | unknown`
+- `sourceKind`: `local | ultimate | hvsc | saf` (null when not applicable)
+- `trackInstanceId`: monotonically increasing playback instance id (null when not applicable)
+- `playlistItemId`: current playlist item id (null when not applicable)
+
 ---
 
 ## 7. Action Tracing Model
@@ -297,6 +306,9 @@ Each Action Trace automatically captures:
 - Playlist length
 - Current index
 - Current item identifier
+- Current source kind (`local | ultimate | hvsc | saf`)
+- Current track instance identifier
+- Current playlist item identifier
 - Playing or paused state
 - `elapsedMs` (current playback position snapshot)
 - `durationMs` (known total length for the current track, or null when unknown)
@@ -452,6 +464,13 @@ Rules:
 - Errors propagate unchanged
 - Each error is recorded exactly once
 - Duplicate logging is suppressed
+
+### 14.1 Error Classification Fields
+
+Every `error` event includes:
+
+- `errorCategory`: `network | timeout | cancelled | user | integration | storage | unknown`
+- `isExpected`: boolean flag for expected errors (user cancels, user selections)
 
 ---
 

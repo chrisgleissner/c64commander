@@ -22,13 +22,24 @@ import com.getcapacitor.annotation.CapacitorPlugin
 class BackgroundExecutionPlugin : Plugin() {
     private val logTag = "BackgroundExecutionPlugin"
 
+    private fun traceSummary(call: PluginCall): String {
+        val trace = call.getObject("traceContext") ?: return ""
+        val correlationId = trace.getString("correlationId") ?: ""
+        val trackInstanceId = trace.getInteger("trackInstanceId")?.toString() ?: ""
+        val playlistItemId = trace.getString("playlistItemId") ?: ""
+        if (correlationId.isBlank() && trackInstanceId.isBlank() && playlistItemId.isBlank()) return ""
+        return "trace(correlationId=$correlationId,trackInstanceId=$trackInstanceId,playlistItemId=$playlistItemId)"
+    }
+
     @PluginMethod
     fun start(call: PluginCall) {
         try {
             BackgroundExecutionService.start(context)
             call.resolve()
         } catch (e: Exception) {
-            Log.e(logTag, "Failed to start background execution", e)
+            val trace = traceSummary(call)
+            val suffix = if (trace.isBlank()) "" else " ($trace)"
+            Log.e(logTag, "Failed to start background execution$suffix", e)
             call.reject("Failed to start background execution", e)
         }
     }
@@ -39,7 +50,9 @@ class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.stop(context)
             call.resolve()
         } catch (e: Exception) {
-            Log.e(logTag, "Failed to stop background execution", e)
+            val trace = traceSummary(call)
+            val suffix = if (trace.isBlank()) "" else " ($trace)"
+            Log.e(logTag, "Failed to stop background execution$suffix", e)
             call.reject("Failed to stop background execution", e)
         }
     }

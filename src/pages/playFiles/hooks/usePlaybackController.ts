@@ -45,6 +45,7 @@ interface UsePlaybackControllerProps {
     durationMs: number | undefined;
     setDurationMs: (v: number | undefined) => void;
     setCurrentSubsongCount: (v: number | null) => void;
+    setTrackInstanceId: (v: number) => void;
 
     repeatEnabled: boolean;
 
@@ -131,6 +132,7 @@ export function usePlaybackController({
     enqueuePlayTransition,
     durationSeconds,
     trace,
+    setTrackInstanceId,
 }: UsePlaybackControllerProps) {
 
     const durationFallbackMs = durationSeconds * 1000;
@@ -295,6 +297,7 @@ export function usePlaybackController({
                 const now = Date.now();
                 const nextTrackInstanceId = trackInstanceIdRef.current + 1;
                 trackInstanceIdRef.current = nextTrackInstanceId;
+                setTrackInstanceId(nextTrackInstanceId);
                 trackStartedAtRef.current = now;
                 playedClockRef.current.start(now, true);
                 setPlayedMs(playedClockRef.current.current(now));
@@ -324,7 +327,7 @@ export function usePlaybackController({
                 setIsPaused(false);
             });
         },
-        [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, resolveSidMetadata, resolveSonglengthDurationMsForPath, resolveUltimateSidDurationByMd5, setCurrentIndex, setCurrentSubsongCount, setDurationMs, setElapsedMs, setIsPaused, setIsPlaying, setPlayedMs, setPlaylist, autoAdvanceGuardRef, playedClockRef, trackInstanceIdRef, trackStartedAtRef],
+        [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, resolveSidMetadata, resolveSonglengthDurationMsForPath, resolveUltimateSidDurationByMd5, setCurrentIndex, setCurrentSubsongCount, setDurationMs, setElapsedMs, setIsPaused, setIsPlaying, setPlayedMs, setPlaylist, setTrackInstanceId, autoAdvanceGuardRef, playedClockRef, trackInstanceIdRef, trackStartedAtRef],
     );
 
     const startPlaylist = useCallback(async (items: PlaylistItem[], startIndex = 0) => {

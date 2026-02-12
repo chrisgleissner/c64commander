@@ -7,12 +7,25 @@
  */
 
 import { registerPlugin } from '@capacitor/core';
+import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { resolveNativeTraceContext, type NativeTraceContext } from '@/lib/native/nativeTraceContext';
 
 export type BackgroundExecutionPlugin = {
-    start: () => Promise<void>;
-    stop: () => Promise<void>;
+    start: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
+    stop: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
 };
 
-export const BackgroundExecution = registerPlugin<BackgroundExecutionPlugin>('BackgroundExecution', {
+const plugin = registerPlugin<BackgroundExecutionPlugin>('BackgroundExecution', {
     web: () => import('./backgroundExecution.web').then((m) => new m.BackgroundExecutionWeb()),
 });
+
+export const BackgroundExecution: BackgroundExecutionPlugin = {
+    start: (options) => plugin.start({
+        ...options,
+        traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+    stop: (options) => plugin.stop({
+        ...options,
+        traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+};

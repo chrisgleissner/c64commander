@@ -7,6 +7,7 @@
  */
 
 import { registerPlugin } from '@capacitor/core';
+import type { NativeTraceContext } from '@/lib/native/nativeTraceContext';
 
 export type FtpEntry = {
   name: string;
@@ -22,6 +23,7 @@ export type FtpListOptions = {
   username?: string;
   password?: string;
   path?: string;
+  traceContext?: NativeTraceContext;
 };
 
 export type FtpReadOptions = {
@@ -30,6 +32,7 @@ export type FtpReadOptions = {
   username?: string;
   password?: string;
   path: string;
+  traceContext?: NativeTraceContext;
 };
 
 export type FtpClientPlugin = {

@@ -22,6 +22,7 @@ import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { getC64API } from '@/lib/c64api';
+import type { TraceSourceKind } from '@/lib/tracing/types';
 import { discoverConnection, getConnectionSnapshot } from '@/lib/connection/connectionManager';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { type PlayRequest } from '@/lib/playback/playbackRouter';
@@ -42,6 +43,7 @@ import {
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { redactTreeUri } from '@/lib/native/safUtils';
+import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/backgroundExecutionManager';
 
 import { AppBar } from '@/components/AppBar';
 import { VolumeControls } from '@/pages/playFiles/components/VolumeControls';
@@ -57,6 +59,7 @@ import { usePlaylistManager } from '@/pages/playFiles/hooks/usePlaylistManager';
 import { useVolumeOverride } from '@/pages/playFiles/hooks/useVolumeOverride';
 import { useLocalEntries } from '@/pages/playFiles/hooks/useLocalEntries';
 import { usePlaybackController } from '@/pages/playFiles/hooks/usePlaybackController';
+import { setPlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
 import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFileSelections';
 import {
   resolveVolumeSyncDecision,
@@ -204,7 +207,9 @@ export default function PlayFilesPage() {
   const playTransitionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playStartInFlightRef = useRef(false);
   const trackInstanceIdRef = useRef(0);
+  const [trackInstanceId, setTrackInstanceId] = useState(0);
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
+  const backgroundExecutionActiveRef = useRef(false);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -266,6 +271,7 @@ export default function PlayFilesPage() {
     durationMs,
     setDurationMs,
     setCurrentSubsongCount,
+    setTrackInstanceId,
     repeatEnabled,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -311,6 +317,36 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef.current = null;
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
+
+  useEffect(() => {
+    if (isPlaying && !isPaused) {
+      if (backgroundExecutionActiveRef.current) return;
+      backgroundExecutionActiveRef.current = true;
+      void startBackgroundExecution({
+        source: 'playback-controller',
+        reason: 'play',
+        context: { trackInstanceId },
+      });
+      return;
+    }
+    if (!backgroundExecutionActiveRef.current) return;
+    backgroundExecutionActiveRef.current = false;
+    void stopBackgroundExecution({
+      source: 'playback-controller',
+      reason: isPaused ? 'pause' : 'stop',
+      context: { trackInstanceId },
+    });
+  }, [isPaused, isPlaying, trackInstanceId]);
+
+  useEffect(() => () => {
+    if (!backgroundExecutionActiveRef.current) return;
+    backgroundExecutionActiveRef.current = false;
+    void stopBackgroundExecution({
+      source: 'playback-controller',
+      reason: 'cleanup',
+      context: { trackInstanceId },
+    });
+  }, [trackInstanceId]);
 
   useEffect(() => {
     if (addItemsProgress.status !== 'scanning') return undefined;
@@ -503,6 +539,34 @@ export default function PlayFilesPage() {
 
   const currentItem = playlist[currentIndex];
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
+  const sourceKind = useMemo<TraceSourceKind | null>(() => {
+    if (!currentItem) return null;
+    if (currentItem.request.source === 'local') {
+      const treeUri = currentItem.sourceId ? localSourceTreeUris.get(currentItem.sourceId) : null;
+      return treeUri ? 'saf' : 'local';
+    }
+    return currentItem.request.source;
+  }, [currentItem, localSourceTreeUris]);
+  const playbackTraceContext = useMemo(() => {
+    if (!playlist.length) return null;
+    return {
+      queueLength: playlist.length,
+      currentIndex,
+      currentItemId: currentItem?.id ?? null,
+      isPlaying,
+      elapsedMs,
+      durationMs: currentDurationMs ?? null,
+      sourceKind,
+      trackInstanceId,
+      playlistItemId: currentItem?.id ?? null,
+    };
+  }, [currentDurationMs, currentIndex, currentItem?.id, elapsedMs, isPlaying, playlist.length, sourceKind, trackInstanceId]);
+
+  useEffect(() => {
+    setPlaybackTraceSnapshot(playbackTraceContext);
+  }, [playbackTraceContext]);
+
+  useEffect(() => () => setPlaybackTraceSnapshot(null), []);
   const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
   const progressPercent = currentDurationMs ? Math.min(100, (elapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - elapsedMs) : undefined;
@@ -647,15 +711,8 @@ export default function PlayFilesPage() {
     trackStartedAtRef,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
+    setTrackInstanceId,
   });
-
-  useEffect(() => {
-    if (!isPlaying || isPaused) return;
-    const guard = autoAdvanceGuardRef.current;
-    if (!guard || guard.autoFired || guard.userCancelled) return;
-    if (Date.now() < guard.dueAtMs) return;
-    void handleNext('auto', guard.trackInstanceId);
-  }, [elapsedMs, handleNext, isPaused, isPlaying]);
 
   useEffect(() => {
     if (isPlaying || isPaused) return;

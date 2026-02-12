@@ -28,6 +28,15 @@ class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FtpClientPlugin"
 
+  private fun traceSummary(call: PluginCall): String {
+    val trace = call.getObject("traceContext") ?: return ""
+    val correlationId = trace.getString("correlationId") ?: ""
+    val trackInstanceId = trace.getInteger("trackInstanceId")?.toString() ?: ""
+    val playlistItemId = trace.getString("playlistItemId") ?: ""
+    if (correlationId.isBlank() && trackInstanceId.isBlank() && playlistItemId.isBlank()) return ""
+    return "trace(correlationId=$correlationId,trackInstanceId=$trackInstanceId,playlistItemId=$playlistItemId)"
+  }
+
   @PluginMethod
   fun listDirectory(call: PluginCall) {
     val host = call.getString("host")
@@ -75,7 +84,9 @@ class FtpClientPlugin : Plugin() {
         result.put("entries", entries)
         call.resolve(result)
       } catch (error: Exception) {
-        Log.e(logTag, "FTP listDirectory failed", error)
+        val trace = traceSummary(call)
+        val suffix = if (trace.isBlank()) "" else " ($trace)"
+        Log.e(logTag, "FTP listDirectory failed$suffix", error)
         call.reject(error.message, error)
       } finally {
         try {
@@ -128,7 +139,9 @@ class FtpClientPlugin : Plugin() {
         result.put("sizeBytes", bytes.size)
         call.resolve(result)
       } catch (error: Exception) {
-        Log.e(logTag, "FTP readFile failed", error)
+        val trace = traceSummary(call)
+        val suffix = if (trace.isBlank()) "" else " ($trace)"
+        Log.e(logTag, "FTP readFile failed$suffix", error)
         call.reject(error.message, error)
       } finally {
         try {

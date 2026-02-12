@@ -8,6 +8,7 @@
 
 import { zipSync, strToU8 } from 'fflate';
 import { getTraceContextSnapshot } from '@/lib/tracing/traceContext';
+import { getLifecycleState } from '@/lib/appLifecycle';
 import { redactHeaders, redactPayload, redactErrorMessage } from '@/lib/tracing/redaction';
 import type {
   TraceEvent,
@@ -16,7 +17,9 @@ import type {
   TraceActionContext,
   BackendTarget,
   BackendDecisionReason,
+  TraceEventContextFields,
 } from '@/lib/tracing/types';
+import { classifyError, type FailureClassification } from '@/lib/tracing/failureTaxonomy';
 import { resolveBackendTarget } from '@/lib/tracing/traceTargets';
 import { getPlatform } from '@/lib/native/platform';
 import { getCurrentTraceIdCounters, nextTraceEventId, resetTraceIds, setTraceIdCounters } from '@/lib/tracing/traceIds';
@@ -90,6 +93,13 @@ const appendEvent = <T extends Record<string, unknown>>(
   if (shouldSuppressTraceEvent(type)) return;
   const nowMs = Date.now();
   evictExpired(nowMs);
+  const playback = getTraceContextSnapshot().playback;
+  const contextFields: TraceEventContextFields = {
+    lifecycleState: getLifecycleState(),
+    sourceKind: playback?.sourceKind ?? null,
+    trackInstanceId: playback?.trackInstanceId ?? null,
+    playlistItemId: playback?.playlistItemId ?? null,
+  };
   const event: TraceEvent<T> = {
     id: nextTraceEventId(),
     timestamp: new Date(nowMs).toISOString(),
@@ -97,7 +107,10 @@ const appendEvent = <T extends Record<string, unknown>>(
     type,
     origin,
     correlationId,
-    data,
+    data: {
+      ...data,
+      ...contextFields,
+    } as TraceEvent<T>['data'],
   };
   events.push(event);
   const size = estimateEventSize(event);
@@ -315,12 +328,16 @@ export const recordFtpOperation = (action: TraceActionContext, payload: {
   });
 };
 
-export const recordTraceError = (action: TraceActionContext, error: Error) => {
+export const recordTraceError = (action: TraceActionContext, error: Error, classification?: FailureClassification) => {
   if (errorOnce.has(error)) return;
   errorOnce.add(error);
+  const resolved = classification ?? classifyError(error);
   appendEvent('error', action.origin, action.correlationId, {
     message: redactErrorMessage(error.message),
     name: error.name,
+    errorCategory: resolved.category,
+    isExpected: resolved.isExpected,
+    errorType: resolved.errorType,
   });
   if (typeof window !== 'undefined') {
     window.setTimeout(() => {
