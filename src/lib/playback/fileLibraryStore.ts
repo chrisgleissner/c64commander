@@ -21,7 +21,8 @@ export const loadFileLibrary = (key: string): FileLibraryState => {
   try {
     const parsed = JSON.parse(raw) as FileLibraryState;
     return parsed?.entries ? parsed : { entries: [] };
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load file library from storage', { key, error });
     return { entries: [] };
   }
 };

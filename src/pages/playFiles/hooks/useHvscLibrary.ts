@@ -73,6 +73,10 @@ export type HvscLibraryState = {
   hvscSummaryDurationMs: number | null | undefined;
   hvscSummaryUpdatedAt: string | null | undefined;
   hvscSummaryFailureLabel: string;
+  hvscIngestionTotalSongs: number;
+  hvscIngestionIngestedSongs: number;
+  hvscIngestionFailedSongs: number;
+  hvscSonglengthSyntaxErrors: number;
   hvscDownloadPercent: number | null | undefined;
   hvscDownloadBytes: number | null;
   hvscDownloadTotalBytes: number | null;
@@ -585,7 +589,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
       }));
       toast({
         title: 'HVSC ready',
-        description: `Version ${status.installedVersion} installed.`,
+        description: status.ingestionSummary
+          ? `Ingested ${status.ingestionSummary.ingestedSongs} of ${status.ingestionSummary.totalSongs} songs. ${status.ingestionSummary.songlengthSyntaxErrors} songlength parsing errors.`
+          : `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
       if (/cancelled/i.test((error as Error).message)) {
@@ -669,7 +675,9 @@ export const useHvscLibrary = (): HvscLibraryState => {
       }));
       toast({
         title: 'HVSC ready',
-        description: `Version ${status.installedVersion} installed.`,
+        description: status.ingestionSummary
+          ? `Ingested ${status.ingestionSummary.ingestedSongs} of ${status.ingestionSummary.totalSongs} songs. ${status.ingestionSummary.songlengthSyntaxErrors} songlength parsing errors.`
+          : `Version ${status.installedVersion} installed.`,
       });
     } catch (error) {
       if (/cancelled/i.test((error as Error).message)) {
@@ -825,6 +833,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
   }, [hvscSummaryFailureCategory]);
   const hvscSummaryDurationMs = hvscStatusSummary.extraction.durationMs ?? hvscStatusSummary.download.durationMs;
   const hvscSummaryUpdatedAt = hvscStatusSummary.lastUpdatedAt;
+  const hvscIngestionTotalSongs = hvscStatus?.ingestionSummary?.totalSongs ?? 0;
+  const hvscIngestionIngestedSongs = hvscStatus?.ingestionSummary?.ingestedSongs ?? 0;
+  const hvscIngestionFailedSongs = hvscStatus?.ingestionSummary?.failedSongs ?? 0;
+  const hvscSonglengthSyntaxErrors = hvscStatus?.ingestionSummary?.songlengthSyntaxErrors ?? 0;
   const hvscDownloadBytes = hvscStatusSummary.download.downloadedBytes ?? null;
   const hvscDownloadTotalBytes = hvscStatusSummary.download.totalBytes ?? hvscStatusSummary.download.sizeBytes ?? null;
   const hvscExtractionTotalFiles = hvscExtractionTotal !== null
@@ -932,6 +944,10 @@ export const useHvscLibrary = (): HvscLibraryState => {
     hvscSummaryDurationMs,
     hvscSummaryUpdatedAt,
     hvscSummaryFailureLabel,
+    hvscIngestionTotalSongs,
+    hvscIngestionIngestedSongs,
+    hvscIngestionFailedSongs,
+    hvscSonglengthSyntaxErrors,
     hvscDownloadPercent,
     hvscDownloadBytes,
     hvscDownloadTotalBytes,

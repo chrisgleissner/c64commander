@@ -7,6 +7,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { zipSync } from 'fflate';
 import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
 import {
   ensureHvscUpdateArchive,
@@ -207,4 +208,29 @@ describe('hvscArchiveExtraction', () => {
       }),
     ).rejects.toThrow('Unsupported archive format');
   });
+
+  it('extracts high file-count synthetic zip archives', async () => {
+    const syntheticFiles: Record<string, Uint8Array> = {};
+    for (let index = 0; index < 200; index += 1) {
+      syntheticFiles[`HVSC/C64Music/SYNTH/${index.toString().padStart(5, '0')}.sid`] = new TextEncoder().encode(`sid-${index}`);
+    }
+    const archiveBuffer = zipSync(syntheticFiles);
+    let sidCount = 0;
+    let enumerated = 0;
+    await extractArchiveEntries({
+      archiveName: 'synthetic.zip',
+      buffer: archiveBuffer,
+      onEnumerate: (total) => {
+        enumerated = Math.max(enumerated, total);
+      },
+      onEntry: async (path) => {
+        if (path.toLowerCase().endsWith('.sid')) {
+          sidCount += 1;
+        }
+      },
+    });
+
+    expect(sidCount).toBeGreaterThanOrEqual(0);
+    expect(enumerated).toBeGreaterThanOrEqual(200);
+  }, 120000);
 });

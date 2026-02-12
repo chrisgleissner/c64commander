@@ -403,7 +403,7 @@ test.describe('App screenshots', () => {
 
     const errorsTab = dialog.getByRole('tab', { name: 'Errors' });
     await errorsTab.click();
-    await expect(dialog.getByText('Total errors:')).toBeVisible();
+    await expect(dialog.getByText('Total warnings/errors:')).toBeVisible();
     await captureScreenshot(page, testInfo, 'diagnostics/04-errors.png');
     const errorEntry = dialog.getByTestId('error-log-log-3');
     await expect(errorEntry).toBeVisible();

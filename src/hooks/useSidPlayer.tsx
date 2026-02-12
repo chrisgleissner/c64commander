@@ -8,7 +8,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getC64API } from '@/lib/c64api';
-import { BackgroundExecution } from '@/lib/native/backgroundExecution';
+import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/backgroundExecutionManager';
 import { createSslPayload } from '@/lib/sid/sidUtils';
 
 export type SidTrack = {
@@ -54,6 +54,12 @@ const resolveBlob = (track: SidTrack) => {
   return null;
 };
 
+/**
+ * @deprecated Legacy SID player provider.
+ *
+ * Prefer the unified playback engine used by the Play Files page.
+ * This provider is only kept for test/coverage probes and legacy experiments.
+ */
 export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<SidQueue>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -84,8 +90,10 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     await api.playSidUpload(blob, track.songNr, sslBlob);
     startedAtRef.current = Date.now();
     setIsPlaying(true);
-    BackgroundExecution.start().catch(() => {
-      /* best-effort — playback still works without background anchor */
+    void startBackgroundExecution({
+      source: 'sid-player',
+      reason: 'start',
+      context: { trackId: track.id },
     });
   }, []);
 
@@ -146,7 +154,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     return () => {
-      BackgroundExecution.stop().catch(() => { });
+      void stopBackgroundExecution({ source: 'sid-player', reason: 'cleanup' });
     };
   }, []);
 
@@ -168,6 +176,11 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   return <SidPlayerContext.Provider value={value}>{children}</SidPlayerContext.Provider>;
 }
 
+/**
+ * @deprecated Legacy SID player hook.
+ *
+ * Prefer the unified playback engine used by the Play Files page.
+ */
 export const useSidPlayer = () => {
   const context = useContext(SidPlayerContext);
   if (!context) {

@@ -48,7 +48,7 @@ describe('playFilesUtils', () => {
             expect(formatTime(3600000)).toBe('60:00');
         });
         it('handles undefined', () => {
-            expect(formatTime(undefined)).toBe('—');
+            expect(formatTime(undefined)).toBe('—:—');
         });
     });
 

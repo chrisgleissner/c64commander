@@ -7,8 +7,9 @@
  */
 
 import { cn } from '@/lib/utils';
+import { Library } from 'lucide-react';
 
-type FileOrigin = 'ultimate' | 'local';
+type FileOrigin = 'ultimate' | 'local' | 'hvsc';
 
 type FileOriginIconProps = {
   origin: FileOrigin;
@@ -18,18 +19,30 @@ type FileOriginIconProps = {
 
 const resolveIconSource = (origin: FileOrigin) => {
   const base = typeof import.meta !== 'undefined' ? import.meta.env.BASE_URL || '/' : '/';
-  return origin === 'ultimate' ? `${base}c64u-icon.svg` : `${base}device-icon.svg`;
+  if (origin === 'ultimate') return `${base}c64u-icon.svg`;
+  return `${base}device-icon.svg`;
 };
 
 const resolveIconLabel = (origin: FileOrigin) =>
-  origin === 'ultimate' ? 'C64 Ultimate file' : 'Local device file';
+  origin === 'ultimate' ? 'C64U file' : origin === 'hvsc' ? 'HVSC file' : 'Local file';
 
-export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => (
-  <img
-    src={resolveIconSource(origin)}
-    alt={label ?? resolveIconLabel(origin)}
-    aria-label={label ?? resolveIconLabel(origin)}
-    data-testid="file-origin-icon"
-    className={cn('h-4 w-4 shrink-0 opacity-70 dark:invert dark:brightness-0', className)}
-  />
-);
+export const FileOriginIcon = ({ origin, className, label }: FileOriginIconProps) => {
+  if (origin === 'hvsc') {
+    return (
+      <Library
+        aria-label={label ?? resolveIconLabel(origin)}
+        data-testid="file-origin-icon"
+        className={cn('h-4 w-4 shrink-0 opacity-70', className)}
+      />
+    );
+  }
+  return (
+    <img
+      src={resolveIconSource(origin)}
+      alt={label ?? resolveIconLabel(origin)}
+      aria-label={label ?? resolveIconLabel(origin)}
+      data-testid="file-origin-icon"
+      className={cn('h-4 w-4 shrink-0 opacity-70 dark:invert dark:brightness-0', className)}
+    />
+  );
+};

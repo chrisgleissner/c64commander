@@ -22,8 +22,8 @@ const readStorageValue = (key: string) => {
 export const isFuzzModeEnabled = () => {
   try {
     if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_FUZZ_MODE === '1') return true;
-  } catch {
-    // ignore
+  } catch (error) {
+    console.warn('Failed to read fuzz mode flag', { error });
   }
   if (typeof window === 'undefined') return false;
   if ((window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode) return true;
@@ -72,7 +72,8 @@ const isSafeMockBaseUrl = (value: string) => {
   try {
     const url = new URL(value);
     return isLocalHost(url.hostname);
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse fuzz mock base URL', { value, error });
     return !value.startsWith('http://') && !value.startsWith('https://');
   }
 };
@@ -83,7 +84,8 @@ export const isFuzzSafeBaseUrl = (baseUrl: string) => {
   try {
     const url = new URL(baseUrl);
     return isLocalHost(url.hostname);
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse base URL for fuzz safety', { baseUrl, error });
     return false;
   }
 };

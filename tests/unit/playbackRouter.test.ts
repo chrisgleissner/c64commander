@@ -15,10 +15,21 @@ import { injectAutostart } from '@/lib/playback/autostart';
 import { loadFirstDiskPrgViaDma } from '@/lib/playback/diskFirstPrg';
 import { mountDiskToDrive, resolveLocalDiskBlob } from '@/lib/disks/diskMount';
 import { loadDiskAutostartMode } from '@/lib/config/appSettings';
+import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { recordDeviceGuard } from '@/lib/tracing/traceSession';
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
   addLog: vi.fn(),
+}));
+
+vi.mock('@/lib/tracing/actionTrace', () => ({
+  getActiveAction: vi.fn(() => ({ correlationId: 'test-correlation', origin: 'ui', name: 'test-action' })),
+}));
+
+vi.mock('@/lib/tracing/traceSession', () => ({
+  recordTraceError: vi.fn(),
+  recordDeviceGuard: vi.fn(),
 }));
 
 vi.mock('@/lib/ftp/ftpClient', () => ({
@@ -80,6 +91,8 @@ beforeEach(() => {
   vi.mocked(loadDiskAutostartMode).mockReturnValue('kernal');
   vi.mocked(readFtpFile).mockReset();
   vi.mocked(getC64APIConfigSnapshot).mockReturnValue({ deviceHost: 'c64u', password: '' } as any);
+  vi.mocked(recordDeviceGuard).mockReset();
+  vi.mocked(getActiveAction).mockReturnValue({ correlationId: 'test-correlation', origin: 'ui', name: 'test-action' } as any);
 });
 
 const createApiMock = () => ({
@@ -126,6 +139,88 @@ describe('playbackRouter', () => {
     const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
     await executePlayPlan(api as any, plan);
     expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', undefined);
+    expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'ssl-propagation-failure',
+        level: 'error',
+        reason: 'ftp-fetch-failed',
+      }),
+    );
+  });
+
+  it('records info-level no-duration signal when Ultimate SID has no songlength metadata', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/NODUR.SID' });
+    await executePlayPlan(api as any, plan);
+    expect(api.playSid).toHaveBeenCalledWith('/MUSIC/NODUR.SID', undefined);
+    expect(api.playSidUpload).not.toHaveBeenCalled();
+    expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'playback-no-duration',
+        level: 'info',
+        reason: 'no-songlength-entry',
+      }),
+    );
+  });
+
+  it('falls back to direct play and records error when SID+SSL upload fails', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
+    const encoded = Buffer.from(sidBytes).toString('base64');
+    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    api.playSidUpload.mockRejectedValueOnce(new Error('HTTP 400: Bad Request'));
+
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
+    await executePlayPlan(api as any, plan);
+
+    expect(api.playSidUpload).toHaveBeenCalledTimes(1);
+    expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', undefined);
+    expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'ssl-propagation-failure',
+        level: 'error',
+        reason: 'upload-failed-with-songlength-available',
+      }),
+    );
+  });
+
+  it('propagates classified error when upload and fallback both fail', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
+    const encoded = Buffer.from(sidBytes).toString('base64');
+    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    api.playSidUpload.mockRejectedValueOnce(new Error('HTTP 500: Server Error'));
+    api.playSid.mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'));
+
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/FAIL.SID', durationMs: 120000 });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('fallback playback failed after SSL propagation failure');
+  });
+
+  it('handles invalid SSL payload duration by falling back to direct playback', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
+    const encoded = Buffer.from(sidBytes).toString('base64');
+    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+
+    const plan = buildPlayPlan({
+      source: 'ultimate',
+      path: '/MUSIC/INVALID.SID',
+      durationMs: (100 * 60 * 1000),
+    });
+    await executePlayPlan(api as any, plan);
+
+    expect(api.playSidUpload).not.toHaveBeenCalled();
+    expect(api.playSid).toHaveBeenCalledWith('/MUSIC/INVALID.SID', undefined);
+    expect(vi.mocked(recordDeviceGuard)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        type: 'ssl-propagation-failure',
+        reason: 'ssl-payload-invalid',
+      }),
+    );
   });
 
   it('routes SID playback from local upload', async () => {

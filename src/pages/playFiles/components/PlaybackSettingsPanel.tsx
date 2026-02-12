@@ -139,7 +139,7 @@ export const PlaybackSettingsPanel = ({
                   onPointerDown={onSongPickerPointerDown}
                   onClick={onSongPickerClick}
                 >
-                  Song {clampedSongNr}/{subsongCount}
+                  Subsong {clampedSongNr}/{subsongCount}
                 </Button>
               </div>
             </div>
@@ -162,13 +162,13 @@ export const PlaybackSettingsPanel = ({
                         className="w-full justify-start"
                         onClick={() => onSelectSong(value)}
                       >
-                        Song {value}
+                        Subsong {value}
                       </Button>
                     );
                   })}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Available songs: 1–{subsongCount}
+                  Available subsongs: 1–{subsongCount}
                 </p>
                 <Button variant="outline" size="sm" className="w-full" onClick={onCloseSongPicker}>
                   Close

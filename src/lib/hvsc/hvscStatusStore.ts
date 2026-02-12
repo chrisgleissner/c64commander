@@ -65,7 +65,8 @@ export const loadHvscStatusSummary = (): HvscStatusSummary => {
     const parsed = JSON.parse(raw) as HvscStatusSummary;
     if (!parsed?.download || !parsed?.extraction) return getDefaultHvscStatusSummary();
     return parsed;
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load HVSC status summary', { error });
     return getDefaultHvscStatusSummary();
   }
 };

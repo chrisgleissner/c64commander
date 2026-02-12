@@ -32,20 +32,24 @@ const buildId = () =>
   `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
 
 const readLogs = (): LogEntry[] => {
+  if (typeof localStorage === 'undefined') return [];
   const raw = localStorage.getItem(LOG_KEY);
   if (!raw) return [];
   try {
     return JSON.parse(raw) as LogEntry[];
-  } catch {
+  } catch (error) {
+    console.warn('Failed to parse stored logs', { error });
     return [];
   }
 };
 
 const writeLogs = (logs: LogEntry[]) => {
+  if (typeof localStorage === 'undefined') return;
   localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(0, MAX_LOGS)));
 };
 
 export const addLog = (level: LogLevel, message: string, details?: unknown) => {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   if (shouldSuppressDiagnosticsSideEffects() && level !== 'error') return;
   if (level === 'debug' && !loadDebugLoggingEnabled()) return;
   const entry: LogEntry = {
@@ -79,16 +83,24 @@ const trimStack = (stack?: string | null) => {
 
 export const buildErrorLogDetails = (error: Error, details: Record<string, unknown> = {}) => ({
   ...details,
-  error: typeof details.error === 'string' ? details.error : error.message,
+  error: {
+    name: error.name,
+    message: typeof details.error === 'string' ? details.error : error.message,
+    stack: trimStack(error.stack),
+  },
   errorName: error.name,
   errorStack: trimStack(error.stack),
 });
 
 export const getLogs = (): LogEntry[] => readLogs();
 
-export const getErrorLogs = (): LogEntry[] => readLogs().filter((entry) => entry.level === 'error');
+export const getProblemLogs = (): LogEntry[] =>
+  readLogs().filter((entry) => entry.level === 'warn' || entry.level === 'error');
+
+export const getErrorLogs = (): LogEntry[] => getProblemLogs();
 
 export const clearLogs = () => {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   writeLogs([]);
   window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
 };

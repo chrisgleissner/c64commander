@@ -6,8 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { unzipSync } from 'fflate';
-import { addErrorLog } from '@/lib/logging';
+import { Unzip, UnzipInflate, unzipSync } from 'fflate';
+import { addErrorLog, addLog } from '@/lib/logging';
 
 type SevenZipFactory = (options: { locateFile: (url: string) => string }) => Promise<any> | any;
 
@@ -25,6 +25,17 @@ const SEVEN_Z_EXTENSION = '.7z';
 const ZIP_EXTENSION = '.zip';
 
 const normalizePath = (value: string) => value.replace(/\\/g, '/').replace(/^\/+/, '');
+
+const readHeapUsageBytes = () => {
+  if (typeof performance !== 'undefined' && 'memory' in performance) {
+    const perf = performance as Performance & { memory?: { usedJSHeapSize?: number } };
+    return perf.memory?.usedJSHeapSize ?? null;
+  }
+  if (typeof process !== 'undefined' && typeof process.memoryUsage === 'function') {
+    return process.memoryUsage().heapUsed;
+  }
+  return null;
+};
 
 let sevenZipModulePromise: ReturnType<SevenZipFactory> | null = null;
 
@@ -55,22 +66,71 @@ const getSevenZipModule = async () => {
 };
 
 const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
-  const entries = unzipSync(buffer);
-  const files = Object.entries(entries).filter(([, data]) => data instanceof Uint8Array);
-  let processed = 0;
+  const heapBefore = readHeapUsageBytes();
+  const files = await new Promise<Array<{ path: string; data: Uint8Array }>>((resolve, reject) => {
+    const extracted: Array<{ path: string; data: Uint8Array }> = [];
+    const unzip = new Unzip((entry) => {
+      const fileChunks: Uint8Array[] = [];
+      entry.ondata = (error, chunk, final) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        if (chunk && chunk.length) {
+          fileChunks.push(chunk);
+        }
+        if (!final) return;
+        const totalLength = fileChunks.reduce((sum, current) => sum + current.length, 0);
+        const merged = new Uint8Array(totalLength);
+        let offset = 0;
+        fileChunks.forEach((part) => {
+          merged.set(part, offset);
+          offset += part.length;
+        });
+        extracted.push({ path: normalizePath(entry.name), data: merged });
+      };
+      entry.start();
+    });
+    unzip.register(UnzipInflate);
+
+    if (buffer.length === 0) {
+      unzip.push(new Uint8Array(0), true);
+    }
+
+    const chunkSize = 256 * 1024;
+    for (let offset = 0; offset < buffer.length; offset += chunkSize) {
+      const chunk = buffer.subarray(offset, Math.min(buffer.length, offset + chunkSize));
+      unzip.push(chunk, offset + chunk.length >= buffer.length);
+    }
+
+    resolve(extracted);
+  });
+
   const total = files.length;
   onEnumerate?.(total);
-  for (const [path, data] of files) {
+  let processed = 0;
+  for (const file of files) {
     processed += 1;
-    await onEntry(normalizePath(path), data as Uint8Array);
+    await onEntry(file.path, file.data);
     onProgress?.(processed, total);
     if (processed % 50 === 0) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
+  if (total === 0) {
+    throw new Error('Zip archive contained no extractable entries');
+  }
+  const heapAfter = readHeapUsageBytes();
+  addLog('info', 'HVSC zip extraction memory profile', {
+    totalEntries: total,
+    heapBefore,
+    heapAfter,
+    heapDelta: (heapBefore !== null && heapAfter !== null) ? heapAfter - heapBefore : null,
+  });
 };
 
 const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
+  const heapBefore = readHeapUsageBytes();
   const module = await getSevenZipModule();
   const workingDir = `/work-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
   const archivePath = `${workingDir}/${normalizePath(archiveName) || `archive${SEVEN_Z_EXTENSION}`}`;
@@ -122,15 +182,35 @@ const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnume
     let processed = 0;
     const total = files.length;
     onEnumerate?.(total);
-    for (const file of files) {
-      processed += 1;
-      const data = module.FS.readFile(file.fullPath, { encoding: 'binary' }) as Uint8Array;
-      await onEntry(normalizePath(file.path), data);
-      onProgress?.(processed, total);
-      if (processed % 50 === 0) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
+    const batchSize = 100;
+    for (let index = 0; index < files.length; index += batchSize) {
+      const batch = files.slice(index, index + batchSize);
+      for (const file of batch) {
+        processed += 1;
+        const data = module.FS.readFile(file.fullPath, { encoding: 'binary' }) as Uint8Array;
+        await onEntry(normalizePath(file.path), data);
+        try {
+          module.FS.unlink(file.fullPath);
+        } catch (unlinkError) {
+          addErrorLog('SevenZip post-entry cleanup failed', {
+            step: 'unlink-extracted-file',
+            path: file.fullPath,
+            error: (unlinkError as Error).message,
+          });
+        }
+        onProgress?.(processed, total);
       }
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
+
+    const heapAfter = readHeapUsageBytes();
+    addLog('info', 'HVSC 7z extraction memory profile', {
+      archiveName,
+      totalEntries: total,
+      heapBefore,
+      heapAfter,
+      heapDelta: (heapBefore !== null && heapAfter !== null) ? heapAfter - heapBefore : null,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to extract ${archiveName}: ${message}`);
@@ -181,9 +261,13 @@ export const extractArchiveEntries = async (options: ExtractArchiveOptions) => {
     } catch (error) {
       try {
         return await extractZip(options);
-      } catch {
-        throw error;
+      } catch (fallbackError) {
+        addErrorLog('7z fallback zip extraction failed', {
+          archiveName: options.archiveName,
+          error: (fallbackError as Error).message,
+        });
       }
+      throw error;
     }
   }
   throw new Error(`Unsupported archive format: ${options.archiveName}`);

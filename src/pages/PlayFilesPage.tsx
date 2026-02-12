@@ -22,6 +22,7 @@ import { toast } from '@/hooks/use-toast';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 import { getC64API } from '@/lib/c64api';
+import type { TraceSourceKind } from '@/lib/tracing/types';
 import { discoverConnection, getConnectionSnapshot } from '@/lib/connection/connectionManager';
 import { getParentPath } from '@/lib/playback/localFileBrowser';
 import { type PlayRequest } from '@/lib/playback/playbackRouter';
@@ -42,8 +43,12 @@ import {
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { redactTreeUri } from '@/lib/native/safUtils';
+import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/backgroundExecutionManager';
+import { BackgroundExecution, onBackgroundAutoSkipDue } from '@/lib/native/backgroundExecution';
 
 import { AppBar } from '@/components/AppBar';
+import { FileOriginIcon } from '@/components/FileOriginIcon';
+import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import { VolumeControls } from '@/pages/playFiles/components/VolumeControls';
 import { PlaybackControlsCard } from '@/pages/playFiles/components/PlaybackControlsCard';
 import { PlaybackSettingsPanel } from '@/pages/playFiles/components/PlaybackSettingsPanel';
@@ -57,11 +62,15 @@ import { usePlaylistManager } from '@/pages/playFiles/hooks/usePlaylistManager';
 import { useVolumeOverride } from '@/pages/playFiles/hooks/useVolumeOverride';
 import { useLocalEntries } from '@/pages/playFiles/hooks/useLocalEntries';
 import { usePlaybackController } from '@/pages/playFiles/hooks/usePlaybackController';
+import { usePlaybackResumeTriggers } from '@/pages/playFiles/hooks/usePlaybackResumeTriggers';
+import { setPlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
+import { getPlaylistDataRepository } from '@/lib/playlistRepository';
+import type { PlaylistItemRecord, TrackRecord } from '@/lib/playlistRepository';
 import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFileSelections';
 import {
   resolveVolumeSyncDecision,
 } from '@/pages/playFiles/playbackGuards';
-import type { PlayableEntry, PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from '@/pages/playFiles/types';
+import type { PlaylistItem, StoredPlaybackSession, StoredPlaylistState } from '@/pages/playFiles/types';
 import {
   CATEGORY_OPTIONS,
   DEFAULT_SONG_DURATION_MS,
@@ -153,6 +162,7 @@ export default function PlayFilesPage() {
   });
   const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
+  const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const addItemsOverlayStartedAtRef = useRef<number | null>(null);
   const addItemsOverlayActiveRef = useRef(false);
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
@@ -204,7 +214,10 @@ export default function PlayFilesPage() {
   const playTransitionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const playStartInFlightRef = useRef(false);
   const trackInstanceIdRef = useRef(0);
+  const [trackInstanceId, setTrackInstanceId] = useState(0);
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
+  const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
+  const backgroundExecutionActiveRef = useRef(false);
 
   useEffect(() => {
     prepareDirectoryInput(localSourceInputRef.current);
@@ -225,7 +238,8 @@ export default function PlayFilesPage() {
   const cancelAutoAdvance = useCallback(() => {
     if (!autoAdvanceGuardRef.current) return;
     autoAdvanceGuardRef.current.userCancelled = true;
-  }, []);
+    setAutoAdvanceDueAtMs(null);
+  }, [setAutoAdvanceDueAtMs]);
 
 
 
@@ -266,6 +280,7 @@ export default function PlayFilesPage() {
     durationMs,
     setDurationMs,
     setCurrentSubsongCount,
+    setTrackInstanceId,
     repeatEnabled,
     localEntriesBySourceId,
     localSourceTreeUris,
@@ -290,6 +305,7 @@ export default function PlayFilesPage() {
     enqueuePlayTransition,
     durationSeconds,
     trace,
+    setAutoAdvanceDueAtMs,
   });
 
 
@@ -311,6 +327,45 @@ export default function PlayFilesPage() {
     autoAdvanceGuardRef.current = null;
     setPlayedMs(0);
   }, [isPaused, isPlaying]);
+
+  useEffect(() => {
+    if (isPlaying && !isPaused) {
+      if (backgroundExecutionActiveRef.current) return;
+      backgroundExecutionActiveRef.current = true;
+      void startBackgroundExecution({
+        source: 'playback-controller',
+        reason: 'play',
+        context: { trackInstanceId },
+      });
+      void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
+      return;
+    }
+    if (!backgroundExecutionActiveRef.current) return;
+    backgroundExecutionActiveRef.current = false;
+    void stopBackgroundExecution({
+      source: 'playback-controller',
+      reason: isPaused ? 'pause' : 'stop',
+      context: { trackInstanceId },
+    });
+    void BackgroundExecution.setDueAtMs({ dueAtMs: null });
+  }, [autoAdvanceDueAtMs, isPaused, isPlaying, trackInstanceId]);
+
+  useEffect(() => () => {
+    if (!backgroundExecutionActiveRef.current) return;
+    backgroundExecutionActiveRef.current = false;
+    void stopBackgroundExecution({
+      source: 'playback-controller',
+      reason: 'cleanup',
+      context: { trackInstanceId },
+    });
+    void BackgroundExecution.setDueAtMs({ dueAtMs: null });
+  }, [trackInstanceId]);
+
+  useEffect(() => {
+    if (!backgroundExecutionActiveRef.current) return;
+    if (!isNativePlatform() || getPlatform() !== 'android') return;
+    void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
+  }, [autoAdvanceDueAtMs]);
 
   useEffect(() => {
     if (addItemsProgress.status !== 'scanning') return undefined;
@@ -382,11 +437,11 @@ export default function PlayFilesPage() {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     const groups: SourceGroup[] = [
-      { label: 'C64 Ultimate', sources: [ultimateSource] },
-      { label: 'This device', sources: localGroupSources },
+      { label: SOURCE_LABELS.local, sources: localGroupSources },
+      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
     if (hvscLibraryAvailable) {
-      groups.push({ label: 'HVSC Library', sources: [createHvscSourceLocation(hvscRoot.path)] });
+      groups.push({ label: SOURCE_LABELS.hvsc, sources: [createHvscSourceLocation(hvscRoot.path)] });
     }
     return groups;
   }, [hvscLibraryAvailable, hvscRoot.path, localSources]);
@@ -421,8 +476,11 @@ export default function PlayFilesPage() {
       sizeBytes: entry.sizeBytes ?? null,
       modifiedAt: entry.modifiedAt ?? null,
       addedAt: addedAtOverride ?? new Date().toISOString(),
+      status: 'ready',
+      unavailableReason: null,
     };
   }, [songNrInput]);
+
   const handleAddFileSelections = useMemo(
     () => createAddFileSelectionsHandler({
       addItemsStartedAtRef,
@@ -481,21 +539,28 @@ export default function PlayFilesPage() {
     return () => window.clearInterval(timer);
   }, [currentIndex, isPaused, isPlaying, syncPlaybackTimeline]);
 
+  usePlaybackResumeTriggers(syncPlaybackTimeline);
+
   useEffect(() => {
-    const onVisible = () => {
-      if (document.hidden) return;
+    if (!isNativePlatform() || getPlatform() !== 'android') return;
+    let cancelled = false;
+    let handle: { remove: () => Promise<void> } | null = null;
+
+    void onBackgroundAutoSkipDue(() => {
+      if (cancelled) return;
       syncPlaybackTimeline();
-    };
-    const onFocus = () => {
-      syncPlaybackTimeline();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('pageshow', onFocus);
+    }).then((next) => {
+      handle = next;
+      if (cancelled) {
+        void handle.remove();
+      }
+    });
+
     return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('pageshow', onFocus);
+      cancelled = true;
+      if (handle) {
+        void handle.remove();
+      }
     };
   }, [syncPlaybackTimeline]);
 
@@ -503,7 +568,37 @@ export default function PlayFilesPage() {
 
   const currentItem = playlist[currentIndex];
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
-  const currentDurationLabel = currentDurationMs !== undefined ? formatTime(currentDurationMs) : null;
+  const sourceKind = useMemo<TraceSourceKind | null>(() => {
+    if (!currentItem) return null;
+    return currentItem.request.source;
+  }, [currentItem]);
+  const localAccessMode = useMemo<'entries' | 'saf' | null>(() => {
+    if (!currentItem || currentItem.request.source !== 'local') return null;
+    const treeUri = currentItem.sourceId ? localSourceTreeUris.get(currentItem.sourceId) : null;
+    return treeUri ? 'saf' : 'entries';
+  }, [currentItem, localSourceTreeUris]);
+  const playbackTraceContext = useMemo(() => {
+    if (!playlist.length) return null;
+    return {
+      queueLength: playlist.length,
+      currentIndex,
+      currentItemId: currentItem?.id ?? null,
+      isPlaying,
+      elapsedMs,
+      durationMs: currentDurationMs ?? null,
+      sourceKind,
+      localAccessMode,
+      trackInstanceId,
+      playlistItemId: currentItem?.id ?? null,
+    };
+  }, [currentDurationMs, currentIndex, currentItem?.id, elapsedMs, isPlaying, playlist.length, sourceKind, localAccessMode, trackInstanceId]);
+
+  useEffect(() => {
+    setPlaybackTraceSnapshot(playbackTraceContext);
+  }, [playbackTraceContext]);
+
+  useEffect(() => () => setPlaybackTraceSnapshot(null), []);
+  const currentDurationLabel = formatTime(currentDurationMs);
   const progressPercent = currentDurationMs ? Math.min(100, (elapsedMs / currentDurationMs) * 100) : 0;
   const remainingMs = currentDurationMs !== undefined ? Math.max(0, currentDurationMs - elapsedMs) : undefined;
   const remainingLabel = currentDurationMs !== undefined ? `-${formatTime(remainingMs)}` : '—';
@@ -647,15 +742,8 @@ export default function PlayFilesPage() {
     trackStartedAtRef,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
+    setTrackInstanceId,
   });
-
-  useEffect(() => {
-    if (!isPlaying || isPaused) return;
-    const guard = autoAdvanceGuardRef.current;
-    if (!guard || guard.autoFired || guard.userCancelled) return;
-    if (Date.now() < guard.dueAtMs) return;
-    void handleNext('auto', guard.trackInstanceId);
-  }, [elapsedMs, handleNext, isPaused, isPlaying]);
 
   useEffect(() => {
     if (isPlaying || isPaused) return;
@@ -700,80 +788,101 @@ export default function PlayFilesPage() {
     setDurationInput(formatDurationSeconds(nextSeconds));
   }, [durationInput, durationSeconds]);
 
+  const buildTrackId = useCallback((source: string, sourceId: string | null | undefined, path: string) =>
+    `${source}:${sourceId ?? ''}:${normalizeSourcePath(path)}`,
+  []);
 
+  const serializePlaylistToQueryRepository = useCallback((items: PlaylistItem[], playlistId: string) => {
+    const nowIso = new Date().toISOString();
+    const tracks: TrackRecord[] = items.map((item) => ({
+      trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+      sourceKind: item.request.source,
+      sourceLocator: normalizeSourcePath(item.path),
+      category: item.category,
+      title: item.label,
+      author: null,
+      released: null,
+      path: normalizeSourcePath(item.path),
+      sizeBytes: item.sizeBytes ?? null,
+      modifiedAt: item.modifiedAt ?? null,
+      defaultDurationMs: item.durationMs ?? null,
+      subsongCount: item.subsongCount ?? null,
+      createdAt: item.addedAt ?? nowIso,
+      updatedAt: nowIso,
+    }));
+    const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
+      playlistItemId: item.id,
+      playlistId,
+      trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+      songNr: item.request.songNr ?? 1,
+      sortKey: String(index).padStart(8, '0'),
+      durationOverrideMs: item.durationMs ?? null,
+      status: item.status ?? 'ready',
+      unavailableReason: item.unavailableReason ?? null,
+      addedAt: item.addedAt ?? nowIso,
+    }));
+    return { tracks, playlistItems };
+  }, [buildTrackId]);
 
+  useEffect(() => {
+    let cancelled = false;
 
+    const run = async () => {
+      if (!playlist.length) {
+        if (!cancelled) {
+          setQueryFilteredPlaylist([]);
+        }
+        return;
+      }
 
-
-
-  const handlePlayEntry = useCallback(async (entry: PlayableEntry) => {
-    try {
-      const item = buildPlaylistItem(entry);
-      if (!item) throw new Error('Unsupported file format.');
-      await startPlaylist([item]);
-      toast({
-        title: 'Playback started',
-        description: `${formatPlayCategory(item.category)} added to playlist`,
+      const repository = getPlaylistDataRepository();
+      const serialized = serializePlaylistToQueryRepository(playlist, playlistStorageKey);
+      await repository.upsertTracks(serialized.tracks);
+      await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
+      const result = await repository.queryPlaylist({
+        playlistId: playlistStorageKey,
+        categoryFilter: playlistTypeFilters,
+        limit: Math.max(1, playlist.length),
+        offset: 0,
+        sort: 'playlist-position',
       });
-    } catch (error) {
-      reportUserError({
-        operation: 'PLAYBACK_START',
-        title: 'Playback failed',
-        description: (error as Error).message,
-        error,
-        context: {
-          source: entry.source,
-          path: entry.path,
-        },
-      });
-    }
-  }, [buildPlaylistItem, reportUserError, startPlaylist]);
+      const byId = new Map(playlist.map((item) => [item.id, item]));
+      const nextFiltered = result.rows
+        .map((row) => byId.get(row.playlistItem.playlistItemId) ?? null)
+        .filter((item): item is PlaylistItem => Boolean(item));
 
-  const handleAddHvscToPlaylist = useCallback((entry: PlayableEntry) => {
-    try {
-      const item = buildPlaylistItem(entry);
-      if (!item) throw new Error('Unsupported file format.');
-      setPlaylist((prev) => [...prev, item]);
-      toast({
-        title: 'Added to playlist',
-        description: entry.name,
-      });
-    } catch (error) {
-      reportUserError({
-        operation: 'PLAYLIST_ADD',
-        title: 'Failed to add item',
-        description: (error as Error).message,
-        error,
-        context: {
-          source: entry.source,
-          path: entry.path,
-        },
-      });
-    }
-  }, [buildPlaylistItem, reportUserError]);
+      if (!cancelled) {
+        setQueryFilteredPlaylist(nextFiltered);
+      }
+    };
 
-  const handlePlayEntries = useCallback(async (entries: PlayableEntry[]) => {
-    const items = entries
-      .map((entry) => buildPlaylistItem(entry))
-      .filter((item): item is PlaylistItem => Boolean(item));
-    if (!items.length) return;
-    const playlistItems = shuffleEnabled ? shuffleArray(items) : items;
-    await startPlaylist(playlistItems);
-    toast({
-      title: 'Playback started',
-      description: `${playlistItems.length} files added to playlist`,
+    run().catch((error) => {
+      addErrorLog('Failed to query filtered playlist', {
+        playlistStorageKey,
+        error: (error as Error).message,
+      });
+      if (!cancelled) {
+        setQueryFilteredPlaylist(playlist.filter((item) => playlistTypeFilters.includes(item.category)));
+      }
     });
-  }, [buildPlaylistItem, shuffleEnabled, startPlaylist]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlist, playlistStorageKey, playlistTypeFilters, serializePlaylistToQueryRepository]);
+
+
+
+
+
+
 
   const playlistTotals = useMemo(() => {
     const durations = playlist.map((item, index) => playlistItemDuration(item, index));
     return calculatePlaylistTotals(durations, playedMs);
   }, [playlist, playedMs, playlistItemDuration]);
 
-  const filteredPlaylist = useMemo(
-    () => playlist.filter((item) => playlistTypeFilters.includes(item.category)),
-    [playlist, playlistTypeFilters],
-  );
+  const filteredPlaylist = queryFilteredPlaylist;
   const currentPlayingItemId = (isPlaying || isPaused) && currentIndex >= 0
     ? playlist[currentIndex]?.id ?? null
     : null;
@@ -808,8 +917,15 @@ export default function PlayFilesPage() {
         >
           <PlaybackControlsCard
             hasCurrentItem={Boolean(currentItem)}
+            currentItemIcon={currentItem ? (
+              <FileOriginIcon
+                origin={currentItem.request.source === 'ultimate' ? 'ultimate' : currentItem.request.source === 'hvsc' ? 'hvsc' : 'local'}
+                className="h-3.5 w-3.5 shrink-0 opacity-70"
+              />
+            ) : undefined}
             currentItemLabel={currentItem?.label ?? null}
-            currentDurationLabel={currentDurationLabel ?? null}
+            currentDurationLabel={currentDurationLabel}
+            subsongLabel={knownSubsongCount && knownSubsongCount > 1 ? `Subsong ${clampedSongNr}/${subsongCount}` : null}
             canTransport={canTransport}
             hasPrev={hasPrev}
             hasNext={hasNext}
@@ -976,12 +1092,8 @@ export default function PlayFilesPage() {
         ) : null}
 
         {hvscControlsEnabled && (
-          <div data-section-label="HVSC library" data-testid="play-section-hvsc">
+          <div data-section-label="HVSC" data-testid="play-section-hvsc">
             <HvscManager
-              recurseFolders={recurseFolders}
-              onPlayEntry={handlePlayEntry}
-              onPlayEntries={handlePlayEntries}
-              onAddToPlaylist={handleAddHvscToPlaylist}
               hvscControlsEnabled={true}
             />
           </div>

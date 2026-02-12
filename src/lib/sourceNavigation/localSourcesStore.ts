@@ -12,6 +12,7 @@ import { addLog } from '@/lib/logging';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeSourcePath } from './paths';
 import { LocalSourceListingError } from './localSourceErrors';
+import { SOURCE_LABELS } from './sourceTerms';
 
 export type LocalSourceEntry = {
   name: string;
@@ -90,7 +91,8 @@ export const loadLocalSources = (): LocalSourceRecord[] => {
   try {
     const parsed = JSON.parse(raw) as LocalSourceRecord[];
     return Array.isArray(parsed) ? parsed.map((source) => normalizeLocalSource(source)) : [];
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load local sources from storage', { error });
     return [];
   }
 };
@@ -180,7 +182,7 @@ export const createLocalSourceFromPicker = async (input: HTMLInputElement | null
     addLog('debug', 'SAF persistable permission granted', { treeUri: redactTreeUri(treeUri) });
     const source: LocalSourceRecord = {
       id: sourceId,
-      name: rootName || 'This device',
+      name: rootName || SOURCE_LABELS.local,
       rootName,
       rootPath: '/',
       createdAt,
@@ -237,4 +239,33 @@ export const requireLocalSourceEntries = (source: LocalSourceRecord, context: st
     });
   }
   return source.entries;
+};
+
+export const validateSource = async (sourceId: string): Promise<boolean> => {
+  const source = loadLocalSources().find((entry) => entry.id === sourceId);
+  if (!source) {
+    addLog('warn', 'Local source validation failed: source missing', { sourceId });
+    return false;
+  }
+
+  if (source.android?.treeUri) {
+    try {
+      await FolderPicker.listChildren({ treeUri: source.android.treeUri, path: '' });
+      return true;
+    } catch (error) {
+      addLog('warn', 'SAF source validation failed', {
+        sourceId,
+        treeUri: redactTreeUri(source.android.treeUri),
+        error: (error as Error).message,
+      });
+      return false;
+    }
+  }
+
+  if (!Array.isArray(source.entries)) {
+    addLog('warn', 'Local source validation failed: entries missing', { sourceId });
+    return false;
+  }
+
+  return true;
 };

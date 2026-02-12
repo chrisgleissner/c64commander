@@ -554,7 +554,7 @@ describe('HomePage SID status', () => {
     expect(screen.getByTestId('home-system-firmware').textContent).toContain('—');
     expect(screen.getByTestId('home-system-git').textContent).toContain('—');
     expect(screen.getByTestId('home-system-build-time').textContent).toContain('2026-01-01 12:00:00 UTC');
-    expect(screen.getByText(/unable to connect to c64 ultimate/i)).toBeTruthy();
+    expect(screen.getByText(/unable to connect to c64u/i)).toBeTruthy();
   });
 
   it('renders device info and drive summaries', () => {

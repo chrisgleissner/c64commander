@@ -54,4 +54,46 @@ describe('C64API playSidUpload', () => {
     expect(String(url)).toContain('/v1/runners:sidplay');
     expect((options as RequestInit)?.method).toBe('POST');
   });
+
+  it('retries transient network failures up to success', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Request timed out'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: [] }), { status: 200 }));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const api = new C64API('http://127.0.0.1:1234', undefined, '127.0.0.1:1234');
+    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], { type: 'audio/sid' });
+
+    await api.playSidUpload(sidFile);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries retryable 503 responses and succeeds on final attempt', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 503, statusText: 'Service Unavailable' }))
+      .mockResolvedValueOnce(new Response('busy', { status: 503, statusText: 'Service Unavailable' }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errors: [] }), { status: 200 }));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const api = new C64API('http://127.0.0.1:1234', undefined, '127.0.0.1:1234');
+    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], { type: 'audio/sid' });
+
+    await api.playSidUpload(sidFile);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry permanent 4xx failures', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('bad request', { status: 400, statusText: 'Bad Request' }));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    const api = new C64API('http://127.0.0.1:1234', undefined, '127.0.0.1:1234');
+    const sidFile = new Blob([new Uint8Array([0x50, 0x53, 0x49, 0x44])], { type: 'audio/sid' });
+
+    await expect(api.playSidUpload(sidFile)).rejects.toThrow('HTTP 400');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
 });

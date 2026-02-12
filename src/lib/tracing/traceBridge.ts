@@ -29,6 +29,16 @@ export type TraceBridge = {
   seedTraces?: (events: ReturnType<typeof getTraceEvents>) => void;
 };
 
+const isTestProbeEnabled = () => {
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof window !== 'undefined') {
+    const win = window as Window & { __c64uTestProbeEnabled?: boolean };
+    if (win.__c64uTestProbeEnabled) return true;
+  }
+  if (typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  return false;
+};
+
 declare global {
   interface Window {
     __c64uTracing?: TraceBridge;
@@ -39,7 +49,7 @@ export const registerTraceBridge = () => {
   if (typeof window === 'undefined') return;
 
   if (window.__c64uTracing) {
-    if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1' && !window.__c64uTracing.seedTraces) {
+    if (isTestProbeEnabled() && !window.__c64uTracing.seedTraces) {
       window.__c64uTracing.seedTraces = (events) => {
         resetActionTrace();
         replaceTraceEvents(events);
@@ -72,7 +82,7 @@ export const registerTraceBridge = () => {
     restoreTracesFromSession,
   };
 
-  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') {
+  if (isTestProbeEnabled()) {
     window.__c64uTracing.seedTraces = (events) => {
       resetActionTrace();
       replaceTraceEvents(events);

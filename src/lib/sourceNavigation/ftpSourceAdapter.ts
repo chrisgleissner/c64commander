@@ -10,6 +10,7 @@ import { listFtpDirectory } from '@/lib/ftp/ftpClient';
 import { getStoredFtpPort } from '@/lib/ftp/ftpConfig';
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import type { SourceEntry, SourceLocation } from './types';
+import { SOURCE_LABELS } from './sourceTerms';
 
 type FtpCacheRecord = {
   entries: SourceEntry[];
@@ -36,7 +37,8 @@ const loadCache = (): FtpCacheState => {
       entries: parsed.entries ?? {},
       order: Array.isArray(parsed.order) ? parsed.order : [],
     };
-  } catch {
+  } catch (error) {
+    console.warn('Failed to load FTP cache', { error });
     return { entries: {}, order: [] };
   }
 };
@@ -45,8 +47,11 @@ const saveCache = (state: FtpCacheState) => {
   if (typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(state));
-  } catch {
-    // Ignore cache persistence errors.
+  } catch (error) {
+    console.warn('Failed to persist FTP cache', {
+      error,
+      entryCount: Object.keys(state.entries).length,
+    });
   }
 };
 
@@ -173,7 +178,7 @@ const listFilesRecursive = async (path: string, options?: { signal?: AbortSignal
 export const createUltimateSourceLocation = (): SourceLocation => ({
   id: 'ultimate',
   type: 'ultimate',
-  name: 'C64 Ultimate',
+  name: SOURCE_LABELS.c64u,
   rootPath: '/',
   isAvailable: true,
   listEntries,

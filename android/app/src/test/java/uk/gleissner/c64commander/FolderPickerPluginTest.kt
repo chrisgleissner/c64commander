@@ -22,6 +22,7 @@ import org.junit.runner.RunWith
 import org.junit.rules.TemporaryFolder
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.shadows.ShadowLog
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -145,6 +146,28 @@ class FolderPickerPluginTest {
     plugin.readFile(call)
     assertTrue(latch.await(2, TimeUnit.SECONDS))
     assertNotNull(resolved?.getString("data"))
+  }
+
+  @Test
+  fun readFileLogsWhenReadFails() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("uri")).thenReturn("content://invalid")
+
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject(anyString(), any(Exception::class.java))
+
+    ShadowLog.clear()
+    plugin.readFile(call)
+
+    assertTrue(latch.await(2, TimeUnit.SECONDS))
+    val logs = ShadowLog.getLogsForTag("FolderPickerPlugin")
+    assertTrue(logs.any { it.msg?.contains("SAF readFile failed") == true })
   }
 
 }

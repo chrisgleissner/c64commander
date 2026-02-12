@@ -156,7 +156,7 @@ test.describe('UX Interaction Patterns', () => {
     // At source root, "Up" button should be disabled or hidden
     const upButton = page.getByRole('button', { name: /Back|Up|Parent/i }).first();
     const upVisible = await upButton.isVisible({ timeout: 2000 }).catch(() => false);
-    
+
     if (upVisible) {
       const isDisabled = await upButton.isDisabled().catch(() => false);
       if (isDisabled) {
@@ -274,7 +274,7 @@ test.describe('UX Interaction Patterns', () => {
     // Should show confirmation dialog
     const confirmDialog = page.getByRole('dialog').or(page.getByRole('alertdialog'));
     const dialogVisible = await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false);
-    
+
     if (dialogVisible) {
       await attachStepScreenshot(page, testInfo, 'confirmation-dialog-shown');
       const confirmText = await confirmDialog.textContent();
@@ -295,7 +295,7 @@ test.describe('UX Interaction Patterns', () => {
     // In playlist view, should have playback controls
     const playButton = page.getByRole('button', { name: /Play|Pause|Resume/i });
     const playControlsExist = await playButton.isVisible({ timeout: 2000 }).catch(() => false);
-    
+
     if (playControlsExist) {
       await attachStepScreenshot(page, testInfo, 'playback-controls-in-playlist');
     }
@@ -318,7 +318,7 @@ test.describe('UX Interaction Patterns', () => {
       // Should NOT have playback controls here
       const playButtonInSelection = page.getByRole('button', { name: /Play|Pause|Resume/i });
       const hasPlaybackControls = await playButtonInSelection.isVisible({ timeout: 1000 }).catch(() => false);
-      
+
       if (!hasPlaybackControls) {
         await attachStepScreenshot(page, testInfo, 'no-playback-controls-in-selection');
       } else {
@@ -340,7 +340,7 @@ test.describe('UX Interaction Patterns', () => {
     // Should NOT have mounting controls (Mount, Unmount)
     const mountButton = page.getByRole('button', { name: /Mount|Unmount|Eject/i });
     const hasMountControls = await mountButton.isVisible({ timeout: 1000 }).catch(() => false);
-    
+
     if (!hasMountControls) {
       await attachStepScreenshot(page, testInfo, 'no-mount-controls-on-play-page');
     } else {
@@ -357,7 +357,7 @@ test.describe('UX Interaction Patterns', () => {
     // Should have mounting controls here
     const mountButtonOnDisks = page.getByRole('button', { name: /Mount|Unmount|Eject/i });
     const hasMountControlsOnDisks = await mountButtonOnDisks.isVisible({ timeout: 2000 }).catch(() => false);
-    
+
     if (hasMountControlsOnDisks) {
       await attachStepScreenshot(page, testInfo, 'mount-controls-on-disks-page');
     } else {
@@ -378,7 +378,7 @@ test.describe('UX Interaction Patterns', () => {
     if (await addButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       const buttonText = await addButton.textContent();
       await attachStepScreenshot(page, testInfo, 'intent-based-add-button');
-      
+
       // Should not contain technical terms like "Browse", "Filesystem", "Directory"
       const hasTechnicalTerms = /browse|filesystem|directory/i.test(buttonText || '');
       if (hasTechnicalTerms) {
@@ -408,11 +408,11 @@ test.describe('UX Interaction Patterns', () => {
     // Look for intent-based headings or instructions
     const heading = page.getByRole('heading', { name: /Choose|Select|Pick/i });
     const headingVisible = await heading.isVisible({ timeout: 2000 }).catch(() => false);
-    
+
     if (headingVisible) {
       const headingText = await heading.textContent();
       await attachStepScreenshot(page, testInfo, 'intent-based-heading');
-      
+
       // Should contain "source" or similar intent
       const hasSourceLanguage = /source|location|where/i.test(headingText || '');
       if (hasSourceLanguage) {
@@ -449,7 +449,7 @@ test.describe('UX Interaction Patterns', () => {
     // Get initial position of a control element (e.g., "Add" button)
     const controlButton = page.getByRole('button', { name: /Add|Select/i }).first();
     const initialBox = await controlButton.boundingBox().catch(() => null);
-    
+
     if (!initialBox) {
       await attachStepScreenshot(page, testInfo, 'control-button-not-found');
       return;
@@ -578,10 +578,10 @@ test.describe('UX Interaction Patterns', () => {
     await c64uButton.click();
     await waitForUiStable(page);
 
-    // Select an item
-    const firstItem = page.getByRole('button').first();
-    if (await firstItem.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await firstItem.click();
+    // Select an item without being blocked by transient toasts.
+    const firstEntryCheckbox = page.locator('[data-testid="source-entry-row"] [role="checkbox"]').first();
+    if (await firstEntryCheckbox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await firstEntryCheckbox.click();
       await waitForUiStable(page);
       await attachStepScreenshot(page, testInfo, 'item-selected');
 
@@ -745,8 +745,10 @@ test.describe('UX Interaction Patterns', () => {
     const c64uVisible = await c64uButton.isVisible({ timeout: 2000 }).catch(() => false);
 
     if (localVisible && c64uVisible) {
-      await expect(localButton).toContainText('Add file / folder');
-      await expect(c64uButton).toContainText('Add file / folder');
+      await expect(localButton).toContainText('Local');
+      await expect(localButton).toContainText('Local Android Device');
+      await expect(c64uButton).toContainText('C64U');
+      await expect(c64uButton).toContainText('Commodore 64 Ultimate');
       await attachStepScreenshot(page, testInfo, 'source-buttons-consistent');
     } else {
       await attachStepScreenshot(page, testInfo, 'source-buttons-missing');

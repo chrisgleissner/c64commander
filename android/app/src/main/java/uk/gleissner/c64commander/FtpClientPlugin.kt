@@ -8,7 +8,7 @@
 
 package uk.gleissner.c64commander
 
-import android.util.Log
+import android.content.Context
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -27,6 +27,26 @@ import java.util.concurrent.Executors
 class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FtpClientPlugin"
+
+  private fun traceFields(call: PluginCall): AppLogger.TraceFields {
+    val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
+    return AppLogger.TraceFields(
+      correlationId = trace.getString("correlationId"),
+      trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
+      playlistItemId = trace.getString("playlistItemId"),
+      sourceKind = trace.getString("sourceKind"),
+      localAccessMode = trace.getString("localAccessMode"),
+      lifecycleState = trace.getString("lifecycleState"),
+    )
+  }
+
+  private fun pluginContextOrNull(): Context? {
+    return try {
+      context
+    } catch (_: Throwable) {
+      null
+    }
+  }
 
   @PluginMethod
   fun listDirectory(call: PluginCall) {
@@ -75,12 +95,20 @@ class FtpClientPlugin : Plugin() {
         result.put("entries", entries)
         call.resolve(result)
       } catch (error: Exception) {
+        AppLogger.error(
+          pluginContextOrNull(),
+          logTag,
+          "FTP listDirectory failed",
+          "FtpClientPlugin",
+          error,
+          traceFields(call),
+        )
         call.reject(error.message, error)
       } finally {
         try {
           if (client.isConnected) client.disconnect()
         } catch (error: Exception) {
-          Log.w(logTag, "Failed to disconnect FTP client", error)
+          AppLogger.warn(pluginContextOrNull(), logTag, "Failed to disconnect FTP client", "FtpClientPlugin", error)
         }
       }
     }
@@ -127,12 +155,20 @@ class FtpClientPlugin : Plugin() {
         result.put("sizeBytes", bytes.size)
         call.resolve(result)
       } catch (error: Exception) {
+        AppLogger.error(
+          pluginContextOrNull(),
+          logTag,
+          "FTP readFile failed",
+          "FtpClientPlugin",
+          error,
+          traceFields(call),
+        )
         call.reject(error.message, error)
       } finally {
         try {
           if (client.isConnected) client.disconnect()
         } catch (error: Exception) {
-          Log.w(logTag, "Failed to disconnect FTP client", error)
+          AppLogger.warn(pluginContextOrNull(), logTag, "Failed to disconnect FTP client", "FtpClientPlugin", error)
         }
       }
     }
@@ -142,7 +178,8 @@ class FtpClientPlugin : Plugin() {
     return try {
       val mlist = client.mlistDir(path)
       if (mlist != null && mlist.isNotEmpty()) mlist else client.listFiles(path)
-    } catch (_: Exception) {
+    } catch (error: Exception) {
+      AppLogger.warn(pluginContextOrNull(), logTag, "FTP MLSD failed; falling back to LIST", "FtpClientPlugin", error)
       client.listFiles(path)
     }
   }

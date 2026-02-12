@@ -11,10 +11,12 @@ import { FolderPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { reportUserError } from '@/lib/uiErrors';
 import type { SourceEntry, SelectedItem, SourceLocation } from '@/lib/sourceNavigation/types';
+import { SOURCE_EXPLANATIONS, SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import type { AddItemsProgressState } from './AddItemsProgressOverlay';
 import { useSourceNavigator } from '@/lib/sourceNavigation/useSourceNavigator';
 import { ItemSelectionView } from './ItemSelectionView';
@@ -89,6 +91,11 @@ export const ItemSelectionDialog = ({
 
   const c64UltimateSource = useMemo(
     () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === 'ultimate') ?? null,
+    [sourceGroups],
+  );
+
+  const hvscSource = useMemo(
+    () => sourceGroups.flatMap((group) => group.sources).find((item) => item.type === 'hvsc') ?? null,
     [sourceGroups],
   );
 
@@ -280,6 +287,22 @@ export const ItemSelectionDialog = ({
                   <Button
                     variant="outline"
                     className="justify-start min-w-0"
+                    onClick={() => void handleAddLocalSource()}
+                    disabled={pendingLocalSource}
+                    aria-busy={pendingLocalSource}
+                    id="import-option-local"
+                    data-testid="import-option-local"
+                    aria-label="Add file / folder from Local"
+                  >
+                    <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
+                    <span className="flex flex-col items-start truncate">
+                      <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
+                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
+                    </span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="justify-start min-w-0"
                     onClick={() => {
                       if (!c64UltimateSource) return;
                       setPendingLocalSource(false);
@@ -288,30 +311,35 @@ export const ItemSelectionDialog = ({
                     disabled={!c64UltimateSource?.isAvailable}
                     id="import-option-c64u"
                     data-testid="import-option-c64u"
-                    aria-label="Add file / folder from C64 Ultimate"
+                    aria-label="Add file / folder from C64U"
                   >
-                    <FolderPlus className="h-4 w-4 mr-1" />
+                    <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
                     <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">C64 Ultimate</span>
-                      <span className="text-[11px] text-muted-foreground">Add file / folder</span>
+                      <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
+                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
                     </span>
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="justify-start min-w-0"
-                    onClick={() => void handleAddLocalSource()}
-                    disabled={pendingLocalSource}
-                    aria-busy={pendingLocalSource}
-                    id="import-option-local"
-                    data-testid="import-option-local"
-                    aria-label="Add file / folder from this device"
-                  >
-                    <FolderPlus className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">This device</span>
-                      <span className="text-[11px] text-muted-foreground">Add file / folder</span>
-                    </span>
-                  </Button>
+                  {hvscSource ? (
+                    <Button
+                      variant="outline"
+                      className="justify-start min-w-0"
+                      onClick={() => {
+                        if (!hvscSource.isAvailable) return;
+                        setPendingLocalSource(false);
+                        setSelectedSourceId(hvscSource.id);
+                      }}
+                      disabled={!hvscSource.isAvailable}
+                      id="import-option-hvsc"
+                      data-testid="import-option-hvsc"
+                      aria-label="Add file / folder from HVSC"
+                    >
+                      <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
+                      <span className="flex flex-col items-start truncate">
+                        <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
+                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
+                      </span>
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             )}

@@ -31,7 +31,8 @@ const inferComponentNameFromStack = () => {
         !['useActionTrace', 'renderWithHooks', 'mountIndeterminateComponent', 'beginWork'].includes(name)
       );
     return candidates[0];
-  } catch {
+  } catch (error) {
+    console.warn('Failed to infer component name from stack', { error });
     return undefined;
   }
 };

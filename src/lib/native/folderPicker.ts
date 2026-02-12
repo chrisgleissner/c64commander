@@ -9,6 +9,8 @@
 import { registerPlugin } from '@capacitor/core';
 import { addLog } from '@/lib/logging';
 import { getPlatform } from '@/lib/native/platform';
+import { getActiveAction } from '@/lib/tracing/actionTrace';
+import { resolveNativeTraceContext, type NativeTraceContext } from '@/lib/native/nativeTraceContext';
 
 export type PickedFolderEntry = {
   uri: string;
@@ -50,27 +52,31 @@ export type FolderPickerFileResult = {
 };
 
 type FolderPickerPlugin = {
-  pickDirectory: (options?: { extensions?: string[] }) => Promise<FolderPickerDirectoryResult>;
-  pickFile: (options?: { extensions?: string[]; mimeTypes?: string[]; initialUri?: string }) => Promise<FolderPickerFileResult>;
-  listChildren: (options: { treeUri: string; path?: string }) => Promise<{ entries: SafFolderEntry[] }>;
-  getPersistedUris: () => Promise<{ uris: SafPersistedUri[] }>;
-  readFile: (options: { uri: string }) => Promise<{ data: string }>;
-  readFileFromTree: (options: { treeUri: string; path: string }) => Promise<{ data: string }>;
+  pickDirectory: (options?: { extensions?: string[]; traceContext?: NativeTraceContext }) => Promise<FolderPickerDirectoryResult>;
+  pickFile: (options?: { extensions?: string[]; mimeTypes?: string[]; initialUri?: string; traceContext?: NativeTraceContext }) => Promise<FolderPickerFileResult>;
+  listChildren: (options: { treeUri: string; path?: string; traceContext?: NativeTraceContext }) => Promise<{ entries: SafFolderEntry[] }>;
+  getPersistedUris: (options?: { traceContext?: NativeTraceContext }) => Promise<{ uris: SafPersistedUri[] }>;
+  readFile: (options: { uri: string; traceContext?: NativeTraceContext }) => Promise<{ data: string }>;
+  readFileFromTree: (options: { treeUri: string; path: string; traceContext?: NativeTraceContext }) => Promise<{ data: string }>;
   writeFileToTree: (options: {
     treeUri: string;
     path: string;
     data: string;
     mimeType?: string;
     overwrite?: boolean;
+    traceContext?: NativeTraceContext;
   }) => Promise<{ uri: string; sizeBytes: number; modifiedAt?: string | null }>;
 };
 
 type FolderPickerOverride = Partial<FolderPickerPlugin>;
 
-const allowAndroidOverride = () =>
-  import.meta.env.VITE_ENABLE_TEST_PROBES === '1'
-  && typeof window !== 'undefined'
-  && (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride === true;
+const allowAndroidOverride = () => {
+  if (typeof window === 'undefined') return false;
+  const testProbeEnabled = import.meta.env.VITE_ENABLE_TEST_PROBES === '1'
+    || (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true;
+  return testProbeEnabled
+    && (window as Window & { __c64uAllowAndroidFolderPickerOverride?: boolean }).__c64uAllowAndroidFolderPickerOverride === true;
+};
 
 const resolveOverride = (): FolderPickerOverride | null => {
   if (typeof window === 'undefined') return null;
@@ -87,42 +93,54 @@ const resolveOverrideMethod = <K extends keyof FolderPickerPlugin>(method: K) =>
   throw new Error('Android SAF picker is required.');
 };
 
+const withTraceContext = <T extends Record<string, unknown> | undefined>(options: T) => ({
+  ...(options ?? {}),
+  traceContext: resolveNativeTraceContext(getActiveAction()),
+});
+
 const plugin = registerPlugin<FolderPickerPlugin>('FolderPicker');
 
 export const FolderPicker: FolderPickerPlugin = {
   pickDirectory: (options) => {
     const override = resolveOverrideMethod('pickDirectory');
-    if (override) return override(options);
-    return plugin.pickDirectory(options);
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.pickDirectory(withTrace);
   },
   pickFile: (options) => {
     const override = resolveOverrideMethod('pickFile');
-    if (override) return override(options);
-    return plugin.pickFile(options);
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.pickFile(withTrace);
   },
   listChildren: (options) => {
     const override = resolveOverrideMethod('listChildren');
-    if (override) return override(options);
-    return plugin.listChildren(options);
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.listChildren(withTrace);
   },
-  getPersistedUris: () => {
+  getPersistedUris: (options) => {
     const override = resolveOverrideMethod('getPersistedUris');
-    if (override) return override();
-    return plugin.getPersistedUris();
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.getPersistedUris(withTrace);
   },
   readFile: (options) => {
     const override = resolveOverrideMethod('readFile');
-    if (override) return override(options);
-    return plugin.readFile(options);
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.readFile(withTrace);
   },
   readFileFromTree: (options) => {
     const override = resolveOverrideMethod('readFileFromTree');
-    if (override) return override(options);
-    return plugin.readFileFromTree(options);
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.readFileFromTree(withTrace);
   },
   writeFileToTree: (options) => {
     const override = resolveOverrideMethod('writeFileToTree');
-    if (override) return override(options);
-    return plugin.writeFileToTree(options);
+    const withTrace = withTraceContext(options);
+    if (override) return override(withTrace);
+    return plugin.writeFileToTree(withTrace);
   },
 };

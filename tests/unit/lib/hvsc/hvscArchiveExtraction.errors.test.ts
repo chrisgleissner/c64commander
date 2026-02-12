@@ -13,10 +13,37 @@ import { addErrorLog } from '@/lib/logging';
 
 vi.mock('fflate', () => ({
     unzipSync: vi.fn(),
+    UnzipInflate: class UnzipInflate { },
+    Unzip: class MockUnzip {
+        private readonly onFile: (entry: { name: string; ondata?: (error: Error | null, chunk: Uint8Array, final: boolean) => void; start: () => void }) => void;
+
+        constructor(onFile: (entry: { name: string; ondata?: (error: Error | null, chunk: Uint8Array, final: boolean) => void; start: () => void }) => void) {
+            this.onFile = onFile;
+        }
+
+        register() { }
+
+        push(chunk: Uint8Array, final: boolean) {
+            if (!final) return;
+            const files = vi.mocked(unzipSync)(chunk as any) as Record<string, Uint8Array>;
+            Object.entries(files || {}).forEach(([name, data]) => {
+                if (!(data instanceof Uint8Array)) return;
+                const entry = {
+                    name,
+                    ondata: undefined as ((error: Error | null, chunk: Uint8Array, final: boolean) => void) | undefined,
+                    start: () => {
+                        entry.ondata?.(null, data, true);
+                    },
+                };
+                this.onFile(entry);
+            });
+        }
+    },
 }));
 
 vi.mock('@/lib/logging', () => ({
     addErrorLog: vi.fn(),
+    addLog: vi.fn(),
 }));
 
 // Setup sensitive mock for 7z-wasm

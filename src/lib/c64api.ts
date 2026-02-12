@@ -21,6 +21,7 @@ import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
 import { runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
+import { classifyError } from '@/lib/tracing/failureTaxonomy';
 import { withRestInteraction, type InteractionIntent } from '@/lib/deviceInteraction/deviceInteractionManager';
 import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore';
 
@@ -33,6 +34,8 @@ const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
 const RAM_BLOCK_WRITE_TIMEOUT_MS = 15_000;
 const IDLE_RECOVERY_THRESHOLD_MS = 10_000;
 const NETWORK_RETRY_DELAY_MS = 180;
+const SID_UPLOAD_MAX_ATTEMPTS = 3;
+const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
 const RETRYABLE_IDLE_RECOVERY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
@@ -41,11 +44,31 @@ const isNetworkFailureMessage = (message: string) =>
 const resolveHostErrorMessage = (message: string) =>
   (isDnsFailure(message) ? 'Host unreachable (DNS)' : 'Host unreachable');
 
+const parseHttpStatusFromErrorMessage = (message: string) => {
+  const match = /http\s+(\d{3})/i.exec(message);
+  if (!match) return null;
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : null;
+};
+
+const isSidUploadTransientFailure = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  if (isNetworkFailureMessage(message) || /timed out|timeout|host unreachable/i.test(message)) {
+    return true;
+  }
+  const status = parseHttpStatusFromErrorMessage(message);
+  return status !== null && SID_UPLOAD_RETRYABLE_HTTP_STATUS.has(status);
+};
+
 const normalizeUrlPath = (url: string) => {
   try {
     const parsed = new URL(url);
     return `${parsed.pathname}${parsed.search}`;
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to normalize API URL path', {
+      url,
+      error: (error as Error).message,
+    });
     return url;
   }
 };
@@ -109,7 +132,10 @@ const extractRequestBody = (body: unknown) => {
   if (typeof body === 'string') {
     try {
       return JSON.parse(body);
-    } catch {
+    } catch (error) {
+      addLog('warn', 'Failed to parse request body JSON', {
+        error: (error as Error).message,
+      });
       return body;
     }
   }
@@ -169,7 +195,10 @@ const readResponseBody = async (response: Response) => {
   if (!contentType.includes('application/json')) return null;
   try {
     return await response.clone().json();
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse API response JSON', {
+      error: (error as Error).message,
+    });
     return null;
   }
 };
@@ -181,7 +210,11 @@ const sanitizeHostInput = (input?: string) => {
     try {
       const url = new URL(raw);
       return url.host || url.hostname || '';
-    } catch {
+    } catch (error) {
+      addLog('warn', 'Failed to parse host from URL input', {
+        input: raw,
+        error: (error as Error).message,
+      });
       return '';
     }
   }
@@ -198,7 +231,11 @@ export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
   try {
     const url = new URL(baseUrl);
     return url.host || DEFAULT_DEVICE_HOST;
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse device host from base URL', {
+      baseUrl,
+      error: (error as Error).message,
+    });
     return normalizeDeviceHost(baseUrl);
   }
 };
@@ -229,7 +266,11 @@ const isLocalProxy = (baseUrl: string) => {
   try {
     const url = new URL(baseUrl);
     return url.hostname === '127.0.0.1' || url.hostname === 'localhost';
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to parse base URL for proxy detection', {
+      baseUrl,
+      error: (error as Error).message,
+    });
     return false;
   }
 };
@@ -308,7 +349,10 @@ const isNativePlatform = () => {
       }
     }
     return Boolean((window as any)?.Capacitor?.isNativePlatform?.());
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Failed to detect native platform in API client', {
+      error: (error as Error).message,
+    });
     return false;
   }
 };
@@ -597,8 +641,9 @@ export class C64API {
           if (!response.ok) {
             const responseBody = await readResponseBody(response);
             const err = new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const failure = classifyError(err, 'integration');
             recordRestResponse(action, { status: response.status, body: responseBody, durationMs, error: err });
-            recordTraceError(action, err);
+            recordTraceError(action, err, failure);
             responseRecorded = true;
             throw err;
           }
@@ -617,8 +662,9 @@ export class C64API {
           const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
           const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
           if (!responseRecorded) {
+            const failure = classifyError(error);
             recordRestResponse(action, { status: status === 'error' ? null : status, body: null, durationMs, error: error as Error });
-            recordTraceError(action, error as Error);
+            recordTraceError(action, error as Error, failure);
           }
           if (!fuzzBlocked) {
             addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
@@ -712,7 +758,11 @@ export class C64API {
       baseUrl: (() => {
         try {
           return new URL(url).origin;
-        } catch {
+        } catch (error) {
+          addLog('warn', 'Failed to parse base URL origin for upload', {
+            url,
+            error: (error as Error).message,
+          });
           return '';
         }
       })(),
@@ -761,8 +811,9 @@ export class C64API {
         const isNetworkFailure = isNetworkFailureMessage(rawMessage);
         const normalizedError = isAbort || isNetworkFailure ? resolveHostErrorMessage(rawMessage) : rawMessage;
         const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt));
+        const failure = classifyError(error);
         recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
-        recordTraceError(action, error as Error);
+        recordTraceError(action, error as Error, failure);
         addErrorLog('C64 API upload failed', buildErrorLogDetails(error as Error, {
           url,
           requestId,
@@ -1133,35 +1184,62 @@ export class C64API {
     }
 
     const path = `${url.pathname}${url.search}`;
-    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
-    let status: number | 'error' = 'error';
     const method = 'POST';
-    let response: Response;
-    try {
-      response = await this.fetchWithTimeout(
-        url.toString(),
-        {
-          method,
-          headers,
-          body: form,
-        },
-        UPLOAD_REQUEST_TIMEOUT_MS,
-      );
-      status = response.status;
-    } finally {
-      this.logRestCall(method, path, status, startedAt);
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= SID_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
+      const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      let status: number | 'error' = 'error';
+      try {
+        const response = await this.fetchWithTimeout(
+          url.toString(),
+          {
+            method,
+            headers,
+            body: form,
+          },
+          UPLOAD_REQUEST_TIMEOUT_MS,
+        );
+        status = response.status;
+
+        if (!response.ok) {
+          const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
+          addErrorLog('SID upload failed', buildErrorLogDetails(error, {
+            status: response.status,
+            statusText: response.statusText,
+            attempt,
+            maxAttempts: SID_UPLOAD_MAX_ATTEMPTS,
+          }));
+          throw error;
+        }
+
+        return this.parseResponseJson(response);
+      } catch (error) {
+        const err = error as Error;
+        lastError = err;
+        const transient = isSidUploadTransientFailure(err);
+        if (attempt < SID_UPLOAD_MAX_ATTEMPTS && transient) {
+          const retryDelayMs = NETWORK_RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          const failure = classifyError(err);
+          addLog('warn', 'SID upload retry scheduled', {
+            path,
+            attempt,
+            maxAttempts: SID_UPLOAD_MAX_ATTEMPTS,
+            retryDelayMs,
+            failureClass: failure.failureClass,
+            errorCategory: failure.category,
+            error: err.message,
+          });
+          await wait(retryDelayMs);
+          continue;
+        }
+        throw err;
+      } finally {
+        this.logRestCall(method, path, status, startedAt);
+      }
     }
 
-    if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      addErrorLog('SID upload failed', buildErrorLogDetails(error, {
-        status: response.status,
-        statusText: response.statusText,
-      }));
-      throw error;
-    }
-
-    return this.parseResponseJson(response);
+    throw lastError ?? new Error('SID upload failed');
   }
 
   async playMod(file: string): Promise<{ errors: string[] }> {

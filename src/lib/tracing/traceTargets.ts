@@ -26,7 +26,8 @@ const normalizeUrl = (value?: string | null) => {
   if (!value) return '';
   try {
     return new URL(value).toString();
-  } catch {
+  } catch (error) {
+    console.warn('Failed to normalize trace target URL', { value, error });
     return value;
   }
 };

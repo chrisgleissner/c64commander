@@ -13,6 +13,8 @@ import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/pla
 import type { PlaybackClock } from '@/lib/playback/playbackClock';
 import type { LocalPlayFile } from '@/lib/playback/playbackRouter';
 import { addErrorLog } from '@/lib/logging';
+import { getPlaylistDataRepository } from '@/lib/playlistRepository';
+import type { PlaylistItemRecord, TrackRecord } from '@/lib/playlistRepository';
 
 interface UsePlaybackPersistenceProps {
     playlist: PlaylistItem[];
@@ -44,6 +46,7 @@ interface UsePlaybackPersistenceProps {
     trackStartedAtRef: React.MutableRefObject<number | null>;
     trackInstanceIdRef: React.MutableRefObject<number>;
     autoAdvanceGuardRef: React.MutableRefObject<any>; // Using any to avoid importing local type from Page
+    setTrackInstanceId: (value: number) => void;
 }
 
 export function usePlaybackPersistence({
@@ -72,7 +75,9 @@ export function usePlaybackPersistence({
     trackStartedAtRef,
     trackInstanceIdRef,
     autoAdvanceGuardRef,
+    setTrackInstanceId,
 }: UsePlaybackPersistenceProps) {
+    const playlistRepository = getPlaylistDataRepository();
     const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
     const hasHydratedPlaylistRef = useRef(false);
     const hasPlaylistRef = useRef(false);
@@ -118,6 +123,82 @@ export function usePlaybackPersistence({
         return { items: hydrated, index: stored.currentIndex ?? -1 };
     };
 
+    const buildTrackId = (source: string, sourceId: string | null | undefined, path: string) =>
+        `${source}:${sourceId ?? ''}:${normalizeSourcePath(path)}`;
+
+    const serializePlaylistToRepository = (items: PlaylistItem[], playlistId: string) => {
+        const nowIso = new Date().toISOString();
+        const tracks: TrackRecord[] = items.map((item) => ({
+            trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+            sourceKind: item.request.source,
+            sourceLocator: normalizeSourcePath(item.path),
+            category: item.category,
+            title: item.label,
+            author: null,
+            released: null,
+            path: normalizeSourcePath(item.path),
+            sizeBytes: item.sizeBytes ?? null,
+            modifiedAt: item.modifiedAt ?? null,
+            defaultDurationMs: item.durationMs ?? null,
+            subsongCount: item.subsongCount ?? null,
+            createdAt: item.addedAt ?? nowIso,
+            updatedAt: nowIso,
+        }));
+        const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
+            playlistItemId: item.id,
+            playlistId,
+            trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+            songNr: item.request.songNr ?? 1,
+            sortKey: String(index).padStart(8, '0'),
+            durationOverrideMs: item.durationMs ?? null,
+            status: item.status ?? 'ready',
+            unavailableReason: item.unavailableReason ?? null,
+            addedAt: item.addedAt ?? nowIso,
+        }));
+        return { tracks, playlistItems };
+    };
+
+    const persistSerializedPlaylist = async (
+        serialized: { tracks: TrackRecord[]; playlistItems: PlaylistItemRecord[] },
+        chunkSize = 500,
+    ) => {
+        for (let index = 0; index < serialized.tracks.length; index += chunkSize) {
+            const chunk = serialized.tracks.slice(index, index + chunkSize);
+            await playlistRepository.upsertTracks(chunk);
+        }
+        await playlistRepository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
+    };
+
+    const hydrateFromRepository = async () => {
+        const playlistItems = await playlistRepository.getPlaylistItems(playlistStorageKey);
+        if (!playlistItems.length) return { items: [] as PlaylistItem[], index: -1 };
+        const trackIds = playlistItems.map((item) => item.trackId);
+        const tracks = await playlistRepository.getTracksByIds(trackIds);
+        const stored: StoredPlaylistState = {
+            items: playlistItems
+                .map((playlistItem) => {
+                    const track = tracks.get(playlistItem.trackId);
+                    if (!track) return null;
+                    return {
+                        source: track.sourceKind,
+                        path: track.path,
+                        name: track.title,
+                        durationMs: track.defaultDurationMs ?? undefined,
+                        songNr: playlistItem.songNr,
+                        sourceId: track.sourceKind === 'local' ? (track.sourceLocator.startsWith('/') ? null : track.sourceLocator) : null,
+                        sizeBytes: track.sizeBytes ?? null,
+                        modifiedAt: track.modifiedAt ?? null,
+                        addedAt: playlistItem.addedAt,
+                        status: playlistItem.status,
+                        unavailableReason: playlistItem.unavailableReason ?? null,
+                    };
+                })
+                .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+            currentIndex: -1,
+        };
+        return hydrateStoredPlaylist(stored);
+    };
+
     // Restore Session (Step 1: Read)
     useEffect(() => {
         if (typeof sessionStorage === 'undefined') return;
@@ -135,65 +216,90 @@ export function usePlaybackPersistence({
     // Restore Playlist (Local Storage)
     useEffect(() => {
         if (typeof localStorage === 'undefined') return;
-        try {
-            const seenKeys = new Set<string>();
-            const candidateKeys: string[] = [];
-            const pushKey = (key: string | null | undefined) => {
-                if (!key || seenKeys.has(key)) return;
-                seenKeys.add(key);
-                candidateKeys.push(key);
-            };
+        if (hasHydratedPlaylistRef.current) return;
+        hasHydratedPlaylistRef.current = true;
+        (async () => {
+            try {
+                const seenKeys = new Set<string>();
+                const candidateKeys: string[] = [];
+                const pushKey = (key: string | null | undefined) => {
+                    if (!key || seenKeys.has(key)) return;
+                    seenKeys.add(key);
+                    candidateKeys.push(key);
+                };
 
-            const defaultKey = buildPlaylistStorageKey('default');
-            pushKey(playlistStorageKey);
-            if (resolvedDeviceId !== 'default') {
-                pushKey(defaultKey);
-            }
-
-            for (let i = 0; i < localStorage.length; i += 1) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(PLAYLIST_STORAGE_PREFIX)) {
-                    pushKey(key);
+                const defaultKey = buildPlaylistStorageKey('default');
+                pushKey(playlistStorageKey);
+                if (resolvedDeviceId !== 'default') {
+                    pushKey(defaultKey);
                 }
-            }
 
-            if (!candidateKeys.length) return;
-
-            const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];
-            for (const key of candidateKeys) {
-                const raw = localStorage.getItem(key);
-                if (!raw) continue;
-                try {
-                    const parsed = JSON.parse(raw) as StoredPlaylistState;
-                    candidates.push({ key, parsed });
-                } catch (error) {
-                    addErrorLog('Failed to parse stored playlist candidate', {
-                        key,
-                        error: (error as Error).message,
-                    });
+                for (let i = 0; i < localStorage.length; i += 1) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith(PLAYLIST_STORAGE_PREFIX)) {
+                        pushKey(key);
+                    }
                 }
-            }
 
-            if (!candidates.length) return;
+                if (!candidateKeys.length) {
+                    const repositoryRestored = await hydrateFromRepository();
+                    if (repositoryRestored.items.length) {
+                        setPlaylist(repositoryRestored.items);
+                        setCurrentIndex(repositoryRestored.index);
+                    }
+                    return;
+                }
 
-            const preferred =
-                candidates.find((entry) => entry.parsed?.items?.length)
-                ?? candidates[0];
-            const restored = hydrateStoredPlaylist(preferred.parsed);
-            if (hasPlaylistRef.current && restored.items.length === 0) {
-                return;
+                const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];
+                for (const key of candidateKeys) {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) continue;
+                    try {
+                        const parsed = JSON.parse(raw) as StoredPlaylistState;
+                        candidates.push({ key, parsed });
+                    } catch (error) {
+                        addErrorLog('Failed to parse stored playlist candidate', {
+                            key,
+                            error: (error as Error).message,
+                        });
+                    }
+                }
+
+                if (!candidates.length) {
+                    const repositoryRestored = await hydrateFromRepository();
+                    if (repositoryRestored.items.length) {
+                        setPlaylist(repositoryRestored.items);
+                        setCurrentIndex(repositoryRestored.index);
+                    }
+                    return;
+                }
+
+                const preferred =
+                    candidates.find((entry) => entry.parsed?.items?.length)
+                    ?? candidates[0];
+                const restored = hydrateStoredPlaylist(preferred.parsed);
+                if (hasPlaylistRef.current && restored.items.length === 0) {
+                    return;
+                }
+                setPlaylist(restored.items);
+                setCurrentIndex(restored.index);
+                if (restored.items.length) {
+                    const serialized = serializePlaylistToRepository(restored.items, playlistStorageKey);
+                    await persistSerializedPlaylist(serialized);
+                }
+            } catch (error) {
+                addErrorLog('Failed to hydrate stored playlist', {
+                    playlistStorageKey,
+                    resolvedDeviceId,
+                    error: (error as Error).message,
+                });
             }
-            setPlaylist(restored.items);
-            setCurrentIndex(restored.index);
-        } catch (error) {
-            addErrorLog('Failed to hydrate stored playlist', {
+        })().catch((error) => {
+            addErrorLog('Playlist hydration task failed', {
                 playlistStorageKey,
-                resolvedDeviceId,
                 error: (error as Error).message,
             });
-        } finally {
-            hasHydratedPlaylistRef.current = true;
-        }
+        });
     }, [
         playlistStorageKey,
         resolvedDeviceId,
@@ -236,6 +342,7 @@ export function usePlaybackPersistence({
             if (typeof pending.durationMs === 'number' && pending.durationMs > 0) {
                 const restoredTrackInstanceId = trackInstanceIdRef.current + 1;
                 trackInstanceIdRef.current = restoredTrackInstanceId;
+                setTrackInstanceId(restoredTrackInstanceId);
                 autoAdvanceGuardRef.current = {
                     trackInstanceId: restoredTrackInstanceId,
                     dueAtMs: (trackStartedAtRef.current ?? now) + pending.durationMs,
@@ -251,7 +358,7 @@ export function usePlaybackPersistence({
             playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
         }
         pendingPlaybackRestoreRef.current = null;
-    }, [playlist, playlistStorageKey]); // Depends on playlist being set
+    }, [playlist, playlistStorageKey, setTrackInstanceId]); // Depends on playlist being set
 
     // Persist Playlist
     useEffect(() => {
@@ -268,6 +375,8 @@ export function usePlaybackPersistence({
                 sizeBytes: item.sizeBytes ?? null,
                 modifiedAt: item.modifiedAt ?? null,
                 addedAt: item.addedAt ?? null,
+                status: item.status ?? 'ready',
+                unavailableReason: item.unavailableReason ?? null,
             })),
             currentIndex,
         };
@@ -278,6 +387,13 @@ export function usePlaybackPersistence({
             if (playlistStorageKey !== defaultKey) {
                 localStorage.setItem(defaultKey, payload);
             }
+            const serialized = serializePlaylistToRepository(playlist, playlistStorageKey);
+            void persistSerializedPlaylist(serialized).catch((error) => {
+                addErrorLog('Failed to persist playlist repository state', {
+                    playlistStorageKey,
+                    error: (error as Error).message,
+                });
+            });
         } catch (error) {
             addErrorLog('Failed to persist playlist', {
                 playlistStorageKey,

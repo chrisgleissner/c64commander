@@ -74,4 +74,38 @@ describe('HvscMediaIndexAdapter', () => {
     expect(snapshot?.entries).toHaveLength(1);
     expect(adapter.getAll()).toHaveLength(1);
   });
+
+  it('returns paged folder listings without rescanning full index per call', async () => {
+    const listings: Record<string, HvscFolderListing> = {
+      '/': {
+        path: '/',
+        folders: ['/DEMOS'],
+        songs: [],
+      },
+      '/DEMOS': {
+        path: '/DEMOS',
+        folders: ['/DEMOS/A'],
+        songs: [
+          { id: 1, virtualPath: '/DEMOS/Alpha.sid', fileName: 'Alpha.sid', durationSeconds: 100 },
+          { id: 2, virtualPath: '/DEMOS/Beta.sid', fileName: 'Beta.sid', durationSeconds: 120 },
+        ],
+      },
+      '/DEMOS/A': {
+        path: '/DEMOS/A',
+        folders: [],
+        songs: [
+          { id: 3, virtualPath: '/DEMOS/A/Gamma.sid', fileName: 'Gamma.sid', durationSeconds: 140 },
+        ],
+      },
+    };
+
+    const adapter = new HvscMediaIndexAdapter(new JsonMediaIndex(createMemoryStorage()), async (path) => listings[path]);
+    await adapter.scan(['/']);
+
+    const page = adapter.queryFolderPage({ path: '/DEMOS', query: 'a', offset: 0, limit: 1 });
+
+    expect(page.totalSongs).toBe(2);
+    expect(page.songs).toHaveLength(1);
+    expect(page.songs[0]?.fileName).toBe('Alpha.sid');
+  });
 });

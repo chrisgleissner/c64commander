@@ -194,7 +194,7 @@ test.describe('Settings connection management', () => {
       'Diagnostics',
       'Play and Disk',
       'Config',
-      'HVSC Library',
+      'HVSC',
       'Device Safety',
       'About',
     ]);

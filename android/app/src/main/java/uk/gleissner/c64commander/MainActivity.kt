@@ -19,6 +19,7 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FeatureFlagsPlugin::class.java)
     registerPlugin(FtpClientPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
+    registerPlugin(DiagnosticsBridgePlugin::class.java)
     super.onCreate(savedInstanceState)
   }
 }

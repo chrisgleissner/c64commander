@@ -57,7 +57,10 @@ const coerceSafEntries = (value: unknown): SafFolderEntry[] | null => {
     try {
       const parsed = JSON.parse(value) as unknown;
       return Array.isArray(parsed) ? parsed as SafFolderEntry[] : null;
-    } catch {
+    } catch (error) {
+      addLog('warn', 'Failed to parse SAF entries', {
+        error: (error as Error).message,
+      });
       return null;
     }
   }

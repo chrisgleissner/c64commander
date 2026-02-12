@@ -60,7 +60,11 @@ const normalizeUrl = (value?: string | null) => {
   if (!value) return '';
   try {
     return new URL(value).toString();
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Invalid URL encountered while normalizing', {
+      value,
+      error: (error as Error).message,
+    });
     return value;
   }
 };
@@ -100,7 +104,10 @@ const parseProbePayload = async (response: Response): Promise<unknown> => {
   if (!contentType.includes('application/json')) return null;
   try {
     return await response.clone().json();
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Discovery probe JSON parse failed', {
+      error: (error as Error).message,
+    });
     return null;
   }
 };
@@ -128,7 +135,11 @@ const probeWithFetch = async (
     const payload = await parseProbePayload(response);
     if (!response.ok) return false;
     return isProbePayloadHealthy(payload);
-  } catch {
+  } catch (error) {
+    addLog('warn', 'Discovery probe request failed', {
+      baseUrl,
+      error: (error as Error).message,
+    });
     return false;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -168,7 +179,11 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
     }
     try {
       return await probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
-    } catch {
+    } catch (fallbackError) {
+      addLog('warn', 'Discovery probe fallback failed', {
+        baseUrl: config.baseUrl,
+        error: (fallbackError as Error).message,
+      });
       return false;
     }
   }
@@ -230,8 +245,10 @@ const cancelActiveDiscovery = () => {
   if (!activeDiscovery) return;
   try {
     activeDiscovery.abort.abort();
-  } catch {
-    // ignore
+  } catch (error) {
+    addLog('warn', 'Failed to abort discovery probe', {
+      error: (error as Error).message,
+    });
   }
   activeDiscovery.cancel();
   activeDiscovery = null;
@@ -533,7 +550,13 @@ export async function initializeConnectionManager() {
   updateDeviceConnectionState('UNKNOWN');
 
   // Ensure outcomes never persist across cold starts.
-  await stopDemoServer().catch(() => { });
+  try {
+    await stopDemoServer();
+  } catch (error) {
+    addLog('warn', 'Failed to stop demo server during initialization', {
+      error: (error as Error).message,
+    });
+  }
   await applyC64APIConfigFromStorage();
 }
 

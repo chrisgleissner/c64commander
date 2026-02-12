@@ -65,7 +65,7 @@ describe('traceSession', () => {
   it('records action lifecycle events', () => {
     // Need window for event dispatch (appendEvent)
     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
-    
+
     recordActionStart(action);
     recordActionScopeStart(action, 'scope');
     recordActionScopeEnd(action, 'scope', null);
@@ -123,10 +123,10 @@ describe('traceSession', () => {
   it('deduplicates trace errors and exports on error', async () => {
     vi.useFakeTimers();
     const error = new Error('boom');
-    
+
     const dispatchSpy = vi.fn();
-    vi.stubGlobal('window', { 
-        dispatchEvent: dispatchSpy, 
+    vi.stubGlobal('window', {
+        dispatchEvent: dispatchSpy,
         setTimeout: setTimeout,
         CustomEvent: class CustomEvent { constructor(public type: string, public detail?: any) {} }
     });
@@ -149,7 +149,7 @@ describe('traceSession', () => {
     expect(zip).toBeInstanceOf(Uint8Array);
     expect(getLastTraceExport()?.reason).toBe('manual');
   });
-  
+
   it('persists and restores traces from sessionStorage', () => {
     const storage: Record<string, string> = {};
     vi.stubGlobal('sessionStorage', {
@@ -161,22 +161,22 @@ describe('traceSession', () => {
 
     recordActionStart({ ...action, correlationId: 'C1' });
     const countersBefore = getCurrentTraceIdCounters();
-    
+
     persistTracesToSession();
-    
+
     expect(storage['__c64uPersistedTraces']).toBeDefined();
     expect(storage['__c64uPersistedTraceCounters']).toBeDefined();
-    
-    resetTraceSession(0, 0); 
+
+    resetTraceSession(0, 0);
     setTraceIdCounters(0, 0);
     expect(getTraceEvents()).toHaveLength(0);
-    
+
     restoreTracesFromSession();
-    
+
     expect(getTraceEvents()).toHaveLength(1);
     const countersAfter = getCurrentTraceIdCounters();
     expect(countersAfter.eventCounter).toBe(countersBefore.eventCounter);
-    expect(storage['__c64uPersistedTraces']).toBeUndefined(); 
+    expect(storage['__c64uPersistedTraces']).toBeUndefined();
   });
 
   it('handles restore with no data', () => {
@@ -185,16 +185,19 @@ describe('traceSession', () => {
       removeItem: () => {}
     });
      vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
-    
+
     restoreTracesFromSession();
     expect(getTraceEvents()).toHaveLength(0);
   });
-  
+
   it('records device guard event', () => {
      vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
     recordDeviceGuard(action, { allowed: true });
     const events = getTraceEvents();
-    expect(events).toContainEqual(expect.objectContaining({ type: 'device-guard', data: { allowed: true } }));
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'device-guard',
+      data: expect.objectContaining({ allowed: true }),
+    }));
   });
 
   it('handles storage errors gracefully', () => {
@@ -204,10 +207,10 @@ describe('traceSession', () => {
        getItem: () => { throw new Error('Corrupt'); }
      });
      vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
-     
+
      persistTracesToSession();
      expect(consoleSpy).toHaveBeenCalledWith('Failed to persist traces:', expect.any(Error));
-     
+
      restoreTracesFromSession();
      expect(consoleSpy).toHaveBeenCalledWith('Failed to restore traces:', expect.any(Error));
   });

@@ -1,234 +1,265 @@
-# C64 Commander Stabilization Plan
+# iOS CI Introduction Plan (AltStore-first)
 
-## Scope Summary
-Fix correctness, reliability, and UX issues across interaction feedback, networking after idle, RAM save/load, joystick swap, truncation behavior, soft IEC messaging, HVSC download/ingest stability, playback lifecycle, and compact song-lengths UI. Add deterministic regression coverage and emulator evidence.
+Based on: `doc/research/ios-porting-research.md`
 
-## Assumptions And Constraints
-- Local workspace already contains in-progress fixes from the same scope; this document tracks final state.
-- Android emulator (`emulator-5554`) is available and used for Maestro validation.
-- Hardware-only behaviors are verified with deterministic mocks where direct hardware is unavailable.
-- Android unit tests require a supported JDK; JDK 25 is incompatible with the project JaCoCo toolchain.
-- No tests were weakened or skipped to force green.
+## Outcome
 
-## Ordered Task List
-- [x] 1. Baseline and instrumentation setup
-- [x] 2. Fix pervasive button highlight persistence (A)
-- [x] 3. Fix network idle reliability and host unreachable handling (B)
-- [x] 4. Fix RAM load correctness against verified scripts (C)
-- [x] 5. Fix joystick swap HTTP 400 request shape/mapping (D)
-- [x] 6. Implement drive mount truncation rules (E1/E2)
-- [x] 7. Suppress persistent non-actionable soft IEC error state (F)
-- [x] 8. Reproduce and fix HVSC download/ingest crash + resilience (G)
-- [x] 9. Harden playback pause/resume/replay/lock-screen lifecycle (H)
-- [x] 10. Compact song lengths UI block while preserving required info (I)
-- [x] 11. Full verification sweep and evidence capture
+Deliver an iOS app pipeline that is usable end-to-end without local macOS or an owned iOS device:
 
----
+- CI builds and tests iOS on GitHub-hosted macOS runners.
+- CI publishes an unsigned AltStore IPA artifact.
+- CI runs a focused iOS-native Maestro regression set and publishes iOS screenshot artifacts.
+- `README.md` contains clear iOS installation instructions (AltStore path) and operator notes.
+- Android remains the primary release path and is not blocked by iOS optional lanes during rollout.
 
-## Task 1: Baseline And Instrumentation Setup
-### Reproduction Steps
-- Ran baseline quality gates and reproduced prior E2E flakiness in connectivity/demo flows.
-- Ran Android test baseline and captured toolchain incompatibility on JDK 25.
+## Scope and constraints
 
-### Implementation Notes
-- Stabilized Playwright artifact finalization and screenshot capture to prevent infra-only failures.
-- Kept network logging structured (`C64U_HTTP_FAILURE`, `C64U_HTTP_RETRY`, request id/method/path/attempt/idle/timing) and visible during tests.
+- AltStore-first distribution; paid Apple Developer signing lane is prewired but disabled.
+- iOS baseline compatibility: iOS 17/18, prefer iOS 26 runtime when available on runner.
+- Docker on Linux is out of scope for iOS simulator execution.
+- iOS Demo Mode is deferred; Android Demo Mode remains unchanged.
+- Keep Android/iOS divergence minimal by preserving existing TS bridge contracts.
 
-### Verification Steps
-- `npm run lint` passes.
-- `npm run test` passes (`171` files, `1205` tests).
-- `npm run test:e2e` passes (`331` tests).
+## Plan interaction protocol
 
----
+### Common required reading
 
-## Task 2: Pervasive Button Highlight Persistence (A)
-### Reproduction Steps
-- Reproduced sticky action/highlight behavior through Home/Play/HVSC controls in earlier runs.
+- `AGENTS.md`
+- `.github/copilot-instructions.md`
+- `README.md`
+- `doc/research/ios-porting-research.md`
+- `doc/testing/maestro.md`
 
-### Implementation Notes
-- Shared interaction behavior and regression coverage were applied in existing branch work.
-- Added/kept deterministic interaction checks in E2E (`homeInteractivity` stateless-action focus clearing; toggle state checks in playback/ux suites).
+### Execution rule
 
-### Verification Steps
-- Playwright suites pass with interaction checks:
-  - `playwright/homeInteractivity.spec.ts`
-  - `playwright/uxInteractions.spec.ts`
-  - `playwright/playback.spec.ts`
+- Complete phases in order.
+- Do not start a phase before the previous phase done-when criteria are met.
+- Keep all iOS CI behavior deterministic (explicit runtime/device selection, explicit artifacts).
 
----
+## Phase 1: Bootstrap iOS platform in repo
 
-## Task 3: Network Idle Reliability And Host Unreachable (B)
-### Reproduction Steps
-- Reproduced idle/reconnect and transition cases in deterministic connectivity simulation tests.
+**Goal**: Add deterministic Capacitor iOS project scaffolding that can be built by CI.
 
-### Implementation Notes
-- Network failure/retry logging remains structured and explicit in `src/lib/c64api.ts`.
-- Logging noise reduced from `error/warn` to `info` for expected retry paths while keeping full context.
-- Playwright connectivity flows hardened with retry-safe clicks and convergence loops.
+**Primary references**:
 
-### Verification Steps
-- `tests/unit/c64api.test.ts` validates timeout/host-unreachable mapping and idle retry behavior.
-- `playwright/connectionSimulation.spec.ts` passes full real/demo transition coverage.
+- `package.json`
+- `capacitor.config.*`
+- `ios/App/App.xcworkspace` (generated)
+- `ios/App/App/Info.plist`
 
----
+### Tasks
 
-## Task 4: RAM Load Correctness Against Scripts (C)
-### Reproduction Steps
-- Compared app behavior against verified RAM workflows and exercised save/load/reboot-clear memory paths.
+- Generate and commit iOS platform:
+  - `npm run build`
+  - `npx cap add ios`
+  - `npx cap sync ios`
+- Add deterministic npm scripts in `package.json`:
+  - `cap:add:ios`, `cap:sync:ios`, `cap:open:ios`, `ios:build:sim`, `ios:build:device`
+- Ensure app id/name remain sourced from Capacitor config and not duplicated.
+- Add ATS baseline entries in `ios/App/App/Info.plist` for local C64U HTTP access.
 
-### Implementation Notes
-- Existing branch changes align RAM action flow with deterministic sequencing.
+### Done when
 
-### Verification Steps
-- `tests/unit/pages/HomePage.ramActions.test.tsx` passes (save/load/bootstrap/reboot clear memory).
-- `tests/unit/ramOperations.test.ts` passes.
+- Clean checkout can run `npx cap sync ios` successfully.
+- iOS workspace exists in repo and simulator build command can run on macOS.
 
----
+## Phase 2: Create GitHub iOS CI workflow skeleton
 
-## Task 5: Joystick Swap HTTP 400 (D)
-### Reproduction Steps
-- Reproduced and inspected config-write request shape for joystick swap.
+**Goal**: Introduce a dedicated workflow that builds iOS simulator artifacts deterministically.
 
-### Implementation Notes
-- Added request-shape regression to ensure category/item/value encoding stays exact.
+**Primary references**:
 
-### Verification Steps
-- Added test in `tests/unit/c64api.test.ts`:
-  - `encodes joystick swap config writes with the expected category and item`
-- Asserts exact URL and `PUT` method.
+- `.github/workflows/android-apk.yaml`
+- `.github/workflows/ios-ci.yaml` (new)
 
----
+### Tasks
 
-## Task 6: Drive Mount Truncation Rules (E1/E2)
-### Reproduction Steps
-- Reproduced truncation loss of filename and constrained drive mount rendering.
+- Create `.github/workflows/ios-ci.yaml` with jobs:
+  - `ios-prepare`
+  - `ios-build-simulator`
+- Configure triggers:
+  - `pull_request`, `push` on `main`, `workflow_dispatch`, optional tag trigger.
+- Implement runtime resolver in workflow:
+  - List runtimes via `xcrun simctl list runtimes`
+  - Select runtime with policy `26 -> 18 -> 17 -> fail`
+- Pin simulator device policy:
+  - Prefer `iPhone 13`; fail with diagnostics if unavailable.
+- Publish build artifact:
+  - `ios/build/Build/Products/Debug-iphonesimulator/App.app`
 
-### Implementation Notes
-- `src/lib/ui/pathDisplay.ts` now preserves full filename in `start-and-filename` mode even under very small widths.
-- Plain filenames no longer get prefixed with unnecessary ellipsis.
-- `src/components/disks/HomeDiskManager.tsx` mount label class updated to allow responsive width measurement (`min-w-0 flex-1`), removing forced tail truncation.
+### Done when
 
-### Verification Steps
-- Updated tests in `src/lib/ui/pathDisplay.test.ts`.
-- Layout/overflow E2E suite passes (`playwright/layoutOverflow.spec.ts`).
+- PR workflow builds simulator app on macOS runner.
+- Job logs show selected Xcode, runtime, and simulator UDID.
 
----
+## Phase 3: Implement minimum iOS native parity for usable app flows
 
-## Task 7: Soft IEC Persistent Service Error Message (F)
-### Reproduction Steps
-- Investigated persistent diagnostics/error rendering behavior.
+**Goal**: Enable high-value flows on iOS without UI forks.
 
-### Implementation Notes
-- Existing branch changes gate diagnostics visibility and avoid always-on alarming messaging in default state.
+**Primary references**:
 
-### Verification Steps
-- Diagnostics/overlay tests pass:
-  - `tests/unit/diagnostics/diagnosticsOverlaySuppression.test.ts`
-  - `playwright/homeDiagnosticsOverlay.spec.ts`
+- `src/lib/native/folderPicker.ts`
+- `src/lib/native/ftpClient.ts`
+- `src/lib/native/secureStorage.ts`
+- `src/lib/native/secureStorage.ios.ts`
+- `src/lib/native/featureFlags.ts`
+- `src/lib/native/backgroundExecution.ts`
+- `src/lib/native/diagnosticsBridge.ts`
+- `android/app/src/main/java/uk/gleissner/c64commander/MainActivity.kt` (plugin contract reference)
+- `ios/App/App/` (new plugin implementations)
 
----
+### Tasks
 
-## Task 8: HVSC Download/Ingest Crash + Resilience (G)
-### Reproduction Steps
-- Reproduced download/ingest flows through mock-server and cached archive fixtures.
-- Exercised emulator HVSC flows via Maestro + Playwright.
+- Add iOS native plugin implementations with same method contracts and plugin names for:
+  - Folder picker and tree/file operations.
+  - FTP list/read operations.
+  - Secure storage backed by Keychain.
+  - Feature flags backed by UserDefaults.
+- Keep background execution behavior explicit on iOS:
+  - No-op allowed initially, but deterministic logging required.
+- Keep diagnostics bridge optional on iOS, but remove any silent catch behavior.
+- Do not introduce page-level Android/iOS forks unless functionally unavoidable.
 
-### Implementation Notes
-- Existing branch work adds resilient HVSC progress/state handling and deterministic mock flows.
-- Adjusted flaky HVSC progress assertion to stable summary signal in `playwright/hvsc.spec.ts`.
+### Done when
 
-### Verification Steps
-- Unit/integration HVSC pipeline tests pass (archive extraction + ingestion pipeline).
-- Playwright HVSC suite passes, including download+ingest and cached flows.
-- Maestro passes:
-  - `/home/chris/.maestro/tests/2026-02-11_120353/ai-report-smoke-hvsc.html`
+- iOS simulator supports launch + local import + FTP browse + credential persistence.
+- No iOS-touching path has silent exception swallowing.
 
----
+## Phase 4: Add iOS Maestro gating and screenshot artifacts
 
-## Task 9: Playback Lifecycle Hardening (H)
-### Reproduction Steps
-- Reproduced replay/transport/transition races in connectivity and playback suites.
+**Goal**: Add focused iOS CI regression coverage and realistic screenshot output.
 
-### Implementation Notes
-- Existing branch work hardens playback transitions and state reconciliation.
-- Added stable transport IDs in `src/pages/playFiles/components/PlaybackControlsCard.tsx` for deterministic automation.
-- Updated Maestro playlist manipulation to target `playlist-play` control directly.
+**Primary references**:
 
-### Verification Steps
-- Playwright playback suites pass:
-  - `playwright/playback.spec.ts`
-  - `playwright/playback.part2.spec.ts`
-- Maestro playback smoke passes:
-  - `/home/chris/.maestro/tests/2026-02-11_120305/ai-report-smoke-playback.html`
+- `.maestro/config.yaml`
+- `.maestro/` (existing Android flows)
+- `doc/testing/maestro.md`
+- `.github/workflows/ios-ci.yaml`
+- `test-results/evidence/`
 
----
+### Tasks
 
-## Task 10: Song Lengths UI Compaction (I)
-### Reproduction Steps
-- Reproduced verbose multi-line song-lengths block behavior.
+- Add iOS-tagged Maestro flows and subflows:
+  - `ios-smoke-launch`
+  - `ios-local-import`
+  - `ios-ftp-browse`
+  - `ios-secure-storage-persist`
+  - `ios-diagnostics-export`
+  - `ios-playback-basics`
+- Define tags:
+  - `ios`, `ci-critical-ios`, optional `slow`.
+- Extend workflow with `ios-maestro-critical` job:
+  - Run `maestro test .maestro --include-tags ios,ci-critical-ios --format junit --output test-results/maestro/ios-junit.xml`
+- Extend workflow with `ios-screenshots` job:
+  - Use Maestro `takeScreenshot` plus `xcrun simctl io <udid> screenshot ...` at deterministic checkpoints.
+- Publish artifacts only (no auto-commit):
+  - `test-results/maestro/**`
+  - `test-results/evidence/maestro/**`
+  - `test-results/artifacts/ios-screenshots/**`
 
-### Implementation Notes
-- Existing branch compacts song-lengths UI and exposes canonical path text through dedicated label.
-- E2E now verifies path label via `songlengths-path-label` title + filename content instead of brittle full-line matches.
+### Done when
 
-### Verification Steps
-- `playwright/playback.part2.spec.ts` song-lengths cases pass.
+- iOS Maestro critical suite runs on PR CI and fails the lane on regression.
+- iOS screenshot bundle is available as downloadable CI artifact.
 
----
+## Phase 5: Add AltStore packaging and disabled paid-signing lane
 
-## Task 11: Full Verification Sweep And Evidence Capture
-### Reproduction Steps
-- Ran full local quality gates and emulator flows.
+**Goal**: Produce usable install artifact now, and keep paid path ready for one-switch activation.
 
-### Implementation Notes
-- Fixed Playwright flakiness in:
-  - `playwright/testArtifacts.ts`
-  - `playwright/connectionSimulation.spec.ts`
-  - `playwright/demoMode.spec.ts`
-  - `playwright/debugDemo.spec.ts`
-- Fixed Maestro tab navigation ambiguity by switching from ambiguous text taps to bottom-tab coordinate taps in shared subflows and related smoke/edge flows.
+**Primary references**:
 
-### Verification Steps
-- `npm run lint` ✅
-- `npm run test` ✅ (`171` passed, `1205` passed)
-- `npm run build` ✅
-- `npm run test:e2e` ✅ (`331` passed)
-- `JAVA_HOME=/home/chris/.sdkman/candidates/java/17.0.18-amzn ./gradlew test` (in `android/`) ✅
-- `maestro test .maestro/smoke-launch.yaml` ✅
-- `maestro test .maestro/smoke-playback.yaml` ✅
-- `maestro test .maestro/smoke-hvsc.yaml` ✅
-- `maestro test .maestro/probe-health.yaml` ✅
+- `.github/workflows/ios-ci.yaml`
+- `README.md`
 
----
+### Tasks
 
-## Root Cause And Fix Log
-- A. UI highlight persistence came from inconsistent interaction state handling and focus artifacts; fixed at shared behavior/test level with broad regression coverage.
-- B. Idle/reconnect “host unreachable” issues were amplified by brittle retries and flaky test interactions; network logging kept structured and connection tests hardened with deterministic retry/click convergence.
-- C. RAM load mismatch was validated and covered by deterministic RAM action/operation tests aligned to expected sequence.
-- D. Joystick swap failures traced to request-shape/encoding risk; added strict request-shape regression test.
-- E. Path truncation lost meaningful filename in tight layouts; truncation now preserves full filename and avoids invalid ellipsis for bare names.
-- F. Persistent soft IEC alarm text was non-actionable by default; diagnostics rendering now suppresses noisy baseline states while retaining actionable signals.
-- G. HVSC flow instability required deterministic mock/archive validation; ingestion/download flows are covered by real fixture-based tests and emulator smoke.
-- H. Playback replay/transition races and selector ambiguity were hardened; transport controls now expose stable IDs for deterministic automation.
-- I. Song-lengths UI verbosity reduced with compact label semantics and robust path assertions.
-- Infra: Android unit tests failed under JDK 25 (JaCoCo unsupported class major 69); resolved by running with JDK 17.
+- Add `ios-package-altstore` job to create unsigned IPA:
+  - Archive with `CODE_SIGNING_ALLOWED=NO`.
+  - Build `Payload/App.app` and zip to `c64commander-altstore-unsigned.ipa`.
+  - Publish checksum file.
+- Add disabled `ios-package-paid` job:
+  - Gate with `if: vars.IOS_PAID_SIGNING_ENABLED == 'true'`.
+  - Document required secrets/vars in workflow comments and README.
+- Ensure tag-trigger path publishes IPA artifacts for release consumption.
 
-## Done Evidence
-### Commands And Outcomes
-- `npm run lint` -> pass
-- `npm run test` -> pass (`171` files / `1205` tests)
-- `npm run test:e2e` -> pass (`331` tests, 12.2m)
-- `npm run build` -> pass
-- `JAVA_HOME=/home/chris/.sdkman/candidates/java/17.0.18-amzn ./gradlew test` -> pass
-- `maestro test .maestro/smoke-launch.yaml` -> pass
-- `maestro test .maestro/smoke-playback.yaml` -> pass
-- `maestro test .maestro/smoke-hvsc.yaml` -> pass
-- `maestro test .maestro/probe-health.yaml` -> pass
+### Done when
 
-### Logs / Artifacts
-- Maestro launch report: `/home/chris/.maestro/tests/2026-02-11_120201/ai-report-smoke-launch.html`
-- Maestro playback report: `/home/chris/.maestro/tests/2026-02-11_120305/ai-report-smoke-playback.html`
-- Maestro HVSC report: `/home/chris/.maestro/tests/2026-02-11_120353/ai-report-smoke-hvsc.html`
-- Maestro probe report: `/home/chris/.maestro/tests/2026-02-11_120505/ai-report-probe-health.html`
-- Playwright report: `playwright-report/index.html`
-- Playwright evidence root: `test-results/evidence/playwright`
+- CI produces downloadable unsigned IPA + checksum.
+- Paid-signing lane is present but inert by default.
+
+## Phase 6: README installation and operator documentation
+
+**Goal**: Make iOS artifact readily usable by end users and testers.
+
+**Primary references**:
+
+- `README.md`
+- `doc/research/ios-porting-research.md`
+
+### Tasks
+
+- Add iOS installation chapter to `README.md`:
+  - Prerequisites: AltStore on iPhone and Apple ID constraints.
+  - Download IPA artifact from GitHub Actions/Release.
+  - Install via AltStore.
+  - Re-sign/refresh expectations (7-day cadence for free Apple ID).
+- Add iOS troubleshooting subsection:
+  - Expired app signature.
+  - App ID/free-account limit issues.
+  - Runtime compatibility note (validated on iOS 17/18 CI matrix policy).
+- Keep Android install section unchanged as primary path.
+
+### Done when
+
+- A new tester without local macOS can install the CI-produced IPA using README steps only.
+- README clearly states current support scope and known AltStore constraints.
+
+## Phase 7: Rollout policy and quality gates
+
+**Goal**: Introduce iOS CI without destabilizing existing Android delivery.
+
+**Primary references**:
+
+- `.github/workflows/android-apk.yaml`
+- `.github/workflows/ios-ci.yaml`
+- `README.md`
+
+### Tasks
+
+- Stage gate policy:
+  - Stage A: iOS jobs informative (non-blocking) until first stable week.
+  - Stage B: `ios-build-simulator` + `ios-maestro-critical` required for PR merge.
+  - Stage C: `ios-package-altstore` required on tags.
+- Keep Android workflow and release criteria unchanged throughout rollout.
+- Add failure triage checklist in workflow comments:
+  - runtime missing, simulator unavailable, Maestro selector drift, packaging errors.
+
+### Done when
+
+- iOS lanes are stable for one week of PR traffic.
+- Required checks policy is enabled for chosen iOS jobs.
+
+## Definition of done (program-level)
+
+The plan is complete when all conditions are true:
+
+- `ios/` platform is committed and synchronized by CI.
+- `.github/workflows/ios-ci.yaml` runs simulator build, iOS Maestro critical flows, iOS screenshots, and AltStore IPA packaging.
+- CI artifacts include:
+  - simulator `.app`
+  - iOS Maestro results/evidence
+  - iOS screenshot pack
+  - `c64commander-altstore-unsigned.ipa` + checksum
+- `README.md` includes iOS installation and troubleshooting instructions for AltStore.
+- Paid signing path exists but remains disabled by default.
+- Android remains primary and unaffected.
+
+## Tracking checklist
+
+- [ ] Phase 1 complete
+- [ ] Phase 2 complete
+- [ ] Phase 3 complete
+- [ ] Phase 4 complete
+- [ ] Phase 5 complete
+- [ ] Phase 6 complete
+- [ ] Phase 7 complete

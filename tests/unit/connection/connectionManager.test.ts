@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as logging from '../../../src/lib/logging';
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from '../../../src/lib/fuzz/fuzzMode';
 import { loadAutomaticDemoModeEnabled, loadDiscoveryProbeTimeoutMs, loadStartupDiscoveryWindowMs } from '../../../src/lib/config/appSettings';
 import { isSmokeModeEnabled, recordSmokeStatus } from '../../../src/lib/smoke/smokeMode';
@@ -221,6 +222,31 @@ describe('connectionManager', () => {
       state: 'REAL_CONNECTED',
       mode: 'real',
     }));
+  });
+
+  it('logs when discovery probe JSON parsing fails', async () => {
+    const addLogSpy = vi.spyOn(logging, 'addLog');
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    vi.mocked(fetch).mockResolvedValue(
+      new Response('not-json', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const ok = await probeOnce();
+
+    expect(ok).toBe(false);
+    expect(addLogSpy).toHaveBeenCalledWith(
+      'warn',
+      'Discovery probe JSON parse failed',
+      expect.objectContaining({
+        error: expect.any(String),
+      }),
+    );
+    addLogSpy.mockRestore();
   });
 
   it('does not fall back to demo mode after real connection is sticky', async () => {

@@ -26,6 +26,13 @@ import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from '
 import { deleteLibraryFile, resetLibraryRoot, resetSonglengthsCache, writeLibraryFile, readCachedArchiveMarker } from '@/lib/hvsc/hvscFilesystem';
 import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
 import { addLog } from '@/lib/logging';
+import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from '@/lib/hvsc/hvscSongLengthService';
+
+const browseIndexMutable = vi.hoisted(() => ({
+  upsertSong: vi.fn(),
+  deleteSong: vi.fn(),
+  finalize: vi.fn(async () => undefined),
+}));
 
 if (!(vi as typeof vi & { mocked?: <T>(value: T) => T }).mocked) {
   (vi as typeof vi & { mocked: <T>(value: T) => T }).mocked = (value) => value;
@@ -78,6 +85,11 @@ vi.mock('@/lib/hvsc/hvscArchiveExtraction', () => ({
   extractArchiveEntries: vi.fn(),
 }));
 
+vi.mock('@/lib/hvsc/hvscSongLengthService', () => ({
+  reloadHvscSonglengthsOnConfigChange: vi.fn(async () => undefined),
+  getHvscSonglengthsStats: vi.fn(() => ({ backendStats: { rejectedLines: 0 } })),
+}));
+
 vi.mock('@/lib/hvsc/hvscReleaseService', () => ({
   buildHvscBaselineUrl: vi.fn(),
   buildHvscUpdateUrl: vi.fn(),
@@ -86,6 +98,28 @@ vi.mock('@/lib/hvsc/hvscReleaseService', () => ({
 
 vi.mock('@/lib/sid/sidUtils', () => ({
   base64ToUint8: vi.fn(() => new Uint8Array()),
+  parseSidHeaderMetadata: vi.fn(() => ({
+    magicId: 'PSID',
+    version: 2,
+    songs: 1,
+    startSong: 1,
+    clock: 'unknown',
+    sid1Model: 'unknown',
+    sid2Model: null,
+    sid3Model: null,
+    sid2Adress: null,
+    sid2Address: null,
+    name: 'demo',
+    author: 'unknown',
+    released: '',
+    rsidValid: null,
+    parserWarnings: [],
+  })),
+  buildSidTrackSubsongs: vi.fn(() => [{ songNr: 1, isDefault: true }]),
+}));
+
+vi.mock('@/lib/hvsc/hvscBrowseIndexStore', () => ({
+  createHvscBrowseIndexMutable: vi.fn(async () => browseIndexMutable),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -257,6 +291,88 @@ describe('hvscIngestionRuntime', () => {
       'INGESTING',
       'READY',
     ]);
+    const summaryPatch = vi.mocked(updateHvscState).mock.calls.find((call) => (call[0] as any)?.ingestionSummary)?.[0] as any;
+    expect(summaryPatch?.ingestionSummary?.ingestedSongs).toBe(1);
+    expect(summaryPatch?.ingestionSummary?.failedSongs).toBe(0);
+    expect(browseIndexMutable.upsertSong).toHaveBeenCalled();
+    expect(browseIndexMutable.finalize).toHaveBeenCalled();
+  });
+
+  it('fails ingestion when a SID cannot be written', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/ok.sid', new Uint8Array([1, 2, 3]));
+      await onEntry?.('HVSC/C64Music/Demo/fail.sid', new Uint8Array([4, 5, 6]));
+    });
+    vi.mocked(writeLibraryFile).mockImplementation(async (path: string) => {
+      if (path.toLowerCase().endsWith('/demo/fail.sid')) {
+        throw new Error('disk full');
+      }
+    });
+
+    await expect(installOrUpdateHvsc('token-fail-write')).rejects.toThrow(/could not be ingested/i);
+    const patchWithSummary = vi.mocked(updateHvscState).mock.calls
+      .map((call) => call[0] as any)
+      .find((patch) => patch?.ingestionSummary?.failedSongs === 1);
+    expect(patchWithSummary?.ingestionState).toBe('error');
+    expect(patchWithSummary?.ingestionSummary?.ingestedSongs).toBe(1);
+    expect(patchWithSummary?.ingestionSummary?.totalSongs).toBe(2);
+  });
+
+  it('keeps ingestion ready when only songlength syntax errors occur', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/ok.sid', new Uint8Array([1, 2, 3]));
+    });
+    vi.mocked(getHvscSonglengthsStats).mockReturnValue({ backendStats: { rejectedLines: 3 } } as any);
+
+    await installOrUpdateHvsc('token-syntax');
+
+    const summaryPatch = vi.mocked(updateHvscState).mock.calls
+      .map((call) => call[0] as any)
+      .find((patch) => patch?.ingestionSummary?.songlengthSyntaxErrors === 3);
+    expect(summaryPatch?.ingestionState).toBe('ready');
+    expect(summaryPatch?.ingestionSummary?.failedSongs).toBe(0);
+  });
+
+  it('fails ingestion when songlength reload fails', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/ok.sid', new Uint8Array([1, 2, 3]));
+    });
+    vi.mocked(reloadHvscSonglengthsOnConfigChange).mockRejectedValueOnce(new Error('reload failed'));
+
+    await expect(installOrUpdateHvsc('token-reload-fail')).rejects.toThrow('reload failed');
   });
 
   it('downloads archives via fetch when cache is missing', async () => {

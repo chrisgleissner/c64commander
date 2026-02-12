@@ -8,6 +8,7 @@
 
 import { getHvscFolderListing } from '@/lib/hvsc';
 import { normalizeSourcePath } from './paths';
+import { SOURCE_LABELS } from './sourceTerms';
 import type { SourceEntry, SourceLocation } from './types';
 
 const normalizeHvscPath = (path: string) => normalizeSourcePath(path || '/');
@@ -55,7 +56,7 @@ export const createHvscSourceLocation = (rootPath: string): SourceLocation => {
   return {
     id: 'hvsc-library',
     type: 'hvsc',
-    name: 'HVSC Library',
+    name: SOURCE_LABELS.hvsc,
     rootPath: normalizedRoot,
     isAvailable: true,
     listEntries,

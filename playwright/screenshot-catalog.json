@@ -37,7 +37,8 @@
   "play": [
     "playback-controls",
     "playlist",
-    "hvsc-library"
+    "hvsc-library",
+    "hvsc"
   ],
   "settings": [
     "appearance",
@@ -47,7 +48,8 @@
     "config",
     "hvsc-library",
     "device-safety",
-    "about"
+    "about",
+    "hvsc"
   ],
   "docs": [
     "getting-started",

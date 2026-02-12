@@ -54,14 +54,32 @@ import {
     parseDeletionList,
     concatChunks,
     parseContentLength,
+    fetchContentLength,
     emitDownloadProgress,
     ensureNotCancelledWith,
     downloadArchive,
 } from '@/lib/hvsc/hvscDownload';
 
+import { addLog } from '@/lib/logging';
+
 describe('hvscDownload', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    it('logs when content length fetch fails', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
+
+        const length = await fetchContentLength('http://example.com/archive.7z');
+
+        expect(length).toBeNull();
+        expect(vi.mocked(addLog)).toHaveBeenCalledWith(
+            'warn',
+            'Failed to read HVSC content length',
+            expect.objectContaining({
+                url: 'http://example.com/archive.7z',
+            }),
+        );
     });
 
     // ── getErrorMessage ──

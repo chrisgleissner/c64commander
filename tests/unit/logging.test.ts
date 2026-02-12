@@ -17,6 +17,7 @@ import {
   getLogs,
 } from '@/lib/logging';
 import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
+import { installConsoleDiagnosticsBridge, logger } from '@/lib/diagnostics/logger';
 
 vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
@@ -126,7 +127,7 @@ describe('logging', () => {
 
     const details = buildErrorLogDetails(error, { context: 'rest' });
 
-    expect(details.error).toBe('boom');
+    expect(details.error).toEqual(expect.objectContaining({ name: 'Error', message: 'boom' }));
     expect(details.errorName).toBe('Error');
     expect(details.errorStack).toContain('line-1');
     expect(details.errorStack).toContain('stack truncated');
@@ -161,7 +162,103 @@ describe('logging', () => {
   it('preserves existing error message in details', () => {
     const error = new Error('original');
     const details = buildErrorLogDetails(error, { error: 'override' });
-    expect(details.error).toBe('override');
+    expect(details.error).toEqual(expect.objectContaining({ message: 'override' }));
+  });
+
+  it('treats warnings as problem logs in Errors tab selector', () => {
+    addLog('warn', 'slow response');
+    addErrorLog('boom');
+    expect(getErrorLogs().map((entry) => entry.level)).toEqual(['error', 'warn']);
+  });
+
+  it('writes canonical error payloads through diagnostics logger wrapper', () => {
+    logger.error('wrapper failure', {
+      details: { error: new Error('wrapped failure') },
+      includeConsole: false,
+    });
+
+    const logs = getLogs();
+    expect(logs).toHaveLength(1);
+    const details = logs[0].details as { error?: { name?: string; message?: string } };
+    expect(details.error?.name).toBe('Error');
+    expect(details.error?.message).toBe('wrapped failure');
+  });
+
+  it('bridges console warn/error into diagnostics logs', () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    const warnSpy = vi.spyOn(console, 'warn');
+    const errorSpy = vi.spyOn(console, 'error');
+
+    console.warn('bridge warn', { code: 1 });
+    console.error('bridge error', { code: 2 });
+
+    uninstallBridge();
+
+    expect(warnSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    const messages = getLogs().map((entry) => entry.message);
+    expect(messages).toContain('bridge warn');
+    expect(messages).toContain('bridge error');
+  });
+
+  it('handles disabled and duplicate console bridge installation', () => {
+    const disabledUninstall = installConsoleDiagnosticsBridge({ enabled: false });
+    console.warn('disabled bridge');
+    expect(getLogs()).toHaveLength(0);
+    disabledUninstall();
+
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    const duplicateUninstall = installConsoleDiagnosticsBridge();
+    console.warn('active bridge');
+    duplicateUninstall();
+    uninstallBridge();
+
+    const messages = getLogs().map((entry) => entry.message);
+    expect(messages).toContain('active bridge');
+    expect(messages).not.toContain('disabled bridge');
+  });
+
+  it('normalizes non-string and error console messages', () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    console.warn({ kind: 'object-message' });
+    console.error(new Error('error-message'));
+    uninstallBridge();
+
+    const logs = getLogs();
+    expect(logs.map((entry) => entry.message)).toEqual(
+      expect.arrayContaining(['[object Object]', 'error-message']),
+    );
+  });
+
+  it('captures empty console.warn invocations as empty message entries', () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    // exercise normalizeConsoleMessage no-args branch
+    console.warn();
+    uninstallBridge();
+
+    const log = getLogs().find((entry) => entry.level === 'warn' && entry.message === '');
+    expect(log).toBeDefined();
+  });
+
+  it('preserves non-Error error payload values in logger details', () => {
+    logger.error('plain object failure', {
+      details: { error: { code: 'E_OBJ' } },
+      includeConsole: false,
+    });
+
+    const details = getLogs()[0].details as { error?: { code?: string } };
+    expect(details.error?.code).toBe('E_OBJ');
+  });
+
+  it('forwards logger info/debug to console by default', () => {
+    const infoSpy = vi.spyOn(console, 'info');
+    const debugSpy = vi.spyOn(console, 'debug');
+
+    logger.info('info-level');
+    logger.debug('debug-level');
+
+    expect(infoSpy).toHaveBeenCalled();
+    expect(debugSpy).toHaveBeenCalled();
   });
 
   it('redacts logs when requested', () => {

@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SelectableActionList, type ActionListItem, type ActionListMenuItem } from '@/components/lists/SelectableActionList';
 import { AddItemsProgressOverlay, type AddItemsProgressState } from '@/components/itemSelection/AddItemsProgressOverlay';
 import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelection/ItemSelectionDialog';
+import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
 import { useC64ConfigItems, useC64Connection, useC64Drives } from '@/hooks/useC64Connection';
@@ -221,13 +222,13 @@ export const HomeDiskManager = () => {
     const ultimateSource = createUltimateSourceLocation();
     const localGroupSources = localSources.map((source) => createLocalSourceLocation(source));
     return [
-      { label: 'C64 Ultimate', sources: [ultimateSource] },
-      { label: 'This device', sources: localGroupSources },
+      { label: SOURCE_LABELS.local, sources: localGroupSources },
+      { label: SOURCE_LABELS.c64u, sources: [ultimateSource] },
     ];
   }, [localSources]);
   const softIecDirectorySourceGroups: SourceGroup[] = useMemo(() => {
     const ultimateSource = createUltimateSourceLocation();
-    return [{ label: 'C64 Ultimate', sources: [ultimateSource] }];
+    return [{ label: SOURCE_LABELS.c64u, sources: [ultimateSource] }];
   }, []);
 
   useEffect(() => {
@@ -652,7 +653,7 @@ export const HomeDiskManager = () => {
       reportUserError({
         operation: 'SOFT_IEC_CONFIG_UPDATE',
         title: 'Unsupported source',
-        description: 'Default Path must be selected from C64 Ultimate storage.',
+        description: 'Default Path must be selected from C64U storage.',
       });
       return false;
     }
@@ -792,7 +793,12 @@ export const HomeDiskManager = () => {
         if (!listingCache.has(parent)) {
           try {
             listingCache.set(parent, await source.listEntries(parent));
-          } catch {
+          } catch (error) {
+            console.warn('Failed to list source entries for selection', {
+              path: parent,
+              sourceId: source.id,
+              error,
+            });
             listingCache.set(parent, []);
           }
         }

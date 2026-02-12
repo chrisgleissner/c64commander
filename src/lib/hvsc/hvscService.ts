@@ -9,6 +9,7 @@
 import type {
   HvscCacheStatus,
   HvscFolderListing,
+  HvscFolderListingPage,
   HvscProgressEvent,
   HvscSong,
   HvscStatus,
@@ -21,6 +22,7 @@ import { loadHvscRoot } from './hvscRootLocator';
 import { ensureHvscSonglengthsReadyOnColdStart } from './hvscSongLengthService';
 import type { SongLengthResolveQuery, SongLengthResolution } from '@/lib/songlengths';
 import { addErrorLog } from '@/lib/logging';
+import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from './hvscBrowseIndexStore';
 import {
   addHvscProgressListener as addRuntimeListener,
   cancelHvscInstall as cancelRuntimeInstall,
@@ -63,6 +65,37 @@ const hasRuntimeBridge = () => {
 
 const hvscIndex = createHvscMediaIndex();
 void ensureHvscSonglengthsReadyOnColdStart();
+
+const LEGACY_MEDIA_INDEX_STORAGE_KEY = 'c64u_media_index:v1';
+
+const migrateLegacyMediaIndex = async () => {
+  if (typeof localStorage === 'undefined') return false;
+  const raw = localStorage.getItem(LEGACY_MEDIA_INDEX_STORAGE_KEY);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { entries?: Array<{ path: string; name: string; type: string; durationSeconds?: number | null }> };
+    if (!Array.isArray(parsed.entries) || parsed.entries.length === 0) return false;
+    hvscIndex.setEntries(parsed.entries
+      .filter((entry) => entry.type === 'sid')
+      .map((entry) => ({
+        path: entry.path,
+        name: entry.name,
+        type: 'sid' as const,
+        durationSeconds: entry.durationSeconds ?? null,
+      })));
+    await hvscIndex.save();
+    return true;
+  } catch (error) {
+    addErrorLog('Failed to migrate legacy HVSC media index', {
+      error: {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+      },
+    });
+    return false;
+  }
+};
 
 export const isHvscBridgeAvailable = () => hasMockBridge() || hasRuntimeBridge();
 
@@ -108,60 +141,97 @@ export const addHvscProgressListener = async (listener: HvscProgressListener) =>
   return addRuntimeListener(listener);
 };
 
-const buildFolderListingFromIndex = (path: string, entries: Array<{ path: string; name: string; durationSeconds?: number | null }>): HvscFolderListing => {
-  const normalized = normalizeSourcePath(path || '/');
-  const prefix = normalized.endsWith('/') ? normalized : `${normalized}/`;
-  const folders = new Set<string>();
-  const songs: HvscFolderListing['songs'] = [];
+const ensureHvscIndexReady = async () => {
+  await hvscIndex.load();
+  if (!hvscIndex.getAll().length) {
+    const migrated = await migrateLegacyMediaIndex();
+    if (!migrated) {
+      const root = loadHvscRoot();
+      await hvscIndex.scan([root.path]);
+    }
+  }
 
-  entries.forEach((entry) => {
-    const dir = entry.path.substring(0, entry.path.lastIndexOf('/')) || '/';
-    folders.add(dir);
-    if (!entry.path.startsWith(prefix)) return;
-    const remainder = entry.path.slice(prefix.length);
-    if (!remainder || remainder.includes('/')) return;
-    songs.push({
-      id: Math.abs(
-        Array.from(entry.path).reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) | 0, 0),
-      ),
-      virtualPath: entry.path,
-      fileName: entry.name,
-      durationSeconds: entry.durationSeconds ?? null,
-    });
-  });
+  const browseSnapshot = await loadHvscBrowseIndexSnapshot();
+  if (!browseSnapshot) {
+    const root = loadHvscRoot();
+    await hvscIndex.scan([root.path]);
+    return;
+  }
 
+  const integrity = await verifyHvscBrowseIndexIntegrity(browseSnapshot);
+  if (!integrity.isValid) {
+    const root = loadHvscRoot();
+    await hvscIndex.scan([root.path]);
+    return;
+  }
+
+  const root = loadHvscRoot();
+  if (!hvscIndex.getAll().length) {
+    await hvscIndex.scan([root.path]);
+  }
+};
+
+const pageRuntimeListing = (
+  listing: HvscFolderListing,
+  query: string,
+  offset: number,
+  limit: number,
+): HvscFolderListingPage => {
+  const normalizedQuery = query.trim().toLowerCase();
+  const folders = listing.folders
+    .filter((folder) => normalizedQuery.length === 0 || folder.toLowerCase().includes(normalizedQuery))
+    .sort((a, b) => a.localeCompare(b));
+  const songs = listing.songs
+    .filter((song) => normalizedQuery.length === 0 || song.fileName.toLowerCase().includes(normalizedQuery) || song.virtualPath.toLowerCase().includes(normalizedQuery))
+    .sort((a, b) => a.fileName.localeCompare(b.fileName));
   return {
-    path: normalized,
-    folders: Array.from(folders).sort((a, b) => a.localeCompare(b)),
-    songs: songs.sort((a, b) => a.fileName.localeCompare(b.fileName)),
+    path: listing.path,
+    folders,
+    songs: songs.slice(offset, offset + limit),
+    totalFolders: folders.length,
+    totalSongs: songs.length,
+    offset,
+    limit,
+    query: normalizedQuery,
   };
 };
 
-const ensureHvscIndexReady = async () => {
-  await hvscIndex.load();
-  if (hvscIndex.getAll().length) return;
-  const root = loadHvscRoot();
-  await hvscIndex.scan([root.path]);
-};
+export const getHvscFolderListingPaged = async (options: {
+  path: string;
+  query?: string;
+  offset?: number;
+  limit?: number;
+}): Promise<HvscFolderListingPage> => {
+  const path = normalizeSourcePath(options.path || '/');
+  const query = options.query ?? '';
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const limit = Math.max(1, Math.floor(options.limit ?? 200));
 
-export const getHvscFolderListing = async (path: string): Promise<HvscFolderListing> => {
   try {
     await ensureHvscIndexReady();
-    const entries = hvscIndex.getAll().map((entry) => ({
-      path: entry.path,
-      name: entry.name,
-      durationSeconds: entry.durationSeconds ?? null,
-    }));
-    if (!entries.length && isHvscBridgeAvailable()) {
-      const mock = getMockBridge();
-      if (mock?.getHvscFolderListing) return mock.getHvscFolderListing({ path });
-      return getRuntimeFolderListing(path);
+    const page = hvscIndex.queryFolderPage({
+      path,
+      query,
+      offset,
+      limit,
+    });
+    if ((page.totalFolders > 0 || page.totalSongs > 0) || !isHvscBridgeAvailable()) {
+      return page;
     }
-    return buildFolderListingFromIndex(path, entries);
+    const mock = getMockBridge();
+    if (mock?.getHvscFolderListing) {
+      const runtimeListing = await mock.getHvscFolderListing({ path });
+      return pageRuntimeListing(runtimeListing, query, offset, limit);
+    }
+    const runtimeListing = await getRuntimeFolderListing(path);
+    return pageRuntimeListing(runtimeListing, query, offset, limit);
   } catch (error) {
     const err = error as Error;
-    addErrorLog('HVSC folder listing fallback to runtime failed over index', {
+    addErrorLog('HVSC paged folder listing failed; falling back to runtime', {
       path,
+      query,
+      offset,
+      limit,
       error: {
         name: err.name,
         message: err.message,
@@ -169,9 +239,26 @@ export const getHvscFolderListing = async (path: string): Promise<HvscFolderList
       },
     });
     const mock = getMockBridge();
-    if (mock?.getHvscFolderListing) return mock.getHvscFolderListing({ path });
-    return getRuntimeFolderListing(path);
+    if (mock?.getHvscFolderListing) {
+      const runtimeListing = await mock.getHvscFolderListing({ path });
+      return pageRuntimeListing(runtimeListing, query, offset, limit);
+    }
+    const runtimeListing = await getRuntimeFolderListing(path);
+    return pageRuntimeListing(runtimeListing, query, offset, limit);
   }
+};
+
+export const getHvscFolderListing = async (path: string): Promise<HvscFolderListing> => {
+  const page = await getHvscFolderListingPaged({
+    path,
+    offset: 0,
+    limit: Number.MAX_SAFE_INTEGER,
+  });
+  return {
+    path: page.path,
+    folders: page.folders,
+    songs: page.songs,
+  };
 };
 
 export const getHvscSong = async (options: { id?: number; virtualPath?: string }): Promise<HvscSong> => {
@@ -209,5 +296,5 @@ export const resolveHvscSonglength = async (query: SongLengthResolveQuery): Prom
 };
 
 export const __test__ = {
-  buildFolderListingFromIndex,
+  pageRuntimeListing,
 };

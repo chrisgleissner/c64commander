@@ -19,4 +19,16 @@ export class BackgroundExecutionWeb implements BackgroundExecutionPlugin {
     async stop(): Promise<void> {
         /* no-op on web */
     }
+
+    async setDueAtMs(): Promise<void> {
+        /* no-op on web */
+    }
+
+    async addListener(): Promise<{ remove: () => Promise<void> }> {
+        return {
+            remove: async () => {
+                /* no-op on web */
+            },
+        };
+    }
 }

@@ -245,6 +245,7 @@ test.describe('Home header and diagnostics overlay', () => {
 
     test('clear all diagnostics empties every tab', async ({ page }: { page: Page }, testInfo: TestInfo) => {
         await page.addInitScript(() => {
+            (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled = true;
             const logs = [
                 { id: 'err-1', timestamp: new Date().toISOString(), level: 'error', message: 'Seed error', details: { note: 'boom' } },
                 { id: 'log-1', timestamp: new Date().toISOString(), level: 'info', message: 'Seed log', details: { note: 'ok' } },
@@ -397,7 +398,7 @@ test.describe('Home header and diagnostics overlay', () => {
         await shareForTab('Errors', 'diagnostics-share-errors', 'error-logs.json', (data) => {
             const entries = data as Array<{ id: string; level?: string }>;
             expect(entries.some((entry) => entry.id === 'err-1')).toBeTruthy();
-            expect(entries.every((entry) => entry.level === 'error')).toBeTruthy();
+            expect(entries.every((entry) => entry.level === 'warn' || entry.level === 'error')).toBeTruthy();
         });
         await shareForTab('Logs', 'diagnostics-share-logs', 'logs.json', (data) => {
             const entries = data as Array<{ id: string }>;

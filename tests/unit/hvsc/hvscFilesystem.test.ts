@@ -20,6 +20,7 @@ import {
   writeCachedArchive,
   writeLibraryFile,
 } from '@/lib/hvsc/hvscFilesystem';
+import * as logging from '@/lib/logging';
 
 type Entry = { type: 'file' | 'directory'; data?: string };
 
@@ -193,8 +194,17 @@ describe('hvscFilesystem', () => {
   });
 
   it('returns null when song is missing', async () => {
+    const warnSpy = vi.spyOn(logging, 'addLog');
     const song = await getHvscSongByVirtualPath('/missing.sid');
     expect(song).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'warn',
+      'HVSC filesystem: Failed to read HVSC song by path',
+      expect.objectContaining({
+        virtualPath: '/missing.sid',
+      }),
+    );
+    warnSpy.mockRestore();
   });
 
   it('short-circuits writes when file already exists', async () => {

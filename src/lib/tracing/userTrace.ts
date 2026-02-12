@@ -14,11 +14,11 @@ function getMeaningfulName(props: any, defaultName: string): string {
   if (props.title) return props.title;
   if (props.name) return props.name;
   if (props.id) return props.id;
-  
+
   if (typeof props.children === 'string') {
     return props.children.slice(0, 30);
   }
-  
+
   // Try to find text in children array (e.g. Button wrapping span)
   if (Array.isArray(props.children)) {
     const textChild = props.children.find((c: any) => typeof c === 'string');
@@ -51,9 +51,9 @@ export const wrapUserEvent = <E extends React.SyntheticEvent<any> | Event, R>(
     }
     const label = getMeaningfulName(props, defaultLabel);
     const actionName = `${actionType} ${label}`;
-    
+
     const context = createActionContext(actionName, 'user', componentName);
-    
+
     await runWithActionTrace(context, async () => {
       if (handler) {
         await handler(e);
@@ -78,13 +78,14 @@ export const wrapValueChange = <T, R>(
         } else {
             valueStr = String(value);
         }
-    } catch {
+    } catch (error) {
+      console.warn('Failed to stringify traced value', { error });
         valueStr = '[complex]';
     }
     const actionName = `${actionType} ${label} [${valueStr}]`;
-    
+
     const context = createActionContext(actionName, 'user', componentName);
-    
+
     await runWithActionTrace(context, async () => {
       if (handler) {
         await handler(value);

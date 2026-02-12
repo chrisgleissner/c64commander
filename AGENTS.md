@@ -92,6 +92,10 @@ Violine this rule is a release blocker.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
 - Exceptions must never be ignored; log them or let them bubble up.
 
+## MANDATORY: Concurrent changes
+
+- If unexpected changes appear in the worktree, keep them as-is and continue. They are created by a concurrently running LLM.
+
 ## Output wording rules
 
 - Keep wording short.

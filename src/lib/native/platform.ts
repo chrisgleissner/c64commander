@@ -14,6 +14,9 @@ const allowPlatformOverride = () => {
   const env = (import.meta as ImportMeta).env as { VITE_ENABLE_TEST_PROBES?: string } | undefined;
   if (env?.VITE_ENABLE_TEST_PROBES === '1') return true;
   if (typeof process !== 'undefined' && process.env?.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof window !== 'undefined') {
+    return (window as Window & { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled === true;
+  }
   return false;
 };
 
@@ -44,7 +47,8 @@ export const isNativePlatform = () => {
     if (typeof capacitor?.isNativePlatform === 'function') {
       return capacitor.isNativePlatform();
     }
-  } catch {
+  } catch (error) {
+    console.warn('Failed to detect native platform', { error });
     return false;
   }
   return false;

@@ -15,10 +15,37 @@ import SevenZip from '7z-wasm';
 // Mock dependencies
 vi.mock('fflate', () => ({
   unzipSync: vi.fn(),
+  UnzipInflate: class UnzipInflate {},
+  Unzip: class MockUnzip {
+    private readonly onFile: (entry: { name: string; ondata?: (error: Error | null, chunk: Uint8Array, final: boolean) => void; start: () => void }) => void;
+
+    constructor(onFile: (entry: { name: string; ondata?: (error: Error | null, chunk: Uint8Array, final: boolean) => void; start: () => void }) => void) {
+      this.onFile = onFile;
+    }
+
+    register() {}
+
+    push(chunk: Uint8Array, final: boolean) {
+      if (!final) return;
+      const files = vi.mocked(unzipSync).mock.results.at(-1)?.value ?? vi.mocked(unzipSync)(chunk as any);
+      Object.entries(files || {}).forEach(([name, data]) => {
+        if (!(data instanceof Uint8Array)) return;
+        const entry = {
+          name,
+          ondata: undefined as ((error: Error | null, chunk: Uint8Array, final: boolean) => void) | undefined,
+          start: () => {
+            entry.ondata?.(null, data, true);
+          },
+        };
+        this.onFile(entry);
+      });
+    }
+  },
 }));
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 // Setup sophisticated mock for 7z-wasm
@@ -48,12 +75,12 @@ vi.mock('7z-wasm', () => ({
 describe('hvscArchiveExtraction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    
+
     // Default behaviors for simple successful 7z run
     mockFS.readdir.mockReturnValue(['.','..']); // Default empty dir
     mockFS.stat.mockReturnValue({ mode: 33188 }); // Regular file
     mockFS.isDir.mockReturnValue(false);
-    
+
     // Mock successful 7z Main call
     mockModule.callMain.mockReturnValue(0);
   });
@@ -82,13 +109,13 @@ describe('hvscArchiveExtraction', () => {
       });
 
       expect(unzipSync).toHaveBeenCalledWith(new Uint8Array([0xFF]));
-      
+
       // Check callbacks
       expect(onEnumerate).toHaveBeenCalledWith(2); // 2 valid files
       expect(onEntry).toHaveBeenCalledTimes(2);
       expect(onEntry).toHaveBeenCalledWith('folder/file1.txt', new Uint8Array([1, 2, 3]));
       expect(onEntry).toHaveBeenCalledWith('file2.bin', new Uint8Array([4, 5]));
-      
+
       expect(onProgress).toHaveBeenCalledTimes(2);
     });
 
@@ -117,10 +144,10 @@ describe('hvscArchiveExtraction', () => {
         // Setup file structure mock for 7z
         // readdir is called for cleanup (twice) and for walking (recursively)
         // We need to valid mock responses.
-        
+
         // Scenario: Root output dir contains 'folder' (dir) and 'file1.txt' (file)
         // 'folder' contains 'file2.txt'
-        
+
         mockFS.readdir.mockImplementation((path) => {
             if (path.endsWith('/out')) return ['.', '..', 'folder', 'file1.txt'];
             if (path.endsWith('/folder')) return ['.', '..', 'file2.txt'];
@@ -149,25 +176,25 @@ describe('hvscArchiveExtraction', () => {
 
         // 1. Check initialization
         expect(SevenZip).toHaveBeenCalled();
-        
+
         // 2. Check Input Write
         expect(mockFS.mkdir).toHaveBeenCalled(); // work dir and out dir
         expect(mockFS.open).toHaveBeenCalledWith(expect.stringMatching(/test.7z$/), 'w+');
         expect(mockFS.write).toHaveBeenCalled();
-        
+
         // 3. Check Extraction Command
         expect(mockModule.callMain).toHaveBeenCalledWith([
-            'x', 
-            expect.stringMatching(/test.7z$/), 
-            expect.stringMatching(/-o.*\/out/), 
+            'x',
+            expect.stringMatching(/test.7z$/),
+            expect.stringMatching(/-o.*\/out/),
             '-y'
         ]);
 
         // 4. Check Traversal and entry processing
         // Should find file1.txt and file2.txt
         expect(onEnumerate).toHaveBeenCalledWith(2);
-        
-        // The mock logic normalizes paths. 
+
+        // The mock logic normalizes paths.
         // walkDir('out', '') -> 'file1.txt'
         // walkDir('folder', 'folder/') -> 'folder/file2.txt'
         expect(onEntry).toHaveBeenCalledWith('file1.txt', expect.any(Uint8Array));
@@ -182,11 +209,11 @@ describe('hvscArchiveExtraction', () => {
     it('falls back to zip if 7z fails', async () => {
         // Mock 7z failure
         mockModule.callMain.mockImplementation(() => { throw new Error('7z broken'); });
-        
+
         // Mock Zip success
         // @ts-expect-error - mock return shape
         vi.mocked(unzipSync).mockReturnValue({'fallback.txt': new Uint8Array([1])});
-        
+
         const onEntry = vi.fn();
         await extractArchiveEntries({
             archiveName: 'test.7z',
@@ -203,7 +230,7 @@ describe('hvscArchiveExtraction', () => {
         // Mock 7z failure
         const originalError = new Error('7z broken');
         mockModule.callMain.mockImplementation(() => { throw originalError; });
-        
+
         // Mock Zip failure
         vi.mocked(unzipSync).mockImplementation(() => { throw new Error('Zip also broken'); });
 
@@ -211,22 +238,22 @@ describe('hvscArchiveExtraction', () => {
             archiveName: 'test.7z',
             buffer: new Uint8Array([]),
             onEntry: vi.fn(),
-        })).rejects.toThrow('7z broken'); // Should rethrow original error
+        })).rejects.toThrow('Failed to extract test.7z: 7z broken');
     });
 
     it('handles cleanup errors gracefully', async () => {
         mockModule.callMain.mockReturnValue(0);
-        
+
         // Make multiple cleanup steps fail
         mockFS.rmdir.mockImplementation(() => { throw new Error('FS Locked'); });
         mockFS.unlink.mockImplementation(() => { throw new Error('File Locked'); });
-        
+
         await extractArchiveEntries({
             archiveName: 'test.7z',
             buffer: new Uint8Array([]),
             onEntry: vi.fn(),
         });
-        
+
         // Should have logged multiple errors
         expect(addErrorLog).toHaveBeenCalledWith('SevenZip cleanup failed', expect.objectContaining({ step: 'rmdir-output' }));
         expect(addErrorLog).toHaveBeenCalledWith('SevenZip cleanup failed', expect.objectContaining({ step: 'unlink-archive' }));
