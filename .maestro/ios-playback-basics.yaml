@@ -7,11 +7,11 @@ tags:
 ---
 - runFlow: subflows/ios-open-play-tab.yaml
 - assertVisible:
-  text: "Playlist"
+    text: "Playlist"
 - assertVisible:
-  id: "playlist-next"
-  optional: true
+    id: "playlist-next"
+    optional: true
 - assertVisible:
-  id: "add-items-to-playlist"
-  optional: true
+    id: "add-items-to-playlist"
+    optional: true
 - takeScreenshot: ios-playback-basics-controls
