@@ -12,6 +12,7 @@ import { useRef, useState } from 'react';
 import { usePlaybackPersistence } from '@/pages/playFiles/hooks/usePlaybackPersistence';
 import type { PlayableEntry, PlaylistItem } from '@/pages/playFiles/types';
 import { buildPlaylistStorageKey } from '@/pages/playFiles/playFilesUtils';
+import { resetPlaylistDataRepositoryForTests } from '@/lib/playlistRepository';
 
 const usePlaybackPersistenceHarness = ({
   playlistStorageKey,
@@ -98,6 +99,7 @@ describe('usePlaybackPersistence', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    resetPlaylistDataRepositoryForTests();
   });
 
   it('restores persisted local playlist items', async () => {
@@ -157,6 +159,60 @@ describe('usePlaybackPersistence', () => {
     await waitFor(() => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe('demo.sid');
+      expect(result.current.playlist[0].request.source).toBe('hvsc');
+    });
+  });
+
+  it('hydrates from repository data when legacy playlist payload is absent', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+    localStorage.setItem('c64u_playlist_repo:v1', JSON.stringify({
+      version: 1,
+      tracks: {
+        'hvsc::/MUSICIANS/Test/repo.sid': {
+          trackId: 'hvsc::/MUSICIANS/Test/repo.sid',
+          sourceKind: 'hvsc',
+          sourceLocator: '/MUSICIANS/Test/repo.sid',
+          category: 'sid',
+          title: 'repo.sid',
+          author: null,
+          released: null,
+          path: '/MUSICIANS/Test/repo.sid',
+          sizeBytes: null,
+          modifiedAt: null,
+          defaultDurationMs: 1000,
+          subsongCount: 1,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      },
+      playlistItemsByPlaylistId: {
+        [playlistStorageKey]: [
+          {
+            playlistItemId: 'repo-item-1',
+            playlistId: playlistStorageKey,
+            trackId: 'hvsc::/MUSICIANS/Test/repo.sid',
+            songNr: 1,
+            sortKey: '00000001',
+            durationOverrideMs: null,
+            status: 'ready',
+            unavailableReason: null,
+            addedAt: new Date().toISOString(),
+          },
+        ],
+      },
+      sessionsByPlaylistId: {},
+      randomSessionsByPlaylistId: {},
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].label).toBe('repo.sid');
       expect(result.current.playlist[0].request.source).toBe('hvsc');
     });
   });

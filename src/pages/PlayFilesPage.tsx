@@ -64,6 +64,8 @@ import { useLocalEntries } from '@/pages/playFiles/hooks/useLocalEntries';
 import { usePlaybackController } from '@/pages/playFiles/hooks/usePlaybackController';
 import { usePlaybackResumeTriggers } from '@/pages/playFiles/hooks/usePlaybackResumeTriggers';
 import { setPlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
+import { getPlaylistDataRepository } from '@/lib/playlistRepository';
+import type { PlaylistItemRecord, TrackRecord } from '@/lib/playlistRepository';
 import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFileSelections';
 import {
   resolveVolumeSyncDecision,
@@ -160,6 +162,7 @@ export default function PlayFilesPage() {
   });
   const [showAddItemsOverlay, setShowAddItemsOverlay] = useState(false);
   const [isAddingItems, setIsAddingItems] = useState(false);
+  const [queryFilteredPlaylist, setQueryFilteredPlaylist] = useState<PlaylistItem[]>([]);
   const addItemsOverlayStartedAtRef = useRef<number | null>(null);
   const addItemsOverlayActiveRef = useRef(false);
   const [addItemsSurface, setAddItemsSurface] = useState<'dialog' | 'page'>('dialog');
@@ -785,6 +788,89 @@ export default function PlayFilesPage() {
     setDurationInput(formatDurationSeconds(nextSeconds));
   }, [durationInput, durationSeconds]);
 
+  const buildTrackId = useCallback((source: string, sourceId: string | null | undefined, path: string) =>
+    `${source}:${sourceId ?? ''}:${normalizeSourcePath(path)}`,
+  []);
+
+  const serializePlaylistToQueryRepository = useCallback((items: PlaylistItem[], playlistId: string) => {
+    const nowIso = new Date().toISOString();
+    const tracks: TrackRecord[] = items.map((item) => ({
+      trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+      sourceKind: item.request.source,
+      sourceLocator: normalizeSourcePath(item.path),
+      category: item.category,
+      title: item.label,
+      author: null,
+      released: null,
+      path: normalizeSourcePath(item.path),
+      sizeBytes: item.sizeBytes ?? null,
+      modifiedAt: item.modifiedAt ?? null,
+      defaultDurationMs: item.durationMs ?? null,
+      subsongCount: item.subsongCount ?? null,
+      createdAt: item.addedAt ?? nowIso,
+      updatedAt: nowIso,
+    }));
+    const playlistItems: PlaylistItemRecord[] = items.map((item, index) => ({
+      playlistItemId: item.id,
+      playlistId,
+      trackId: buildTrackId(item.request.source, item.sourceId ?? null, item.path),
+      songNr: item.request.songNr ?? 1,
+      sortKey: String(index).padStart(8, '0'),
+      durationOverrideMs: item.durationMs ?? null,
+      status: item.status ?? 'ready',
+      unavailableReason: item.unavailableReason ?? null,
+      addedAt: item.addedAt ?? nowIso,
+    }));
+    return { tracks, playlistItems };
+  }, [buildTrackId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      if (!playlist.length) {
+        if (!cancelled) {
+          setQueryFilteredPlaylist([]);
+        }
+        return;
+      }
+
+      const repository = getPlaylistDataRepository();
+      const serialized = serializePlaylistToQueryRepository(playlist, playlistStorageKey);
+      await repository.upsertTracks(serialized.tracks);
+      await repository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
+      const result = await repository.queryPlaylist({
+        playlistId: playlistStorageKey,
+        categoryFilter: playlistTypeFilters,
+        limit: Math.max(1, playlist.length),
+        offset: 0,
+        sort: 'playlist-position',
+      });
+      const byId = new Map(playlist.map((item) => [item.id, item]));
+      const nextFiltered = result.rows
+        .map((row) => byId.get(row.playlistItem.playlistItemId) ?? null)
+        .filter((item): item is PlaylistItem => Boolean(item));
+
+      if (!cancelled) {
+        setQueryFilteredPlaylist(nextFiltered);
+      }
+    };
+
+    run().catch((error) => {
+      addErrorLog('Failed to query filtered playlist', {
+        playlistStorageKey,
+        error: (error as Error).message,
+      });
+      if (!cancelled) {
+        setQueryFilteredPlaylist(playlist.filter((item) => playlistTypeFilters.includes(item.category)));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [playlist, playlistStorageKey, playlistTypeFilters, serializePlaylistToQueryRepository]);
+
 
 
 
@@ -796,10 +882,7 @@ export default function PlayFilesPage() {
     return calculatePlaylistTotals(durations, playedMs);
   }, [playlist, playedMs, playlistItemDuration]);
 
-  const filteredPlaylist = useMemo(
-    () => playlist.filter((item) => playlistTypeFilters.includes(item.category)),
-    [playlist, playlistTypeFilters],
-  );
+  const filteredPlaylist = queryFilteredPlaylist;
   const currentPlayingItemId = (isPlaying || isPaused) && currentIndex >= 0
     ? playlist[currentIndex]?.id ?? null
     : null;
