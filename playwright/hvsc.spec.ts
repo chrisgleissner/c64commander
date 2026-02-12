@@ -74,13 +74,26 @@ test.describe('HVSC Play page', () => {
   };
 
   const tryOpenFolderByToken = async (dialog: ReturnType<Page['getByRole']>, token: string) => {
-    const row = dialog
+    const rowLocator = () => dialog
       .getByTestId('source-entry-row')
       .filter({ hasText: new RegExp(token, 'i') })
       .first();
-    if (await row.count() === 0) return false;
-    await row.click();
-    return true;
+
+    if (await rowLocator().count() === 0) return false;
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const row = rowLocator();
+      await expect(row).toBeVisible();
+      try {
+        await row.click({ timeout: 3000 });
+        return true;
+      } catch (error) {
+        if (attempt === 2) throw error;
+        await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible();
+      }
+    }
+
+    return false;
   };
 
   const openHvscDemoFolder = async (dialog: ReturnType<Page['getByRole']>) => {
