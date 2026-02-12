@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLocalStoragePlaylistDataRepository } from '@/lib/playlistRepository';
 import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from '@/lib/playlistRepository';
 
@@ -36,6 +36,23 @@ const buildPlaylistItem = (overrides: Partial<PlaylistItemRecord> = {}): Playlis
 describe('localStorage playlist repository', () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  it('recovers from malformed or incompatible persisted state', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    localStorage.setItem('c64u_playlist_repo:v1', '{bad json');
+    let repository = getLocalStoragePlaylistDataRepository();
+    let result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
+    expect(result.rows).toEqual([]);
+    expect(result.totalMatchCount).toBe(0);
+    expect(warn).toHaveBeenCalled();
+
+    localStorage.setItem('c64u_playlist_repo:v1', JSON.stringify({ version: 999, tracks: {} }));
+    repository = getLocalStoragePlaylistDataRepository();
+    result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
+    expect(result.rows).toEqual([]);
+    expect(result.totalMatchCount).toBe(0);
   });
 
   it('persists tracks and playlist rows and supports deterministic query paging', async () => {
@@ -165,5 +182,101 @@ describe('localStorage playlist repository', () => {
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
     expect(stored?.cursor).toBe(2);
+  });
+
+  it('handles query edge cases for sorting, clamped paging, and missing tracks', async () => {
+    const repository = getLocalStoragePlaylistDataRepository();
+    const noCategoryTrack: TrackRecord = {
+      ...buildTrack({ trackId: 'track-c', title: 'Other', path: '/path-b.sid', sourceLocator: '/path-b.sid' }),
+      category: null,
+    };
+    await repository.upsertTracks([
+      buildTrack({ trackId: 'track-a', title: 'Same', path: '/path-a.sid', sourceLocator: '/path-a.sid' }),
+      buildTrack({ trackId: 'track-b', title: 'Same', path: '/path-b.sid', sourceLocator: '/path-b.sid' }),
+      noCategoryTrack,
+    ]);
+
+    await repository.replacePlaylistItems('playlist-default', [
+      buildPlaylistItem({ playlistItemId: 'item-missing', trackId: 'does-not-exist', sortKey: '0000' }),
+      buildPlaylistItem({ playlistItemId: 'item-a', trackId: 'track-a', sortKey: '0001' }),
+      buildPlaylistItem({ playlistItemId: 'item-b', trackId: 'track-b', sortKey: '0002' }),
+      buildPlaylistItem({ playlistItemId: 'item-c', trackId: 'track-c', sortKey: '0003' }),
+    ]);
+
+    const byTitle = await repository.queryPlaylist({
+      playlistId: 'playlist-default',
+      sort: 'title',
+      offset: -9,
+      limit: 0,
+    });
+    expect(byTitle.rows).toHaveLength(1);
+    expect(byTitle.totalMatchCount).toBe(3);
+
+    const byPath = await repository.queryPlaylist({
+      playlistId: 'playlist-default',
+      sort: 'path',
+      offset: 0,
+      limit: 10,
+    });
+    expect(byPath.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(['item-a', 'item-b', 'item-c']);
+
+    const categoryFiltered = await repository.queryPlaylist({
+      playlistId: 'playlist-default',
+      categoryFilter: ['song'],
+      offset: 0,
+      limit: 10,
+    });
+    expect(categoryFiltered.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(['item-a', 'item-b']);
+  });
+
+  it('handles random-session edge cases when order is missing or cursor is out of range', async () => {
+    const repository = getLocalStoragePlaylistDataRepository();
+
+    expect(await repository.next('playlist-default')).toBeNull();
+
+    await repository.saveRandomSession({
+      playlistId: 'playlist-default',
+      seed: 1,
+      cursor: 0,
+      order: [],
+    });
+    expect(await repository.next('playlist-default')).toBeNull();
+
+    await repository.saveRandomSession({
+      playlistId: 'playlist-default',
+      seed: 2,
+      cursor: 99,
+      order: ['item-1'],
+    });
+    expect(await repository.next('playlist-default')).toBeNull();
+  });
+
+  it('supports repository operations when localStorage is unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: undefined,
+      configurable: true,
+      writable: true,
+    });
+
+    try {
+      const repository = getLocalStoragePlaylistDataRepository();
+      await repository.upsertTracks([buildTrack({ trackId: 'track-offline' })]);
+      await repository.replacePlaylistItems('playlist-default', [
+        buildPlaylistItem({ playlistItemId: 'item-offline', trackId: 'track-offline', sortKey: '0001' }),
+      ]);
+
+      const queried = await repository.queryPlaylist({
+        playlistId: 'playlist-default',
+        limit: 10,
+        offset: 0,
+      });
+      expect(queried.totalMatchCount).toBe(1);
+      expect(queried.rows[0]?.playlistItem.playlistItemId).toBe('item-offline');
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(globalThis, 'localStorage', descriptor);
+      }
+    }
   });
 });
