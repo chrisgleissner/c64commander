@@ -168,20 +168,20 @@ jobs:
           udid = create.stdout.strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
 
-            print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
-            try:
+          print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
+          try:
               bootstatus = subprocess.run(
-                ["xcrun", "simctl", "bootstatus", udid, "-b"],
-                capture_output=True,
-                text=True,
-                timeout=300,
+                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                  capture_output=True,
+                  text=True,
+                  timeout=300,
               )
-            except subprocess.TimeoutExpired:
+          except subprocess.TimeoutExpired:
               print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
               print(subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True), file=sys.stderr)
               sys.exit(1)
 
-            if bootstatus.returncode != 0:
+          if bootstatus.returncode != 0:
               print("simctl bootstatus failed", file=sys.stderr)
               print(bootstatus.stdout, file=sys.stderr)
               print(bootstatus.stderr, file=sys.stderr)
@@ -322,20 +322,20 @@ jobs:
             ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
 
-            print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
-            try:
+          print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
+          try:
               bootstatus = subprocess.run(
-                ["xcrun", "simctl", "bootstatus", udid, "-b"],
-                capture_output=True,
-                text=True,
-                timeout=300,
+                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                  capture_output=True,
+                  text=True,
+                  timeout=300,
               )
-            except subprocess.TimeoutExpired:
+          except subprocess.TimeoutExpired:
               print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
               print(subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True), file=sys.stderr)
               sys.exit(1)
 
-            if bootstatus.returncode != 0:
+          if bootstatus.returncode != 0:
               print("simctl bootstatus failed", file=sys.stderr)
               print(bootstatus.stdout, file=sys.stderr)
               print(bootstatus.stderr, file=sys.stderr)
@@ -488,20 +488,20 @@ jobs:
             ).strip()
           subprocess.check_call(["xcrun", "simctl", "boot", udid])
 
-            print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
-            try:
+          print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
+          try:
               bootstatus = subprocess.run(
-                ["xcrun", "simctl", "bootstatus", udid, "-b"],
-                capture_output=True,
-                text=True,
-                timeout=300,
+                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                  capture_output=True,
+                  text=True,
+                  timeout=300,
               )
-            except subprocess.TimeoutExpired:
+          except subprocess.TimeoutExpired:
               print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
               print(subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True), file=sys.stderr)
               sys.exit(1)
 
-            if bootstatus.returncode != 0:
+          if bootstatus.returncode != 0:
               print("simctl bootstatus failed", file=sys.stderr)
               print(bootstatus.stdout, file=sys.stderr)
               print(bootstatus.stderr, file=sys.stderr)
