@@ -74,6 +74,53 @@ The script also accepts a direct Songlengths file path:
 python3 scripts/hvsc_filename_frequency.py /path/to/HVSC/DOCUMENTS/Songlengths.md5 --duplicates-only
 ```
 
+## Playback auto-advance under lock/background
+
+### Completion signal decision (2026-02)
+
+Primary signal: **duration-based due time** computed in JS (from Songlengths / HVSC metadata / fallback duration).
+
+Why:
+- The published C64U REST API spec in `doc/c64/c64u-openapi.yaml` documents runner *start* endpoints (e.g. `/v1/runners:sidplay`) but does not expose a reliable runner/player state endpoint that can be polled for an authoritative "finished" signal.
+- WebView timers are the only cross-platform completion mechanism available in the browser layer.
+
+Secondary watchdog (Android only): **foreground service dueAtMs watchdog**.
+
+Why:
+- On some devices and power modes, WebView JS timers may be throttled while backgrounded or locked.
+- A foreground service + partial wakelock reduces throttling and provides a secondary wake-up path.
+
+### How it works
+
+- The playback controller assigns an `autoAdvanceGuard` with an absolute `dueAtMs` for song categories.
+- `PlayFilesPage` reconciles playback state via `syncPlaybackTimeline()`:
+  - Updates elapsed counters.
+  - If `Date.now() >= guard.dueAtMs` and the guard is still valid, it triggers `handleNext('auto')` immediately.
+- Reconciliation triggers:
+  - A periodic interval while playing.
+  - `visibilitychange`, `focus`, and `pageshow` when the app returns to the foreground.
+  - Android watchdog event `backgroundAutoSkipDue` emitted by the BackgroundExecution foreground service.
+
+### OEM battery constraints
+
+Even foreground services can be constrained by OEM power management (Doze, App Standby buckets, aggressive battery savers).
+
+Expected behavior:
+- If `BackgroundExecution.start()` fails or the service is killed, playback continues using JS-only reconciliation.
+- Failures are logged with lifecycle state and failure classification to aid triage.
+
+### Manual validation (Maestro / ADB)
+
+Lock/unlock cannot be fully validated in CI. For local Android validation:
+
+1. Start playback on the Play Files page with a short-duration SID.
+2. Lock the device (example): `adb shell input keyevent 26`.
+3. Wait until after the track duration.
+4. Unlock the device.
+5. Verify the playlist advanced exactly once.
+
+If you create/update a Maestro flow for this, follow `doc/testing/maestro.md` and keep the flow runnable locally.
+
 ## UI typography stability
 
 Root cause (resolved): the app bar and several UI labels used the `font-mono` class, but JetBrains Mono is not bundled. When styles re-applied after interactions, browsers swapped to the default monospace fallback, causing visible font shifts and header height changes. The fix standardizes UI labels/values on the sans-serif stack (`Inter` → `Arial` → system) and removes monospace usage from standard UI elements.

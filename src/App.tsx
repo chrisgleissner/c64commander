@@ -124,11 +124,17 @@ const App = () => (
         <Sonner />
         <FeatureFlagsProvider>
           <RefreshControlProvider>
-            <SidPlayerProvider>
+            {shouldEnableCoverageProbe() ? (
+              <SidPlayerProvider>
+                <AppErrorBoundary>
+                  <AppRoutes />
+                </AppErrorBoundary>
+              </SidPlayerProvider>
+            ) : (
               <AppErrorBoundary>
                 <AppRoutes />
               </AppErrorBoundary>
-            </SidPlayerProvider>
+            )}
           </RefreshControlProvider>
         </FeatureFlagsProvider>
       </TooltipProvider>

@@ -137,6 +137,18 @@ test.describe('Playback file browser', () => {
 
     const { requestEvent, related } = await expectRestTraceSequence(page, testInfo, /\/v1\/runners:sidplay/);
     expect((requestEvent.data as { target?: string }).target).toBe('external-mock');
+    const requestData = requestEvent.data as {
+      lifecycleState?: unknown;
+      sourceKind?: unknown;
+      trackInstanceId?: unknown;
+      playlistItemId?: unknown;
+      localAccessMode?: unknown;
+    };
+    expect(typeof requestData.lifecycleState).toBe('string');
+    expect(requestData.sourceKind).toBe('ultimate');
+    expect(typeof requestData.trackInstanceId).toBe('number');
+    expect(typeof requestData.playlistItemId).toBe('string');
+    expect(requestData.localAccessMode).toBe(null);
     const decisionEvent = findTraceEvent(related, 'backend-decision');
     expect((decisionEvent?.data as { selectedTarget?: string }).selectedTarget).toBe('external-mock');
     await snap(page, testInfo, 'play-requested');
@@ -829,6 +841,36 @@ test.describe('Playback file browser', () => {
     await page.waitForTimeout(1800);
     expect(server.sidplayRequests.length).toBe(2);
     await snap(page, testInfo, 'user-next-cancels-old-auto');
+  });
+
+  test('visibilitychange reconciliation catches up after timer throttling', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.addInitScript(() => {
+      // Simulate background timer throttling by preventing interval-based reconciliation.
+      // The test then relies on visibilitychange/focus/pageshow reconciliation.
+      window.setInterval = (() => 0) as unknown as typeof window.setInterval;
+      window.clearInterval = (() => undefined) as unknown as typeof window.clearInterval;
+    });
+
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-1.sid', name: 'track-1.sid', durationMs: 600 },
+      { source: 'ultimate' as const, path: '/Usb0/Demos/track-2.sid', name: 'track-2.sid', durationMs: 20000 },
+    ]);
+
+    await page.goto('/play');
+    await page.getByTestId('playlist-play').click();
+    await expect.poll(() => server.sidplayRequests.length).toBe(1);
+    await expect(page.getByTestId('playback-current-track')).toContainText('track-1.sid');
+
+    await page.waitForTimeout(900);
+    expect(server.sidplayRequests.length).toBe(1);
+
+    await page.evaluate(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await expect.poll(() => server.sidplayRequests.length).toBe(2);
+    await expect(page.getByTestId('playback-current-track')).toContainText('track-2.sid');
+    await snap(page, testInfo, 'visibilitychange-catchup');
   });
 
   test('playlist row highlight follows confirmed playback and clears on transition failure', async ({ page }: { page: Page }, testInfo: TestInfo) => {

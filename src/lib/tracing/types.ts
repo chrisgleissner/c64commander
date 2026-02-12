@@ -8,9 +8,11 @@
 
 export type TraceOrigin = 'user' | 'automatic' | 'system';
 
-export type TraceLifecycleState = 'foreground' | 'background' | 'unknown';
+export type TraceLifecycleState = 'foreground' | 'background' | 'locked' | 'unknown';
 
-export type TraceSourceKind = 'local' | 'ultimate' | 'hvsc' | 'saf';
+export type TraceSourceKind = 'local' | 'ultimate' | 'hvsc';
+
+export type TraceLocalAccessMode = 'entries' | 'saf';
 
 export type TraceEventType =
   | 'action-start'
@@ -27,6 +29,7 @@ export type TraceEventType =
 export type TraceEventContextFields = {
   lifecycleState: TraceLifecycleState;
   sourceKind: TraceSourceKind | null;
+  localAccessMode: TraceLocalAccessMode | null;
   trackInstanceId: number | null;
   playlistItemId: string | null;
 };
@@ -65,6 +68,7 @@ export type TracePlaybackContext = {
   elapsedMs: number;
   durationMs?: number | null;
   sourceKind?: TraceSourceKind | null;
+  localAccessMode?: TraceLocalAccessMode | null;
   trackInstanceId?: number | null;
   playlistItemId?: string | null;
 };

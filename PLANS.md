@@ -93,20 +93,20 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 ### Subtasks
 
-- [ ] **2.1 Audit all useSidPlayer consumers and determine legacy status [Q1 research]**
+- [x] **2.1 Audit all useSidPlayer consumers and determine legacy status [Q1 research]**
   - Grep for all imports/usages of `useSidPlayer` across the codebase.
   - For each consumer, determine: is it active production code, trace-only, or dead code?
   - Known consumers from research: `src/components/TraceContextBridge.tsx:27`, `src/App.tsx:98` (provider), `src/hooks/useSidPlayer.tsx` (definition).
   - Determine if `useSidPlayer` holds any runtime state that is not also held by `usePlaybackController` (e.g., background execution start/stop, audio context). Document findings.
   - **Decision gate**: if all active responsibilities can be migrated to `usePlaybackController`, mark `useSidPlayer` as deprecated and plan removal in subtask 2.8. If it has unique active responsibilities, document them and integrate rather than remove.
 
-- [ ] **2.2 Migrate TraceContextBridge away from legacy useSidPlayer**
+- [x] **2.2 Migrate TraceContextBridge away from legacy useSidPlayer**
   - In `src/components/TraceContextBridge.tsx`: replace `useSidPlayer()` context reads with state sourced from the active playback engine (`usePlaybackController` or its exposed state).
   - The bridge must read: current track ID/path, playback state (playing/paused/stopped), source kind (`local` | `ultimate` | `hvsc`), elapsed time, and queue position.
   - For Android diagnostics, include an optional `localAccessMode` field when source kind is `local` (`entries` | `saf`), instead of adding a new source kind.
   - Verify that `src/App.tsx` still provides the bridge with correct context after the change.
 
-- [ ] **2.3 Define and implement a cross-layer failure taxonomy enum**
+- [x] **2.3 Define and implement a cross-layer failure taxonomy enum**
   - Create `src/lib/errors/failureTaxonomy.ts` with an enum/union type covering:
     - `user-cancellation`: User explicitly cancelled an operation.
     - `network-transient`: Transient network error (timeout, connection reset).
@@ -122,36 +122,36 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
     - `unknown`: Unclassifiable error.
   - Export a `classifyError(error: unknown, context?: string): FailureClass` helper that maps common error shapes (e.g., `AxiosError` codes, `DOMException` names, native plugin rejection patterns) to taxonomy entries.
 
-- [ ] **2.4 Integrate failure taxonomy into key catch blocks**
+- [x] **2.4 Integrate failure taxonomy into key catch blocks**
   - In all catch blocks modified in Phase 1, call `classifyError(e, operationContext)` and include the resulting class in the log output.
   - In `src/lib/playback/playbackRouter.ts`: classify FTP fetch failure, upload failure, and fallback separately.
   - In `src/lib/hvsc/hvscIngestionRuntime.ts`: classify download, extraction, and indexing failures separately.
   - In `src/lib/c64api.ts`: classify REST call failures with the taxonomy.
 
-- [ ] **2.5 Add correlation ID pass-through to native plugin interfaces**
+- [x] **2.5 Add correlation ID pass-through to native plugin interfaces**
   - Extend the JS->native bridge call signatures in `src/lib/native/ftpClient.ts` and `src/lib/native/folderPicker.ts` to accept an optional `correlationId: string` parameter.
   - In the Kotlin plugins (`FtpClientPlugin.kt`, `FolderPickerPlugin.kt`), read the correlation ID from `call.getString("correlationId")` and include it in all `Log.d`/`Log.e` entries.
   - In `BackgroundExecutionPlugin.kt` / `BackgroundExecutionService.kt`, accept and log a correlation ID for start/stop lifecycle events.
   - Generate the correlation ID from `src/lib/tracing/traceSession.ts` before invoking native plugins and include it in trace events.
 
-- [ ] **2.6 Add lifecycle state context to trace events**
+- [x] **2.6 Add lifecycle state context to trace events**
   - In `src/lib/tracing/traceSession.ts`, add a `lifecycleState` field to trace event payloads. Possible values: `foreground`, `background`, `locked`, `unknown`.
   - Source the lifecycle state from browser visibility/focus events (`document.visibilityState`, `document.hasFocus()`) and from the `BackgroundExecution` native bridge state if available.
   - Emit lifecycle state in all playback-related trace events.
 
-- [ ] **2.7 Add source-kind and queue-identifier context to trace events**
+- [x] **2.7 Add source-kind and queue-identifier context to trace events**
   - Ensure every playback trace event includes: `sourceKind` (`local` | `ultimate` | `hvsc`), `trackInstanceId`, and `playlistItemId`.
   - For Android local playback diagnostics, include optional `localAccessMode` (`entries` | `saf`) when source kind is `local`.
   - Update `src/lib/tracing/traceBridge.ts` and `TraceContextBridge.tsx` to populate these fields from the active playback engine state.
 
-- [ ] **2.8 Remove or gate legacy SidPlayerProvider wrapping**
+- [x] **2.8 Remove or gate legacy SidPlayerProvider wrapping**
   - Based on findings from subtask 2.1:
     - If `useSidPlayer` has no remaining active responsibilities beyond trace context (now migrated in 2.2), remove `SidPlayerProvider` from `src/App.tsx` entirely.
     - If `useSidPlayer` has unique active responsibilities (e.g., background execution lifecycle), migrate those to `usePlaybackController` or a dedicated hook, then remove the provider.
     - If migration is complex, gate the provider behind a feature flag for safe rollout.
   - In all cases: add `@deprecated` annotation to `useSidPlayer.tsx` and ensure no new consumers are added.
 
-- [ ] **2.9 Unit and E2E tests for trace context accuracy**
+- [x] **2.9 Unit and E2E tests for trace context accuracy**
   - Add unit tests for `TraceContextBridge` verifying it reads from the active playback engine, not `useSidPlayer`.
   - Add unit tests for `classifyError` covering each taxonomy entry with representative error shapes.
   - Extend Playwright trace-related tests to assert that playback trace events contain `sourceKind`, `trackInstanceId`, and `lifecycleState` fields.
@@ -172,7 +172,7 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
 
 ### Subtasks
 
-- [ ] **3.1 Research authoritative completion signal options [Q2 research]**
+- [x] **3.1 Research authoritative completion signal options [Q2 research]**
   - Investigate what completion signals are actually available:
     1. **JS guard timers** (`dueAtMs` + `setInterval`): current mechanism. Subject to WebView throttling.
     2. **C64U device status polling**: check if the C64U REST API exposes a "playback finished" or "idle" status endpoint (review `doc/c64/c64u-openapi.yaml` for runner status or player state endpoints).
@@ -180,17 +180,17 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
   - **Decision gate**: select primary signal (most reliable under lock) and secondary watchdog. Document rationale in `doc/developer.md`.
   - If C64U status polling is available and reliable, consider it as the primary signal (device-authoritative). If not, JS timers + native watchdog remain the approach.
 
-- [ ] **3.2 Analyze current timer and lifecycle hook behavior**
+- [x] **3.2 Analyze current timer and lifecycle hook behavior**
   - Read and document the exact auto-skip timing mechanism in `src/pages/PlayFilesPage.tsx` (lines ~464-500, ~652-658).
   - Read and document the `setInterval`/`setTimeout` usage and `visibilitychange`/`pageshow`/`focus` event handlers.
   - Identify which timers are subject to browser throttling or suspension when the page is hidden or the device is locked (behavior varies by Android version, OEM, and power state).
 
-- [ ] **3.3 Validate and harden visibility-aware timer reconciliation**
+- [x] **3.3 Validate and harden visibility-aware timer reconciliation**
   - `PlayFilesPage.tsx` already wires `visibilitychange`, `focus`, and `pageshow` to `syncPlaybackTimeline()`.
   - Verify this path reliably triggers immediate auto-next when `dueAtMs` has passed (without waiting for an interval tick) and make behavior consistent if logic is split between page and hook layers.
   - Consolidate timer-reconciliation ownership (page vs controller) so there is one authoritative auto-next path.
 
-- [ ] **3.4 Integrate Android foreground service with active playback path**
+- [x] **3.4 Integrate Android foreground service with active playback path**
   - In `usePlaybackController.ts` (or a new hook `useBackgroundPlayback.ts`):
     - Call `BackgroundExecution.start()` (via `src/lib/native/backgroundExecution.ts`) when playback begins.
     - Call `BackgroundExecution.stop()` when playback stops or the queue is exhausted.
@@ -198,19 +198,19 @@ Address all critical, high, medium, and low findings from the 2026-02-11 risk an
   - This wakelock/foreground-service keeps the WebView process alive and reduces timer throttling severity on Android.
   - The legacy `useSidPlayer` calls to `BackgroundExecution` should be removed or no-op'd to prevent double-start.
 
-- [ ] **3.5 Add a native heartbeat/watchdog mechanism**
+- [x] **3.5 Add a native heartbeat/watchdog mechanism**
   - In `BackgroundExecutionService.kt`:
     - Accept an expected `dueAtMs` timestamp via the plugin bridge.
     - If the service is running and `dueAtMs` has passed without a JS `stop()` or `renew()` call, fire a local broadcast or Capacitor event (`backgroundAutoSkipDue`) to wake the WebView.
   - In JS: listen for the `backgroundAutoSkipDue` event and trigger auto-next if the queue state confirms the track should have completed.
   - This is a secondary safety net, not the primary mechanism.
 
-- [ ] **3.6 Handle OEM battery optimization edge cases**
+- [x] **3.6 Handle OEM battery optimization edge cases**
   - Document in `doc/developer.md`: known OEM restrictions (Doze, App Standby, battery saver) and their impact on foreground services and WebView timers.
   - In the app: when `BackgroundExecution.start()` fails or the service is killed, log at WARN with lifecycle context (Phase 2.5) and continue with JS-only timers as fallback.
   - Do not crash or stall the queue if the native service is unavailable.
 
-- [ ] **3.7 Add tests for lock-state auto-skip behavior**
+- [x] **3.7 Add tests for lock-state auto-skip behavior**
   - **Unit tests** (`usePlaybackController` or `PlayFilesPage` test):
     - Mock `document.visibilityState` to `hidden`, advance fake timers past `dueAtMs`, then set visibility to `visible`. Assert auto-next fires immediately on visibility change.
     - Test that `dueAtMs` recomputation after resume is correct (not double-counting elapsed time).

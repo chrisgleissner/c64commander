@@ -54,6 +54,12 @@ const resolveBlob = (track: SidTrack) => {
   return null;
 };
 
+/**
+ * @deprecated Legacy SID player provider.
+ *
+ * Prefer the unified playback engine used by the Play Files page.
+ * This provider is only kept for test/coverage probes and legacy experiments.
+ */
 export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   const [queue, setQueue] = useState<SidQueue>([]);
   const [currentIndex, setCurrentIndex] = useState(-1);
@@ -170,6 +176,11 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   return <SidPlayerContext.Provider value={value}>{children}</SidPlayerContext.Provider>;
 }
 
+/**
+ * @deprecated Legacy SID player hook.
+ *
+ * Prefer the unified playback engine used by the Play Files page.
+ */
 export const useSidPlayer = () => {
   const context = useContext(SidPlayerContext);
   if (!context) {

@@ -97,6 +97,7 @@ const appendEvent = <T extends Record<string, unknown>>(
   const contextFields: TraceEventContextFields = {
     lifecycleState: getLifecycleState(),
     sourceKind: playback?.sourceKind ?? null,
+    localAccessMode: playback?.localAccessMode ?? null,
     trackInstanceId: playback?.trackInstanceId ?? null,
     playlistItemId: playback?.playlistItemId ?? null,
   };
@@ -338,6 +339,7 @@ export const recordTraceError = (action: TraceActionContext, error: Error, class
     errorCategory: resolved.category,
     isExpected: resolved.isExpected,
     errorType: resolved.errorType,
+    failureClass: resolved.failureClass,
   });
   if (typeof window !== 'undefined') {
     window.setTimeout(() => {

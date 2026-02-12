@@ -44,6 +44,7 @@ import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/backgroundExecutionManager';
+import { BackgroundExecution, onBackgroundAutoSkipDue } from '@/lib/native/backgroundExecution';
 
 import { AppBar } from '@/components/AppBar';
 import { VolumeControls } from '@/pages/playFiles/components/VolumeControls';
@@ -59,6 +60,7 @@ import { usePlaylistManager } from '@/pages/playFiles/hooks/usePlaylistManager';
 import { useVolumeOverride } from '@/pages/playFiles/hooks/useVolumeOverride';
 import { useLocalEntries } from '@/pages/playFiles/hooks/useLocalEntries';
 import { usePlaybackController } from '@/pages/playFiles/hooks/usePlaybackController';
+import { usePlaybackResumeTriggers } from '@/pages/playFiles/hooks/usePlaybackResumeTriggers';
 import { setPlaybackTraceSnapshot } from '@/pages/playFiles/playbackTraceStore';
 import { createAddFileSelectionsHandler } from '@/pages/playFiles/handlers/addFileSelections';
 import {
@@ -209,6 +211,7 @@ export default function PlayFilesPage() {
   const trackInstanceIdRef = useRef(0);
   const [trackInstanceId, setTrackInstanceId] = useState(0);
   const autoAdvanceGuardRef = useRef<AutoAdvanceGuard | null>(null);
+  const [autoAdvanceDueAtMs, setAutoAdvanceDueAtMs] = useState<number | null>(null);
   const backgroundExecutionActiveRef = useRef(false);
 
   useEffect(() => {
@@ -230,7 +233,8 @@ export default function PlayFilesPage() {
   const cancelAutoAdvance = useCallback(() => {
     if (!autoAdvanceGuardRef.current) return;
     autoAdvanceGuardRef.current.userCancelled = true;
-  }, []);
+    setAutoAdvanceDueAtMs(null);
+  }, [setAutoAdvanceDueAtMs]);
 
 
 
@@ -296,6 +300,7 @@ export default function PlayFilesPage() {
     enqueuePlayTransition,
     durationSeconds,
     trace,
+    setAutoAdvanceDueAtMs,
   });
 
 
@@ -327,6 +332,7 @@ export default function PlayFilesPage() {
         reason: 'play',
         context: { trackInstanceId },
       });
+      void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
       return;
     }
     if (!backgroundExecutionActiveRef.current) return;
@@ -336,7 +342,8 @@ export default function PlayFilesPage() {
       reason: isPaused ? 'pause' : 'stop',
       context: { trackInstanceId },
     });
-  }, [isPaused, isPlaying, trackInstanceId]);
+    void BackgroundExecution.setDueAtMs({ dueAtMs: null });
+  }, [autoAdvanceDueAtMs, isPaused, isPlaying, trackInstanceId]);
 
   useEffect(() => () => {
     if (!backgroundExecutionActiveRef.current) return;
@@ -346,7 +353,14 @@ export default function PlayFilesPage() {
       reason: 'cleanup',
       context: { trackInstanceId },
     });
+    void BackgroundExecution.setDueAtMs({ dueAtMs: null });
   }, [trackInstanceId]);
+
+  useEffect(() => {
+    if (!backgroundExecutionActiveRef.current) return;
+    if (!isNativePlatform() || getPlatform() !== 'android') return;
+    void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
+  }, [autoAdvanceDueAtMs]);
 
   useEffect(() => {
     if (addItemsProgress.status !== 'scanning') return undefined;
@@ -517,21 +531,28 @@ export default function PlayFilesPage() {
     return () => window.clearInterval(timer);
   }, [currentIndex, isPaused, isPlaying, syncPlaybackTimeline]);
 
+  usePlaybackResumeTriggers(syncPlaybackTimeline);
+
   useEffect(() => {
-    const onVisible = () => {
-      if (document.hidden) return;
+    if (!isNativePlatform() || getPlatform() !== 'android') return;
+    let cancelled = false;
+    let handle: { remove: () => Promise<void> } | null = null;
+
+    void onBackgroundAutoSkipDue(() => {
+      if (cancelled) return;
       syncPlaybackTimeline();
-    };
-    const onFocus = () => {
-      syncPlaybackTimeline();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('pageshow', onFocus);
+    }).then((next) => {
+      handle = next;
+      if (cancelled) {
+        void handle.remove();
+      }
+    });
+
     return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('pageshow', onFocus);
+      cancelled = true;
+      if (handle) {
+        void handle.remove();
+      }
     };
   }, [syncPlaybackTimeline]);
 
@@ -541,11 +562,12 @@ export default function PlayFilesPage() {
   const currentDurationMs = currentItem ? playlistItemDuration(currentItem, currentIndex) : undefined;
   const sourceKind = useMemo<TraceSourceKind | null>(() => {
     if (!currentItem) return null;
-    if (currentItem.request.source === 'local') {
-      const treeUri = currentItem.sourceId ? localSourceTreeUris.get(currentItem.sourceId) : null;
-      return treeUri ? 'saf' : 'local';
-    }
     return currentItem.request.source;
+  }, [currentItem]);
+  const localAccessMode = useMemo<'entries' | 'saf' | null>(() => {
+    if (!currentItem || currentItem.request.source !== 'local') return null;
+    const treeUri = currentItem.sourceId ? localSourceTreeUris.get(currentItem.sourceId) : null;
+    return treeUri ? 'saf' : 'entries';
   }, [currentItem, localSourceTreeUris]);
   const playbackTraceContext = useMemo(() => {
     if (!playlist.length) return null;
@@ -557,10 +579,11 @@ export default function PlayFilesPage() {
       elapsedMs,
       durationMs: currentDurationMs ?? null,
       sourceKind,
+      localAccessMode,
       trackInstanceId,
       playlistItemId: currentItem?.id ?? null,
     };
-  }, [currentDurationMs, currentIndex, currentItem?.id, elapsedMs, isPlaying, playlist.length, sourceKind, trackInstanceId]);
+  }, [currentDurationMs, currentIndex, currentItem?.id, elapsedMs, isPlaying, playlist.length, sourceKind, localAccessMode, trackInstanceId]);
 
   useEffect(() => {
     setPlaybackTraceSnapshot(playbackTraceContext);

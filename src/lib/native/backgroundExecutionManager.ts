@@ -8,6 +8,8 @@
 
 import { addLog } from '@/lib/logging';
 import { BackgroundExecution } from '@/lib/native/backgroundExecution';
+import { getLifecycleState } from '@/lib/appLifecycle';
+import { classifyError } from '@/lib/tracing/failureTaxonomy';
 
 type BackgroundExecutionLogContext = {
   source: string;
@@ -24,8 +26,12 @@ export const startBackgroundExecution = async (logContext: BackgroundExecutionLo
     await BackgroundExecution.start();
   } catch (error) {
     activeCount = Math.max(0, activeCount - 1);
+    const failure = classifyError(error);
     addLog('warn', 'Background execution start failed', {
       ...logContext,
+      lifecycleState: getLifecycleState(),
+      failureClass: failure.failureClass,
+      failureCategory: failure.category,
       error: (error as Error).message,
     });
   }
@@ -38,8 +44,12 @@ export const stopBackgroundExecution = async (logContext: BackgroundExecutionLog
   try {
     await BackgroundExecution.stop();
   } catch (error) {
+    const failure = classifyError(error);
     addLog('warn', 'Background execution stop failed', {
       ...logContext,
+      lifecycleState: getLifecycleState(),
+      failureClass: failure.failureClass,
+      failureCategory: failure.category,
       error: (error as Error).message,
     });
   }

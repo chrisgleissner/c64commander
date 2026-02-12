@@ -10,9 +10,19 @@ import { registerPlugin } from '@capacitor/core';
 import { getActiveAction } from '@/lib/tracing/actionTrace';
 import { resolveNativeTraceContext, type NativeTraceContext } from '@/lib/native/nativeTraceContext';
 
+export type BackgroundAutoSkipDueEvent = {
+    dueAtMs: number;
+    firedAtMs: number;
+};
+
 export type BackgroundExecutionPlugin = {
     start: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
     stop: (options?: { traceContext?: NativeTraceContext }) => Promise<void>;
+    setDueAtMs: (options: { dueAtMs: number | null; traceContext?: NativeTraceContext }) => Promise<void>;
+    addListener: (
+        eventName: 'backgroundAutoSkipDue',
+        listenerFunc: (event: BackgroundAutoSkipDueEvent) => void,
+    ) => Promise<{ remove: () => Promise<void> }>;
 };
 
 const plugin = registerPlugin<BackgroundExecutionPlugin>('BackgroundExecution', {
@@ -28,4 +38,13 @@ export const BackgroundExecution: BackgroundExecutionPlugin = {
         ...options,
         traceContext: resolveNativeTraceContext(getActiveAction()),
     }),
+    setDueAtMs: (options) => plugin.setDueAtMs({
+        ...options,
+        traceContext: resolveNativeTraceContext(getActiveAction()),
+    }),
+    addListener: (eventName, listenerFunc) => plugin.addListener(eventName, listenerFunc),
+};
+
+export const onBackgroundAutoSkipDue = async (listener: (event: BackgroundAutoSkipDueEvent) => void) => {
+    return await BackgroundExecution.addListener('backgroundAutoSkipDue', listener);
 };

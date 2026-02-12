@@ -88,6 +88,8 @@ interface UsePlaybackControllerProps {
     enqueuePlayTransition: (task: () => Promise<void>) => Promise<void>;
     durationSeconds: number; // for fallback
 
+    setAutoAdvanceDueAtMs: (dueAtMs: number | null) => void;
+
     trace: any;
 }
 
@@ -133,6 +135,7 @@ export function usePlaybackController({
     durationSeconds,
     trace,
     setTrackInstanceId,
+    setAutoAdvanceDueAtMs,
 }: UsePlaybackControllerProps) {
 
     const durationFallbackMs = durationSeconds * 1000;
@@ -293,6 +296,9 @@ export function usePlaybackController({
                     : resolvedDurationBase;
                 setElapsedMs(0);
                 setDurationMs(resolvedDuration);
+                if (typeof options?.playlistIndex === 'number' && options.playlistIndex >= 0) {
+                    setCurrentIndex(options.playlistIndex);
+                }
                 await executePlayPlan(api, plan, executionOptions);
                 const now = Date.now();
                 const nextTrackInstanceId = trackInstanceIdRef.current + 1;
@@ -308,8 +314,10 @@ export function usePlaybackController({
                         autoFired: false,
                         userCancelled: false,
                     };
+                    setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
                 } else {
                     autoAdvanceGuardRef.current = null;
+                    setAutoAdvanceDueAtMs(null);
                 }
                 if (resolvedDuration !== item.durationMs || subsongCount !== item.subsongCount) {
                     setPlaylist((prev) =>
@@ -320,14 +328,11 @@ export function usePlaybackController({
                         ),
                     );
                 }
-                if (typeof options?.playlistIndex === 'number' && options.playlistIndex >= 0) {
-                    setCurrentIndex(options.playlistIndex);
-                }
                 setIsPlaying(true);
                 setIsPaused(false);
             });
         },
-        [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, resolveSidMetadata, resolveSonglengthDurationMsForPath, resolveUltimateSidDurationByMd5, setCurrentIndex, setCurrentSubsongCount, setDurationMs, setElapsedMs, setIsPaused, setIsPlaying, setPlayedMs, setPlaylist, setTrackInstanceId, autoAdvanceGuardRef, playedClockRef, trackInstanceIdRef, trackStartedAtRef],
+        [durationFallbackMs, enqueuePlayTransition, ensurePlaybackConnection, localEntriesBySourceId, localSourceTreeUris, resolveSidMetadata, resolveSonglengthDurationMsForPath, resolveUltimateSidDurationByMd5, setCurrentIndex, setCurrentSubsongCount, setDurationMs, setElapsedMs, setIsPaused, setIsPlaying, setPlayedMs, setPlaylist, setTrackInstanceId, setAutoAdvanceDueAtMs, autoAdvanceGuardRef, playedClockRef, trackInstanceIdRef, trackStartedAtRef],
     );
 
     const startPlaylist = useCallback(async (items: PlaylistItem[], startIndex = 0) => {
@@ -359,10 +364,11 @@ export function usePlaybackController({
             setIsPaused(false);
             trackStartedAtRef.current = null;
             autoAdvanceGuardRef.current = null;
+            setAutoAdvanceDueAtMs(null);
         } finally {
             setIsPlaylistLoading(false);
         }
-    }, [applySonglengthsToItems, playItem, playedClockRef, setIsPaused, setIsPlaying, setIsPlaylistLoading, setPlayedMs, setPlaylist, trackStartedAtRef, autoAdvanceGuardRef]);
+    }, [applySonglengthsToItems, playItem, playedClockRef, setAutoAdvanceDueAtMs, setIsPaused, setIsPlaying, setIsPlaylistLoading, setPlayedMs, setPlaylist, trackStartedAtRef, autoAdvanceGuardRef]);
 
     const handlePlay = useCallback(trace(async function handlePlay() {
         const targetIndex = resolvePlayTargetIndex(playlist.length, currentIndex);
@@ -433,7 +439,8 @@ export function usePlaybackController({
         setCurrentSubsongCount(null);
         trackStartedAtRef.current = null;
         autoAdvanceGuardRef.current = null;
-    }), [currentIndex, isPaused, isPlaying, playlist, restoreVolumeOverrides, resumeMachineWithRetry, withTimeout, trace, playedClockRef, setPlayedMs, setIsPlaying, setIsPaused, setElapsedMs, setDurationMs, setCurrentSubsongCount, trackStartedAtRef, autoAdvanceGuardRef]);
+        setAutoAdvanceDueAtMs(null);
+    }), [currentIndex, isPaused, isPlaying, playlist, restoreVolumeOverrides, resumeMachineWithRetry, withTimeout, trace, playedClockRef, setAutoAdvanceDueAtMs, setPlayedMs, setIsPlaying, setIsPaused, setElapsedMs, setDurationMs, setCurrentSubsongCount, trackStartedAtRef, autoAdvanceGuardRef]);
 
     const handlePauseResume = useCallback(trace(async function handlePauseResume() {
         if (!isPlaying) return;
@@ -467,6 +474,7 @@ export function usePlaybackController({
                     autoAdvanceGuardRef.current.dueAtMs = now + Math.max(0, durationMs - elapsedMs);
                     autoAdvanceGuardRef.current.autoFired = false;
                     autoAdvanceGuardRef.current.userCancelled = false;
+                    setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
                 }
             } else {
                 const pauseItems = await resolveEnabledSidVolumeItems();
@@ -482,6 +490,7 @@ export function usePlaybackController({
                 playedClockRef.current.pause(now);
                 setPlayedMs(playedClockRef.current.current(now));
                 setIsPaused(true);
+                setAutoAdvanceDueAtMs(null);
             }
         } catch (error) {
             reportUserError({
@@ -495,7 +504,7 @@ export function usePlaybackController({
                 },
             });
         }
-    }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, dispatchVolume, durationMs, elapsedMs, isPaused, isPlaying, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, trace, pauseMuteSnapshotRef, playedClockRef, resumeMachineWithRetry, setPlayedMs, setIsPaused, trackStartedAtRef, autoAdvanceGuardRef]);
+    }), [applyAudioMixerUpdates, buildEnabledSidMuteUpdates, captureSidMuteSnapshot, dispatchVolume, durationMs, elapsedMs, isPaused, isPlaying, resolveEnabledSidVolumeItems, sidEnablement, snapshotToUpdates, trace, pauseMuteSnapshotRef, playedClockRef, resumeMachineWithRetry, setAutoAdvanceDueAtMs, setPlayedMs, setIsPaused, trackStartedAtRef, autoAdvanceGuardRef]);
 
     const handleNext = useCallback(async (source: 'auto' | 'user' = 'user', expectedTrackInstanceId?: number) => {
         if (!playlist.length) return;
@@ -519,6 +528,7 @@ export function usePlaybackController({
                 setIsPlaying(false);
                 setIsPaused(false);
                 autoAdvanceGuardRef.current = null;
+                setAutoAdvanceDueAtMs(null);
                 return;
             }
             nextIndex = 0;
@@ -545,8 +555,9 @@ export function usePlaybackController({
             setIsPaused(false);
             trackStartedAtRef.current = null;
             autoAdvanceGuardRef.current = null;
+            setAutoAdvanceDueAtMs(null);
         }
-    }, [cancelAutoAdvance, currentIndex, playItem, playlist, repeatEnabled, playedClockRef, setPlayedMs, setIsPlaying, setIsPaused, autoAdvanceGuardRef, trackStartedAtRef]);
+    }, [cancelAutoAdvance, currentIndex, playItem, playlist, repeatEnabled, playedClockRef, setAutoAdvanceDueAtMs, setPlayedMs, setIsPlaying, setIsPaused, autoAdvanceGuardRef, trackStartedAtRef]);
 
     const handlePrevious = useCallback(async () => {
         if (!playlist.length) return;
@@ -576,8 +587,9 @@ export function usePlaybackController({
             setIsPaused(false);
             trackStartedAtRef.current = null;
             autoAdvanceGuardRef.current = null;
+            setAutoAdvanceDueAtMs(null);
         }
-    }, [cancelAutoAdvance, currentIndex, playItem, playlist, playedClockRef, setPlayedMs, setIsPlaying, setIsPaused, trackStartedAtRef, autoAdvanceGuardRef]);
+    }, [cancelAutoAdvance, currentIndex, playItem, playlist, playedClockRef, setAutoAdvanceDueAtMs, setPlayedMs, setIsPlaying, setIsPaused, trackStartedAtRef, autoAdvanceGuardRef]);
 
     const playlistItemDuration = useCallback(
         (item: PlaylistItem, index: number) => {

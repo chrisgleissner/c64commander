@@ -19,6 +19,8 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 
 /**
@@ -36,6 +38,11 @@ class BackgroundExecutionService : Service() {
         private const val CHANNEL_ID = "c64_background_execution"
         private const val NOTIFICATION_ID = 1
         private const val WAKELOCK_TAG = "c64commander:background_execution"
+
+        const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
+        const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
+        const val EXTRA_DUE_AT_MS = "dueAtMs"
+        const val EXTRA_FIRED_AT_MS = "firedAtMs"
 
         @Volatile
         var isRunning = false
@@ -61,9 +68,26 @@ class BackgroundExecutionService : Service() {
             }
             context.stopService(Intent(context, BackgroundExecutionService::class.java))
         }
+
+        fun updateDueAt(context: Context, dueAtMs: Long?) {
+            val intent = Intent(context, BackgroundExecutionService::class.java)
+            intent.action = ACTION_UPDATE_DUE_AT
+            if (dueAtMs != null) {
+                intent.putExtra(EXTRA_DUE_AT_MS, dueAtMs)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var dueAtMs: Long? = null
+    private var dueRunnable: Runnable? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -72,15 +96,30 @@ class BackgroundExecutionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.i(TAG, "Service starting")
-        startForeground(NOTIFICATION_ID, buildNotification())
-        acquireWakeLock()
-        isRunning = true
+        val action = intent?.action
+        if (!isRunning) {
+            Log.i(TAG, "Service starting")
+            startForeground(NOTIFICATION_ID, buildNotification())
+            acquireWakeLock()
+            isRunning = true
+        }
+
+        if (action == ACTION_UPDATE_DUE_AT) {
+            val nextDue = intent.getLongExtra(EXTRA_DUE_AT_MS, -1L)
+            if (nextDue <= 0L) {
+                updateDueAtInternal(null)
+            } else {
+                updateDueAtInternal(nextDue)
+            }
+            return START_STICKY
+        }
+
         return START_STICKY
     }
 
     override fun onDestroy() {
         Log.i(TAG, "Service stopping")
+        updateDueAtInternal(null)
         releaseWakeLock()
         isRunning = false
         super.onDestroy()
@@ -137,5 +176,38 @@ class BackgroundExecutionService : Service() {
             }
         }
         wakeLock = null
+    }
+
+    private fun updateDueAtInternal(nextDueAtMs: Long?) {
+        dueAtMs = nextDueAtMs
+        dueRunnable?.let { handler.removeCallbacks(it) }
+        dueRunnable = null
+
+        if (nextDueAtMs == null) {
+            Log.d(TAG, "Cleared dueAtMs watchdog")
+            return
+        }
+
+        val delay = maxOf(0L, nextDueAtMs - System.currentTimeMillis())
+        val runnable = Runnable {
+            val currentDue = dueAtMs
+            if (currentDue == null) return@Runnable
+            val now = System.currentTimeMillis()
+            if (now < currentDue) {
+                // Re-schedule in case the clock changed.
+                updateDueAtInternal(currentDue)
+                return@Runnable
+            }
+            val broadcast = Intent(ACTION_AUTO_SKIP_DUE)
+            broadcast.putExtra(EXTRA_DUE_AT_MS, currentDue)
+            broadcast.putExtra(EXTRA_FIRED_AT_MS, now)
+            sendBroadcast(broadcast)
+            Log.i(TAG, "Auto-skip watchdog fired (dueAtMs=$currentDue, now=$now)")
+            dueAtMs = null
+            dueRunnable = null
+        }
+        dueRunnable = runnable
+        handler.postDelayed(runnable, delay)
+        Log.d(TAG, "Scheduled dueAtMs watchdog (dueAtMs=$nextDueAtMs, delayMs=$delay)")
     }
 }
