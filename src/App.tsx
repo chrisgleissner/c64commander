@@ -39,6 +39,8 @@ import { TestHeartbeat } from '@/components/TestHeartbeat';
 import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace';
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction';
+import { installConsoleDiagnosticsBridge } from '@/lib/diagnostics/logger';
+import { startNativeDiagnosticsBridge, stopNativeDiagnosticsBridge } from '@/lib/native/diagnosticsBridge';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -95,6 +97,7 @@ const AppRoutes = () => (
     <GlobalButtonInteractionModel />
     <RouteRefresher />
     <DebugStartupLogger />
+    <DiagnosticsRuntimeBridge />
     <TraceContextBridge />
     <GlobalDiagnosticsOverlay />
     <ConnectionController />
@@ -192,6 +195,18 @@ const GlobalErrorListener = () => {
 const GlobalButtonInteractionModel = () => {
   useEffect(() => {
     return registerGlobalButtonInteractionModel();
+  }, []);
+  return null;
+};
+
+const DiagnosticsRuntimeBridge = () => {
+  useEffect(() => {
+    const uninstallConsoleBridge = installConsoleDiagnosticsBridge();
+    void startNativeDiagnosticsBridge();
+    return () => {
+      uninstallConsoleBridge();
+      void stopNativeDiagnosticsBridge();
+    };
   }, []);
   return null;
 };

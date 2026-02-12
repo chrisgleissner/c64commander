@@ -205,8 +205,9 @@ All trace events share a common envelope:
 
 Each trace event payload is automatically enriched with a minimal context block:
 
-- `lifecycleState`: `foreground | background | unknown`
-- `sourceKind`: `local | ultimate | hvsc | saf` (null when not applicable)
+- `lifecycleState`: `foreground | background | locked | unknown`
+- `sourceKind`: `local | ultimate | hvsc` (null when not applicable)
+- `localAccessMode`: `entries | saf` (null when sourceKind is not `local`)
 - `trackInstanceId`: monotonically increasing playback instance id (null when not applicable)
 - `playlistItemId`: current playlist item id (null when not applicable)
 

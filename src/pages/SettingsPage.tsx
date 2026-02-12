@@ -1547,7 +1547,7 @@ export default function SettingsPage() {
         <DialogContent className="max-h-[calc(100dvh-2rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden">
           <DialogHeader>
             <DialogTitle>Diagnostics</DialogTitle>
-            <DialogDescription>Review error logs, logs, traces, and action summaries.</DialogDescription>
+            <DialogDescription>Review warnings/errors, logs, traces, and action summaries.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2">
             <AlertDialog>
@@ -1558,7 +1558,7 @@ export default function SettingsPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Clear diagnostics</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently clear all error logs, logs, traces, and actions. This cannot be undone.
+                    This will permanently clear all warning/error logs, logs, traces, and actions. This cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -1615,7 +1615,7 @@ export default function SettingsPage() {
             </TabsList>
             <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-muted-foreground">Total errors: {errorLogs.length}</p>
+                <p className="text-xs text-muted-foreground">Total warnings/errors: {errorLogs.length}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1626,7 +1626,7 @@ export default function SettingsPage() {
                 </Button>
               </div>
               {filteredErrorLogs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No error logs recorded.</p>
+                <p className="text-sm text-muted-foreground">No warning or error logs recorded.</p>
               ) : (
                 filteredErrorLogs.map((entry) => (
                   <DiagnosticsListItem

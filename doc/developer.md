@@ -151,6 +151,28 @@ VS Code workspace settings in `.vscode/settings.json` enable:
 - JSON/Markdown: built-in VS Code formatters
 - Kotlin: format on save is enabled; no repo-enforced Kotlin formatter is configured
 
+## Diagnostics logging contract
+
+- App-level logging uses a single structured path via `src/lib/diagnostics/logger.ts` and `src/lib/logging.ts`.
+- Canonical log envelope remains:
+  - `id`, `level`, `message`, `timestamp`, `details`
+- Context keys in `details` use runtime trace/action names:
+  - `correlationId`, `origin`, `lifecycleState`, `sourceKind`, `localAccessMode`,
+    `trackInstanceId`, `playlistItemId`, `actionName`, `component`
+- Error payload in `details` uses canonical shape:
+  - `error: { name, message, stack }`
+  - Legacy compatibility fields (`errorName`, `errorStack`, string `error`) remain readable in existing data.
+
+### Diagnostics tabs semantics
+
+- **Logs** tab: all levels (`debug`, `info`, `warn`, `error`).
+- **Errors** tab: `warn` + `error`.
+
+### Native log mirroring
+
+- Android plugins/services mirror structured logs to JS diagnostics via `DiagnosticsBridge`.
+- Native logs continue to write to logcat and are additionally forwarded with trace-context fields when available.
+
 ## build - One-stop build tool
 
 All common development tasks use `./build`:

@@ -158,6 +158,17 @@ export function usePlaybackPersistence({
         return { tracks, playlistItems };
     };
 
+    const persistSerializedPlaylist = async (
+        serialized: { tracks: TrackRecord[]; playlistItems: PlaylistItemRecord[] },
+        chunkSize = 500,
+    ) => {
+        for (let index = 0; index < serialized.tracks.length; index += chunkSize) {
+            const chunk = serialized.tracks.slice(index, index + chunkSize);
+            await playlistRepository.upsertTracks(chunk);
+        }
+        await playlistRepository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
+    };
+
     const hydrateFromRepository = async () => {
         const playlistItems = await playlistRepository.getPlaylistItems(playlistStorageKey);
         if (!playlistItems.length) return { items: [] as PlaylistItem[], index: -1 };
@@ -209,81 +220,80 @@ export function usePlaybackPersistence({
         hasHydratedPlaylistRef.current = true;
         (async () => {
             try {
-            const seenKeys = new Set<string>();
-            const candidateKeys: string[] = [];
-            const pushKey = (key: string | null | undefined) => {
-                if (!key || seenKeys.has(key)) return;
-                seenKeys.add(key);
-                candidateKeys.push(key);
-            };
+                const seenKeys = new Set<string>();
+                const candidateKeys: string[] = [];
+                const pushKey = (key: string | null | undefined) => {
+                    if (!key || seenKeys.has(key)) return;
+                    seenKeys.add(key);
+                    candidateKeys.push(key);
+                };
 
-            const defaultKey = buildPlaylistStorageKey('default');
-            pushKey(playlistStorageKey);
-            if (resolvedDeviceId !== 'default') {
-                pushKey(defaultKey);
-            }
-
-            for (let i = 0; i < localStorage.length; i += 1) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(PLAYLIST_STORAGE_PREFIX)) {
-                    pushKey(key);
+                const defaultKey = buildPlaylistStorageKey('default');
+                pushKey(playlistStorageKey);
+                if (resolvedDeviceId !== 'default') {
+                    pushKey(defaultKey);
                 }
-            }
 
-            if (!candidateKeys.length) {
-                const repositoryRestored = await hydrateFromRepository();
-                if (repositoryRestored.items.length) {
-                    setPlaylist(repositoryRestored.items);
-                    setCurrentIndex(repositoryRestored.index);
+                for (let i = 0; i < localStorage.length; i += 1) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith(PLAYLIST_STORAGE_PREFIX)) {
+                        pushKey(key);
+                    }
                 }
-                return;
-            }
 
-            const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];
-            for (const key of candidateKeys) {
-                const raw = localStorage.getItem(key);
-                if (!raw) continue;
-                try {
-                    const parsed = JSON.parse(raw) as StoredPlaylistState;
-                    candidates.push({ key, parsed });
-                } catch (error) {
-                    addErrorLog('Failed to parse stored playlist candidate', {
-                        key,
-                        error: (error as Error).message,
-                    });
+                if (!candidateKeys.length) {
+                    const repositoryRestored = await hydrateFromRepository();
+                    if (repositoryRestored.items.length) {
+                        setPlaylist(repositoryRestored.items);
+                        setCurrentIndex(repositoryRestored.index);
+                    }
+                    return;
                 }
-            }
 
-            if (!candidates.length) {
-                const repositoryRestored = await hydrateFromRepository();
-                if (repositoryRestored.items.length) {
-                    setPlaylist(repositoryRestored.items);
-                    setCurrentIndex(repositoryRestored.index);
+                const candidates: Array<{ key: string; parsed: StoredPlaylistState }> = [];
+                for (const key of candidateKeys) {
+                    const raw = localStorage.getItem(key);
+                    if (!raw) continue;
+                    try {
+                        const parsed = JSON.parse(raw) as StoredPlaylistState;
+                        candidates.push({ key, parsed });
+                    } catch (error) {
+                        addErrorLog('Failed to parse stored playlist candidate', {
+                            key,
+                            error: (error as Error).message,
+                        });
+                    }
                 }
-                return;
-            }
 
-            const preferred =
-                candidates.find((entry) => entry.parsed?.items?.length)
-                ?? candidates[0];
-            const restored = hydrateStoredPlaylist(preferred.parsed);
-            if (hasPlaylistRef.current && restored.items.length === 0) {
-                return;
+                if (!candidates.length) {
+                    const repositoryRestored = await hydrateFromRepository();
+                    if (repositoryRestored.items.length) {
+                        setPlaylist(repositoryRestored.items);
+                        setCurrentIndex(repositoryRestored.index);
+                    }
+                    return;
+                }
+
+                const preferred =
+                    candidates.find((entry) => entry.parsed?.items?.length)
+                    ?? candidates[0];
+                const restored = hydrateStoredPlaylist(preferred.parsed);
+                if (hasPlaylistRef.current && restored.items.length === 0) {
+                    return;
+                }
+                setPlaylist(restored.items);
+                setCurrentIndex(restored.index);
+                if (restored.items.length) {
+                    const serialized = serializePlaylistToRepository(restored.items, playlistStorageKey);
+                    await persistSerializedPlaylist(serialized);
+                }
+            } catch (error) {
+                addErrorLog('Failed to hydrate stored playlist', {
+                    playlistStorageKey,
+                    resolvedDeviceId,
+                    error: (error as Error).message,
+                });
             }
-            setPlaylist(restored.items);
-            setCurrentIndex(restored.index);
-            if (restored.items.length) {
-                const serialized = serializePlaylistToRepository(restored.items, playlistStorageKey);
-                await playlistRepository.upsertTracks(serialized.tracks);
-                await playlistRepository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
-            }
-        } catch (error) {
-            addErrorLog('Failed to hydrate stored playlist', {
-                playlistStorageKey,
-                resolvedDeviceId,
-                error: (error as Error).message,
-            });
-        }
         })().catch((error) => {
             addErrorLog('Playlist hydration task failed', {
                 playlistStorageKey,
@@ -378,8 +388,12 @@ export function usePlaybackPersistence({
                 localStorage.setItem(defaultKey, payload);
             }
             const serialized = serializePlaylistToRepository(playlist, playlistStorageKey);
-            void playlistRepository.upsertTracks(serialized.tracks);
-            void playlistRepository.replacePlaylistItems(playlistStorageKey, serialized.playlistItems);
+            void persistSerializedPlaylist(serialized).catch((error) => {
+                addErrorLog('Failed to persist playlist repository state', {
+                    playlistStorageKey,
+                    error: (error as Error).message,
+                });
+            });
         } catch (error) {
             addErrorLog('Failed to persist playlist', {
                 playlistStorageKey,

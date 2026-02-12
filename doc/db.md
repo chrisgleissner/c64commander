@@ -10,8 +10,8 @@ This document defines the persistent relational schema owned by C64 Commander fo
 
 ## Current State vs Target State
 
-- Current runtime state (today): no relational tables are implemented yet; most persistence uses localStorage/sessionStorage plus app filesystem.
-- Target runtime state (planned): app-owned DB with the tables below, used behind TypeScript repository interfaces.
+- Current runtime state (today): playlist/query/session persistence runs through TypeScript repository interfaces with IndexedDB (durable) and localStorage fallback adapters.
+- Target runtime state (planned): app-owned relational tables with explicit migration management and FTS-backed querying as defined below.
 
 ## Conventions
 

@@ -9,11 +9,11 @@
 package uk.gleissner.c64commander
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
-import android.util.Log
 import androidx.activity.result.ActivityResult
 import androidx.documentfile.provider.DocumentFile
 import com.getcapacitor.JSObject
@@ -29,13 +29,24 @@ class FolderPickerPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FolderPickerPlugin"
 
-  private fun traceSummary(call: PluginCall): String {
-    val trace = call.getObject("traceContext") ?: return ""
-    val correlationId = trace.getString("correlationId") ?: ""
-    val trackInstanceId = trace.getInteger("trackInstanceId")?.toString() ?: ""
-    val playlistItemId = trace.getString("playlistItemId") ?: ""
-    if (correlationId.isBlank() && trackInstanceId.isBlank() && playlistItemId.isBlank()) return ""
-    return "trace(correlationId=$correlationId,trackInstanceId=$trackInstanceId,playlistItemId=$playlistItemId)"
+  private fun traceFields(call: PluginCall): AppLogger.TraceFields {
+    val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
+    return AppLogger.TraceFields(
+      correlationId = trace.getString("correlationId"),
+      trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
+      playlistItemId = trace.getString("playlistItemId"),
+      sourceKind = trace.getString("sourceKind"),
+      localAccessMode = trace.getString("localAccessMode"),
+      lifecycleState = trace.getString("lifecycleState"),
+    )
+  }
+
+  private fun pluginContextOrNull(): Context? {
+    return try {
+      context
+    } catch (_: Throwable) {
+      null
+    }
   }
 
   private fun parseStringArray(call: PluginCall, key: String): List<String> {
@@ -80,9 +91,7 @@ class FolderPickerPlugin : Plugin() {
       try {
         intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse(initialUriString))
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.w(logTag, "Invalid initial URI provided$suffix", error)
+        AppLogger.warn(pluginContextOrNull(), logTag, "Invalid initial URI provided", "FolderPickerPlugin", error, traceFields(call))
       }
     }
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -108,9 +117,7 @@ class FolderPickerPlugin : Plugin() {
     try {
       context.contentResolver.takePersistableUriPermission(treeUri, flags)
     } catch (error: SecurityException) {
-      val trace = traceSummary(call)
-      val suffix = if (trace.isBlank()) "" else " ($trace)"
-      Log.e(logTag, "Persistable permission rejected$suffix", error)
+      AppLogger.error(pluginContextOrNull(), logTag, "Persistable permission rejected", "FolderPickerPlugin", error, traceFields(call))
       call.reject("Persistable permission rejected: ${error.message}", error)
       return
     }
@@ -131,9 +138,7 @@ class FolderPickerPlugin : Plugin() {
         response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.e(logTag, "Folder picker directory resolution failed$suffix", error)
+        AppLogger.error(pluginContextOrNull(), logTag, "Folder picker directory resolution failed", "FolderPickerPlugin", error, traceFields(call))
         call.reject(error.message, error)
       }
     }
@@ -157,9 +162,7 @@ class FolderPickerPlugin : Plugin() {
     try {
       context.contentResolver.takePersistableUriPermission(fileUri, flags)
     } catch (error: SecurityException) {
-      val trace = traceSummary(call)
-      val suffix = if (trace.isBlank()) "" else " ($trace)"
-      Log.e(logTag, "Persistable permission rejected$suffix", error)
+      AppLogger.error(pluginContextOrNull(), logTag, "Persistable permission rejected", "FolderPickerPlugin", error, traceFields(call))
       call.reject("Persistable permission rejected: ${error.message}", error)
       return
     }
@@ -203,9 +206,7 @@ class FolderPickerPlugin : Plugin() {
           try {
             context.contentResolver.takePersistableUriPermission(parentTreeUri, flags)
           } catch (error: SecurityException) {
-            val trace = traceSummary(call)
-            val suffix = if (trace.isBlank()) "" else " ($trace)"
-            Log.w(logTag, "Parent tree permission rejected$suffix", error)
+            AppLogger.warn(pluginContextOrNull(), logTag, "Parent tree permission rejected", "FolderPickerPlugin", error, traceFields(call))
           }
           val parentRoot = DocumentFile.fromTreeUri(context, parentTreeUri)
           response.put("parentTreeUri", parentTreeUri.toString())
@@ -214,9 +215,7 @@ class FolderPickerPlugin : Plugin() {
         response.put("permissionPersisted", true)
         call.resolve(response)
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.e(logTag, "Folder picker file resolution failed$suffix", error)
+        AppLogger.error(pluginContextOrNull(), logTag, "Folder picker file resolution failed", "FolderPickerPlugin", error, traceFields(call))
         call.reject(error.message, error)
       }
     }
@@ -261,9 +260,7 @@ class FolderPickerPlugin : Plugin() {
         response.put("entries", entries)
         call.resolve(response)
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.e(logTag, "SAF listChildren failed$suffix", error)
+        AppLogger.error(pluginContextOrNull(), logTag, "SAF listChildren failed", "FolderPickerPlugin", error, traceFields(call))
         call.reject(error.message, error)
       }
     }
@@ -303,9 +300,7 @@ class FolderPickerPlugin : Plugin() {
         result.put("data", encoded)
         call.resolve(result)
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.e(logTag, "SAF readFile failed$suffix", error)
+        AppLogger.error(pluginContextOrNull(), logTag, "SAF readFile failed", "FolderPickerPlugin", error, traceFields(call))
         call.reject(error.message, error)
       }
     }
@@ -337,9 +332,7 @@ class FolderPickerPlugin : Plugin() {
         result.put("data", encoded)
         call.resolve(result)
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.e(logTag, "SAF readFileFromTree failed$suffix", error)
+        AppLogger.error(pluginContextOrNull(), logTag, "SAF readFileFromTree failed", "FolderPickerPlugin", error, traceFields(call))
         call.reject(error.message, error)
       }
     }
@@ -400,9 +393,7 @@ class FolderPickerPlugin : Plugin() {
         response.put("modifiedAt", isoTimestampNow())
         call.resolve(response)
       } catch (error: Exception) {
-        val trace = traceSummary(call)
-        val suffix = if (trace.isBlank()) "" else " ($trace)"
-        Log.e(logTag, "SAF writeFileToTree failed$suffix", error)
+        AppLogger.error(pluginContextOrNull(), logTag, "SAF writeFileToTree failed", "FolderPickerPlugin", error, traceFields(call))
         call.reject(error.message, error)
       }
     }

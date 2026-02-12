@@ -17,6 +17,7 @@ import {
   getLogs,
 } from '@/lib/logging';
 import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
+import { installConsoleDiagnosticsBridge, logger } from '@/lib/diagnostics/logger';
 
 vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
   shouldSuppressDiagnosticsSideEffects: vi.fn().mockReturnValue(false),
@@ -126,7 +127,7 @@ describe('logging', () => {
 
     const details = buildErrorLogDetails(error, { context: 'rest' });
 
-    expect(details.error).toBe('boom');
+    expect(details.error).toEqual(expect.objectContaining({ name: 'Error', message: 'boom' }));
     expect(details.errorName).toBe('Error');
     expect(details.errorStack).toContain('line-1');
     expect(details.errorStack).toContain('stack truncated');
@@ -161,7 +162,43 @@ describe('logging', () => {
   it('preserves existing error message in details', () => {
     const error = new Error('original');
     const details = buildErrorLogDetails(error, { error: 'override' });
-    expect(details.error).toBe('override');
+    expect(details.error).toEqual(expect.objectContaining({ message: 'override' }));
+  });
+
+  it('treats warnings as problem logs in Errors tab selector', () => {
+    addLog('warn', 'slow response');
+    addErrorLog('boom');
+    expect(getErrorLogs().map((entry) => entry.level)).toEqual(['error', 'warn']);
+  });
+
+  it('writes canonical error payloads through diagnostics logger wrapper', () => {
+    logger.error('wrapper failure', {
+      details: { error: new Error('wrapped failure') },
+      includeConsole: false,
+    });
+
+    const logs = getLogs();
+    expect(logs).toHaveLength(1);
+    const details = logs[0].details as { error?: { name?: string; message?: string } };
+    expect(details.error?.name).toBe('Error');
+    expect(details.error?.message).toBe('wrapped failure');
+  });
+
+  it('bridges console warn/error into diagnostics logs', () => {
+    const uninstallBridge = installConsoleDiagnosticsBridge();
+    const warnSpy = vi.spyOn(console, 'warn');
+    const errorSpy = vi.spyOn(console, 'error');
+
+    console.warn('bridge warn', { code: 1 });
+    console.error('bridge error', { code: 2 });
+
+    uninstallBridge();
+
+    expect(warnSpy).toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    const messages = getLogs().map((entry) => entry.message);
+    expect(messages).toContain('bridge warn');
+    expect(messages).toContain('bridge error');
   });
 
   it('redacts logs when requested', () => {

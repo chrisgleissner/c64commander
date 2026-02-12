@@ -18,7 +18,6 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.util.Log
 import android.os.Handler
 import android.os.Looper
 import androidx.core.app.NotificationCompat
@@ -50,7 +49,7 @@ class BackgroundExecutionService : Service() {
 
         fun start(context: Context) {
             if (isRunning) {
-                Log.d(TAG, "Already running — ignoring start request")
+                AppLogger.debug(context, TAG, "Already running — ignoring start request", "BackgroundExecutionService")
                 return
             }
             val intent = Intent(context, BackgroundExecutionService::class.java)
@@ -63,7 +62,7 @@ class BackgroundExecutionService : Service() {
 
         fun stop(context: Context) {
             if (!isRunning) {
-                Log.d(TAG, "Not running — ignoring stop request")
+                AppLogger.debug(context, TAG, "Not running — ignoring stop request", "BackgroundExecutionService")
                 return
             }
             context.stopService(Intent(context, BackgroundExecutionService::class.java))
@@ -91,14 +90,14 @@ class BackgroundExecutionService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        Log.i(TAG, "Service created")
+        AppLogger.info(this, TAG, "Service created", "BackgroundExecutionService")
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action
         if (!isRunning) {
-            Log.i(TAG, "Service starting")
+            AppLogger.info(this, TAG, "Service starting", "BackgroundExecutionService")
             startForeground(NOTIFICATION_ID, buildNotification())
             acquireWakeLock()
             isRunning = true
@@ -118,7 +117,7 @@ class BackgroundExecutionService : Service() {
     }
 
     override fun onDestroy() {
-        Log.i(TAG, "Service stopping")
+        AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
         updateDueAtInternal(null)
         releaseWakeLock()
         isRunning = false
@@ -165,14 +164,14 @@ class BackgroundExecutionService : Service() {
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
             acquire()
         }
-        Log.d(TAG, "WakeLock acquired")
+        AppLogger.debug(this, TAG, "WakeLock acquired", "BackgroundExecutionService")
     }
 
     private fun releaseWakeLock() {
         wakeLock?.let {
             if (it.isHeld) {
                 it.release()
-                Log.d(TAG, "WakeLock released")
+                AppLogger.debug(this, TAG, "WakeLock released", "BackgroundExecutionService")
             }
         }
         wakeLock = null
@@ -184,7 +183,7 @@ class BackgroundExecutionService : Service() {
         dueRunnable = null
 
         if (nextDueAtMs == null) {
-            Log.d(TAG, "Cleared dueAtMs watchdog")
+            AppLogger.debug(this, TAG, "Cleared dueAtMs watchdog", "BackgroundExecutionService")
             return
         }
 
@@ -202,12 +201,12 @@ class BackgroundExecutionService : Service() {
             broadcast.putExtra(EXTRA_DUE_AT_MS, currentDue)
             broadcast.putExtra(EXTRA_FIRED_AT_MS, now)
             sendBroadcast(broadcast)
-            Log.i(TAG, "Auto-skip watchdog fired (dueAtMs=$currentDue, now=$now)")
+            AppLogger.info(this, TAG, "Auto-skip watchdog fired (dueAtMs=$currentDue, now=$now)", "BackgroundExecutionService")
             dueAtMs = null
             dueRunnable = null
         }
         dueRunnable = runnable
         handler.postDelayed(runnable, delay)
-        Log.d(TAG, "Scheduled dueAtMs watchdog (dueAtMs=$nextDueAtMs, delayMs=$delay)")
+        AppLogger.debug(this, TAG, "Scheduled dueAtMs watchdog (dueAtMs=$nextDueAtMs, delayMs=$delay)", "BackgroundExecutionService")
     }
 }

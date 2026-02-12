@@ -410,6 +410,43 @@ describe('indexedDB playlist repository', () => {
         expect(result.totalMatchCount).toBe(0);
     });
 
+    it('handles 100k playlist query windows deterministically', async () => {
+        const repository = getIndexedDbPlaylistDataRepository({ preferDurableStorage: false });
+        const trackCount = 100_000;
+        const tracks: TrackRecord[] = [];
+        const items: PlaylistItemRecord[] = [];
+
+        for (let index = 0; index < trackCount; index += 1) {
+            const id = String(index).padStart(6, '0');
+            tracks.push(buildTrack({
+                trackId: `track-${id}`,
+                title: `Large Track ${id}`,
+                path: `/library/large-track-${id}.sid`,
+                sourceLocator: `/library/large-track-${id}.sid`,
+                category: index % 3 === 0 ? 'song' : 'program',
+            }));
+            items.push(buildItem(`item-${id}`, `track-${id}`, id));
+        }
+
+        await repository.upsertTracks(tracks);
+        await repository.replacePlaylistItems('playlist-default', items);
+
+        const page = await repository.queryPlaylist({
+            playlistId: 'playlist-default',
+            query: 'large track 00',
+            categoryFilter: ['song'],
+            offset: 120,
+            limit: 40,
+            sort: 'playlist-position',
+        });
+
+        expect(page.totalMatchCount).toBeGreaterThan(1_000);
+        expect(page.rows).toHaveLength(40);
+        expect(page.rows[0]?.playlistItem.playlistItemId).toMatch(/^item-\d+$/);
+        expect(page.rows[0]?.playlistItem.sortKey <= page.rows[39]?.playlistItem.sortKey).toBe(true);
+        expect(page.rows.every((row) => row.track.category === 'song')).toBe(true);
+    });
+
     it('uses fallback IndexedDB error messages when request.error is missing', async () => {
         Object.defineProperty(globalThis, 'indexedDB', {
             value: createFakeIndexedDb({ failGet: true, failGetWithoutError: true }),

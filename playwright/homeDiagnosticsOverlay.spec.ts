@@ -398,7 +398,7 @@ test.describe('Home header and diagnostics overlay', () => {
         await shareForTab('Errors', 'diagnostics-share-errors', 'error-logs.json', (data) => {
             const entries = data as Array<{ id: string; level?: string }>;
             expect(entries.some((entry) => entry.id === 'err-1')).toBeTruthy();
-            expect(entries.every((entry) => entry.level === 'error')).toBeTruthy();
+            expect(entries.every((entry) => entry.level === 'warn' || entry.level === 'error')).toBeTruthy();
         });
         await shareForTab('Logs', 'diagnostics-share-logs', 'logs.json', (data) => {
             const entries = data as Array<{ id: string }>;

@@ -12,7 +12,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.util.Log
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
@@ -45,7 +44,7 @@ class BackgroundExecutionPlugin : Plugin() {
         try {
             context.registerReceiver(autoSkipReceiver, IntentFilter(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE))
         } catch (e: Exception) {
-            Log.e(logTag, "Failed to register auto-skip receiver", e)
+            AppLogger.error(context, logTag, "Failed to register auto-skip receiver", "BackgroundExecutionPlugin", e)
         }
     }
 
@@ -53,18 +52,29 @@ class BackgroundExecutionPlugin : Plugin() {
         try {
             context.unregisterReceiver(autoSkipReceiver)
         } catch (e: Exception) {
-            Log.w(logTag, "Failed to unregister auto-skip receiver", e)
+            AppLogger.warn(context, logTag, "Failed to unregister auto-skip receiver", "BackgroundExecutionPlugin", e)
         }
         super.handleOnDestroy()
     }
 
-    private fun traceSummary(call: PluginCall): String {
-        val trace = call.getObject("traceContext") ?: return ""
-        val correlationId = trace.getString("correlationId") ?: ""
-        val trackInstanceId = trace.getInteger("trackInstanceId")?.toString() ?: ""
-        val playlistItemId = trace.getString("playlistItemId") ?: ""
-        if (correlationId.isBlank() && trackInstanceId.isBlank() && playlistItemId.isBlank()) return ""
-        return "trace(correlationId=$correlationId,trackInstanceId=$trackInstanceId,playlistItemId=$playlistItemId)"
+    private fun traceFields(call: PluginCall): AppLogger.TraceFields {
+        val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
+        return AppLogger.TraceFields(
+            correlationId = trace.getString("correlationId"),
+            trackInstanceId = trace.getInteger("trackInstanceId")?.toString(),
+            playlistItemId = trace.getString("playlistItemId"),
+            sourceKind = trace.getString("sourceKind"),
+            localAccessMode = trace.getString("localAccessMode"),
+            lifecycleState = trace.getString("lifecycleState"),
+        )
+    }
+
+    private fun pluginContextOrNull(): Context? {
+        return try {
+            context
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     @PluginMethod
@@ -73,9 +83,7 @@ class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.start(context)
             call.resolve()
         } catch (e: Exception) {
-            val trace = traceSummary(call)
-            val suffix = if (trace.isBlank()) "" else " ($trace)"
-            Log.e(logTag, "Failed to start background execution$suffix", e)
+            AppLogger.error(pluginContextOrNull(), logTag, "Failed to start background execution", "BackgroundExecutionPlugin", e, traceFields(call))
             call.reject("Failed to start background execution", e)
         }
     }
@@ -91,9 +99,7 @@ class BackgroundExecutionPlugin : Plugin() {
             }
             call.resolve()
         } catch (e: Exception) {
-            val trace = traceSummary(call)
-            val suffix = if (trace.isBlank()) "" else " ($trace)"
-            Log.e(logTag, "Failed to update background auto-skip due time$suffix", e)
+            AppLogger.error(pluginContextOrNull(), logTag, "Failed to update background auto-skip due time", "BackgroundExecutionPlugin", e, traceFields(call))
             call.reject("Failed to update background auto-skip due time", e)
         }
     }
@@ -105,9 +111,7 @@ class BackgroundExecutionPlugin : Plugin() {
             BackgroundExecutionService.stop(context)
             call.resolve()
         } catch (e: Exception) {
-            val trace = traceSummary(call)
-            val suffix = if (trace.isBlank()) "" else " ($trace)"
-            Log.e(logTag, "Failed to stop background execution$suffix", e)
+            AppLogger.error(pluginContextOrNull(), logTag, "Failed to stop background execution", "BackgroundExecutionPlugin", e, traceFields(call))
             call.reject("Failed to stop background execution", e)
         }
     }

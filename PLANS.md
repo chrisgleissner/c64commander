@@ -624,14 +624,14 @@ Before executing a phase:
   - Use shared empty/error/loading language across sources.
   - Preserve source-specific data only where required (e.g., availability), not UI behavior.
 
-- [ ] **7.10 Integrate query-driven playlist UI**
+- [x] **7.10 Integrate query-driven playlist UI**
   - Dependency gate: execute after Phase 8.2-8.6 are complete.
   - Update Play page list hooks/components to consume paged query results from a shared playlist query API, not full in-memory arrays.
   - Keep the API stable so Phase 8 can swap in the durable repository implementation without UI contract changes.
   - Keep both collapsed and view-all modes source-agnostic and consistent.
   - Ensure list rendering remains virtualized and stable during rapid filter input updates.
 
-- [ ] **7.11 Add UI tests for 100k-scale source-transparent behavior**
+- [x] **7.11 Add UI tests for 100k-scale source-transparent behavior**
   - Dependency gate: execute after repository-backed adapter and FTS query path are active (Phase 8.4-8.6).
   - Playwright:
     - Seed a large mixed-source playlist fixture (100k rows via repository test adapter).
@@ -662,7 +662,7 @@ Before executing a phase:
 
 ### Subtasks
 
-- [ ] **8.1 Define canonical track and playlist schema**
+- [x] **8.1 Define canonical track and playlist schema**
   - Adopt `doc/db.md` as the authoritative table-level schema and implement normalized entities (no source-specific UI shape):
     - `tracks`, `sid_metadata`, `track_subsongs`,
     - `playlists`, `playlist_items`, `playlist_sessions`,
@@ -674,36 +674,36 @@ Before executing a phase:
     - query contract (paging/windowing, deterministic order, total counts).
   - Document invariants and migration policy in `doc/db.md` and `doc/developer.md`.
 
-- [ ] **8.2 Define TypeScript repository interfaces (single app API)**
+- [x] **8.2 Define TypeScript repository interfaces (single app API)**
   - Add repository contracts in TS (`TrackRepository`, `PlaylistRepository`, `PlaylistQueryRepository`, `RandomPlayRepository`).
   - Ensure all Play page hooks/services depend only on interfaces, not storage engine specifics.
 
-- [ ] **8.3 Implement SQLite-backed adapter for native (Android/iOS)**
+- [x] **8.3 Implement SQLite-backed adapter for native (Android/iOS)**
   - Use SQLite as primary persistent store for native targets.
   - Add deterministic schema migrations and versioning.
   - Keep repository behavior identical across Android and future iOS.
 
-- [ ] **8.4 Implement compatible web/dev adapter**
+- [x] **8.4 Implement compatible web/dev adapter**
   - Provide a web adapter (IndexedDB or SQLite WASM) that satisfies the same repository contracts.
   - Keep test seeding utilities compatible with both adapters.
 
-- [ ] **8.5 Implement indexed text search for instant filtering**
+- [x] **8.5 Implement indexed text search for instant filtering**
   - Add full-text search index over normalized searchable fields (title, author, released, path, tags/aliases, SID metadata facets where applicable).
   - Expose query API with `query + limit + offset/cursor + sort` and `totalMatchCount`.
   - Guarantee deterministic ordering for stable pagination.
 
-- [ ] **8.6 Implement 100k-safe playlist persistence and hydration**
+- [x] **8.6 Implement 100k-safe playlist persistence and hydration**
   - Replace localStorage full-blob playlist persistence with repository-backed persistence.
   - Persist playlist rows incrementally/chunked.
   - Persist playback session pointers separately from bulk metadata.
   - Add one-time migration from existing localStorage/sessionStorage payloads.
 
-- [ ] **8.7 Implement deterministic random play session model**
+- [x] **8.7 Implement deterministic random play session model**
   - Random play must operate on query result IDs, not source-specific objects.
   - Use a seed-backed shuffle session with cursor to avoid duplicates until cycle completion.
   - Ensure random play behavior is identical across sources and restarts.
 
-- [ ] **8.8 Add repository/query scalability tests**
+- [x] **8.8 Add repository/query scalability tests**
   - Unit/integration tests for 100k-track dataset:
     - text filter latency budget,
     - paged query correctness and stable ordering,
@@ -715,7 +715,7 @@ Before executing a phase:
     - rollback/failure behavior is deterministic and logs structured error context.
   - Add durability tests for restart/hydration at large sizes.
 
-- [ ] **8.9 Run full build and test suite**
+- [x] **8.9 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - `cd android && ./gradlew test`
   - Fix any regressions.
@@ -738,7 +738,7 @@ Before executing a phase:
 
 ### Subtasks
 
-- [ ] **9.1 Define a single logging contract and ownership boundaries**
+- [x] **9.1 Define a single logging contract and ownership boundaries**
   - Document a canonical log schema in `doc/developer.md` aligned with existing diagnostics storage and tracing terminology:
     - Top-level log envelope (unchanged shape): `id`, `level`, `message`, `timestamp`, `details` (`src/lib/logging.ts` contract).
     - Context inside `details` must use trace/action field names verbatim where applicable: `correlationId`, `origin`, `lifecycleState`, `sourceKind`, `localAccessMode`, `trackInstanceId`, `playlistItemId`, `actionName`, `component`.
@@ -750,7 +750,7 @@ Before executing a phase:
     - `recordTraceError` remains trace-domain instrumentation, not a replacement for diagnostics logs.
     - Native plugin logs must be mirrored into diagnostics logs through a bridge (not logcat-only).
 
-- [ ] **9.2 Normalize JS/TS logging entry points**
+- [x] **9.2 Normalize JS/TS logging entry points**
   - Introduce a unified logger wrapper (for example `src/lib/diagnostics/logger.ts`) exposing `debug/info/warn/error`.
   - The wrapper must:
     - Route to `addLog`/`addErrorLog` with the canonical envelope and `details` schema from 9.1.
@@ -758,7 +758,7 @@ Before executing a phase:
     - Capture and include active trace context using existing trace names (`correlationId`, `origin`, `lifecycleState`, `sourceKind`, `localAccessMode`, `trackInstanceId`, `playlistItemId`) when available.
   - Refactor direct `console.warn`/`console.info`/`console.error` usages in `src/` to this wrapper unless they are third-party/runtime shims.
 
-- [ ] **9.3 Make Errors tab include WARN + ERROR**
+- [x] **9.3 Make Errors tab include WARN + ERROR**
   - Update diagnostics log selectors so error views include both severities:
     - `src/lib/logging.ts`: replace `getErrorLogs()` filter from `level === 'error'` to `level === 'error' || level === 'warn'` (or introduce `getProblemLogs()` and migrate callers).
     - `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`: ensure the `Errors` tab uses the warn+error selector.
@@ -766,12 +766,12 @@ Before executing a phase:
     - Update tab copy for clarity where needed (e.g., empty state and totals) so "Errors" clearly means warnings + errors.
   - Keep severity glyph/color rendering unchanged (WARN remains distinct from ERROR).
 
-- [ ] **9.4 Add a global fallback for uncaptured console logs**
+- [x] **9.4 Add a global fallback for uncaptured console logs**
   - Add an optional diagnostics console bridge (startup-installed) that forwards `console.warn` and `console.error` into diagnostics logs with canonical metadata in `details` (for example `component: 'console'`) to prevent blind spots during migration.
   - Guard against log recursion and duplicate emission (notably `src/lib/logging.ts` parse-failure fallback currently calls `console.warn`).
   - Keep the bridge deterministic and disable-able for tests that assert raw console output.
 
-- [ ] **9.5 Bridge Android native logs into diagnostics**
+- [x] **9.5 Bridge Android native logs into diagnostics**
   - Implement a native->JS diagnostics log bridge plugin/event stream (or extend an existing plugin) that emits structured log events from Kotlin.
   - Create a shared Kotlin helper (for example `AppLogger`) used by plugins/services instead of direct `Log.*` calls:
     - Always writes to logcat.
@@ -784,7 +784,7 @@ Before executing a phase:
     - Mock server components where relevant for debugging (`MockC64U*`, `MockFtpServer`).
   - Add buffering/drain behavior for logs emitted before JS listener registration.
 
-- [ ] **9.6 Unify diagnostics export semantics**
+- [x] **9.6 Unify diagnostics export semantics**
   - Ensure exported diagnostics bundles clearly separate:
     - `logs` (all severities),
     - `error-logs` (warn+error),
@@ -792,14 +792,14 @@ Before executing a phase:
     - `actions`.
   - Verify redaction still applies to new structured fields and that exported log records preserve the canonical envelope (`id`, `level`, `message`, `timestamp`, `details`).
 
-- [ ] **9.7 Align diagnostics docs with runtime field names**
+- [x] **9.7 Align diagnostics docs with runtime field names**
   - Update `doc/diagnostics/tracing-spec.md` and `doc/developer.md` so context naming matches runtime types:
     - `sourceKind`: `local | ultimate | hvsc` (source identity),
     - `localAccessMode`: `entries | saf` (Android local access mode),
     - `lifecycleState`: includes `locked` where implemented.
   - Update diagnostics UX wording/docs where needed so "Errors" tab semantics (warn+error) are explicit.
 
-- [ ] **9.8 Tests for consolidated logging behavior**
+- [x] **9.8 Tests for consolidated logging behavior**
   - Unit tests:
     - Logger wrapper routes each severity correctly.
     - Errors selector returns `warn` + `error`.
@@ -812,7 +812,7 @@ Before executing a phase:
   - Playwright:
     - Trigger representative warn/error paths and assert visibility in diagnostics tabs.
 
-- [ ] **9.9 Run full build and test suite**
+- [x] **9.9 Run full build and test suite**
   - `npm run lint && npm run test && npm run build && npm run test:e2e`
   - `cd android && ./gradlew test`
   - Fix any regressions.
@@ -823,21 +823,21 @@ Before executing a phase:
 
 After all phases are complete:
 
-- [ ] `npm run lint` passes.
-- [ ] `npm run test` passes (all unit tests).
-- [ ] `npm run build` passes.
-- [ ] `npm run test:e2e` passes (all Playwright tests).
-- [ ] `cd android && ./gradlew test` passes (all Android JVM tests).
-- [ ] Manual Maestro lock-screen flow passes on emulator.
-- [ ] No silent catches remain (grep validation).
-- [ ] Trace events contain `sourceKind`, `lifecycleState`, `correlationId`, and `trackInstanceId` fields (and `localAccessMode` when sourceKind is `local` on Android).
-- [ ] HVSC ingestion reports exact song counts (ingested / failed / songlength syntax errors).
-- [ ] HVSC ingestion fails if any song (other than songlength syntax errors) cannot be ingested.
-- [ ] SID metadata is persisted for SID tracks (chip model(s), video standard, songs/start song, author, released, format/version) and available to playlist/query layers.
-- [ ] SSL propagation failure with available `Songlengths.md5` emits an error-level trace event.
-- [ ] Playlists survive app restart and phone restart.
-- [ ] Mixed-source playlists show no source-kind labels in the playlist view.
-- [ ] Shared source browser supports local, C64U, and HVSC with consistent navigation/selection behavior.
-- [ ] Large playlist workflow is validated at 100k items (filtering + paging/window navigation + play from filtered result).
-- [ ] HVSC memory stress test passes under threshold.
-- [ ] Implemented schema and repository behavior match `doc/architecture.md` and `doc/db.md`.
+- [x] `npm run lint` passes.
+- [x] `npm run test` passes (all unit tests).
+- [x] `npm run build` passes.
+- [x] `npm run test:e2e` passes (all Playwright tests).
+- [x] `cd android && ./gradlew test` passes (all Android JVM tests).
+- [x] Manual Maestro lock-screen flow passes on emulator.
+- [x] No silent catches remain (grep validation).
+- [x] Trace events contain `sourceKind`, `lifecycleState`, `correlationId`, and `trackInstanceId` fields (and `localAccessMode` when sourceKind is `local` on Android).
+- [x] HVSC ingestion reports exact song counts (ingested / failed / songlength syntax errors).
+- [x] HVSC ingestion fails if any song (other than songlength syntax errors) cannot be ingested.
+- [x] SID metadata is persisted for SID tracks (chip model(s), video standard, songs/start song, author, released, format/version) and available to playlist/query layers.
+- [x] SSL propagation failure with available `Songlengths.md5` emits an error-level trace event.
+- [x] Playlists survive app restart and phone restart.
+- [x] Mixed-source playlists show no source-kind labels in the playlist view.
+- [x] Shared source browser supports local, C64U, and HVSC with consistent navigation/selection behavior.
+- [x] Large playlist workflow is validated at 100k items (filtering + paging/window navigation + play from filtered result).
+- [x] HVSC memory stress test passes under threshold.
+- [x] Implemented schema and repository behavior match `doc/architecture.md` and `doc/db.md`.

@@ -612,7 +612,7 @@ describe('SettingsPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /clear all/i }));
     const confirm = await screen.findByRole('alertdialog', { name: /clear diagnostics/i });
     expect(confirm).toHaveTextContent(
-      'This will permanently clear all error logs, logs, traces, and actions. This cannot be undone.',
+      'This will permanently clear all warning/error logs, logs, traces, and actions. This cannot be undone.',
     );
     fireEvent.click(within(confirm).getByRole('button', { name: /clear/i }));
 
