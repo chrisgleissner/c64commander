@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA000200C64A0C50A7E00001 /* MockC64UState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000100C64A0C50A7E00001 /* MockC64UState.swift */; };
+		AA000400C64A0C5E17E00001 /* MockC64UServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000300C64A0C5E17E00001 /* MockC64UServer.swift */; };
+		AA000600C64A0CF7F5000001 /* MockFtpServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000500C64A0CF7F5000001 /* MockFtpServer.swift */; };
+		AA000800C64A0C91A6000001 /* MockC64UPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000700C64A0C91A6000001 /* MockC64UPlugin.swift */; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
@@ -20,6 +24,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		AA000100C64A0C50A7E00001 /* MockC64UState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockC64UState.swift; sourceTree = "<group>"; };
+		AA000300C64A0C5E17E00001 /* MockC64UServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockC64UServer.swift; sourceTree = "<group>"; };
+		AA000500C64A0CF7F5000001 /* MockFtpServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockFtpServer.swift; sourceTree = "<group>"; };
+		AA000700C64A0C91A6000001 /* MockC64UPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockC64UPlugin.swift; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -81,6 +89,10 @@
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				81EED6C1B4F14D66A4D0A2F1 /* NativePlugins.swift */,
 				81EED6C3B4F14D66A4D0A2F1 /* IOSFtp.swift */,
+				AA000100C64A0C50A7E00001 /* MockC64UState.swift */,
+				AA000300C64A0C5E17E00001 /* MockC64UServer.swift */,
+				AA000500C64A0CF7F5000001 /* MockFtpServer.swift */,
+				AA000700C64A0C91A6000001 /* MockC64UPlugin.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -218,6 +230,10 @@
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				81EED6C4B4F14D66A4D0A2F1 /* IOSFtp.swift in Sources */,
 				81EED6C2B4F14D66A4D0A2F1 /* NativePlugins.swift in Sources */,
+				AA000200C64A0C50A7E00001 /* MockC64UState.swift in Sources */,
+				AA000400C64A0C5E17E00001 /* MockC64UServer.swift in Sources */,
+				AA000600C64A0CF7F5000001 /* MockFtpServer.swift in Sources */,
+				AA000800C64A0C91A6000001 /* MockC64UPlugin.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
