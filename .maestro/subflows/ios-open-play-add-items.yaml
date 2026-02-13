@@ -70,11 +70,13 @@ tags:
           visible: "Choose source"
           timeout: ${TIMEOUT}
 # WKWebView exposes aria-label ("Add file / folder from Local") instead of
-# inner text ("Local") in the accessibility tree.
-- scrollUntilVisible:
-    element:
+# inner text ("Local") in the accessibility tree.  Do NOT use scrollUntilVisible
+# here — scroll gestures can dismiss the sheet/dialog on iOS and hide the
+# source buttons.  The buttons are always in view without scrolling.
+- takeScreenshot: choose-source-dialog
+- extendedWaitUntil:
+    visible:
       text: "Add file / folder from Local"
-    direction: DOWN
-    timeout: ${TIMEOUT}
+    timeout: ${LONG_TIMEOUT}
 - assertVisible: "Add file / folder from Local"
 - takeScreenshot: choose-source
