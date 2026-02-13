@@ -330,7 +330,7 @@ test.describe('Disk management', () => {
     await expect(page.getByTestId('drive-status-raw-soft-iec')).toContainText('73,U64IEC');
     await expect(page.getByTestId('drive-status-raw-soft-iec')).toContainText('ULTIMATE DOS V1.1,00,00');
 
-    await expect(page.getByTestId('drive-status-message-soft-iec')).toHaveClass(/text-muted-foreground/);
+    await expect(page.getByTestId('drive-status-message-soft-iec')).toHaveClass(/text-success/);
 
     const messageBox = await page.getByTestId('drive-status-message-soft-iec').boundingBox();
     const rawBox = await page.getByTestId('drive-status-raw-soft-iec').boundingBox();

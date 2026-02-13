@@ -29,26 +29,27 @@ tags:
     visible: "Playlist"
     timeout: ${TIMEOUT}
 - assertVisible: "Playlist"
-- scrollUntilVisible:
-    element:
-      id: "add-items-to-playlist"
-    direction: DOWN
-    timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
-- tapOn:
-    id: "add-items-to-playlist"
-    optional: true
-- tapOn:
-    text: "Add items"
-    optional: true
-- tapOn:
-    text: "Add more items"
-    optional: true
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible: "Choose source"
-    timeout: ${TIMEOUT}
+- retry:
+  maxRetries: 3
+  commands:
+    - tapOn:
+      id: "add-items-to-playlist"
+      optional: true
+    - tapOn:
+      text: "Add items"
+      optional: true
+    - tapOn:
+      text: "Add more items"
+      optional: true
+    - tapOn:
+      text: "Add items to playlist"
+      optional: true
+    - waitForAnimationToEnd
+    - extendedWaitUntil:
+      visible: "Choose source"
+      timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
       id: "import-option-local"

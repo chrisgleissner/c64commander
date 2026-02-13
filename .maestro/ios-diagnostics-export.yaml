@@ -6,32 +6,24 @@ tags:
   - ci-critical-ios
 ---
 - runFlow: subflows/ios-open-settings-tab.yaml
-- scrollUntilVisible:
-    element:
-      text: "Enable Debug Logging"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- tapOn:
-    id: "diagnostics-open-dialog"
-    optional: true
-- tapOn:
-    text: "Diagnostics"
-    optional: true
-- extendedWaitUntil:
-    visible:
-      id: "diagnostics-share-errors"
-    timeout: ${TIMEOUT}
-- scrollUntilVisible:
-    element:
-      id: "diagnostics-share-errors"
-    direction: DOWN
-    timeout: ${TIMEOUT}
-- assertVisible:
-    id: "diagnostics-share-errors"
-- assertVisible:
-    id: "diagnostics-share-logs"
-- assertVisible:
-    id: "diagnostics-share-traces"
-- assertVisible:
-    id: "diagnostics-share-actions"
+- retry:
+  maxRetries: 3
+  commands:
+    - scrollUntilVisible:
+      element:
+      id: "diagnostics-open-dialog"
+      direction: DOWN
+      timeout: ${TIMEOUT}
+    - assertVisible:
+      id: "diagnostics-open-dialog"
+    - tapOn:
+      id: "diagnostics-open-dialog"
+    - waitForAnimationToEnd
+    - extendedWaitUntil:
+      visible: "Errors"
+      timeout: ${TIMEOUT}
+- assertVisible: "Errors"
+- assertVisible: "Logs"
+- assertVisible: "Traces"
+- assertVisible: "Actions"
 - takeScreenshot: ios-diagnostics-export-actions
