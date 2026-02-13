@@ -65,7 +65,7 @@ Monitor drive status, mount images, and browse your disk collections.
 
 ### Configuration
 
-Browse configuration categories, tune audio and SID settings, and edit drive-specific options.
+Access the entirety of the C64U configuration, e.g. to mount custom cartidges or tune advances settings.
 
 <table>
   <tr>
