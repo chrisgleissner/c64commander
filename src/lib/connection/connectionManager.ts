@@ -323,9 +323,9 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   }
   cancelActiveDiscovery();
   resetInteractionState('transition-demo-active');
-  transitionTo('DEMO_ACTIVE', trigger);
-  logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 
+  // Show the interstitial early so the UI responds immediately while the mock
+  // server is still starting up.
   const shouldShowInterstitial = shouldShowDemoInterstitial(trigger);
   if (shouldShowInterstitial) {
     demoInterstitialShownThisSession = true;
@@ -333,12 +333,18 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     setSnapshot({ demoInterstitialVisible: true });
   }
 
+  // Configure the API base URL BEFORE transitioning state so that queries
+  // triggered by the DEMO_ACTIVE re-render already target the mock server
+  // instead of the unreachable real-device hostname.
+
   if (isFuzzModeEnabled()) {
     const fuzzBaseUrl = getFuzzMockBaseUrl();
     if (fuzzBaseUrl) {
       const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
       applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
       addLog('info', 'Fuzz mode using forced mock base URL', { trigger, baseUrl: fuzzBaseUrl });
+      transitionTo('DEMO_ACTIVE', trigger);
+      logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
       return;
     }
   }
@@ -378,7 +384,10 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     addLog('info', 'Demo mode using stored device host', { trigger, baseUrl: fallbackBaseUrl });
   }
 
-  // Interstitial is already surfaced above to avoid waiting on mock server startup.
+  // Transition state AFTER the URL is configured so that React queries
+  // triggered by the DEMO_ACTIVE re-render hit the correct endpoint.
+  transitionTo('DEMO_ACTIVE', trigger);
+  logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 };
 
 const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
