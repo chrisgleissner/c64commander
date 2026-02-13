@@ -829,6 +829,7 @@ export default function SettingsPage() {
               variant="outline"
               onClick={() => setDiagnosticsDialogOpen(true)}
               data-diagnostics-open-trigger="true"
+              data-testid="diagnostics-open-dialog"
             >
               <FileText className="h-4 w-4 mr-2" />
               Diagnostics

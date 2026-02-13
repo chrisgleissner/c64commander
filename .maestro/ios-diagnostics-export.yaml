@@ -6,6 +6,12 @@ tags:
   - ci-critical-ios
 ---
 - runFlow: subflows/ios-open-settings-tab.yaml
+- tapOn:
+    id: "diagnostics-open-dialog"
+- extendedWaitUntil:
+    visible:
+      id: "diagnostics-share-errors"
+    timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
       id: "diagnostics-share-errors"

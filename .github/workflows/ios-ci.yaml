@@ -116,7 +116,7 @@ jobs:
           runtime_dump = subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
           runtimes = json.loads(runtime_dump).get("runtimes", [])
 
-          preferred_major_versions = [26, 18, 17]
+          preferred_major_versions = [18, 17, 26]
           selected = None
 
           for major in preferred_major_versions:
@@ -139,7 +139,7 @@ jobs:
                   break
 
           if not selected:
-              print("No supported iOS runtime found for policy 26 -> 18 -> 17", file=sys.stderr)
+              print("No supported iOS runtime found for policy 18 -> 17 -> 26", file=sys.stderr)
               sys.exit(1)
 
           device_types_dump = subprocess.check_output(["xcrun", "simctl", "list", "devicetypes", "-j"], text=True)
@@ -279,7 +279,7 @@ jobs:
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
           ).get("runtimes", [])
 
-          preferred_major_versions = [26, 18, 17]
+          preferred_major_versions = [18, 17, 26]
           runtime_identifier = None
           for major in preferred_major_versions:
               for runtime in runtimes:
@@ -301,7 +301,7 @@ jobs:
                   break
 
           if not runtime_identifier:
-              print("No supported iOS runtime found for policy 26 -> 18 -> 17", file=sys.stderr)
+              print("No supported iOS runtime found for policy 18 -> 17 -> 26", file=sys.stderr)
               sys.exit(1)
 
           device_types = json.loads(
@@ -445,7 +445,7 @@ jobs:
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
           ).get("runtimes", [])
 
-          preferred_major_versions = [26, 18, 17]
+          preferred_major_versions = [18, 17, 26]
           runtime_identifier = None
           for major in preferred_major_versions:
               for runtime in runtimes:
@@ -467,7 +467,7 @@ jobs:
                   break
 
           if not runtime_identifier:
-              print("No supported iOS runtime found for policy 26 -> 18 -> 17", file=sys.stderr)
+              print("No supported iOS runtime found for policy 18 -> 17 -> 26", file=sys.stderr)
               sys.exit(1)
 
           device_types = json.loads(
