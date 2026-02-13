@@ -71,7 +71,7 @@ jobs:
     name: iOS | Build simulator
     runs-on: macos-15
     needs: ios-prepare
-    timeout-minutes: 35
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -98,112 +98,6 @@ jobs:
           set -euo pipefail
           find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
 
-      - name: Select simulator runtime and device
-        id: simulator
-        run: |
-          set -euo pipefail
-          xcrun simctl list runtimes
-          xcrun simctl list devicetypes
-
-          python3 <<'PY'
-          import json
-          import os
-          import re
-          import subprocess
-          import sys
-          import time
-
-          runtime_dump = subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
-          runtimes = json.loads(runtime_dump).get("runtimes", [])
-
-          preferred_major_versions = [18, 17, 26]
-          selected = None
-
-          for major in preferred_major_versions:
-              for runtime in runtimes:
-                  if not runtime.get("isAvailable", False):
-                      continue
-                  identifier = runtime.get("identifier", "")
-                  if not identifier.startswith("com.apple.CoreSimulator.SimRuntime.iOS-"):
-                      continue
-                  suffix = identifier.split("iOS-", 1)[1]
-                  major_part = suffix.split("-")[0]
-                  try:
-                      parsed_major = int(major_part)
-                  except ValueError:
-                      continue
-                  if parsed_major == major:
-                      selected = runtime
-                      break
-              if selected:
-                  break
-
-          if not selected:
-              print("No supported iOS runtime found for policy 18 -> 17 -> 26", file=sys.stderr)
-              sys.exit(1)
-
-          device_types_dump = subprocess.check_output(["xcrun", "simctl", "list", "devicetypes", "-j"], text=True)
-          device_types = json.loads(device_types_dump).get("devicetypes", [])
-          iphone_13 = next((d for d in device_types if d.get("name") == "iPhone 13" and d.get("isAvailable", True)), None)
-
-          if not iphone_13:
-              print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
-              sys.exit(1)
-
-          runtime_identifier = selected["identifier"]
-          device_type_identifier = iphone_13["identifier"]
-          run_id = os.environ.get("GITHUB_RUN_ID", "local")
-          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-          sim_name = f"C64Commander-CI-{run_id}-{run_attempt}"
-
-          create = subprocess.run(
-              ["xcrun", "simctl", "create", sim_name, device_type_identifier, runtime_identifier],
-              capture_output=True,
-              text=True,
-          )
-          if create.returncode != 0:
-              print(create.stderr, file=sys.stderr)
-              sys.exit(create.returncode)
-
-          udid = create.stdout.strip()
-          subprocess.check_call(["xcrun", "simctl", "boot", udid])
-
-          print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
-          try:
-              bootstatus = subprocess.run(
-                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
-                  capture_output=True,
-                  text=True,
-                  timeout=300,
-              )
-          except subprocess.TimeoutExpired:
-              print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
-              print(subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True), file=sys.stderr)
-              sys.exit(1)
-
-          if bootstatus.returncode != 0:
-              print("simctl bootstatus failed", file=sys.stderr)
-              print(bootstatus.stdout, file=sys.stderr)
-              print(bootstatus.stderr, file=sys.stderr)
-              sys.exit(bootstatus.returncode)
-
-          github_output = os.environ.get("GITHUB_OUTPUT")
-          if not github_output:
-              print("GITHUB_OUTPUT is not set", file=sys.stderr)
-              sys.exit(1)
-
-          with open(github_output, "a", encoding="utf-8") as fh:
-              fh.write(f"runtime={runtime_identifier}\n")
-              fh.write(f"device_type={device_type_identifier}\n")
-              fh.write(f"udid={udid}\n")
-          PY
-
-      - name: Print selected simulator
-        run: |
-          echo "Selected runtime: ${{ steps.simulator.outputs.runtime }}"
-          echo "Selected device type: ${{ steps.simulator.outputs.device_type }}"
-          echo "Selected simulator UDID: ${{ steps.simulator.outputs.udid }}"
-
       - name: Build app for simulator
         run: |
           set -euo pipefail
@@ -212,7 +106,7 @@ jobs:
             -scheme App \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -destination "generic/platform=iOS Simulator" \
             -derivedDataPath ios/build \
             CODE_SIGNING_ALLOWED=NO
 
@@ -223,19 +117,11 @@ jobs:
           path: ios/build/Build/Products/Debug-iphonesimulator/App.app
           if-no-files-found: error
 
-      - name: Shutdown and delete simulator
-        if: always()
-        run: |
-          if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
-            xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
-            xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
-          fi
-
   ios-maestro-critical:
     name: iOS | Maestro critical
     runs-on: macos-15
-    needs: ios-prepare
-    timeout-minutes: 35
+    needs: ios-build-simulator
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -243,24 +129,11 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Download prepared iOS workspace
+      - name: Download simulator app
         uses: actions/download-artifact@v4
         with:
-          name: ios-prepared-workspace
-          path: .
-
-      - name: Ensure CocoaPods scripts are executable
-        run: |
-          set -euo pipefail
-          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+          name: ios-simulator-app
+          path: App.app
 
       - name: Select simulator runtime and device
         id: simulator
@@ -270,10 +143,8 @@ jobs:
           python3 <<'PY'
           import json
           import os
-          import re
           import subprocess
           import sys
-          import time
 
           runtimes = json.loads(
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
@@ -347,22 +218,10 @@ jobs:
               fh.write(f"udid={udid}\n")
           PY
 
-      - name: Build app for simulator
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -workspace ios/App/App.xcworkspace \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "id=${{ steps.simulator.outputs.udid }}" \
-            -derivedDataPath ios/build \
-            CODE_SIGNING_ALLOWED=NO
-
       - name: Install app in simulator
         run: |
           set -euo pipefail
-          xcrun simctl install "${{ steps.simulator.outputs.udid }}" ios/build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl install "${{ steps.simulator.outputs.udid }}" App.app
 
       - name: Install Maestro CLI
         run: |
@@ -401,8 +260,8 @@ jobs:
   ios-screenshots:
     name: iOS | Screenshots
     runs-on: macos-15
-    needs: ios-prepare
-    timeout-minutes: 35
+    needs: ios-build-simulator
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -410,24 +269,11 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Download prepared iOS workspace
+      - name: Download simulator app
         uses: actions/download-artifact@v4
         with:
-          name: ios-prepared-workspace
-          path: .
-
-      - name: Ensure CocoaPods scripts are executable
-        run: |
-          set -euo pipefail
-          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+          name: ios-simulator-app
+          path: App.app
 
       - name: Select simulator runtime and device
         id: simulator
@@ -437,10 +283,8 @@ jobs:
           python3 <<'PY'
           import json
           import os
-          import re
           import subprocess
           import sys
-          import time
 
           runtimes = json.loads(
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
@@ -514,22 +358,10 @@ jobs:
               fh.write(f"udid={udid}\n")
           PY
 
-      - name: Build app for simulator
-        run: |
-          set -euo pipefail
-          xcodebuild \
-            -workspace ios/App/App.xcworkspace \
-            -scheme App \
-            -configuration Debug \
-            -sdk iphonesimulator \
-            -destination "id=${{ steps.simulator.outputs.udid }}" \
-            -derivedDataPath ios/build \
-            CODE_SIGNING_ALLOWED=NO
-
       - name: Install app in simulator
         run: |
           set -euo pipefail
-          xcrun simctl install "${{ steps.simulator.outputs.udid }}" ios/build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl install "${{ steps.simulator.outputs.udid }}" App.app
 
       - name: Install Maestro CLI
         run: |
