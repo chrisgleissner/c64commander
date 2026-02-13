@@ -42,20 +42,20 @@ tags:
     timeout: ${TIMEOUT}
 - assertVisible: "Playlist"
 - scrollUntilVisible:
-        element:
-            id: "add-items-to-playlist"
-        direction: DOWN
-        timeout: ${TIMEOUT}
+    element:
+      id: "add-items-to-playlist"
+    direction: DOWN
+    timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
 - retry:
     maxRetries: 3
     commands:
-            - scrollUntilVisible:
-                    element:
-                        id: "add-items-to-playlist"
-                    direction: DOWN
-                    timeout: ${TIMEOUT}
+      - scrollUntilVisible:
+          element:
+            id: "add-items-to-playlist"
+          direction: DOWN
+          timeout: ${TIMEOUT}
       - tapOn:
           id: "add-items-to-playlist"
       - tapOn:
