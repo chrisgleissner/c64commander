@@ -26,7 +26,9 @@ import { useConnectionState } from '@/hooks/useConnectionState';
 
 export interface ConnectionStatus {
   state: 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
+  connectionState: 'connected' | 'disconnected' | 'demo';
   isConnected: boolean;
+  isDemo: boolean;
   isConnecting: boolean;
   error: string | null;
   deviceInfo: DeviceInfo | null;
@@ -107,7 +109,14 @@ export function useC64Connection() {
 
   const status: ConnectionStatus = {
     state: connection.state,
-    isConnected: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
+    connectionState:
+      connection.state === 'REAL_CONNECTED'
+        ? 'connected'
+        : connection.state === 'DEMO_ACTIVE'
+          ? 'demo'
+          : 'disconnected',
+    isConnected: connection.state === 'REAL_CONNECTED',
+    isDemo: connection.state === 'DEMO_ACTIVE',
     isConnecting: connection.state === 'DISCOVERING',
     error: error ? (error as Error).message : null,
     deviceInfo: deviceInfo || null,
@@ -186,14 +195,14 @@ export function useC64ConfigItems(category: string, items: string[], enabled = t
 
 export function useC64AllConfig() {
   const { data: categories } = useC64Categories();
-  
+
   return useQuery({
     queryKey: ['c64-all-config'],
     queryFn: async () => {
       const api = getC64API();
       const cats = await api.getCategories();
       const configs: Record<string, ConfigResponse> = {};
-      
+
       for (const cat of cats.categories) {
         try {
           configs[cat] = await api.getCategory(cat);
@@ -201,7 +210,7 @@ export function useC64AllConfig() {
           console.warn(`Failed to fetch category ${cat}:`, e);
         }
       }
-      
+
       return configs;
     },
     enabled: !!categories,
@@ -211,7 +220,7 @@ export function useC64AllConfig() {
 
 export function useC64SetConfig() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ category, item, value }: { category: string; item: string; value: string | number }) => {
       const api = getC64API();

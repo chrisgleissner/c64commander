@@ -544,17 +544,67 @@ jobs:
           MAESTRO_CLI_NO_ANALYTICS: 1
         run: |
           set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
           mkdir -p test-results/maestro
-          mkdir -p test-results/artifacts/ios-screenshots
+          mkdir -p artifacts
 
-          "$HOME/.maestro/bin/maestro" test .maestro/ios-smoke-launch.yaml --format junit --output test-results/maestro/ios-screenshots-smoke.xml
-          xcrun simctl io "${{ steps.simulator.outputs.udid }}" screenshot test-results/artifacts/ios-screenshots/01-smoke-home.png
+          fetch_endpoint_with_retry() {
+            local endpoint="$1"
+            local output_file="$2"
+            local attempt=1
+            local max_attempts=10
 
-          "$HOME/.maestro/bin/maestro" test .maestro/ios-playback-basics.yaml --format junit --output test-results/maestro/ios-screenshots-playback.xml
-          xcrun simctl io "${{ steps.simulator.outputs.udid }}" screenshot test-results/artifacts/ios-screenshots/02-playback-basics.png
+            while [[ "$attempt" -le "$max_attempts" ]]; do
+              if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail "http://127.0.0.1:39877/debug/$endpoint" > "$output_file"; then
+                return 0
+              fi
+              sleep 1
+              attempt=$((attempt + 1))
+            done
 
-          "$HOME/.maestro/bin/maestro" test .maestro/ios-diagnostics-export.yaml --format junit --output test-results/maestro/ios-screenshots-diagnostics.xml
-          xcrun simctl io "${{ steps.simulator.outputs.udid }}" screenshot test-results/artifacts/ios-screenshots/03-diagnostics-export.png
+            echo "Failed to fetch debug endpoint /debug/$endpoint after $max_attempts attempts" >&2
+            return 1
+          }
+
+          collect_debug_payloads() {
+            local test_name="$1"
+            local test_dir="artifacts/$test_name"
+            fetch_endpoint_with_retry "trace" "$test_dir/trace.json"
+            fetch_endpoint_with_retry "actions" "$test_dir/action.json"
+            fetch_endpoint_with_retry "log" "$test_dir/log.json"
+            fetch_endpoint_with_retry "errorLog" "$test_dir/errorLog.json"
+          }
+
+          run_flow_with_capture() {
+            local flow_file="$1"
+            local junit_file="$2"
+            local test_name="$3"
+            local screenshot_name="$4"
+            local test_dir="artifacts/$test_name"
+
+            mkdir -p "$test_dir/screenshots"
+            "$HOME/.maestro/bin/maestro" test "$flow_file" --format junit --output "$junit_file"
+            xcrun simctl io "$UDID" screenshot "$test_dir/screenshots/$screenshot_name"
+            collect_debug_payloads "$test_name"
+          }
+
+          run_flow_with_capture \
+            ".maestro/ios-smoke-launch.yaml" \
+            "test-results/maestro/ios-screenshots-smoke.xml" \
+            "smoke-launch" \
+            "01-smoke-home.png"
+
+          run_flow_with_capture \
+            ".maestro/ios-playback-basics.yaml" \
+            "test-results/maestro/ios-screenshots-playback.xml" \
+            "playback-basics" \
+            "02-playback-basics.png"
+
+          run_flow_with_capture \
+            ".maestro/ios-diagnostics-export.yaml" \
+            "test-results/maestro/ios-screenshots-diagnostics.xml" \
+            "diagnostics-export" \
+            "03-diagnostics-export.png"
 
       - name: Upload iOS screenshot artifacts
         if: always()
@@ -562,9 +612,25 @@ jobs:
         with:
           name: ios-screenshots
           path: |
+            artifacts/**
             test-results/maestro/**
             test-results/evidence/maestro/**
-            test-results/artifacts/ios-screenshots/**
+          if-no-files-found: warn
+
+      - name: Create iOS screenshot artifact archive
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -d artifacts ]]; then
+            zip -qry artifacts.zip artifacts
+          fi
+
+      - name: Upload iOS screenshot artifact archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots-zip
+          path: artifacts.zip
           if-no-files-found: warn
 
       - name: Shutdown and delete simulator

@@ -1,0 +1,474 @@
+version: 1
+tracker_id: production-readiness-feat-ios-port
+branch: feat/iOS-PORT
+updated_utc: "2026-02-13T00:00:00Z"
+source_documents:
+  audit: doc/research/production-readiness-audit.md
+  plan: doc/research/production-readiness-plan.md
+policy:
+  android_release_gate: true
+  ios_informational_gate: true
+  require_automated_tests_for_every_fix: true
+  forbid_skipped_critical_tests: true
+  forbid_silent_exception_handling: true
+status_legend:
+  - pending
+  - in_progress
+  - blocked
+  - done
+  - accepted_risk
+severity_legend:
+  - high
+  - medium_high
+  - medium
+  - low_medium
+  - low
+required_ci_gates:
+  - id: gate_lint
+    name: npm run lint
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_unit
+    name: npm run test
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_build
+    name: npm run build
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_playwright
+    name: npm run test:e2e
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_android_jvm
+    name: cd android && ./gradlew test
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_android_emulator
+    name: tests/android-emulator suite
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_maestro_background
+    name: Maestro lock/background flow
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_maestro_hvsc
+    name: Maestro HVSC flow
+    status: pending
+    blocking: true
+    evidence: []
+  - id: gate_golden_trace
+    name: Playwright golden trace validation
+    status: pending
+    blocking: true
+    evidence: []
+audit_findings:
+  - id: P1
+    severity: high
+    title: Android background service restart/lifetime is not safety-bounded
+    status: pending
+    modules:
+      - android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionService.kt
+    plan_steps: [step_2, step_9]
+    required_tests:
+      - android_jvm_service_lifecycle
+      - android_emulator_background_lock
+      - maestro_background_execution_required
+    mitigation_type: lifecycle_hardening
+    accepted_risk: false
+    evidence: []
+  - id: P2
+    severity: high
+    title: Locked-screen/background playback path is not CI-enforced
+    status: pending
+    modules:
+      - .maestro/config.yaml
+      - .maestro/smoke-background-execution.yaml
+      - scripts/run-maestro-gating.sh
+    plan_steps: [step_1, step_4]
+    required_tests:
+      - ci_assertion_required_flows_executed
+      - maestro_background_execution_required
+    mitigation_type: ci_gate_enforcement
+    accepted_risk: false
+    evidence: []
+  - id: P3
+    severity: high
+    title: Restored playback session does not rehydrate native due-time
+    status: pending
+    modules:
+      - src/pages/playFiles/hooks/usePlaybackPersistence.ts
+      - src/pages/PlayFilesPage.tsx
+    plan_steps: [step_3, step_9]
+    required_tests:
+      - unit_restore_rehydrates_due_time
+      - integration_restore_native_manager
+      - emulator_process_kill_restore_lock
+    mitigation_type: state_rehydration_consistency
+    accepted_risk: false
+    evidence: []
+  - id: P4
+    severity: medium_high
+    title: Async source-navigation stale result race
+    status: pending
+    modules:
+      - src/lib/sourceNavigation/useSourceNavigator.ts
+    plan_steps: [step_5]
+    required_tests:
+      - unit_out_of_order_navigation_resolution
+      - integration_rapid_navigation_churn
+    mitigation_type: concurrency_token_gating
+    accepted_risk: false
+    evidence: []
+  - id: P5
+    severity: medium
+    title: Config write queue swallows queue-chain errors
+    status: pending
+    modules:
+      - src/lib/config/configWriteThrottle.ts
+    plan_steps: [step_6]
+    required_tests:
+      - unit_config_queue_error_surface
+    mitigation_type: error_propagation
+    accepted_risk: false
+    evidence: []
+  - id: P6
+    severity: medium
+    title: Observability is inconsistent across core stores/adapters
+    status: pending
+    modules:
+      - src/lib/hvsc/hvscStateStore.ts
+      - src/lib/hvsc/hvscStatusStore.ts
+      - src/lib/sourceNavigation/ftpSourceAdapter.ts
+      - src/lib/sourceNavigation/localSourcesStore.ts
+    plan_steps: [step_6]
+    required_tests:
+      - unit_failure_logs_include_context
+    mitigation_type: structured_logging_standardization
+    accepted_risk: false
+    evidence: []
+  - id: P7
+    severity: medium
+    title: Ultimate SID length propagation is best-effort only
+    status: pending
+    modules:
+      - src/lib/playback/playbackRouter.ts
+      - src/pages/playFiles/hooks/usePlaybackController.ts
+      - src/lib/c64api.ts
+    plan_steps: [step_7]
+    required_tests:
+      - unit_duration_propagation_matrix
+      - integration_duration_fallback_determinism
+      - playwright_trace_updates_if_semantics_change
+    mitigation_type: reliability_contract_and_telemetry
+    accepted_risk: false
+    evidence: []
+  - id: P8
+    severity: medium
+    title: HVSC ingestion memory profile has high-pressure hotspots
+    status: pending
+    modules:
+      - src/lib/hvsc/hvscDownload.ts
+      - src/lib/hvsc/hvscArchiveExtraction.ts
+      - src/lib/hvsc/hvscIngestionRuntime.ts
+      - src/lib/hvsc/hvscFilesystem.ts
+    plan_steps: [step_8]
+    required_tests:
+      - unit_enospc_and_partial_cleanup
+      - integration_cancel_restart_idempotency
+      - nightly_android_ingestion_stress
+      - maestro_hvsc_required
+    mitigation_type: memory_pressure_hardening
+    accepted_risk: false
+    evidence: []
+  - id: P9
+    severity: medium
+    title: Android native background-service tests are absent
+    status: pending
+    modules:
+      - android/app/src/test/java
+      - tests/android-emulator/specs
+    plan_steps: [step_9]
+    required_tests:
+      - android_jvm_service_lifecycle
+      - android_emulator_lifecycle_matrix
+    mitigation_type: native_test_expansion
+    accepted_risk: false
+    evidence: []
+  - id: P10
+    severity: medium
+    title: iOS background parity is missing
+    status: pending
+    modules:
+      - ios/App/App/NativePlugins.swift
+      - ios/App/App/Info.plist
+      - .github/workflows/ios-ci.yaml
+    plan_steps: [step_10]
+    required_tests:
+      - ios_smoke_supported_capabilities
+    mitigation_type: parity_matrix_and_incremental_hardening
+    accepted_risk: false
+    evidence: []
+  - id: P11
+    severity: low_medium
+    title: Empty catches in Gradle scripts
+    status: pending
+    modules:
+      - android/app/build.gradle
+    plan_steps: [step_6]
+    required_tests:
+      - gradle_error_path_visibility
+    mitigation_type: build_diagnostics_hardening
+    accepted_risk: false
+    evidence: []
+  - id: P12
+    severity: low
+    title: Very large files increase regression and review risk
+    status: pending
+    modules:
+      - src/pages/SettingsPage.tsx
+      - src/components/disks/HomeDiskManager.tsx
+      - src/lib/c64api.ts
+      - src/pages/PlayFilesPage.tsx
+    plan_steps: [step_11]
+    required_tests:
+      - characterization_tests_before_refactor
+    mitigation_type: modularization_refactor
+    accepted_risk: false
+    evidence: []
+plan_steps:
+  - id: step_0
+    title: Baseline and safety harness
+    status: pending
+    severity_focus: [high, medium_high, medium]
+    depends_on: []
+    gates_required: []
+    findings_covered: [P1, P2, P3, P4, P5, P6, P7, P8, P9, P10, P11, P12]
+    deliverables:
+      - baseline_test_status_snapshot
+      - ci_matrix_required_vs_informational
+    evidence: []
+  - id: step_1
+    title: Enforce critical CI gates first
+    status: pending
+    severity_focus: [high]
+    depends_on: [step_0]
+    gates_required: [gate_maestro_background, gate_maestro_hvsc]
+    findings_covered: [P2]
+    deliverables:
+      - ci_requires_background_and_hvsc_flows
+      - gating_script_asserts_critical_flow_execution
+    evidence: []
+  - id: step_2
+    title: Fix Android background service lifetime safety
+    status: pending
+    severity_focus: [high]
+    depends_on: [step_1]
+    gates_required:
+      [gate_android_jvm, gate_android_emulator, gate_maestro_background]
+    findings_covered: [P1]
+    deliverables:
+      - deterministic_service_lifecycle_contract
+      - wake_lock_release_guarantees
+    evidence: []
+  - id: step_3
+    title: Rehydrate native due-time on restored sessions
+    status: pending
+    severity_focus: [high]
+    depends_on: [step_2]
+    gates_required: [gate_unit, gate_android_emulator, gate_maestro_background]
+    findings_covered: [P3]
+    deliverables:
+      - restored_due_time_native_rearm
+      - track_instance_due_time_atomic_restore
+    evidence: []
+  - id: step_4
+    title: Continuously verify lock-screen reliability
+    status: pending
+    severity_focus: [high]
+    depends_on: [step_3]
+    gates_required: [gate_maestro_background, gate_android_emulator]
+    findings_covered: [P2]
+    deliverables:
+      - lock_unlock_regressions_block_ci
+      - network_interruption_locked_playback_coverage
+    evidence: []
+  - id: step_5
+    title: Fix source navigation race and stale writes
+    status: pending
+    severity_focus: [medium_high]
+    depends_on: [step_4]
+    gates_required: [gate_unit]
+    findings_covered: [P4]
+    deliverables:
+      - async_token_gated_state_writes
+      - out_of_order_resolution_tests
+    evidence: []
+  - id: step_6
+    title: Error propagation and structured observability
+    status: pending
+    severity_focus: [medium, low_medium]
+    depends_on: [step_5]
+    gates_required: [gate_unit, gate_build]
+    findings_covered: [P5, P6, P11]
+    deliverables:
+      - no_silent_catches_in_touched_paths
+      - structured_error_context_in_logs
+    evidence: []
+  - id: step_7
+    title: Song length propagation reliability contract
+    status: pending
+    severity_focus: [medium]
+    depends_on: [step_6]
+    gates_required: [gate_unit, gate_playwright, gate_golden_trace]
+    findings_covered: [P7]
+    deliverables:
+      - explicit_duration_fallback_contract
+      - deterministic_timing_assertions
+    evidence: []
+  - id: step_8
+    title: HVSC ingestion resource pressure and resilience
+    status: pending
+    severity_focus: [medium]
+    depends_on: [step_7]
+    gates_required: [gate_unit, gate_maestro_hvsc]
+    findings_covered: [P8]
+    deliverables:
+      - reduced_peak_memory_profile
+      - interruption_restart_idempotency
+    evidence: []
+  - id: step_9
+    title: Expand Android native and emulator lifecycle coverage
+    status: pending
+    severity_focus: [medium]
+    depends_on: [step_8]
+    gates_required:
+      [gate_android_jvm, gate_android_emulator, gate_maestro_background]
+    findings_covered: [P1, P3, P9]
+    deliverables:
+      - android_native_lifecycle_matrix
+      - process_kill_restore_coverage
+    evidence: []
+  - id: step_10
+    title: iOS forward-looking hardening
+    status: pending
+    severity_focus: [medium]
+    depends_on: [step_9]
+    gates_required: []
+    findings_covered: [P10]
+    deliverables:
+      - documented_android_ios_parity_matrix
+      - ios_smoke_guardrails
+    evidence: []
+  - id: step_11
+    title: Large-file refactor risk reduction
+    status: pending
+    severity_focus: [low]
+    depends_on: [step_10]
+    gates_required: [gate_unit, gate_build]
+    findings_covered: [P12]
+    deliverables:
+      - characterization_coverage_before_refactor
+      - reduced_module_size_and_coupling
+    evidence: []
+test_assets:
+  required_new_or_strengthened:
+    - id: android_jvm_service_lifecycle
+      suite: android_jvm
+      status: pending
+      evidence: []
+    - id: android_emulator_background_lock
+      suite: android_emulator
+      status: pending
+      evidence: []
+    - id: emulator_process_kill_restore_lock
+      suite: android_emulator
+      status: pending
+      evidence: []
+    - id: maestro_background_execution_required
+      suite: maestro
+      status: pending
+      evidence: []
+    - id: maestro_hvsc_required
+      suite: maestro
+      status: pending
+      evidence: []
+    - id: unit_restore_rehydrates_due_time
+      suite: unit
+      status: pending
+      evidence: []
+    - id: integration_restore_native_manager
+      suite: integration
+      status: pending
+      evidence: []
+    - id: unit_out_of_order_navigation_resolution
+      suite: unit
+      status: pending
+      evidence: []
+    - id: integration_rapid_navigation_churn
+      suite: integration
+      status: pending
+      evidence: []
+    - id: unit_config_queue_error_surface
+      suite: unit
+      status: pending
+      evidence: []
+    - id: unit_failure_logs_include_context
+      suite: unit
+      status: pending
+      evidence: []
+    - id: unit_duration_propagation_matrix
+      suite: unit
+      status: pending
+      evidence: []
+    - id: integration_duration_fallback_determinism
+      suite: integration
+      status: pending
+      evidence: []
+    - id: unit_enospc_and_partial_cleanup
+      suite: unit
+      status: pending
+      evidence: []
+    - id: integration_cancel_restart_idempotency
+      suite: integration
+      status: pending
+      evidence: []
+    - id: nightly_android_ingestion_stress
+      suite: nightly
+      status: pending
+      evidence: []
+    - id: android_emulator_lifecycle_matrix
+      suite: android_emulator
+      status: pending
+      evidence: []
+    - id: ios_smoke_supported_capabilities
+      suite: ios_smoke
+      status: pending
+      evidence: []
+release_readiness:
+  android_go_no_go: pending
+  blockers_open:
+    - P1
+    - P2
+    - P3
+  accepted_risks: []
+  final_validation:
+    lint: pending
+    unit: pending
+    build: pending
+    playwright: pending
+    android_jvm: pending
+    android_emulator: pending
+    maestro_background: pending
+    maestro_hvsc: pending
+notes:
+  - Use this tracker as the single machine-readable status source.
+  - Update status and evidence arrays in every remediation PR.
+  - Evidence entries should be immutable run links, artifact paths, or commit SHAs.

@@ -9,9 +9,7 @@
 import { Loader2, Monitor } from 'lucide-react';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
-import { C64U_DEMO_GOLDEN_LIGHT, C64U_DEMO_GOLDEN_DARK } from '@/lib/ui/colors';
 import { cn } from '@/lib/utils';
-import { useThemeContext } from '@/components/ThemeProvider';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
 
 type Props = {
@@ -20,21 +18,17 @@ type Props = {
 
 export function ConnectivityIndicator({ className }: Props) {
   const { state } = useConnectionState();
-  const { resolvedTheme } = useThemeContext();
 
   const handleClick = () => {
     void discoverConnection('manual');
   };
 
-  const isDemo = state === 'DEMO_ACTIVE';
   const isReal = state === 'REAL_CONNECTED';
   const isDiscovering = state === 'DISCOVERING';
-  const isDark = resolvedTheme === 'dark';
-  const demoColor = isDark ? C64U_DEMO_GOLDEN_DARK : C64U_DEMO_GOLDEN_LIGHT;
 
   const label =
     state === 'DEMO_ACTIVE'
-      ? 'C64U Demo'
+      ? 'C64U Disconnected'
       : state === 'REAL_CONNECTED'
         ? 'C64U Connected'
         : state === 'DISCOVERING'
@@ -61,31 +55,20 @@ export function ConnectivityIndicator({ className }: Props) {
       ) : (
         <Monitor
           className={cn('h-5 w-5', isReal ? 'text-success' : 'text-muted-foreground')}
-          style={isDemo ? { color: demoColor } : undefined}
+          style={undefined}
           aria-hidden="true"
         />
       )}
 
-      {isDemo ? (
-        <span
-          className="flex flex-col leading-none font-semibold text-[10px] uppercase tracking-wide"
-          style={{ color: demoColor }}
-          data-testid="connection-status-label"
-        >
-          <span>C64U</span>
-          <span>DEMO</span>
-        </span>
-      ) : (
-        <span
-          className={cn(
-            'text-xs font-semibold uppercase tracking-wide',
-            isReal ? 'text-success' : 'text-muted-foreground',
-          )}
-          data-testid="connection-status-label"
-        >
-          C64U
-        </span>
-      )}
+      <span
+        className={cn(
+          'text-xs font-semibold uppercase tracking-wide',
+          isReal ? 'text-success' : 'text-muted-foreground',
+        )}
+        data-testid="connection-status-label"
+      >
+        C64U
+      </span>
     </button>
   );
 }

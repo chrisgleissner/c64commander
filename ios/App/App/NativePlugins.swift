@@ -3,6 +3,7 @@ import Capacitor
 import UIKit
 import Security
 import os.log
+import Network
 
 enum IOSDiagnosticsLevel: String {
     case debug
@@ -64,6 +65,144 @@ enum IOSDiagnostics {
         )
     }
 }
+
+final class IOSDebugSnapshotStore {
+    static let shared = IOSDebugSnapshotStore()
+
+    private let queue = DispatchQueue(label: "uk.gleissner.c64commander.debugsnapshots")
+    private var snapshots: [String: String] = [
+        "trace": "[]",
+        "actions": "[]",
+        "log": "[]",
+        "errorLog": "[]",
+    ]
+
+    private init() {}
+
+    func update(trace: String?, actions: String?, log: String?, errorLog: String?) {
+        queue.sync {
+            if let trace {
+                snapshots["trace"] = trace
+            }
+            if let actions {
+                snapshots["actions"] = actions
+            }
+            if let log {
+                snapshots["log"] = log
+            }
+            if let errorLog {
+                snapshots["errorLog"] = errorLog
+            }
+        }
+    }
+
+    func payload(for key: String) -> String {
+        queue.sync {
+            snapshots[key] ?? "[]"
+        }
+    }
+}
+
+#if DEBUG
+final class IOSDebugHTTPServer {
+    static let shared = IOSDebugHTTPServer()
+
+    private let queue = DispatchQueue(label: "uk.gleissner.c64commander.debughttp")
+    private var listener: NWListener?
+    private let port: NWEndpoint.Port = 39877
+
+    private init() {}
+
+    func start() {
+        queue.async {
+            guard self.listener == nil else {
+                return
+            }
+
+            do {
+                let parameters = NWParameters.tcp
+                parameters.allowLocalEndpointReuse = true
+                let listener = try NWListener(using: parameters, on: self.port)
+                listener.newConnectionHandler = { [weak self] connection in
+                    self?.handle(connection: connection)
+                }
+                listener.stateUpdateHandler = { state in
+                    switch state {
+                    case .failed(let error):
+                        IOSDiagnostics.log(.error, "iOS debug HTTP server failed", details: ["origin": "native", "port": self.port.rawValue], error: error)
+                    case .ready:
+                        IOSDiagnostics.log(.info, "iOS debug HTTP server ready", details: ["origin": "native", "port": self.port.rawValue])
+                    default:
+                        break
+                    }
+                }
+                listener.start(queue: self.queue)
+                self.listener = listener
+            } catch {
+                IOSDiagnostics.log(.error, "Unable to start iOS debug HTTP server", details: ["origin": "native", "port": self.port.rawValue], error: error)
+            }
+        }
+    }
+
+    private func handle(connection: NWConnection) {
+        connection.start(queue: queue)
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 16 * 1024) { [weak self] data, _, _, error in
+            if let error {
+                IOSDiagnostics.log(.warn, "Debug HTTP receive failed", details: ["origin": "native"], error: error)
+                connection.cancel()
+                return
+            }
+            guard let self else {
+                connection.cancel()
+                return
+            }
+            let request = String(data: data ?? Data(), encoding: .utf8) ?? ""
+            let path = self.extractPath(from: request)
+            let (status, body) = self.resolve(path: path)
+            self.sendResponse(connection: connection, status: status, body: body)
+        }
+    }
+
+    private func extractPath(from request: String) -> String {
+        guard let firstLine = request.split(separator: "\r\n", maxSplits: 1, omittingEmptySubsequences: false).first else {
+            return ""
+        }
+        let parts = firstLine.split(separator: " ")
+        guard parts.count >= 2 else {
+            return ""
+        }
+        return String(parts[1])
+    }
+
+    private func resolve(path: String) -> (Int, String) {
+        switch path {
+        case "/debug/trace":
+            return (200, IOSDebugSnapshotStore.shared.payload(for: "trace"))
+        case "/debug/actions":
+            return (200, IOSDebugSnapshotStore.shared.payload(for: "actions"))
+        case "/debug/log":
+            return (200, IOSDebugSnapshotStore.shared.payload(for: "log"))
+        case "/debug/errorLog":
+            return (200, IOSDebugSnapshotStore.shared.payload(for: "errorLog"))
+        default:
+            return (404, "{\"error\":\"not found\"}")
+        }
+    }
+
+    private func sendResponse(connection: NWConnection, status: Int, body: String) {
+        let statusText = status == 200 ? "OK" : "Not Found"
+        let bodyData = Data(body.utf8)
+        let response = "HTTP/1.1 \(status) \(statusText)\r\nContent-Type: application/json\r\nContent-Length: \(bodyData.count)\r\nConnection: close\r\n\r\n"
+        let responseData = Data(response.utf8) + bodyData
+        connection.send(content: responseData, completion: .contentProcessed { error in
+            if let error {
+                IOSDiagnostics.log(.warn, "Debug HTTP send failed", details: ["origin": "native"], error: error)
+            }
+            connection.cancel()
+        })
+    }
+}
+#endif
 
 private struct FolderPickerConstants {
     static let bookmarksKey = "ios.folderPicker.securityBookmarks"
@@ -720,7 +859,9 @@ public final class BackgroundExecutionPlugin: CAPPlugin, CAPBridgedPlugin {
 public final class DiagnosticsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "DiagnosticsBridgePlugin"
     public let jsName = "DiagnosticsBridge"
-    public let pluginMethods: [CAPPluginMethod] = []
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "updateDebugSnapshots", returnType: CAPPluginReturnPromise),
+    ]
 
     private var observer: NSObjectProtocol?
 
@@ -744,6 +885,16 @@ public final class DiagnosticsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
                 "details": details,
             ])
         }
+    }
+
+    @objc public func updateDebugSnapshots(_ call: CAPPluginCall) {
+        IOSDebugSnapshotStore.shared.update(
+            trace: call.getString("trace"),
+            actions: call.getString("actions"),
+            log: call.getString("log"),
+            errorLog: call.getString("errorLog")
+        )
+        call.resolve()
     }
 
     deinit {
