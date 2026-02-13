@@ -21,7 +21,7 @@ tags:
             text: "Settings"
           timeout: ${TIMEOUT}
 - tapOn:
-    id: "tab-settings"
+  text: "Settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${TIMEOUT}

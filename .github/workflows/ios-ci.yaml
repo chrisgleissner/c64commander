@@ -369,6 +369,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -Ls "https://get.maestro.mobile.dev" | bash
+          "$HOME/.maestro/bin/maestro" --version
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Run iOS Maestro critical flows
@@ -377,7 +378,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p test-results/maestro
-          maestro test .maestro --include-tags ios,ci-critical-ios --format junit --output test-results/maestro/ios-junit.xml
+          "$HOME/.maestro/bin/maestro" test .maestro --include-tags ios,ci-critical-ios --format junit --output test-results/maestro/ios-junit.xml
 
       - name: Upload iOS Maestro artifacts
         if: always()
@@ -535,6 +536,7 @@ jobs:
         run: |
           set -euo pipefail
           curl -Ls "https://get.maestro.mobile.dev" | bash
+          "$HOME/.maestro/bin/maestro" --version
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
       - name: Capture iOS Maestro and simulator screenshots
@@ -545,13 +547,13 @@ jobs:
           mkdir -p test-results/maestro
           mkdir -p test-results/artifacts/ios-screenshots
 
-          maestro test .maestro/ios-smoke-launch.yaml --format junit --output test-results/maestro/ios-screenshots-smoke.xml
+          "$HOME/.maestro/bin/maestro" test .maestro/ios-smoke-launch.yaml --format junit --output test-results/maestro/ios-screenshots-smoke.xml
           xcrun simctl io "${{ steps.simulator.outputs.udid }}" screenshot test-results/artifacts/ios-screenshots/01-smoke-home.png
 
-          maestro test .maestro/ios-playback-basics.yaml --format junit --output test-results/maestro/ios-screenshots-playback.xml
+          "$HOME/.maestro/bin/maestro" test .maestro/ios-playback-basics.yaml --format junit --output test-results/maestro/ios-screenshots-playback.xml
           xcrun simctl io "${{ steps.simulator.outputs.udid }}" screenshot test-results/artifacts/ios-screenshots/02-playback-basics.png
 
-          maestro test .maestro/ios-diagnostics-export.yaml --format junit --output test-results/maestro/ios-screenshots-diagnostics.xml
+          "$HOME/.maestro/bin/maestro" test .maestro/ios-diagnostics-export.yaml --format junit --output test-results/maestro/ios-screenshots-diagnostics.xml
           xcrun simctl io "${{ steps.simulator.outputs.udid }}" screenshot test-results/artifacts/ios-screenshots/03-diagnostics-export.png
 
       - name: Upload iOS screenshot artifacts
