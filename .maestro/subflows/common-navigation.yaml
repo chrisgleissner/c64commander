@@ -15,10 +15,19 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      - tapOn:
+          text: "Got it"
+          optional: true
+      - tapOn:
+          text: "Wait"
+          optional: true
+      - tapOn:
+          text: "Close app"
+          optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            text: "Play"
+            text: "Home"
           timeout: ${TIMEOUT}
 - tapOn:
     point: "25%,95%"
