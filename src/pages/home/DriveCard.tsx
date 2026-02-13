@@ -45,9 +45,10 @@ export interface DriveCardProps {
     mountedPath?: string;
     mountedPathLabel?: string;
     onMountedPathClick?: () => void;
-    statusSummary?: string;
+    statusSummary: string;
     statusSeverity?: DiagnosticsDisplaySeverity;
     onStatusClick?: () => void;
+    statusRaw?: string;
 
     isConnected: boolean;
     className?: string;
@@ -79,6 +80,7 @@ export function DriveCard({
     statusSummary,
     statusSeverity = 'INFO',
     onStatusClick,
+    statusRaw,
     isConnected,
     className,
     testIdSuffix,
@@ -117,23 +119,6 @@ export function DriveCard({
                     </button>
                 </div>
             )}
-
-            {statusSummary ? (
-                <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground whitespace-nowrap">Status</span>
-                    <button
-                        type="button"
-                        onClick={onStatusClick}
-                        className={cn(
-                            'truncate text-left font-medium underline-offset-2 hover:underline',
-                            getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
-                        )}
-                        data-testid={`home-drive-status-${testIdSuffix}`}
-                    >
-                        {statusSummary}
-                    </button>
-                </div>
-            ) : null}
 
             {/* Row 2: Bus ID and Type */}
             <div className="grid grid-cols-2 gap-2 text-xs">
@@ -179,6 +164,24 @@ export function DriveCard({
                         </>
                     )}
                 </div>
+            </div>
+
+            {/* Row 3: Status (always shown) */}
+            <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground whitespace-nowrap">Status</span>
+                <button
+                    type="button"
+                    onClick={onStatusClick}
+                    disabled={!onStatusClick}
+                    className={cn(
+                        'truncate text-left font-medium',
+                        onStatusClick ? 'underline-offset-2 hover:underline' : 'cursor-default',
+                        getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
+                    )}
+                    data-testid={`home-drive-status-${testIdSuffix}`}
+                >
+                    {statusSummary}
+                </button>
             </div>
         </div>
     );

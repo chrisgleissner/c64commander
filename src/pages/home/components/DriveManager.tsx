@@ -206,6 +206,9 @@ export function DriveManager({
                         : false;
                     const statusRaw = resolveDriveStatusRaw(device?.lastError);
                     const formattedStatus = statusRaw ? formatDiskDosStatus(statusRaw) : null;
+                    const statusSummary = formattedStatus ? toStatusSummary(formattedStatus) : 'OK';
+                    const statusSeverity = formattedStatus?.severity ?? 'INFO';
+                    const statusDetails = formattedStatus ?? { code: null, severity: 'INFO' as const, message: 'OK', details: 'Drive status not yet retrieved.', raw: '' };
 
 
                     const testIdSuffix = spec.testIdSuffix;
@@ -246,11 +249,12 @@ export function DriveManager({
                             mountedPath={mountedPath}
                             mountedPathLabel={mountedPathLabel}
                             onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel)}
-                            statusSummary={formattedStatus ? toStatusSummary(formattedStatus) : undefined}
-                            statusSeverity={formattedStatus?.severity}
+                            statusSummary={statusSummary}
+                            statusSeverity={statusSeverity}
                             onStatusClick={formattedStatus
                                 ? () => setStatusDetailsDialog({ driveLabel: label, status: formattedStatus })
-                                : undefined}
+                                : () => setStatusDetailsDialog({ driveLabel: label, status: statusDetails })}
+                            statusRaw={formattedStatus?.raw}
                             pathPending={pathPending}
                             isConnected={isConnected}
                             testIdSuffix={testIdSuffix}

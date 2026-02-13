@@ -137,8 +137,14 @@ const resolveDriveStatusRaw = (primary?: string | null, fallback?: string | null
 };
 
 const resolveStatusDisplaySeverity = (status: { severity: 'INFO' | 'WARN' | 'ERROR'; message: string | null }) => {
-  if (status.message === 'DOS MISMATCH') return 'WARN';
   return status.severity;
+};
+
+const getStatusMessageColorClass = (status: { severity: 'INFO' | 'WARN' | 'ERROR'; message: string | null }) => {
+  // OK is always green, regardless of severity
+  if (status.message === 'OK') return 'text-success';
+  // Otherwise use standard diagnostics colors
+  return getDiagnosticsColorClassForDisplaySeverity(status.severity);
 };
 
 export const HomeDiskManager = () => {
@@ -1402,17 +1408,25 @@ export const HomeDiskManager = () => {
                 <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
                   {formattedStatus.message ? (
                     <p
-                      className={cn('text-xs', getDiagnosticsColorClassForDisplaySeverity(resolveStatusDisplaySeverity(formattedStatus)))}
+                      className={cn('text-xs', getStatusMessageColorClass(formattedStatus))}
                       data-testid={`drive-status-message-${key}`}
                     >
                       {formattedStatus.message}
                     </p>
                   ) : null}
-                  <p className="text-xs text-muted-foreground whitespace-pre-wrap" data-testid={`drive-status-raw-${key}`}>
-                    {formattedStatus.raw}
+                  {formattedStatus.raw ? (
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap" data-testid={`drive-status-raw-${key}`}>
+                      {formattedStatus.raw}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
+                  <p className="text-xs text-success" data-testid={`drive-status-message-${key}`}>
+                    OK
                   </p>
                 </div>
-              ) : null}
+              )}
             </div>
           ))}
 
@@ -1528,17 +1542,25 @@ export const HomeDiskManager = () => {
               <div className="space-y-0.5" data-testid="drive-status-soft-iec">
                 {softIecFormattedStatus.message ? (
                   <p
-                    className={cn('text-xs', getDiagnosticsColorClassForDisplaySeverity(resolveStatusDisplaySeverity(softIecFormattedStatus)))}
+                    className={cn('text-xs', getStatusMessageColorClass(softIecFormattedStatus))}
                     data-testid="drive-status-message-soft-iec"
                   >
                     {softIecFormattedStatus.message}
                   </p>
                 ) : null}
-                <p className="text-xs text-muted-foreground whitespace-pre-wrap" data-testid="drive-status-raw-soft-iec">
-                  {softIecFormattedStatus.raw}
+                {softIecFormattedStatus.raw ? (
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap" data-testid="drive-status-raw-soft-iec">
+                    {softIecFormattedStatus.raw}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-0.5" data-testid="drive-status-soft-iec">
+                <p className="text-xs text-success" data-testid="drive-status-message-soft-iec">
+                  OK
                 </p>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       </section>
