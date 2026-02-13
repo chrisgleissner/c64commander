@@ -17,13 +17,13 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
-        - tapOn:
+      - tapOn:
           text: "Got it"
           optional: true
-        - tapOn:
+      - tapOn:
           text: "Wait"
           optional: true
-        - tapOn:
+      - tapOn:
           text: "Close app"
           optional: true
       - tapOn:
