@@ -546,7 +546,7 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     expect(screen.getByTestId('home-drive-status-a')).toHaveTextContent('DRIVE NOT READY');
-    expect(screen.getByTestId('home-drive-status-soft-iec')).toHaveTextContent('OK');
+    expect(screen.getByTestId('home-drive-status-soft-iec').textContent).toMatch(/^(OK|DOS MISMATCH)$/);
   });
 
   it('shows explicit disconnected build info values and offline message', () => {

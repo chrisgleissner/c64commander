@@ -32,24 +32,24 @@ tags:
 - waitForAnimationToEnd
 - takeScreenshot: play-files
 - retry:
-  maxRetries: 3
-  commands:
-    - tapOn:
-      id: "add-items-to-playlist"
-      optional: true
-    - tapOn:
-      text: "Add items"
-      optional: true
-    - tapOn:
-      text: "Add more items"
-      optional: true
-    - tapOn:
-      text: "Add items to playlist"
-      optional: true
-    - waitForAnimationToEnd
-    - extendedWaitUntil:
-      visible: "Choose source"
-      timeout: ${TIMEOUT}
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "add-items-to-playlist"
+          optional: true
+      - tapOn:
+          text: "Add items"
+          optional: true
+      - tapOn:
+          text: "Add more items"
+          optional: true
+      - tapOn:
+          text: "Add items to playlist"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Choose source"
+          timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
       id: "import-option-local"
