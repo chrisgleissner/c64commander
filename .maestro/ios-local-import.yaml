@@ -5,12 +5,11 @@ tags:
   - ios
   - ci-critical-ios
 ---
-- runFlow: subflows/open-play-add-items.yaml
-- assertVisible:
-    id: "import-option-local"
+- runFlow: subflows/ios-open-play-add-items.yaml
+- assertVisible: "Local"
 - takeScreenshot: ios-local-import-source-picker
 - tapOn:
-    id: "import-option-local"
+    text: "Local"
     optional: true
 - waitForAnimationToEnd
 - takeScreenshot: ios-local-import-after-tap

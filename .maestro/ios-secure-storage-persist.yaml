@@ -5,15 +5,13 @@ tags:
   - ios
   - ci-critical-ios
 ---
-- runFlow: subflows/open-play-add-items.yaml
-- assertVisible:
-    id: "import-option-c64u"
+- runFlow: subflows/ios-open-play-add-items.yaml
+- assertVisible: "C64U"
 - tapOn:
-    id: "import-option-c64u"
+    text: "C64U"
     optional: true
 - waitForAnimationToEnd
 - launchApp
-- runFlow: subflows/open-play-add-items.yaml
-- assertVisible:
-    id: "import-option-c64u"
+- runFlow: subflows/ios-open-play-add-items.yaml
+- assertVisible: "C64U"
 - takeScreenshot: ios-secure-storage-persist-relaunch

@@ -10,16 +10,10 @@ tags:
     maxRetries: 3
     commands:
       - tapOn:
-          id: "diagnostics-open-dialog"
-          optional: true
-      - tapOn:
-          id: "diagnostics-activity-indicator"
+          text: "Diagnostics"
           optional: true
       - tapOn:
           text: "Open diagnostics"
-          optional: true
-      - tapOn:
-          text: "Diagnostics"
           optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:

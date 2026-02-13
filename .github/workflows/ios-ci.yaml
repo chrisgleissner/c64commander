@@ -363,7 +363,37 @@ jobs:
         run: |
           set -euo pipefail
           xcrun simctl install "${{ steps.simulator.outputs.udid }}" ios/build/Build/Products/Debug-iphonesimulator/App.app
-          xcrun simctl launch "${{ steps.simulator.outputs.udid }}" "${{ env.APP_ID }}" || true
+
+      - name: Start external C64U mock server
+        id: mock
+        run: |
+          set -euo pipefail
+          node scripts/maestro-external-mock.mjs --out /tmp/c64u-mock-info.json &
+          MOCK_PID=$!
+          echo "mock_pid=$MOCK_PID" >> "$GITHUB_OUTPUT"
+          for i in $(seq 1 30); do
+            if [[ -f /tmp/c64u-mock-info.json ]]; then break; fi
+            sleep 0.5
+          done
+          if [[ ! -f /tmp/c64u-mock-info.json ]]; then
+            echo "Mock server failed to start" >&2
+            exit 1
+          fi
+          MOCK_PORT=$(python3 -c "import json; print(json.load(open('/tmp/c64u-mock-info.json'))['baseUrl'].split(':')[-1])")
+          echo "port=$MOCK_PORT" >> "$GITHUB_OUTPUT"
+          echo "Mock server running on port $MOCK_PORT (PID: $MOCK_PID)"
+
+      - name: Inject smoke config into app container
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          CONTAINER=$(xcrun simctl get_app_container "$UDID" "${{ env.APP_ID }}" data)
+          mkdir -p "$CONTAINER/Documents"
+          cat > "$CONTAINER/Documents/c64u-smoke.json" <<EOF
+          {"target":"real","host":"127.0.0.1:${{ steps.mock.outputs.port }}","readOnly":false,"debugLogging":true}
+          EOF
+          echo "Smoke config written to $CONTAINER/Documents/c64u-smoke.json"
+          cat "$CONTAINER/Documents/c64u-smoke.json"
 
       - name: Install Maestro CLI
         run: |
@@ -394,6 +424,7 @@ jobs:
       - name: Shutdown and delete simulator
         if: always()
         run: |
+          kill ${{ steps.mock.outputs.mock_pid }} 2>/dev/null || true
           if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
             xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
             xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
@@ -531,7 +562,37 @@ jobs:
         run: |
           set -euo pipefail
           xcrun simctl install "${{ steps.simulator.outputs.udid }}" ios/build/Build/Products/Debug-iphonesimulator/App.app
-          xcrun simctl launch "${{ steps.simulator.outputs.udid }}" "${{ env.APP_ID }}" || true
+
+      - name: Start external C64U mock server
+        id: mock
+        run: |
+          set -euo pipefail
+          node scripts/maestro-external-mock.mjs --out /tmp/c64u-mock-info.json &
+          MOCK_PID=$!
+          echo "mock_pid=$MOCK_PID" >> "$GITHUB_OUTPUT"
+          for i in $(seq 1 30); do
+            if [[ -f /tmp/c64u-mock-info.json ]]; then break; fi
+            sleep 0.5
+          done
+          if [[ ! -f /tmp/c64u-mock-info.json ]]; then
+            echo "Mock server failed to start" >&2
+            exit 1
+          fi
+          MOCK_PORT=$(python3 -c "import json; print(json.load(open('/tmp/c64u-mock-info.json'))['baseUrl'].split(':')[-1])")
+          echo "port=$MOCK_PORT" >> "$GITHUB_OUTPUT"
+          echo "Mock server running on port $MOCK_PORT (PID: $MOCK_PID)"
+
+      - name: Inject smoke config into app container
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          CONTAINER=$(xcrun simctl get_app_container "$UDID" "${{ env.APP_ID }}" data)
+          mkdir -p "$CONTAINER/Documents"
+          cat > "$CONTAINER/Documents/c64u-smoke.json" <<EOF
+          {"target":"real","host":"127.0.0.1:${{ steps.mock.outputs.port }}","readOnly":false,"debugLogging":true}
+          EOF
+          echo "Smoke config written to $CONTAINER/Documents/c64u-smoke.json"
+          cat "$CONTAINER/Documents/c64u-smoke.json"
 
       - name: Install Maestro CLI
         run: |
@@ -638,6 +699,7 @@ jobs:
       - name: Shutdown and delete simulator
         if: always()
         run: |
+          kill ${{ steps.mock.outputs.mock_pid }} 2>/dev/null || true
           if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
             xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
             xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
