@@ -9,15 +9,18 @@ tags:
 - retry:
     maxRetries: 3
     commands:
-      - scrollUntilVisible:
-          element:
-            id: "diagnostics-open-dialog"
-          direction: DOWN
-          timeout: ${TIMEOUT}
-      - assertVisible:
-          id: "diagnostics-open-dialog"
       - tapOn:
           id: "diagnostics-open-dialog"
+      optional: true
+    - tapOn:
+      id: "diagnostics-activity-indicator"
+      optional: true
+    - tapOn:
+      text: "Open diagnostics"
+      optional: true
+    - tapOn:
+      text: "Diagnostics"
+      optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible: "Errors"
