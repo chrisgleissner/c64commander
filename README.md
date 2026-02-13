@@ -46,8 +46,8 @@ Control SID playback, adjust playback settings, manage playlists, select SID sub
 <table>
   <tr>
     <td><img src="doc/img/app/play/01-overview.png" alt="Play overview" width="360"/></td>
+    <td><img src="doc/img/app/play/import/01-import-interstitial.png" alt="Play import" width="360"/></td>
     <td><img src="doc/img/app/play/sections/02-playlist.png" alt="Play playlist" width="360"/></td>
-    <td><img src="doc/img/app/play/sections/03-hvsc-library.png" alt="Play HVSC library" width="360"/></td>
   </tr>
 </table>
 
@@ -58,8 +58,8 @@ Monitor drive status, mount images, and browse your disk collections.
 <table>
   <tr>
     <td><img src="doc/img/app/disks/01-overview.png" alt="Disks overview" width="360"/></td>
+    <td><img src="doc/img/app/disks/sections/02-disks.png" alt="Disks collection" width="360"/></td>
     <td><img src="doc/img/app/disks/collection/01-view-all.png" alt="Disks collection" width="360"/></td>
-    <td></td>
   </tr>
 </table>
 
@@ -71,7 +71,7 @@ Browse configuration categories, tune audio and SID settings, and edit drive-spe
   <tr>
     <td><img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
     <td><img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
-    <td></td>
+    <td><img src="doc/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration U64 specific" width="360"/></td>
   </tr>
 </table>
 
@@ -88,7 +88,7 @@ Adjust appearance, connections, diagnostics, playback defaults, HVSC library acc
   <tr>
     <td><img src="doc/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
     <td><img src="doc/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
-    <td><img src="doc/img/app/settings/sections/06-hvsc-library.png" alt="Settings HVSC library" width="360"/></td>
+    <td><img src="doc/img/app/settings/sections/07-device-safety.png" alt="Settings Device Safety" width="360"/></td>
   </tr>
 </table>
 
