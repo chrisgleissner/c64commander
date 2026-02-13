@@ -7,21 +7,21 @@ tags:
 ---
 - runFlow: subflows/ios-open-settings-tab.yaml
 - retry:
-  maxRetries: 3
-  commands:
-    - scrollUntilVisible:
-      element:
-      id: "diagnostics-open-dialog"
-      direction: DOWN
-      timeout: ${TIMEOUT}
-    - assertVisible:
-      id: "diagnostics-open-dialog"
-    - tapOn:
-      id: "diagnostics-open-dialog"
-    - waitForAnimationToEnd
-    - extendedWaitUntil:
-      visible: "Errors"
-      timeout: ${TIMEOUT}
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: "diagnostics-open-dialog"
+          direction: DOWN
+          timeout: ${TIMEOUT}
+      - assertVisible:
+          id: "diagnostics-open-dialog"
+      - tapOn:
+          id: "diagnostics-open-dialog"
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Errors"
+          timeout: ${TIMEOUT}
 - assertVisible: "Errors"
 - assertVisible: "Logs"
 - assertVisible: "Traces"
