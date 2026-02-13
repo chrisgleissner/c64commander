@@ -82,14 +82,14 @@ test.describe('HVSC Play page', () => {
     if (await rowLocator().count() === 0) return false;
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const row = rowLocator();
-      await expect(row).toBeVisible();
       try {
+        const row = rowLocator();
+        await expect(row).toBeVisible({ timeout: 3000 });
         await row.click({ timeout: 3000 });
         return true;
       } catch (error) {
         if (attempt === 2) throw error;
-        await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible();
+        await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible({ timeout: 5000 });
       }
     }
 

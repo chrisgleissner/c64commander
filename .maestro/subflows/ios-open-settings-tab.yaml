@@ -21,7 +21,7 @@ tags:
             text: "Settings"
           timeout: ${TIMEOUT}
 - tapOn:
-  text: "Settings"
+    text: "Settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${TIMEOUT}
