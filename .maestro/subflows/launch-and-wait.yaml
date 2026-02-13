@@ -35,7 +35,8 @@ tags:
             text: "Home"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
-    point: "8%,95%"
+    text: "Home"
+    optional: true
 - extendedWaitUntil:
     visible:
       text: "Home"

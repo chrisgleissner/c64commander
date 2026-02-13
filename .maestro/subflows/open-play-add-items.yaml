@@ -23,7 +23,8 @@ tags:
             text: "Play"
           timeout: ${TIMEOUT}
 - tapOn:
-    point: "25%,95%"
+    text: "Play"
+    optional: true
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
