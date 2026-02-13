@@ -11,6 +11,7 @@ import type { LogLevel } from '@/lib/logging';
 import type { TraceEvent } from '@/lib/tracing/types';
 
 export type DiagnosticsSeverity = 'error' | 'warn' | 'info' | 'debug';
+export type DiagnosticsDisplaySeverity = 'ERROR' | 'WARN' | 'INFO';
 
 type DiagnosticsSeverityMeta = {
   glyph: 'E' | 'W' | 'I' | 'D';
@@ -27,6 +28,15 @@ export const DIAGNOSTICS_SEVERITY_META: Record<DiagnosticsSeverity, DiagnosticsS
 
 export const getDiagnosticsSeverityMeta = (severity: DiagnosticsSeverity): DiagnosticsSeverityMeta =>
   DIAGNOSTICS_SEVERITY_META[severity];
+
+const DISPLAY_TO_DIAGNOSTICS_SEVERITY: Record<DiagnosticsDisplaySeverity, DiagnosticsSeverity> = {
+  ERROR: 'error',
+  WARN: 'warn',
+  INFO: 'info',
+};
+
+export const getDiagnosticsColorClassForDisplaySeverity = (severity: DiagnosticsDisplaySeverity): string =>
+  getDiagnosticsSeverityMeta(DISPLAY_TO_DIAGNOSTICS_SEVERITY[severity]).colorClass;
 
 export const resolveLogSeverity = (level: LogLevel): DiagnosticsSeverity => level;
 

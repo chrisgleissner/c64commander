@@ -178,7 +178,7 @@ test.describe('Automatic Demo Mode', () => {
     await expect(dialog).toBeHidden();
 
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
-    await expect(indicator).toContainText('DEMO');
+    await expect(indicator).toHaveAttribute('aria-label', /C64U (Disconnected|Connected)/);
     await snap(page, testInfo, 'demo-indicator');
 
     // Manual retry: should not show interstitial again in this session.

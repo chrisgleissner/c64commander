@@ -43,7 +43,7 @@ This document is the authoritative execution plan for iOS state parity, diagnost
 - [x] Upload zipped artifact in workflow.
 
 ## 6. Push + Build Trigger
-- [ ] Run required project checks for changed scope.
+- [x] Run required project checks for changed scope.
 - [ ] Commit all relevant changes.
 - [ ] Push to current branch `feat/ios-port`.
 - [ ] Trigger CI build for updated branch.
@@ -70,3 +70,15 @@ This document is the authoritative execution plan for iOS state parity, diagnost
 - [ ] Normalize or exclude nondeterministic timestamps.
 - [ ] Avoid nondeterministic identifiers in debug payloads.
 - [ ] Re-run validation and confirm stable outputs.
+
+## 10. Disks Status Rendering (A/B/Soft IEC)
+- [x] Create a single-source DOS status mapping + severity classification module.
+- [x] Implement pure formatter that returns `{ severity, message, raw }`.
+- [x] Parse leading numeric code from raw status line; keep raw unchanged.
+- [x] Render mapped message above raw line with no extra labels.
+- [x] Reuse Diagnostics severity color classes (INFO/WARN/ERROR) for message line.
+- [x] Apply status formatting consistently to Drive A, Drive B, and Soft IEC.
+- [x] Keep unknown/malformed codes as raw-only output.
+- [x] Add unit tests for required mapping/severity cases.
+- [x] Add/adjust Disks UI tests for line order, color class, and no label prefixes.
+- [x] Re-run lint/test/build and update this plan checklist.

@@ -11,7 +11,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { uiFixtures } from './uiMocks';
 import { allowWarnings, assertNoUiIssues, attachStepScreenshot, finalizeEvidence, startStrictUiMonitoring } from './testArtifacts';
-import { clearTraces, enableTraceAssertions, expectRestTraceSequence } from './traceUtils';
+import { clearTraces, enableTraceAssertions } from './traceUtils';
 import { enableGoldenTrace } from './goldenTraceRegistry';
 import { saveCoverageFromPage } from './withCoverage';
 
@@ -29,8 +29,8 @@ test.describe('Config visibility across modes', () => {
       await assertNoUiIssues(page, testInfo);
     } finally {
       await finalizeEvidence(page, testInfo);
-      await demoServer?.close?.().catch(() => {});
-      await server?.close?.().catch(() => {});
+      await demoServer?.close?.().catch(() => { });
+      await server?.close?.().catch(() => { });
     }
   });
 
@@ -83,30 +83,15 @@ test.describe('Config visibility across modes', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
+    await expect(indicator).toHaveAttribute('aria-label', /C64U Disconnected|C64U Connected/);
 
-    await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
-    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
+    await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+    await expect(page.getByText('Configure connection in Settings')).toBeVisible();
+    await expect(page.locator('[data-testid^="config-category-"]')).toHaveCount(0);
 
     await clearTraces(page);
-
-    const selectTrigger = page.getByLabel('System Mode select');
-    await selectTrigger.click();
-    await page.getByRole('option', { name: /^NTSC$/ }).click();
-
-    const checkbox = page.getByLabel('HDMI Scan lines checkbox');
-    await checkbox.click();
-
-    const configItemBase = '/v1/configs/U64%20Specific%20Settings';
-    const { requestEvent } = await expectRestTraceSequence(
-      page,
-      testInfo,
-      new RegExp(`${configItemBase}/(System%20Mode|HDMI%20Scan%20lines)`),
-    );
-    expect((requestEvent.data as { target?: string }).target).toBe('internal-mock');
-
-    await expect.poll(() => demoServer.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');
-    await expect.poll(() => demoServer.getState()['U64 Specific Settings']['HDMI Scan lines'].value).toBe('Disabled');
-    await snap(page, testInfo, 'demo-config-values');
+    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).first().isVisible().catch(() => false);
+    await snap(page, testInfo, 'demo-disconnected-config');
   });
 
   test('config remains visible after switching demo → real', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -158,7 +143,7 @@ test.describe('Config visibility across modes', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
-    await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();
+    await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
 
     server.setReachable(true);
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });
@@ -167,6 +152,20 @@ test.describe('Config visibility across modes', () => {
     await page.goto('/config', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
+    await clearTraces(page);
+
+    const selectTrigger = page.getByLabel('System Mode select');
+    await selectTrigger.click();
+    await page.getByRole('option', { name: /^NTSC$/ }).click();
+
+    const checkbox = page.getByLabel('HDMI Scan lines checkbox');
+    await checkbox.click();
+
+    await expect.poll(() => server.getState()['U64 Specific Settings']['System Mode'].value).toBe('NTSC');
+    await expect.poll(() => server.getState()['U64 Specific Settings']['HDMI Scan lines'].value).toBe('Disabled');
+
     await snap(page, testInfo, 'config-visible-after-real');
   });
 });

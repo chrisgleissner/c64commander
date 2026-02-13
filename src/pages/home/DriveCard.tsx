@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { getOnOffButtonClass } from '@/lib/ui/buttonStyles';
+import { getDiagnosticsColorClassForDisplaySeverity, type DiagnosticsDisplaySeverity } from '@/lib/diagnostics/diagnosticsSeverity';
 
 export interface DriveCardProps {
     name: string;
@@ -44,6 +45,9 @@ export interface DriveCardProps {
     mountedPath?: string;
     mountedPathLabel?: string;
     onMountedPathClick?: () => void;
+    statusSummary?: string;
+    statusSeverity?: DiagnosticsDisplaySeverity;
+    onStatusClick?: () => void;
 
     isConnected: boolean;
     className?: string;
@@ -72,6 +76,9 @@ export function DriveCard({
     mountedPath,
     mountedPathLabel,
     onMountedPathClick,
+    statusSummary,
+    statusSeverity = 'INFO',
+    onStatusClick,
     isConnected,
     className,
     testIdSuffix,
@@ -110,6 +117,23 @@ export function DriveCard({
                     </button>
                 </div>
             )}
+
+            {statusSummary ? (
+                <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground whitespace-nowrap">Status</span>
+                    <button
+                        type="button"
+                        onClick={onStatusClick}
+                        className={cn(
+                            'truncate text-left font-medium underline-offset-2 hover:underline',
+                            getDiagnosticsColorClassForDisplaySeverity(statusSeverity),
+                        )}
+                        data-testid={`home-drive-status-${testIdSuffix}`}
+                    >
+                        {statusSummary}
+                    </button>
+                </div>
+            ) : null}
 
             {/* Row 2: Bus ID and Type */}
             <div className="grid grid-cols-2 gap-2 text-xs">

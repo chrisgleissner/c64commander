@@ -9,6 +9,8 @@ import { ItemSelectionDialog, type SourceGroup } from '@/components/itemSelectio
 import { createUltimateSourceLocation } from '@/lib/sourceNavigation/ftpSourceAdapter';
 import { SOURCE_LABELS } from '@/lib/sourceNavigation/sourceTerms';
 import { DRIVE_CONTROL_SPECS, DriveControlSpec } from '../constants';
+import { formatDiskDosStatus, type DiskDosStatus } from '@/lib/disks/dosStatusFormatter';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import {
     buildBusIdOptions,
@@ -22,6 +24,23 @@ import {
     DISK_BUS_ID_DEFAULTS,
     PHYSICAL_DRIVE_TYPE_DEFAULTS,
 } from '../constants';
+
+const resolveDriveStatusRaw = (value?: string | null) => {
+    const message = value?.trim() ?? '';
+    if (!message) return '';
+    if (/^service error reported\.?$/i.test(message)) return '';
+    return message;
+};
+
+const toStatusSummary = (status: DiskDosStatus) => {
+    if (status.message) {
+        return status.message.replace(/\s+\(.+\)$/, '');
+    }
+    if (status.code !== null) {
+        return `DOS STATUS ${status.code}`;
+    }
+    return 'Status reported';
+};
 
 interface DriveManagerProps {
     isConnected: boolean;
@@ -54,6 +73,10 @@ export function DriveManager({
     const [mountTarget, setMountTarget] = useState<{
         spec: DriveControlSpec;
         currentPath?: string;
+    } | null>(null);
+    const [statusDetailsDialog, setStatusDetailsDialog] = useState<{
+        driveLabel: string;
+        status: DiskDosStatus;
     } | null>(null);
 
     const sourceGroups = useMemo(() => {
@@ -181,6 +204,8 @@ export function DriveManager({
                     const pathPending = isSoftIec
                         ? Boolean(configWritePending[buildConfigKey('SoftIEC Drive Settings', 'Default Path')])
                         : false;
+                    const statusRaw = resolveDriveStatusRaw(device?.lastError);
+                    const formattedStatus = statusRaw ? formatDiskDosStatus(statusRaw) : null;
 
 
                     const testIdSuffix = spec.testIdSuffix;
@@ -221,6 +246,11 @@ export function DriveManager({
                             mountedPath={mountedPath}
                             mountedPathLabel={mountedPathLabel}
                             onMountedPathClick={() => handleMountClick(spec, summary?.mountedLabel)}
+                            statusSummary={formattedStatus ? toStatusSummary(formattedStatus) : undefined}
+                            statusSeverity={formattedStatus?.severity}
+                            onStatusClick={formattedStatus
+                                ? () => setStatusDetailsDialog({ driveLabel: label, status: formattedStatus })
+                                : undefined}
                             pathPending={pathPending}
                             isConnected={isConnected}
                             testIdSuffix={testIdSuffix}
@@ -241,6 +271,36 @@ export function DriveManager({
                 onAddLocalSource={async () => null}
                 allowFolderSelection={mountTarget?.spec.class === 'SOFT_IEC_DRIVE'}
             />
+
+            <Dialog open={Boolean(statusDetailsDialog)} onOpenChange={(open) => !open && setStatusDetailsDialog(null)}>
+                <DialogContent className="max-w-lg" data-testid="home-drive-status-details-dialog">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {statusDetailsDialog
+                                ? `${statusDetailsDialog.driveLabel}: ${statusDetailsDialog.status.message ?? 'DOS Status'}`
+                                : 'DOS Status'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {statusDetailsDialog && statusDetailsDialog.status.code !== null
+                                ? `Code ${statusDetailsDialog.status.code} • ${statusDetailsDialog.status.severity}`
+                                : `Severity ${statusDetailsDialog?.status.severity ?? 'INFO'}`}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                        {statusDetailsDialog?.status.details ? (
+                            <p className="text-sm leading-relaxed" data-testid="home-drive-status-details-text">
+                                {statusDetailsDialog.status.details}
+                            </p>
+                        ) : null}
+                        <div className="space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground">Raw status line</p>
+                            <p className="text-xs text-muted-foreground whitespace-pre-wrap break-all" data-testid="home-drive-status-details-raw">
+                                {statusDetailsDialog?.status.raw}
+                            </p>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

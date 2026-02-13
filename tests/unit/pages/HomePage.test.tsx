@@ -534,6 +534,26 @@ describe('HomePage SID status', () => {
     fireEvent.keyDown(document.activeElement ?? driveTypeSelect, { key: 'Escape' });
   });
 
+  it('shows concise drive DOS status on Home and opens full details overlay on click', () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, bus_id: 8, type: '1541', last_error: '74,DRIVE NOT READY,00,00' } },
+        { b: { enabled: true, bus_id: 9, type: '1541' } },
+        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation', last_error: '73,U64IEC ULTIMATE DOS V1.1,00,00' } },
+      ],
+    };
+
+    renderHomePage();
+
+    expect(screen.getByTestId('home-drive-status-a')).toHaveTextContent('DRIVE NOT READY');
+    expect(screen.getByTestId('home-drive-status-soft-iec')).toHaveTextContent('DOS MISMATCH');
+
+    fireEvent.click(screen.getByTestId('home-drive-status-a'));
+    expect(screen.getByText('Drive A: DRIVE NOT READY')).toBeInTheDocument();
+    expect(screen.getByTestId('home-drive-status-details-text')).toHaveTextContent(/cannot access media/i);
+    expect(screen.getByTestId('home-drive-status-details-raw')).toHaveTextContent('74,DRIVE NOT READY,00,00');
+  });
+
   it('shows explicit disconnected build info values and offline message', () => {
     (globalThis as any).__APP_VERSION__ = '';
     (globalThis as any).__GIT_SHA__ = '';

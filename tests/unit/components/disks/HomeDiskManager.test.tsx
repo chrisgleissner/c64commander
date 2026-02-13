@@ -234,6 +234,24 @@ describe('HomeDiskManager', () => {
         expect(screen.getByText('Directory unavailable')).toBeInTheDocument();
     });
 
+    it('renders DOS status as message line above raw line without details overlay', () => {
+        useC64DrivesMock.data = {
+          drives: [
+            { a: { bus_id: 8, enabled: true } },
+            { b: { bus_id: 9, enabled: true } },
+            { softiec: { bus_id: 11, enabled: true, last_error: '74,DRIVE NOT READY,00,00' } },
+          ],
+        } as any;
+
+        renderComponent();
+
+        expect(screen.getByTestId('drive-status-message-soft-iec')).toHaveTextContent('DRIVE NOT READY');
+        expect(screen.getByTestId('drive-status-raw-soft-iec')).toHaveTextContent('74,DRIVE NOT READY,00,00');
+        expect(screen.queryByTestId('drive-status-details-text')).not.toBeInTheDocument();
+        expect(screen.queryByText('Message:')).not.toBeInTheDocument();
+        expect(screen.queryByText('Details:')).not.toBeInTheDocument();
+    });
+
     it('handles mount flow', async () => {
         renderComponent();
         
