@@ -45,9 +45,11 @@ tags:
     visible: "Playlist"
     timeout: ${TIMEOUT}
 - assertVisible: "Playlist"
+# WKWebView exposes aria-label ("Add items to playlist") instead of inner text
+# ("Add items") in the accessibility tree, so match against the aria-label.
 - scrollUntilVisible:
     element:
-      text: "Add items"
+      text: "Add items to playlist"
     direction: DOWN
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
@@ -57,15 +59,9 @@ tags:
     commands:
       - scrollUntilVisible:
           element:
-            text: "Add items"
+            text: "Add items to playlist"
           direction: DOWN
           timeout: ${TIMEOUT}
-      - tapOn:
-          text: "Add items"
-          optional: true
-      - tapOn:
-          text: "Add more items"
-          optional: true
       - tapOn:
           text: "Add items to playlist"
           optional: true

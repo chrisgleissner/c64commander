@@ -14,6 +14,7 @@ import { isSmokeModeEnabled, recordSmokeStatus } from '../../../src/lib/smoke/sm
 
 vi.mock('../../../src/lib/config/appSettings', () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
+  loadDebugLoggingEnabled: vi.fn(() => false),
   loadDiscoveryProbeTimeoutMs: vi.fn(() => 2500),
   loadStartupDiscoveryWindowMs: vi.fn(() => 600),
 }));

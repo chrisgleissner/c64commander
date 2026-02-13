@@ -136,7 +136,7 @@ const probeWithFetch = async (
     if (!response.ok) return false;
     return isProbePayloadHealthy(payload);
   } catch (error) {
-    addLog('warn', 'Discovery probe request failed', {
+    addLog('debug', 'Discovery probe request failed', {
       baseUrl,
       error: (error as Error).message,
     });
@@ -180,7 +180,7 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
     try {
       return await probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
     } catch (fallbackError) {
-      addLog('warn', 'Discovery probe fallback failed', {
+      addLog('debug', 'Discovery probe fallback failed', {
         baseUrl: config.baseUrl,
         error: (fallbackError as Error).message,
       });
@@ -458,7 +458,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       await transitionToRealConnected(trigger);
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
-      addLog('warn', 'Discovery probe failed', { trigger });
+      addLog('debug', 'Discovery probe failed', { trigger });
       if (isSmokeModeEnabled()) {
         console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
       }

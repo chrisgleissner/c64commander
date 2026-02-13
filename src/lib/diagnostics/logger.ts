@@ -113,6 +113,13 @@ const normalizeConsoleMessage = (args: unknown[]) => {
     const first = args[0];
     if (typeof first === 'string') return first;
     if (first instanceof Error) return first.message;
+    if (first !== null && typeof first === 'object') {
+        try {
+            return JSON.stringify(first);
+        } catch {
+            return String(first);
+        }
+    }
     return String(first);
 };
 
