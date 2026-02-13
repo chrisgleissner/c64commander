@@ -5,10 +5,11 @@ tags:
   - ios
   - ci-critical-ios
 ---
+# WKWebView exposes aria-label instead of inner text for source buttons.
 - runFlow: subflows/ios-open-play-add-items.yaml
-- assertVisible: "C64U"
+- assertVisible: "Add file / folder from C64U"
 - tapOn:
-    text: "C64U"
+    text: "Add file / folder from C64U"
     optional: true
 - waitForAnimationToEnd
 - takeScreenshot: ios-ftp-browse-after-tap

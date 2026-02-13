@@ -69,10 +69,12 @@ tags:
       - extendedWaitUntil:
           visible: "Choose source"
           timeout: ${TIMEOUT}
+# WKWebView exposes aria-label ("Add file / folder from Local") instead of
+# inner text ("Local") in the accessibility tree.
 - scrollUntilVisible:
     element:
-      text: "Local"
+      text: "Add file / folder from Local"
     direction: DOWN
     timeout: ${TIMEOUT}
-- assertVisible: "Local"
+- assertVisible: "Add file / folder from Local"
 - takeScreenshot: choose-source
