@@ -24,7 +24,9 @@ C64 Commander is an Android app that connects to a C64 Ultimate on your local ne
 
 ### Home
 
-Track device status at a glance, control the machine and drives, and access quick configuration actions.
+This page is the central dashboard for the most important device settings.
+
+All settings can also be adjusted from the Configuration or Disk pages.
 
 <table>
   <tr>
@@ -41,7 +43,9 @@ Track device status at a glance, control the machine and drives, and access quic
 
 ### Play
 
-Control SID playback, adjust playback settings, manage playlists, select SID subsongs, and explore HVSC playback modes.
+Control music and program playback, adjust playback settings and manage playlists, imported from local device, C64U or HVSC.
+
+Automatically advance to the next item in the playlist when the current item finishes.
 
 <table>
   <tr>
@@ -106,7 +110,7 @@ Read in-app documentation, getting started guides, and per-page walkthroughs wit
 
 ### Diagnostics
 
-Trigger diagnostic actions, inspect traces, review logs, and triage errors.
+Inspect and export logs, traces, and the effect of user/system actions.
 
 <table>
   <tr>
