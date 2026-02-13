@@ -828,6 +828,7 @@ export default function SettingsPage() {
             <Button
               variant="outline"
               onClick={() => setDiagnosticsDialogOpen(true)}
+              id="diagnostics-open-dialog"
               data-diagnostics-open-trigger="true"
               data-testid="diagnostics-open-dialog"
             >
