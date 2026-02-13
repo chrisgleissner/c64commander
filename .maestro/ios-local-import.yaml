@@ -5,11 +5,10 @@ tags:
   - ios
   - ci-critical-ios
 ---
+# Verify Local source option is visible in the source picker.
+# We intentionally do NOT tap "Local" because on iOS WKWebView the
+# showDirectoryPicker API is unavailable and the fallback triggers a native
+# UIDocumentPickerViewController that blocks Maestro.
 - runFlow: subflows/ios-open-play-add-items.yaml
 - assertVisible: "Local"
 - takeScreenshot: ios-local-import-source-picker
-- tapOn:
-    text: "Local"
-    optional: true
-- waitForAnimationToEnd
-- takeScreenshot: ios-local-import-after-tap
