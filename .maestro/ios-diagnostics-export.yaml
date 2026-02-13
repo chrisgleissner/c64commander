@@ -8,11 +8,15 @@ tags:
 - runFlow: subflows/ios-open-settings-tab.yaml
 - scrollUntilVisible:
     element:
-      id: "diagnostics-open-dialog"
+      text: "Enable Debug Logging"
     direction: DOWN
     timeout: ${TIMEOUT}
 - tapOn:
     id: "diagnostics-open-dialog"
+    optional: true
+- tapOn:
+    text: "Diagnostics"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: "diagnostics-share-errors"

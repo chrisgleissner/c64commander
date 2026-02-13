@@ -375,6 +375,7 @@ jobs:
       - name: Run iOS Maestro critical flows
         env:
           MAESTRO_CLI_NO_ANALYTICS: 1
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
         run: |
           set -euo pipefail
           mkdir -p test-results/maestro
@@ -542,6 +543,7 @@ jobs:
       - name: Capture iOS Maestro and simulator screenshots
         env:
           MAESTRO_CLI_NO_ANALYTICS: 1
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
         run: |
           set -euo pipefail
           UDID="${{ steps.simulator.outputs.udid }}"

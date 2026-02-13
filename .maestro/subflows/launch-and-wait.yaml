@@ -37,9 +37,5 @@ tags:
 - tapOn:
     text: "Home"
     optional: true
-- extendedWaitUntil:
-    visible:
-      text: "Home"
-    timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: home

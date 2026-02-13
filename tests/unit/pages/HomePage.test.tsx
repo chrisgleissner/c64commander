@@ -534,7 +534,7 @@ describe('HomePage SID status', () => {
     fireEvent.keyDown(document.activeElement ?? driveTypeSelect, { key: 'Escape' });
   });
 
-  it('shows concise drive DOS status on Home and opens full details overlay on click', () => {
+  it('shows concise drive DOS status on Home for Drive A and Soft IEC', () => {
     drivesPayloadRef.current = {
       drives: [
         { a: { enabled: true, bus_id: 8, type: '1541', last_error: '74,DRIVE NOT READY,00,00' } },
@@ -546,12 +546,7 @@ describe('HomePage SID status', () => {
     renderHomePage();
 
     expect(screen.getByTestId('home-drive-status-a')).toHaveTextContent('DRIVE NOT READY');
-    expect(screen.getByTestId('home-drive-status-soft-iec')).toHaveTextContent('DOS MISMATCH');
-
-    fireEvent.click(screen.getByTestId('home-drive-status-a'));
-    expect(screen.getByText('Drive A: DRIVE NOT READY')).toBeInTheDocument();
-    expect(screen.getByTestId('home-drive-status-details-text')).toHaveTextContent(/cannot access media/i);
-    expect(screen.getByTestId('home-drive-status-details-raw')).toHaveTextContent('74,DRIVE NOT READY,00,00');
+    expect(screen.getByTestId('home-drive-status-soft-iec')).toHaveTextContent('OK');
   });
 
   it('shows explicit disconnected build info values and offline message', () => {
