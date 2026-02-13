@@ -294,10 +294,14 @@ export const ItemSelectionDialog = ({
                     data-testid="import-option-local"
                     aria-label="Add file / folder from Local"
                   >
-                    <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
-                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
+                    {/* aria-hidden ensures WKWebView treats the button as a leaf accessible element
+                        so Maestro matches the button's aria-label instead of child text nodes */}
+                    <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                      <FileOriginIcon origin="local" className="h-4 w-4 mr-1" />
+                      <span className="flex flex-col items-start truncate">
+                        <span className="truncate font-medium">{SOURCE_LABELS.local}</span>
+                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.local}</span>
+                      </span>
                     </span>
                   </Button>
                   <Button
@@ -313,10 +317,12 @@ export const ItemSelectionDialog = ({
                     data-testid="import-option-c64u"
                     aria-label="Add file / folder from C64U"
                   >
-                    <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
-                    <span className="flex flex-col items-start truncate">
-                      <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
-                      <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                    <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                      <FileOriginIcon origin="ultimate" className="h-4 w-4 mr-1" />
+                      <span className="flex flex-col items-start truncate">
+                        <span className="truncate font-medium">{SOURCE_LABELS.c64u}</span>
+                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.c64u}</span>
+                      </span>
                     </span>
                   </Button>
                   {hvscSource ? (
@@ -333,10 +339,12 @@ export const ItemSelectionDialog = ({
                       data-testid="import-option-hvsc"
                       aria-label="Add file / folder from HVSC"
                     >
-                      <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
-                      <span className="flex flex-col items-start truncate">
-                        <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
-                        <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
+                      <span className="inline-flex items-center justify-start min-w-0" aria-hidden="true">
+                        <FileOriginIcon origin="hvsc" className="h-4 w-4 mr-1" />
+                        <span className="flex flex-col items-start truncate">
+                          <span className="truncate font-medium">{SOURCE_LABELS.hvsc}</span>
+                          <span className="text-[11px] text-muted-foreground">{SOURCE_EXPLANATIONS.hvsc}</span>
+                        </span>
                       </span>
                     </Button>
                   ) : null}

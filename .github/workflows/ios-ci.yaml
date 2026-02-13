@@ -375,10 +375,11 @@ jobs:
           MAESTRO_CLI_NO_ANALYTICS: 1
           MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
         run: |
-          set -euo pipefail
+          set -uo pipefail
           UDID="${{ steps.simulator.outputs.udid }}"
           mkdir -p test-results/maestro
           mkdir -p artifacts
+          overall_exit=0
 
           fetch_endpoint_with_retry() {
             local endpoint="$1"
@@ -401,10 +402,10 @@ jobs:
           collect_debug_payloads() {
             local test_name="$1"
             local test_dir="artifacts/$test_name"
-            fetch_endpoint_with_retry "trace" "$test_dir/trace.json"
-            fetch_endpoint_with_retry "actions" "$test_dir/action.json"
-            fetch_endpoint_with_retry "log" "$test_dir/log.json"
-            fetch_endpoint_with_retry "errorLog" "$test_dir/errorLog.json"
+            fetch_endpoint_with_retry "trace" "$test_dir/trace.json" || true
+            fetch_endpoint_with_retry "actions" "$test_dir/action.json" || true
+            fetch_endpoint_with_retry "log" "$test_dir/log.json" || true
+            fetch_endpoint_with_retry "errorLog" "$test_dir/errorLog.json" || true
           }
 
           run_flow_with_capture() {
@@ -415,8 +416,13 @@ jobs:
             local test_dir="artifacts/$test_name"
 
             mkdir -p "$test_dir/screenshots"
-            "$HOME/.maestro/bin/maestro" test "$flow_file" --format junit --output "$junit_file"
-            xcrun simctl io "$UDID" screenshot "$test_dir/screenshots/$screenshot_name"
+            if "$HOME/.maestro/bin/maestro" test "$flow_file" --format junit --output "$junit_file"; then
+              xcrun simctl io "$UDID" screenshot "$test_dir/screenshots/$screenshot_name"
+            else
+              overall_exit=1
+              echo "::warning::Maestro flow $test_name failed"
+              xcrun simctl io "$UDID" screenshot "$test_dir/screenshots/${test_name}-failure.png" || true
+            fi
             collect_debug_payloads "$test_name"
           }
 
@@ -437,6 +443,8 @@ jobs:
             "test-results/maestro/ios-screenshots-diagnostics.xml" \
             "diagnostics-export" \
             "03-diagnostics-export.png"
+
+          exit $overall_exit
 
       - name: Upload iOS screenshot artifacts
         if: always()

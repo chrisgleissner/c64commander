@@ -1614,10 +1614,10 @@ export default function SettingsPage() {
             className="space-y-3"
           >
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>Errors</TabsTrigger>
-              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>Logs</TabsTrigger>
-              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>Traces</TabsTrigger>
-              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>Actions</TabsTrigger>
+              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass} aria-label="Errors">Errors</TabsTrigger>
+              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass} aria-label="Logs">Logs</TabsTrigger>
+              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass} aria-label="Traces">Traces</TabsTrigger>
+              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass} aria-label="Actions">Actions</TabsTrigger>
             </TabsList>
             <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               <div className="flex items-center justify-between gap-2">
