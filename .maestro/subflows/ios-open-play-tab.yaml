@@ -21,7 +21,7 @@ tags:
             text: "Play"
           timeout: ${TIMEOUT}
 - tapOn:
-  id: "tab-play"
+    id: "tab-play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
