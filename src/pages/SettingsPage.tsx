@@ -796,14 +796,18 @@ export default function SettingsPage() {
           {/* Connection Status */}
           <div className={`p-3 rounded-lg text-sm break-words ${status.isConnected
             ? 'bg-success/10 text-success'
-            : status.isConnecting
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-destructive/10 text-destructive'
+            : isDemoActive
+              ? 'bg-primary/10 text-primary'
+              : status.isConnecting
+                ? 'bg-muted text-muted-foreground'
+                : 'bg-destructive/10 text-destructive'
             }`}>
             {status.isConnecting ? (
               'Connecting...'
             ) : status.isConnected ? (
               `Connected to ${baseUrl}`
+            ) : isDemoActive ? (
+              `Demo mode — ${baseUrl}`
             ) : (
               status.error || 'Not connected'
             )}
