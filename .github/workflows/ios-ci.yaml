@@ -286,7 +286,7 @@ jobs:
 
   ios-maestro-aggregate:
     name: iOS | Maestro aggregate
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     needs: ios-maestro-tests
     if: always()
 
