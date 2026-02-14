@@ -6,23 +6,26 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
     private var nativePluginsRegistered = false
+    private weak var nativePluginsBridge: CAPBridge?
 
     private func registerNativePluginsIfNeeded() {
-        guard !nativePluginsRegistered else {
-            return
-        }
         guard let bridgeViewController = window?.rootViewController as? CAPBridgeViewController,
               let bridge = bridgeViewController.bridge else {
             return
         }
+
+        // Only register plugins once per bridge instance.
+        guard bridge !== nativePluginsBridge else {
+            return
+        }
+
         bridge.registerPluginInstance(FolderPickerPlugin())
         bridge.registerPluginInstance(FtpClientPlugin())
         bridge.registerPluginInstance(SecureStoragePlugin())
         bridge.registerPluginInstance(FeatureFlagsPlugin())
         bridge.registerPluginInstance(BackgroundExecutionPlugin())
         bridge.registerPluginInstance(DiagnosticsBridgePlugin())
-        bridge.registerPluginInstance(MockC64UPlugin())
-        nativePluginsRegistered = true
+        nativePluginsBridge = bridge
     }
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
