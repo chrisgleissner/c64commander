@@ -377,15 +377,22 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
             const reader = response.body.getReader();
             const chunks: Uint8Array[] = [];
             let loaded = 0;
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value) {
-                    chunks.push(value);
-                    loaded += value.length;
-                    emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    if (value) {
+                        chunks.push(value);
+                        loaded += value.length;
+                        emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
+                    }
+                    ensureNotCancelled();
                 }
-                ensureNotCancelled();
+            } catch (error) {
+                try { reader.cancel().catch(() => {}); } catch { /* reader may already be closed */ }
+                throw error;
+            } finally {
+                try { reader.releaseLock(); } catch { /* stream may already be released */ }
             }
             if (totalBytes && loaded !== totalBytes) {
                 throw new Error(`Download size mismatch: expected ${totalBytes}, got ${loaded}`);

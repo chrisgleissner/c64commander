@@ -38,6 +38,11 @@ class BackgroundExecutionService : Service() {
         private const val NOTIFICATION_ID = 1
         private const val WAKELOCK_TAG = "c64commander:background_execution"
 
+        /** Maximum WakeLock hold time before automatic release (10 minutes). */
+        internal const val WAKELOCK_TIMEOUT_MS = 10L * 60 * 1000
+        /** Idle timeout: service stops if no dueAtMs is set within this window (60 seconds). */
+        internal const val IDLE_TIMEOUT_MS = 60L * 1000
+
         const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
         const val EXTRA_DUE_AT_MS = "dueAtMs"
@@ -87,6 +92,7 @@ class BackgroundExecutionService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     private var dueAtMs: Long? = null
     private var dueRunnable: Runnable? = null
+    private var idleRunnable: Runnable? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -113,11 +119,15 @@ class BackgroundExecutionService : Service() {
             return START_STICKY
         }
 
+        // Schedule idle timeout: if no dueAtMs has been set, stop the service
+        scheduleIdleTimeout()
+
         return START_STICKY
     }
 
     override fun onDestroy() {
         AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
+        cancelIdleTimeout()
         updateDueAtInternal(null)
         releaseWakeLock()
         isRunning = false
@@ -162,9 +172,21 @@ class BackgroundExecutionService : Service() {
         if (wakeLock != null) return
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-            acquire()
+            acquire(WAKELOCK_TIMEOUT_MS)
         }
-        AppLogger.debug(this, TAG, "WakeLock acquired", "BackgroundExecutionService")
+        AppLogger.debug(this, TAG, "WakeLock acquired (timeout=${WAKELOCK_TIMEOUT_MS}ms)", "BackgroundExecutionService")
+    }
+
+    /** Re-acquires the WakeLock with a fresh timeout, extending the hold window. */
+    private fun renewWakeLock() {
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
+            acquire(WAKELOCK_TIMEOUT_MS)
+        }
+        AppLogger.debug(this, TAG, "WakeLock renewed (timeout=${WAKELOCK_TIMEOUT_MS}ms)", "BackgroundExecutionService")
     }
 
     private fun releaseWakeLock() {
@@ -187,6 +209,10 @@ class BackgroundExecutionService : Service() {
             return
         }
 
+        // Renew wake lock whenever a due-time is scheduled, and cancel idle timeout
+        renewWakeLock()
+        cancelIdleTimeout()
+
         val delay = maxOf(0L, nextDueAtMs - System.currentTimeMillis())
         val runnable = Runnable {
             val currentDue = dueAtMs
@@ -208,5 +234,23 @@ class BackgroundExecutionService : Service() {
         dueRunnable = runnable
         handler.postDelayed(runnable, delay)
         AppLogger.debug(this, TAG, "Scheduled dueAtMs watchdog (dueAtMs=$nextDueAtMs, delayMs=$delay)", "BackgroundExecutionService")
+    }
+
+    private fun scheduleIdleTimeout() {
+        cancelIdleTimeout()
+        if (dueAtMs != null) return // Already active — no idle timeout needed
+        val runnable = Runnable {
+            if (dueAtMs != null) return@Runnable
+            AppLogger.info(this, TAG, "Idle timeout reached — stopping service", "BackgroundExecutionService")
+            stopSelf()
+        }
+        idleRunnable = runnable
+        handler.postDelayed(runnable, IDLE_TIMEOUT_MS)
+        AppLogger.debug(this, TAG, "Scheduled idle timeout (${IDLE_TIMEOUT_MS}ms)", "BackgroundExecutionService")
+    }
+
+    private fun cancelIdleTimeout() {
+        idleRunnable?.let { handler.removeCallbacks(it) }
+        idleRunnable = null
     }
 }

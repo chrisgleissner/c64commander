@@ -7,6 +7,7 @@
  */
 
 import { loadConfigWriteIntervalMs } from './appSettings';
+import { addErrorLog } from '@/lib/logging';
 
 let lastWriteAt = 0;
 let queue = Promise.resolve();
@@ -36,7 +37,9 @@ export const scheduleConfigWrite = async <T,>(task: () => Promise<T>): Promise<T
     return task();
   };
   const next = queue.then(run);
-  queue = next.catch(() => {});
+  queue = next.catch((error) => {
+    addErrorLog('Config write queue: preceding task failed', { error: (error as Error).message });
+  });
   return next;
 };
 

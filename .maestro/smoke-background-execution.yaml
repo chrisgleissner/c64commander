@@ -6,6 +6,7 @@ env:
 tags:
   - device
   - probe
+  - ci-critical
 ---
 # Verify JS continues executing while the screen is locked.
 # Requires VITE_ENABLE_TEST_PROBES=1 in the build.
@@ -39,4 +40,9 @@ tags:
 
 # Assert the heartbeat advanced (JS kept running while screen was locked)
 - assertTrue: ${output.finalHeartbeat > output.initialHeartbeat}
+
+# Assert the counter is a valid number and the advance is bounded
+- assertTrue: ${!isNaN(output.initialHeartbeat) && !isNaN(output.finalHeartbeat)}
+- evalScript: ${output.heartbeatDelta = output.finalHeartbeat - output.initialHeartbeat}
+- assertTrue: ${output.heartbeatDelta >= 2 && output.heartbeatDelta <= 50}
 - takeScreenshot: background-execution-verified

@@ -130,4 +130,65 @@ describe('useSourceNavigator', () => {
       }),
     );
   });
+
+  it('discards stale responses when a newer navigation fires', async () => {
+    type Resolver = (entries: { type: string; name: string; path: string }[]) => void;
+    const resolvers: Resolver[] = [];
+    const listEntries = vi.fn().mockImplementation(
+      () => new Promise<{ type: string; name: string; path: string }[]>((resolve) => {
+        resolvers.push(resolve);
+      }),
+    );
+    const source: SourceLocation = {
+      id: 'race-1',
+      type: 'local',
+      name: 'Local',
+      rootPath: '/',
+      isAvailable: true,
+      listEntries,
+      listFilesRecursive: vi.fn(),
+    };
+
+    const { result } = renderHook(() => useSourceNavigator(source));
+
+    // Wait for the initial load call
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(1));
+
+    // Resolve initial load
+    await act(async () => {
+      resolvers[0]([{ type: 'dir', name: 'A', path: '/A' }]);
+    });
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.path).toBe('/');
+
+    // Fire two navigations quickly — second should win
+    act(() => {
+      result.current.navigateTo('/A');
+    });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(2));
+
+    act(() => {
+      result.current.navigateTo('/B');
+    });
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(3));
+
+    // Resolve the FIRST navigation (stale — /A) AFTER the second was dispatched
+    await act(async () => {
+      resolvers[1]([{ type: 'file', name: 'stale.sid', path: '/A/stale.sid' }]);
+    });
+
+    // Stale result should NOT appear — entries should still be from initial load
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0].name).toBe('A');
+
+    // Now resolve the SECOND navigation (current — /B)
+    await act(async () => {
+      resolvers[2]([{ type: 'file', name: 'current.sid', path: '/B/current.sid' }]);
+    });
+
+    // Current result should appear
+    expect(result.current.entries).toHaveLength(1);
+    expect(result.current.entries[0].name).toBe('current.sid');
+    expect(result.current.path).toBe('/B');
+  });
 });

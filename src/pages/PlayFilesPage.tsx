@@ -743,6 +743,7 @@ export default function PlayFilesPage() {
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId,
+    setAutoAdvanceDueAtMs,
   });
 
   useEffect(() => {

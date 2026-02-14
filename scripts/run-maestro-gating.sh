@@ -393,6 +393,17 @@ if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
     log "Maestro report contains failures"
     MAESTRO_EXIT_CODE=1
   fi
+
+  # Assert critical flows actually executed (ci-critical gate integrity)
+  REQUIRED_FLOWS=("smoke-background-execution" "smoke-hvsc" "smoke-launch")
+  if [[ "${CI:-false}" == "true" ]]; then
+    for FLOW in "${REQUIRED_FLOWS[@]}"; do
+      if ! grep -q "$FLOW" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
+        log "GATE VIOLATION: Required flow '$FLOW' missing from Maestro report"
+        MAESTRO_EXIT_CODE=1
+      fi
+    done
+  fi
 else
   log "Maestro report missing at $RAW_OUTPUT_DIR/maestro-report.xml"
   MAESTRO_EXIT_CODE=1

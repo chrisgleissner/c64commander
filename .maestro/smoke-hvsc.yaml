@@ -2,6 +2,7 @@ appId: uk.gleissner.c64commander
 tags:
   - hvsc
   - slow
+  - ci-critical
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
