@@ -25,6 +25,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         bridge.registerPluginInstance(FeatureFlagsPlugin())
         bridge.registerPluginInstance(BackgroundExecutionPlugin())
         bridge.registerPluginInstance(DiagnosticsBridgePlugin())
+        bridge.registerPluginInstance(MockC64UPlugin())
         nativePluginsBridge = bridge
     }
 

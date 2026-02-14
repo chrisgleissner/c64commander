@@ -17,6 +17,7 @@ type DiagnosticsBridgePlugin = {
         actions: string;
         log: string;
         errorLog: string;
+        network: string;
     }) => Promise<void>;
 };
 
@@ -97,6 +98,7 @@ export const pushNativeDebugSnapshots = async (payload: {
     actions: string;
     log: string;
     errorLog: string;
+    network: string;
 }) => {
     await DiagnosticsBridge.updateDebugSnapshots(payload);
 };

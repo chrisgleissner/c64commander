@@ -75,11 +75,12 @@ final class IOSDebugSnapshotStore {
         "actions": "[]",
         "log": "[]",
         "errorLog": "[]",
+        "network": "{\"requests\":[],\"successCount\":0,\"failureCount\":0}",
     ]
 
     private init() {}
 
-    func update(trace: String?, actions: String?, log: String?, errorLog: String?) {
+    func update(trace: String?, actions: String?, log: String?, errorLog: String?, network: String? = nil) {
         queue.sync {
             if let trace {
                 snapshots["trace"] = trace
@@ -92,6 +93,9 @@ final class IOSDebugSnapshotStore {
             }
             if let errorLog {
                 snapshots["errorLog"] = errorLog
+            }
+            if let network {
+                snapshots["network"] = network
             }
         }
     }
@@ -184,6 +188,8 @@ final class IOSDebugHTTPServer {
             return (200, IOSDebugSnapshotStore.shared.payload(for: "log"))
         case "/debug/errorLog":
             return (200, IOSDebugSnapshotStore.shared.payload(for: "errorLog"))
+        case "/debug/network":
+            return (200, IOSDebugSnapshotStore.shared.payload(for: "network"))
         default:
             return (404, "{\"error\":\"not found\"}")
         }
@@ -892,7 +898,8 @@ public final class DiagnosticsBridgePlugin: CAPPlugin, CAPBridgedPlugin {
             trace: call.getString("trace"),
             actions: call.getString("actions"),
             log: call.getString("log"),
-            errorLog: call.getString("errorLog")
+            errorLog: call.getString("errorLog"),
+            network: call.getString("network")
         )
         call.resolve()
     }

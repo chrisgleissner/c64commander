@@ -13,6 +13,11 @@ tags:
 
 - runFlow: subflows/launch-and-wait.yaml
 
+- extendedWaitUntil:
+    visible:
+      id: "test-heartbeat"
+    timeout: ${TIMEOUT}
+
 # Read the initial heartbeat counter value
 - copyTextFrom:
     id: "test-heartbeat"
@@ -28,6 +33,11 @@ tags:
 - extendedWaitUntil:
     visible:
       text: "Home"
+    timeout: ${TIMEOUT}
+
+- extendedWaitUntil:
+    visible:
+      id: "test-heartbeat"
     timeout: ${TIMEOUT}
 
 # Read the heartbeat again

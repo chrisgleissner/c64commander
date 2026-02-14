@@ -599,6 +599,7 @@ jobs:
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
       MAESTRO_TIMEOUT_SECS: "300"
+      MAESTRO_CLI_NO_ANALYTICS: "1"
       ANDROID_AVD_HOME: /home/runner/.android/avd
 
     steps:
@@ -623,6 +624,13 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Cache Maestro CLI
+        id: maestro-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.maestro
+          key: maestro-cli-${{ runner.os }}-v1
+
       - name: Export Android SDK env
         run: |
           if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
@@ -642,6 +650,10 @@ jobs:
           set -ex
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/emulator:$PATH"
+
+          echo "=== Restarting adb daemon ==="
+          adb kill-server || true
+          adb start-server
 
           # Ensure AVD directory exists
           mkdir -p "$ANDROID_AVD_HOME"
@@ -672,7 +684,7 @@ jobs:
 
           echo "=== Starting emulator in background ==="
           mkdir -p test-results/maestro
-          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-boot-anim -no-snapshot -gpu swiftshader_indirect -noaudio -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-audio -no-metrics -no-boot-anim -no-snapshot -gpu swiftshader_indirect -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
           EMULATOR_PID=$!
           echo $EMULATOR_PID > test-results/maestro/emulator.pid
           echo "Emulator started with PID: $EMULATOR_PID"
@@ -691,14 +703,19 @@ jobs:
           set -e
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          boot_start=$(date +%s)
           echo "Waiting for emulator to appear in adb devices..."
           timeout 120 bash -c 'until adb devices | grep -q "emulator-"; do sleep 2; done' || { echo "Emulator did not appear"; adb devices; cat test-results/maestro/emulator.log || true; exit 1; }
           SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
           echo "Emulator serial: $SERIAL"
+          timeout 120 adb -s "$SERIAL" wait-for-device || { echo "Device wait-for-device failed"; adb devices -l; exit 1; }
           echo "Waiting for boot completion..."
           timeout 180 bash -c "until adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '1'; do sleep 3; done" || { echo "Boot did not complete"; adb -s $SERIAL shell getprop sys.boot_completed || true; cat test-results/maestro/emulator.log || true; exit 1; }
           echo "Waiting for boot animation to stop..."
           timeout 60 bash -c "until adb -s $SERIAL shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' | grep -q 'stopped'; do sleep 2; done" || true
+          boot_end=$(date +%s)
+          echo "- emulator boot: $((boot_end-boot_start))s" >> $GITHUB_STEP_SUMMARY
+          echo "emulator_boot_seconds=$((boot_end-boot_start))" >> test-results/maestro/timings.txt
           echo "Emulator is ready"
           adb devices -l
 
@@ -710,21 +727,26 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Install Maestro CLI
+        if: steps.maestro-cache.outputs.cache-hit != 'true'
         run: |
           curl -fsSL https://get.maestro.mobile.dev | bash
+          echo "$HOME/.maestro/bin" >> $GITHUB_PATH
+
+      - name: Export Maestro CLI path
+        run: |
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
       - name: Build web + sync
         run: |
           start=$(date +%s)
-          npm run cap:build
+          VITE_ENABLE_TEST_PROBES=1 npm run cap:build
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Build APK (debug)
         run: |
           start=$(date +%s)
-          npm run android:apk
+          VITE_ENABLE_TEST_PROBES=1 npm run android:apk
           end=$(date +%s)
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 

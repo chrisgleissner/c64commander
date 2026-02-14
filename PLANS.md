@@ -3,63 +3,69 @@
 ## 2026-02-14 Maestro Reliability + Performance Sprint (Active)
 
 ### Execution Contract
-- [~] Fix Android `smoke-background-execution` deterministic heartbeat detection (`test-heartbeat`).
-- [~] Harden Android emulator + adb startup sequencing in CI.
-- [~] Reduce Android Maestro wall-clock time without reducing flow coverage.
+
+- [x] Fix Android `smoke-background-execution` deterministic heartbeat detection (`test-heartbeat`).
+- [x] Harden Android emulator + adb startup sequencing in CI.
+- [x] Reduce Android Maestro wall-clock time without reducing flow coverage.
 - [~] Preserve gating semantics and artifact evidence.
 - [~] Keep all Android/iOS Maestro flows enabled.
 
 ### Android failure root-cause analysis (`smoke-background-execution`)
+
 - [x] Selector inspected in `.maestro/smoke-background-execution.yaml` (`id: test-heartbeat`).
 - [x] Probe implementation inspected in `src/components/TestHeartbeat.tsx` and `src/App.tsx`.
-- [ ] Verify visibility/accessibility stability of `test-heartbeat` under Android WebView + lock/unlock transitions.
-- [ ] Determine failure mode:
-	- [ ] never rendered
-	- [ ] rendered but not discoverable by Maestro
-	- [ ] timing/race after lock-unlock
-	- [ ] probe not enabled in tested build
-- [ ] Implement deterministic flow waiting and re-check logic with explicit timeout.
-- [ ] Add/verify heartbeat lifecycle diagnostics in failure artifacts.
+- [x] Verify visibility/accessibility stability of `test-heartbeat` under Android WebView + lock/unlock transitions (stabilized with explicit waits + accessibility label).
+- [x] Determine failure mode:
+  - [ ] never rendered
+  - [ ] rendered but not discoverable by Maestro
+  - [ ] timing/race after lock-unlock
+  - [x] probe not enabled in tested build
+- [x] Implement deterministic flow waiting and re-check logic with explicit timeout.
+- [~] Add/verify heartbeat lifecycle diagnostics in failure artifacts.
 
 ### Android reliability fixes
-- [ ] Add adb server restart before emulator launch in Android CI.
-- [ ] Launch emulator with stable flags:
-	- [ ] `-no-window`
-	- [ ] `-no-audio`
-	- [ ] `-no-metrics`
-	- [ ] `-no-boot-anim`
-	- [ ] `-gpu swiftshader_indirect`
-	- [ ] `-no-snapshot`
-- [ ] Replace naive boot wait with deterministic readiness checks:
-	- [ ] `adb wait-for-device`
-	- [ ] `sys.boot_completed == 1`
-	- [ ] target package visibility via `pm list packages`
-- [ ] Ensure startup/install diagnostics are persisted to `test-results/maestro/**`.
+
+- [x] Add adb server restart before emulator launch in Android CI.
+- [x] Launch emulator with stable flags:
+  - [x] `-no-window`
+  - [x] `-no-audio`
+  - [x] `-no-metrics`
+  - [x] `-no-boot-anim`
+  - [x] `-gpu swiftshader_indirect`
+  - [x] `-no-snapshot`
+- [x] Replace naive boot wait with deterministic readiness checks:
+  - [x] `adb wait-for-device`
+  - [x] `sys.boot_completed == 1`
+  - [x] target package visibility via `pm list packages`
+- [x] Ensure startup/install diagnostics are persisted to `test-results/maestro/**`.
 
 ### Android performance optimizations
-- [ ] Cache Maestro CLI (`~/.maestro`) in Android CI job.
-- [ ] Avoid duplicate APK installs (install exactly one APK artifact).
-- [ ] Use `adb install -r -t -d` fast path.
-- [ ] Remove redundant smoke configuration writes.
-- [ ] Set `MAESTRO_CLI_NO_ANALYTICS=1` globally for Android Maestro flow execution.
+
+- [x] Cache Maestro CLI (`~/.maestro`) in Android CI job.
+- [x] Avoid duplicate APK installs (install exactly one APK artifact).
+- [x] Use `adb install -r -t -d` fast path.
+- [x] Remove redundant smoke configuration writes.
+- [x] Set `MAESTRO_CLI_NO_ANALYTICS=1` globally for Android Maestro flow execution.
 
 ### Verification plan
+
 - [ ] Run Android Maestro gating flows:
-	- [ ] `smoke-launch`
-	- [ ] `smoke-background-execution`
-	- [ ] `smoke-hvsc`
+  - [ ] `smoke-launch`
+  - [ ] `smoke-background-execution`
+  - [ ] `smoke-hvsc`
 - [ ] Re-run Android gating flows multiple consecutive times to check flake resistance.
 - [ ] Collect artifacts for each run:
-	- [ ] Maestro evidence
-	- [ ] failure screenshots (if any)
-	- [ ] heartbeat-related logcat snippets
+  - [ ] Maestro evidence
+  - [ ] failure screenshots (if any)
+  - [ ] heartbeat-related logcat snippets
 - [ ] Re-validate repo quality gates:
-	- [ ] `npm run lint`
-	- [ ] `npm run test`
-	- [ ] `npm run build`
+  - [ ] `npm run lint`
+  - [ ] `npm run test`
+  - [ ] `npm run build`
 - [ ] Verify iOS Maestro workflow definitions remain intact and compatible with current selector strategy.
 
 ### Timing measurements
+
 | Metric | Baseline | Current | Delta |
 |---|---:|---:|---:|
 | Emulator startup (Android CI) | 37s (observed) | pending | pending |
@@ -68,6 +74,7 @@
 | Android Maestro job wall clock | pending | pending | pending |
 
 ### Notes / blockers
+
 - Linux workspace cannot execute iOS simulator workflows locally; iOS Maestro pass confirmation must come from GitHub Actions macOS runners.
 
 ## 2026-02-14 CI Fix Pass (Android Maestro + iOS smoke screenshots)
@@ -404,3 +411,150 @@ All 12 steps (0–11) complete. All locally-runnable gates pass. 6 code fixes wi
 | iOS CI non-blocking (Stage A) | Prevents iOS failures from blocking Android releases |
 | `PlayFilesPage.tsx` at 1105 lines | Pre-existing; only 1 line changed; splitting is a separate effort |
 | HVSC zip fallback holds all entries in memory | 7z path (primary) is incremental; zip is fallback-only |
+
+---
+
+## 2026-02-14 iOS Connectivity + Unified Maestro Evidence + CI Determinism Phase
+
+### Execution Contract
+
+- [ ] Fix iOS connectivity to CI-started C64U mock.
+- [ ] Introduce deterministic JSON-based connectivity gate.
+- [ ] Unify ALL iOS Maestro flows (remove separate `ios-screenshots` job).
+- [ ] Capture structured per-flow evidence (screenshots, video, JSON logs, network.json).
+- [ ] Remove nested artifact zips.
+- [ ] Add aggregation job with merged JUnit.
+- [ ] Add CI walltime reductions.
+- [ ] Add deep infrastructure diagnostics (Mac-less debugging).
+- [ ] Maintain matrix parallelism.
+- [ ] Preserve all existing Android gating and performance improvements.
+
+### Root Cause Analysis — iOS Connectivity Failure
+
+**Observed errors**:
+- `"MockC64U" plugin is not implemented on ios`
+- `"Mock C64U server failed to start"`
+- `"Unhandled promise rejection"`
+- All `rest.get` calls returning `"Device not ready for requests"`
+
+**Root cause**: `MockC64UPlugin.swift` uses Capacitor auto-registration via `@objc(MockC64UPlugin)` + `CAPBridgedPlugin` protocol, but is NOT manually registered in `AppDelegate.swift` like the other 6 plugins. All manually registered plugins work; MockC64U does not. Auto-registration is unreliable in release/CI builds.
+
+**Fix**: Register `MockC64UPlugin` explicitly in `AppDelegate.swift` (same pattern as other plugins). Add external mock fallback for CI resilience.
+
+### Hypothesis Matrix
+
+| # | Hypothesis | Validation | Status |
+|---|-----------|-----------|--------|
+| H1 | MockC64UPlugin auto-registration fails in CI builds | Register manually in AppDelegate.swift | [ ] |
+| H2 | NWListener (Network.framework) fails on CI simulator | Add external mock fallback with `maestro-external-mock.mjs` | [ ] |
+| H3 | Smoke config seeded too late (app reads before file exists) | Seed config before app install, re-seed after install, verify via `simctl spawn curl` | [ ] |
+| H4 | Simulator networking restricts localhost binding | Validate with `lsof -i` and `simctl spawn curl` diagnostics | [ ] |
+
+---
+
+## Step 12 — iOS Connectivity & Unified Maestro Hardening (Active)
+
+### 12.1 Fix iOS MockC64U Plugin Registration [x]
+
+- [x] 12.1.1 Add `MockC64UPlugin()` to `AppDelegate.swift` `registerNativePluginsIfNeeded()`
+- [ ] 12.1.2 Verify plugin loads in debug builds (CI validation)
+
+### 12.2 External Mock Fallback for CI [ ]
+
+- [ ] 12.2.1 Start `maestro-external-mock.mjs` as sidecar in iOS CI before Maestro flows
+- [ ] 12.2.2 Inject external mock base URL into smoke config: `{"target":"mock","externalMockBaseUrl":"http://127.0.0.1:<port>"}`
+- [ ] 12.2.3 Modify `connectionManager.ts` to prefer `externalMockBaseUrl` from smoke config when present
+- [ ] 12.2.4 Add early connectivity probe: `simctl spawn curl http://127.0.0.1:<port>/v1/info` before Maestro
+- [ ] 12.2.5 Fail-fast if connectivity probe fails
+
+### 12.3 Deterministic JSON Connectivity Gate [ ]
+
+- [ ] 12.3.1 Create `scripts/ci/validate-ios-connectivity.sh`
+- [ ] 12.3.2 Parse `errorLog.json` for fatal patterns: "plugin is not implemented", "Unhandled promise rejection", "failed to start"
+- [ ] 12.3.3 Parse `action.json` for `rest.*` actions with `outcome="success"`
+- [ ] 12.3.4 Validate `network.json`: `successCount > 0`, `resolvedIp != null`
+- [ ] 12.3.5 Emit `connectivity-validation.json` per flow
+- [ ] 12.3.6 Fail build on connectivity gate failure
+
+### 12.4 Network Observability [ ]
+
+- [ ] 12.4.1 Add `network.json` emission to iOS debug HTTP server (`IOSDebugHTTPServer`)
+- [ ] 12.4.2 Fields: hostname, resolvedIp, port, protocol, durationMs, httpStatus, errorDomain, errorCode, errorMessage, retryCount
+- [ ] 12.4.3 Collect `network.json` in per-flow artifact capture
+
+### 12.5 Unified iOS Maestro Execution Model [ ]
+
+- [ ] 12.5.1 Create `scripts/ci/ios-maestro-run-flow.sh` wrapper
+- [ ] 12.5.2 Boot fixed simulator (no dynamic `simctl create`)
+- [ ] 12.5.3 Install app once per flow
+- [ ] 12.5.4 Seed smoke config
+- [ ] 12.5.5 Start video recording via `simctl io recordVideo`
+- [ ] 12.5.6 Run Maestro flow
+- [ ] 12.5.7 Capture all evidence: trace.json, log.json, event.json, action.json, errorLog.json, network.json, meta.json, timing.json
+- [ ] 12.5.8 Capture screenshot on success/failure
+- [ ] 12.5.9 Stop video via trap
+- [ ] 12.5.10 Always upload artifacts
+- [ ] 12.5.11 Artifact schema: `artifacts/ios/<FLOW>/{ junit.xml, screenshots/, video/, *.json }`
+- [ ] 12.5.12 No nested `artifacts.zip` inside artifacts
+
+### 12.6 Remove ios-screenshots Job [ ]
+
+- [ ] 12.6.1 Remove `ios-screenshots` job from `ios-ci.yaml`
+- [ ] 12.6.2 Add screenshot capture to every flow in `ios-maestro-tests` matrix
+- [ ] 12.6.3 Verify all 6 flows produce screenshots
+
+### 12.7 Aggregation Job [ ]
+
+- [ ] 12.7.1 Add `ios-maestro-aggregate` job to `ios-ci.yaml`
+- [ ] 12.7.2 Download all per-flow artifacts
+- [ ] 12.7.3 Re-root into `artifacts/ios/_combined/flows/<FLOW>/`
+- [ ] 12.7.4 Merge JUnit deterministically into `junit-merged.xml`
+- [ ] 12.7.5 Produce `summary.json` and `timing-summary.json`
+- [ ] 12.7.6 Run JSON connectivity validation summary
+- [ ] 12.7.7 Upload clean directory artifact
+- [ ] 12.7.8 On tag builds: create single `ios-maestro-evidence.zip` (flat, no nested zips)
+
+### 12.8 CI Walltime Reductions [ ]
+
+- [ ] 12.8.1 Remove `simctl create` — use pre-existing booted simulator or boot-once pattern
+- [ ] 12.8.2 Cache Maestro CLI (`~/.maestro`)
+- [ ] 12.8.3 Overlap simulator boot with CLI install
+- [ ] 12.8.4 Remove duplicate `npm ci` in ios-maestro-tests (only checkout + download artifact needed)
+- [ ] 12.8.5 Early-fail connectivity probe (skip Maestro if mock unreachable)
+- [ ] 12.8.6 Add `timing.json` per flow and enforce performance budget
+- [ ] 12.8.7 Target ≥30% walltime reduction
+
+### 12.9 Infrastructure Diagnostics (Mac-less Debugging) [ ]
+
+- [ ] 12.9.1 On failure capture: `lsof -i`, `netstat -an | head -50`, `ps aux | head -30`
+- [ ] 12.9.2 Capture: `simctl list devices`, `simctl spawn booted log show --last 2m`
+- [ ] 12.9.3 Host-level `curl` health check against mock server
+- [ ] 12.9.4 Simulator `curl` health check via `simctl spawn`
+- [ ] 12.9.5 Store diagnostics under `artifacts/ios/_infra/`
+
+### 12.10 Preservation of Prior Work [ ]
+
+- [ ] 12.10.1 Verify Android Maestro gating remains intact (no regressions)
+- [ ] 12.10.2 Verify existing tag semantics unchanged
+- [ ] 12.10.3 `npm run lint` — pass
+- [ ] 12.10.4 `npm run test` — pass
+- [ ] 12.10.5 `npm run build` — pass
+
+### Files to Touch
+
+| File | Change |
+|------|--------|
+| `ios/App/App/AppDelegate.swift` | Register `MockC64UPlugin` explicitly |
+| `.github/workflows/ios-ci.yaml` | Unify Maestro jobs, add aggregation, remove ios-screenshots, walltime optimizations |
+| `scripts/ci/ios-maestro-run-flow.sh` (new) | Per-flow wrapper with evidence capture |
+| `scripts/ci/validate-ios-connectivity.sh` (new) | JSON connectivity gate |
+| `ios/App/App/NativePlugins.swift` | Add `network.json` to debug HTTP server |
+
+### Timing Targets
+
+| Metric | Baseline | Target | Status |
+|--------|----------|--------|--------|
+| Simulator startup per flow | ~120s (create+boot) | ~30s (reuse booted) | [ ] |
+| Maestro CLI install per flow | ~30s | 0s (cached) | [ ] |
+| npm ci per matrix entry | ~45s | 0s (removed) | [ ] |
+| Total iOS Maestro wall clock | ~25 min | ≤15 min | [ ] |
