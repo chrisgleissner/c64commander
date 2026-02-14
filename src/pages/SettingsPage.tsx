@@ -796,14 +796,18 @@ export default function SettingsPage() {
           {/* Connection Status */}
           <div className={`p-3 rounded-lg text-sm break-words ${status.isConnected
             ? 'bg-success/10 text-success'
-            : status.isConnecting
-              ? 'bg-muted text-muted-foreground'
-              : 'bg-destructive/10 text-destructive'
+            : isDemoActive
+              ? 'bg-primary/10 text-primary'
+              : status.isConnecting
+                ? 'bg-muted text-muted-foreground'
+                : 'bg-destructive/10 text-destructive'
             }`}>
             {status.isConnecting ? (
               'Connecting...'
             ) : status.isConnected ? (
               `Connected to ${baseUrl}`
+            ) : isDemoActive ? (
+              `Demo mode — ${baseUrl}`
             ) : (
               status.error || 'Not connected'
             )}
@@ -828,7 +832,9 @@ export default function SettingsPage() {
             <Button
               variant="outline"
               onClick={() => setDiagnosticsDialogOpen(true)}
+              id="diagnostics-open-dialog"
               data-diagnostics-open-trigger="true"
+              data-testid="diagnostics-open-dialog"
             >
               <FileText className="h-4 w-4 mr-2" />
               Diagnostics
@@ -1608,10 +1614,10 @@ export default function SettingsPage() {
             className="space-y-3"
           >
             <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass}>Errors</TabsTrigger>
-              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass}>Logs</TabsTrigger>
-              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass}>Traces</TabsTrigger>
-              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass}>Actions</TabsTrigger>
+              <TabsTrigger value="error-logs" className={diagnosticsTabTriggerClass} aria-label="Errors">Errors</TabsTrigger>
+              <TabsTrigger value="logs" className={diagnosticsTabTriggerClass} aria-label="Logs">Logs</TabsTrigger>
+              <TabsTrigger value="traces" className={diagnosticsTabTriggerClass} aria-label="Traces">Traces</TabsTrigger>
+              <TabsTrigger value="actions" className={diagnosticsTabTriggerClass} aria-label="Actions">Actions</TabsTrigger>
             </TabsList>
             <TabsContent value="error-logs" className="space-y-3 max-h-[calc(100dvh-23rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-auto pr-2">
               <div className="flex items-center justify-between gap-2">

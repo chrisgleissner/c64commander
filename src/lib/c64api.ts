@@ -666,7 +666,7 @@ export class C64API {
             recordRestResponse(action, { status: status === 'error' ? null : status, body: null, durationMs, error: error as Error });
             recordTraceError(action, error as Error, failure);
           }
-          if (!fuzzBlocked) {
+          if (!fuzzBlocked && intent !== 'system') {
             addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
               path,
               url,

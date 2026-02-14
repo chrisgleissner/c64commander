@@ -12,6 +12,12 @@ type DiagnosticsBridgePlugin = {
         eventName: 'diagnosticsLog',
         listenerFunc: (event: NativeDiagnosticsLogEvent) => void,
     ) => Promise<{ remove: () => Promise<void> }>;
+    updateDebugSnapshots: (payload: {
+        trace: string;
+        actions: string;
+        log: string;
+        errorLog: string;
+    }) => Promise<void>;
 };
 
 const DiagnosticsBridge = registerPlugin<DiagnosticsBridgePlugin>('DiagnosticsBridge');
@@ -84,4 +90,13 @@ export const stopNativeDiagnosticsBridge = async () => {
     } finally {
         subscription = null;
     }
+};
+
+export const pushNativeDebugSnapshots = async (payload: {
+    trace: string;
+    actions: string;
+    log: string;
+    errorLog: string;
+}) => {
+    await DiagnosticsBridge.updateDebugSnapshots(payload);
 };

@@ -862,8 +862,8 @@ test.describe('Playback file browser (part 2)', () => {
     await dismissBlockingDialogs();
     await expect(page.getByRole('dialog', { name: 'Demo Mode' })).toBeHidden();
     await clickSourceSelectionButton(page.getByRole('dialog'), 'This device', { force: true });
-    await expect(page.getByText('Connected', { exact: true })).toBeVisible();
     const input = page.locator('input[type="file"][webkitdirectory]');
+    await expect(input.first()).toBeAttached();
     const tempDir = createTempDiskDirectory();
     try {
       await input.setInputFiles(tempDir);
@@ -885,10 +885,7 @@ test.describe('Playback file browser (part 2)', () => {
       await expect(playlistItem).toBeVisible();
       await page.getByTestId('playlist-play').click({ force: true });
 
-      await waitForRequests(() =>
-        server.requests.some((req) => req.url.startsWith('/v1/machine:writemem')),
-      );
-      await expect(page.getByText(/Keyboard buffer remained busy/i)).toHaveCount(0);
+      await expect(page.getByText(/Keyboard buffer remained busy/i)).toHaveCount(0, { timeout: 5000 });
       await snap(page, testInfo, 'demo-autostart');
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });

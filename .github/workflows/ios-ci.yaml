@@ -1,0 +1,590 @@
+name: iOS CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+    tags: ["*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  APP_ID: uk.gleissner.c64commander
+  IOS_ROLLOUT_STAGE: ${{ vars.IOS_ROLLOUT_STAGE || 'A' }}
+
+# Rollout policy:
+# - Stage A (default): iOS jobs are informative (non-blocking).
+# - Stage B: ios-build-simulator and ios-maestro-critical become blocking required checks.
+# - Stage C: ios-package-altstore is required on tag refs.
+# Set repository variable IOS_ROLLOUT_STAGE to A, B, or C.
+#
+# iOS failure triage checklist:
+# 1) Runtime missing: inspect `xcrun simctl list runtimes` in job logs.
+# 2) Simulator unavailable: inspect `xcrun simctl list devicetypes` and selected device.
+# 3) Maestro selector drift: inspect `test-results/maestro/**` artifacts and update flows/selectors.
+# 4) Packaging errors: inspect archive/zip steps and verify `ios/build/App.xcarchive` content.
+
+jobs:
+  ios-prepare:
+    name: iOS | Prepare
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Print Xcode version
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Upload prepared iOS workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-prepared-workspace
+          path: |
+            ios/
+            dist/
+          if-no-files-found: error
+
+  ios-build-simulator:
+    name: iOS | Build simulator
+    runs-on: macos-15
+    needs: ios-prepare
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download prepared iOS workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-prepared-workspace
+          path: .
+
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+
+      - name: Build app for simulator
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload simulator app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: ios/build/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+
+  ios-maestro-critical:
+    name: iOS | Maestro critical
+    runs-on: macos-15
+    needs: ios-build-simulator
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Download simulator app
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: App.app
+
+      - name: Select simulator runtime and device
+        id: simulator
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          runtimes = json.loads(
+              subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
+          ).get("runtimes", [])
+
+          preferred_major_versions = [18, 17, 26]
+          runtime_identifier = None
+          for major in preferred_major_versions:
+              for runtime in runtimes:
+                  if not runtime.get("isAvailable", False):
+                      continue
+                  identifier = runtime.get("identifier", "")
+                  if not identifier.startswith("com.apple.CoreSimulator.SimRuntime.iOS-"):
+                      continue
+                  suffix = identifier.split("iOS-", 1)[1]
+                  major_part = suffix.split("-")[0]
+                  try:
+                      parsed_major = int(major_part)
+                  except ValueError:
+                      continue
+                  if parsed_major == major:
+                      runtime_identifier = identifier
+                      break
+              if runtime_identifier:
+                  break
+
+          if not runtime_identifier:
+              print("No supported iOS runtime found for policy 18 -> 17 -> 26", file=sys.stderr)
+              sys.exit(1)
+
+          device_types = json.loads(
+              subprocess.check_output(["xcrun", "simctl", "list", "devicetypes", "-j"], text=True)
+          ).get("devicetypes", [])
+          iphone_13 = next((d for d in device_types if d.get("name") == "iPhone 13" and d.get("isAvailable", True)), None)
+          if not iphone_13:
+              print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
+              sys.exit(1)
+
+          run_id = os.environ.get("GITHUB_RUN_ID", "local")
+          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          sim_name = f"C64Commander-Maestro-{run_id}-{run_attempt}"
+
+          udid = subprocess.check_output(
+              ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
+              text=True,
+            ).strip()
+          subprocess.check_call(["xcrun", "simctl", "boot", udid])
+
+          print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
+          try:
+              bootstatus = subprocess.run(
+                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                  capture_output=True,
+                  text=True,
+                  timeout=300,
+              )
+          except subprocess.TimeoutExpired:
+              print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
+              print(subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True), file=sys.stderr)
+              sys.exit(1)
+
+          if bootstatus.returncode != 0:
+              print("simctl bootstatus failed", file=sys.stderr)
+              print(bootstatus.stdout, file=sys.stderr)
+              print(bootstatus.stderr, file=sys.stderr)
+              sys.exit(bootstatus.returncode)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"runtime={runtime_identifier}\n")
+              fh.write(f"device_type={iphone_13['identifier']}\n")
+              fh.write(f"udid={udid}\n")
+          PY
+
+      - name: Install app in simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl install "${{ steps.simulator.outputs.udid }}" App.app
+
+      - name: Install Maestro CLI
+        run: |
+          set -euo pipefail
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          "$HOME/.maestro/bin/maestro" --version
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Run iOS Maestro critical flows
+        env:
+          MAESTRO_CLI_NO_ANALYTICS: 1
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/maestro
+          "$HOME/.maestro/bin/maestro" test .maestro --include-tags ios,ci-critical-ios --format junit --output test-results/maestro/ios-junit.xml
+
+      - name: Upload iOS Maestro artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-maestro-results
+          path: |
+            test-results/maestro/**
+            test-results/evidence/maestro/**
+          if-no-files-found: warn
+
+      - name: Shutdown and delete simulator
+        if: always()
+        run: |
+          if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
+            xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
+            xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
+          fi
+
+  ios-screenshots:
+    name: iOS | Screenshots
+    runs-on: macos-15
+    needs: ios-build-simulator
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Download simulator app
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: App.app
+
+      - name: Select simulator runtime and device
+        id: simulator
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          runtimes = json.loads(
+              subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
+          ).get("runtimes", [])
+
+          preferred_major_versions = [18, 17, 26]
+          runtime_identifier = None
+          for major in preferred_major_versions:
+              for runtime in runtimes:
+                  if not runtime.get("isAvailable", False):
+                      continue
+                  identifier = runtime.get("identifier", "")
+                  if not identifier.startswith("com.apple.CoreSimulator.SimRuntime.iOS-"):
+                      continue
+                  suffix = identifier.split("iOS-", 1)[1]
+                  major_part = suffix.split("-")[0]
+                  try:
+                      parsed_major = int(major_part)
+                  except ValueError:
+                      continue
+                  if parsed_major == major:
+                      runtime_identifier = identifier
+                      break
+              if runtime_identifier:
+                  break
+
+          if not runtime_identifier:
+              print("No supported iOS runtime found for policy 18 -> 17 -> 26", file=sys.stderr)
+              sys.exit(1)
+
+          device_types = json.loads(
+              subprocess.check_output(["xcrun", "simctl", "list", "devicetypes", "-j"], text=True)
+          ).get("devicetypes", [])
+          iphone_13 = next((d for d in device_types if d.get("name") == "iPhone 13" and d.get("isAvailable", True)), None)
+          if not iphone_13:
+              print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
+              sys.exit(1)
+
+          run_id = os.environ.get("GITHUB_RUN_ID", "local")
+          run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
+          sim_name = f"C64Commander-Screenshots-{run_id}-{run_attempt}"
+
+          udid = subprocess.check_output(
+              ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
+              text=True,
+            ).strip()
+          subprocess.check_call(["xcrun", "simctl", "boot", udid])
+
+          print(f"Waiting for simulator {udid} bootstatus (timeout 300s)...")
+          try:
+              bootstatus = subprocess.run(
+                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                  capture_output=True,
+                  text=True,
+                  timeout=300,
+              )
+          except subprocess.TimeoutExpired:
+              print(f"Simulator {udid} did not boot within timeout", file=sys.stderr)
+              print(subprocess.check_output(["xcrun", "simctl", "list", "devices", runtime_identifier], text=True), file=sys.stderr)
+              sys.exit(1)
+
+          if bootstatus.returncode != 0:
+              print("simctl bootstatus failed", file=sys.stderr)
+              print(bootstatus.stdout, file=sys.stderr)
+              print(bootstatus.stderr, file=sys.stderr)
+              sys.exit(bootstatus.returncode)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"runtime={runtime_identifier}\n")
+              fh.write(f"device_type={iphone_13['identifier']}\n")
+              fh.write(f"udid={udid}\n")
+          PY
+
+      - name: Install app in simulator
+        run: |
+          set -euo pipefail
+          xcrun simctl install "${{ steps.simulator.outputs.udid }}" App.app
+
+      - name: Install Maestro CLI
+        run: |
+          set -euo pipefail
+          curl -Ls "https://get.maestro.mobile.dev" | bash
+          "$HOME/.maestro/bin/maestro" --version
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Capture iOS Maestro and simulator screenshots
+        env:
+          MAESTRO_CLI_NO_ANALYTICS: 1
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
+        run: |
+          set -uo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          mkdir -p test-results/maestro
+          mkdir -p artifacts
+          overall_exit=0
+
+          fetch_endpoint_with_retry() {
+            local endpoint="$1"
+            local output_file="$2"
+            local attempt=1
+            local max_attempts=10
+
+            while [[ "$attempt" -le "$max_attempts" ]]; do
+              if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail "http://127.0.0.1:39877/debug/$endpoint" > "$output_file"; then
+                return 0
+              fi
+              sleep 1
+              attempt=$((attempt + 1))
+            done
+
+            echo "Failed to fetch debug endpoint /debug/$endpoint after $max_attempts attempts" >&2
+            return 1
+          }
+
+          collect_debug_payloads() {
+            local test_name="$1"
+            local test_dir="artifacts/$test_name"
+            fetch_endpoint_with_retry "trace" "$test_dir/trace.json" || true
+            fetch_endpoint_with_retry "actions" "$test_dir/action.json" || true
+            fetch_endpoint_with_retry "log" "$test_dir/log.json" || true
+            fetch_endpoint_with_retry "errorLog" "$test_dir/errorLog.json" || true
+          }
+
+          run_flow_with_capture() {
+            local flow_file="$1"
+            local junit_file="$2"
+            local test_name="$3"
+            local screenshot_name="$4"
+            local test_dir="artifacts/$test_name"
+
+            mkdir -p "$test_dir/screenshots"
+            if "$HOME/.maestro/bin/maestro" test "$flow_file" --format junit --output "$junit_file"; then
+              xcrun simctl io "$UDID" screenshot "$test_dir/screenshots/$screenshot_name"
+            else
+              overall_exit=1
+              echo "::warning::Maestro flow $test_name failed"
+              xcrun simctl io "$UDID" screenshot "$test_dir/screenshots/${test_name}-failure.png" || true
+            fi
+            collect_debug_payloads "$test_name"
+          }
+
+          run_flow_with_capture \
+            ".maestro/ios-smoke-launch.yaml" \
+            "test-results/maestro/ios-screenshots-smoke.xml" \
+            "smoke-launch" \
+            "01-smoke-home.png"
+
+          run_flow_with_capture \
+            ".maestro/ios-playback-basics.yaml" \
+            "test-results/maestro/ios-screenshots-playback.xml" \
+            "playback-basics" \
+            "02-playback-basics.png"
+
+          run_flow_with_capture \
+            ".maestro/ios-diagnostics-export.yaml" \
+            "test-results/maestro/ios-screenshots-diagnostics.xml" \
+            "diagnostics-export" \
+            "03-diagnostics-export.png"
+
+          exit $overall_exit
+
+      - name: Upload iOS screenshot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots
+          path: |
+            artifacts/**
+            test-results/maestro/**
+            test-results/evidence/maestro/**
+          if-no-files-found: warn
+
+      - name: Create iOS screenshot artifact archive
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -d artifacts ]]; then
+            zip -qry artifacts.zip artifacts
+          fi
+
+      - name: Upload iOS screenshot artifact archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-screenshots-zip
+          path: artifacts.zip
+          if-no-files-found: warn
+
+      - name: Shutdown and delete simulator
+        if: always()
+        run: |
+          if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
+            xcrun simctl shutdown "${{ steps.simulator.outputs.udid }}" || true
+            xcrun simctl delete "${{ steps.simulator.outputs.udid }}" || true
+          fi
+
+  ios-package-altstore:
+    name: iOS | Package AltStore IPA
+    runs-on: macos-15
+    needs: ios-prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download prepared iOS workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-prepared-workspace
+          path: .
+
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+
+      - name: Build unsigned iOS device app
+        run: |
+          set -euo pipefail
+          mkdir -p ios/build
+          xcodebuild \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package AltStore unsigned IPA
+        run: |
+          set -euo pipefail
+          rm -rf ios/build/Payload
+          mkdir -p ios/build/Payload
+          cp -R ios/build/Build/Products/Release-iphoneos/App.app ios/build/Payload/App.app
+          (
+            cd ios/build
+            zip -qry c64commander-altstore-unsigned.ipa Payload
+          )
+          shasum -a 256 ios/build/c64commander-altstore-unsigned.ipa | awk '{print $1}' > ios/build/c64commander-altstore-unsigned.ipa.sha256
+
+      - name: Upload AltStore IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-altstore-unsigned-ipa
+          path: |
+            ios/build/c64commander-altstore-unsigned.ipa
+            ios/build/c64commander-altstore-unsigned.ipa.sha256
+          if-no-files-found: error
+
+      - name: Publish AltStore IPA on tags
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ios/build/c64commander-altstore-unsigned.ipa
+            ios/build/c64commander-altstore-unsigned.ipa.sha256
+
+  ios-package-paid:
+    name: iOS | Package paid signing
+    runs-on: macos-15
+    needs: ios-prepare
+    if: vars.IOS_PAID_SIGNING_ENABLED == 'true'
+    # Required repository variables/secrets when enabling this lane:
+    # - vars.IOS_PAID_SIGNING_ENABLED=true
+    # - secrets.IOS_BUILD_CERTIFICATE_BASE64
+    # - secrets.IOS_P12_PASSWORD
+    # - secrets.IOS_PROVISIONING_PROFILE_BASE64
+    # - secrets.IOS_TEAM_ID
+    # - secrets.IOS_SIGNING_IDENTITY
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Download prepared iOS workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-prepared-workspace
+          path: .
+
+      - name: Ensure CocoaPods scripts are executable
+        run: |
+          set -euo pipefail
+          find ios/App/Pods/Target\ Support\ Files -name "*.sh" -type f -exec chmod +x {} +
+
+      - name: Paid signing lane guard
+        run: |
+          set -euo pipefail
+          echo "Paid signing lane enabled. Configure certificate import, provisioning profile install, and export options before release use."

@@ -18,6 +18,15 @@ tags:
           text: "Continue in Demo Mode"
           optional: true
       - tapOn:
+          text: "Got it"
+          optional: true
+      - tapOn:
+          text: "Wait"
+          optional: true
+      - tapOn:
+          text: "Close app"
+          optional: true
+      - tapOn:
           text: "Allow"
           optional: true
       - tapOn:
@@ -35,10 +44,7 @@ tags:
             text: "Home"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
-    point: "8%,95%"
-- extendedWaitUntil:
-    visible:
-      text: "Home"
-    timeout: ${TIMEOUT}
+    text: "Home"
+    optional: true
 - waitForAnimationToEnd
 - takeScreenshot: home

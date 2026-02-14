@@ -1,0 +1,27 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/ios-open-settings-tab.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          text: "Diagnostics"
+          optional: true
+      - tapOn:
+          text: "Open diagnostics"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Errors"
+          timeout: ${TIMEOUT}
+# WKWebView does not expose inactive Radix tab triggers (aria-selected=false)
+# in the accessibility tree, so we only assert the default-active Errors tab
+# and the dialog title to confirm the diagnostics panel opened correctly.
+- assertVisible: "Errors"
+- assertVisible: "Diagnostics"
+- takeScreenshot: ios-diagnostics-export-actions

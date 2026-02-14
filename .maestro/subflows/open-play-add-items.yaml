@@ -17,13 +17,26 @@ tags:
       - tapOn:
           text: "Continue in Demo Mode"
           optional: true
+      - tapOn:
+          text: "Got it"
+          optional: true
+      - tapOn:
+          text: "Wait"
+          optional: true
+      - tapOn:
+          text: "Close app"
+          optional: true
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-            text: "Play"
+            text: "Home"
           timeout: ${TIMEOUT}
 - tapOn:
     point: "25%,95%"
+    optional: true
+- tapOn:
+    text: "Play"
+    optional: true
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
@@ -35,19 +48,29 @@ tags:
     timeout: ${TIMEOUT}
 - waitForAnimationToEnd
 - takeScreenshot: play-files
-- tapOn:
-    id: "add-items-to-playlist"
-    optional: true
-- tapOn:
-    text: "Add items"
-    optional: true
-- tapOn:
-    text: "Add more items"
-    optional: true
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible: "Choose source"
-    timeout: ${TIMEOUT}
+- retry:
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            id: "add-items-to-playlist"
+          direction: DOWN
+          timeout: ${TIMEOUT}
+      - tapOn:
+          id: "add-items-to-playlist"
+      - tapOn:
+          text: "Add items"
+          optional: true
+      - tapOn:
+          text: "Add more items"
+          optional: true
+      - tapOn:
+          text: "Add items to playlist"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Choose source"
+          timeout: ${TIMEOUT}
 - scrollUntilVisible:
     element:
       id: "import-option-local"

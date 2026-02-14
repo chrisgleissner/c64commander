@@ -136,7 +136,7 @@ const probeWithFetch = async (
     if (!response.ok) return false;
     return isProbePayloadHealthy(payload);
   } catch (error) {
-    addLog('warn', 'Discovery probe request failed', {
+    addLog('debug', 'Discovery probe request failed', {
       baseUrl,
       error: (error as Error).message,
     });
@@ -180,7 +180,7 @@ export async function probeOnce(options: { signal?: AbortSignal; timeoutMs?: num
     try {
       return await probeWithFetch(config.baseUrl, { signal: outerSignal, timeoutMs });
     } catch (fallbackError) {
-      addLog('warn', 'Discovery probe fallback failed', {
+      addLog('debug', 'Discovery probe fallback failed', {
         baseUrl: config.baseUrl,
         error: (fallbackError as Error).message,
       });
@@ -323,9 +323,9 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
   }
   cancelActiveDiscovery();
   resetInteractionState('transition-demo-active');
-  transitionTo('DEMO_ACTIVE', trigger);
-  logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 
+  // Show the interstitial early so the UI responds immediately while the mock
+  // server is still starting up.
   const shouldShowInterstitial = shouldShowDemoInterstitial(trigger);
   if (shouldShowInterstitial) {
     demoInterstitialShownThisSession = true;
@@ -333,12 +333,18 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     setSnapshot({ demoInterstitialVisible: true });
   }
 
+  // Configure the API base URL BEFORE transitioning state so that queries
+  // triggered by the DEMO_ACTIVE re-render already target the mock server
+  // instead of the unreachable real-device hostname.
+
   if (isFuzzModeEnabled()) {
     const fuzzBaseUrl = getFuzzMockBaseUrl();
     if (fuzzBaseUrl) {
       const mockHost = getDeviceHostFromBaseUrl(fuzzBaseUrl);
       applyC64APIRuntimeConfig(fuzzBaseUrl, undefined, mockHost);
       addLog('info', 'Fuzz mode using forced mock base URL', { trigger, baseUrl: fuzzBaseUrl });
+      transitionTo('DEMO_ACTIVE', trigger);
+      logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
       return;
     }
   }
@@ -378,7 +384,10 @@ const transitionToDemoActive = async (trigger: DiscoveryTrigger) => {
     addLog('info', 'Demo mode using stored device host', { trigger, baseUrl: fallbackBaseUrl });
   }
 
-  // Interstitial is already surfaced above to avoid waiting on mock server startup.
+  // Transition state AFTER the URL is configured so that React queries
+  // triggered by the DEMO_ACTIVE re-render hit the correct endpoint.
+  transitionTo('DEMO_ACTIVE', trigger);
+  logDiscoveryDecision('DEMO_ACTIVE', trigger, { mode: 'demo' });
 };
 
 const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
@@ -449,7 +458,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       await transitionToRealConnected(trigger);
     } else {
       setSnapshot({ lastProbeFailedAtMs: Date.now() });
-      addLog('warn', 'Discovery probe failed', { trigger });
+      addLog('debug', 'Discovery probe failed', { trigger });
       if (isSmokeModeEnabled()) {
         console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
       }

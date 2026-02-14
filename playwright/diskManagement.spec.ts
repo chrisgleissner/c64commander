@@ -323,6 +323,29 @@ test.describe('Disk management', () => {
     await snap(page, testInfo, 'filter-cleared');
   });
 
+  test('DOS status line renders message above raw line without labels @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/disks', { waitUntil: 'domcontentloaded' });
+
+    await expect(page.getByTestId('drive-status-message-soft-iec')).toHaveText(/^(OK|DOS MISMATCH)$/);
+    await expect(page.getByTestId('drive-status-raw-soft-iec')).toContainText('73,U64IEC');
+    await expect(page.getByTestId('drive-status-raw-soft-iec')).toContainText('ULTIMATE DOS V1.1,00,00');
+
+    await expect(page.getByTestId('drive-status-message-soft-iec')).toHaveClass(/text-success|text-amber-600/);
+
+    const messageBox = await page.getByTestId('drive-status-message-soft-iec').boundingBox();
+    const rawBox = await page.getByTestId('drive-status-raw-soft-iec').boundingBox();
+    expect(messageBox).not.toBeNull();
+    expect(rawBox).not.toBeNull();
+    if (messageBox && rawBox) {
+      expect(messageBox.y).toBeLessThan(rawBox.y);
+    }
+
+    await expect(page.getByText('Message:', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Details:', { exact: true })).toHaveCount(0);
+
+    await snap(page, testInfo, 'drive-dos-status-formatted');
+  });
+
   test('disk groups display and can be reassigned inline @layout', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/disks', { waitUntil: 'domcontentloaded' });
     await snap(page, testInfo, 'disks-open');

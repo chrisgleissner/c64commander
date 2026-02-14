@@ -45,6 +45,8 @@ import type { SelectedItem, SourceEntry, SourceLocation } from '@/lib/sourceNavi
 import { getPlatform, isNativePlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { normalizeConfigItem } from '@/lib/config/normalizeConfigItem';
+import { formatDiskDosStatus } from '@/lib/disks/dosStatusFormatter';
+import { getDiagnosticsColorClassForDisplaySeverity } from '@/lib/diagnostics/diagnosticsSeverity';
 import {
   buildBusIdOptions,
   buildTypeOptions,
@@ -126,6 +128,23 @@ const resolveSoftIecServiceError = (value?: string | null) => {
   if (!message) return '';
   if (/^service error reported\.?$/i.test(message)) return '';
   return message;
+};
+
+const resolveDriveStatusRaw = (primary?: string | null, fallback?: string | null) => {
+  if (typeof primary === 'string' && primary.trim().length) return primary;
+  if (typeof fallback === 'string' && fallback.trim().length) return fallback;
+  return '';
+};
+
+const resolveStatusDisplaySeverity = (status: { severity: 'INFO' | 'WARN' | 'ERROR'; message: string | null }) => {
+  return status.severity;
+};
+
+const getStatusMessageColorClass = (status: { severity: 'INFO' | 'WARN' | 'ERROR'; message: string | null }) => {
+  // OK is always green, regardless of severity
+  if (status.message === 'OK') return 'text-success';
+  // Otherwise use standard diagnostics colors
+  return getDiagnosticsColorClassForDisplaySeverity(status.severity);
 };
 
 export const HomeDiskManager = () => {
@@ -1173,6 +1192,9 @@ export const HomeDiskManager = () => {
     const mountedDiskName = forcedEmpty ? null : mountedDisk?.name || info?.image_file || null;
     const mountedLabel = mountedDiskName ?? 'No disk mounted';
 
+    const rawStatusLine = resolveDriveStatusRaw(driveErrors[key], info?.last_error);
+    const formattedStatus = rawStatusLine ? formatDiskDosStatus(rawStatusLine) : null;
+
     return {
       key,
       driveLabel: buildDriveLabel(key),
@@ -1192,7 +1214,7 @@ export const HomeDiskManager = () => {
       powerPending,
       configPending: Boolean(driveConfigPending[key]),
       resetPending: Boolean(driveResetPending[key]),
-      errorMessage: driveErrors[key] || '',
+      formattedStatus,
     };
   });
 
@@ -1212,7 +1234,8 @@ export const HomeDiskManager = () => {
   const softIecResetPending = Boolean(driveResetPending.softiec);
   const softIecPowerPending = Boolean(drivePowerPending.softiec);
   const softIecEndpointKey = softIecDevice?.endpointKey ?? 'softiec';
-  const softIecErrorMessage = driveErrors.softiec || resolveSoftIecServiceError(softIecDevice?.lastError);
+  const softIecRawStatus = resolveDriveStatusRaw(driveErrors.softiec, resolveSoftIecServiceError(softIecDevice?.lastError));
+  const softIecFormattedStatus = softIecRawStatus ? formatDiskDosStatus(softIecRawStatus) : null;
 
   return (
     <div className="space-y-6">
@@ -1222,7 +1245,7 @@ export const HomeDiskManager = () => {
           Drives
         </h3>
         <div className="grid gap-3">
-          {driveRows.map(({ key, driveLabel, mounted, mountedDisk, canRotate, mountedLabel, busId, busOptions, driveType, driveTypeOptions, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending, resetPending, errorMessage }) => (
+          {driveRows.map(({ key, driveLabel, mounted, mountedDisk, canRotate, mountedLabel, busId, busOptions, driveType, driveTypeOptions, powerEnabled, hasPowerState, powerLabel, powerTarget, powerPending, configPending, resetPending, formattedStatus }) => (
             <div key={key} className="config-card space-y-2" data-testid={`drive-card-${key}`}>
               <div className="flex min-w-0 items-baseline justify-between gap-2">
                 <span className="truncate text-sm font-semibold">{driveLabel}</span>
@@ -1381,9 +1404,29 @@ export const HomeDiskManager = () => {
                 </div>
               </div>
 
-              {errorMessage ? (
-                <p className="text-xs text-destructive">{errorMessage}</p>
-              ) : null}
+              {formattedStatus ? (
+                <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
+                  {formattedStatus.message ? (
+                    <p
+                      className={cn('text-xs', getStatusMessageColorClass(formattedStatus))}
+                      data-testid={`drive-status-message-${key}`}
+                    >
+                      {formattedStatus.message}
+                    </p>
+                  ) : null}
+                  {formattedStatus.raw ? (
+                    <p className="text-xs text-muted-foreground whitespace-pre-wrap" data-testid={`drive-status-raw-${key}`}>
+                      {formattedStatus.raw}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="space-y-0.5" data-testid={`drive-status-${key}`}>
+                  <p className="text-xs text-success" data-testid={`drive-status-message-${key}`}>
+                    OK
+                  </p>
+                </div>
+              )}
             </div>
           ))}
 
@@ -1495,9 +1538,29 @@ export const HomeDiskManager = () => {
               </div>
             </div>
 
-            {softIecErrorMessage ? (
-              <p className="text-xs text-destructive">{softIecErrorMessage}</p>
-            ) : null}
+            {softIecFormattedStatus ? (
+              <div className="space-y-0.5" data-testid="drive-status-soft-iec">
+                {softIecFormattedStatus.message ? (
+                  <p
+                    className={cn('text-xs', getStatusMessageColorClass(softIecFormattedStatus))}
+                    data-testid="drive-status-message-soft-iec"
+                  >
+                    {softIecFormattedStatus.message}
+                  </p>
+                ) : null}
+                {softIecFormattedStatus.raw ? (
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap" data-testid="drive-status-raw-soft-iec">
+                    {softIecFormattedStatus.raw}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-0.5" data-testid="drive-status-soft-iec">
+                <p className="text-xs text-success" data-testid="drive-status-message-soft-iec">
+                  OK
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -1786,6 +1849,7 @@ export const HomeDiskManager = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 };

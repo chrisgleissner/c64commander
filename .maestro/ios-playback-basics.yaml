@@ -1,0 +1,14 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/ios-open-play-tab.yaml
+- assertVisible:
+    text: "Playlist"
+- assertVisible:
+    text: "Add items"
+    optional: true
+- takeScreenshot: ios-playback-basics-controls

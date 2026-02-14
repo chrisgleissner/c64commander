@@ -10,16 +10,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, fireEvent } from '@testing-library/react';
 
 let connectionState = 'UNKNOWN';
-let theme = 'light';
 
 const discoverConnection = vi.fn();
 
 vi.mock('@/hooks/useConnectionState', () => ({
   useConnectionState: () => ({ state: connectionState }),
-}));
-
-vi.mock('@/components/ThemeProvider', () => ({
-  useThemeContext: () => ({ resolvedTheme: theme }),
 }));
 
 vi.mock('@/lib/connection/connectionManager', () => ({
@@ -31,7 +26,6 @@ import { ConnectivityIndicator } from '@/components/ConnectivityIndicator';
 describe('ConnectivityIndicator', () => {
   it('renders labels for connection states and triggers discovery', () => {
     connectionState = 'REAL_CONNECTED';
-    theme = 'light';
 
     const { getByTestId } = render(<ConnectivityIndicator />);
     const button = getByTestId('connectivity-indicator');
@@ -43,19 +37,17 @@ describe('ConnectivityIndicator', () => {
     expect(discoverConnection).toHaveBeenCalledWith('manual');
   });
 
-  it('renders demo state label and uses dark theme colors', () => {
+  it('renders demo state as disconnected', () => {
     connectionState = 'DEMO_ACTIVE';
-    theme = 'dark';
 
     const { getByTestId } = render(<ConnectivityIndicator />);
     const button = getByTestId('connectivity-indicator');
 
-    expect(button).toHaveAttribute('aria-label', 'C64U Demo');
+    expect(button).toHaveAttribute('aria-label', 'C64U Disconnected');
   });
 
   it('renders offline state label', () => {
     connectionState = 'OFFLINE_NO_DEMO';
-    theme = 'light';
 
     const { getByTestId } = render(<ConnectivityIndicator />);
     const button = getByTestId('connectivity-indicator');

@@ -226,7 +226,7 @@ describe('logging', () => {
 
     const logs = getLogs();
     expect(logs.map((entry) => entry.message)).toEqual(
-      expect.arrayContaining(['[object Object]', 'error-message']),
+      expect.arrayContaining(['{"kind":"object-message"}', 'error-message']),
     );
   });
 

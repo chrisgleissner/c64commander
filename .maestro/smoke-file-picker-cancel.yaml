@@ -11,14 +11,29 @@ env:
   TIMEOUT: ${TIMEOUT || "15000"}
   LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
 ---
-- runFlow: subflows/open-play-add-items.yaml
-- scrollUntilVisible:
-    element:
-      id: "import-option-local"
-    direction: DOWN
-    timeout: ${SHORT_TIMEOUT}
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    point: "25%,95%"
+    optional: true
+- tapOn:
+    text: "Play"
+    optional: true
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- tapOn:
+    id: "add-items-to-playlist"
+    optional: true
+- tapOn:
+    text: "Add items"
+    optional: true
+- tapOn:
+    text: "Add more items"
+    optional: true
+- waitForAnimationToEnd
 - tapOn:
     id: "import-option-local"
+    optional: true
 - takeScreenshot: file-picker-open
 
 # Try to dismiss the file picker

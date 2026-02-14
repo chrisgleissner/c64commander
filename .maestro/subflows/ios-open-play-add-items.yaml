@@ -1,0 +1,82 @@
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - subflow
+---
+# iOS-specific variant of open-play-add-items.yaml using text selectors.
+# WKWebView does not map HTML id attributes to iOS accessibility identifiers,
+# so Maestro id selectors fail. This version uses text-based selectors instead.
+
+- runFlow: launch-and-wait.yaml
+- retry:
+    maxRetries: 3
+    commands:
+      - runFlow:
+          when:
+            visible: "Continue in Demo Mode"
+          file: continue-demo.yaml
+      - tapOn:
+          text: "Continue in Demo Mode"
+          optional: true
+      - tapOn:
+          text: "Got it"
+          optional: true
+      - tapOn:
+          text: "Wait"
+          optional: true
+      - tapOn:
+          text: "Close app"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible:
+            text: "Home"
+          timeout: ${TIMEOUT}
+- tapOn:
+    point: "25%,95%"
+    optional: true
+- tapOn:
+    text: "Play"
+    optional: true
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- assertVisible: "Playlist"
+# WKWebView exposes aria-label ("Add items to playlist") instead of inner text
+# ("Add items") in the accessibility tree, so match against the aria-label.
+- scrollUntilVisible:
+    element:
+      text: "Add items to playlist"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- waitForAnimationToEnd
+- takeScreenshot: play-files
+- retry:
+    maxRetries: 3
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "Add items to playlist"
+          direction: DOWN
+          timeout: ${TIMEOUT}
+      - tapOn:
+          text: "Add items to playlist"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Choose source"
+          timeout: ${TIMEOUT}
+# WKWebView exposes aria-label ("Add file / folder from Local") instead of
+# inner text ("Local") in the accessibility tree.  Do NOT use scrollUntilVisible
+# here — scroll gestures can dismiss the sheet/dialog on iOS and hide the
+# source buttons.  The buttons are always in view without scrolling.
+- takeScreenshot: choose-source-dialog
+- extendedWaitUntil:
+    visible:
+      text: "Add file / folder from Local"
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "Add file / folder from Local"
+- takeScreenshot: choose-source

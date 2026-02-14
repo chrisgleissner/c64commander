@@ -79,17 +79,23 @@ test.describe('HVSC Play page', () => {
       .filter({ hasText: new RegExp(token, 'i') })
       .first();
 
-    if (await rowLocator().count() === 0) return false;
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const row = rowLocator();
-      await expect(row).toBeVisible();
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       try {
+        await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible({ timeout: 5000 });
+        if (await rowLocator().count() === 0) {
+          const refreshButton = dialog.getByRole('button', { name: /Refresh|Loading…/i }).first();
+          if (await refreshButton.isVisible().catch(() => false)) {
+            await refreshButton.click({ timeout: 2000 }).catch(() => undefined);
+          }
+          continue;
+        }
+        const row = rowLocator();
+        await expect(row).toBeVisible({ timeout: 5000 });
         await row.click({ timeout: 3000 });
         return true;
       } catch (error) {
-        if (attempt === 2) throw error;
-        await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible();
+        if (attempt === 5) throw error;
+        await expect(dialog.getByTestId('source-entry-row').first()).toBeVisible({ timeout: 5000 });
       }
     }
 

@@ -1,0 +1,11 @@
+appId: uk.gleissner.c64commander
+env:
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/launch-and-wait.yaml
+- assertVisible: "Home"
+- takeScreenshot: ios-smoke-launch-home
+- runFlow: subflows/common-navigation.yaml

@@ -246,13 +246,13 @@ export default function PlayFilesPage() {
 
 
   const ensurePlaybackConnection = useCallback(async () => {
-    if (status.isConnected) return;
+    if (status.isConnected || status.isDemo) return;
     await discoverConnection('manual');
     const snapshot = getConnectionSnapshot();
     if (snapshot.state !== 'REAL_CONNECTED' && snapshot.state !== 'DEMO_ACTIVE') {
       throw new Error('Device not connected. Check connection settings.');
     }
-  }, [status.isConnected]);
+  }, [status.isConnected, status.isDemo]);
 
   const {
     playItem,
@@ -907,7 +907,7 @@ export default function PlayFilesPage() {
     <div className="min-h-screen bg-gradient-to-b from-background to-background/95 pt-[var(--app-bar-height)]">
       <AppBar
         title="Play Files"
-        subtitle={status.isConnected ? 'Connected' : status.isConnecting ? 'Connecting…' : 'Offline'}
+        subtitle={status.isConnected ? 'Connected' : status.isDemo ? 'Demo' : status.isConnecting ? 'Connecting…' : 'Offline'}
       />
       <main className="container max-w-3xl mx-auto px-4 py-6 pb-24 space-y-6">
         <div

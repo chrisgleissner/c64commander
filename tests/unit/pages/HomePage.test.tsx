@@ -534,7 +534,22 @@ describe('HomePage SID status', () => {
     fireEvent.keyDown(document.activeElement ?? driveTypeSelect, { key: 'Escape' });
   });
 
-  it('shows build info placeholders and offline message when disconnected', () => {
+  it('shows concise drive DOS status on Home for Drive A and Soft IEC', () => {
+    drivesPayloadRef.current = {
+      drives: [
+        { a: { enabled: true, bus_id: 8, type: '1541', last_error: '74,DRIVE NOT READY,00,00' } },
+        { b: { enabled: true, bus_id: 9, type: '1541' } },
+        { 'IEC Drive': { enabled: true, bus_id: 11, type: 'DOS emulation', last_error: '73,U64IEC ULTIMATE DOS V1.1,00,00' } },
+      ],
+    };
+
+    renderHomePage();
+
+    expect(screen.getByTestId('home-drive-status-a')).toHaveTextContent('DRIVE NOT READY');
+    expect(screen.getByTestId('home-drive-status-soft-iec').textContent).toMatch(/^(OK|DOS MISMATCH)$/);
+  });
+
+  it('shows explicit disconnected build info values and offline message', () => {
     (globalThis as any).__APP_VERSION__ = '';
     (globalThis as any).__GIT_SHA__ = '';
     (globalThis as any).__BUILD_TIME__ = '';
@@ -550,9 +565,9 @@ describe('HomePage SID status', () => {
     fireEvent.click(systemInfo);
 
     expect(screen.getByTestId('home-system-version').textContent).toContain('—');
-    expect(screen.getByTestId('home-system-device').textContent).toContain('—');
-    expect(screen.getByTestId('home-system-firmware').textContent).toContain('—');
-    expect(screen.getByTestId('home-system-git').textContent).toContain('—');
+    expect(screen.getByTestId('home-system-device').textContent).toContain('Not connected');
+    expect(screen.getByTestId('home-system-firmware').textContent).toContain('Not connected');
+    expect(screen.getByTestId('home-system-git').textContent).toContain('Not available');
     expect(screen.getByTestId('home-system-build-time').textContent).toContain('2026-01-01 12:00:00 UTC');
     expect(screen.getByText(/unable to connect to c64u/i)).toBeTruthy();
   });

@@ -7,6 +7,13 @@ export function SystemInfo() {
     const [expanded, setExpanded] = useState(false);
     const { status } = useC64Connection();
     const buildInfo = getBuildInfo();
+    const disconnected = !status.isConnected;
+    const deviceValue = disconnected
+        ? 'Not connected'
+        : (status.deviceInfo?.hostname || status.deviceInfo?.product || 'Not available');
+    const firmwareValue = disconnected
+        ? 'Not connected'
+        : (status.deviceInfo?.firmware_version || 'Not available');
 
     return (
         <motion.button
@@ -22,15 +29,15 @@ export function SystemInfo() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
                 <span className="text-muted-foreground">App</span>
                 <span className="font-semibold text-foreground" data-testid="home-system-version">
-                    {buildInfo.versionLabel || '—'}
+                    {buildInfo.versionLabel || 'Not available'}
                 </span>
                 <span className="text-muted-foreground">Device</span>
                 <span className="font-semibold text-foreground" data-testid="home-system-device">
-                    {status.deviceInfo?.hostname || status.deviceInfo?.product || '—'}
+                    {deviceValue}
                 </span>
                 <span className="text-muted-foreground">Firmware</span>
                 <span className="font-semibold text-foreground" data-testid="home-system-firmware">
-                    {status.deviceInfo?.firmware_version || '—'}
+                    {firmwareValue}
                 </span>
             </div>
             {expanded && (
@@ -38,7 +45,7 @@ export function SystemInfo() {
                     <div className="flex items-center gap-1">
                         <span>Git</span>
                         <span className="font-semibold text-foreground" data-testid="home-system-git">
-                            {buildInfo.gitShaShort || '—'}
+                            {buildInfo.gitShaShort || 'Not available'}
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -50,19 +57,19 @@ export function SystemInfo() {
                     <div className="flex items-center gap-1">
                         <span>FPGA</span>
                         <span className="font-semibold text-foreground" data-testid="home-system-fpga">
-                            {status.deviceInfo?.fpga_version || '—'}
+                            {disconnected ? 'Not available' : (status.deviceInfo?.fpga_version || 'Not available')}
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
                         <span>Core</span>
                         <span className="font-semibold text-foreground" data-testid="home-system-core">
-                            {status.deviceInfo?.core_version || '—'}
+                            {disconnected ? 'Not available' : (status.deviceInfo?.core_version || 'Not available')}
                         </span>
                     </div>
                     <div className="flex items-center gap-1">
                         <span>Core ID</span>
                         <span className="font-semibold text-foreground" data-testid="home-system-core-id">
-                            {status.deviceInfo?.unique_id || '—'}
+                            {disconnected ? 'Not available' : (status.deviceInfo?.unique_id || 'Not available')}
                         </span>
                     </div>
                 </div>

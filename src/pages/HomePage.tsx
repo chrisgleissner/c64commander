@@ -134,17 +134,18 @@ function HomePageContent() {
   const api = getC64API();
   const queryClient = useQueryClient();
   const { status } = useC64Connection();
-  const { driveSummaryItems } = useDriveData(status.isConnected || status.isConnecting);
+  const isActive = status.isConnected || status.isDemo;
+  const { driveSummaryItems } = useDriveData(isActive || status.isConnecting);
 
   const { data: u64SettingsCategory } = useC64ConfigItems(
     'U64 Specific Settings',
     [...U64_HOME_ITEMS],
-    status.isConnected || status.isConnecting,
+    isActive || status.isConnecting,
   );
   const { data: ledStripCategory } = useC64ConfigItems(
     'LED Strip Settings',
     [...LED_STRIP_HOME_ITEMS],
-    status.isConnected || status.isConnecting,
+    isActive || status.isConnecting,
   );
 
 
@@ -218,15 +219,16 @@ function HomePageContent() {
 
   const inlineSelectTriggerClass =
     'h-auto w-auto border-0 bg-transparent px-0 py-0 text-xs font-semibold text-foreground shadow-none focus:ring-0 focus:ring-offset-0 [&>svg]:hidden';
+  const unavailableLabel = 'Not available';
 
   const u64Category = u64SettingsCategory as Record<string, unknown> | undefined;
   const ledStripConfig = ledStripCategory as Record<string, unknown> | undefined;
   const videoModeOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'System Mode').map((value) => String(value));
-  const videoModeValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'System Mode', '—'));
+  const videoModeValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'System Mode', unavailableLabel));
   const analogVideoOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Analog Video Mode').map((value) => String(value));
-  const analogVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Analog Video Mode', '—'));
+  const analogVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Analog Video Mode', unavailableLabel));
   const digitalVideoOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Digital Video Mode').map((value) => String(value));
-  const digitalVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Digital Video Mode', '—'));
+  const digitalVideoValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'Digital Video Mode', unavailableLabel));
   const hdmiScanOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'HDMI Scan lines').map((value) => String(value));
   const hdmiScanValue = String(resolveConfigValue(u64Category, 'U64 Specific Settings', 'HDMI Scan lines', 'Disabled'));
   const joystickSwapOptions = readItemOptions(u64Category, 'U64 Specific Settings', 'Joystick Swapper').map((value) => String(value));
@@ -244,11 +246,11 @@ function HomePageContent() {
   const ledModeOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'LedStrip Mode').map((value) => String(value));
   const ledModeValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip Mode', 'Off'));
   const ledFixedColorOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Fixed Color').map((value) => String(value));
-  const ledFixedColorValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Fixed Color', '—'));
+  const ledFixedColorValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Fixed Color', unavailableLabel));
   const ledSidSelectOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select').map((value) => String(value));
   const ledTintOptions = readItemOptions(ledStripConfig, 'LED Strip Settings', 'Color tint').map((value) => String(value));
   const ledTintValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Color tint', 'Pure'));
-  const ledSidSelectValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select', '—'));
+  const ledSidSelectValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'LedStrip SID Select', unavailableLabel));
   const ledIntensityValue = String(resolveConfigValue(ledStripConfig, 'LED Strip Settings', 'Strip Intensity', '0'));
   const ledIntensityDetails = readItemDetails(ledStripConfig, 'LED Strip Settings', 'Strip Intensity');
   const ledIntensityMin = ledIntensityDetails?.min ?? 0;
@@ -357,6 +359,13 @@ function HomePageContent() {
   const effectiveLedSidSelectOptions = ledSidSelectOptions.length ? ledSidSelectOptions : [ledSidSelectValue];
   const effectiveLedTintOptions = ledTintOptions.length ? ledTintOptions : [ledTintValue];
 
+  const displayedVideoModeValue = isActive ? videoModeValue : unavailableLabel;
+  const displayedAnalogVideoValue = isActive ? analogVideoValue : unavailableLabel;
+  const displayedDigitalVideoValue = isActive ? digitalVideoValue : unavailableLabel;
+  const displayedVideoModeOptions = isActive ? effectiveVideoModeOptions : [unavailableLabel];
+  const displayedAnalogVideoOptions = isActive ? effectiveAnalogVideoOptions : [unavailableLabel];
+  const displayedDigitalVideoOptions = isActive ? effectiveDigitalVideoOptions : [unavailableLabel];
+
   const hdmiScanEnabledValue = resolveToggleOption(effectiveHdmiScanOptions, true);
   const hdmiScanDisabledValue = resolveToggleOption(effectiveHdmiScanOptions, false);
   const hdmiScanChecked = normalizeOptionToken(hdmiScanValue) === normalizeOptionToken(hdmiScanEnabledValue);
@@ -371,18 +380,18 @@ function HomePageContent() {
   });
   const joystickSwapChecked = normalizeOptionToken(joystickSwapValue) === normalizeOptionToken(joystickSwapEnabledValue);
 
-  const videoModeSelectOptions = normalizeSelectOptions(effectiveVideoModeOptions, videoModeValue);
-  const analogVideoSelectOptions = normalizeSelectOptions(effectiveAnalogVideoOptions, analogVideoValue);
-  const digitalVideoSelectOptions = normalizeSelectOptions(effectiveDigitalVideoOptions, digitalVideoValue);
+  const videoModeSelectOptions = normalizeSelectOptions(displayedVideoModeOptions, displayedVideoModeValue);
+  const analogVideoSelectOptions = normalizeSelectOptions(displayedAnalogVideoOptions, displayedAnalogVideoValue);
+  const digitalVideoSelectOptions = normalizeSelectOptions(displayedDigitalVideoOptions, displayedDigitalVideoValue);
   const ledModeSelectOptions = normalizeSelectOptions(effectiveLedModeOptions, ledModeValue);
   const ledFixedColorSelectOptions = normalizeSelectOptions(effectiveLedFixedColorOptions, ledFixedColorValue);
   const ledSidSelectSelectOptions = normalizeSelectOptions(effectiveLedSidSelectOptions, ledSidSelectValue);
   const ledTintSelectOptions = normalizeSelectOptions(effectiveLedTintOptions, ledTintValue);
 
 
-  const videoModeSelectValue = normalizeSelectValue(videoModeValue);
-  const analogVideoSelectValue = normalizeSelectValue(analogVideoValue);
-  const digitalVideoSelectValue = normalizeSelectValue(digitalVideoValue);
+  const videoModeSelectValue = normalizeSelectValue(displayedVideoModeValue);
+  const analogVideoSelectValue = normalizeSelectValue(displayedAnalogVideoValue);
+  const digitalVideoSelectValue = normalizeSelectValue(displayedDigitalVideoValue);
   const ledModeSelectValue = normalizeSelectValue(ledModeValue);
   const ledFixedColorSelectValue = normalizeSelectValue(ledFixedColorValue);
   const ledSidSelectSelectValue = normalizeSelectValue(ledSidSelectValue);
@@ -426,7 +435,7 @@ function HomePageContent() {
   const ledIntensityPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Strip Intensity')]);
   const ledSidSelectPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'LedStrip SID Select')]);
   const ledTintPending = Boolean(configWritePending[buildConfigKey('LED Strip Settings', 'Color tint')]);
-  const ledFixedColorSliderDisabled = !status.isConnected || ledFixedColorPending || ledFixedColorSliderMax === 0;
+  const ledFixedColorSliderDisabled = !isActive || ledFixedColorPending || ledFixedColorSliderMax === 0;
 
 
 
@@ -510,7 +519,7 @@ function HomePageContent() {
                         'HOME_VIDEO_MODE',
                         'Video mode updated',
                       )}
-                    disabled={!status.isConnected || videoModePending}
+                    disabled={!isActive || videoModePending}
                   >
                     <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-video-mode">
                       <SelectValue placeholder={videoModeValue} />
@@ -536,7 +545,7 @@ function HomePageContent() {
                         'HOME_ANALOG_VIDEO_MODE',
                         'Analog video mode updated',
                       )}
-                    disabled={!status.isConnected || analogVideoPending}
+                    disabled={!isActive || analogVideoPending}
                   >
                     <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-video-analog">
                       <SelectValue placeholder={analogVideoValue} />
@@ -562,7 +571,7 @@ function HomePageContent() {
                         'HOME_DIGITAL_VIDEO_MODE',
                         'Digital video mode updated',
                       )}
-                    disabled={!status.isConnected || digitalVideoPending}
+                    disabled={!isActive || digitalVideoPending}
                   >
                     <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-video-digital">
                       <SelectValue placeholder={digitalVideoValue} />
@@ -591,7 +600,7 @@ function HomePageContent() {
                           'HDMI scan lines updated',
                         );
                       }}
-                      disabled={!status.isConnected || hdmiScanPending}
+                      disabled={!isActive || hdmiScanPending}
                       className="h-4 w-4"
                       aria-label="HDMI Scan Lines"
                       data-testid="home-video-scanlines"
@@ -613,7 +622,7 @@ function HomePageContent() {
                           'Joystick swap updated',
                         );
                       }}
-                      disabled={!status.isConnected || joystickSwapPending}
+                      disabled={!isActive || joystickSwapPending}
                       className="h-4 w-4"
                       aria-label="Joystick Swap"
                       data-testid="home-joystick-swap"
@@ -639,7 +648,7 @@ function HomePageContent() {
                           'HOME_LED_MODE',
                           'LED mode updated',
                         )}
-                      disabled={!status.isConnected || ledModePending}
+                      disabled={!isActive || ledModePending}
                     >
                       <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-mode">
                         <SelectValue placeholder={ledModeValue} />
@@ -665,7 +674,7 @@ function HomePageContent() {
                           'HOME_LED_COLOR',
                           'LED color updated',
                         )}
-                      disabled={!status.isConnected || ledFixedColorPending}
+                      disabled={!isActive || ledFixedColorPending}
                     >
                       <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-color">
                         <div className="flex items-center gap-2">
@@ -787,7 +796,7 @@ function HomePageContent() {
                         'LED intensity updated',
                       );
                     }}
-                    disabled={!status.isConnected || ledIntensityPending}
+                    disabled={!isActive || ledIntensityPending}
                     data-testid="home-led-intensity-slider"
                   />
                   <div className="flex items-center justify-between gap-2">
@@ -802,7 +811,7 @@ function HomePageContent() {
                           'HOME_LED_SID_SELECT',
                           'LED SID select updated',
                         )}
-                      disabled={!status.isConnected || ledSidSelectPending}
+                      disabled={!isActive || ledSidSelectPending}
                     >
                       <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-sid-select">
                         <SelectValue placeholder={ledSidSelectValue} />
@@ -828,7 +837,7 @@ function HomePageContent() {
                           'HOME_LED_TINT',
                           'LED tint updated',
                         )}
-                      disabled={!status.isConnected || ledTintPending}
+                      disabled={!isActive || ledTintPending}
                     >
                       <SelectTrigger className={inlineSelectTriggerClass} data-testid="home-led-tint">
                         <SelectValue placeholder={ledTintValue} />
@@ -875,7 +884,7 @@ function HomePageContent() {
           data-section-label="Drives"
         >
           <DriveManager
-            isConnected={status.isConnected}
+            isConnected={isActive}
             handleAction={handleAction}
             machineTaskBusy={machineTaskBusy}
             machineTaskId={machineTaskId}
@@ -891,7 +900,7 @@ function HomePageContent() {
           data-section-label="Printers"
         >
           <PrinterManager
-            isConnected={status.isConnected}
+            isConnected={isActive}
             machineTaskBusy={machineTaskBusy}
             machineTaskId={machineTaskId}
             onResetPrinter={handleResetPrinter}
@@ -900,12 +909,12 @@ function HomePageContent() {
 
 
         <AudioMixer
-          isConnected={status.isConnected}
+          isConnected={isActive}
           machineTaskBusy={machineTaskBusy}
           runMachineTask={runMachineTask}
         />
 
-        <StreamStatus isConnected={status.isConnected} />
+        <StreamStatus isConnected={isActive} />
 
         {/* Config Actions */}
         <motion.div
@@ -928,7 +937,7 @@ function HomePageContent() {
               variant="success"
               compact
               onClick={() => handleAction(() => controls.saveConfig.mutateAsync(), 'Config saved to flash')}
-              disabled={!status.isConnected || machineTaskBusy}
+              disabled={!isActive || machineTaskBusy}
               loading={controls.saveConfig.isPending}
             />
             <QuickActionCard
@@ -937,7 +946,7 @@ function HomePageContent() {
               description="From flash"
               compact
               onClick={() => handleAction(() => controls.loadConfig.mutateAsync(), 'Config loaded from flash')}
-              disabled={!status.isConnected || machineTaskBusy}
+              disabled={!isActive || machineTaskBusy}
               loading={controls.loadConfig.isPending}
             />
             <QuickActionCard
@@ -947,7 +956,7 @@ function HomePageContent() {
               variant="danger"
               compact
               onClick={() => handleAction(() => controls.resetConfig.mutateAsync(), 'Config reset to defaults')}
-              disabled={!status.isConnected || machineTaskBusy}
+              disabled={!isActive || machineTaskBusy}
               loading={controls.resetConfig.isPending}
             />
             <QuickActionCard
@@ -958,7 +967,7 @@ function HomePageContent() {
               compact
               dataTestId="home-config-save-app"
               onClick={() => setSaveDialogOpen(true)}
-              disabled={!status.isConnected || isSaving || machineTaskBusy}
+              disabled={!isActive || isSaving || machineTaskBusy}
               loading={isSaving}
             />
             <QuickActionCard
@@ -968,7 +977,7 @@ function HomePageContent() {
               compact
               dataTestId="home-config-load-app"
               onClick={() => setLoadDialogOpen(true)}
-              disabled={!status.isConnected || appConfigs.length === 0 || machineTaskBusy}
+              disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
             />
             <QuickActionCard
               icon={RotateCcw}
@@ -976,7 +985,7 @@ function HomePageContent() {
               description="Changes"
               compact
               onClick={() => handleAction(() => revertToInitial(), 'Config reverted')}
-              disabled={!status.isConnected || isApplying || !hasChanges || machineTaskBusy}
+              disabled={!isActive || isApplying || !hasChanges || machineTaskBusy}
               loading={isApplying}
             />
             <QuickActionCard
@@ -986,13 +995,13 @@ function HomePageContent() {
               compact
               dataTestId="home-config-manage-app"
               onClick={() => setManageDialogOpen(true)}
-              disabled={!status.isConnected || appConfigs.length === 0 || machineTaskBusy}
+              disabled={!isActive || appConfigs.length === 0 || machineTaskBusy}
             />
           </div>
         </motion.div>
 
         {/* Offline Message */}
-        {!status.isConnected && !status.isConnecting && (
+        {!isActive && !status.isConnecting && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
