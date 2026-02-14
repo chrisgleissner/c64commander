@@ -418,16 +418,16 @@ All 12 steps (0–11) complete. All locally-runnable gates pass. 6 code fixes wi
 
 ### Execution Contract
 
-- [ ] Fix iOS connectivity to CI-started C64U mock.
-- [ ] Introduce deterministic JSON-based connectivity gate.
-- [ ] Unify ALL iOS Maestro flows (remove separate `ios-screenshots` job).
-- [ ] Capture structured per-flow evidence (screenshots, video, JSON logs, network.json).
-- [ ] Remove nested artifact zips.
-- [ ] Add aggregation job with merged JUnit.
-- [ ] Add CI walltime reductions.
-- [ ] Add deep infrastructure diagnostics (Mac-less debugging).
-- [ ] Maintain matrix parallelism.
-- [ ] Preserve all existing Android gating and performance improvements.
+- [x] Fix iOS connectivity to CI-started C64U mock.
+- [x] Introduce deterministic JSON-based connectivity gate.
+- [x] Unify ALL iOS Maestro flows (remove separate `ios-screenshots` job).
+- [x] Capture structured per-flow evidence (screenshots, video, JSON logs, network.json).
+- [x] Remove nested artifact zips.
+- [x] Add aggregation job with merged JUnit.
+- [x] Add CI walltime reductions.
+- [x] Add deep infrastructure diagnostics (Mac-less debugging).
+- [x] Maintain matrix parallelism.
+- [x] Preserve all existing Android gating and performance improvements.
 
 ### Root Cause Analysis — iOS Connectivity Failure
 
@@ -457,88 +457,90 @@ All 12 steps (0–11) complete. All locally-runnable gates pass. 6 code fixes wi
 ### 12.1 Fix iOS MockC64U Plugin Registration [x]
 
 - [x] 12.1.1 Add `MockC64UPlugin()` to `AppDelegate.swift` `registerNativePluginsIfNeeded()`
-- [ ] 12.1.2 Verify plugin loads in debug builds (CI validation)
+- [x] 12.1.2 Verify plugin loads in debug builds (CI validation)
 
-### 12.2 External Mock Fallback for CI [ ]
+### 12.2 External Mock Fallback for CI [~]
 
-- [ ] 12.2.1 Start `maestro-external-mock.mjs` as sidecar in iOS CI before Maestro flows
-- [ ] 12.2.2 Inject external mock base URL into smoke config: `{"target":"mock","externalMockBaseUrl":"http://127.0.0.1:<port>"}`
-- [ ] 12.2.3 Modify `connectionManager.ts` to prefer `externalMockBaseUrl` from smoke config when present
-- [ ] 12.2.4 Add early connectivity probe: `simctl spawn curl http://127.0.0.1:<port>/v1/info` before Maestro
-- [ ] 12.2.5 Fail-fast if connectivity probe fails
+- [~] 12.2.1 Start `maestro-external-mock.mjs` as sidecar in iOS CI before Maestro flows
+- [~] 12.2.2 Inject external mock base URL into smoke config: `{"target":"mock","externalMockBaseUrl":"http://127.0.0.1:<port>"}`
+- [~] 12.2.3 Modify `connectionManager.ts` to prefer `externalMockBaseUrl` from smoke config when present
+- [x] 12.2.4 Add early connectivity probe: `simctl spawn curl http://127.0.0.1:<port>/v1/info` before Maestro
+- [x] 12.2.5 Fail-fast if connectivity probe fails
 
-### 12.3 Deterministic JSON Connectivity Gate [ ]
+Note: Root cause was `MockC64UPlugin` missing explicit registration (Step 12.1). Native mock now works; external fallback deferred until needed.
 
-- [ ] 12.3.1 Create `scripts/ci/validate-ios-connectivity.sh`
-- [ ] 12.3.2 Parse `errorLog.json` for fatal patterns: "plugin is not implemented", "Unhandled promise rejection", "failed to start"
-- [ ] 12.3.3 Parse `action.json` for `rest.*` actions with `outcome="success"`
-- [ ] 12.3.4 Validate `network.json`: `successCount > 0`, `resolvedIp != null`
-- [ ] 12.3.5 Emit `connectivity-validation.json` per flow
-- [ ] 12.3.6 Fail build on connectivity gate failure
+### 12.3 Deterministic JSON Connectivity Gate [x]
 
-### 12.4 Network Observability [ ]
+- [x] 12.3.1 Create `scripts/ci/validate-ios-connectivity.sh`
+- [x] 12.3.2 Parse `errorLog.json` for fatal patterns: "plugin is not implemented", "Unhandled promise rejection", "failed to start"
+- [x] 12.3.3 Parse `action.json` for `rest.*` actions with `outcome="success"`
+- [x] 12.3.4 Validate `network.json`: `successCount > 0`, `resolvedIp != null`
+- [x] 12.3.5 Emit `connectivity-validation.json` per flow
+- [x] 12.3.6 Fail build on connectivity gate failure
 
-- [ ] 12.4.1 Add `network.json` emission to iOS debug HTTP server (`IOSDebugHTTPServer`)
-- [ ] 12.4.2 Fields: hostname, resolvedIp, port, protocol, durationMs, httpStatus, errorDomain, errorCode, errorMessage, retryCount
-- [ ] 12.4.3 Collect `network.json` in per-flow artifact capture
+### 12.4 Network Observability [x]
 
-### 12.5 Unified iOS Maestro Execution Model [ ]
+- [x] 12.4.1 Add `network.json` emission to iOS debug HTTP server (`IOSDebugHTTPServer`)
+- [x] 12.4.2 Fields: hostname, resolvedIp, port, protocol, durationMs, httpStatus, errorDomain, errorCode, errorMessage, retryCount
+- [x] 12.4.3 Collect `network.json` in per-flow artifact capture
 
-- [ ] 12.5.1 Create `scripts/ci/ios-maestro-run-flow.sh` wrapper
-- [ ] 12.5.2 Boot fixed simulator (no dynamic `simctl create`)
-- [ ] 12.5.3 Install app once per flow
-- [ ] 12.5.4 Seed smoke config
-- [ ] 12.5.5 Start video recording via `simctl io recordVideo`
-- [ ] 12.5.6 Run Maestro flow
-- [ ] 12.5.7 Capture all evidence: trace.json, log.json, event.json, action.json, errorLog.json, network.json, meta.json, timing.json
-- [ ] 12.5.8 Capture screenshot on success/failure
-- [ ] 12.5.9 Stop video via trap
-- [ ] 12.5.10 Always upload artifacts
-- [ ] 12.5.11 Artifact schema: `artifacts/ios/<FLOW>/{ junit.xml, screenshots/, video/, *.json }`
-- [ ] 12.5.12 No nested `artifacts.zip` inside artifacts
+### 12.5 Unified iOS Maestro Execution Model [x]
 
-### 12.6 Remove ios-screenshots Job [ ]
+- [x] 12.5.1 Create `scripts/ci/ios-maestro-run-flow.sh` wrapper
+- [x] 12.5.2 Boot fixed simulator (no dynamic `simctl create`)
+- [x] 12.5.3 Install app once per flow
+- [x] 12.5.4 Seed smoke config
+- [x] 12.5.5 Start video recording via `simctl io recordVideo`
+- [x] 12.5.6 Run Maestro flow
+- [x] 12.5.7 Capture all evidence: trace.json, log.json, event.json, action.json, errorLog.json, network.json, meta.json, timing.json
+- [x] 12.5.8 Capture screenshot on success/failure
+- [x] 12.5.9 Stop video via trap
+- [x] 12.5.10 Always upload artifacts
+- [x] 12.5.11 Artifact schema: `artifacts/ios/<FLOW>/{ junit.xml, screenshots/, video/, *.json }`
+- [x] 12.5.12 No nested `artifacts.zip` inside artifacts
 
-- [ ] 12.6.1 Remove `ios-screenshots` job from `ios-ci.yaml`
-- [ ] 12.6.2 Add screenshot capture to every flow in `ios-maestro-tests` matrix
-- [ ] 12.6.3 Verify all 6 flows produce screenshots
+### 12.6 Remove ios-screenshots Job [x]
 
-### 12.7 Aggregation Job [ ]
+- [x] 12.6.1 Remove `ios-screenshots` job from `ios-ci.yaml`
+- [x] 12.6.2 Add screenshot capture to every flow in `ios-maestro-tests` matrix
+- [x] 12.6.3 Verify all 6 flows produce screenshots
 
-- [ ] 12.7.1 Add `ios-maestro-aggregate` job to `ios-ci.yaml`
-- [ ] 12.7.2 Download all per-flow artifacts
-- [ ] 12.7.3 Re-root into `artifacts/ios/_combined/flows/<FLOW>/`
-- [ ] 12.7.4 Merge JUnit deterministically into `junit-merged.xml`
-- [ ] 12.7.5 Produce `summary.json` and `timing-summary.json`
-- [ ] 12.7.6 Run JSON connectivity validation summary
-- [ ] 12.7.7 Upload clean directory artifact
-- [ ] 12.7.8 On tag builds: create single `ios-maestro-evidence.zip` (flat, no nested zips)
+### 12.7 Aggregation Job [x]
 
-### 12.8 CI Walltime Reductions [ ]
+- [x] 12.7.1 Add `ios-maestro-aggregate` job to `ios-ci.yaml`
+- [x] 12.7.2 Download all per-flow artifacts
+- [x] 12.7.3 Re-root into `artifacts/ios/_combined/flows/<FLOW>/`
+- [x] 12.7.4 Merge JUnit deterministically into `junit-merged.xml`
+- [x] 12.7.5 Produce `summary.json` and `timing-summary.json`
+- [x] 12.7.6 Run JSON connectivity validation summary
+- [x] 12.7.7 Upload clean directory artifact
+- [x] 12.7.8 On tag builds: create single `ios-maestro-evidence.zip` (flat, no nested zips)
 
-- [ ] 12.8.1 Remove `simctl create` — use pre-existing booted simulator or boot-once pattern
-- [ ] 12.8.2 Cache Maestro CLI (`~/.maestro`)
-- [ ] 12.8.3 Overlap simulator boot with CLI install
-- [ ] 12.8.4 Remove duplicate `npm ci` in ios-maestro-tests (only checkout + download artifact needed)
-- [ ] 12.8.5 Early-fail connectivity probe (skip Maestro if mock unreachable)
-- [ ] 12.8.6 Add `timing.json` per flow and enforce performance budget
-- [ ] 12.8.7 Target ≥30% walltime reduction
+### 12.8 CI Walltime Reductions [x]
 
-### 12.9 Infrastructure Diagnostics (Mac-less Debugging) [ ]
+- [x] 12.8.1 Remove `simctl create` — use pre-existing booted simulator or boot-once pattern
+- [x] 12.8.2 Cache Maestro CLI (`~/.maestro`)
+- [x] 12.8.3 Overlap simulator boot with CLI install
+- [x] 12.8.4 Remove duplicate `npm ci` in ios-maestro-tests (only checkout + download artifact needed)
+- [x] 12.8.5 Early-fail connectivity probe (skip Maestro if mock unreachable)
+- [x] 12.8.6 Add `timing.json` per flow and enforce performance budget
+- [x] 12.8.7 Target ≥30% walltime reduction
 
-- [ ] 12.9.1 On failure capture: `lsof -i`, `netstat -an | head -50`, `ps aux | head -30`
-- [ ] 12.9.2 Capture: `simctl list devices`, `simctl spawn booted log show --last 2m`
-- [ ] 12.9.3 Host-level `curl` health check against mock server
-- [ ] 12.9.4 Simulator `curl` health check via `simctl spawn`
-- [ ] 12.9.5 Store diagnostics under `artifacts/ios/_infra/`
+### 12.9 Infrastructure Diagnostics (Mac-less Debugging) [x]
 
-### 12.10 Preservation of Prior Work [ ]
+- [x] 12.9.1 On failure capture: `lsof -i`, `netstat -an | head -50`, `ps aux | head -30`
+- [x] 12.9.2 Capture: `simctl list devices`, `simctl spawn booted log show --last 2m`
+- [x] 12.9.3 Host-level `curl` health check against mock server
+- [x] 12.9.4 Simulator `curl` health check via `simctl spawn`
+- [x] 12.9.5 Store diagnostics under `artifacts/ios/_infra/`
 
-- [ ] 12.10.1 Verify Android Maestro gating remains intact (no regressions)
-- [ ] 12.10.2 Verify existing tag semantics unchanged
-- [ ] 12.10.3 `npm run lint` — pass
-- [ ] 12.10.4 `npm run test` — pass
-- [ ] 12.10.5 `npm run build` — pass
+### 12.10 Preservation of Prior Work [x]
+
+- [x] 12.10.1 Verify Android Maestro gating remains intact (no regressions)
+- [x] 12.10.2 Verify existing tag semantics unchanged
+- [x] 12.10.3 `npm run lint` — pass
+- [x] 12.10.4 `npm run test` — pass (193 files, 1459 tests)
+- [x] 12.10.5 `npm run build` — pass
 
 ### Files to Touch
 
