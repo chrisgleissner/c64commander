@@ -1,5 +1,75 @@
 # Android MVP Production Readiness Plan (feat/iOS-PORT)
 
+## 2026-02-14 Maestro Reliability + Performance Sprint (Active)
+
+### Execution Contract
+- [~] Fix Android `smoke-background-execution` deterministic heartbeat detection (`test-heartbeat`).
+- [~] Harden Android emulator + adb startup sequencing in CI.
+- [~] Reduce Android Maestro wall-clock time without reducing flow coverage.
+- [~] Preserve gating semantics and artifact evidence.
+- [~] Keep all Android/iOS Maestro flows enabled.
+
+### Android failure root-cause analysis (`smoke-background-execution`)
+- [x] Selector inspected in `.maestro/smoke-background-execution.yaml` (`id: test-heartbeat`).
+- [x] Probe implementation inspected in `src/components/TestHeartbeat.tsx` and `src/App.tsx`.
+- [ ] Verify visibility/accessibility stability of `test-heartbeat` under Android WebView + lock/unlock transitions.
+- [ ] Determine failure mode:
+	- [ ] never rendered
+	- [ ] rendered but not discoverable by Maestro
+	- [ ] timing/race after lock-unlock
+	- [ ] probe not enabled in tested build
+- [ ] Implement deterministic flow waiting and re-check logic with explicit timeout.
+- [ ] Add/verify heartbeat lifecycle diagnostics in failure artifacts.
+
+### Android reliability fixes
+- [ ] Add adb server restart before emulator launch in Android CI.
+- [ ] Launch emulator with stable flags:
+	- [ ] `-no-window`
+	- [ ] `-no-audio`
+	- [ ] `-no-metrics`
+	- [ ] `-no-boot-anim`
+	- [ ] `-gpu swiftshader_indirect`
+	- [ ] `-no-snapshot`
+- [ ] Replace naive boot wait with deterministic readiness checks:
+	- [ ] `adb wait-for-device`
+	- [ ] `sys.boot_completed == 1`
+	- [ ] target package visibility via `pm list packages`
+- [ ] Ensure startup/install diagnostics are persisted to `test-results/maestro/**`.
+
+### Android performance optimizations
+- [ ] Cache Maestro CLI (`~/.maestro`) in Android CI job.
+- [ ] Avoid duplicate APK installs (install exactly one APK artifact).
+- [ ] Use `adb install -r -t -d` fast path.
+- [ ] Remove redundant smoke configuration writes.
+- [ ] Set `MAESTRO_CLI_NO_ANALYTICS=1` globally for Android Maestro flow execution.
+
+### Verification plan
+- [ ] Run Android Maestro gating flows:
+	- [ ] `smoke-launch`
+	- [ ] `smoke-background-execution`
+	- [ ] `smoke-hvsc`
+- [ ] Re-run Android gating flows multiple consecutive times to check flake resistance.
+- [ ] Collect artifacts for each run:
+	- [ ] Maestro evidence
+	- [ ] failure screenshots (if any)
+	- [ ] heartbeat-related logcat snippets
+- [ ] Re-validate repo quality gates:
+	- [ ] `npm run lint`
+	- [ ] `npm run test`
+	- [ ] `npm run build`
+- [ ] Verify iOS Maestro workflow definitions remain intact and compatible with current selector strategy.
+
+### Timing measurements
+| Metric | Baseline | Current | Delta |
+|---|---:|---:|---:|
+| Emulator startup (Android CI) | 37s (observed) | pending | pending |
+| APK install (Android CI) | pending | pending | pending |
+| Maestro gating duration | pending | pending | pending |
+| Android Maestro job wall clock | pending | pending | pending |
+
+### Notes / blockers
+- Linux workspace cannot execute iOS simulator workflows locally; iOS Maestro pass confirmation must come from GitHub Actions macOS runners.
+
 ## 2026-02-14 CI Fix Pass (Android Maestro + iOS smoke screenshots)
 
 ### Execution Contract
