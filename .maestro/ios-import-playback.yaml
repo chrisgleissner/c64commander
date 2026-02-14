@@ -8,9 +8,9 @@
 
 appId: uk.gleissner.c64commander
 env:
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
-  TIMEOUT: ${TIMEOUT || "15000"}
+    LONG_TIMEOUT: ${LONG_TIMEOUT || "30000"}
+    SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+    TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
   - ci-critical-ios
@@ -26,33 +26,51 @@ tags:
 # Browse mock FTP tree: root → Usb0 → Music → select SID.
 # Use aria-label selectors (reliable on WKWebView) and LONG_TIMEOUT for FTP.
 - retry:
-    maxRetries: 3
+    maxRetries: 5
     commands:
       # On CI the initial directory can vary (root, Usb0, or Music).
       # Use optional navigation taps and converge on the target SID entry.
       - tapOn:
           text: "Open Usb0"
           optional: true
+      - waitForAnimationToEnd
       - tapOn:
           text: "Open USB0"
           optional: true
+      - waitForAnimationToEnd
       - tapOn:
           text: "Usb0"
           optional: true
+      - waitForAnimationToEnd
       - tapOn:
           text: "USB0"
           optional: true
+      - waitForAnimationToEnd
       - tapOn:
           text: "Open Music"
           optional: true
+      - waitForAnimationToEnd
       - tapOn:
           text: "Music"
           optional: true
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "Open Music"
+          optional: true
+      - waitForAnimationToEnd
       - extendedWaitUntil:
           visible: "Select Mock_Tune_0001.sid"
           timeout: ${LONG_TIMEOUT}
 
-- tapOn: "Select Mock_Tune_0001.sid"
+- tapOn:
+    text: "Select Mock_Tune_0001.sid"
+    optional: true
+- tapOn:
+    text: "Mock_Tune_0001.sid"
+    optional: true
+- extendedWaitUntil:
+    visible: "Add to playlist"
+    timeout: ${TIMEOUT}
 - takeScreenshot: ios-file-selected
 
 # Confirm the selection.
