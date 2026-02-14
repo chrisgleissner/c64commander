@@ -439,6 +439,39 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     return;
   }
 
+  if (trigger === 'manual') {
+    transitionTo('DISCOVERING', trigger);
+    const autoDemoEnabled = loadAutomaticDemoModeEnabled() && !isSmokeModeEnabled();
+    const manualProbeTimeoutMs = Math.max(1000, loadDiscoveryProbeTimeoutMs()) + 1000;
+    setSnapshot({ lastProbeAtMs: Date.now() });
+    const ok = await Promise.race<boolean>([
+      probeOnce({ timeoutMs: manualProbeTimeoutMs }),
+      new Promise<boolean>((resolve) => {
+        setTimeout(() => resolve(false), manualProbeTimeoutMs);
+      }),
+    ]);
+    if (ok) {
+      setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+      addLog('info', 'Discovery probe succeeded', { trigger });
+      if (isSmokeModeEnabled()) {
+        console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
+      }
+      await transitionToRealConnected(trigger);
+    } else {
+      setSnapshot({ lastProbeFailedAtMs: Date.now() });
+      addLog('debug', 'Discovery probe failed', { trigger });
+      if (isSmokeModeEnabled()) {
+        console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
+      }
+      if (autoDemoEnabled) {
+        await transitionToDemoActive(trigger);
+      } else {
+        await transitionToOfflineNoDemo(trigger);
+      }
+    }
+    return;
+  }
+
   if (trigger === 'background') {
     if (snapshot.state !== 'DEMO_ACTIVE' && snapshot.state !== 'OFFLINE_NO_DEMO') return;
     const abort = new AbortController();

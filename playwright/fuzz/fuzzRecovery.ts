@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page, ElementHandle } from '@playwright/test';
+import type { Page, ElementHandle } from 'playwright';
 
 export type RecoveryContext = {
   seed: number;
@@ -43,9 +43,9 @@ const fillInput = async (page: Page, input: ElementHandle<HTMLElement>, value: s
   const supportsFill = await input.evaluate((node) =>
     node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement,
   );
-  await input.click().catch(() => {});
-  await page.keyboard.press('Control+A').catch(() => {});
-  await page.keyboard.press('Backspace').catch(() => {});
+  await input.click().catch(() => { });
+  await page.keyboard.press('Control+A').catch(() => { });
+  await page.keyboard.press('Backspace').catch(() => { });
   if (supportsFill) {
     await (input as ElementHandle<HTMLInputElement | HTMLTextAreaElement>).fill(value).catch(async () => {
       await page.keyboard.insertText(value);
@@ -148,7 +148,7 @@ export const attemptStructuredRecovery = async (
     name: /(save|confirm|ok|continue|yes|submit|apply|done|delete|proceed|add|create)/i,
   });
   if (await primaryLocator.count()) {
-    await primaryLocator.first().click().catch(() => {});
+    await primaryLocator.first().click().catch(() => { });
     return {
       recovered: true,
       log: 'recovery click primary locator',
@@ -160,7 +160,7 @@ export const attemptStructuredRecovery = async (
   const buttons = await scope.$$('button, [role="button"]');
   const primary = await pickPrimaryButton(buttons as ElementHandle<HTMLElement>[]);
   if (primary) {
-    await primary.button.click().catch(() => {});
+    await primary.button.click().catch(() => { });
     return {
       recovered: true,
       log: `recovery click "${primary.label || 'button'}"`,
@@ -170,7 +170,7 @@ export const attemptStructuredRecovery = async (
   }
 
   if (dialog) {
-    await page.keyboard.press('Escape').catch(() => {});
+    await page.keyboard.press('Escape').catch(() => { });
     return { recovered: true, log: 'recovery escape', filledValues, clicked: false };
   }
 

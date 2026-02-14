@@ -389,10 +389,24 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
                     ensureNotCancelled();
                 }
             } catch (error) {
-                try { reader.cancel().catch(() => { }); } catch { /* reader may already be closed */ }
+                try {
+                    await reader.cancel();
+                } catch (cancelError) {
+                    addLog('warn', 'Failed to cancel HVSC download reader after stream error', {
+                        archiveName,
+                        error: (cancelError as Error).message,
+                    });
+                }
                 throw error;
             } finally {
-                try { reader.releaseLock(); } catch { /* stream may already be released */ }
+                try {
+                    reader.releaseLock();
+                } catch (releaseError) {
+                    addLog('warn', 'Failed to release HVSC download reader lock', {
+                        archiveName,
+                        error: (releaseError as Error).message,
+                    });
+                }
             }
             if (totalBytes && loaded !== totalBytes) {
                 throw new Error(`Download size mismatch: expected ${totalBytes}, got ${loaded}`);

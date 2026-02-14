@@ -6,9 +6,10 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { chromium, devices, expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { chromium, devices } from 'playwright';
 import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import * as path from 'node:path';
 import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
 import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
@@ -18,6 +19,10 @@ import { diffProgress, hasMeaningfulProgress, readProgressSnapshot } from './fuz
 const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
 const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
 test.use({ screenshot: 'off', video: 'off', trace: 'off' });
+
+const ACTION_TIMEOUT_MS = 30_000; // Hard timeout for any single action
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // Maximum session duration (5 minutes)
+const HEARTBEAT_INTERVAL_MS = 10_000; // Log heartbeat every 10 seconds during long operations
 
 type Severity = 'crash' | 'freeze' | 'errorLog' | 'warnLog';
 
@@ -139,6 +144,36 @@ const parseActionTimeout = (error: unknown) => {
   return /timeout/i.test(message);
 };
 
+/**
+ * Wraps an async operation with a hard timeout.
+ * Throws a timeout error if the operation doesn't complete within the specified time.
+ */
+const withTimeout = async <T>(
+  operation: () => Promise<T>,
+  timeoutMs: number,
+  description: string,
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Timeout after ${timeoutMs}ms: ${description}`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([operation(), timeoutPromise]);
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+    return result;
+  } catch (error) {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+    throw error;
+  }
+};
+
 const getDeviceProfile = (platform: string) => {
   if (platform === 'android-tablet') {
     return {
@@ -153,7 +188,9 @@ const getDeviceProfile = (platform: string) => {
   return devices['Pixel 5'];
 };
 
-const describeElement = async (element: import('@playwright/test').ElementHandle<HTMLElement>) =>
+type ElementHandle = import('playwright').ElementHandle<HTMLElement>;
+
+const describeElement = async (element: ElementHandle) =>
   element.evaluate((node) => {
     const tag = node.tagName.toLowerCase();
     const role = node.getAttribute('role');
@@ -166,17 +203,17 @@ const describeElement = async (element: import('@playwright/test').ElementHandle
   });
 
 const pickVisibleElement = async (
-  page: import('@playwright/test').Page,
+  page: Page,
   selector: string,
   rng: SeededRng,
-  filter?: (element: import('@playwright/test').ElementHandle<HTMLElement>) => Promise<boolean>,
+  filter?: (element: ElementHandle) => Promise<boolean>,
 ) => {
   const elements = await page.$$(selector);
-  const visible: Array<import('@playwright/test').ElementHandle<HTMLElement>> = [];
+  const visible: ElementHandle[] = [];
   for (const element of elements) {
     if (!(await element.isVisible())) continue;
-    if (filter && !(await filter(element as import('@playwright/test').ElementHandle<HTMLElement>))) continue;
-    visible.push(element as import('@playwright/test').ElementHandle<HTMLElement>);
+    if (filter && !(await filter(element as ElementHandle))) continue;
+    visible.push(element as ElementHandle);
     if (visible.length >= 30) break;
   }
   if (!visible.length) return null;
@@ -185,7 +222,7 @@ const pickVisibleElement = async (
   return { target, description };
 };
 
-const hasVisibleElement = async (page: import('@playwright/test').Page, selector: string) => {
+const hasVisibleElement = async (page: Page, selector: string) => {
   const elements = await page.$$(selector);
   for (const element of elements) {
     if (await element.isVisible()) return true;
@@ -194,18 +231,18 @@ const hasVisibleElement = async (page: import('@playwright/test').Page, selector
 };
 
 const pickVisibleElementByText = async (
-  page: import('@playwright/test').Page,
+  page: Page,
   selector: string,
   matcher: RegExp,
   rng: SeededRng,
 ) => {
   const elements = await page.$$(selector);
-  const visible: Array<import('@playwright/test').ElementHandle<HTMLElement>> = [];
+  const visible: ElementHandle[] = [];
   for (const element of elements) {
     if (!(await element.isVisible())) continue;
     const text = ((await element.textContent()) || '').trim();
     if (!matcher.test(text)) continue;
-    visible.push(element as import('@playwright/test').ElementHandle<HTMLElement>);
+    visible.push(element as ElementHandle);
     if (visible.length >= 20) break;
   }
   if (!visible.length) return null;
@@ -215,7 +252,7 @@ const pickVisibleElementByText = async (
 };
 
 const hasVisibleElementByText = async (
-  page: import('@playwright/test').Page,
+  page: Page,
   selector: string,
   matcher: RegExp,
 ) => {
@@ -228,10 +265,10 @@ const hasVisibleElementByText = async (
   return false;
 };
 
-const getActiveDialog = async (page: import('@playwright/test').Page) =>
+const getActiveDialog = async (page: Page) =>
   page.$('[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]');
 
-const isExternalOrBlankTarget = async (element: import('@playwright/test').ElementHandle<HTMLElement>) =>
+const isExternalOrBlankTarget = async (element: ElementHandle) =>
   element.evaluate((node) => {
     if (!(node instanceof HTMLAnchorElement)) return false;
     const target = node.getAttribute('target');
@@ -243,8 +280,8 @@ const isExternalOrBlankTarget = async (element: import('@playwright/test').Eleme
   });
 
 const showInteractionPulse = async (
-  page: import('@playwright/test').Page,
-  target?: import('@playwright/test').ElementHandle<HTMLElement>,
+  page: Page,
+  target?: ElementHandle,
 ) => {
   try {
     const box = target ? await target.boundingBox() : null;
@@ -272,14 +309,14 @@ const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
   }
   const overlay = await page.$('[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]');
   if (!overlay) return false;
-  await page.keyboard.press('Escape').catch(() => {});
+  await page.keyboard.press('Escape').catch(() => { });
   await page.waitForTimeout(50);
   return true;
 };
 
 const jitterClick = async (
-  page: import('@playwright/test').Page,
-  target: import('@playwright/test').ElementHandle<HTMLElement>,
+  page: Page,
+  target: ElementHandle,
   rng: SeededRng,
   clickCount = 1,
   delay = 0,
@@ -321,8 +358,8 @@ const jitterClick = async (
 };
 
 const safeClick = async (
-  page: import('@playwright/test').Page,
-  pick: { target: import('@playwright/test').ElementHandle<HTMLElement>; description: string },
+  page: Page,
+  pick: { target: ElementHandle; description: string },
   rng: SeededRng,
   selector: string,
   options?: { clickCount?: number; delay?: number },
@@ -443,13 +480,18 @@ test.describe('Fuzz Test', () => {
     const infraMode = !FUZZ_ENABLED;
     const seed = infraMode ? 4242 : toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
-    const timeBudgetMs = infraMode ? undefined : toNumber(process.env.FUZZ_TIME_BUDGET_MS);
+    // Default time budget for fuzz mode: 10 minutes if not specified
+    const defaultTimeBudgetMs = SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000;
+    const timeBudgetMs = infraMode ? undefined : (toNumber(process.env.FUZZ_TIME_BUDGET_MS) ?? defaultTimeBudgetMs);
     const maxSteps = infraMode ? 10 : maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
     const progressTimeoutMs = infraMode
       ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
       : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
-    const baseTimeout = infraMode ? 20_000 : timeBudgetMs ?? (SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000);
-    const timeoutGraceMs = infraMode ? 30_000 : 5 * 60 * 1000;
+    const actionTimeoutMs = Math.max(5000, toNumber(process.env.FUZZ_ACTION_TIMEOUT_MS) ?? ACTION_TIMEOUT_MS);
+    const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? SESSION_TIMEOUT_MS);
+    // Grace period is now much shorter to prevent long hangs
+    const timeoutGraceMs = infraMode ? 30_000 : 60_000; // 1 minute max grace
+    const baseTimeout = infraMode ? 20_000 : (timeBudgetMs ?? defaultTimeBudgetMs);
     const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
     testInfo.setTimeout(timeoutMs);
@@ -474,11 +516,11 @@ test.describe('Fuzz Test', () => {
     const outputRootBase = process.env.FUZZ_OUTPUT_ROOT
       ? path.resolve(process.cwd(), process.env.FUZZ_OUTPUT_ROOT)
       : path.resolve(
-          process.cwd(),
-          'test-results',
-          'fuzz',
-          `run-${runMode}-${platform}-${seed}-${runId}`,
-        );
+        process.cwd(),
+        'test-results',
+        'fuzz',
+        `run-${runMode}-${platform}-${seed}-${runId}`,
+      );
     const outputRoot = shardTotal > 1 ? path.join(outputRootBase, `shard-${shardIndex}`) : outputRootBase;
     const videosDir = path.join(outputRoot, 'videos');
     const sessionsDir = path.join(outputRoot, 'sessions');
@@ -647,7 +689,7 @@ test.describe('Fuzz Test', () => {
       let issue: IssueRecord | null = null;
       let lastLogId: string | null = null;
       let lastFaultAt = 0;
-      let currentFaultMode: 'none' | 'slow' | 'timeout' | 'refused' = 'none';
+      let currentFaultMode: 'none' | 'slow' | 'timeout' | 'refused' | 'auth' = 'none';
       let serverReachable = true;
       let lastOutageAt = 0;
       const backendTracker = createBackendFailureTracker({
@@ -791,6 +833,7 @@ test.describe('Fuzz Test', () => {
       let noProgressCount = 0;
       let progressSnapshot = await readProgressSnapshot(page);
       let lastProgressAt = Date.now();
+      const sessionStartTime = Date.now();
       let mode: 'chaos' | 'recovery' = 'chaos';
       let recoveryAttempts = 0;
       const recoveryStepLimit = infraMode ? 1 : 6;
@@ -799,7 +842,7 @@ test.describe('Fuzz Test', () => {
         totalSteps += 1;
         sessionSteps += 1;
         logInteraction(`s=${totalSteps}\ta=infra\tpage-load`);
-        await page.waitForSelector('[data-testid="connectivity-indicator"]', { timeout: 5000 }).catch(() => {});
+        await page.waitForSelector('[data-testid="connectivity-indicator"]', { timeout: 5000 }).catch(() => { });
         await checkAppLogsForIssues();
         infraActionsExecuted += 1;
         if (!issue) {
@@ -810,7 +853,11 @@ test.describe('Fuzz Test', () => {
       const ensureAppOrigin = async () => {
         const url = page.url();
         if (!url || url.startsWith('about:') || !url.startsWith(baseOrigin)) {
-          await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+          await withTimeout(
+            () => page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }),
+            actionTimeoutMs,
+            'navigate to app origin'
+          ).catch(() => { });
           return true;
         }
         return false;
@@ -995,9 +1042,9 @@ test.describe('Fuzz Test', () => {
             if (!pick) return { log: 'add-items filter skip' };
             const text = rng.next() > 0.5 ? randomLargeText(rng) : randomText(rng);
             await showInteractionPulse(page, pick.target);
-            await pick.target.click().catch(() => {});
-            await page.keyboard.press('Control+A').catch(() => {});
-            await page.keyboard.press('Backspace').catch(() => {});
+            await pick.target.click().catch(() => { });
+            await page.keyboard.press('Control+A').catch(() => { });
+            await page.keyboard.press('Backspace').catch(() => { });
             await page.keyboard.insertText(text);
             return { log: `add-items filter ${text.length} chars` };
           },
@@ -1106,8 +1153,8 @@ test.describe('Fuzz Test', () => {
               const options = await page.$$('role=option');
               if (!options.length) continue;
               const option = rng.pick(options);
-              await showInteractionPulse(page, option as import('@playwright/test').ElementHandle<HTMLElement>);
-              await option.click().catch(() => {});
+              await showInteractionPulse(page, option as ElementHandle);
+              await option.click().catch(() => { });
             }
             return { log: `config-select ${pick.description} x${selections}` };
           },
@@ -1148,7 +1195,7 @@ test.describe('Fuzz Test', () => {
                 logs.push(`wheel ${delta}`);
               } else {
                 const key = randomKey(rng);
-                await page.keyboard.press(key).catch(() => {});
+                await page.keyboard.press(key).catch(() => { });
                 logs.push(`key ${key}`);
               }
               await page.waitForTimeout(rng.int(0, 15));
@@ -1195,10 +1242,10 @@ test.describe('Fuzz Test', () => {
           run: async () => {
             networkOffline = true;
             lastOutageAt = Date.now();
-            await context.setOffline(true).catch(() => {});
+            await context.setOffline(true).catch(() => { });
             const duration = rng.int(500, 2500);
             await page.waitForTimeout(duration);
-            await context.setOffline(false).catch(() => {});
+            await context.setOffline(false).catch(() => { });
             networkOffline = false;
             return { log: `network offline ${duration}ms` };
           },
@@ -1213,7 +1260,7 @@ test.describe('Fuzz Test', () => {
             for (let i = 0; i < bursts; i += 1) {
               const key = randomKey(rng);
               keys.push(key);
-              await page.keyboard.press(key).catch(() => {});
+              await page.keyboard.press(key).catch(() => { });
             }
             return { log: `key ${keys.join(',')}` };
           },
@@ -1277,14 +1324,14 @@ test.describe('Fuzz Test', () => {
             const text = modeRoll < 0.35 ? randomLargeText(rng) : randomText(rng);
             await showInteractionPulse(page, pick.target);
             if (modeRoll < 0.35) {
-              await pick.target.click().catch(() => {});
-              await page.keyboard.press('Control+A').catch(() => {});
-              await page.keyboard.press('Backspace').catch(() => {});
+              await pick.target.click().catch(() => { });
+              await page.keyboard.press('Control+A').catch(() => { });
+              await page.keyboard.press('Backspace').catch(() => { });
               await page.keyboard.insertText(text);
               return { log: `paste ${pick.description} (${text.length} chars)` };
             }
             if (rng.next() > 0.45 || !supportsFill) {
-              await pick.target.click().catch(() => {});
+              await pick.target.click().catch(() => { });
               await page.keyboard.type(text, { delay: rng.int(0, 15) });
               return { log: `type ${pick.description} "${text}"` };
             }
@@ -1316,11 +1363,11 @@ test.describe('Fuzz Test', () => {
               const buttons = await dialog.$$('button, [role="button"]');
               if (buttons.length) {
                 const target = rng.pick(buttons);
-                await showInteractionPulse(page, target);
-                await target.click().catch(() => {});
+                await showInteractionPulse(page, target as ElementHandle);
+                await target.click().catch(() => { });
                 return { log: 'modal button' };
               }
-              await page.keyboard.press('Escape').catch(() => {});
+              await page.keyboard.press('Escape').catch(() => { });
               return { log: 'modal escape' };
             }
             const pick = await pickVisibleElement(page, 'button[aria-haspopup="dialog"], [data-state="closed"][data-radix-collection-item]', rng);
@@ -1336,14 +1383,14 @@ test.describe('Fuzz Test', () => {
           run: async () => {
             const url = page.url();
             if (!url.startsWith(baseOrigin) || url.startsWith('about:')) {
-              await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+              await page.goto(baseUrl, { waitUntil: 'domcontentloaded' }).catch(() => { });
               return { log: 'nav recover' };
             }
             if (rng.next() > 0.5) {
-              await page.goBack({ timeout: 5000 }).catch(() => {});
+              await page.goBack({ timeout: 5000 }).catch(() => { });
               return { log: 'nav back' };
             }
-            await page.goForward({ timeout: 5000 }).catch(() => {});
+            await page.goForward({ timeout: 5000 }).catch(() => { });
             return { log: 'nav forward' };
           },
         },
@@ -1401,6 +1448,18 @@ test.describe('Fuzz Test', () => {
 
       while (!infraMode && Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
+
+        // Session-level timeout check - prevent sessions from running forever
+        const sessionElapsed = Date.now() - sessionStartTime;
+        if (sessionElapsed >= sessionTimeoutMs) {
+          logInteraction(`s=${totalSteps}	a=session	timeout ${Math.round(sessionElapsed / 1000)}s`);
+          recordStuckSessionIssue(
+            'session-timeout',
+            `Session exceeded maximum duration of ${sessionTimeoutMs / 1000}s after ${sessionSteps} steps.`,
+          );
+          break;
+        }
+
         totalSteps += 1;
         sessionSteps += 1;
 
@@ -1413,7 +1472,7 @@ test.describe('Fuzz Test', () => {
 
         const backoffUntil = backendTracker.getBackoffUntilMs();
         if (backoffUntil > now) {
-          const waitMs = backoffUntil - now;
+          const waitMs = Math.min(backoffUntil - now, 5000); // Cap backoff wait to 5s max
           logInteraction(`s=${totalSteps}\ta=backend\tbackoff ${waitMs}ms`);
           await page.waitForTimeout(waitMs);
         }
@@ -1446,7 +1505,12 @@ test.describe('Fuzz Test', () => {
             break;
           }
           try {
-            const result = await action.run();
+            // Wrap action execution with a hard timeout to prevent hangs
+            const result = await withTimeout(
+              () => action.run(),
+              actionTimeoutMs,
+              `action ${action.name}`,
+            );
             logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
           } catch (error) {
             logInteraction(`s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`);
@@ -1533,7 +1597,7 @@ test.describe('Fuzz Test', () => {
       if (issue) {
         const screenshotName = `${sessionId}.png`;
         screenshotPath = path.join(outputRoot, screenshotName);
-        await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+        await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => { });
       }
 
       const video = page.video();
@@ -1547,18 +1611,18 @@ test.describe('Fuzz Test', () => {
             const target = path.join(videosDir, `${safeName}-${sessionId}.webm`);
             await fs.rename(recorded, target).catch(async () => {
               await fs.copyFile(recorded, target);
-              await fs.unlink(recorded).catch(() => {});
+              await fs.unlink(recorded).catch(() => { });
             });
             savedVideo = path.relative(outputRoot, target);
           } else if (retainSuccessSessions > 0) {
             const target = path.join(videosDir, `success-${sessionId}.webm`);
             await fs.rename(recorded, target).catch(async () => {
               await fs.copyFile(recorded, target);
-              await fs.unlink(recorded).catch(() => {});
+              await fs.unlink(recorded).catch(() => { });
             });
             savedVideo = path.relative(outputRoot, target);
           } else {
-            await fs.unlink(recorded).catch(() => {});
+            await fs.unlink(recorded).catch(() => { });
           }
         } catch {
           // ignore video errors
@@ -1594,8 +1658,8 @@ test.describe('Fuzz Test', () => {
         retainedSuccess.push({ logPath: sessionLogPath, videoPath: savedVideo ? path.join(outputRoot, savedVideo) : undefined });
         while (retainedSuccess.length > retainSuccessSessions) {
           const removed = retainedSuccess.shift();
-          if (removed?.logPath) await fs.unlink(removed.logPath).catch(() => {});
-          if (removed?.videoPath) await fs.unlink(removed.videoPath).catch(() => {});
+          if (removed?.logPath) await fs.unlink(removed.logPath).catch(() => { });
+          if (removed?.videoPath) await fs.unlink(removed.videoPath).catch(() => { });
         }
       }
 
@@ -1625,7 +1689,7 @@ test.describe('Fuzz Test', () => {
           .map(async (entry) => {
             if (entry.name.includes('-session-')) return;
             if (!entry.name.endsWith('.webm')) return;
-            await fs.unlink(path.join(videosDir, entry.name)).catch(() => {});
+            await fs.unlink(path.join(videosDir, entry.name)).catch(() => { });
           }),
       );
     } catch {
@@ -1654,8 +1718,9 @@ test.describe('Fuzz Test', () => {
     if (!issueGroups.size) {
       summaryLines.push('No issues detected.');
     } else {
-      for (const group of issueGroups.values()) {
-        const totalCount = Object.values(group.severityCounts).reduce((sum, value) => sum + value, 0);
+      const groupsArray = Array.from(issueGroups.values());
+      for (const group of groupsArray) {
+        const totalCount = Object.values(group.severityCounts).reduce((sum: number, value: number) => sum + value, 0);
         const exampleVideos = group.examples
           .map((example) => example.video)
           .filter(Boolean)

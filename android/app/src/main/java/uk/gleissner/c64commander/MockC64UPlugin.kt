@@ -57,6 +57,7 @@ class MockC64UPlugin : Plugin() {
       call.resolve(payload)
     } catch (error: Exception) {
       Log.e(logTag, "Failed to start mock C64U server", error)
+      AppLogger.error(context, logTag, "Failed to start mock C64U server", "MockC64UPlugin", error)
       call.reject(error.message, error)
     }
   }
@@ -71,6 +72,7 @@ class MockC64UPlugin : Plugin() {
       call.resolve()
     } catch (error: Exception) {
       Log.e(logTag, "Failed to stop mock C64U server", error)
+      AppLogger.error(context, logTag, "Failed to stop mock C64U server", "MockC64UPlugin", error)
       call.reject(error.message, error)
     }
   }

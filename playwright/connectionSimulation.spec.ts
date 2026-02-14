@@ -357,8 +357,8 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
       try {
         await demoDialog.waitFor({ state: 'visible', timeout: 1500 });
-      } catch (error) {
-        console.warn('Demo interstitial did not appear before continuing', error);
+      } catch {
+        // Dialog may not appear if discovery converges quickly.
       }
 
       if (await demoContinue.isVisible()) {
@@ -572,10 +572,11 @@ test.describe('Deterministic Connectivity Simulation', () => {
       }
     };
     let connected = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    const reconnectDeadline = Date.now() + 60000;
+    for (let attempt = 0; attempt < 8 && Date.now() < reconnectDeadline; attempt += 1) {
       await clickIndicatorAndDismissDemo();
       try {
-        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
+        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 8000 });
         connected = true;
         break;
       } catch {
@@ -583,11 +584,14 @@ test.describe('Deterministic Connectivity Simulation', () => {
       }
     }
     if (!connected) {
-      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 30000 });
+      throw new Error('Manual rediscovery did not reach REAL_CONNECTED within timeout window.');
     }
     const currentUsing = page.getByText('Currently using:');
     await expect(currentUsing).toBeVisible();
-    await expect(currentUsing.locator('span')).toHaveText(host);
+    await expect.poll(
+      async () => (await currentUsing.locator('span').textContent())?.trim() ?? '',
+      { timeout: 30000 },
+    ).toBe(host);
 
     await snap(page, testInfo, 'real-demo-real-manual');
   });

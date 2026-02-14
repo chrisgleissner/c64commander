@@ -173,6 +173,32 @@ describe('connectionManager', () => {
     );
   });
 
+  it('manual discovery transitions from demo to real when probe succeeds', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await discoverConnection('manual');
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
   it('connects to real device when legacy base url is reachable', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');
