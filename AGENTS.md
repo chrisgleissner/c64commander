@@ -112,6 +112,11 @@ When modifying Playwright tests, REST routing, or tracing logic:
 
 ## Fast path (before a PR)
 
+### Platform build scope
+
+- Only Android can be built locally.
+- For iOS, rely on CI (macOS runners) for build and validation.
+
 ### Install dependencies
 
 ```bash
