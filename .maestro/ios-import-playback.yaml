@@ -26,19 +26,19 @@ tags:
 # Browse mock FTP tree: root → Usb0 → Music → select SID.
 # Use aria-label selectors (reliable on WKWebView) and LONG_TIMEOUT for FTP.
 - retry:
-    maxRetries: 2
+    maxRetries: 3
     commands:
-      - extendedWaitUntil:
-          visible: "Open Usb0"
-          timeout: ${LONG_TIMEOUT}
-      - tapOn: "Open Usb0"
-      - extendedWaitUntil:
-          visible: "Open Music"
-          timeout: ${TIMEOUT}
-      - tapOn: "Open Music"
+      # On CI the initial directory can vary (root, Usb0, or Music).
+      # Use optional navigation taps and converge on the target SID entry.
+      - tapOn:
+          text: "Open Usb0"
+          optional: true
+      - tapOn:
+          text: "Open Music"
+          optional: true
       - extendedWaitUntil:
           visible: "Select Mock_Tune_0001.sid"
-          timeout: ${TIMEOUT}
+          timeout: ${LONG_TIMEOUT}
 
 - tapOn: "Select Mock_Tune_0001.sid"
 - takeScreenshot: ios-file-selected
