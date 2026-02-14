@@ -1,5 +1,62 @@
 # Android MVP Production Readiness Plan (feat/iOS-PORT)
 
+## 2026-02-14 Independent Re-Verification Pass (Current)
+
+### Execution Contract
+- [x] Plan Verification
+- [x] Stability Audit
+- [x] Coverage Enforcement
+- [x] iOS Parity
+- [~] CI Validation
+
+### Plan Verification (stale-plan audit)
+- [x] Re-validated Step 1 Maestro tagging and gating assertions in `.maestro/*` + `scripts/run-maestro-gating.sh`.
+- [x] Re-validated Step 2 background service bounds and idle timeout in `BackgroundExecutionService.kt` + JVM tests.
+- [x] Re-validated Step 3 native due-time restore path in `usePlaybackPersistence.ts` + tests.
+- [x] Re-validated Step 5 source navigation stale-response token guard in `useSourceNavigator.ts` + tests.
+- [x] Re-validated Step 6 config queue error propagation in `configWriteThrottle.ts` + tests.
+- [x] Re-validated Step 8 HVSC streaming cleanup behavior in `hvscDownload.ts` + tests.
+
+### Stability Audit (new hardening implemented)
+- [x] Removed silent catches in `src/lib/hvsc/hvscDownload.ts` stream cleanup path; failures now log via `addLog`.
+- [x] Hardened manual rediscovery convergence in `src/lib/connection/connectionManager.ts` using bounded manual probe timeout fallback.
+- [x] Routed Android native plugin errors to app-level diagnostics (not Logcat-only) in:
+	- `android/app/src/main/java/uk/gleissner/c64commander/DiagnosticsBridgePlugin.kt`
+	- `android/app/src/main/java/uk/gleissner/c64commander/SecureStoragePlugin.kt`
+	- `android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt`
+- [x] Ensured `BackgroundExecutionPlugin.kt` context access failures are surfaced (no silent swallow).
+
+### Coverage Enforcement
+- [x] Confirmed global Vitest coverage thresholds remain 80/80/80/80 in `vitest.config.ts`.
+- [x] Ran `npm run test:coverage` and `npm run test:coverage:all` locally after changes.
+- [x] Added regression test for manual rediscovery demo→real transition:
+	- `tests/unit/connection/connectionManager.test.ts`
+
+### iOS Parity & Mock Safety
+- [x] Verified iOS Keychain secure storage parity in `ios/App/App/NativePlugins.swift` (`SecureStoragePlugin`).
+- [x] Verified iOS background execution is explicit no-op stub and documented in `doc/internals/ios-parity-matrix.md`.
+- [x] Verified mock connectivity and green-indicator coverage through existing Playwright and connection manager tests.
+
+### CI Validation
+- [x] `npm run lint` (pass)
+- [x] `npm run test` (pass)
+- [x] `npm run build` (pass)
+- [x] `cd android && ./gradlew test -Dorg.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64 --no-daemon` (pass)
+- [x] `scripts/run-maestro-gating.sh --skip-build` (pass locally; executed flow set depends on CI env tag filter)
+- [x] `npm run validate:traces` (pass)
+- [x] `npm run test:e2e` (pass verified via JSON reporter: 335 expected, 0 unexpected)
+- [!] Remote GitHub CI currently not fully green on active PR: `Android | Maestro gating` status check is failing while other listed web/iOS checks are passing.
+
+### New Files / Areas Touched in this pass
+- `src/lib/hvsc/hvscDownload.ts`
+- `src/lib/connection/connectionManager.ts`
+- `playwright/connectionSimulation.spec.ts`
+- `tests/unit/connection/connectionManager.test.ts`
+- `android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionPlugin.kt`
+- `android/app/src/main/java/uk/gleissner/c64commander/DiagnosticsBridgePlugin.kt`
+- `android/app/src/main/java/uk/gleissner/c64commander/SecureStoragePlugin.kt`
+- `android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt`
+
 ## Execution Mode
 - Plan-execute-verify only.
 - Priority order enforced; medium/low work blocked until high blockers pass gates.

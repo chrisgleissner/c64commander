@@ -377,14 +377,22 @@ adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c
 log "Running Maestro gating flows"
 set +e
 MAESTRO_EXIT_CODE=0
-# On CI, run only critical tests to keep build time under 6 minutes
-# Critical tests verify native Android components (file picker integration)
-TAG_FILTER="device"
+# Local default: run device-tagged flows.
+# CI: run required critical flow files explicitly to avoid config-level excludeTags
+# (e.g., probe/slow/hvsc) from silently filtering required gates.
 if [[ "${CI:-false}" == "true" ]]; then
-  TAG_FILTER="ci-critical"
-fi
-if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" --include-tags="$TAG_FILTER" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
-  MAESTRO_EXIT_CODE=$?
+  CI_FLOW_FILES=(
+    "$ROOT_DIR/.maestro/smoke-launch.yaml"
+    "$ROOT_DIR/.maestro/smoke-background-execution.yaml"
+    "$ROOT_DIR/.maestro/smoke-hvsc.yaml"
+  )
+  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+    MAESTRO_EXIT_CODE=$?
+  fi
+else
+  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" --include-tags="device" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+    MAESTRO_EXIT_CODE=$?
+  fi
 fi
 set -e
 
