@@ -47,7 +47,7 @@ vi.mock('@/lib/sources/localArchiveIngestion', async () => {
 
 import { browseLocalSidFiles } from '@/lib/sources/localFsPicker';
 
-const buildAsyncEntries = (entries: [string, { kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File>; entries?: () => AsyncIterableIterator<[string, any]>; }][] ) =>
+const buildAsyncEntries = (entries: [string, { kind: 'file' | 'directory'; name: string; getFile?: () => Promise<File>; entries?: () => AsyncIterableIterator<[string, any]>; }][]) =>
   (async function* iterator() {
     for (const entry of entries) {
       yield entry as [string, any];
