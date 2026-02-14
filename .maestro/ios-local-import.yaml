@@ -31,6 +31,12 @@ tags:
 - retry:
     maxRetries: 5
     commands:
+      # Re-enter C64U source on each retry in case the source sheet remained open
+      # or the browser view was dismissed between attempts.
+      - tapOn:
+          text: "Add file / folder from C64U"
+          optional: true
+      - waitForAnimationToEnd
       # On CI the initial directory can vary (root, Usb0, or Music).
       # Use optional navigation taps and converge on the target SID entry.
       - tapOn:
