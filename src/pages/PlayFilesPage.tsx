@@ -791,7 +791,7 @@ export default function PlayFilesPage() {
 
   const buildTrackId = useCallback((source: string, sourceId: string | null | undefined, path: string) =>
     `${source}:${sourceId ?? ''}:${normalizeSourcePath(path)}`,
-  []);
+    []);
 
   const serializePlaylistToQueryRepository = useCallback((items: PlaylistItem[], playlistId: string) => {
     const nowIso = new Date().toISOString();

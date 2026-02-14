@@ -389,7 +389,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
                     ensureNotCancelled();
                 }
             } catch (error) {
-                try { reader.cancel().catch(() => {}); } catch { /* reader may already be closed */ }
+                try { reader.cancel().catch(() => { }); } catch { /* reader may already be closed */ }
                 throw error;
             } finally {
                 try { reader.releaseLock(); } catch { /* stream may already be released */ }
