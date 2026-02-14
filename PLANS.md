@@ -192,6 +192,12 @@
 
 ---
 
+## TODO
+
+- [ ] Write `doc/internals/ios-parity-matrix.md`: For each native feature of the app, compare what is possible on Android vs iOS. Include workarounds for features not directly available on iOS. Cover: local file import, FTP browsing, background execution, secure storage, HVSC ingestion, mock C64U server, debug HTTP server, diagnostics bridge, SID playback, file picker, and any platform-specific Capacitor plugins.
+
+---
+
 ## Gates
 
 | Gate | Command | Required | CI Job |

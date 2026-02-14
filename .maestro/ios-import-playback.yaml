@@ -1,0 +1,82 @@
+# iOS equivalent of Android edge-playlist-manipulation + smoke-hvsc-mounted.
+# Browses the mock C64U via FTP, imports a SID, adds it to the playlist,
+# starts playback, verifies transport controls, stops, and clears the playlist.
+#
+# On iOS WKWebView, showDirectoryPicker is unavailable so "Local" import
+# cannot complete. This flow uses the C64U FTP source instead, which is the
+# primary high-value import path on iOS.
+
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+# Open Play tab and show source picker.
+- runFlow: subflows/ios-open-play-add-items.yaml
+
+# Tap the C64U source.
+- tapOn:
+    text: "Add file / folder from C64U"
+- waitForAnimationToEnd
+
+# Browse mock FTP tree: root → Usb0 → Music → Mock_Tune_0001.sid
+- extendedWaitUntil:
+    visible: "Select items"
+    timeout: ${TIMEOUT}
+- extendedWaitUntil:
+    visible: "Open Usb0"
+    timeout: ${TIMEOUT}
+- tapOn: "Open Usb0"
+
+- extendedWaitUntil:
+    visible: "Open Music"
+    timeout: ${TIMEOUT}
+- tapOn: "Open Music"
+
+- extendedWaitUntil:
+    visible: "Select Mock_Tune_0001.sid"
+    timeout: ${TIMEOUT}
+- tapOn: "Select Mock_Tune_0001.sid"
+- takeScreenshot: ios-file-selected
+
+# Confirm the selection.
+- tapOn: "Add to playlist"
+- waitForAnimationToEnd
+
+# Verify playlist now contains the item.
+- extendedWaitUntil:
+    visible: "Mock_Tune_0001.sid"
+    timeout: ${TIMEOUT}
+- takeScreenshot: ios-playlist-populated
+
+# Start playback via transport control (aria-label="Play").
+- tapOn:
+    text: "Play"
+    index: 1
+- extendedWaitUntil:
+    visible: "Stop"
+    timeout: ${SHORT_TIMEOUT}
+- assertVisible: "Mock_Tune_0001.sid"
+- assertNotVisible: "Playback failed"
+- takeScreenshot: ios-now-playing
+
+# Stop playback.
+- tapOn:
+    text: "Stop"
+- extendedWaitUntil:
+    visible: "Play"
+    timeout: ${SHORT_TIMEOUT}
+
+# Clear the playlist.
+- tapOn:
+    text: "Clear playlist"
+    optional: true
+- extendedWaitUntil:
+    visible: "No tracks in playlist yet."
+    timeout: ${TIMEOUT}
+- assertVisible: "No tracks in playlist yet."
+- takeScreenshot: ios-playlist-cleared

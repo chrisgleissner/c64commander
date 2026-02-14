@@ -1,15 +1,64 @@
+# Verify the Local source option is visible in the source picker, then
+# import a file from C64U and verify playback.
+#
+# On iOS WKWebView the showDirectoryPicker API is unavailable, so tapping
+# "Local" would trigger a native UIDocumentPickerViewController that blocks
+# Maestro. Instead we verify visibility of the Local option and then use the
+# C64U FTP source to complete a full import-and-play cycle.
+
 appId: uk.gleissner.c64commander
 env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
   - ci-critical-ios
 ---
-# Verify Local source option is visible in the source picker.
-# We intentionally do NOT tap "Local" because on iOS WKWebView the
-# showDirectoryPicker API is unavailable and the fallback triggers a native
-# UIDocumentPickerViewController that blocks Maestro.
-# WKWebView exposes aria-label instead of inner text.
 - runFlow: subflows/ios-open-play-add-items.yaml
+
+# Assert Local source is visible (smoke check).
 - assertVisible: "Add file / folder from Local"
-- takeScreenshot: ios-local-import-source-picker
+- takeScreenshot: ios-local-source-visible
+
+# Use C64U source to import a file (Local cannot complete on WKWebView).
+- tapOn:
+    text: "Add file / folder from C64U"
+- waitForAnimationToEnd
+
+# Browse mock FTP tree: root → Usb0 → Music → Mock_Tune_0001.sid
+- extendedWaitUntil:
+    visible: "Select items"
+    timeout: ${TIMEOUT}
+- extendedWaitUntil:
+    visible: "Open Usb0"
+    timeout: ${TIMEOUT}
+- tapOn: "Open Usb0"
+
+- extendedWaitUntil:
+    visible: "Open Music"
+    timeout: ${TIMEOUT}
+- tapOn: "Open Music"
+
+- extendedWaitUntil:
+    visible: "Select Mock_Tune_0001.sid"
+    timeout: ${TIMEOUT}
+- tapOn: "Select Mock_Tune_0001.sid"
+- tapOn: "Add to playlist"
+- waitForAnimationToEnd
+
+# Verify the file landed in the playlist.
+- extendedWaitUntil:
+    visible: "Mock_Tune_0001.sid"
+    timeout: ${TIMEOUT}
+- takeScreenshot: ios-local-import-playlist
+
+# Start playback via transport control.
+- tapOn:
+    text: "Play"
+    index: 1
+- extendedWaitUntil:
+    visible: "Stop"
+    timeout: ${SHORT_TIMEOUT}
+- assertNotVisible: "Playback failed"
+- takeScreenshot: ios-local-import-playing

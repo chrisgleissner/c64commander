@@ -133,6 +133,9 @@ jobs:
           - ios-ftp-browse
           - ios-local-import
           - ios-secure-storage-persist
+          - ios-import-playback
+          - ios-hvsc-browse
+          - ios-config-persistence
 
     steps:
       - name: Checkout
