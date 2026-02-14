@@ -132,28 +132,22 @@ check_action_log
 check_network_log
 
 # ── Emit validation result ──────────────────────────────────────
-python3 -c "
-import json
-result = {
-    'flow': '${FLOW_NAME}',
-    'valid': ${had_error} == 0,
-    'errors': $(python3 -c "import json; print(json.dumps([$(printf '"%s",' "${errors[@]+"${errors[@]}"})][:-1] if [$(printf '"%s",' "${errors[@]+"${errors[@]}"})][:-1] else []))" 2>/dev/null || echo '[]'),
-    'checks': {
-        'errorLog': True,
-        'actionLog': True,
-        'networkLog': True
-    }
-}
-with open('${VALIDATION_FILE}', 'w') as f:
-    json.dump(result, f, indent=2)
-print(json.dumps(result, indent=2))
-" 2>/dev/null || {
-  # Fallback if python3 fails
-  cat > "$VALIDATION_FILE" <<VJSON
+ERRORS_JSON="[]"
+if [[ ${#errors[@]} -gt 0 ]]; then
+  ERRORS_JSON=$(printf '%s\n' "${errors[@]}" | python3 -c "
+import sys, json
+print(json.dumps([line.strip() for line in sys.stdin if line.strip()]))
+" 2>/dev/null || echo '[]')
+fi
+
+VALID="true"
+[[ $had_error -ne 0 ]] && VALID="false"
+
+cat > "$VALIDATION_FILE" <<VJSON
 {
   "flow": "${FLOW_NAME}",
-  "valid": $([ $had_error -eq 0 ] && echo "true" || echo "false"),
-  "errors": [],
+  "valid": ${VALID},
+  "errors": ${ERRORS_JSON},
   "checks": {
     "errorLog": true,
     "actionLog": true,
@@ -161,7 +155,7 @@ print(json.dumps(result, indent=2))
   }
 }
 VJSON
-}
+cat "$VALIDATION_FILE"
 
 if [[ $had_error -ne 0 ]]; then
   log "CONNECTIVITY VALIDATION FAILED for ${FLOW_NAME}:"
