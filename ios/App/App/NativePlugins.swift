@@ -254,10 +254,24 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
     private var pendingFileExtensions: [String] = []
     private let operationQueue = DispatchQueue(label: "uk.gleissner.c64commander.folderpicker")
 
+    private func makeDirectoryPicker() -> UIDocumentPickerViewController {
+        if #available(iOS 14.0, *) {
+            return UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+        }
+        return UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
+    }
+
+    private func makeFilePicker() -> UIDocumentPickerViewController {
+        if #available(iOS 14.0, *) {
+            return UIDocumentPickerViewController(forOpeningContentTypes: [.data, .item])
+        }
+        return UIDocumentPickerViewController(documentTypes: ["public.data", "public.item"], in: .open)
+    }
+
     @objc public func pickDirectory(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.pendingDirectoryCall = call
-            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+            let picker = self.makeDirectoryPicker()
             picker.delegate = self
             picker.allowsMultipleSelection = false
             IOSDiagnostics.log(.info, "Folder picker opening for directory selection", details: ["origin": "native", "operation": "pickDirectory"])
@@ -272,7 +286,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 .map { $0.replacingOccurrences(of: ".", with: "").lowercased() }
                 .filter { !$0.isEmpty }
 
-            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data, .item])
+            let picker = self.makeFilePicker()
             picker.delegate = self
             picker.allowsMultipleSelection = false
             IOSDiagnostics.log(.info, "Folder picker opening for file selection", details: ["origin": "native", "operation": "pickFile", "extensions": self.pendingFileExtensions])
