@@ -37,7 +37,19 @@ tags:
           text: "Open Usb0"
           optional: true
       - tapOn:
+          text: "Open USB0"
+          optional: true
+      - tapOn:
+          text: "Usb0"
+          optional: true
+      - tapOn:
+          text: "USB0"
+          optional: true
+      - tapOn:
           text: "Open Music"
+          optional: true
+      - tapOn:
+          text: "Music"
           optional: true
       - extendedWaitUntil:
           visible: "Select Mock_Tune_0001.sid"
