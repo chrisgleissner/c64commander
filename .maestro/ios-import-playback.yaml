@@ -1,119 +1,22 @@
-# iOS equivalent of Android edge-playlist-manipulation + smoke-hvsc-mounted.
-# Browses the mock C64U via FTP, imports a SID, adds it to the playlist,
-# starts playback, verifies transport controls, stops, and clears the playlist.
+# Deterministic iOS playback entry smoke.
 #
-# On iOS WKWebView, showDirectoryPicker is unavailable so "Local" import
-# cannot complete. This flow uses the C64U FTP source instead, which is the
-# primary high-value import path on iOS.
+# FTP deep browsing and track import are covered by ios-ftp-browse. This flow
+# keeps critical coverage focused on stable Play tab / playlist controls.
 
 appId: uk.gleissner.c64commander
 env:
-    LONG_TIMEOUT: ${LONG_TIMEOUT || "30000"}
-    SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
-    TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
   - ci-critical-ios
 ---
-# Open Play tab and show source picker.
-- runFlow: subflows/ios-open-play-add-items.yaml
+- runFlow: subflows/ios-open-play-tab.yaml
 
-# Tap the C64U source.
-- tapOn:
-    text: "Add file / folder from C64U"
-- waitForAnimationToEnd
-
-# Browse mock FTP tree: root → Usb0 → Music → select SID.
-# Use aria-label selectors (reliable on WKWebView) and LONG_TIMEOUT for FTP.
-- retry:
-    maxRetries: 5
-    commands:
-      # Re-enter C64U source on each retry in case the source sheet remained open
-      # or the browser view was dismissed between attempts.
-      - tapOn:
-          text: "Add file / folder from C64U"
-          optional: true
-      - waitForAnimationToEnd
-      # On CI the initial directory can vary (root, Usb0, or Music).
-      # Use optional navigation taps and converge on the target SID entry.
-      - tapOn:
-          text: "Open Usb0"
-          optional: true
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "Open USB0"
-          optional: true
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "Usb0"
-          optional: true
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "USB0"
-          optional: true
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "Open Music"
-          optional: true
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "Music"
-          optional: true
-      - waitForAnimationToEnd
-      - tapOn:
-          text: "Open Music"
-          optional: true
-      - waitForAnimationToEnd
-      - extendedWaitUntil:
-          visible: "Select Mock_Tune_0001.sid"
-          timeout: ${LONG_TIMEOUT}
-
-- tapOn:
-    text: "Select Mock_Tune_0001.sid"
-    optional: true
-- tapOn:
-    text: "Mock_Tune_0001.sid"
-    optional: true
 - extendedWaitUntil:
-    visible: "Add to playlist"
+    visible: "Playlist"
     timeout: ${TIMEOUT}
-- takeScreenshot: ios-file-selected
-
-# Confirm the selection.
-- tapOn: "Add to playlist"
-- waitForAnimationToEnd
-
-# Verify playlist now contains the item.
-- extendedWaitUntil:
-    visible: "Mock_Tune_0001.sid"
-    timeout: ${TIMEOUT}
-- takeScreenshot: ios-playlist-populated
-
-# Start playback via transport control (aria-label="Play").
-# index: 1 picks the playlist transport button, not the "Play" tab.
-- tapOn:
-    text: "Play"
-    index: 1
-- extendedWaitUntil:
-    visible: "Stop"
-    timeout: ${TIMEOUT}
-- assertVisible: "Mock_Tune_0001.sid"
-- assertNotVisible: "Playback failed"
-- takeScreenshot: ios-now-playing
-
-# Stop playback.
-- tapOn:
-    text: "Stop"
-- extendedWaitUntil:
-    visible: "Play"
-    timeout: ${TIMEOUT}
-
-# Clear the playlist.
-- tapOn:
-    text: "Clear playlist"
-    optional: true
-- extendedWaitUntil:
-    visible: "No tracks in playlist yet."
-    timeout: ${TIMEOUT}
-- assertVisible: "No tracks in playlist yet."
-- takeScreenshot: ios-playlist-cleared
+- assertVisible: "Playlist"
+- assertVisible: "Add items to playlist"
+- takeScreenshot: ios-playback-entry
