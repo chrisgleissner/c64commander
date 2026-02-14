@@ -55,11 +55,17 @@ FLOW_DIR="${ARTIFACTS_BASE}/${FLOW}"
 mkdir -p "${FLOW_DIR}/screenshots" "${FLOW_DIR}/video"
 
 # ── Timing ──────────────────────────────────────────────────────
-TIMING_START=$(date +%s%3N 2>/dev/null || python3 -c "import time; print(int(time.time()*1000))")
+# macOS BSD date does not support %N (nanoseconds) — date +%s%3N outputs
+# a literal "N" suffix causing bash arithmetic failures. Use python3
+# unconditionally for portable millisecond timestamps.
+ms_timestamp() {
+  python3 -c "import time; print(int(time.time()*1000))"
+}
+TIMING_START=$(ms_timestamp)
 
 emit_timing() {
   local end
-  end=$(date +%s%3N 2>/dev/null || python3 -c "import time; print(int(time.time()*1000))")
+  end=$(ms_timestamp)
   local duration_ms=$((end - TIMING_START))
   cat > "${FLOW_DIR}/timing.json" <<TJSON
 {

@@ -86,6 +86,46 @@ describe('localFsPicker', () => {
     expect(ingestLocalArchivesMock).toHaveBeenCalledTimes(1);
   });
 
+  it('enumerates SAF results on ios using same native path as android', async () => {
+    platformState.value = 'ios';
+    const treeUri = 'file:///private/var/mobile/Containers/Shared/AppGroup/Music';
+    pickDirectoryMock.mockResolvedValue({
+      treeUri,
+      rootName: 'Music',
+      permissionPersisted: true,
+    });
+    listChildrenMock.mockResolvedValue({
+      entries: [
+        { type: 'file', name: 'tune.sid', path: '/tune.sid' },
+        { type: 'file', name: 'demo.sid', path: '/demo.sid' },
+        { type: 'file', name: 'readme.txt', path: '/readme.txt' },
+      ],
+    });
+    ingestLocalArchivesMock.mockImplementation(async (files: unknown[]) => ({
+      files,
+      archiveCount: 0,
+      extractedCount: 0,
+    }));
+
+    const result = await browseLocalSidFiles(null);
+    // readme.txt is not a supported file type and should be filtered out
+    expect(result).toHaveLength(2);
+    expect(result?.map((f) => f.name)).toEqual(['tune.sid', 'demo.sid']);
+    expect(pickDirectoryMock).toHaveBeenCalledTimes(1);
+    expect(listChildrenMock).toHaveBeenCalledTimes(1);
+    expect(ingestLocalArchivesMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws on unsupported picker response on ios', async () => {
+    platformState.value = 'ios';
+    pickDirectoryMock.mockResolvedValue({
+      treeUri: null,
+      permissionPersisted: false,
+    });
+
+    await expect(browseLocalSidFiles(null)).rejects.toThrow('Native folder picker returned an unsupported response.');
+  });
+
   it('falls back to input click when directory picker is unavailable on web', async () => {
     platformState.value = 'web';
     const input = { click: vi.fn() } as unknown as HTMLInputElement;

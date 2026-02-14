@@ -172,7 +172,7 @@ describe('localSourcesStore', () => {
       files: [{ name: 'song.sid', path: '/Phone/song.sid', uri: 'file://song.sid' }],
     });
 
-    await expect(createLocalSourceFromPicker(null)).rejects.toThrow('Android SAF picker returned an unsupported response.');
+    await expect(createLocalSourceFromPicker(null)).rejects.toThrow('Native folder picker returned an unsupported response.');
   });
 
   it('falls back to input click when directory picker is unavailable', async () => {

@@ -4,6 +4,7 @@ import UIKit
 import Security
 import os.log
 import Network
+import UniformTypeIdentifiers
 
 enum IOSDiagnosticsLevel: String {
     case debug
@@ -256,9 +257,10 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
     @objc public func pickDirectory(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.pendingDirectoryCall = call
-            let picker = UIDocumentPickerViewController(documentTypes: ["public.folder"], in: .open)
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
             picker.delegate = self
             picker.allowsMultipleSelection = false
+            IOSDiagnostics.log(.info, "Folder picker opening for directory selection", details: ["origin": "native", "operation": "pickDirectory"])
             self.bridge?.viewController?.present(picker, animated: true)
         }
     }
@@ -270,9 +272,10 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 .map { $0.replacingOccurrences(of: ".", with: "").lowercased() }
                 .filter { !$0.isEmpty }
 
-            let picker = UIDocumentPickerViewController(documentTypes: ["public.data", "public.item"], in: .open)
+            let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.data, .item])
             picker.delegate = self
             picker.allowsMultipleSelection = false
+            IOSDiagnostics.log(.info, "Folder picker opening for file selection", details: ["origin": "native", "operation": "pickFile", "extensions": self.pendingFileExtensions])
             self.bridge?.viewController?.present(picker, animated: true)
         }
     }
@@ -280,11 +283,13 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
     public func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
         if let call = pendingDirectoryCall {
             pendingDirectoryCall = nil
+            IOSDiagnostics.log(.info, "Folder picker cancelled by user", details: ["origin": "native", "operation": "pickDirectory"])
             call.reject("Folder selection canceled")
         }
         if let call = pendingFileCall {
             pendingFileCall = nil
             pendingFileExtensions = []
+            IOSDiagnostics.log(.info, "File picker cancelled by user", details: ["origin": "native", "operation": "pickFile"])
             call.reject("File selection canceled")
         }
     }
@@ -345,7 +350,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
 
                 call.resolve(["entries": entries])
             } catch {
-                IOSDiagnostics.log(.error, "SAF listChildren failed", details: ["origin": "native", "treeUri": treeUri, "path": relativePath], error: error)
+                IOSDiagnostics.log(.error, "List children failed", details: ["origin": "native", "operation": "listChildren", "treeUri": treeUri, "path": relativePath], error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -376,9 +381,10 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 defer { scoped.stopAccessingSecurityScopedResource() }
 
                 let data = try Data(contentsOf: scoped)
+                IOSDiagnostics.log(.debug, "File read completed", details: ["origin": "native", "operation": "readFile", "sizeBytes": data.count])
                 call.resolve(["data": data.base64EncodedString()])
             } catch {
-                IOSDiagnostics.log(.error, "SAF readFile failed", details: ["origin": "native", "uri": uri], error: error)
+                IOSDiagnostics.log(.error, "File read failed", details: ["origin": "native", "operation": "readFile", "uri": uri], error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -402,9 +408,10 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
 
                 let fileUrl = root.appendingPathComponent(safePath, isDirectory: false)
                 let data = try Data(contentsOf: fileUrl)
+                IOSDiagnostics.log(.debug, "File read from tree completed", details: ["origin": "native", "operation": "readFileFromTree", "path": path, "sizeBytes": data.count])
                 call.resolve(["data": data.base64EncodedString()])
             } catch {
-                IOSDiagnostics.log(.error, "SAF readFileFromTree failed", details: ["origin": "native", "treeUri": treeUri, "path": path], error: error)
+                IOSDiagnostics.log(.error, "File read from tree failed", details: ["origin": "native", "operation": "readFileFromTree", "treeUri": treeUri, "path": path], error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -453,7 +460,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 ]
                 call.resolve(response)
             } catch {
-                IOSDiagnostics.log(.error, "SAF writeFileToTree failed", details: ["origin": "native", "treeUri": treeUri, "path": path], error: error)
+                IOSDiagnostics.log(.error, "Write file to tree failed", details: ["origin": "native", "operation": "writeFileToTree", "treeUri": treeUri, "path": path], error: error)
                 call.reject(error.localizedDescription)
             }
         }
@@ -464,6 +471,12 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
             do {
                 let persisted = try self.persistSecurityScopedUrl(url)
                 let rootName = url.lastPathComponent
+                IOSDiagnostics.log(.info, "Folder picker directory selected", details: [
+                    "origin": "native",
+                    "operation": "pickDirectory",
+                    "rootName": rootName,
+                    "permissionPersisted": persisted,
+                ])
                 call.resolve([
                     "treeUri": url.absoluteString,
                     "rootName": rootName,
@@ -483,6 +496,12 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 if !requiredExtensions.isEmpty {
                     let matches = requiredExtensions.contains { lowercasedName.hasSuffix(".\($0)") }
                     if !matches {
+                        IOSDiagnostics.log(.warn, "File picker extension mismatch", details: [
+                            "origin": "native",
+                            "operation": "pickFile",
+                            "fileName": url.lastPathComponent,
+                            "requiredExtensions": requiredExtensions,
+                        ])
                         throw NativePluginError.operationFailed("Selected file does not match required extension.")
                     }
                 }
@@ -493,6 +512,13 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
                 let parentUrl = url.deletingLastPathComponent()
                 _ = try self.persistSecurityScopedUrl(parentUrl)
 
+                IOSDiagnostics.log(.info, "File picker file selected", details: [
+                    "origin": "native",
+                    "operation": "pickFile",
+                    "fileName": url.lastPathComponent,
+                    "sizeBytes": values.fileSize as Any,
+                    "permissionPersisted": persisted,
+                ])
                 call.resolve([
                     "uri": url.absoluteString,
                     "name": url.lastPathComponent,
@@ -511,6 +537,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
 
     private func persistSecurityScopedUrl(_ url: URL) throws -> Bool {
         guard url.startAccessingSecurityScopedResource() else {
+            IOSDiagnostics.log(.error, "Security-scoped bookmark permission rejected", details: ["origin": "native", "uri": url.absoluteString])
             throw NativePluginError.operationFailed("Persistable permission rejected")
         }
         defer { url.stopAccessingSecurityScopedResource() }
@@ -523,6 +550,7 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
         var persistedUris = UserDefaults.standard.dictionary(forKey: FolderPickerConstants.persistedUrisKey) as? [String: NSNumber] ?? [:]
         persistedUris[url.absoluteString] = NSNumber(value: Int64(Date().timeIntervalSince1970 * 1000))
         UserDefaults.standard.set(persistedUris, forKey: FolderPickerConstants.persistedUrisKey)
+        IOSDiagnostics.log(.info, "Security-scoped bookmark persisted", details: ["origin": "native", "uri": url.absoluteString])
         return true
     }
 
@@ -545,16 +573,19 @@ public final class FolderPickerPlugin: CAPPlugin, CAPBridgedPlugin, UIDocumentPi
         let bookmarks = UserDefaults.standard.dictionary(forKey: FolderPickerConstants.bookmarksKey) as? [String: String] ?? [:]
         guard let encoded = bookmarks[uri],
               let bookmarkData = Data(base64Encoded: encoded) else {
+            IOSDiagnostics.log(.error, "No persisted bookmark found for URI", details: ["origin": "native", "uri": uri])
             throw NativePluginError.unavailable("No persisted permission for URI")
         }
 
         var stale = false
         let scopedUrl = try URL(resolvingBookmarkData: bookmarkData, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
         if stale {
+            IOSDiagnostics.log(.warn, "Security-scoped bookmark is stale, refreshing", details: ["origin": "native", "uri": uri])
             _ = try persistSecurityScopedUrl(scopedUrl)
         }
 
         guard scopedUrl.startAccessingSecurityScopedResource() else {
+            IOSDiagnostics.log(.error, "Persisted bookmark permission could not be activated", details: ["origin": "native", "uri": uri])
             throw NativePluginError.unavailable("Persisted permission could not be activated")
         }
 
