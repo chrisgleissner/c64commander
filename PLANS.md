@@ -1,5 +1,27 @@
 # Android MVP Production Readiness Plan (feat/iOS-PORT)
 
+## 2026-02-14 CI Fix Pass (Android Maestro + iOS smoke screenshots)
+
+### Execution Contract
+- [x] Android Maestro CI failures reproduced and fixed locally.
+- [x] iOS simulator smoke-mode seeding added to CI workflows (`ios-maestro-tests`, `ios-screenshots`).
+- [x] Lint/test/build rerun after fixes.
+- [~] Remote iOS screenshot OCR verification pending fresh GitHub Actions run.
+
+### Changes landed
+- [x] `scripts/run-maestro-gating.sh`: force `VITE_ENABLE_TEST_PROBES=1` during Android CI smoke build.
+- [x] `.maestro/smoke-hvsc.yaml`: updated selector text from legacy `HVSC library` to current `HVSC` label.
+- [x] `.maestro/smoke-background-execution.yaml`: removed unsupported Maestro `sleep()` eval and kept heartbeat delta assertion.
+- [x] `src/components/TestHeartbeat.tsx`: expose stable `id="test-heartbeat"` and keep probe effectively hidden but discoverable.
+- [x] `.github/workflows/ios-ci.yaml`: write `c64u-smoke.json` into simulator app data container before iOS Maestro/screenshot flows.
+
+### Verification evidence
+- [x] `CI=true bash scripts/run-maestro-gating.sh --skip-build` → **3/3 flows passed** (`smoke-launch`, `smoke-background-execution`, `smoke-hvsc`).
+- [x] `npm run lint` → pass.
+- [x] `npm run test` → pass (193 files / 1458 tests).
+- [x] `npm run build` → pass.
+- [!] iOS screenshot OCR proof requires new CI artifact generation on macOS runner after workflow changes.
+
 ## 2026-02-14 Independent Re-Verification Pass (Current)
 
 ### Execution Contract

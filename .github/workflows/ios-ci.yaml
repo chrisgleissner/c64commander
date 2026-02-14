@@ -237,6 +237,23 @@ jobs:
           set -euo pipefail
           xcrun simctl install "${{ steps.simulator.outputs.udid }}" App.app
 
+      - name: Seed iOS smoke mode config
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_DATA_DIR="$(xcrun simctl get_app_container "$UDID" "${{ env.APP_ID }}" data)"
+          PAYLOAD='{"target":"mock","readOnly":false,"debugLogging":true}'
+
+          mkdir -p "$APP_DATA_DIR/Documents"
+          mkdir -p "$APP_DATA_DIR/Library/NoCloud"
+          mkdir -p "$APP_DATA_DIR/Library/Application Support"
+
+          printf '%s' "$PAYLOAD" > "$APP_DATA_DIR/Documents/c64u-smoke.json"
+          printf '%s' "$PAYLOAD" > "$APP_DATA_DIR/Library/NoCloud/c64u-smoke.json"
+          printf '%s' "$PAYLOAD" > "$APP_DATA_DIR/Library/Application Support/c64u-smoke.json"
+
+          ls -l "$APP_DATA_DIR/Documents/c64u-smoke.json"
+
       - name: Install Maestro CLI
         run: |
           set -euo pipefail
@@ -377,6 +394,23 @@ jobs:
         run: |
           set -euo pipefail
           xcrun simctl install "${{ steps.simulator.outputs.udid }}" App.app
+
+      - name: Seed iOS smoke mode config
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_DATA_DIR="$(xcrun simctl get_app_container "$UDID" "${{ env.APP_ID }}" data)"
+          PAYLOAD='{"target":"mock","readOnly":false,"debugLogging":true}'
+
+          mkdir -p "$APP_DATA_DIR/Documents"
+          mkdir -p "$APP_DATA_DIR/Library/NoCloud"
+          mkdir -p "$APP_DATA_DIR/Library/Application Support"
+
+          printf '%s' "$PAYLOAD" > "$APP_DATA_DIR/Documents/c64u-smoke.json"
+          printf '%s' "$PAYLOAD" > "$APP_DATA_DIR/Library/NoCloud/c64u-smoke.json"
+          printf '%s' "$PAYLOAD" > "$APP_DATA_DIR/Library/Application Support/c64u-smoke.json"
+
+          ls -l "$APP_DATA_DIR/Documents/c64u-smoke.json"
 
       - name: Install Maestro CLI
         run: |

@@ -29,8 +29,9 @@ export function TestHeartbeat() {
 
     return (
         <span
+            id="test-heartbeat"
             data-testid="test-heartbeat"
-            style={{ position: 'fixed', bottom: 0, right: 0, fontSize: 1, color: 'transparent', pointerEvents: 'none', zIndex: -1 }}
+            style={{ position: 'fixed', bottom: 0, right: 0, fontSize: 8, lineHeight: 1, opacity: 0.01, pointerEvents: 'none', zIndex: 2147483647 }}
         >
             {String(count)}
         </span>

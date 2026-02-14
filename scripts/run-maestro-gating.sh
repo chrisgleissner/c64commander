@@ -281,8 +281,14 @@ configure_java_env
 
 if [[ "$SKIP_BUILD" == "0" ]]; then
   log "Building web + Android debug APK"
-  (cd "$ROOT_DIR" && npm run cap:build)
-  (cd "$ROOT_DIR" && npm run android:apk)
+  (
+    cd "$ROOT_DIR"
+    VITE_ENABLE_TEST_PROBES=1 npm run cap:build
+  )
+  (
+    cd "$ROOT_DIR"
+    VITE_ENABLE_TEST_PROBES=1 npm run android:apk
+  )
 fi
 
 mkdir -p "$RAW_OUTPUT_DIR" "$EVIDENCE_DIR"
