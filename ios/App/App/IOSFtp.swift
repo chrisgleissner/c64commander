@@ -40,8 +40,23 @@ final class FtpSession {
     }
 
     func disconnect() {
-        inputStream?.close()
-        outputStream?.close()
+        if let input = inputStream {
+            if input.streamStatus != .closed && input.streamStatus != .notOpen {
+                input.close()
+            }
+            if let error = input.streamError {
+                IOSDiagnostics.log(.warn, "FTP input stream error during disconnect", details: ["origin": "native", "host": host, "port": "\(port)"], error: error)
+            }
+        }
+
+        if let output = outputStream {
+            if output.streamStatus != .closed && output.streamStatus != .notOpen {
+                output.close()
+            }
+            if let error = output.streamError {
+                IOSDiagnostics.log(.warn, "FTP output stream error during disconnect", details: ["origin": "native", "host": host, "port": "\(port)"], error: error)
+            }
+        }
         inputStream = nil
         outputStream = nil
     }
