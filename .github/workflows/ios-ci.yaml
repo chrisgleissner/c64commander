@@ -17,7 +17,7 @@ env:
 
 # Rollout policy:
 # - Stage A (default): iOS jobs are informative (non-blocking).
-# - Stage B: ios-build-simulator and ios-maestro-critical become blocking required checks.
+# - Stage B: ios-build-simulator and ios-maestro-tests become blocking required checks.
 # - Stage C: ios-package-altstore is required on tag refs.
 # Set repository variable IOS_ROLLOUT_STAGE to A, B, or C.
 #
@@ -117,11 +117,22 @@ jobs:
           path: ios/build/Build/Products/Debug-iphonesimulator/App.app
           if-no-files-found: error
 
-  ios-maestro-critical:
-    name: iOS | Maestro critical
+  ios-maestro-tests:
+    name: iOS | Maestro ${{ matrix.flow }}
     runs-on: macos-15
     needs: ios-build-simulator
-    timeout-minutes: 30
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        flow:
+          - ios-smoke-launch
+          - ios-playback-basics
+          - ios-diagnostics-export
+          - ios-ftp-browse
+          - ios-local-import
+          - ios-secure-storage-persist
 
     steps:
       - name: Checkout
@@ -183,9 +194,10 @@ jobs:
               print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
               sys.exit(1)
 
+          flow = os.environ.get("MATRIX_FLOW", "unknown")
           run_id = os.environ.get("GITHUB_RUN_ID", "local")
           run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-          sim_name = f"C64Commander-Maestro-{run_id}-{run_attempt}"
+          sim_name = f"C64Commander-{flow}-{run_id}-{run_attempt}"
 
           udid = subprocess.check_output(
               ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
@@ -217,6 +229,8 @@ jobs:
               fh.write(f"device_type={iphone_13['identifier']}\n")
               fh.write(f"udid={udid}\n")
           PY
+        env:
+          MATRIX_FLOW: ${{ matrix.flow }}
 
       - name: Install app in simulator
         run: |
@@ -230,23 +244,24 @@ jobs:
           "$HOME/.maestro/bin/maestro" --version
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
 
-      - name: Run iOS Maestro critical flows
+      - name: Run Maestro flow (${{ matrix.flow }})
         env:
           MAESTRO_CLI_NO_ANALYTICS: 1
           MAESTRO_DRIVER_STARTUP_TIMEOUT: 120000
         run: |
           set -euo pipefail
           mkdir -p test-results/maestro
-          "$HOME/.maestro/bin/maestro" test .maestro --include-tags ios,ci-critical-ios --format junit --output test-results/maestro/ios-junit.xml
+          "$HOME/.maestro/bin/maestro" test ".maestro/${{ matrix.flow }}.yaml" \
+            --format junit \
+            --output "test-results/maestro/${{ matrix.flow }}-junit.xml"
 
-      - name: Upload iOS Maestro artifacts
+      - name: Upload Maestro artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-maestro-results
+          name: ios-maestro-${{ matrix.flow }}
           path: |
             test-results/maestro/**
-            test-results/evidence/maestro/**
           if-no-files-found: warn
 
       - name: Shutdown and delete simulator

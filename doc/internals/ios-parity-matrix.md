@@ -64,5 +64,5 @@ At 907 lines, approaching the 1000-line limit. Contains 6 plugin implementations
 The following iOS CI assertions exist:
 
 - `ios-build-simulator` verifies Xcode build succeeds for simulator target
-- `ios-maestro-critical` runs 6 ci-critical-ios Maestro flows
+- `ios-maestro-tests` runs 6 Maestro flows in a matrix build (1 flow per job)
 - `ios-screenshots` captures 3 scenario screenshots with debug payloads
