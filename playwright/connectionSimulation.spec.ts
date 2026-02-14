@@ -558,33 +558,19 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
 
     server.setReachable(true);
-    const clickIndicatorAndDismissDemo = async () => {
-      await clickWithoutNavigationWait(page, page.getByTestId('connectivity-indicator'));
-      const retryDialog = page.getByRole('dialog', { name: 'Demo Mode' });
-      if (await retryDialog.isVisible().catch(() => false)) {
-        const continueButton = retryDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
-        if (await continueButton.isVisible().catch(() => false)) {
-          await clickWithoutNavigationWait(page, continueButton);
-        } else {
-          await page.keyboard.press('Escape');
-        }
-        await expect(retryDialog).toBeHidden({ timeout: 5000 });
-      }
-    };
-    let connected = false;
-    const reconnectDeadline = Date.now() + 60000;
-    for (let attempt = 0; attempt < 8 && Date.now() < reconnectDeadline; attempt += 1) {
-      await clickIndicatorAndDismissDemo();
-      try {
-        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 8000 });
-        connected = true;
-        break;
-      } catch {
-        // Retry manual discovery trigger if the probe loop is still converging.
-      }
-    }
-    if (!connected) {
-      throw new Error('Manual rediscovery did not reach REAL_CONNECTED within timeout window.');
+
+    // Allow mock server state to propagate before triggering rediscovery.
+    await page.waitForTimeout(500);
+
+    // Trigger a single manual discovery probe. The demo interstitial was already
+    // dismissed earlier in this test, so clicking the indicator just runs probeOnce().
+    await clickWithoutNavigationWait(page, indicator);
+    try {
+      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
+    } catch {
+      // First attempt may race with state changes — retry once.
+      await clickWithoutNavigationWait(page, indicator);
+      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
     }
     const currentUsing = page.getByText('Currently using:');
     await expect(currentUsing).toBeVisible();

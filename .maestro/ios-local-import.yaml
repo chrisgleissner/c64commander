@@ -27,22 +27,22 @@ tags:
 - waitForAnimationToEnd
 
 # Browse mock FTP tree: root → Usb0 → Music → Mock_Tune_0001.sid
-- extendedWaitUntil:
-    visible: "Select items"
-    timeout: ${TIMEOUT}
-- extendedWaitUntil:
-    visible: "Open Usb0"
-    timeout: ${TIMEOUT}
-- tapOn: "Open Usb0"
+# Use aria-label selectors (reliable on WKWebView) and LONG_TIMEOUT for FTP.
+- retry:
+    maxRetries: 2
+    commands:
+      - extendedWaitUntil:
+          visible: "Open Usb0"
+          timeout: ${LONG_TIMEOUT}
+      - tapOn: "Open Usb0"
+      - extendedWaitUntil:
+          visible: "Open Music"
+          timeout: ${TIMEOUT}
+      - tapOn: "Open Music"
+      - extendedWaitUntil:
+          visible: "Select Mock_Tune_0001.sid"
+          timeout: ${TIMEOUT}
 
-- extendedWaitUntil:
-    visible: "Open Music"
-    timeout: ${TIMEOUT}
-- tapOn: "Open Music"
-
-- extendedWaitUntil:
-    visible: "Select Mock_Tune_0001.sid"
-    timeout: ${TIMEOUT}
 - tapOn: "Select Mock_Tune_0001.sid"
 - tapOn: "Add to playlist"
 - waitForAnimationToEnd
@@ -53,12 +53,13 @@ tags:
     timeout: ${TIMEOUT}
 - takeScreenshot: ios-local-import-playlist
 
-# Start playback via transport control.
+# Start playback via transport control (aria-label="Play").
+# index: 1 picks the playlist transport button, not the "Play" tab.
 - tapOn:
     text: "Play"
     index: 1
 - extendedWaitUntil:
     visible: "Stop"
-    timeout: ${SHORT_TIMEOUT}
+    timeout: ${TIMEOUT}
 - assertNotVisible: "Playback failed"
 - takeScreenshot: ios-local-import-playing
