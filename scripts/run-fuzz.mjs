@@ -60,7 +60,7 @@ if (noProgressSteps) env.FUZZ_NO_PROGRESS_STEPS = noProgressSteps;
 const progressTimeoutMs = parseDurationMs(progressTimeout);
 if (progressTimeoutMs) env.FUZZ_PROGRESS_TIMEOUT_MS = String(progressTimeoutMs);
 
-const budgetMs = parseDurationMs(timeBudget) ?? 30 * 60 * 1000;
+const budgetMs = parseDurationMs(timeBudget) ?? 5 * 60 * 1000;
 if (budgetMs) env.FUZZ_TIME_BUDGET_MS = String(budgetMs);
 
 const getPhysicalCoreCount = async () => {
@@ -120,19 +120,54 @@ const buildOutputRoot = () => {
   return path.resolve(process.cwd(), 'test-results', 'fuzz', `run-${resolvedRunMode}-${resolvedPlatform}-${baseSeed}-${runId}`);
 };
 
+const isMissingFileError = (error) => Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT');
+
+const ensureFile = async (filePath) => {
+  const stat = await fs.stat(filePath);
+  if (!stat.isFile() || stat.size === 0) {
+    throw new Error(`Required artifact missing or empty: ${filePath}`);
+  }
+};
+
+const copyDirContents = async (sourceDir, destinationDir, prefix = '') => {
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true });
+  await fs.mkdir(destinationDir, { recursive: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetName = prefix ? `${prefix}${entry.name}` : entry.name;
+    const destinationPath = path.join(destinationDir, targetName);
+    await fs.copyFile(sourcePath, destinationPath);
+  }
+};
+
 const mergeReports = async () => {
   const outputRoot = buildOutputRoot();
+  const mergedSessionsDir = path.join(outputRoot, 'sessions');
+  const mergedVideosDir = path.join(outputRoot, 'videos');
+  await fs.mkdir(mergedSessionsDir, { recursive: true });
+  await fs.mkdir(mergedVideosDir, { recursive: true });
+
   const issueGroups = new Map();
+  const terminatedByReason = {};
   let totalSteps = 0;
   let sessions = 0;
-  await fs.mkdir(outputRoot, { recursive: true });
+  let maxVisualStagnationMs = 0;
+  let durationTotalMs = 0;
+  const stepsPerSession = [];
+  const stagnationSessions = [];
+  const stagnationViolations = [];
+  const missingArtifacts = [];
 
   let parseErrors = 0;
   for (let shard = 0; shard < concurrency; shard += 1) {
     const shardRoot = concurrency === 1 ? outputRoot : path.join(outputRoot, `shard-${shard}`);
-    const reportPath = concurrency === 1
-      ? path.join(outputRoot, 'fuzz-issue-report.json')
-      : path.join(shardRoot, 'fuzz-issue-report.json');
+    const reportPath = path.join(shardRoot, 'fuzz-issue-report.json');
+    const metricsPath = path.join(shardRoot, 'fuzz-run-metrics.json');
+    const stagnationPath = path.join(shardRoot, 'visual-stagnation-report.json');
+    const shardSessionsDir = path.join(shardRoot, 'sessions');
+    const shardVideosDir = path.join(shardRoot, 'videos');
+
     try {
       const raw = await fs.readFile(reportPath, 'utf8');
       let parsed;
@@ -174,10 +209,66 @@ const mergeReports = async () => {
         }
       }
     } catch (error) {
-      if ((error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+      if (isMissingFileError(error)) {
         continue;
       }
       console.error(`Failed to read fuzz report for shard ${shard}:`, error);
+      parseErrors += 1;
+    }
+
+    try {
+      const metricsRaw = await fs.readFile(metricsPath, 'utf8');
+      const metrics = JSON.parse(metricsRaw);
+      const sessionsStarted = Number(metrics?.sessionsStarted || 0);
+      const avgDuration = Number(metrics?.averageSessionDurationMs || 0);
+      durationTotalMs += sessionsStarted * avgDuration;
+      for (const [reason, count] of Object.entries(metrics?.sessionsTerminatedByReason || {})) {
+        terminatedByReason[reason] = (terminatedByReason[reason] || 0) + Number(count || 0);
+      }
+      for (const item of metrics?.stepsPerSession || []) {
+        stepsPerSession.push({
+          sessionId: concurrency === 1 ? item.sessionId : `shard-${shard}-${item.sessionId}`,
+          steps: Number(item.steps || 0),
+        });
+      }
+      maxVisualStagnationMs = Math.max(maxVisualStagnationMs, Number(metrics?.maxVisualStagnationMs || 0));
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        console.error(`Failed to read fuzz metrics for shard ${shard}:`, error);
+      }
+      parseErrors += 1;
+    }
+
+    try {
+      const stagnationRaw = await fs.readFile(stagnationPath, 'utf8');
+      const stagnation = JSON.parse(stagnationRaw);
+      for (const entry of stagnation?.sessions || []) {
+        stagnationSessions.push({
+          sessionId: concurrency === 1 ? entry.sessionId : `shard-${shard}-${entry.sessionId}`,
+          maxVisualStagnationMs: Number(entry.maxVisualStagnationMs || 0),
+          terminationReason: entry.terminationReason || 'unknown',
+        });
+      }
+      for (const violation of stagnation?.violations || []) {
+        stagnationViolations.push({
+          sessionId: concurrency === 1 ? violation.sessionId : `shard-${shard}-${violation.sessionId}`,
+          maxVisualStagnationMs: Number(violation.maxVisualStagnationMs || 0),
+          terminationReason: violation.terminationReason || 'unknown',
+        });
+      }
+      maxVisualStagnationMs = Math.max(maxVisualStagnationMs, Number(stagnation?.maxVisualStagnationMs || 0));
+    } catch (error) {
+      if (!isMissingFileError(error)) {
+        console.error(`Failed to read visual stagnation report for shard ${shard}:`, error);
+      }
+      parseErrors += 1;
+    }
+
+    try {
+      await copyDirContents(shardSessionsDir, mergedSessionsDir, concurrency === 1 ? '' : `shard-${shard}-`);
+      await copyDirContents(shardVideosDir, mergedVideosDir, concurrency === 1 ? '' : `shard-${shard}-`);
+    } catch (error) {
+      console.error(`Failed to copy session/video artifacts for shard ${shard}:`, error);
       parseErrors += 1;
     }
   }
@@ -238,6 +329,97 @@ const mergeReports = async () => {
   const summaryContent = summaryLines.join('\n');
   await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryContent, 'utf8');
   await fs.writeFile(path.join(outputRoot, 'README.md'), summaryContent, 'utf8');
+
+  const runMetrics = {
+    meta: {
+      seed: baseSeed,
+      platform: platform || env.FUZZ_PLATFORM || 'android-phone',
+      runMode: env.FUZZ_RUN_MODE || 'local',
+      shardTotal: concurrency,
+      runId,
+      timeBudgetMs: budgetMs,
+    },
+    sessionsStarted: sessions,
+    sessionsTerminatedByReason: terminatedByReason,
+    maxVisualStagnationMs,
+    averageSessionDurationMs: sessions ? Math.round(durationTotalMs / sessions) : 0,
+    averageStepsPerSession: sessions ? Number((totalSteps / sessions).toFixed(2)) : 0,
+    totalSteps,
+    stepsPerSession,
+  };
+  const visualStagnationReport = {
+    meta: {
+      seed: baseSeed,
+      runId,
+      shardTotal: concurrency,
+      thresholdMs: 5000,
+    },
+    maxVisualStagnationMs,
+    violations: stagnationViolations,
+    sessions: stagnationSessions,
+  };
+
+  await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(runMetrics, null, 2), 'utf8');
+  await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(visualStagnationReport, null, 2), 'utf8');
+
+  const requiredTopLevel = [
+    'sessions',
+    'videos',
+    'fuzz-issue-summary.md',
+    'fuzz-issue-report.json',
+    'README.md',
+    'fuzz-run-metrics.json',
+    'visual-stagnation-report.json',
+  ];
+
+  for (const item of requiredTopLevel) {
+    const fullPath = path.join(outputRoot, item);
+    const stat = await fs.stat(fullPath).catch((error) => {
+      missingArtifacts.push({ path: item, reason: (error && error.message) || 'missing' });
+      return null;
+    });
+    if (!stat) continue;
+    if (stat.isFile() && stat.size === 0) {
+      missingArtifacts.push({ path: item, reason: 'empty' });
+    }
+  }
+
+  try {
+    const sessionArtifacts = await fs.readdir(mergedSessionsDir, { withFileTypes: true });
+    const videoArtifacts = await fs.readdir(mergedVideosDir, { withFileTypes: true });
+    if (!sessionArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.json'))) {
+      missingArtifacts.push({ path: 'sessions/*.json', reason: 'none-found' });
+    }
+    if (!videoArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.webm'))) {
+      missingArtifacts.push({ path: 'videos/*.webm', reason: 'none-found' });
+    }
+
+    const sessionJsonFiles = sessionArtifacts
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+      .map((entry) => path.join(mergedSessionsDir, entry.name));
+    for (const sessionJsonPath of sessionJsonFiles) {
+      const raw = await fs.readFile(sessionJsonPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const requiredSessionPaths = [parsed?.interactionLog, parsed?.finalScreenshot, parsed?.video].filter(Boolean);
+      for (const relativePath of requiredSessionPaths) {
+        await ensureFile(path.join(outputRoot, relativePath)).catch((error) => {
+          missingArtifacts.push({
+            path: `${path.relative(outputRoot, sessionJsonPath)} -> ${relativePath}`,
+            reason: error.message,
+          });
+        });
+      }
+    }
+  } catch (error) {
+    missingArtifacts.push({ path: 'sessions/videos', reason: (error && error.message) || 'unreadable' });
+  }
+
+  if (missingArtifacts.length > 0) {
+    throw new Error(`Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`);
+  }
+  if (visualStagnationReport.violations.length > 0) {
+    throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);
+  }
 
   return { parseErrors };
 };

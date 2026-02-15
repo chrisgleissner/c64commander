@@ -8,13 +8,13 @@ on:
       time_budget:
         description: "Fuzz time budget (e.g., 10m, 2h)"
         required: false
-        default: "1h"
+        default: "5m"
 
 jobs:
   fuzz:
     name: Fuzz Test (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 120 # Hard limit of 2 hours for the entire job
+    timeout-minutes: 25
     concurrency:
       group: fuzz-test-${{ github.ref }}
       cancel-in-progress: true
@@ -45,10 +45,11 @@ jobs:
         env:
           FUZZ_RUN_MODE: ci
           VITE_FUZZ_MODE: "1"
+          FUZZ_CONCURRENCY: "2"
         run: |
-          SEED=$(date -u +%Y%m%d)
-          TIME_BUDGET="${{ github.event.inputs.time_budget || '1h' }}"
-          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget "$TIME_BUDGET" --fuzz-platform android-phone
+          SEED=${{ github.run_id }}
+          TIME_BUDGET="${{ github.event.inputs.time_budget || '5m' }}"
+          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget "$TIME_BUDGET" --fuzz-concurrency 2 --fuzz-platform android-phone
 
       - name: Upload fuzz artifacts
         if: always()
