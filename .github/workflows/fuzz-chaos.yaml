@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       time_budget:
-        description: "Fuzz time budget (e.g., 10m, 2h)"
+        description: "Fuzz time budget (default 5m)"
         required: false
         default: "5m"
 
@@ -31,6 +31,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install ffmpeg tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4

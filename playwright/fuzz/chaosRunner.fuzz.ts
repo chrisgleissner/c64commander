@@ -554,9 +554,12 @@ test.describe('Fuzz Test', () => {
       ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
       : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
     const actionTimeoutMs = Math.max(5000, toNumber(process.env.FUZZ_ACTION_TIMEOUT_MS) ?? ACTION_TIMEOUT_MS);
-    const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? SESSION_TIMEOUT_MS);
+    const defaultSessionTimeoutMs = infraMode
+      ? 30_000
+      : Math.max(60_000, Math.min(120_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) / 2)));
+    const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
     // Grace period is now much shorter to prevent long hangs
-    const timeoutGraceMs = infraMode ? 30_000 : 60_000; // 1 minute max grace
+    const timeoutGraceMs = infraMode ? 30_000 : 120_000; // bounded grace for 5m fuzz + artifact finalization
     const baseTimeout = infraMode ? 20_000 : (timeBudgetMs ?? defaultTimeBudgetMs);
     const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
@@ -1794,18 +1797,32 @@ test.describe('Fuzz Test', () => {
       await sampleVisualProgress(true);
 
       const screenshotPath = sessionScreenshotPath;
-      await page.screenshot({ path: screenshotPath, fullPage: true }).catch((error) => {
+      await withTimeout(
+        () => page.screenshot({ path: screenshotPath, fullPage: true, timeout: actionTimeoutMs }),
+        actionTimeoutMs,
+        'final session screenshot',
+      ).catch((error) => {
         logInteraction(`s=${totalSteps}\ta=screenshot\terror=${(error as Error)?.message || 'failed'}`);
       });
 
       await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
 
       const video = page.video();
-      await context.close();
+      await withTimeout(
+        () => context.close(),
+        Math.max(5000, actionTimeoutMs),
+        'close browser context',
+      ).catch((error) => {
+        logInteraction(`s=${totalSteps}\ta=context\terror=${(error as Error)?.message || 'close-failed'}`);
+      });
       let savedVideo: string | undefined;
       if (video) {
         try {
-          const recorded = await video.path();
+          const recorded = await withTimeout(
+            () => video.path(),
+            Math.max(5000, actionTimeoutMs),
+            'finalize session video path',
+          );
           const target = path.join(videosDir, `${sessionId}.webm`);
           await fs.rename(recorded, target).catch(async () => {
             await fs.copyFile(recorded, target);
@@ -1905,8 +1922,16 @@ test.describe('Fuzz Test', () => {
       expect(infraSessionClean).toBe(true);
     }
 
-    await browser.close();
-    await server.close();
+    await withTimeout(
+      () => browser.close(),
+      Math.max(10_000, actionTimeoutMs * 2),
+      'close browser',
+    );
+    await withTimeout(
+      () => server.close(),
+      Math.max(10_000, actionTimeoutMs),
+      'close mock server',
+    );
 
     const sessionsStarted = sessionManifests.length;
     const averageSessionDurationMs = sessionsStarted
