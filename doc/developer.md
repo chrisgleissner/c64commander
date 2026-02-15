@@ -4,7 +4,7 @@ This guide covers development workflows for C64 Commander contributors.
 
 ## Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 24 LTS and npm 10+
 - JDK 17 (for Android builds)
 - Android SDK (for device builds)
 - git
@@ -17,6 +17,12 @@ Clone the repository and build:
 git clone https://github.com/chrisgleissner/c64commander.git
 cd c64commander
 ./build
+```
+
+For deterministic dependency installs, use:
+
+```bash
+npm ci
 ```
 
 This runs the full build pipeline: dependencies, web build, Capacitor sync, tests, and debug APK.

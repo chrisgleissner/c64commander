@@ -1,92 +1,111 @@
-# 2026-02-15 Web Platform (Docker) First-Class Support Plan
+# Web + Multi-Platform Productionization Contract (Node 24)
 
-## Scope
+Last updated: 2026-02-15
+Owner: Copilot coding agent
+Branch: feat/web
 
-Introduce Web as an official peer platform to Android and iOS with:
-- Dockerized self-hosted deployment
-- Server-side REST/FTP proxying to C64U (browser never calls C64U directly)
-- Optional login gating derived from the network password setting
-- Persistent config in mounted `/config`
-- Multi-arch image support limited to `linux/amd64` and `linux/arm64`
-- CI build/test/release integration with version-tag consistency
+## Goal
 
-## Decisions
+Productionize Web as a first-class platform without duplicating Android-shared logic tests, and upgrade the repository from Node 22/20 references to Node 24 LTS with Docker runtime alignment to `node:24-trixie-slim`.
 
-- Web platform uses Playwright (not Maestro) for browser E2E because Maestro is optimized for native app automation and this repository already has mature Playwright browser flows.
-- Server is implemented in TypeScript (Node runtime) and serves static assets + auth + REST/FTP proxy.
-- Docker image naming convention: `ghcr.io/chrisgleissner/c64commander:<version>`.
-- Docker architecture matrix is strictly MVP: `linux/amd64,linux/arm64`.
+## Phase Status
 
-## Execution Checklist
+### Phase 1 — Inventory & Baseline
 
-### 1) Platform Runtime & Proxy
-- [x] Add TypeScript web server module.
-- [x] Serve static app assets.
-- [x] Add health endpoint.
-- [x] Add REST proxy endpoint(s) with deterministic errors.
-- [x] Add FTP proxy endpoint(s) with deterministic errors.
-- [x] Inject network password header into REST requests when configured.
+- [x] Inventory all Node references (`package.json`, workflows, Dockerfile, runtime pin files).
+- [x] Inventory current Web container hardening state.
+- [x] Inventory platform-specific test coverage and duplication risk.
+- [x] Capture baseline validation outputs.
 
-### 2) Auth & Config Persistence
-- [x] Add `/config`-backed settings persistence.
-- [x] Use network password as single source of truth.
-- [x] If password unset: no login required.
-- [x] If password set: require login + session cookie for static/proxy routes.
-- [x] Add login/logout/status endpoints.
-- [x] Expose secure-storage web endpoints for existing app settings UI.
+### Phase 2 — Node 24 Upgrade & Toolchain Alignment
 
-### 3) Frontend Integration (No UI Fork)
-- [x] Keep shared TypeScript frontend unchanged in behavior.
-- [x] Add web-platform runtime wiring for REST proxy base path.
-- [x] Add web-platform runtime wiring for FTP bridge path.
-- [x] Wire web secure-storage plugin to server endpoints.
+- [x] Enforce Node 24 via `package.json` engines (`>=24 <25`) and npm floor (`>=10`).
+- [x] Upgrade workflow Node pins to 24:
+  - `.github/workflows/android-apk.yaml`
+  - `.github/workflows/ios-ci.yaml`
+  - `.github/workflows/web-platform.yaml`
+  - `.github/workflows/fuzz-chaos.yaml`
+- [x] Add `.nvmrc` with `24`.
+- [x] Upgrade Node-sensitive types package: `@types/node` to `^24.7.2`.
+- [x] Regenerate lockfile and validate deterministic install (`npm install`, then `npm ci`).
 
-### 4) Docker & Packaging
-- [x] Add multi-stage Dockerfile.
-- [x] Runtime binds `0.0.0.0:8080`.
-- [x] Support mounted `/config` volume.
-- [x] Add scripts for local docker build/run.
-- [x] Add Buildx publish path for `linux/amd64,linux/arm64` only.
+### Phase 3 — Web Docker Hardening & Runtime Readiness
 
-### 5) Tests
-- [x] Add unit tests for config/auth/password-injection/proxy helpers.
-- [x] Add integration tests for auth middleware and REST/FTP proxy behavior.
-- [x] Add Playwright web-platform tests covering:
-  - [x] startup + health + UI load
-  - [x] auth matrix (no password, wrong password, correct password, route protection)
-  - [x] one high-value click path (file browse/add/play)
-  - [x] edge path (invalid password or unreachable mock)
-  - [x] persistence across restart with mounted `/config`
+- [x] Base image upgraded in all stages: `node:24-trixie-slim`.
+- [x] Multi-stage build retained.
+- [x] Runtime configured as non-root (`USER node`).
+- [x] Explicit `WORKDIR`, `NODE_ENV`, `PORT`, and `EXPOSE 8080` retained.
+- [x] `HEALTHCHECK` added and validated against `/healthz`.
+- [x] Deterministic copy order retained.
+- [x] Runtime logs validated via `docker logs`.
 
-### 6) CI & Release
-- [x] Add CI job(s) to build web assets + web server.
-- [x] Build and validate Docker image on `linux/amd64` in PR/push.
-- [x] On tags, publish multi-arch image manifest (`linux/amd64,linux/arm64`) to GHCR.
-- [x] Enforce image tag equals app version/tag.
-- [x] Keep Android/iOS gates intact.
+### Phase 4 — Multi-Arch Validation (`linux/amd64`, `linux/arm64`, RPi64)
 
-### 7) Documentation
-- [x] Update README platform badge/wording to Android|iOS|Web.
-- [x] Add Web overview and CORS proxy rationale.
-- [x] Add Docker installation intro + official links (Windows/macOS/Linux).
-- [x] Add canonical `docker run` usage + Raspberry Pi example + update flow.
-- [x] Add LAN-only and internet-exposure warning.
+- [x] Base image manifest evidence captured for `linux/amd64` and `linux/arm64/v8` via `docker buildx imagetools inspect node:24-trixie-slim`.
+- [x] Raspberry Pi 64-bit compatibility documented via arm64/v8 manifest presence.
+- [ ] Local multi-arch build execution fully validated in this Linux rootless environment.
+  - Attempted `docker buildx build --platform linux/amd64,linux/arm64 ...`
+  - Observed `exec format error` during arm64 emulation in this local setup.
+  - CI path remains authoritative for true multi-arch build execution (QEMU + Buildx in `web-platform.yaml`).
 
-### 8) Final Verification
-- [x] Run `npm run lint`.
-- [x] Run `npm run test`.
-- [x] Run `npm run build`.
-- [x] Run web server tests.
-- [x] Mark all checklist items completed with outcome notes.
+### Phase 5 — Test Strategy Deduplication & Platform-Specific Scope
 
-## Outcome Notes
+- [x] Confirmed Android remains canonical for shared domain logic.
+- [x] No new duplicate Web/iOS tests were added for shared behavior.
+- [x] Web-only coverage retained in existing tests:
+  - `tests/unit/web/webServer.test.ts` (auth/health/proxy/ftp)
+  - `playwright/webPlatformAuth.spec.ts` (auth matrix, proxy edge path, persistence)
+- [x] iOS-only behavior remains in iOS workflow + Maestro flows (`ios-ci.yaml`) without duplicating Android shared logic.
 
-- Completed implementation of the Dockerized Web platform server, auth/config persistence, frontend web wiring, Docker packaging, CI workflow, and README documentation.
-- Verified locally with:
-  - `npm run lint`
-  - `npm run test`
-  - `npm run build:web-platform`
-  - `npm run test:web-platform`
-  - `docker build -f web/Dockerfile -t c64commander:local .`
-  - Container smoke health check on `http://127.0.0.1:18080/healthz`
-- Added dedicated Playwright web-platform coverage for startup/auth/high-value path/edge path and config persistence across restart.
+### Phase 6 — Cross-Platform Validation Matrix + CI Gate
+
+- [x] `npm ci`
+- [x] `npm run lint`
+- [x] `npm run test`
+- [x] `npm run build`
+- [x] `npm run build:web-platform`
+- [x] `npm run test:web-platform`
+- [x] `npm run android:apk`
+- [ ] `npm run ios:build:sim` (environment-bound on Linux: `xcodebuild: not found`)
+- [~] `gh pr checks 40` (35 successful, 2 skipped, 1 pending `codecov/project`, no failures at capture time)
+
+## Verification Evidence
+
+### Node/toolchain evidence
+
+- Local runtime: `node v24.11.0`, `npm 11.6.1`.
+- Clean install constraint validated by lock mismatch failure followed by lock regeneration and successful `npm ci`.
+
+### Docker/runtime evidence
+
+- `docker build -f web/Dockerfile -t c64commander:local .` succeeded.
+- Container smoke on `:18080` returned `{"ok":true}` from `/healthz`.
+- Runtime log confirms server bind: `C64 Commander web server running on http://0.0.0.0:8080`.
+- Health status object present in `docker inspect`.
+
+### Multi-arch/base image evidence
+
+- `docker buildx imagetools inspect node:24-trixie-slim` reported manifests for:
+  - `linux/amd64`
+  - `linux/arm64/v8`
+
+### CI evidence snapshot
+
+- `gh pr checks 40` showed Android CI, iOS CI, and Web CI checks passing.
+- Remaining pending check is external coverage aggregation (`codecov/project`) with no failing checks reported.
+
+## Risk Log
+
+- [x] Node 24 dependency compatibility risk mitigated by successful `npm ci`, lint, test, build, and web-platform validation.
+- [x] Docker runtime hardening risk mitigated by successful local smoke + healthcheck + logs.
+- [ ] Rootless local arm64 emulation for Buildx remains environment-constrained; rely on CI multi-arch pipeline execution.
+- [x] Test matrix explosion avoided (no redundant cross-platform duplication introduced).
+
+## Definition of Done
+
+- [x] Node 24 enforced across package metadata and CI workflows.
+- [x] Web Docker image aligned to `node:24-trixie-slim` with pragmatic hardening.
+- [x] Web local Docker runtime + healthcheck validated.
+- [x] Android remains primary shared-logic surface; no redundant Web/iOS duplication added.
+- [x] Platform-specific Web coverage remains focused on Web-only behavior.
+- [ ] Full end-state CI gate fully settled (one non-failing pending external check at capture time).
