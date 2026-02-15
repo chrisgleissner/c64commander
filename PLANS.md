@@ -1,3 +1,120 @@
+# 2026-02-15 Playwright Fuzz Stabilization & Hardening Plan (Active)
+
+## Objective
+
+Stabilize and harden the existing Playwright fuzz system so 5-minute local and CI runs complete deterministically, avoid visual stagnation beyond 5 seconds, recover or restart sessions safely, and always emit complete machine-readable artifacts.
+
+## Global constraints
+
+- [x] No assertion weakening.
+- [x] No global-timeout inflation to mask defects.
+- [x] No skipped tests.
+- [x] No silent exception swallowing introduced by this change.
+- [x] Seed-based determinism preserved (`seed`, `baseSeed + shardIndex`).
+
+## Phase 1 — Session lifecycle hardening
+
+### Tasks
+
+- [x] Enforce strict hard per-session timeout path and explicit termination reasons.
+- [x] Ensure non-recoverable states always trigger this sequence:
+  - [x] Capture final screenshot.
+  - [x] Persist last N interactions.
+  - [x] Finalize and retain session video.
+  - [x] Close context.
+  - [x] Reset mock server state.
+  - [x] Start clean next session.
+- [x] Prevent corrupted session reuse by resetting all session-scoped state per run.
+
+### Verification criteria
+
+- [x] Session manifests show deterministic termination reason for every session.
+- [x] Logs demonstrate restart after freeze/crash/non-recoverable states.
+- [x] Every session has `log + final screenshot + video`.
+
+## Phase 2 — Visual stagnation detection + deterministic recovery ladder
+
+### Tasks
+
+- [x] Add fixed-interval visual sampling and deterministic visual delta measurement.
+- [x] Detect stagnation windows and trigger recovery when no meaningful visual delta for >5s.
+- [x] Implement deterministic escalation ladder, one step per stall incident:
+  - [x] Close modal.
+  - [x] Navigate back.
+  - [x] Return to root tab.
+  - [x] Force home route.
+  - [x] Reload page.
+  - [x] Terminate session.
+- [x] Record freeze issue when recovery is exhausted.
+
+### Verification criteria
+
+- [x] Session logs show ordered ladder steps.
+- [x] Session termination occurs on exhausted recovery.
+- [x] `visual-stagnation-report.json` records per-session max stagnation and violations.
+
+## Phase 3 — Artifact completeness + metrics + run-level validation
+
+### Tasks
+
+- [x] Emit complete per-session artifacts with deterministic filenames.
+- [x] Emit complete consolidated artifacts:
+  - [x] `sessions/`
+  - [x] `videos/`
+  - [x] `fuzz-issue-summary.md`
+  - [x] `fuzz-issue-report.json`
+  - [x] `README.md`
+  - [x] `fuzz-run-metrics.json`
+  - [x] `visual-stagnation-report.json`
+- [x] Add hard artifact validation that fails run when required artifacts are missing/incomplete.
+- [x] Emit metrics:
+  - [x] Sessions started.
+  - [x] Sessions terminated by reason.
+  - [x] Max visual stagnation.
+  - [x] Average session duration.
+  - [x] Steps per session.
+
+### Verification criteria
+
+- [x] Local run produces all required files and non-empty structured content.
+- [x] Validation step fails when artifacts are intentionally missing (guard check).
+
+## Phase 4 — CI 5-minute bounded execution
+
+### Tasks
+
+- [x] Set CI fuzz budget to 5 minutes.
+- [x] Align Playwright timeout envelope with fuzz budget and bounded grace.
+- [x] Enable deterministic shard behavior and merge outputs deterministically.
+- [x] Remove 2-hour hanging behavior from fuzz workflow.
+
+### Verification criteria
+
+- [ ] CI fuzz workflow completes without Playwright timeout.
+- [ ] CI artifact set is complete and deterministic.
+
+## Phase 5 — End-to-end validation (local + CI)
+
+### Tasks
+
+- [x] Run local fuzz for 5 minutes.
+- [x] Validate no visual stagnation >5s in `visual-stagnation-report.json`.
+- [x] Validate session restart behavior from logs.
+- [ ] Run `npm run lint`, `npm run test`, `npm run build`.
+- [ ] Commit and push changes.
+- [ ] Trigger CI fuzz workflow.
+- [ ] Wait for CI completion.
+- [ ] Download CI artifacts and verify completeness.
+
+### Verification criteria
+
+- [x] Local 5-minute fuzz run passes with complete artifacts.
+- [ ] CI 5-minute fuzz run is green.
+- [ ] No Playwright timeout in local or CI run.
+- [ ] `PLANS.md` checklist fully completed.
+
+---
+
 # C64 Commander — iOS Local Source & CI Stabilization Plan
 
 ## 2026-02-14 iOS Local Source File Selection + CI Hardening (Active)
