@@ -14,7 +14,7 @@ Introduce Web as an official peer platform to Android and iOS with:
 
 - Web platform uses Playwright (not Maestro) for browser E2E because Maestro is optimized for native app automation and this repository already has mature Playwright browser flows.
 - Server is implemented in TypeScript (Node runtime) and serves static assets + auth + REST/FTP proxy.
-- Docker image naming convention: `ghcr.io/chrisgleissner/c64commander-web:<version>`.
+- Docker image naming convention: `ghcr.io/chrisgleissner/c64commander:<version>`.
 - Docker architecture matrix is strictly MVP: `linux/amd64,linux/arm64`.
 
 ## Execution Checklist
@@ -87,6 +87,6 @@ Introduce Web as an official peer platform to Android and iOS with:
   - `npm run test`
   - `npm run build:web-platform`
   - `npm run test:web-platform`
-  - `docker build -f web/Dockerfile -t c64commander-web:local .`
+  - `docker build -f web/Dockerfile -t c64commander:local .`
   - Container smoke health check on `http://127.0.0.1:18080/healthz`
 - Remaining planned item intentionally deferred: dedicated Playwright browser E2E suite against the running Docker container (unit/integration and container smoke coverage are in place).

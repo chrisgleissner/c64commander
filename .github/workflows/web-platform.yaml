@@ -12,7 +12,7 @@ permissions:
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/chrisgleissner/c64commander-web
+  IMAGE_NAME: ghcr.io/chrisgleissner/c64commander
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
@@ -45,13 +45,13 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Build Docker image (amd64 smoke)
-        run: docker build -f web/Dockerfile -t c64commander-web:ci .
+        run: docker build -f web/Dockerfile -t c64commander:ci .
 
       - name: Run Docker container smoke test
         run: |
           set -euo pipefail
           mkdir -p .tmp/web-config
-          docker run -d --name c64commander-web-smoke --network host -v "$PWD/.tmp/web-config:/config" c64commander-web:ci
+          docker run -d --name c64commander-smoke --network host -v "$PWD/.tmp/web-config:/config" c64commander:ci
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
               break
@@ -70,7 +70,7 @@ jobs:
 
       - name: Stop smoke container
         if: always()
-        run: docker rm -f c64commander-web-smoke || true
+        run: docker rm -f c64commander-smoke || true
 
   web-docker-publish:
     name: Web | Publish GHCR multi-arch

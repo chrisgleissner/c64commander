@@ -22,9 +22,9 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
   - [🚀 Quick Start](#-quick-start)
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
-    - [Install on Web (Docker)](#install-on-web-docker)
-      - [Docker installation (quick links)](#docker-installation-quick-links)
-      - [Run Web platform](#run-web-platform)
+    - [Install for Web Access](#install-for-web-access)
+      - [Docker installation](#docker-installation)
+      - [Run Docker container](#run-docker-container)
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
@@ -79,11 +79,11 @@ Done.
 
 AltStore automatically refreshes installed apps in the background when your iPhone can reach AltServer on your local network.
 
-### Install on Web (Docker)
+### Install for Web Access
 
 The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server, and that server proxies REST/FTP to C64U (required because C64U does not provide browser-safe CORS headers).
 
-#### Docker installation (quick links)
+#### Docker installation
 
 - Windows (Docker Desktop): https://docs.docker.com/desktop/setup/install/windows-install/
 - macOS (Docker Desktop): https://docs.docker.com/desktop/setup/install/mac-install/
@@ -96,14 +96,14 @@ Supported container architectures (MVP only):
 
 These images also run on Windows/macOS through Docker Desktop virtualization.
 
-#### Run Web platform
+#### Run Docker container
 
 ```bash
 docker run -d \
-  --name c64commander-web \
+  --name c64commander \
   -p 8080:8080 \
   -v ./c64commander-config:/config \
-  ghcr.io/chrisgleissner/c64commander-web:<version>
+  ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
 Then open:
@@ -113,7 +113,7 @@ Then open:
 Raspberry Pi example (64-bit OS):
 
 ```bash
-docker run -d --name c64commander-web -p 8080:8080 -v /home/pi/c64commander-config:/config ghcr.io/chrisgleissner/c64commander-web:<version>
+docker run -d --name c64commander -p 8080:8080 -v /home/pi/c64commander-config:/config ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
 Network password model:
@@ -124,9 +124,9 @@ Network password model:
 Update to a newer version:
 
 ```bash
-docker pull ghcr.io/chrisgleissner/c64commander-web:<version>
-docker rm -f c64commander-web
-docker run -d --name c64commander-web -p 8080:8080 -v ./c64commander-config:/config ghcr.io/chrisgleissner/c64commander-web:<version>
+docker pull ghcr.io/chrisgleissner/c64commander:<version>
+docker rm -f c64commander
+docker run -d --name c64commander -p 8080:8080 -v ./c64commander-config:/config ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
 > [!WARNING]

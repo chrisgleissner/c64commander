@@ -50,8 +50,8 @@
     "android:apk": "cd android && ./gradlew assembleDebug",
     "maestro:gating": "bash scripts/run-maestro-gating.sh",
     "assets:play": "node scripts/generate-play-assets.mjs",
-    "docker:web:build": "docker build -f web/Dockerfile -t c64commander-web:local .",
-    "docker:web:run": "docker run --rm -p 8080:8080 -v $(pwd)/.tmp/web-config:/config c64commander-web:local"
+    "docker:web:build": "docker build -f web/Dockerfile -t c64commander:local .",
+    "docker:web:run": "docker run --rm -p 8080:8080 -v $(pwd)/.tmp/web-config:/config c64commander:local"
   },
   "dependencies": {
     "7z-wasm": "^1.2.0",
