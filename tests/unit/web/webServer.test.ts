@@ -187,6 +187,7 @@ describe('web server platform runtime', () => {
             WEB_DIST_DIR: distDir,
             WEB_CONFIG_DIR: configDir,
             C64U_NETWORK_PASSWORD: 'secret',
+            WEB_ALLOW_REMOTE_FTP_HOSTS: '1',
         });
 
         const cookie = await loginAndGetCookie(server.baseUrl, 'secret');
@@ -227,4 +228,5 @@ describe('web server platform runtime', () => {
 
         await server.close();
     });
+
 });

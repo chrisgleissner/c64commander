@@ -48,13 +48,15 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
 
 ## ✨ Why C64 Commander?
 
-Because it gives you easy control of your C64 Ultimate from your phone.
+Because it gives you full control of your C64 Ultimate from any modern device:
 
+- **Cross-platform access**: Native Android and iOS apps, plus a web interface served via Docker on macOS, Windows, or Linux.
 - **Quick dashboard**: Access common actions and advanced controls in a clean mobile interface.
 - **Deep configuration**: Browse and edit the full C64 Ultimate configuration from one place.
 - **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or the High Voltage SID Collection ([HVSC](https://hvsc.c64.org)). Quickly find what you want with powerful search and filtering.
 - **Manage disks efficiently**: Mount, unmount, and handle drive workflows with fewer steps.
 - **Troubleshoot with confidence**: Inspect logs, traces, and activity when behavior needs a closer look.
+
 
 ## 🚀 Quick Start
 
@@ -144,6 +146,83 @@ docker run -d --name c64commander -p 8080:8080 -v ./c64commander-config:/config 
 
 > [!WARNING]
 > Web mode is intended for trusted LAN use. Do not expose it directly to the public internet.
+
+Additional web security defaults:
+
+- Session cookies are `HttpOnly` + `SameSite=Lax`.
+- `Secure` cookies are enabled automatically when `NODE_ENV=production` (override with `WEB_COOKIE_SECURE=true|false`).
+- FTP host override is disabled by default to prevent open-proxy behavior. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted/dev setups.
+
+#### Advanced: Linux auto-update service
+
+For Linux hosts (including Raspberry Pi), an updater script is available at [scripts/web-auto-update.sh](scripts/web-auto-update.sh).
+
+Recommended mode (`tags`) tracks new GitHub release tags and restarts the container only when a new release appears.
+
+Development mode (`ref`) tracks any branch/ref commit and rebuilds from source on update.
+
+> [!IMPORTANT]
+> Use `--track tags` for normal deployments. Use `--track ref` only when developing/testing branch changes.
+
+Prepare once:
+
+```bash
+chmod +x scripts/web-auto-update.sh
+mkdir -p ./c64commander-config
+```
+
+Run in release-tag mode (recommended):
+
+```bash
+./scripts/web-auto-update.sh \
+  --track tags \
+  --interval 300 \
+  --container-name c64commander \
+  --config-dir ./c64commander-config
+```
+
+Run in branch/ref mode (development):
+
+```bash
+./scripts/web-auto-update.sh \
+  --track ref \
+  --ref feat/web \
+  --interval 120 \
+  --container-name c64commander-dev \
+  --config-dir ./c64commander-config-dev
+```
+
+Run as a systemd service (Linux):
+
+```bash
+sudo tee /etc/systemd/system/c64commander-updater.service >/dev/null <<'EOF'
+[Unit]
+Description=C64 Commander Web Auto Updater
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/c64commander
+ExecStart=/opt/c64commander/scripts/web-auto-update.sh --track tags --interval 300 --container-name c64commander --config-dir /opt/c64commander/config
+Restart=always
+RestartSec=10
+User=pi
+Group=pi
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now c64commander-updater.service
+```
+
+Optional GitHub API token (helps with rate limits):
+
+```bash
+export GITHUB_TOKEN=<your-token>
+```
 
 
 ### First Connection Checklist
@@ -283,6 +362,7 @@ If you want to build, test, or contribute:
 
 - Developer guide: [doc/developer.md](doc/developer.md)
 - Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
+- Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
 
 ## 🙏 Acknowledgments
 

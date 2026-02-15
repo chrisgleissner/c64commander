@@ -1,6 +1,7 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { promises as fs } from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { URL } from 'node:url';
 import { PassThrough } from 'node:stream';
@@ -18,8 +19,18 @@ type SessionRecord = {
     expiresAtMs: number;
 };
 
+type LoginAttemptRecord = {
+    failures: number;
+    firstFailureAtMs: number;
+    blockedUntilMs: number;
+};
+
 const COOKIE_NAME = 'c64_session';
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const SESSION_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
+const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_FAILURE_BLOCK_MS = 5 * 60 * 1000;
+const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
 const PORT = Number(process.env.PORT ?? '8080');
 const HOST = process.env.HOST ?? '0.0.0.0';
 const configDir = process.env.WEB_CONFIG_DIR ?? '/config';
@@ -42,6 +53,49 @@ const hopByHopHeaders = new Set([
 ]);
 
 const sessions = new Map<string, SessionRecord>();
+const loginAttempts = new Map<string, LoginAttemptRecord>();
+
+const isSecureCookieEnabled = (() => {
+    const explicit = (process.env.WEB_COOKIE_SECURE ?? '').trim().toLowerCase();
+    if (explicit === 'true' || explicit === '1') return true;
+    if (explicit === 'false' || explicit === '0') return false;
+    return process.env.NODE_ENV === 'production';
+})();
+
+const allowRemoteFtpHosts = (() => {
+    const value = (process.env.WEB_ALLOW_REMOTE_FTP_HOSTS ?? '').trim().toLowerCase();
+    return value === 'true' || value === '1';
+})();
+
+const log = (level: 'info' | 'warn' | 'error', message: string, details?: Record<string, unknown>) => {
+    const payload = {
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        ...(details ?? {}),
+    };
+    const line = JSON.stringify(payload);
+    if (level === 'error') {
+        console.error(line);
+        return;
+    }
+    if (level === 'warn') {
+        console.warn(line);
+        return;
+    }
+    console.log(line);
+};
+
+const errorDetails = (error: unknown) => {
+    if (error instanceof Error) {
+        return {
+            errorName: error.name,
+            errorMessage: error.message,
+            ...(process.env.NODE_ENV === 'production' ? {} : { errorStack: error.stack }),
+        };
+    }
+    return { errorMessage: String(error) };
+};
 
 const normalizePassword = (value: unknown): string | null => {
     if (typeof value !== 'string') return null;
@@ -54,8 +108,67 @@ const sanitizeHost = (value: unknown): string | null => {
     const trimmed = value.trim();
     if (!trimmed) return null;
     if (/^https?:\/\//i.test(trimmed)) return null;
-    if (/[\s/]/.test(trimmed)) return null;
-    return trimmed;
+    if (/[\s/\\?#@]/.test(trimmed)) return null;
+
+    if (net.isIP(trimmed)) return trimmed;
+
+    const isValidHostname = (hostname: string) => {
+        if (hostname.length > 253) return false;
+        const labels = hostname.split('.');
+        return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
+    };
+
+    const maybeHostPort = /^([^:]+):(\d{1,5})$/.exec(trimmed);
+    if (maybeHostPort) {
+        const hostPart = maybeHostPort[1];
+        const port = Number(maybeHostPort[2]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+        if (!net.isIP(hostPart) && !isValidHostname(hostPart)) return null;
+        return `${hostPart}:${port}`;
+    }
+
+    if (isValidHostname(trimmed)) return trimmed;
+    return null;
+};
+
+const getClientIp = (req: IncomingMessage) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.trim()) {
+        return forwarded.split(',')[0].trim();
+    }
+    return req.socket.remoteAddress ?? 'unknown';
+};
+
+const isLoginBlocked = (clientIp: string) => {
+    const attempt = loginAttempts.get(clientIp);
+    if (!attempt) return false;
+    if (attempt.blockedUntilMs > Date.now()) return true;
+    if (Date.now() - attempt.firstFailureAtMs > LOGIN_FAILURE_WINDOW_MS) {
+        loginAttempts.delete(clientIp);
+    }
+    return false;
+};
+
+const recordFailedLogin = (clientIp: string) => {
+    const now = Date.now();
+    const existing = loginAttempts.get(clientIp);
+    if (!existing || now - existing.firstFailureAtMs > LOGIN_FAILURE_WINDOW_MS) {
+        loginAttempts.set(clientIp, {
+            failures: 1,
+            firstFailureAtMs: now,
+            blockedUntilMs: 0,
+        });
+        return;
+    }
+    existing.failures += 1;
+    if (existing.failures >= LOGIN_FAILURE_MAX_ATTEMPTS) {
+        existing.blockedUntilMs = now + LOGIN_FAILURE_BLOCK_MS;
+    }
+    loginAttempts.set(clientIp, existing);
+};
+
+const clearFailedLogins = (clientIp: string) => {
+    loginAttempts.delete(clientIp);
 };
 
 const parseCookies = (headerValue: string | undefined): Record<string, string> => {
@@ -195,7 +308,7 @@ const loadConfig = async (): Promise<AppConfig> => {
     } catch (error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code !== 'ENOENT') {
-            console.error('Failed to load web config', err);
+            log('error', 'Failed to load web config', errorDetails(error));
             throw error;
         }
         await saveConfig(defaultConfig);
@@ -230,7 +343,8 @@ const issueSessionCookie = (res: ServerResponse) => {
         expiresAtMs: createdAtMs + SESSION_TTL_MS,
     };
     sessions.set(token, session);
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
+    const securePart = isSecureCookieEnabled ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}${securePart}`);
 };
 
 const clearSessionCookie = (req: IncomingMessage, res: ServerResponse) => {
@@ -238,7 +352,8 @@ const clearSessionCookie = (req: IncomingMessage, res: ServerResponse) => {
     if (token) {
         sessions.delete(token);
     }
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0`);
+    const securePart = isSecureCookieEnabled ? '; Secure' : '';
+    res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${securePart}`);
 };
 
 const cleanupExpiredSessions = () => {
@@ -275,7 +390,11 @@ const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config
             body: body.length > 0 ? body : undefined,
         });
     } catch (error) {
-        console.error('REST proxy upstream error', { error });
+        log('error', 'REST proxy upstream error', {
+            targetHost,
+            path: requestUrl.pathname,
+            ...errorDetails(error),
+        });
         writeJson(res, 502, { error: 'REST proxy upstream request failed' });
         return;
     }
@@ -302,7 +421,12 @@ const collectStream = async (stream: PassThrough): Promise<Buffer> => {
 
 const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: AppConfig) => {
     const payload = await readJsonBody<{ host?: string; port?: number; username?: string; password?: string; path?: string }>(req);
-    const host = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
+    const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
+    if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
+        writeJson(res, 403, { error: 'FTP host override is disabled' });
+        return;
+    }
+    const host = requestedHost;
     const ftp = new FtpClient();
     ftp.ftp.verbose = false;
     try {
@@ -324,13 +448,13 @@ const handleFtpList = async (req: IncomingMessage, res: ServerResponse, config: 
             })),
         });
     } catch (error) {
-        console.error('FTP list failed', { error });
-        writeJson(res, 502, { error: `FTP list failed: ${(error as Error).message}` });
+        log('error', 'FTP list failed', { host, path: payload.path ?? '/', ...errorDetails(error) });
+        writeJson(res, 502, { error: 'FTP list failed' });
     } finally {
         try {
             ftp.close();
         } catch (error) {
-            console.warn('FTP close failed after list', { error });
+            log('warn', 'FTP close failed after list', errorDetails(error));
         }
     }
 };
@@ -341,7 +465,12 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
         writeJson(res, 400, { error: 'Missing FTP path' });
         return;
     }
-    const host = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
+    const requestedHost = sanitizeHost(payload.host) ?? config.defaultDeviceHost;
+    if (!allowRemoteFtpHosts && requestedHost !== config.defaultDeviceHost) {
+        writeJson(res, 403, { error: 'FTP host override is disabled' });
+        return;
+    }
+    const host = requestedHost;
     const ftp = new FtpClient();
     ftp.ftp.verbose = false;
     const stream = new PassThrough();
@@ -362,21 +491,37 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
             sizeBytes: data.byteLength,
         });
     } catch (error) {
-        console.error('FTP read failed', { error });
-        writeJson(res, 502, { error: `FTP read failed: ${(error as Error).message}` });
+        log('error', 'FTP read failed', { host, path: payload.path, ...errorDetails(error) });
+        writeJson(res, 502, { error: 'FTP read failed' });
     } finally {
         try {
             ftp.close();
         } catch (error) {
-            console.warn('FTP close failed after read', { error });
+            log('warn', 'FTP close failed after read', errorDetails(error));
         }
     }
 };
 
 const serveStatic = async (res: ServerResponse, requestPath: string) => {
-    const normalized = requestPath === '/' ? '/index.html' : requestPath;
-    const safePath = path.normalize(normalized).replace(/^\.\.(\/|\\|$)/, '');
-    const fullPath = path.join(distDir, safePath);
+    let decodedPath = requestPath;
+    try {
+        decodedPath = decodeURIComponent(requestPath);
+    } catch {
+        writeJson(res, 400, { error: 'Invalid path encoding' });
+        return;
+    }
+
+    const normalized = decodedPath === '/' ? 'index.html' : decodedPath.replace(/^\/+/, '');
+    const safePath = path.normalize(normalized);
+    if (safePath.startsWith('..') || path.isAbsolute(safePath)) {
+        writeJson(res, 403, { error: 'Invalid path' });
+        return;
+    }
+    const fullPath = path.resolve(distDir, safePath);
+    if (fullPath !== distDir && !fullPath.startsWith(`${distDir}${path.sep}`)) {
+        writeJson(res, 403, { error: 'Invalid path' });
+        return;
+    }
 
     try {
         const stat = await fs.stat(fullPath);
@@ -392,7 +537,11 @@ const serveStatic = async (res: ServerResponse, requestPath: string) => {
     } catch (error) {
         const err = error as NodeJS.ErrnoException;
         if (err.code !== 'ENOENT') {
-            console.error('Static file serve failed', { error });
+            log('error', 'Static file serve failed', {
+                requestPath,
+                errorCode: err.code,
+                ...errorDetails(error),
+            });
             writeJson(res, 500, { error: 'Failed to serve static asset' });
             return;
         }
@@ -402,16 +551,19 @@ const serveStatic = async (res: ServerResponse, requestPath: string) => {
         const indexHtml = await fs.readFile(path.join(distDir, 'index.html'), 'utf8');
         writeText(res, 200, indexHtml, 'text/html; charset=utf-8');
     } catch (error) {
-        console.error('Missing index.html in dist output', { error });
+        log('error', 'Missing index.html in dist output', errorDetails(error));
         writeJson(res, 500, { error: 'Web bundle missing. Build dist before starting server.' });
     }
 };
 
 export const startWebServer = async () => {
     let config = await loadConfig();
+    cleanupExpiredSessions();
+    const cleanupTimer = setInterval(() => {
+        cleanupExpiredSessions();
+    }, SESSION_CLEANUP_INTERVAL_MS);
 
     const server = http.createServer(async (req, res) => {
-        cleanupExpiredSessions();
         try {
             const method = (req.method ?? 'GET').toUpperCase();
             const requestUrl = new URL(req.url ?? '/', 'http://localhost');
@@ -435,13 +587,20 @@ export const startWebServer = async () => {
                     writeJson(res, 405, { error: 'Method not allowed' });
                     return;
                 }
+                const clientIp = getClientIp(req);
+                if (isLoginBlocked(clientIp)) {
+                    writeJson(res, 429, { error: 'Too many failed login attempts. Try again later.' });
+                    return;
+                }
                 const payload = await readJsonBody<{ password?: string }>(req);
                 const candidate = payload.password ?? '';
                 const expected = config.networkPassword;
                 if (!expected || !safeCompare(candidate, expected)) {
+                    recordFailedLogin(clientIp);
                     writeJson(res, 401, { error: 'Invalid password' });
                     return;
                 }
+                clearFailedLogins(clientIp);
                 issueSessionCookie(res);
                 writeJson(res, 200, { ok: true });
                 return;
@@ -524,9 +683,13 @@ export const startWebServer = async () => {
 
             await serveStatic(res, pathname);
         } catch (error) {
-            console.error('Unhandled web server error', error);
+            log('error', 'Unhandled web server error', errorDetails(error));
             writeJson(res, 500, { error: 'Internal server error' });
         }
+    });
+
+    server.once('close', () => {
+        clearInterval(cleanupTimer);
     });
 
     await new Promise<void>((resolve, reject) => {
@@ -534,7 +697,12 @@ export const startWebServer = async () => {
         server.listen(PORT, HOST, () => resolve());
     });
 
-    console.log(`C64 Commander web server running on http://${HOST}:${PORT}`);
+    log('info', 'C64 Commander web server running', {
+        host: HOST,
+        port: PORT,
+        secureCookies: isSecureCookieEnabled,
+        allowRemoteFtpHosts,
+    });
     return server;
 };
 
@@ -546,7 +714,7 @@ const isDirectRun = (() => {
 
 if (isDirectRun) {
     void startWebServer().catch((error) => {
-        console.error('Failed to start web server', error);
+        log('error', 'Failed to start web server', errorDetails(error));
         process.exit(1);
     });
 }

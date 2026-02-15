@@ -4,7 +4,16 @@ FROM node:24-trixie-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
-COPY . .
+COPY index.html ./
+COPY base.css ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY tailwind.config.ts ./
+COPY postcss.config.js ./
+COPY components.json ./
+COPY src ./src
+COPY public ./public
+COPY web ./web
 ENV VITE_WEB_PLATFORM=1
 RUN npm run build && npm run build:web-server
 

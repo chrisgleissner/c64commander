@@ -17,8 +17,12 @@ env:
 
 jobs:
   web-build-and-test:
-    name: Web | Build + tests
+    name: Web | Build + tests (${{ matrix.platform }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
 
     steps:
       - name: Checkout
@@ -42,12 +46,27 @@ jobs:
         run: npm run test:web-platform
 
       - name: Install Playwright browsers
+        if: matrix.platform == 'linux/amd64'
         run: npx playwright install --with-deps chromium
 
-      - name: Build Docker image (amd64 smoke)
-        run: docker build -f web/Dockerfile -t c64commander:ci .
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (${{ matrix.platform }})
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform "${{ matrix.platform }}" \
+            --load \
+            -f web/Dockerfile \
+            -t c64commander:ci \
+            .
 
       - name: Run Docker container smoke test
+        if: matrix.platform == 'linux/amd64'
         run: |
           set -euo pipefail
           mkdir -p .tmp/web-config
@@ -69,6 +88,7 @@ jobs:
           curl -fsS http://127.0.0.1:18080/healthz | tee /tmp/web-health.json
 
       - name: Run web-platform Playwright checks
+        if: matrix.platform == 'linux/amd64'
         env:
           PLAYWRIGHT_REUSE_SERVER: "1"
           PLAYWRIGHT_PORT: "18080"
@@ -77,7 +97,7 @@ jobs:
         run: npx playwright test playwright/webPlatformAuth.spec.ts --project=web
 
       - name: Stop smoke container
-        if: always()
+        if: always() && matrix.platform == 'linux/amd64'
         run: docker rm -f c64commander-smoke || true
 
   web-docker-publish:
@@ -99,7 +119,7 @@ jobs:
       - name: Verify tag/version consistency
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${GITHUB_REF_NAME#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
           if [[ "$TAG" != "$PKG_VERSION" ]]; then
             echo "Tag/version mismatch: tag=$TAG package.json=$PKG_VERSION"
