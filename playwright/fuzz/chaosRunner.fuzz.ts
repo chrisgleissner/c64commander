@@ -20,10 +20,11 @@ const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
 const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
 test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
-const ACTION_TIMEOUT_MS = 30_000; // Hard timeout for any single action
+const ACTION_TIMEOUT_MS = 10_000; // Hard timeout for any single action
 const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // Maximum session duration (5 minutes)
 const HEARTBEAT_INTERVAL_MS = 10_000; // Log heartbeat every 10 seconds during long operations
 const VISUAL_SAMPLE_INTERVAL_MS = 1000;
+const VISUAL_SAMPLE_TIMEOUT_MS = 3000;
 const MAX_VISUAL_STAGNATION_MS = 5000;
 const VISUAL_DELTA_THRESHOLD = 0.003;
 
@@ -554,6 +555,10 @@ test.describe('Fuzz Test', () => {
       ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
       : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
     const actionTimeoutMs = Math.max(5000, toNumber(process.env.FUZZ_ACTION_TIMEOUT_MS) ?? ACTION_TIMEOUT_MS);
+    const visualSampleTimeoutMs = Math.max(
+      1000,
+      Math.min(actionTimeoutMs, toNumber(process.env.FUZZ_VISUAL_SAMPLE_TIMEOUT_MS) ?? VISUAL_SAMPLE_TIMEOUT_MS),
+    );
     const defaultSessionTimeoutMs = infraMode
       ? 30_000
       : Math.max(60_000, Math.min(120_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) / 2)));
@@ -596,7 +601,8 @@ test.describe('Fuzz Test', () => {
 
     const rng = new SeededRng(seed);
     const server = await createMockC64Server();
-    const browser = await chromium.launch({ headless: true });
+    let browser = await chromium.launch({ headless: true });
+    let browserNeedsRestart = false;
     const deviceProfile = getDeviceProfile(platform);
 
     const issueGroups = new Map<string, IssueGroup>();
@@ -675,15 +681,37 @@ test.describe('Fuzz Test', () => {
       let lastVisualChangeAt = Date.now();
       let maxVisualStagnationMs = 0;
 
-      const context = await browser.newContext({
-        ...deviceProfile,
-        baseURL: baseUrl,
-        recordVideo: {
-          dir: videosDir,
-          size: deviceProfile.viewport ?? { width: 360, height: 740 },
-        },
-      });
-      const page = await context.newPage();
+      if (browserNeedsRestart) {
+        await withTimeout(
+          () => browser.close(),
+          Math.max(10_000, actionTimeoutMs * 2),
+          'restart browser after failed session cleanup',
+        ).catch(() => { });
+        browser = await withTimeout(
+          () => chromium.launch({ headless: true }),
+          Math.max(10_000, actionTimeoutMs * 2),
+          'launch browser for next session',
+        );
+        browserNeedsRestart = false;
+      }
+
+      const context = await withTimeout(
+        () => browser.newContext({
+          ...deviceProfile,
+          baseURL: baseUrl,
+          recordVideo: {
+            dir: videosDir,
+            size: deviceProfile.viewport ?? { width: 360, height: 740 },
+          },
+        }),
+        Math.max(10_000, actionTimeoutMs * 2),
+        'create browser context',
+      );
+      const page = await withTimeout(
+        () => context.newPage(),
+        Math.max(5000, actionTimeoutMs),
+        'create session page',
+      );
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(12000);
       let networkOffline = false;
@@ -855,11 +883,16 @@ test.describe('Fuzz Test', () => {
 
       const readAppLogs = async (): Promise<AppLogEntry[]> => {
         try {
-          const raw = await page.evaluate(() => localStorage.getItem('c64u_app_logs'));
+          const raw = await withTimeout(
+            () => page.evaluate(() => localStorage.getItem('c64u_app_logs')),
+            Math.max(1000, Math.min(3000, actionTimeoutMs)),
+            'read app logs',
+          );
           if (!raw) return [] as AppLogEntry[];
           const parsed = JSON.parse(raw) as AppLogEntry[];
           return Array.isArray(parsed) ? parsed : [];
-        } catch {
+        } catch (error) {
+          logInteraction(`s=${totalSteps}\ta=logs\terror=${(error as Error)?.message || 'read-failed'}`);
           return [] as AppLogEntry[];
         }
       };
@@ -922,8 +955,8 @@ test.describe('Fuzz Test', () => {
         let screenshotBuffer: Buffer;
         try {
           screenshotBuffer = await withTimeout(
-            () => page.screenshot({ type: 'png', animations: 'disabled', timeout: actionTimeoutMs }),
-            actionTimeoutMs,
+            () => page.screenshot({ type: 'png', animations: 'disabled', timeout: visualSampleTimeoutMs }),
+            visualSampleTimeoutMs,
             'visual sample screenshot',
           );
         } catch (error) {
@@ -994,11 +1027,19 @@ test.describe('Fuzz Test', () => {
         return { log: 'ladder terminate-session', terminal: true };
       };
 
-      await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+      await withTimeout(
+        () => page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }),
+        Math.max(5000, actionTimeoutMs),
+        'session initial navigation',
+      );
 
       let sessionSteps = 0;
       let noProgressCount = 0;
-      let progressSnapshot = await readProgressSnapshot(page);
+      let progressSnapshot = await withTimeout(
+        () => readProgressSnapshot(page),
+        Math.max(1000, Math.min(3000, actionTimeoutMs)),
+        'initial progress snapshot',
+      ).catch(() => ({ screenKey: '', navKey: '', traceKey: '', stateKey: '' }));
       let lastProgressAt = Date.now();
       const sessionStartTime = Date.now();
       let lastHeartbeatAt = sessionStartTime;
@@ -1619,6 +1660,16 @@ test.describe('Fuzz Test', () => {
 
         await sampleVisualProgress();
 
+        if (Date.now() - sessionStartTime >= sessionTimeoutMs) {
+          logInteraction(`s=${totalSteps}\ta=session\ttimeout ${Math.round((Date.now() - sessionStartTime) / 1000)}s`);
+          recordStuckSessionIssue(
+            'session-timeout',
+            `Session exceeded maximum duration of ${sessionTimeoutMs / 1000}s after ${sessionSteps} steps.`,
+          );
+          terminationReason = 'session-timeout';
+          break;
+        }
+
         // Session-level timeout check - prevent sessions from running forever
         const sessionElapsed = Date.now() - sessionStartTime;
         if (sessionElapsed >= sessionTimeoutMs) {
@@ -1728,7 +1779,11 @@ test.describe('Fuzz Test', () => {
           await checkAppLogsForIssues();
           if (issue) break;
           await sampleVisualProgress();
-          const nextSnapshot = await readProgressSnapshot(page);
+          const nextSnapshot = await withTimeout(
+            () => readProgressSnapshot(page),
+            Math.max(1000, Math.min(3000, actionTimeoutMs)),
+            'next progress snapshot',
+          ).catch(() => progressSnapshot);
           const delta = diffProgress(progressSnapshot, nextSnapshot);
           const anyProgress = hasMeaningfulProgress(delta);
           const interactionProgress = delta.screenChanged || delta.navigationChanged || delta.stateChanged;
@@ -1808,13 +1863,17 @@ test.describe('Fuzz Test', () => {
       await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
 
       const video = page.video();
-      await withTimeout(
+      const contextClosed = await withTimeout(
         () => context.close(),
         Math.max(5000, actionTimeoutMs),
         'close browser context',
-      ).catch((error) => {
+      ).then(() => true).catch((error) => {
         logInteraction(`s=${totalSteps}\ta=context\terror=${(error as Error)?.message || 'close-failed'}`);
+        return false;
       });
+      if (!contextClosed) {
+        browserNeedsRestart = true;
+      }
       let savedVideo: string | undefined;
       if (video) {
         try {
@@ -1913,7 +1972,22 @@ test.describe('Fuzz Test', () => {
     };
 
     while (Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
-      await runSession();
+      const remainingRunMs = runDeadline - Date.now();
+      const minimumSessionWindowMs = Math.max(15_000, Math.min(sessionTimeoutMs, 60_000));
+      if (remainingRunMs < minimumSessionWindowMs) {
+        break;
+      }
+      const sessionEnvelopeTimeoutMs = Math.max(sessionTimeoutMs + actionTimeoutMs * 4, 45_000);
+      try {
+        await withTimeout(
+          () => runSession(),
+          sessionEnvelopeTimeoutMs,
+          `session envelope (${sessionEnvelopeTimeoutMs}ms)`,
+        );
+      } catch (error) {
+        browserNeedsRestart = true;
+        console.error('Fuzz session envelope failed; restarting browser for next session:', error);
+      }
       if (maxSteps && totalSteps >= maxSteps) break;
     }
 
