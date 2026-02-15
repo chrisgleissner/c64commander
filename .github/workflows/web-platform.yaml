@@ -46,7 +46,6 @@ jobs:
         run: npm run test:web-platform
 
       - name: Install Playwright browsers
-        if: matrix.platform == 'linux/amd64'
         run: npx playwright install --with-deps chromium
 
       - name: Setup QEMU
@@ -66,7 +65,6 @@ jobs:
             .
 
       - name: Run Docker container smoke test
-        if: matrix.platform == 'linux/amd64'
         run: |
           set -euo pipefail
           mkdir -p .tmp/web-config
@@ -88,7 +86,6 @@ jobs:
           curl -fsS http://127.0.0.1:18080/healthz | tee /tmp/web-health.json
 
       - name: Run web-platform Playwright checks
-        if: matrix.platform == 'linux/amd64'
         env:
           PLAYWRIGHT_REUSE_SERVER: "1"
           PLAYWRIGHT_PORT: "18080"
@@ -97,7 +94,7 @@ jobs:
         run: npx playwright test playwright/webPlatformAuth.spec.ts --project=web
 
       - name: Stop smoke container
-        if: always() && matrix.platform == 'linux/amd64'
+        if: always()
         run: docker rm -f c64commander-smoke || true
 
   web-docker-publish:
