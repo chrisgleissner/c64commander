@@ -25,12 +25,23 @@ type LoginAttemptRecord = {
     blockedUntilMs: number;
 };
 
+type ServerLogLevel = 'info' | 'warn' | 'error';
+
+type ServerLogEntry = {
+    id: string;
+    timestamp: string;
+    level: ServerLogLevel;
+    message: string;
+    details?: Record<string, unknown>;
+};
+
 const COOKIE_NAME = 'c64_session';
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const SESSION_CLEANUP_INTERVAL_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_WINDOW_MS = 10 * 60 * 1000;
 const LOGIN_FAILURE_BLOCK_MS = 5 * 60 * 1000;
 const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
+const MAX_SERVER_LOGS = 500;
 const PORT = Number(process.env.PORT ?? '8064');
 const HOST = process.env.HOST ?? '0.0.0.0';
 const configDir = process.env.WEB_CONFIG_DIR ?? '/config';
@@ -54,6 +65,7 @@ const hopByHopHeaders = new Set([
 
 const sessions = new Map<string, SessionRecord>();
 const loginAttempts = new Map<string, LoginAttemptRecord>();
+const serverLogs: ServerLogEntry[] = [];
 
 const isSecureCookieEnabled = (() => {
     const explicit = (process.env.WEB_COOKIE_SECURE ?? '').trim().toLowerCase();
@@ -67,13 +79,28 @@ const allowRemoteFtpHosts = (() => {
     return value === 'true' || value === '1';
 })();
 
-const log = (level: 'info' | 'warn' | 'error', message: string, details?: Record<string, unknown>) => {
+const appendServerLog = (entry: ServerLogEntry) => {
+    serverLogs.unshift(entry);
+    if (serverLogs.length > MAX_SERVER_LOGS) {
+        serverLogs.length = MAX_SERVER_LOGS;
+    }
+};
+
+const log = (level: ServerLogLevel, message: string, details?: Record<string, unknown>) => {
+    const timestamp = new Date().toISOString();
     const payload = {
-        timestamp: new Date().toISOString(),
+        timestamp,
         level,
         message,
         ...(details ?? {}),
     };
+    appendServerLog({
+        id: randomBytes(12).toString('hex'),
+        timestamp,
+        level,
+        message,
+        details,
+    });
     const line = JSON.stringify(payload);
     if (level === 'error') {
         console.error(line);
@@ -118,11 +145,35 @@ const sanitizeHost = (value: unknown): string | null => {
         return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
     };
 
-    const maybeHostPort = /^([^:]+):(\d{1,5})$/.exec(trimmed);
-    if (maybeHostPort) {
-        const hostPart = maybeHostPort[1];
-        const port = Number(maybeHostPort[2]);
+    const parsePort = (portValue: string) => {
+        const port = Number(portValue);
         if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+        return port;
+    };
+
+    if (trimmed.startsWith('[')) {
+        const closingBracketIndex = trimmed.indexOf(']');
+        if (closingBracketIndex <= 1) return null;
+        const hostPart = trimmed.slice(1, closingBracketIndex);
+        if (net.isIP(hostPart) !== 6) return null;
+        const remainder = trimmed.slice(closingBracketIndex + 1);
+        if (!remainder) return `[${hostPart}]`;
+        const portMatch = /^:(\d{1,5})$/.exec(remainder);
+        if (!portMatch) return null;
+        const port = parsePort(portMatch[1]);
+        if (port === null) return null;
+        return `[${hostPart}]:${port}`;
+    }
+
+    if (trimmed.includes(':')) {
+        if (trimmed.indexOf(':') !== trimmed.lastIndexOf(':')) {
+            return null;
+        }
+        const maybeHostPort = /^([^:]+):(\d{1,5})$/.exec(trimmed);
+        if (!maybeHostPort) return null;
+        const hostPart = maybeHostPort[1];
+        const port = parsePort(maybeHostPort[2]);
+        if (port === null) return null;
         if (!net.isIP(hostPart) && !isValidHostname(hostPart)) return null;
         return `${hostPart}:${port}`;
     }
@@ -649,6 +700,15 @@ export const startWebServer = async () => {
                     return;
                 }
                 writeJson(res, 405, { error: 'Method not allowed' });
+                return;
+            }
+
+            if (pathname === '/api/diagnostics/server-logs') {
+                if (method !== 'GET') {
+                    writeJson(res, 405, { error: 'Method not allowed' });
+                    return;
+                }
+                writeJson(res, 200, { logs: serverLogs });
                 return;
             }
 

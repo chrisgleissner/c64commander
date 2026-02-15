@@ -26,6 +26,7 @@ const MAX_STACK_CHARS = 3000;
 
 const LOG_KEY = 'c64u_app_logs';
 const MAX_LOGS = 500;
+let externalLogs: LogEntry[] = [];
 
 const buildId = () =>
   (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()) ||
@@ -92,10 +93,29 @@ export const buildErrorLogDetails = (error: Error, details: Record<string, unkno
   errorStack: trimStack(error.stack),
 });
 
-export const getLogs = (): LogEntry[] => readLogs();
+export const setExternalLogs = (logs: LogEntry[]) => {
+  if (typeof window === 'undefined') return;
+  externalLogs = logs;
+  window.dispatchEvent(new CustomEvent('c64u-logs-updated'));
+};
+
+const mergeLogs = () => {
+  const merged = [...externalLogs, ...readLogs()];
+  const seen = new Set<string>();
+  const deduped: LogEntry[] = [];
+  for (const entry of merged) {
+    if (seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    deduped.push(entry);
+  }
+  deduped.sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+  return deduped;
+};
+
+export const getLogs = (): LogEntry[] => mergeLogs();
 
 export const getProblemLogs = (): LogEntry[] =>
-  readLogs().filter((entry) => entry.level === 'warn' || entry.level === 'error');
+  getLogs().filter((entry) => entry.level === 'warn' || entry.level === 'error');
 
 export const getErrorLogs = (): LogEntry[] => getProblemLogs();
 

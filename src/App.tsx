@@ -42,6 +42,7 @@ import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction
 import { installConsoleDiagnosticsBridge } from '@/lib/diagnostics/logger';
 import { startNativeDiagnosticsBridge, stopNativeDiagnosticsBridge } from '@/lib/native/diagnosticsBridge';
 import { startNativeDebugSnapshotPublisher } from '@/lib/diagnostics/nativeDebugSnapshots';
+import { startWebServerLogBridge } from '@/lib/diagnostics/webServerLogs';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -204,10 +205,12 @@ const DiagnosticsRuntimeBridge = () => {
   useEffect(() => {
     const uninstallConsoleBridge = installConsoleDiagnosticsBridge();
     const stopDebugSnapshotPublisher = startNativeDebugSnapshotPublisher();
+    const stopWebServerLogBridge = startWebServerLogBridge();
     void startNativeDiagnosticsBridge();
     return () => {
       uninstallConsoleBridge();
       stopDebugSnapshotPublisher();
+      stopWebServerLogBridge();
       void stopNativeDiagnosticsBridge();
     };
   }, []);

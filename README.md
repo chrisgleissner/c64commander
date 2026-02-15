@@ -137,6 +137,10 @@ Network password model:
 
 - If no network password is configured, the UI opens directly.
 - If a network password is configured, login is required and the server injects the password into proxied C64U requests.
+- You do **not** need to set a password when starting the Docker container.
+- Preferred flow: start without a password, then set **Settings → Device → Network password** in the app.
+- After saving that setting, the web server persists it in `/config/web-config.json`; on the next access (or after logout), login is required with that same password.
+- Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`), so you do not re-enter the password on every request.
 
 Update to a newer version:
 
@@ -154,6 +158,11 @@ Additional web security defaults:
 - Session cookies are `HttpOnly` + `SameSite=Lax`.
 - `Secure` cookies are enabled automatically when `NODE_ENV=production` (override with `WEB_COOKIE_SECURE=true|false`).
 - FTP host override is disabled by default to prevent open-proxy behavior. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted/dev setups.
+
+Web logging behavior:
+
+- Web server logs are emitted to container stdout/stderr (for Docker logs) and mirrored into the in-app diagnostics logs overlay.
+- `basic-ftp` is a runtime dependency because FTP list/read requests are executed by the web server process.
 
 ### First Connection Checklist
 
