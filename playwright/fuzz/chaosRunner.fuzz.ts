@@ -607,6 +607,7 @@ test.describe('Fuzz Test', () => {
     testInfo.setTimeout(timeoutMs);
     const platform = process.env.FUZZ_PLATFORM || 'android-phone';
     const runMode = infraMode ? 'infra' : (process.env.FUZZ_RUN_MODE || 'local');
+    const isCiRun = runMode === 'ci';
     const runId = process.env.FUZZ_RUN_ID || `${seed}`;
     const shardIndex = toNumber(process.env.FUZZ_SHARD_INDEX) ?? 0;
     const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;
@@ -2107,11 +2108,16 @@ test.describe('Fuzz Test', () => {
       if (remainingRunMs < minimumSessionWindowMs) {
         break;
       }
-      const maxEnvelopeByBudgetMs = Math.max(20_000, remainingRunMs + actionTimeoutMs * 3);
-      const sessionEnvelopeTimeoutMs = Math.min(
-        Math.max(sessionTimeoutMs + actionTimeoutMs * 3, 20_000),
+      const envelopeMultiplier = isCiRun ? 1 : 3;
+      const minimumEnvelopeMs = isCiRun ? 15_000 : 20_000;
+      const maxEnvelopeByBudgetMs = Math.max(minimumEnvelopeMs, remainingRunMs + actionTimeoutMs * envelopeMultiplier);
+      let sessionEnvelopeTimeoutMs = Math.min(
+        Math.max(sessionTimeoutMs + actionTimeoutMs * envelopeMultiplier, minimumEnvelopeMs),
         maxEnvelopeByBudgetMs,
       );
+      if (isCiRun) {
+        sessionEnvelopeTimeoutMs = Math.min(sessionEnvelopeTimeoutMs, 60_000);
+      }
       try {
         await withTimeout(
           () => runSession(),
@@ -2127,6 +2133,13 @@ test.describe('Fuzz Test', () => {
           console.error('Failed to create synthetic timeout session artifacts:', artifactError);
         });
         console.error('Fuzz session envelope failed; restarting browser for next session:', error);
+        if (isCiRun) {
+          const ciTimeoutSessions = sessionManifests.filter((item) => item.terminationReason === 'session-timeout').length;
+          if (ciTimeoutSessions >= 2) {
+            console.error('Stopping CI fuzz loop after repeated session envelope timeouts to preserve bounded execution.');
+            break;
+          }
+        }
       }
       if (maxSteps && totalSteps >= maxSteps) break;
     }

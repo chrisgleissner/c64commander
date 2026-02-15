@@ -93,7 +93,7 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
     env.FUZZ_PROGRESS_TIMEOUT_MS = '4000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(30_000, Math.floor(budgetMs / 4)));
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(30_000, Math.floor(budgetMs / 6)));
   }
   if (!env.FUZZ_MIN_SESSION_STEPS) {
     env.FUZZ_MIN_SESSION_STEPS = '40';
@@ -608,6 +608,20 @@ const mergeReports = async () => {
     for (const sessionJsonPath of sessionJsonFiles) {
       const raw = await fs.readFile(sessionJsonPath, 'utf8');
       const parsed = JSON.parse(raw);
+
+      if (concurrency > 1) {
+        if (parsed?.interactionLog) {
+          parsed.interactionLog = resolveMergedArtifactPath(parsed.interactionLog, sessionJsonPath);
+        }
+        if (parsed?.finalScreenshot) {
+          parsed.finalScreenshot = resolveMergedArtifactPath(parsed.finalScreenshot, sessionJsonPath);
+        }
+        if (parsed?.video) {
+          parsed.video = resolveMergedArtifactPath(parsed.video, sessionJsonPath);
+        }
+        await fs.writeFile(sessionJsonPath, JSON.stringify(parsed, null, 2), 'utf8');
+      }
+
       const interactionLogPath = parsed?.interactionLog;
       const finalScreenshotPath = parsed?.finalScreenshot;
       const videoPathValue = parsed?.video;
@@ -680,7 +694,21 @@ const mergeReports = async () => {
       }
 
       const videoPath = path.join(outputRoot, mergedVideoRelativePath);
-      const videoDurationMs = probeVideoDurationMs(videoPath);
+      let videoDurationMs;
+      try {
+        videoDurationMs = probeVideoDurationMs(videoPath);
+      } catch (error) {
+        if (isSyntheticTimeoutSession) {
+          console.warn('Skipping strict video-duration checks for synthetic timeout session with unreadable video:', error);
+          continue;
+        }
+        frameValidationViolations.push({
+          sessionId,
+          reason: 'video-unreadable',
+          details: (error && error.message) || 'unable to determine video duration',
+        });
+        continue;
+      }
       const minExpectedDurationMs = Math.max(1000, sessionDurationMs - 1500);
       if (!isSyntheticTimeoutSession && videoDurationMs < minExpectedDurationMs) {
         frameValidationViolations.push({
