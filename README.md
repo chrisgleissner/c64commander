@@ -3,15 +3,16 @@
 [![Build](https://github.com/chrisgleissner/c64commander/actions/workflows/android-apk.yaml/badge.svg?branch=main)](https://github.com/chrisgleissner/c64commander/actions/workflows/android-apk.yaml)
 [![codecov](https://codecov.io/gh/chrisgleissner/c64commander/graph/badge.svg?token=hGEe09SZch)](https://codecov.io/gh/chrisgleissner/c64commander)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
+[![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS-blue)](https://github.com/chrisgleissner/c64commander/releases)
 
-Control your Commodore 64 Ultimate from your Android device.
+Control your Commodore 64 Ultimate from your Android or iOS device.
 
 <img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="600"/>
 
 > [!NOTE]
 > This project is under active development. Some features are still being finalised.
 
-C64 Commander is an Android app that connects to a C64 Ultimate on your local network:
+C64 Commander is an Android/iOS app that connects to a C64 Ultimate on your local network:
 
 - **Configuration**: View and adjust the full C64 Ultimate configuration.
 - **Control**: Operate the C64 and its disk drives from a mobile-friendly interface.
@@ -118,14 +119,16 @@ Inspect and export logs, traces, and the effect of user/system actions.
 
 Full screenshot set lives under [doc/img/app/](doc/img/app/).
 
-## Install the APK on your Android phone
+## Getting Started
+
+### Android Installation
 
 1. Download the APK from the latest GitHub release (`c64commander-<version>.apk` for normal installs; use `c64commander-<version>-debug.apk` only if you need a debug build).
 2. Open the downloaded file on your phone (Files app or notification).
 3. If prompted, allow installs from unknown sources for the browser or files app.
 4. Tap Install to finish.
 
-## Install on iPhone via AltStore (iOS)
+### iOS Installation via AltStore
 
 1. Install AltStore on your iPhone and sign in with an Apple ID.
 2. Open GitHub Actions for this repository and download these artifacts from the `iOS CI` workflow:
@@ -135,36 +138,41 @@ Full screenshot set lives under [doc/img/app/](doc/img/app/).
 4. In AltStore, choose “+” and select `c64commander-altstore-unsigned.ipa`.
 5. Launch C64 Commander from the home screen after installation completes.
 
-### iOS troubleshooting (AltStore)
+---
+
+## Troubleshooting
+
+### Connectivity issues
+
+#### Cannot reach device
+
+- Ensure the C64 Ultimate is on the same network as your mobile device and powered on.
+
+- Make sure the IP address / hostname is correct in Settings → Device → Connection.
+
+#### Device becomes unresponsive
+
+C64 Commander includes a configurable device safety system to reduce REST and FTP load. You can find these controls in Settings → Device Safety.
+
+- **Safety mode presets**: Relaxed, Balanced (default), and Conservative.
+- **Advanced controls**: REST and FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit breaker thresholds, and discovery probe interval.
+- **Warning**: Lower safety settings can overwhelm the device. Use relaxed settings only if you understand the risks.
+
+### iOS
 
 - **App expired**: free Apple ID installs must be refreshed in AltStore about every 7 days.
 - **App ID/account limits reached**: remove unused sideloaded apps from your Apple ID account and retry.
 - **Install/signing errors**: retry with a fresh download of both IPA and checksum and confirm they match.
 - **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17` in that order; iOS 17/18 are the baseline support targets.
 
-## Device safety settings
-
-C64 Commander includes a configurable device safety system to reduce REST and FTP load.
-You can find these controls in Settings → Device Safety.
-
-- **Safety mode presets**: Relaxed, Balanced (default), and Conservative.
-- **Advanced controls**: REST and FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit breaker thresholds, and discovery probe interval.
-- **Warning**: Lower safety settings can overwhelm the device. Use relaxed settings only if you understand the risks.
 
 ## Developer documentation
 
 For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).
 
-iOS CI/bootstrap helpers:
-
-- `npm run cap:add:ios` to generate the iOS platform.
-- `npm run cap:sync:ios` to sync web/native assets for iOS.
-- `npm run ios:build:sim` to build the simulator app on macOS.
-- `npm run ios:build:device` to build a device-targeted app on macOS.
-- GitHub iOS simulator CI is defined in [.github/workflows/ios-ci.yaml](.github/workflows/ios-ci.yaml).
-- AltStore packaging lane publishes `c64commander-altstore-unsigned.ipa` plus `.sha256` as CI artifacts.
-- Paid-signing lane is disabled by default and only runs when `IOS_PAID_SIGNING_ENABLED=true`.
-- Paid-signing lane expects `IOS_BUILD_CERTIFICATE_BASE64`, `IOS_P12_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64`, `IOS_TEAM_ID`, and `IOS_SIGNING_IDENTITY` secrets.
-- Rollout stage policy uses `IOS_ROLLOUT_STAGE` (`A`, `B`, `C`) to transition iOS checks from informative to required.
-
 Fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).
+
+
+## License
+
+This project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
