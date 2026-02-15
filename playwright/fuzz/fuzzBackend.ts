@@ -17,7 +17,7 @@ export type BackendFailureContext = {
   now: number;
   serverReachable: boolean;
   networkOffline: boolean;
-  faultMode: 'none' | 'slow' | 'timeout' | 'refused';
+  faultMode: 'none' | 'slow' | 'timeout' | 'refused' | 'auth';
   lastOutageAt: number;
 };
 

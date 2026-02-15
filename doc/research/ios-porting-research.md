@@ -161,7 +161,7 @@ Keep Android workflow unchanged as primary and independent.
 
 1. `ios-prepare` (macOS)
 2. `ios-build-simulator` (macOS)
-3. `ios-maestro-critical` (macOS)
+3. `ios-maestro-tests` (macOS, matrix: 6 parallel jobs)
 4. `ios-screenshots` (macOS)
 5. `ios-package-altstore` (macOS)
 6. `ios-package-paid` (macOS, disabled by default)
@@ -174,7 +174,7 @@ Use `needs` so simulator test and screenshots run only after successful simulato
 flowchart TD
   T[Triggers: PR / main push / manual / tag] --> P[ios-prepare]
   P --> B[ios-build-simulator]
-  B --> M[ios-maestro-critical]
+  B --> M[ios-maestro-tests]
   B --> S[ios-screenshots]
   M --> A[ios-package-altstore]
   A --> D{IOS_PAID_SIGNING_ENABLED}
@@ -221,7 +221,7 @@ Steps:
 - Export path artifact:
   - `ios/build/Build/Products/Debug-iphonesimulator/App.app`
 
-### Job: `ios-maestro-critical`
+### Job: `ios-maestro-tests`
 
 Purpose: run high-value iOS native flows in simulator.
 
@@ -450,7 +450,7 @@ Deliverables:
 
 Done when:
 
-- `ios-maestro-critical` and `ios-screenshots` jobs are stable.
+- `ios-maestro-tests` and `ios-screenshots` jobs are stable.
 
 ## Phase 4: AltStore artifact lane + paid-signing toggle
 

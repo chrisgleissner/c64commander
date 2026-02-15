@@ -1,5 +1,6 @@
 import { addErrorLog, getErrorLogs, getLogs } from '@/lib/logging';
 import { buildActionSummaries } from '@/lib/diagnostics/actionSummaries';
+import { buildNetworkSnapshot } from '@/lib/diagnostics/networkSnapshot';
 import { getTraceEvents } from '@/lib/tracing/traceSession';
 import { getPlatform } from '@/lib/native/platform';
 import { pushNativeDebugSnapshots } from '@/lib/native/diagnosticsBridge';
@@ -9,6 +10,7 @@ type SnapshotPayload = {
     actions: string;
     log: string;
     errorLog: string;
+    network: string;
 };
 
 const sortObjectKeys = (value: unknown): unknown => {
@@ -44,12 +46,14 @@ const buildSnapshotPayload = (): SnapshotPayload => {
     const actionSummaries = buildActionSummaries(traceEvents);
     const logs = sortLogEntries(getLogs());
     const errorLogs = sortLogEntries(getErrorLogs());
+    const networkSnapshot = buildNetworkSnapshot();
 
     return {
         trace: stableStringify(traceEvents),
         actions: stableStringify(actionSummaries),
         log: stableStringify(logs),
         errorLog: stableStringify(errorLogs),
+        network: stableStringify(networkSnapshot),
     };
 };
 

@@ -54,6 +54,13 @@ require_cmd() {
   fi
 }
 
+write_timing() {
+  local key="$1"
+  local value="$2"
+  mkdir -p "$RAW_OUTPUT_DIR"
+  echo "${key}=${value}" >> "$RAW_OUTPUT_DIR/timings.txt"
+}
+
 run_with_timeout() {
   local timeout_secs="$1"
   shift
@@ -167,7 +174,7 @@ ensure_avd() {
 
 start_emulator() {
   log "Starting emulator $AVD_NAME"
-  local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-boot-anim" "-gpu" "swiftshader_indirect" "-noaudio" "-netdelay" "none" "-netspeed" "full")
+  local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-boot-anim" "-no-audio" "-no-metrics" "-gpu" "swiftshader_indirect" "-netdelay" "none" "-netspeed" "full")
   args+=("-port" "$EMULATOR_PORT")
   if [[ "$EMULATOR_HEADLESS" == "1" ]]; then
     args+=("-no-window")
@@ -281,20 +288,29 @@ configure_java_env
 
 if [[ "$SKIP_BUILD" == "0" ]]; then
   log "Building web + Android debug APK"
-  (cd "$ROOT_DIR" && npm run cap:build)
-  (cd "$ROOT_DIR" && npm run android:apk)
+  (
+    cd "$ROOT_DIR"
+    VITE_ENABLE_TEST_PROBES=1 npm run cap:build
+  )
+  (
+    cd "$ROOT_DIR"
+    VITE_ENABLE_TEST_PROBES=1 npm run android:apk
+  )
 fi
 
 mkdir -p "$RAW_OUTPUT_DIR" "$EVIDENCE_DIR"
+export MAESTRO_CLI_NO_ANALYTICS="${MAESTRO_CLI_NO_ANALYTICS:-1}"
 
 EMULATOR_PID=""
 if [[ "$SKIP_EMULATOR_START" == "0" ]]; then
   require_cmd sdkmanager
   require_cmd avdmanager
   require_cmd emulator
+  adb kill-server >/dev/null 2>&1 || true
   adb start-server >/dev/null 2>&1 || true
   stop_existing_emulators
   ensure_avd
+  boot_start_time=$(date +%s)
   EMULATOR_PID=$(start_emulator)
   DEVICE_ID="emulator-$EMULATOR_PORT"
 fi
@@ -337,6 +353,12 @@ if ! wait_for_boot "$DEVICE_ID"; then
   capture_failure_artifacts "$DEVICE_ID"
   exit 1
 fi
+if [[ -n "${boot_start_time:-}" ]]; then
+  boot_end_time=$(date +%s)
+  boot_duration=$((boot_end_time - boot_start_time))
+  log "Emulator boot duration: ${boot_duration}s"
+  write_timing "emulator_boot_seconds" "$boot_duration"
+fi
 
 adb -s "$DEVICE_ID" shell settings put global window_animation_scale 0 || true
 adb -s "$DEVICE_ID" shell settings put global transition_animation_scale 0 || true
@@ -344,18 +366,18 @@ adb -s "$DEVICE_ID" shell settings put global animator_duration_scale 0 || true
 
 prepare_diagnostics "$DEVICE_ID"
 
-log "Installing APK: $APK_PATH"
 if ! resolve_apk_path; then
   log "Unable to locate APK at $APK_PATH"
   exit 1
 fi
 log "Installing APK: $APK_PATH"
 INSTALL_LOG="$RAW_OUTPUT_DIR/adb-install.log"
-if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install -r "$APK_PATH" >"$INSTALL_LOG" 2>&1; then
+install_start_time=$(date +%s)
+if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install -r -t -d "$APK_PATH" >"$INSTALL_LOG" 2>&1; then
   if grep -q "INSTALL_FAILED_UPDATE_INCOMPATIBLE" "$INSTALL_LOG"; then
     log "APK signature mismatch; uninstalling existing package $APP_ID"
     adb -s "$DEVICE_ID" uninstall "$APP_ID" >/dev/null 2>&1 || true
-    if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install "$APK_PATH" >>"$INSTALL_LOG" 2>&1; then
+    if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install -t -d "$APK_PATH" >>"$INSTALL_LOG" 2>&1; then
       log "APK install failed after uninstall"
       capture_failure_artifacts "$DEVICE_ID"
       exit 1
@@ -366,6 +388,16 @@ if ! run_with_timeout "$INSTALL_TIMEOUT_SECS" adb -s "$DEVICE_ID" install -r "$A
     exit 1
   fi
 fi
+install_end_time=$(date +%s)
+install_duration=$((install_end_time - install_start_time))
+log "APK install duration: ${install_duration}s"
+write_timing "apk_install_seconds" "$install_duration"
+
+if ! timeout 30 bash -c "until adb -s '$DEVICE_ID' shell pm list packages '$APP_ID' | tr -d '\r' | grep -q '$APP_ID'; do sleep 1; done"; then
+  log "Installed package $APP_ID not discoverable via pm list packages"
+  capture_failure_artifacts "$DEVICE_ID"
+  exit 1
+fi
 
 adb -s "$DEVICE_ID" shell am force-stop "$APP_ID" >/dev/null 2>&1 || true
 adb -s "$DEVICE_ID" shell pm clear "$APP_ID" >/dev/null 2>&1 || true
@@ -375,23 +407,48 @@ BUILD_PAYLOAD=$(node -e "const target=process.argv[1];const host=process.argv[2]
 adb -s "$DEVICE_ID" shell "run-as $APP_ID sh -c 'mkdir -p files && cat > files/c64u-smoke.json'" <<<"$BUILD_PAYLOAD" || true
 
 log "Running Maestro gating flows"
+maestro_start_time=$(date +%s)
 set +e
 MAESTRO_EXIT_CODE=0
-# On CI, run only critical tests to keep build time under 6 minutes
-# Critical tests verify native Android components (file picker integration)
-TAG_FILTER="device"
+# Local default: run device-tagged flows.
+# CI: run required critical flow files explicitly to avoid config-level excludeTags
+# (e.g., probe/slow/hvsc) from silently filtering required gates.
 if [[ "${CI:-false}" == "true" ]]; then
-  TAG_FILTER="ci-critical"
-fi
-if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" --include-tags="$TAG_FILTER" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
-  MAESTRO_EXIT_CODE=$?
+  # smoke-background-execution excluded: Android WebView suspends setInterval
+  # during screen-off, making the heartbeat assertion unreliable on emulators.
+  CI_FLOW_FILES=(
+    "$ROOT_DIR/.maestro/smoke-launch.yaml"
+    "$ROOT_DIR/.maestro/smoke-hvsc.yaml"
+  )
+  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+    MAESTRO_EXIT_CODE=$?
+  fi
+else
+  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "$ROOT_DIR/.maestro" --include-tags="device" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+    MAESTRO_EXIT_CODE=$?
+  fi
 fi
 set -e
+maestro_end_time=$(date +%s)
+maestro_duration=$((maestro_end_time - maestro_start_time))
+log "Maestro execution duration: ${maestro_duration}s"
+write_timing "maestro_seconds" "$maestro_duration"
 
 if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
   if grep -q "<failure" "$RAW_OUTPUT_DIR/maestro-report.xml" || grep -q "<error" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
     log "Maestro report contains failures"
     MAESTRO_EXIT_CODE=1
+  fi
+
+  # Assert critical flows actually executed (ci-critical gate integrity)
+  REQUIRED_FLOWS=("smoke-hvsc" "smoke-launch")
+  if [[ "${CI:-false}" == "true" ]]; then
+    for FLOW in "${REQUIRED_FLOWS[@]}"; do
+      if ! grep -q "$FLOW" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
+        log "GATE VIOLATION: Required flow '$FLOW' missing from Maestro report"
+        MAESTRO_EXIT_CODE=1
+      fi
+    done
   fi
 else
   log "Maestro report missing at $RAW_OUTPUT_DIR/maestro-report.xml"

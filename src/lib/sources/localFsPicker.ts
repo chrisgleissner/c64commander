@@ -64,11 +64,11 @@ const listSafFiles = async (treeUri: string): Promise<{ name: string; path: stri
 };
 
 export const browseLocalSidFiles = async (input: HTMLInputElement | null): Promise<LocalSidFile[] | null> => {
-  if (getPlatform() === 'android') {
+  if (getPlatform() === 'android' || getPlatform() === 'ios') {
     const result = await FolderPicker.pickDirectory();
     const treeUri = result?.treeUri;
     if (!treeUri || result?.files != null || !result?.permissionPersisted) {
-      throw new Error('Android SAF picker returned an unsupported response.');
+      throw new Error('Native folder picker returned an unsupported response.');
     }
     const entries = await listSafFiles(treeUri);
     const candidates = entries

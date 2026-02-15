@@ -1,15 +1,21 @@
+# Verify source options are visible on iOS.
+#
+# Local picker interaction is not automatable in WKWebView CI because it opens
+# native document picker UI. FTP browsing and playback are covered in dedicated
+# iOS critical flows, so this flow intentionally validates deterministic source
+# option visibility only.
+
 appId: uk.gleissner.c64commander
 env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
 tags:
   - ios
   - ci-critical-ios
 ---
-# Verify Local source option is visible in the source picker.
-# We intentionally do NOT tap "Local" because on iOS WKWebView the
-# showDirectoryPicker API is unavailable and the fallback triggers a native
-# UIDocumentPickerViewController that blocks Maestro.
-# WKWebView exposes aria-label instead of inner text.
 - runFlow: subflows/ios-open-play-add-items.yaml
+
 - assertVisible: "Add file / folder from Local"
-- takeScreenshot: ios-local-import-source-picker
+- assertVisible: "Add file / folder from C64U"
+- takeScreenshot: ios-source-options-visible

@@ -65,6 +65,7 @@ export const useSourceNavigator = (source: SourceLocation | null): SourceNavigat
     try {
       const safePath = ensureWithinRoot(nextPath, source.rootPath);
       const result = await source.listEntries(safePath);
+      if (loadingTokenRef.current !== token) return; // stale response — discard
       setEntries(result);
       setPath(safePath);
     } catch (err) {

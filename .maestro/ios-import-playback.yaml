@@ -1,0 +1,22 @@
+# Deterministic iOS playback entry smoke.
+#
+# FTP deep browsing and track import are covered by ios-ftp-browse. This flow
+# keeps critical coverage focused on stable Play tab / playlist controls.
+
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/ios-open-play-tab.yaml
+
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${TIMEOUT}
+- assertVisible: "Playlist"
+- assertVisible: "Add items to playlist"
+- takeScreenshot: ios-playback-entry

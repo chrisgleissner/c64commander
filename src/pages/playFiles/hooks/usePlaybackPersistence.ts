@@ -47,6 +47,7 @@ interface UsePlaybackPersistenceProps {
     trackInstanceIdRef: React.MutableRefObject<number>;
     autoAdvanceGuardRef: React.MutableRefObject<any>; // Using any to avoid importing local type from Page
     setTrackInstanceId: (value: number) => void;
+    setAutoAdvanceDueAtMs: (value: number | null) => void;
 }
 
 export function usePlaybackPersistence({
@@ -76,6 +77,7 @@ export function usePlaybackPersistence({
     trackInstanceIdRef,
     autoAdvanceGuardRef,
     setTrackInstanceId,
+    setAutoAdvanceDueAtMs,
 }: UsePlaybackPersistenceProps) {
     const playlistRepository = getPlaylistDataRepository();
     const pendingPlaybackRestoreRef = useRef<StoredPlaybackSession | null>(null);
@@ -349,16 +351,20 @@ export function usePlaybackPersistence({
                     autoFired: false,
                     userCancelled: false,
                 };
+                // Rehydrate native due-time so the background service knows when to auto-skip
+                setAutoAdvanceDueAtMs(autoAdvanceGuardRef.current.dueAtMs);
             } else {
                 autoAdvanceGuardRef.current = null;
+                setAutoAdvanceDueAtMs(null);
             }
         } else {
             trackStartedAtRef.current = null;
             autoAdvanceGuardRef.current = null;
+            setAutoAdvanceDueAtMs(null);
             playedClockRef.current.hydrate(Math.max(0, pending.playedMs), null);
         }
         pendingPlaybackRestoreRef.current = null;
-    }, [playlist, playlistStorageKey, setTrackInstanceId]); // Depends on playlist being set
+    }, [playlist, playlistStorageKey, setTrackInstanceId, setAutoAdvanceDueAtMs]); // Depends on playlist being set
 
     // Persist Playlist
     useEffect(() => {

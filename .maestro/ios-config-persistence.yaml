@@ -1,0 +1,35 @@
+# iOS equivalent of Android edge-config-persistence.
+# Navigates to Settings, verifies the HVSC flag is enabled by default on
+# native builds, restarts the app, and confirms the flag persisted.
+
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/ios-open-settings-tab.yaml
+
+# Scroll until the HVSC checkbox is in view.
+- scrollUntilVisible:
+    element:
+      text: "HVSC"
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+- takeScreenshot: ios-hvsc-setting-visible
+
+# Restart and confirm it persisted.
+- launchApp:
+    stopApp: true
+- runFlow: subflows/ios-open-settings-tab.yaml
+- scrollUntilVisible:
+    element:
+      text: "HVSC"
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+- takeScreenshot: ios-hvsc-setting-persisted

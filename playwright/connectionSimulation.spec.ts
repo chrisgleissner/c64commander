@@ -357,8 +357,8 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
       try {
         await demoDialog.waitFor({ state: 'visible', timeout: 1500 });
-      } catch (error) {
-        console.warn('Demo interstitial did not appear before continuing', error);
+      } catch {
+        // Dialog may not appear if discovery converges quickly.
       }
 
       if (await demoContinue.isVisible()) {
@@ -558,36 +558,26 @@ test.describe('Deterministic Connectivity Simulation', () => {
     await expect.poll(() => demoServer?.requests.some((req) => req.url.startsWith('/v1/info'))).toBe(true);
 
     server.setReachable(true);
-    const clickIndicatorAndDismissDemo = async () => {
-      await clickWithoutNavigationWait(page, page.getByTestId('connectivity-indicator'));
-      const retryDialog = page.getByRole('dialog', { name: 'Demo Mode' });
-      if (await retryDialog.isVisible().catch(() => false)) {
-        const continueButton = retryDialog.getByRole('button', { name: /Continue in Demo Mode|Close|Dismiss|OK/i }).first();
-        if (await continueButton.isVisible().catch(() => false)) {
-          await clickWithoutNavigationWait(page, continueButton);
-        } else {
-          await page.keyboard.press('Escape');
-        }
-        await expect(retryDialog).toBeHidden({ timeout: 5000 });
-      }
-    };
-    let connected = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await clickIndicatorAndDismissDemo();
-      try {
-        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
-        connected = true;
-        break;
-      } catch {
-        // Retry manual discovery trigger if the probe loop is still converging.
-      }
-    }
-    if (!connected) {
-      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 30000 });
+
+    // Allow mock server state to propagate before triggering rediscovery.
+    await page.waitForTimeout(500);
+
+    // Trigger a single manual discovery probe. The demo interstitial was already
+    // dismissed earlier in this test, so clicking the indicator just runs probeOnce().
+    await clickWithoutNavigationWait(page, indicator);
+    try {
+      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
+    } catch {
+      // First attempt may race with state changes — retry once.
+      await clickWithoutNavigationWait(page, indicator);
+      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
     }
     const currentUsing = page.getByText('Currently using:');
     await expect(currentUsing).toBeVisible();
-    await expect(currentUsing.locator('span')).toHaveText(host);
+    await expect.poll(
+      async () => (await currentUsing.locator('span').textContent())?.trim() ?? '',
+      { timeout: 30000 },
+    ).toBe(host);
 
     await snap(page, testInfo, 'real-demo-real-manual');
   });

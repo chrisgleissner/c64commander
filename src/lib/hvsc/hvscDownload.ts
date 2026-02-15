@@ -377,15 +377,36 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
             const reader = response.body.getReader();
             const chunks: Uint8Array[] = [];
             let loaded = 0;
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                if (value) {
-                    chunks.push(value);
-                    loaded += value.length;
-                    emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    if (value) {
+                        chunks.push(value);
+                        loaded += value.length;
+                        emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
+                    }
+                    ensureNotCancelled();
                 }
-                ensureNotCancelled();
+            } catch (error) {
+                try {
+                    await reader.cancel();
+                } catch (cancelError) {
+                    addLog('warn', 'Failed to cancel HVSC download reader after stream error', {
+                        archiveName,
+                        error: (cancelError as Error).message,
+                    });
+                }
+                throw error;
+            } finally {
+                try {
+                    reader.releaseLock();
+                } catch (releaseError) {
+                    addLog('warn', 'Failed to release HVSC download reader lock', {
+                        archiveName,
+                        error: (releaseError as Error).message,
+                    });
+                }
             }
             if (totalBytes && loaded !== totalBytes) {
                 throw new Error(`Download size mismatch: expected ${totalBytes}, got ${loaded}`);

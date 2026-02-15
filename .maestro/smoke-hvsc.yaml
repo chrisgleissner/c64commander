@@ -2,6 +2,7 @@ appId: uk.gleissner.c64commander
 tags:
   - hvsc
   - slow
+  - ci-critical
 env:
   SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
   TIMEOUT: ${TIMEOUT || "15000"}
@@ -14,11 +15,11 @@ env:
     visible: "Playlist"
     timeout: ${SHORT_TIMEOUT}
 - scrollUntilVisible:
-    element: "HVSC library"
+    element: "HVSC"
     direction: DOWN
     timeout: ${TIMEOUT}
 - extendedWaitUntil:
-    visible: "HVSC library"
+    visible: "HVSC"
     timeout: ${SHORT_TIMEOUT}
 - takeScreenshot: hvsc-controls
 - assertVisible: "Download HVSC"

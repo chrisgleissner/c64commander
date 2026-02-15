@@ -1,0 +1,34 @@
+# iOS equivalent of Android smoke-hvsc.
+# Navigates to the Play tab, scrolls down to the HVSC section, and
+# verifies the HVSC controls (Download / Ingest) are visible.
+
+appId: uk.gleissner.c64commander
+env:
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+tags:
+  - ios
+  - ci-critical-ios
+---
+- runFlow: subflows/ios-open-play-tab.yaml
+
+# Scroll down past the playlist section to reach the HVSC controls.
+- scrollUntilVisible:
+    element:
+      text: "HVSC"
+    direction: DOWN
+    speed: 80
+    timeout: ${LONG_TIMEOUT}
+- assertVisible: "HVSC"
+- takeScreenshot: ios-hvsc-controls
+
+# Verify the Download HVSC button is present.
+- scrollUntilVisible:
+    element:
+      text: "Download HVSC"
+    direction: DOWN
+    speed: 80
+    timeout: ${TIMEOUT}
+- assertVisible: "Download HVSC"
+- takeScreenshot: ios-hvsc-actions

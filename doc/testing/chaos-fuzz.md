@@ -11,6 +11,22 @@ This document describes the platform-agnostic chaos/fuzz runner built on Playwri
 
 The runner executes a series of **fuzz sessions**. Each session starts from a clean app state, records a Playwright video, performs weighted UI actions, and **terminates immediately** on the first detected issue or unrecoverable stall. The session is reset and a new session begins until the run reaches its step or time budget.
 
+## Timeout safeguards
+
+The fuzz runner has multiple layers of timeout protection to prevent "no progress" situations:
+
+1. **Action timeout** (default: 30s): Each action is wrapped with a hard timeout. If an action doesn't complete within this time, it's terminated and recorded as a freeze issue.
+
+2. **Session timeout** (default: 5 minutes): Each session has a maximum duration. If a session runs longer than this, it's terminated and a new session starts.
+
+3. **Progress watchdog** (default: 5s): If no meaningful progress is detected within this time, the runner switches to recovery mode.
+
+4. **Backend backoff cap** (max: 5s): Backend failure backoff waits are capped to prevent indefinite waiting.
+
+5. **CI job timeout** (hard limit: 2 hours): The GitHub workflow has a hard timeout that terminates the entire job.
+
+These safeguards ensure the test never hangs indefinitely and always makes progress or terminates gracefully.
+
 ## Fuzz mode contract (app-side)
 
 Fuzz mode is enabled by setting:

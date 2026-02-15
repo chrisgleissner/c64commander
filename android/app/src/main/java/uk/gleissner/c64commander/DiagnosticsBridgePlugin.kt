@@ -12,7 +12,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.util.Log
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.annotation.CapacitorPlugin
@@ -59,7 +58,7 @@ class DiagnosticsBridgePlugin : Plugin() {
     try {
       context.registerReceiver(diagnosticsReceiver, IntentFilter(AppLogger.ACTION_DIAGNOSTICS_LOG))
     } catch (error: Exception) {
-      Log.e(logTag, "Failed to register diagnostics receiver", error)
+      AppLogger.error(context, logTag, "Failed to register diagnostics receiver", "DiagnosticsBridgePlugin", error)
     }
   }
 
@@ -67,7 +66,7 @@ class DiagnosticsBridgePlugin : Plugin() {
     try {
       context.unregisterReceiver(diagnosticsReceiver)
     } catch (error: Exception) {
-      Log.w(logTag, "Failed to unregister diagnostics receiver", error)
+      AppLogger.warn(context, logTag, "Failed to unregister diagnostics receiver", "DiagnosticsBridgePlugin", error)
     }
     super.handleOnDestroy()
   }

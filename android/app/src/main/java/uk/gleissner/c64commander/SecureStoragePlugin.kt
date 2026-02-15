@@ -9,7 +9,6 @@
 package uk.gleissner.c64commander
 
 import android.util.Log
-import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.getcapacitor.JSObject
@@ -46,6 +45,7 @@ class SecureStoragePlugin : Plugin() {
       call.resolve()
     } catch (error: Exception) {
       Log.e(logTag, "Failed to set secure password", error)
+      AppLogger.error(context, logTag, "Failed to set secure password", "SecureStoragePlugin", error)
       call.reject(error.message, error)
     }
   }
@@ -59,6 +59,7 @@ class SecureStoragePlugin : Plugin() {
       call.resolve(payload)
     } catch (error: Exception) {
       Log.e(logTag, "Failed to read secure password", error)
+      AppLogger.error(context, logTag, "Failed to read secure password", "SecureStoragePlugin", error)
       call.reject(error.message, error)
     }
   }
@@ -70,6 +71,7 @@ class SecureStoragePlugin : Plugin() {
       call.resolve()
     } catch (error: Exception) {
       Log.e(logTag, "Failed to clear secure password", error)
+      AppLogger.error(context, logTag, "Failed to clear secure password", "SecureStoragePlugin", error)
       call.reject(error.message, error)
     }
   }

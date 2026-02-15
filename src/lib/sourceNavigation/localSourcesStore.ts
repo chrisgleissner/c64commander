@@ -150,36 +150,39 @@ export const prepareDirectoryInput = (input: HTMLInputElement | null) => {
 };
 
 export const createLocalSourceFromPicker = async (input: HTMLInputElement | null): Promise<LocalSourceBuildResult | null> => {
-  if (getPlatform() === 'android' && isNativePlatform()) {
-    addLog('debug', 'SAF picker invoked', { platform: 'android' });
+  const platform = getPlatform();
+  if ((platform === 'android' || platform === 'ios') && isNativePlatform()) {
+    addLog('debug', 'Native folder picker invoked', { platform });
     let result: Awaited<ReturnType<typeof FolderPicker.pickDirectory>>;
     try {
       result = await FolderPicker.pickDirectory();
     } catch (error) {
-      addLog('debug', 'SAF picker failed', { error: (error as Error).message });
+      addLog('debug', 'Native folder picker failed', { platform, error: (error as Error).message });
       throw error;
     }
     const treeUri = result?.treeUri;
     if (!treeUri || result?.files != null) {
-      addLog('debug', 'Android SAF picker rejected non-SAF response', {
+      addLog('debug', 'Native folder picker rejected non-SAF response', {
+        platform,
         treeUri: redactTreeUri(treeUri),
         hasEntries: Array.isArray(result?.files),
       });
-      throw new Error('Android SAF picker returned an unsupported response.');
+      throw new Error('Native folder picker returned an unsupported response.');
     }
     const rootName = normalizeRootName(result?.rootName);
     const sourceId = safeRandomId();
     const createdAt = new Date().toISOString();
-    addLog('debug', 'SAF tree URI received', {
+    addLog('debug', 'Native tree URI received', {
+      platform,
       treeUri: redactTreeUri(treeUri),
       rootName,
       permissionPersisted: result?.permissionPersisted === true,
     });
     if (!result?.permissionPersisted) {
-      addLog('debug', 'SAF persistable permission missing', { treeUri: redactTreeUri(treeUri) });
+      addLog('debug', 'Native persistable permission missing', { platform, treeUri: redactTreeUri(treeUri) });
       throw new Error('Folder access permission could not be persisted.');
     }
-    addLog('debug', 'SAF persistable permission granted', { treeUri: redactTreeUri(treeUri) });
+    addLog('debug', 'Native persistable permission granted', { platform, treeUri: redactTreeUri(treeUri) });
     const source: LocalSourceRecord = {
       id: sourceId,
       name: rootName || SOURCE_LABELS.local,

@@ -6,7 +6,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
     private var nativePluginsRegistered = false
-    private weak var nativePluginsBridge: CAPBridge?
+    private weak var nativePluginsBridge: (any CAPBridgeProtocol)?
 
     private func registerNativePluginsIfNeeded() {
         guard let bridgeViewController = window?.rootViewController as? CAPBridgeViewController,
@@ -25,6 +25,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         bridge.registerPluginInstance(FeatureFlagsPlugin())
         bridge.registerPluginInstance(BackgroundExecutionPlugin())
         bridge.registerPluginInstance(DiagnosticsBridgePlugin())
+        bridge.registerPluginInstance(MockC64UPlugin())
         nativePluginsBridge = bridge
     }
 

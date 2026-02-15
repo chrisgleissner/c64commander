@@ -37,6 +37,8 @@ const usePlaybackPersistenceHarness = ({
   const trackInstanceIdRef = useRef(0);
   const autoAdvanceGuardRef = useRef<any>(null);
 
+  const setAutoAdvanceDueAtMsRef = useRef(vi.fn());
+
   usePlaybackPersistence({
     playlist,
     setPlaylist,
@@ -53,6 +55,7 @@ const usePlaybackPersistenceHarness = ({
     durationMs,
     setDurationMs,
     setCurrentSubsongCount: vi.fn(),
+    setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
     resolvedDeviceId: 'device-1',
     playlistStorageKey,
     localEntriesBySourceId,
@@ -92,6 +95,7 @@ const usePlaybackPersistenceHarness = ({
   return {
     playlist,
     currentIndex,
+    setAutoAdvanceDueAtMs: setAutoAdvanceDueAtMsRef.current,
   };
 };
 
@@ -214,6 +218,109 @@ describe('usePlaybackPersistence', () => {
       expect(result.current.playlist).toHaveLength(1);
       expect(result.current.playlist[0].label).toBe('repo.sid');
       expect(result.current.playlist[0].request.source).toBe('hvsc');
+    });
+  });
+
+  it('calls setAutoAdvanceDueAtMs with correct value on session restore with duration', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+    const durationMs = 60000;
+    const elapsedMs = 10000;
+
+    // Seed playlist in localStorage
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/restore.sid',
+          name: 'restore.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+          durationMs,
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    // Seed session in sessionStorage — playing, not paused, with known duration
+    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
+      playlistKey: playlistStorageKey,
+      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/restore.sid',
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: false,
+      elapsedMs,
+      playedMs: elapsedMs,
+      durationMs,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // The guard should have been set and setAutoAdvanceDueAtMs called with a numeric value
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === 'number');
+      expect(numericCalls.length).toBeGreaterThanOrEqual(1);
+      // The dueAtMs should be approximately trackStartedAt + durationMs
+      const dueAt = numericCalls[numericCalls.length - 1][0] as number;
+      expect(dueAt).toBeGreaterThan(Date.now() - 120000); // sanity: within last 2 min
+      expect(dueAt).toBeLessThan(Date.now() + durationMs + 5000); // sanity: not too far in the future
+    });
+  });
+
+  it('calls setAutoAdvanceDueAtMs with null on session restore without duration', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+
+    // Seed playlist in localStorage — item has NO duration
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/nodur.sid',
+          name: 'nodur.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    // Seed session in sessionStorage — playing, no duration
+    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
+      playlistKey: playlistStorageKey,
+      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/nodur.sid',
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: false,
+      elapsedMs: 5000,
+      playedMs: 5000,
+      durationMs: undefined,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // setAutoAdvanceDueAtMs should have been called with null (no auto-advance without duration)
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const nullCalls = calls.filter(([v]: [unknown]) => v === null);
+      expect(nullCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
 });
