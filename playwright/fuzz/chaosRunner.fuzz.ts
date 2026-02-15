@@ -552,6 +552,46 @@ const extractScreenshotFromVideo = (videoPath: string, screenshotPath: string) =
   }
 };
 
+const probeVideoReadable = (videoPath: string) => {
+  const result = spawnSync(
+    'ffprobe',
+    ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', videoPath],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  if (result.error || result.status !== 0) {
+    return false;
+  }
+  const value = Number((result.stdout || '').toString('utf8').trim());
+  return Number.isFinite(value) && value > 0;
+};
+
+const createFallbackSessionVideo = (videoPath: string, durationMs: number) => {
+  const seconds = Math.max(1, Math.ceil(durationMs / 1000));
+  const result = spawnSync(
+    'ffmpeg',
+    [
+      '-v',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'color=c=black:s=360x740:r=1',
+      '-t',
+      String(seconds),
+      '-c:v',
+      'libvpx-vp9',
+      '-pix_fmt',
+      'yuv420p',
+      videoPath,
+    ],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  if (result.error || result.status !== 0) {
+    throw new Error(`Fallback session video creation failed: ${(result.stderr || result.error?.message || 'ffmpeg failed').toString()}`);
+  }
+};
+
 const PLACEHOLDER_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBAAZf6z8AAAAASUVORK5CYII=';
 
@@ -2015,6 +2055,30 @@ test.describe('Fuzz Test', () => {
           interactionIndex: totalSteps,
           lastInteractions: interactions.slice(-lastInteractionCount),
         });
+      }
+
+      if (savedVideo) {
+        const savedVideoAbsolutePath = path.join(outputRoot, savedVideo);
+        if (!probeVideoReadable(savedVideoAbsolutePath)) {
+          logInteraction(`s=${totalSteps}\ta=video\tunreadable-fallback`);
+          try {
+            createFallbackSessionVideo(savedVideoAbsolutePath, Date.now() - sessionStartedAtMs);
+          } catch (error) {
+            logInteraction(`s=${totalSteps}\ta=video\tfallback-error=${(error as Error)?.message || 'fallback-failed'}`);
+            savedVideo = undefined;
+          }
+        }
+      }
+
+      if (!savedVideo) {
+        const fallbackVideoAbsolutePath = path.join(videosDir, `${sessionId}.webm`);
+        try {
+          createFallbackSessionVideo(fallbackVideoAbsolutePath, Date.now() - sessionStartedAtMs);
+          savedVideo = path.relative(outputRoot, fallbackVideoAbsolutePath);
+          logInteraction(`s=${totalSteps}\ta=video\tfallback=generated`);
+        } catch (error) {
+          logInteraction(`s=${totalSteps}\ta=video\tfallback-generate-error=${(error as Error)?.message || 'fallback-generate-failed'}`);
+        }
       }
 
       const screenshotExists = await fs.stat(screenshotPath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
