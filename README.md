@@ -81,7 +81,10 @@ AltStore automatically refreshes installed apps in the background when your iPho
 
 ### Install for Web Access
 
-The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server, and that server proxies REST/FTP to C64U (required because C64U does not provide browser-safe CORS headers).
+The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server which in turn calls your C64U via REST/FTP.
+- The C64 Commander web server can be hosted on Windows, Mac, or Linux. 
+- Using a Raspberry Pi Zero 2W, 4B or above with at least 512MiB RAM is recommended due to its low cost and power use.
+- If desired, access can be secured via the same Network password that also protects your C64 Ultimate.
 
 #### Docker installation
 
@@ -103,6 +106,7 @@ docker run -d \
   --name c64commander \
   -p 8080:8080 \
   -v ./c64commander-config:/config \
+  --restart unless-stopped \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
@@ -113,7 +117,12 @@ Then open:
 Raspberry Pi example (64-bit OS):
 
 ```bash
-docker run -d --name c64commander -p 8080:8080 -v /home/pi/c64commander-config:/config ghcr.io/chrisgleissner/c64commander:<version>
+docker run -d --name c64commander -p 8080:8080 -v /home/pi/c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
+```
+
+Ensure Docker starts on boot:
+```bash
+sudo systemctl enable --now docker
 ```
 
 Network password model:
@@ -126,7 +135,7 @@ Update to a newer version:
 ```bash
 docker pull ghcr.io/chrisgleissner/c64commander:<version>
 docker rm -f c64commander
-docker run -d --name c64commander -p 8080:8080 -v ./c64commander-config:/config ghcr.io/chrisgleissner/c64commander:<version>
+docker run -d --name c64commander -p 8080:8080 -v ./c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
 > [!WARNING]

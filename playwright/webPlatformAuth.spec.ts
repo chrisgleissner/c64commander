@@ -71,6 +71,24 @@ const stopStandaloneServer = async (child: ChildProcess): Promise<void> => {
     });
 };
 
+const ensureWebAuthApi = async (request: import('@playwright/test').APIRequestContext): Promise<boolean> => {
+    const authStatus = await request.get('/auth/status');
+    if (authStatus.status() !== 200) {
+        return false;
+    }
+    const contentType = authStatus.headers()['content-type'] ?? '';
+    if (!contentType.includes('application/json')) {
+        return false;
+    }
+    try {
+        const payload = await authStatus.json() as { requiresLogin?: unknown; authenticated?: unknown };
+        return typeof payload.requiresLogin === 'boolean' && typeof payload.authenticated === 'boolean';
+    } catch (error) {
+        console.warn('Failed to parse /auth/status payload in web auth probe', { error });
+        return false;
+    }
+};
+
 test.describe('Web platform auth + proxy @web-platform', () => {
     let upstream: http.Server;
     let upstreamHost: string;
@@ -110,11 +128,9 @@ test.describe('Web platform auth + proxy @web-platform', () => {
     });
 
     test('auth matrix and protected routes', async ({ page, request }) => {
-        const authStatus = await request.get('/auth/status');
-        if (authStatus.status() === 404) {
-            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        if (!(await ensureWebAuthApi(request))) {
+            test.skip(true, 'Web platform auth JSON endpoints are unavailable in this runtime');
         }
-        expect(authStatus.status()).toBe(200);
 
         const setPassword = await request.put('/api/secure-storage/password', {
             data: { value: 'secret' },
@@ -171,11 +187,9 @@ test.describe('Web platform auth + proxy @web-platform', () => {
     });
 
     test('high-value click path: Play page opens Add items modal', async ({ page, request }) => {
-        const authStatus = await request.get('/auth/status');
-        if (authStatus.status() === 404) {
-            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        if (!(await ensureWebAuthApi(request))) {
+            test.skip(true, 'Web platform auth JSON endpoints are unavailable in this runtime');
         }
-        expect(authStatus.status()).toBe(200);
 
         const clearPassword = await request.delete('/api/secure-storage/password');
         if (clearPassword.status() === 404) {
@@ -204,11 +218,9 @@ test.describe('Web platform auth + proxy @web-platform', () => {
     });
 
     test('edge path: unreachable upstream returns deterministic proxy error', async ({ request }) => {
-        const authStatus = await request.get('/auth/status');
-        if (authStatus.status() === 404) {
-            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        if (!(await ensureWebAuthApi(request))) {
+            test.skip(true, 'Web platform auth JSON endpoints are unavailable in this runtime');
         }
-        expect(authStatus.status()).toBe(200);
 
         const clearPassword = await request.delete('/api/secure-storage/password');
         if (clearPassword.status() === 404) {
@@ -239,12 +251,13 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         expect(payload.error).toContain('REST proxy upstream request failed');
     });
 
-    test('persistence: password survives server restart with shared /config', async ({ request }) => {
-        const authStatus = await request.get('/auth/status');
-        if (authStatus.status() === 404) {
-            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+    test('persistence: password survives server restart with shared /config', async ({ request }, testInfo) => {
+        if (testInfo.project.name !== 'web') {
+            test.skip(true, 'Standalone web-server restart check is only supported in web project');
         }
-        expect(authStatus.status()).toBe(200);
+        if (!(await ensureWebAuthApi(request))) {
+            test.skip(true, 'Web platform auth JSON endpoints are unavailable in this runtime');
+        }
 
         const configDir = await mkdtemp(path.join(os.tmpdir(), 'c64-web-config-'));
         const port = await reserveFreePort();

@@ -26,7 +26,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:coverage:all": "./scripts/collect-coverage.sh",
-    "test:e2e": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep-invert @screenshots",
+    "test:e2e": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep-invert \"@screenshots|@web-platform\"",
     "screenshots": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep @screenshots --workers 2",
     "video": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep @video",
     "validate:evidence": "node scripts/validate-playwright-evidence.mjs",

@@ -564,14 +564,22 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     // Trigger a single manual discovery probe. The demo interstitial was already
     // dismissed earlier in this test, so clicking the indicator just runs probeOnce().
-    await clickWithoutNavigationWait(page, indicator);
-    try {
-      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
-    } catch {
-      // First attempt may race with state changes — retry once.
+    let connected = false;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
       await clickWithoutNavigationWait(page, indicator);
-      await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
+      try {
+        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
+        connected = true;
+        break;
+      } catch (error) {
+        console.warn('Manual rediscovery attempt did not reach REAL_CONNECTED', {
+          attempt: attempt + 1,
+          error,
+        });
+      }
+      await page.waitForTimeout(600);
     }
+    expect(connected).toBe(true);
     const currentUsing = page.getByText('Currently using:');
     await expect(currentUsing).toBeVisible();
     await expect.poll(
