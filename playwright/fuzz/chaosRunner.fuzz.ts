@@ -122,7 +122,7 @@ type SessionManifest = {
   recoverySteps: RecoveryStepName[];
   interactionLog: string;
   finalScreenshot: string;
-  video: string;
+  video?: string;
 };
 
 class SeededRng {
@@ -522,12 +522,23 @@ const computeVisualDelta = (previous: Buffer | null, current: Buffer): number =>
   if (!previous) return 1;
   const sampleLength = Math.min(previous.length, current.length);
   if (sampleLength === 0) return 0;
-  const stride = 32;
+  const minimumSampleCount = 128;
+  const maximumSampleCount = 2048;
+  const targetSampleCount = Math.min(
+    maximumSampleCount,
+    Math.max(minimumSampleCount, Math.floor(sampleLength / 16)),
+  );
+  const stride = Math.max(1, Math.floor(sampleLength / targetSampleCount));
   let compared = 0;
   let changed = 0;
   for (let index = 0; index < sampleLength; index += stride) {
     compared += 1;
     if (previous[index] !== current[index]) changed += 1;
+  }
+  const lastIndex = sampleLength - 1;
+  if (lastIndex >= 0 && lastIndex % stride !== 0) {
+    compared += 1;
+    if (previous[lastIndex] !== current[lastIndex]) changed += 1;
   }
   const lengthPenalty = Math.abs(previous.length - current.length) / Math.max(previous.length, current.length);
   const byteDelta = compared ? changed / compared : 0;
@@ -2149,7 +2160,7 @@ test.describe('Fuzz Test', () => {
         recoverySteps,
         interactionLog: path.relative(outputRoot, sessionLogPath),
         finalScreenshot: path.relative(outputRoot, screenshotPath),
-        video: savedVideo || '',
+        video: savedVideo,
       };
       sessionManifests.push(sessionManifest);
       await writeJson(sessionJsonPath, sessionManifest);
@@ -2355,10 +2366,12 @@ test.describe('Fuzz Test', () => {
         } catch {
           missing.push('finalScreenshot');
         }
-        try {
-          await fs.stat(path.join(outputRoot, item.video));
-        } catch {
-          missing.push('video');
+        if (item.video) {
+          try {
+            await fs.stat(path.join(outputRoot, item.video));
+          } catch {
+            missing.push('video');
+          }
         }
         return { sessionId: item.sessionId, missing };
       }),
