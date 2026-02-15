@@ -82,6 +82,12 @@ Productionize Web as a first-class platform without duplicating Android-shared l
 - Container smoke on `:18080` returned `{"ok":true}` from `/healthz`.
 - Runtime log confirms server bind: `C64 Commander web server running on http://0.0.0.0:8080`.
 - Health status object present in `docker inspect`.
+- Web CI smoke failure root cause was captured from Actions logs: container not reachable on `127.0.0.1:8080` when using host networking.
+- Remediation applied in `.github/workflows/web-platform.yaml`:
+  - switched container run from `--network host` to `-p 18080:8080`
+  - aligned smoke curl checks to `http://127.0.0.1:18080/healthz`
+  - aligned Playwright `PLAYWRIGHT_PORT` to `18080`
+  - added writable config mount permission setup (`chmod 0777 .tmp/web-config`) and deterministic log dump on health timeout.
 
 ### Multi-arch/base image evidence
 
@@ -93,6 +99,7 @@ Productionize Web as a first-class platform without duplicating Android-shared l
 
 - `gh pr checks 40` showed Android CI, iOS CI, and Web CI checks passing.
 - Remaining pending check is external coverage aggregation (`codecov/project`) with no failing checks reported.
+- A later CI cycle surfaced one failure in `Web | Build + tests`; root cause was diagnosed and workflow fix was committed locally as above. Next CI cycle on updated commit is expected to clear this failure.
 
 ## Risk Log
 

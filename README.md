@@ -41,6 +41,10 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
   - [⚖️ License](#️-license)
+  - [🙏 Acknowledgments](#-acknowledgments)
+    - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
+    - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
+    - [Third-Party Libraries](#third-party-libraries)
 
 ## ✨ Why C64 Commander?
 
@@ -48,7 +52,7 @@ Because it gives you easy control of your C64 Ultimate from your phone.
 
 - **Quick dashboard**: Access common actions and advanced controls in a clean mobile interface.
 - **Deep configuration**: Browse and edit the full C64 Ultimate configuration from one place.
-- **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or HVSC. Quickly find what you want with powerful search and filtering.
+- **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or the High Voltage SID Collection ([HVSC](https://hvsc.c64.org)). Quickly find what you want with powerful search and filtering.
 - **Manage disks efficiently**: Mount, unmount, and handle drive workflows with fewer steps.
 - **Troubleshoot with confidence**: Inspect logs, traces, and activity when behavior needs a closer look.
 
@@ -82,7 +86,7 @@ AltStore automatically refreshes installed apps in the background when your iPho
 ### Install for Web Access
 
 The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server which in turn calls your C64U via REST/FTP.
-- The C64 Commander web server can be hosted on Windows, Mac, or Linux. 
+- The C64 Commander web server can be hosted on Windows, Mac, or Linux.
 - Using a Raspberry Pi Zero 2W, 4B or above with at least 512MiB RAM is recommended due to its low cost and power use.
 - If desired, access can be secured via the same Network password that also protects your C64 Ultimate.
 
@@ -280,6 +284,22 @@ If you want to build, test, or contribute:
 - Developer guide: [doc/developer.md](doc/developer.md)
 - Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
 
+## 🙏 Acknowledgments
+
+This project would not be possible without the following:
+
+### High Voltage SID Collection (HVSC)
+
+The [High Voltage SID Collection](https://hvsc.c64.org) is an amazing archive of C64 music, preserving decades of SID chip artistry. C64 Commander uses HVSC to provide access to thousands of SID tunes, making it easy to explore and enjoy the rich history of C64 music.
+
+### Commodore and the C64 Ultimate
+
+Heartfelt thanks to Commodore for creating the Commodore 64, a machine that defined a generation of computing and gaming. Special recognition goes to the creators of the C64 Ultimate (Ultimate 64) for breathing new life into this classic platform with modern hardware that maintains the authentic C64 experience while adding powerful new capabilities.
+
+### Third-Party Libraries
+
+C64 Commander builds on many excellent open-source projects. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for a detailed list of third-party components and their licenses.
+
 ## ⚖️ License
 
-This project is licensed under GPL v2. See [LICENSE](LICENSE) for details.
+This project is licensed under GPL v3. See [LICENSE](LICENSE) for details.

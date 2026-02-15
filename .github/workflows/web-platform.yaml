@@ -51,19 +51,27 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p .tmp/web-config
-          docker run -d --name c64commander-smoke --network host -v "$PWD/.tmp/web-config:/config" c64commander:ci
+          chmod 0777 .tmp/web-config
+          docker run -d --name c64commander-smoke -p 18080:8080 -v "$PWD/.tmp/web-config:/config" c64commander:ci
+          healthy=0
           for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+              healthy=1
               break
             fi
             sleep 1
           done
-          curl -fsS http://127.0.0.1:8080/healthz | tee /tmp/web-health.json
+          if [[ "$healthy" != "1" ]]; then
+            echo "Container failed health check within timeout; dumping logs"
+            docker logs c64commander-smoke || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:18080/healthz | tee /tmp/web-health.json
 
       - name: Run web-platform Playwright checks
         env:
           PLAYWRIGHT_REUSE_SERVER: "1"
-          PLAYWRIGHT_PORT: "8080"
+          PLAYWRIGHT_PORT: "18080"
           PLAYWRIGHT_WORKERS: "1"
           PLAYWRIGHT_DEVICES: "web"
         run: npx playwright test playwright/webPlatformAuth.spec.ts --project=web
