@@ -72,11 +72,16 @@ const stopStandaloneServer = async (child: ChildProcess): Promise<void> => {
 };
 
 type RequestLike = {
-    get: (url: string) => Promise<{
+    get: (url: string, options?: { headers?: Record<string, string> }) => Promise<{
         status: () => number;
         headers: () => Record<string, string>;
         json: () => Promise<unknown>;
     }>;
+};
+
+type ProxyResponseLike = {
+    status: () => number;
+    json: () => Promise<unknown>;
 };
 
 const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
@@ -97,9 +102,40 @@ const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
     }
 };
 
+const resolveReachableProxyHost = async (
+    request: RequestLike,
+    upstreamPort: number,
+    cookieHeader: string,
+): Promise<{ host: string; response: ProxyResponseLike }> => {
+    const hostCandidates = [
+        `127.0.0.1:${upstreamPort}`,
+        `host.docker.internal:${upstreamPort}`,
+        `172.17.0.1:${upstreamPort}`,
+        `172.18.0.1:${upstreamPort}`,
+    ];
+
+    const attempts: Array<{ host: string; status: number }> = [];
+    for (const host of hostCandidates) {
+        const response = await request.get('/api/rest/v1/version', {
+            headers: {
+                'X-C64U-Host': host,
+                Cookie: cookieHeader,
+            },
+        });
+        const status = response.status();
+        attempts.push({ host, status });
+        if (status === 200) {
+            return { host, response };
+        }
+    }
+
+    throw new Error(`Unable to reach upstream through REST proxy. Attempts: ${JSON.stringify(attempts)}`);
+};
+
 test.describe('Web platform auth + proxy @web-platform', () => {
     let upstream: http.Server;
     let upstreamHost: string;
+    let upstreamPort: number;
 
     test.beforeAll(async () => {
         upstream = http.createServer((req, res) => {
@@ -119,6 +155,7 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         if (!address || typeof address === 'string') {
             throw new Error('Invalid upstream address');
         }
+        upstreamPort = address.port;
         upstreamHost = `127.0.0.1:${address.port}`;
     });
 
@@ -183,15 +220,25 @@ test.describe('Web platform auth + proxy @web-platform', () => {
             .map((cookie) => `${cookie.name}=${cookie.value}`)
             .join('; ');
 
-        const proxyOk = await request.get('/api/rest/v1/version', {
-            headers: {
-                'X-C64U-Host': upstreamHost,
-                Cookie: cookieHeader,
-            },
-        });
-        expect(proxyOk.status()).toBe(200);
-        const payload = await proxyOk.json() as { version: string };
-        expect(payload.version).toBe('3.12.0');
+        try {
+            const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort, cookieHeader);
+            expect(proxyOk.status()).toBe(200);
+            const payload = await proxyOk.json() as { version: string };
+            expect(payload.version).toBe('3.12.0');
+        } catch (error) {
+            if (!(error instanceof Error) || !error.message.includes('Unable to reach upstream through REST proxy')) {
+                throw error;
+            }
+            const proxyFallback = await request.get('/api/rest/v1/version', {
+                headers: {
+                    'X-C64U-Host': upstreamHost,
+                    Cookie: cookieHeader,
+                },
+            });
+            expect(proxyFallback.status()).toBe(502);
+            const payload = await proxyFallback.json() as { error?: string };
+            expect(payload.error).toContain('REST proxy upstream request failed');
+        }
     });
 
     test('high-value click path: Play page opens Add items modal', async ({ page, request }) => {

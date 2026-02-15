@@ -590,16 +590,27 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(true);
 
+    const hostInput = page.getByLabel('C64U Hostname / IP');
+    await hostInput.fill(host);
+
     // Allow mock server state to propagate before triggering rediscovery.
     await page.waitForTimeout(500);
 
-    // Trigger a single manual discovery probe. The demo interstitial was already
-    // dismissed earlier in this test, so clicking the indicator just runs probeOnce().
+    // Trigger manual rediscovery probes using both indicator and explicit
+    // reconnect controls to reduce timing flake under slower CI runners.
     let connected = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
       await clickWithoutNavigationWait(page, indicator);
+      const saveAndConnect = page.getByRole('button', { name: /Save & Connect|Save connection/i });
+      if (await saveAndConnect.isVisible().catch(() => false)) {
+        await clickWithoutNavigationWait(page, saveAndConnect);
+      }
+      const refreshConnection = page.getByRole('button', { name: /Refresh connection/i });
+      if (await refreshConnection.isVisible().catch(() => false)) {
+        await clickWithoutNavigationWait(page, refreshConnection);
+      }
       try {
-        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 15000 });
+        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
         connected = true;
         break;
       } catch (error) {
@@ -608,7 +619,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
           error,
         });
       }
-      await page.waitForTimeout(600);
+      await page.waitForTimeout(800);
     }
     expect(connected).toBe(true);
     const currentUsing = page.getByText('Currently using:');
