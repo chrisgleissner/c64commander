@@ -5,27 +5,91 @@
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 [![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS-blue)](https://github.com/chrisgleissner/c64commander/releases)
 
-Control your Commodore 64 Ultimate from your Android or iOS device.
+Your C64 Ultimate command center in your pocket.
 
 <img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="600"/>
 
+C64 Commander lets you control and manage a C64 Ultimate from Android or iOS on your local network.
+
 > [!NOTE]
-> This project is under active development. Some features are still being finalised.
+> This project is under active development, with frequent improvements across UX, stability, and feature depth.
 
-C64 Commander is an Android/iOS app that connects to a C64 Ultimate on your local network:
+## 📑 Contents
 
-- **Configuration**: View and adjust the full C64 Ultimate configuration.
-- **Control**: Operate the C64 and its disk drives from a mobile-friendly interface.
-- **Playback**: Browse and play music, programs, and disk images from local storage or via the C64 Ultimate, with playlist and automatic playback support.
-- **Disks**: Work with disks and disk collections, including mounting, unmounting, and multi-disk workflows.
-- **Collections**: Browse and play the HVSC music library via your C64 Ultimate.
-- **Diagnostics**: Inspect device state and use diagnostic tools for troubleshooting.
+- [C64 Commander](#c64-commander)
+  - [Contents](#contents)
+  - [✨ Why C64 Commander?](#-why-c64-commander)
+  - [🚀 Quick Start](#-quick-start)
+    - [Install on Android](#install-on-android)
+    - [Install on iOS (AltStore)](#install-on-ios-altstore)
+    - [First Connection Checklist](#first-connection-checklist)
+  - [🧩 What You Can Do](#-what-you-can-do)
+    - [Home](#home)
+    - [Play](#play)
+    - [Disks](#disks)
+    - [Configuration](#configuration)
+    - [Settings](#settings)
+    - [Docs](#docs)
+    - [Diagnostics](#diagnostics)
+  - [🛟 Troubleshooting](#-troubleshooting)
+    - [Connectivity](#connectivity)
+      - [Can’t reach the device](#cant-reach-the-device)
+      - [Device becomes unresponsive](#device-becomes-unresponsive)
+    - [iOS specifics](#ios-specifics)
+  - [🛠️ For Developers](#️-for-developers)
+  - [⚖️ License](#️-license)
 
-## Screenshots
+## ✨ Why C64 Commander?
+
+Because it gives you easy control of your C64 Ultimate from your phone.
+
+- **Quick dashboard**: Access common actions and advanced controls in a clean mobile interface.
+- **Deep configuration**: Browse and edit the full C64 Ultimate configuration from one place.
+- **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or HVSC. Quickly find what you want with powerful search and filtering.
+- **Manage disks efficiently**: Mount, unmount, and handle drive workflows with fewer steps.
+- **Troubleshoot with confidence**: Inspect logs, traces, and activity when behavior needs a closer look.
+
+## 🚀 Quick Start
+
+### Install on Android
+
+1. Download the APK from the latest GitHub release:
+   - `c64commander-<version>.apk` for normal installs
+   - `c64commander-<version>-debug.apk` only when you explicitly need a debug build
+2. Open the downloaded file on your phone.
+3. If prompted, allow installs from unknown sources for your browser or file manager.
+4. Tap **Install**.
+
+### Install on iOS (AltStore)
+
+1. Install AltStore on your iPhone and sign in with your Apple ID.
+2. In this repository’s GitHub Actions, open the `iOS CI` workflow and download:
+   - `c64commander-altstore-unsigned.ipa`
+   - `c64commander-altstore-unsigned.ipa.sha256`
+3. Verify checksum locally:
+
+   ```bash
+   shasum -a 256 c64commander-altstore-unsigned.ipa
+   ```
+
+4. Confirm the output exactly matches the `.sha256` file.
+5. In AltStore, tap `+` and select `c64commander-altstore-unsigned.ipa`.
+6. Launch C64 Commander from your home screen.
+
+### First Connection Checklist
+
+Before first use:
+
+1. Power on your C64 Ultimate.
+2. Make sure your phone and C64 Ultimate are on the same network.
+3. In the app, open **Settings → Device → Connection**.
+4. Enter the correct C64 Ultimate IP address or hostname.
+
+## 🧩 What You Can Do
 
 ### Home
 
-This page is the central dashboard for the most important device settings. All settings can also be adjusted from the Configuration or Disk pages.
+Your everyday dashboard: quick access to the controls you touch most often.
 
 <table>
   <tr>
@@ -42,7 +106,7 @@ This page is the central dashboard for the most important device settings. All s
 
 ### Play
 
-Control music and program playback, adjust playback settings and manage playlists, imported from local device, C64U or HVSC. Supports automatic playlist advance and random shuffle.
+Build playlists from local content, C64 Ultimate storage, or HVSC, then run autoplay or shuffle sessions.
 
 <table>
   <tr>
@@ -54,7 +118,7 @@ Control music and program playback, adjust playback settings and manage playlist
 
 ### Disks
 
-Monitor drive status, mount images, and browse your disk collections.
+View drive state, mount images quickly, and browse disk collections in one place.
 
 <table>
   <tr>
@@ -66,19 +130,19 @@ Monitor drive status, mount images, and browse your disk collections.
 
 ### Configuration
 
-Access the entirety of the C64U configuration, e.g. to mount custom cartidges or tune advances settings.
+Access full C64 Ultimate configuration pages, from basic tuning to hardware-specific settings.
 
 <table>
   <tr>
     <td><img src="doc/img/app/config/01-categories.png" alt="Configuration categories" width="360"/></td>
     <td><img src="doc/img/app/config/sections/05-u64-specific-settings.png" alt="Configuration U64 specific" width="360"/></td>
-    <td><img src="doc/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration U64 specific" width="360"/></td>
+    <td><img src="doc/img/app/config/sections/06-c64-and-cartridge-settings.png" alt="Configuration C64 and cartridge settings" width="360"/></td>
   </tr>
 </table>
 
 ### Settings
 
-Adjust appearance, connections, diagnostics, playback defaults, HVSC library access, and device safety.
+Tune appearance, connection behavior, diagnostics, playback defaults, HVSC integration, and device-safety limits.
 
 <table>
   <tr>
@@ -89,13 +153,13 @@ Adjust appearance, connections, diagnostics, playback defaults, HVSC library acc
   <tr>
     <td><img src="doc/img/app/settings/sections/04-play-and-disk.png" alt="Settings play and disk" width="360"/></td>
     <td><img src="doc/img/app/settings/sections/05-config.png" alt="Settings configuration" width="360"/></td>
-    <td><img src="doc/img/app/settings/sections/07-device-safety.png" alt="Settings Device Safety" width="360"/></td>
+    <td><img src="doc/img/app/settings/sections/07-device-safety.png" alt="Settings device safety" width="360"/></td>
   </tr>
 </table>
 
 ### Docs
 
-Read in-app documentation, getting started guides, and per-page walkthroughs with external references.
+Built-in guides for setup, workflows, and practical day-to-day usage.
 
 <table>
   <tr>
@@ -107,7 +171,7 @@ Read in-app documentation, getting started guides, and per-page walkthroughs wit
 
 ### Diagnostics
 
-Inspect and export logs, traces, and the effect of user/system actions.
+Track actions, inspect traces, and export logs when it is time for serious troubleshooting.
 
 <table>
   <tr>
@@ -117,62 +181,39 @@ Inspect and export logs, traces, and the effect of user/system actions.
   </tr>
 </table>
 
-Full screenshot set lives under [doc/img/app/](doc/img/app/).
+Full screenshot set: [doc/img/app/](doc/img/app/)
 
-## Getting Started
+## 🛟 Troubleshooting
 
-### Android Installation
+### Connectivity
 
-1. Download the APK from the latest GitHub release (`c64commander-<version>.apk` for normal installs; use `c64commander-<version>-debug.apk` only if you need a debug build).
-2. Open the downloaded file on your phone (Files app or notification).
-3. If prompted, allow installs from unknown sources for the browser or files app.
-4. Tap Install to finish.
+#### Can’t reach the device
 
-### iOS Installation via AltStore
-
-1. Install AltStore on your iPhone and sign in with an Apple ID.
-2. Open GitHub Actions for this repository and download these artifacts from the `iOS CI` workflow:
-  - `c64commander-altstore-unsigned.ipa`
-  - `c64commander-altstore-unsigned.ipa.sha256`
-3. Verify the checksum locally (`shasum -a 256 c64commander-altstore-unsigned.ipa`) matches the `.sha256` file.
-4. In AltStore, choose “+” and select `c64commander-altstore-unsigned.ipa`.
-5. Launch C64 Commander from the home screen after installation completes.
-
----
-
-## Troubleshooting
-
-### Connectivity issues
-
-#### Cannot reach device
-
-- Ensure the C64 Ultimate is on the same network as your mobile device and powered on.
-
-- Make sure the IP address / hostname is correct in Settings → Device → Connection.
+- Confirm your C64 Ultimate and mobile device are on the same network.
+- Confirm IP address / hostname in **Settings → Device → Connection**.
 
 #### Device becomes unresponsive
 
-C64 Commander includes a configurable device safety system to reduce REST and FTP load. You can find these controls in Settings → Device Safety.
+C64 Commander includes configurable **Device Safety** controls under **Settings → Device Safety** to help avoid overload from REST and FTP traffic. If you spot issues with the default **Balanced** preset, try **Conservative**.
 
-- **Safety mode presets**: Relaxed, Balanced (default), and Conservative.
-- **Advanced controls**: REST and FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit breaker thresholds, and discovery probe interval.
-- **Warning**: Lower safety settings can overwhelm the device. Use relaxed settings only if you understand the risks.
+- **Presets**: Relaxed, Balanced (default), Conservative
+- **Advanced controls**: REST/FTP concurrency, read coalescing windows, cooldowns, backoff strategy, circuit-breaker thresholds, discovery probe interval
+- **Important**: Relaxed settings can overwhelm some setups. Use carefully.
 
-### iOS
+### iOS specifics
 
-- **App expired**: free Apple ID installs must be refreshed in AltStore about every 7 days.
-- **App ID/account limits reached**: remove unused sideloaded apps from your Apple ID account and retry.
-- **Install/signing errors**: retry with a fresh download of both IPA and checksum and confirm they match.
-- **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17` in that order; iOS 17/18 are the baseline support targets.
+- **App expired**: Free Apple ID sideloads in AltStore usually need refresh roughly every 7 days.
+- **Account/App ID limits**: Remove unused sideloaded apps and retry.
+- **Install/signing errors**: Re-download the IPA and checksum, then verify again.
+- **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17`; iOS 17 and 18 are baseline support targets.
 
+## 🛠️ For Developers
 
-## Developer documentation
+If you want to build, test, or contribute:
 
-For build instructions, testing, and contribution guidelines, see [doc/developer.md](doc/developer.md).
+- Developer guide: [doc/developer.md](doc/developer.md)
+- Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
 
-Fuzz testing is documented in [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md).
+## ⚖️ License
 
-
-## License
-
-This project is licensed under the GPL v2 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under GPL v2. See [LICENSE](LICENSE) for details.
