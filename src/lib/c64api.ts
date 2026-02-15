@@ -28,6 +28,7 @@ import { getDeviceStateSnapshot } from '@/lib/deviceInteraction/deviceStateStore
 const DEFAULT_BASE_URL = 'http://c64u';
 const DEFAULT_DEVICE_HOST = 'c64u';
 const DEFAULT_PROXY_URL = 'http://127.0.0.1:8787';
+const WEB_PROXY_PATH = '/api/rest';
 const CONTROL_REQUEST_TIMEOUT_MS = 3000;
 const UPLOAD_REQUEST_TIMEOUT_MS = 5000;
 const PLAYBACK_REQUEST_TIMEOUT_MS = 5000;
@@ -243,6 +244,16 @@ export const getDeviceHostFromBaseUrl = (baseUrl?: string) => {
 export const buildBaseUrlFromDeviceHost = (deviceHost?: string) =>
   `http://${normalizeDeviceHost(deviceHost)}`;
 
+const resolvePlatformApiBaseUrl = (deviceHost: string, baseUrl?: string) => {
+  if (import.meta.env.VITE_WEB_PLATFORM === '1' && typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/$/, '')}${WEB_PROXY_PATH}`;
+  }
+  if (baseUrl) {
+    return baseUrl.replace(/\/$/, '');
+  }
+  return buildBaseUrlFromDeviceHost(deviceHost);
+};
+
 export const resolveDeviceHostFromStorage = () => {
   if (typeof localStorage === 'undefined') return DEFAULT_DEVICE_HOST;
   const storedDeviceHost = localStorage.getItem('c64u_device_host');
@@ -423,6 +434,7 @@ export interface DrivesResponse {
 export class C64API {
   private password?: string;
   private deviceHost: string;
+  private apiBaseUrl: string;
 
   constructor(
     baseUrl: string = DEFAULT_BASE_URL,
@@ -430,11 +442,18 @@ export class C64API {
     deviceHost: string = DEFAULT_DEVICE_HOST
   ) {
     this.deviceHost = normalizeDeviceHost(deviceHost || getDeviceHostFromBaseUrl(baseUrl));
+    const initialBaseUrl = import.meta.env.VITE_WEB_PLATFORM === '1'
+      ? baseUrl
+      : buildBaseUrlFromDeviceHost(this.deviceHost);
+    this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, initialBaseUrl);
     this.password = password;
   }
 
   setBaseUrl(url: string) {
-    this.deviceHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(url));
+    if (import.meta.env.VITE_WEB_PLATFORM !== '1') {
+      this.deviceHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(url));
+    }
+    this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
   }
 
   setPassword(password?: string) {
@@ -443,10 +462,14 @@ export class C64API {
 
   setDeviceHost(deviceHost?: string) {
     this.deviceHost = normalizeDeviceHost(deviceHost);
+    this.apiBaseUrl = resolvePlatformApiBaseUrl(
+      this.deviceHost,
+      buildBaseUrlFromDeviceHost(this.deviceHost),
+    );
   }
 
   getBaseUrl() {
-    return buildBaseUrlFromDeviceHost(this.deviceHost);
+    return this.apiBaseUrl;
   }
 
   getPassword() {
@@ -463,7 +486,7 @@ export class C64API {
       headers['X-Password'] = this.password;
     }
     const baseUrl = this.getBaseUrl();
-    if (isLocalProxy(baseUrl)) {
+    if (baseUrl.includes(WEB_PROXY_PATH) || isLocalProxy(baseUrl)) {
       headers['X-C64U-Host'] = this.deviceHost;
     }
     return headers;
@@ -1436,7 +1459,10 @@ const createApiProxy = (api: C64API): C64API => new Proxy(api, {
 export function getC64API(): C64API {
   if (!apiInstance) {
     const resolvedDeviceHost = resolveDeviceHostFromStorage();
-    const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+    const resolvedBaseUrl = resolvePlatformApiBaseUrl(
+      resolvedDeviceHost,
+      buildBaseUrlFromDeviceHost(resolvedDeviceHost),
+    );
     const cachedPassword = getCachedPassword();
     apiInstance = new C64API(resolvedBaseUrl, cachedPassword ?? undefined, resolvedDeviceHost);
     if (!lastDeviceHost) {
@@ -1457,7 +1483,10 @@ export function getC64API(): C64API {
 export function updateC64APIConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
-  const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+  const resolvedBaseUrl = resolvePlatformApiBaseUrl(
+    resolvedDeviceHost,
+    buildBaseUrlFromDeviceHost(resolvedDeviceHost),
+  );
 
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
@@ -1513,7 +1542,7 @@ export function getC64APIConfigSnapshot(): C64ApiConfigSnapshot {
 export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, deviceHost?: string) {
   const api = getC64API();
   const resolvedDeviceHost = resolvePreferredDeviceHost(baseUrl, deviceHost);
-  const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+  const resolvedBaseUrl = resolvePlatformApiBaseUrl(resolvedDeviceHost, baseUrl);
   api.setBaseUrl(resolvedBaseUrl);
   api.setPassword(password);
   api.setDeviceHost(resolvedDeviceHost);
@@ -1540,7 +1569,10 @@ export function applyC64APIRuntimeConfig(baseUrl: string, password?: string, dev
 export async function applyC64APIConfigFromStorage() {
   const savedPassword = await loadStoredPassword();
   const resolvedDeviceHost = resolveDeviceHostFromStorage();
-  const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+  const resolvedBaseUrl = resolvePlatformApiBaseUrl(
+    resolvedDeviceHost,
+    buildBaseUrlFromDeviceHost(resolvedDeviceHost),
+  );
   applyC64APIRuntimeConfig(resolvedBaseUrl, savedPassword ?? undefined, resolvedDeviceHost);
 }
 

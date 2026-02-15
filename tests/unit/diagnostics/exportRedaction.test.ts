@@ -26,7 +26,7 @@ describe('exportRedaction', () => {
       path: '/private/keys',
       password: 'topsecret',
       token: 'abc',
-      nested: { url: 'http://c64u.local:8080/v1/info' },
+      nested: { url: 'http://c64u.local:8064/v1/info' },
     };
     const output = redactExportValue(input) as Record<string, unknown>;
     expect(output.password).toBe('***');

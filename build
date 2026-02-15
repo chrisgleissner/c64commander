@@ -18,6 +18,7 @@ RUN_TEST_E2E_CI=false
 RUN_TEST_MAESTRO_CI=false
 RUN_TEST_MAESTRO_ALL=false
 RUN_TEST_MAESTRO_TAGS=false
+RUN_TEST_MAESTRO_DOCKER=false
 RUN_VALIDATE_EVIDENCE=false
 RUN_COVERAGE=false
 RUN_ANDROID_COVERAGE=true
@@ -29,6 +30,8 @@ RUN_SMOKE_ANDROID_REAL=false
 RUN_FORMAT=true
 RUN_DUMP_C64U_CONFIG=false
 RUN_CONTRACT_TEST=false
+RUN_DOCKER_BUILD=false
+RUN_DOCKER_START=false
 PLAYWRIGHT_DEVICES=""
 PLAYWRIGHT_PORT_RESOLVED=false
 APK_PATH=""
@@ -57,6 +60,10 @@ RECORD_TRACES=false
 TRACE_OUTPUT_DIR=""
 TRACE_SUITE=""
 MAESTRO_TAGS=""
+DOCKER_IMAGE_TAG="c64commander:local"
+DOCKER_CONTAINER_NAME="c64commander"
+DOCKER_PORT="8064"
+DOCKER_CONFIG_DIR="$ROOT_DIR/.tmp/web-config"
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
 CONTRACT_MODE="safe"
@@ -79,6 +86,7 @@ TEST_APK_FLAGS=()
 FUZZ_FLAGS=()
 CONTRACT_FLAGS=()
 TARGET_FLAGS=()
+DOCKER_FLAGS=()
 
 usage() {
   cat <<'EOF'
@@ -100,9 +108,12 @@ Primary actions (exactly one; default build when omitted):
   --test-maestro-ci
   --test-maestro-all
   --test-maestro-tags <tags>
+  --test-maestro-docker
   --test-fuzz
   --test-contract
   --test-smoke
+  --docker-build
+  --docker-start
   --screenshots
   --screenshots-only
   --video
@@ -131,6 +142,12 @@ Test modifiers (require one --test-* primary action):
   --skip-android-coverage  Skip Android Jacoco coverage check
   --test-apk-path <path>   APK path override for Maestro/smoke tests
   --test-device-id <id>    adb device id for Maestro tests
+
+Docker modifiers (require --docker-build, --docker-start, or --test-maestro-docker):
+  --docker-image <tag>     Docker image tag (default: c64commander:local)
+  --docker-name <name>     Docker container name (default: c64commander)
+  --docker-port <port>     Host port mapped to container 8064 (default: 8064)
+  --docker-config-dir <path> Host directory mounted to /config (default: .tmp/web-config)
 
 Fuzz modifiers (require --test-fuzz):
   --fuzz-seed <num>          Base seed for fuzz RNG (default: epoch millis; each shard adds its index)
@@ -174,6 +191,9 @@ Examples:
   ./build --screenshots-only
   ./build --video
   ./build --test-e2e --record-traces --trace-suite playback
+  ./build --docker-build
+  ./build --docker-start
+  ./build --test-maestro-docker
   ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off
   ./build --test-smoke --c64u-target real --c64u-host C64U
 
@@ -183,6 +203,7 @@ Notes:
   --video             Records a Playwright walkthrough video.
   --test-e2e          Runs Playwright E2E tests excluding @screenshots.
   --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
+  --test-maestro-docker  Builds/starts web Docker and runs Maestro CI flows against 10.0.2.2:<docker-port> unless --c64u-host overrides it.
   --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
   --coverage          Runs unit + E2E coverage regardless of test category.
   Playwright port     Auto-selected to avoid clashes; set PLAYWRIGHT_PORT to pin a specific port.
@@ -212,6 +233,9 @@ set_primary_action() {
 is_test_action() {
   case "$PRIMARY_ACTION" in
     test-unit|test-e2e|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-smoke)
+      return 0
+      ;;
+    test-maestro-docker)
       return 0
       ;;
     *)
@@ -456,6 +480,34 @@ ensure_maestro_emulator() {
   TEST_DEVICE_ID="$emulator_id"
 }
 
+build_docker_web_image() {
+  require_cmd docker
+  log "Building Docker image: ${DOCKER_IMAGE_TAG}"
+  (cd "$ROOT_DIR" && docker build -f web/Dockerfile -t "$DOCKER_IMAGE_TAG" .)
+}
+
+start_docker_web_container() {
+  require_cmd docker
+  require_cmd curl
+  mkdir -p "$DOCKER_CONFIG_DIR"
+  docker rm -f "$DOCKER_CONTAINER_NAME" >/dev/null 2>&1 || true
+  log "Starting Docker container: ${DOCKER_CONTAINER_NAME}"
+  (cd "$ROOT_DIR" && docker run -d --name "$DOCKER_CONTAINER_NAME" -p "${DOCKER_PORT}:8064" -v "$DOCKER_CONFIG_DIR:/config" "$DOCKER_IMAGE_TAG" >/dev/null)
+
+  local health_url="http://127.0.0.1:${DOCKER_PORT}/healthz"
+  local i
+  for i in $(seq 1 30); do
+    if curl -fsS "$health_url" >/dev/null; then
+      log "Docker web server is healthy at http://127.0.0.1:${DOCKER_PORT}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Docker web server did not become healthy at ${health_url}" >&2
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test-unit)
@@ -488,6 +540,10 @@ while [[ $# -gt 0 ]]; do
       set_primary_action "test-fuzz" "$1"
       shift
       ;;
+    --test-maestro-docker)
+      set_primary_action "test-maestro-docker" "$1"
+      shift
+      ;;
     --test-contract)
       set_primary_action "test-contract" "$1"
       shift
@@ -514,6 +570,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dump-c64u-config)
       set_primary_action "dump-c64u-config" "$1"
+      shift
+      ;;
+    --docker-build)
+      set_primary_action "docker-build" "$1"
+      shift
+      ;;
+    --docker-start)
+      set_primary_action "docker-start" "$1"
       shift
       ;;
     --skip-install)
@@ -621,6 +685,30 @@ while [[ $# -gt 0 ]]; do
       record_flag TEST_APK_FLAGS "$1"
       require_value "$1" "${2:-}"
       TEST_DEVICE_ID="$2"
+      shift 2
+      ;;
+    --docker-image)
+      record_flag DOCKER_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      DOCKER_IMAGE_TAG="$2"
+      shift 2
+      ;;
+    --docker-name)
+      record_flag DOCKER_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      DOCKER_CONTAINER_NAME="$2"
+      shift 2
+      ;;
+    --docker-port)
+      record_flag DOCKER_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      DOCKER_PORT="$2"
+      shift 2
+      ;;
+    --docker-config-dir)
+      record_flag DOCKER_FLAGS "$1"
+      require_value "$1" "${2:-}"
+      DOCKER_CONFIG_DIR="$2"
       shift 2
       ;;
     --fuzz-seed)
@@ -773,17 +861,22 @@ if [[ -z "$PRIMARY_ACTION" ]]; then
 fi
 
 if [[ "$PRIMARY_ACTION" == "emulator" || "$PRIMARY_ACTION" == "dump-c64u-config" ]]; then
-  if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 ]]; then
+  if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 || ${#DOCKER_FLAGS[@]} -gt 0 ]]; then
     echo "Tooling actions must run in isolation" >&2
     exit 1
   fi
 fi
 
 if [[ "$PRIMARY_ACTION" == "screenshots" || "$PRIMARY_ACTION" == "screenshots-only" || "$PRIMARY_ACTION" == "video" ]]; then
-  if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 ]]; then
+  if [[ ${#BUILD_FLAGS[@]} -gt 0 || ${#TEST_MODIFIERS[@]} -gt 0 || ${#TEST_APK_FLAGS[@]} -gt 0 || ${#FUZZ_FLAGS[@]} -gt 0 || ${#CONTRACT_FLAGS[@]} -gt 0 || ${#TARGET_FLAGS[@]} -gt 0 || ${#DOCKER_FLAGS[@]} -gt 0 ]]; then
     echo "Screenshot actions must run in isolation" >&2
     exit 1
   fi
+fi
+
+if [[ "$PRIMARY_ACTION" != "docker-build" && "$PRIMARY_ACTION" != "docker-start" && "$PRIMARY_ACTION" != "test-maestro-docker" && ${#DOCKER_FLAGS[@]} -gt 0 ]]; then
+  echo "Docker modifiers require --docker-build, --docker-start, or --test-maestro-docker" >&2
+  exit 1
 fi
 
 if [[ "$PRIMARY_ACTION" != "build" && ${#BUILD_FLAGS[@]} -gt 0 ]]; then
@@ -810,7 +903,7 @@ fi
 
 if [[ ${#TARGET_FLAGS[@]} -gt 0 ]]; then
   case "$PRIMARY_ACTION" in
-    test-contract|test-maestro-ci|test-maestro-all|test-maestro-tags|test-smoke|test-fuzz)
+    test-contract|test-maestro-ci|test-maestro-all|test-maestro-tags|test-maestro-docker|test-smoke|test-fuzz)
       ;;
     *)
       echo "--c64u-target/--c64u-host are only valid with contract, Maestro, or smoke tests" >&2
@@ -850,6 +943,11 @@ if [[ "$PRIMARY_ACTION" == "test-maestro-tags" && -z "$MAESTRO_TAGS" ]]; then
   exit 1
 fi
 
+if [[ ! "$DOCKER_PORT" =~ ^[0-9]+$ ]] || [[ "$DOCKER_PORT" -lt 1 ]] || [[ "$DOCKER_PORT" -gt 65535 ]]; then
+  echo "Invalid --docker-port: ${DOCKER_PORT}" >&2
+  exit 1
+fi
+
 RUN_INSTALL=true
 RUN_BUILD=true
 RUN_TEST=true
@@ -865,12 +963,15 @@ RUN_TEST_E2E_CI=false
 RUN_TEST_MAESTRO_CI=false
 RUN_TEST_MAESTRO_ALL=false
 RUN_TEST_MAESTRO_TAGS=false
+RUN_TEST_MAESTRO_DOCKER=false
 RUN_FUZZ=false
 RUN_CONTRACT_TEST=false
 RUN_SMOKE_ANDROID_EMULATOR=false
 RUN_SMOKE_ANDROID_REAL=false
 RUN_EMULATOR=false
 RUN_DUMP_C64U_CONFIG=false
+RUN_DOCKER_BUILD=false
+RUN_DOCKER_START=false
 
 case "$PRIMARY_ACTION" in
   build)
@@ -907,6 +1008,12 @@ case "$PRIMARY_ACTION" in
   test-maestro-tags)
     RUN_TEST=false
     RUN_TEST_MAESTRO_TAGS=true
+    ;;
+  test-maestro-docker)
+    RUN_TEST=false
+    RUN_TEST_MAESTRO_DOCKER=true
+    RUN_DOCKER_BUILD=true
+    RUN_DOCKER_START=true
     ;;
   test-fuzz)
     RUN_TEST=false
@@ -961,7 +1068,35 @@ case "$PRIMARY_ACTION" in
   dump-c64u-config)
     RUN_DUMP_C64U_CONFIG=true
     ;;
+  docker-build)
+    RUN_INSTALL=false
+    RUN_BUILD=false
+    RUN_TEST=false
+    RUN_APK=false
+    RUN_FORMAT=false
+    RUN_DOCKER_BUILD=true
+    ;;
+  docker-start)
+    RUN_INSTALL=false
+    RUN_BUILD=false
+    RUN_TEST=false
+    RUN_APK=false
+    RUN_FORMAT=false
+    RUN_DOCKER_BUILD=true
+    RUN_DOCKER_START=true
+    ;;
 esac
+
+if [[ "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
+  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" != "real" ]]; then
+    echo "--test-maestro-docker requires --c64u-target real" >&2
+    exit 1
+  fi
+  C64U_TARGET="real"
+  if [[ "$C64U_HOST_SET" != "true" ]]; then
+    C64U_HOST="10.0.2.2:${DOCKER_PORT}"
+  fi
+fi
 
 if [[ "$RUN_EMULATOR" == "true" ]]; then
   log "Starting Android emulator flow"
@@ -1147,16 +1282,27 @@ if [[ "$RUN_FUZZ" == "true" ]]; then
   (cd "$ROOT_DIR" && FUZZ_RUN_MODE="local" node scripts/run-fuzz.mjs "${FUZZ_ARGS[@]}")
 fi
 
+if [[ "$RUN_DOCKER_BUILD" == "true" ]]; then
+  build_docker_web_image
+fi
+
+if [[ "$RUN_DOCKER_START" == "true" ]]; then
+  start_docker_web_container
+fi
+
 if [[ "$RUN_APK" == "true" ]]; then
   log "Building debug APK"
   (cd "$ROOT_DIR" && npm run android:apk -- --warning-mode none)
 fi
 
-if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "$RUN_TEST_MAESTRO_TAGS" == "true" ]]; then
+if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_ALL" == "true" || "$RUN_TEST_MAESTRO_TAGS" == "true" || "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
+  if [[ "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
+    trap 'docker rm -f "$DOCKER_CONTAINER_NAME" >/dev/null 2>&1 || true' EXIT
+  fi
   ensure_maestro_emulator
   log "Running Maestro tests"
   MAESTRO_MODE=""
-  if [[ "$RUN_TEST_MAESTRO_CI" == "true" ]]; then
+  if [[ "$RUN_TEST_MAESTRO_CI" == "true" || "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
     MAESTRO_MODE="ci"
   elif [[ "$RUN_TEST_MAESTRO_ALL" == "true" ]]; then
     MAESTRO_MODE="all"

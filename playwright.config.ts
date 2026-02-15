@@ -29,6 +29,10 @@ const phoneProject = {
   name: 'android-phone',
   use: playwrightDevices['Pixel 5'],
 };
+const webProject = {
+  name: 'web',
+  use: playwrightDevices['Desktop Chrome'],
+};
 const tabletProject = {
   name: 'android-tablet',
   use: {
@@ -47,12 +51,13 @@ const getActiveProjects = () => {
     return [phoneProject, tabletProject];
   }
 
-  const normalized = devicesEnv === 'all' ? 'phone,tablet' : devicesEnv;
+  const normalized = devicesEnv === 'all' ? 'phone,tablet,web' : devicesEnv;
   const requested = normalized.split(',').map((d) => d.trim());
 
   const projects = [];
   if (requested.includes('phone')) projects.push(phoneProject);
   if (requested.includes('tablet')) projects.push(tabletProject);
+  if (requested.includes('web')) projects.push(webProject);
 
   return projects.length > 0 ? projects : [phoneProject];
 };

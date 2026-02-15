@@ -1619,7 +1619,7 @@
     "origin": "system",
     "correlationId": "COR-0015",
     "data": {
-      "name": "api.host-change:127.0.0.1:32961->localhost:8080",
+      "name": "api.host-change:127.0.0.1:32961->localhost:8064",
       "component": null,
       "context": {
         "ui": {
@@ -1698,11 +1698,11 @@
     "correlationId": "COR-0016",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -1768,11 +1768,11 @@
     "correlationId": "COR-0017",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -1838,11 +1838,11 @@
     "correlationId": "COR-0018",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -1908,11 +1908,11 @@
     "correlationId": "COR-0019",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -1978,11 +1978,11 @@
     "correlationId": "COR-0020",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -2048,11 +2048,11 @@
     "correlationId": "COR-0021",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -2118,11 +2118,11 @@
     "correlationId": "COR-0022",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -2204,11 +2204,11 @@
     "correlationId": "COR-0023",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -2274,11 +2274,11 @@
     "correlationId": "COR-0024",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -2936,7 +2936,7 @@
     "correlationId": "COR-0025",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -3160,7 +3160,7 @@
     "correlationId": "COR-0026",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -3280,11 +3280,11 @@
     "correlationId": "COR-0027",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -3422,7 +3422,7 @@
     "correlationId": "COR-0028",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -3542,11 +3542,11 @@
     "correlationId": "COR-0029",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -3684,7 +3684,7 @@
     "correlationId": "COR-0030",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -3804,11 +3804,11 @@
     "correlationId": "COR-0031",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -3946,7 +3946,7 @@
     "correlationId": "COR-0032",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -4066,11 +4066,11 @@
     "correlationId": "COR-0033",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "real-device",
@@ -4208,7 +4208,7 @@
     "correlationId": "COR-0034",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {},
       "body": null,
@@ -4328,11 +4328,11 @@
     "correlationId": "COR-0035",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "internal-mock",
@@ -4470,11 +4470,11 @@
     "correlationId": "COR-0036",
     "data": {
       "method": "GET",
-      "url": "http://localhost:8080/v1/info",
+      "url": "http://localhost:8064/v1/info",
       "normalizedUrl": "/v1/info",
       "headers": {
         "Content-Type": "application/json",
-        "X-C64U-Host": "localhost:8080"
+        "X-C64U-Host": "localhost:8064"
       },
       "body": null,
       "target": "internal-mock",

@@ -1,0 +1,148 @@
+name: Web CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+    tags: ["*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/chrisgleissner/c64commander
+  CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  web-build-and-test:
+    name: Web | Build + tests (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web platform
+        run: npm run build:web-platform
+
+      - name: Run web-platform tests
+        run: npm run test:web-platform
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (${{ matrix.platform }})
+        run: |
+          set -euo pipefail
+          docker buildx build \
+            --platform "${{ matrix.platform }}" \
+            --load \
+            -f web/Dockerfile \
+            -t c64commander:ci \
+            .
+
+      - name: Run Docker container smoke test
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/web-config
+          chmod 0777 .tmp/web-config
+          docker run -d --name c64commander-smoke --add-host=host.docker.internal:host-gateway -p 18080:8064 -v "$PWD/.tmp/web-config:/config" c64commander:ci
+          healthy=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
+              healthy=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$healthy" != "1" ]]; then
+            echo "Container failed health check within timeout; dumping logs"
+            docker logs c64commander-smoke || true
+            exit 1
+          fi
+          curl -fsS http://127.0.0.1:18080/healthz | tee /tmp/web-health.json
+
+      - name: Run web-platform Playwright checks
+        env:
+          PLAYWRIGHT_REUSE_SERVER: "1"
+          PLAYWRIGHT_PORT: "18080"
+          PLAYWRIGHT_WORKERS: "1"
+          PLAYWRIGHT_DEVICES: "web"
+        run: npx playwright test playwright/webPlatformAuth.spec.ts --project=web
+
+      - name: Stop smoke container
+        if: always()
+        run: docker rm -f c64commander-smoke || true
+
+  web-docker-publish:
+    name: Web | Publish GHCR multi-arch
+    runs-on: ubuntu-latest
+    needs: web-build-and-test
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify tag/version consistency
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$TAG" != "$PKG_VERSION" ]]; then
+            echo "Tag/version mismatch: tag=$TAG package.json=$PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push linux/amd64,linux/arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.IMAGE_NAME }}:latest

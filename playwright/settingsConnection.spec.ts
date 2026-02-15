@@ -50,7 +50,7 @@ test.describe('Settings connection management', () => {
     const originalUrl = await urlInput.inputValue();
     await snap(page, testInfo, 'original-url');
 
-    await urlInput.fill('localhost:8080');
+    await urlInput.fill('localhost:8064');
     await snap(page, testInfo, 'url-changed');
 
     await page.getByRole('button', { name: /Save & Connect|Save connection/i }).click();
@@ -61,7 +61,7 @@ test.describe('Settings connection management', () => {
 
 
     const stored = await page.evaluate(() => localStorage.getItem('c64u_device_host'));
-    expect(stored).toBe('localhost:8080');
+    expect(stored).toBe('localhost:8064');
     await snap(page, testInfo, 'url-saved');
   });
 

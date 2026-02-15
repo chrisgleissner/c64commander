@@ -13,6 +13,38 @@ Source: https://docs.maestro.dev/api-reference/commands
 
 ## Rules
 
+## Platform Comparison Matrix
+
+| Platform | CI runner | Flows executed in CI | High-level description |
+| --- | --- | --- | --- |
+| Android | `scripts/run-maestro-gating.sh` with `CI=true` | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` | `smoke-launch` validates app launch and primary shell availability. `smoke-hvsc` validates core HVSC browsing/import path on device. |
+| iPhone (iOS simulator) | `.github/workflows/ios-ci.yaml` matrix (`ios-maestro-tests`) | `ios-smoke-launch`, `ios-playback-basics`, `ios-diagnostics-export`, `ios-ftp-browse`, `ios-local-import`, `ios-secure-storage-persist`, `ios-import-playback`, `ios-hvsc-browse`, `ios-config-persistence` | Covers launch stability, playback controls, diagnostics dialog export path, FTP browsing, local source option visibility, secure-storage persistence, import-to-playback path, HVSC controls visibility, and config persistence across app restarts. |
+| Web (Docker route via Android app) | `./build --test-maestro-docker` | `.maestro/smoke-launch.yaml`, `.maestro/smoke-hvsc.yaml` (CI-tag subset) | Builds/starts Docker web server and runs Android Maestro CI flows with app target set to `real` and host default `10.0.2.2:<docker-port>`, exercising the web route through the native client path. |
+
+## Build helper Maestro modes
+
+- `./build --test-maestro-ci`: Runs Android Maestro CI-critical subset against configured C64U target (`mock` by default).
+- `./build --test-maestro-all`: Runs all Android Maestro flows (ignores `excludeTags`).
+- `./build --test-maestro-tags <tags>`: Runs Android Maestro flows with include/exclude tag filters.
+- `./build --test-maestro-docker`: Builds and starts Docker web runtime, then runs Android Maestro CI-critical subset against Docker web endpoint (default host `10.0.2.2:<docker-port>`).
+
+### Android flow details (CI)
+
+- `smoke-launch`: Boots app and verifies baseline UI responsiveness on emulator/device.
+- `smoke-hvsc`: Verifies HVSC integration smoke path (browse/import surface) on Android.
+
+### iPhone flow details (CI)
+
+- `ios-smoke-launch`: Confirms app launches and primary navigation shell is reachable.
+- `ios-playback-basics`: Validates basic transport/playback controls and state transitions.
+- `ios-diagnostics-export`: Opens diagnostics UI and checks export-capable dialog path.
+- `ios-ftp-browse`: Validates FTP source browsing behavior on iOS selectors.
+- `ios-local-import`: Verifies deterministic local import source option visibility.
+- `ios-secure-storage-persist`: Ensures secure-storage values persist across relaunch.
+- `ios-import-playback`: Confirms import-to-playback happy path in iOS flow.
+- `ios-hvsc-browse`: Validates HVSC section visibility and key actions.
+- `ios-config-persistence`: Verifies settings persistence after restart.
+
 ### Tag tests for CI optimization
 
 Use tags to control which tests run on CI versus locally:

@@ -32,6 +32,7 @@ for (const line of output.split('\n')) {
   const rawFile = match[1].trim();
   if (!rawFile) continue;
   const normalized = rawFile.includes('/') ? rawFile : path.join('playwright', rawFile);
+  if (normalized.endsWith('playwright/webPlatformAuth.spec.ts')) continue;
   fileCounts.set(normalized, (fileCounts.get(normalized) ?? 0) + 1);
 }
 
