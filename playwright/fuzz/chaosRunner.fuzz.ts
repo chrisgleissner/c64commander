@@ -9,6 +9,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { chromium, devices } from 'playwright';
 import { promises as fs } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createMockC64Server } from '../../tests/mocks/mockC64Server';
@@ -531,6 +532,20 @@ const computeVisualDelta = (previous: Buffer | null, current: Buffer): number =>
 
 const writeJson = async (filePath: string, payload: unknown) => {
   await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
+};
+
+const extractScreenshotFromVideo = (videoPath: string, screenshotPath: string) => {
+  const result = spawnSync(
+    'ffmpeg',
+    ['-v', 'error', '-y', '-sseof', '-0.1', '-i', videoPath, '-frames:v', '1', screenshotPath],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  if (result.error) {
+    throw new Error(`ffmpeg execution failed: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error((result.stderr || Buffer.from('ffmpeg failed')).toString('utf8').trim() || 'ffmpeg failed');
+  }
 };
 
 const sleep = (ms: number) => new Promise((resolve) => {
@@ -1916,6 +1931,16 @@ test.describe('Fuzz Test', () => {
         });
       }
 
+      const screenshotExists = await fs.stat(screenshotPath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
+      if (!screenshotExists && savedVideo) {
+        try {
+          extractScreenshotFromVideo(path.join(outputRoot, savedVideo), screenshotPath);
+          logInteraction(`s=${totalSteps}\ta=screenshot\tfallback=video-frame`);
+        } catch (error) {
+          logInteraction(`s=${totalSteps}\ta=screenshot\tfallback-error=${(error as Error)?.message || 'ffmpeg-failed'}`);
+        }
+      }
+
       if (infraMode && issue) {
         infraSessionClean = false;
       }
@@ -1995,31 +2020,7 @@ test.describe('Fuzz Test', () => {
       if (remainingRunMs < minimumSessionWindowMs) {
         break;
       }
-      const maxEnvelopeByBudgetMs = Math.max(20_000, remainingRunMs + actionTimeoutMs * 3);
-      const sessionEnvelopeTimeoutMs = Math.min(
-        Math.max(sessionTimeoutMs + actionTimeoutMs * 3, 20_000),
-        maxEnvelopeByBudgetMs,
-      );
-      let sessionPromise: Promise<void> | null = null;
-      try {
-        sessionPromise = runSession();
-        await withTimeout(
-          () => sessionPromise,
-          sessionEnvelopeTimeoutMs,
-          `session envelope (${sessionEnvelopeTimeoutMs}ms)`,
-        );
-      } catch (error) {
-        browserNeedsRestart = true;
-        try {
-          await Promise.race([
-            sessionPromise ?? sleep(0),
-            sleep(Math.max(3_000, actionTimeoutMs)),
-          ]);
-        } catch {
-          // no-op
-        }
-        console.error('Fuzz session envelope failed; restarting browser for next session:', error);
-      }
+      await runSession();
       if (maxSteps && totalSteps >= maxSteps) break;
     }
 

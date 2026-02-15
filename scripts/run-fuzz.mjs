@@ -531,8 +531,9 @@ const mergeReports = async () => {
         let durationMs;
         try {
           durationMs = probeVideoDurationMs(videoAbsolutePath);
-        } catch {
-          continue;
+        } catch (error) {
+          console.warn('Synthetic session duration probe failed, using fallback duration:', error);
+          durationMs = Math.max(1000, Math.floor((budgetMs || 60_000) / Math.max(1, concurrency)));
         }
         const syntheticManifest = {
           sessionId: syntheticSessionId,
