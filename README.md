@@ -40,11 +40,11 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
       - [Device becomes unresponsive](#device-becomes-unresponsive)
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
-  - [⚖️ License](#️-license)
   - [🙏 Acknowledgments](#-acknowledgments)
     - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
     - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
     - [Third-Party Libraries](#third-party-libraries)
+  - [⚖️ License](#️-license)
 
 ## ✨ Why C64 Commander?
 
@@ -294,7 +294,7 @@ The [High Voltage SID Collection](https://hvsc.c64.org) is an amazing archive of
 
 ### Commodore and the C64 Ultimate
 
-Heartfelt thanks to Commodore for creating the Commodore 64, a machine that defined a generation of computing and gaming. Special recognition goes to the creators of the C64 Ultimate (Ultimate 64) for breathing new life into this classic platform with modern hardware that maintains the authentic C64 experience while adding powerful new capabilities.
+Heartfelt thanks to [Commodore](https://commodore.net) for creating the Commodore 64, a machine that defined a generation of computing and gaming. Special recognition goes to the creators of the C64 Ultimate (Ultimate 64) for breathing new life into this classic platform with modern hardware that maintains the authentic C64 experience while adding powerful new capabilities.
 
 ### Third-Party Libraries
 
