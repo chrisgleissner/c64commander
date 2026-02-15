@@ -71,7 +71,15 @@ const stopStandaloneServer = async (child: ChildProcess): Promise<void> => {
     });
 };
 
-const ensureWebAuthApi = async (request: import('@playwright/test').APIRequestContext): Promise<boolean> => {
+type RequestLike = {
+    get: (url: string) => Promise<{
+        status: () => number;
+        headers: () => Record<string, string>;
+        json: () => Promise<unknown>;
+    }>;
+};
+
+const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
     const authStatus = await request.get('/auth/status');
     if (authStatus.status() !== 200) {
         return false;
