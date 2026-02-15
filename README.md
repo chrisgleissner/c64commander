@@ -53,28 +53,29 @@ Because it gives you easy control of your C64 Ultimate from your phone.
 
 ### Install on Android
 
-1. Download the APK from the latest GitHub release:
-   - `c64commander-<version>.apk` for normal installs
-   - `c64commander-<version>-debug.apk` only when you explicitly need a debug build
-2. Open the downloaded file on your phone.
-3. If prompted, allow installs from unknown sources for your browser or file manager.
+1. Download `c64commander-<version>.apk` from the latest GitHub release.
+2. Open the file on your phone.
+3. Allow installs from unknown sources if prompted.
 4. Tap **Install**.
+5. Launch C64 Commander from your home screen.
 
-### Install on iOS (AltStore)
+Done.
 
-1. Install AltStore on your iPhone and sign in with your Apple ID.
-2. In this repository’s GitHub Actions, open the `iOS CI` workflow and download:
-   - `c64commander-altstore-unsigned.ipa`
-   - `c64commander-altstore-unsigned.ipa.sha256`
-3. Verify checksum locally:
+### Install on iOS
 
-   ```bash
-   shasum -a 256 c64commander-altstore-unsigned.ipa
-   ```
+iOS builds are distributed via AltStore.
 
-4. Confirm the output exactly matches the `.sha256` file.
-5. In AltStore, tap `+` and select `c64commander-altstore-unsigned.ipa`.
+1. Install **AltServer** on a Mac or Windows PC from https://altstore.io, then connect your iPhone via USB.
+2. In AltServer, choose **Install AltStore → [your iPhone]** and sign in with your Apple ID.
+3. Open **AltStore** on your iPhone.
+4. Download `c64commander-altstore-<version>.ipa` from the latest GitHub release and transfer it to your iPhone.
+5. In **AltStore → My Apps**, tap `+` and select the IPA.
 6. Launch C64 Commander from your home screen.
+
+Done.
+
+AltStore automatically refreshes installed apps in the background when your iPhone can reach AltServer on your local network.
+
 
 ### First Connection Checklist
 
