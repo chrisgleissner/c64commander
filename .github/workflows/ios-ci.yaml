@@ -47,6 +47,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Resolve app version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME}"
+          else
+            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
+            if [[ -z "$APP_VERSION" ]]; then
+              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+            fi
+          fi
+          if [[ -z "$APP_VERSION" ]]; then
+            APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+
       - name: Print Xcode version
         run: |
           xcodebuild -version
@@ -525,22 +540,23 @@ jobs:
       - name: Package AltStore unsigned IPA
         run: |
           set -euo pipefail
+          IPA_BASENAME="c64commander-${APP_VERSION}-altstore-unsigned"
           rm -rf ios/build/Payload
           mkdir -p ios/build/Payload
           cp -R ios/build/Build/Products/Release-iphoneos/App.app ios/build/Payload/App.app
           (
             cd ios/build
-            zip -qry c64commander-altstore-unsigned.ipa Payload
+            zip -qry "${IPA_BASENAME}.ipa" Payload
           )
-          shasum -a 256 ios/build/c64commander-altstore-unsigned.ipa | awk '{print $1}' > ios/build/c64commander-altstore-unsigned.ipa.sha256
+          shasum -a 256 "ios/build/${IPA_BASENAME}.ipa" | awk '{print $1}' > "ios/build/${IPA_BASENAME}.ipa.sha256"
 
       - name: Upload AltStore IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-altstore-unsigned-ipa
           path: |
-            ios/build/c64commander-altstore-unsigned.ipa
-            ios/build/c64commander-altstore-unsigned.ipa.sha256
+            ios/build/c64commander-*-altstore-unsigned.ipa
+            ios/build/c64commander-*-altstore-unsigned.ipa.sha256
           if-no-files-found: error
 
       - name: Publish AltStore IPA on tags
@@ -548,8 +564,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ios/build/c64commander-altstore-unsigned.ipa
-            ios/build/c64commander-altstore-unsigned.ipa.sha256
+            ios/build/c64commander-*-altstore-unsigned.ipa
+            ios/build/c64commander-*-altstore-unsigned.ipa.sha256
 
   ios-package-paid:
     name: iOS | Package paid signing
