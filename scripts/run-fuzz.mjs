@@ -234,6 +234,7 @@ const resolveMergedArtifactPath = (relativePath, sessionJsonPath) => {
   if (!shardPrefix) return relativePath;
   const directory = path.dirname(relativePath);
   const file = path.basename(relativePath);
+  if (file.startsWith(shardPrefix)) return relativePath;
   return path.join(directory, `${shardPrefix}${file}`);
 };
 
