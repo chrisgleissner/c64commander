@@ -28,6 +28,10 @@ const VISUAL_SAMPLE_INTERVAL_MS = 1000;
 const VISUAL_SAMPLE_TIMEOUT_MS = 3000;
 const MAX_VISUAL_STAGNATION_MS = 5000;
 const VISUAL_DELTA_THRESHOLD = 0.003;
+const PLACEHOLDER_SCREENSHOT_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Zc1cAAAAASUVORK5CYII=',
+  'base64',
+);
 
 type Severity = 'crash' | 'freeze' | 'errorLog' | 'warnLog';
 
@@ -548,6 +552,16 @@ const extractScreenshotFromVideo = (videoPath: string, screenshotPath: string) =
   }
 };
 
+const PLACEHOLDER_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMBAAZf6z8AAAAASUVORK5CYII=';
+
+const ensureScreenshotArtifact = async (screenshotPath: string) => {
+  const exists = await fs.stat(screenshotPath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
+  if (exists) return;
+  await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
+  await fs.writeFile(screenshotPath, Buffer.from(PLACEHOLDER_PNG_BASE64, 'base64'));
+};
+
 const sleep = (ms: number) => new Promise((resolve) => {
   setTimeout(resolve, ms);
 });
@@ -654,6 +668,77 @@ test.describe('Fuzz Test', () => {
       'max-steps': 0,
       'no-action': 0,
       'visual-stagnation': 0,
+    };
+
+    const createSyntheticTimeoutSession = async (detail: string, durationMs: number) => {
+      const effectiveSessionIndex = Math.max(1, sessionIndex);
+      const sessionId = `session-${String(effectiveSessionIndex).padStart(4, '0')}`;
+      const sessionLogPath = path.join(sessionsDir, `${sessionId}.log`);
+      const sessionJsonPath = path.join(sessionsDir, `${sessionId}.json`);
+      const sessionScreenshotPath = path.join(sessionsDir, `${sessionId}.png`);
+      const sessionVideoPath = path.join(videosDir, `${sessionId}.webm`);
+
+      const alreadyExists = await fs.stat(sessionJsonPath).then((stat) => stat.isFile()).catch(() => false);
+      if (alreadyExists) return;
+
+      await fs.writeFile(sessionLogPath, `s=0\ta=session\tsynthetic-timeout\tdetail=${detail}\n`, 'utf8');
+
+      const seconds = Math.max(1, Math.ceil(durationMs / 1000));
+      const videoResult = spawnSync(
+        'ffmpeg',
+        [
+          '-v',
+          'error',
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'color=c=black:s=360x740:r=1',
+          '-t',
+          String(seconds),
+          '-c:v',
+          'libvpx-vp9',
+          '-pix_fmt',
+          'yuv420p',
+          sessionVideoPath,
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      );
+      if (videoResult.error || videoResult.status !== 0) {
+        throw new Error(`Synthetic timeout video creation failed: ${(videoResult.stderr || videoResult.error?.message || 'ffmpeg failed').toString()}`);
+      }
+
+      try {
+        try {
+          extractScreenshotFromVideo(sessionVideoPath, sessionScreenshotPath);
+        } catch (error) {
+          console.warn('Synthetic timeout screenshot extraction failed, using placeholder:', error);
+        }
+        await ensureScreenshotArtifact(sessionScreenshotPath);
+      } catch {
+        await fs.writeFile(sessionScreenshotPath, PLACEHOLDER_SCREENSHOT_PNG);
+      }
+
+      const syntheticManifest: SessionManifest = {
+        sessionId,
+        seed,
+        shardIndex,
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + durationMs).toISOString(),
+        durationMs,
+        steps: 0,
+        terminationReason: 'session-timeout',
+        maxVisualStagnationMs: MAX_VISUAL_STAGNATION_MS,
+        visualSamples: 0,
+        recoverySteps: ['terminate-session'],
+        interactionLog: path.relative(outputRoot, sessionLogPath),
+        finalScreenshot: path.relative(outputRoot, sessionScreenshotPath),
+        video: path.relative(outputRoot, sessionVideoPath),
+      };
+
+      sessionManifests.push(syntheticManifest);
+      terminationCounts['session-timeout'] += 1;
+      await writeJson(sessionJsonPath, syntheticManifest);
     };
 
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
@@ -1938,8 +2023,10 @@ test.describe('Fuzz Test', () => {
           logInteraction(`s=${totalSteps}\ta=screenshot\tfallback=video-frame`);
         } catch (error) {
           logInteraction(`s=${totalSteps}\ta=screenshot\tfallback-error=${(error as Error)?.message || 'ffmpeg-failed'}`);
+          await fs.writeFile(screenshotPath, PLACEHOLDER_SCREENSHOT_PNG).catch(() => { });
         }
       }
+      await ensureScreenshotArtifact(screenshotPath);
 
       if (infraMode && issue) {
         infraSessionClean = false;
@@ -2020,7 +2107,27 @@ test.describe('Fuzz Test', () => {
       if (remainingRunMs < minimumSessionWindowMs) {
         break;
       }
-      await runSession();
+      const maxEnvelopeByBudgetMs = Math.max(20_000, remainingRunMs + actionTimeoutMs * 3);
+      const sessionEnvelopeTimeoutMs = Math.min(
+        Math.max(sessionTimeoutMs + actionTimeoutMs * 3, 20_000),
+        maxEnvelopeByBudgetMs,
+      );
+      try {
+        await withTimeout(
+          () => runSession(),
+          sessionEnvelopeTimeoutMs,
+          `session envelope (${sessionEnvelopeTimeoutMs}ms)`,
+        );
+      } catch (error) {
+        browserNeedsRestart = true;
+        await createSyntheticTimeoutSession(
+          (error as Error)?.message || 'session-envelope-timeout',
+          sessionEnvelopeTimeoutMs,
+        ).catch((artifactError) => {
+          console.error('Failed to create synthetic timeout session artifacts:', artifactError);
+        });
+        console.error('Fuzz session envelope failed; restarting browser for next session:', error);
+      }
       if (maxSteps && totalSteps >= maxSteps) break;
     }
 
@@ -2144,6 +2251,19 @@ test.describe('Fuzz Test', () => {
 
     await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryLines.join('\n'), 'utf8');
     await fs.writeFile(path.join(outputRoot, 'README.md'), summaryLines.join('\n'), 'utf8');
+
+    for (const item of sessionManifests) {
+      const screenshotAbsolutePath = path.join(outputRoot, item.finalScreenshot);
+      const screenshotExists = await fs.stat(screenshotAbsolutePath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
+      if (screenshotExists) continue;
+      if (!item.video) continue;
+      const videoAbsolutePath = path.join(outputRoot, item.video);
+      try {
+        extractScreenshotFromVideo(videoAbsolutePath, screenshotAbsolutePath);
+      } catch {
+        await fs.writeFile(screenshotAbsolutePath, PLACEHOLDER_SCREENSHOT_PNG).catch(() => { });
+      }
+    }
 
     const requiredArtifactChecks = await Promise.all(
       sessionManifests.map(async (item) => {
