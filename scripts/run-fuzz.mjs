@@ -64,6 +64,21 @@ if (progressTimeoutMs) env.FUZZ_PROGRESS_TIMEOUT_MS = String(progressTimeoutMs);
 const budgetMs = parseDurationMs(timeBudget) ?? 5 * 60 * 1000;
 if (budgetMs) env.FUZZ_TIME_BUDGET_MS = String(budgetMs);
 
+if (budgetMs <= 120_000) {
+  if (!env.FUZZ_ACTION_TIMEOUT_MS) {
+    env.FUZZ_ACTION_TIMEOUT_MS = '5000';
+  }
+  if (!env.FUZZ_SESSION_TIMEOUT_MS) {
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(15_000, Math.floor(budgetMs / 3)));
+  }
+  if (!env.FUZZ_MIN_SESSION_STEPS) {
+    env.FUZZ_MIN_SESSION_STEPS = '8';
+  }
+  if (!env.FUZZ_NO_PROGRESS_STEPS) {
+    env.FUZZ_NO_PROGRESS_STEPS = '6';
+  }
+}
+
 const getPhysicalCoreCount = async () => {
   if (process.platform !== 'linux') return null;
   try {
@@ -221,6 +236,8 @@ const mergeReports = async () => {
   const outputRoot = buildOutputRoot();
   const mergedSessionsDir = path.join(outputRoot, 'sessions');
   const mergedVideosDir = path.join(outputRoot, 'videos');
+  await fs.rm(mergedSessionsDir, { recursive: true, force: true });
+  await fs.rm(mergedVideosDir, { recursive: true, force: true });
   await fs.mkdir(mergedSessionsDir, { recursive: true });
   await fs.mkdir(mergedVideosDir, { recursive: true });
 

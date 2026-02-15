@@ -533,6 +533,10 @@ const writeJson = async (filePath: string, payload: unknown) => {
   await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
 };
 
+const sleep = (ms: number) => new Promise((resolve) => {
+  setTimeout(resolve, ms);
+});
+
 const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
   if (severity === 'freeze') return `Investigate timeout/freeze around ${signature.topFrames[0] || 'recent action'}.`;
   if (signature.exception.toLowerCase().includes('typeerror')) {
@@ -1991,19 +1995,29 @@ test.describe('Fuzz Test', () => {
       if (remainingRunMs < minimumSessionWindowMs) {
         break;
       }
-      const maxEnvelopeByBudgetMs = Math.max(15_000, remainingRunMs + actionTimeoutMs);
+      const maxEnvelopeByBudgetMs = Math.max(20_000, remainingRunMs + actionTimeoutMs * 3);
       const sessionEnvelopeTimeoutMs = Math.min(
-        Math.max(sessionTimeoutMs + actionTimeoutMs * 2, 20_000),
+        Math.max(sessionTimeoutMs + actionTimeoutMs * 3, 20_000),
         maxEnvelopeByBudgetMs,
       );
+      let sessionPromise: Promise<void> | null = null;
       try {
+        sessionPromise = runSession();
         await withTimeout(
-          () => runSession(),
+          () => sessionPromise,
           sessionEnvelopeTimeoutMs,
           `session envelope (${sessionEnvelopeTimeoutMs}ms)`,
         );
       } catch (error) {
         browserNeedsRestart = true;
+        try {
+          await Promise.race([
+            sessionPromise ?? sleep(0),
+            sleep(Math.max(3_000, actionTimeoutMs)),
+          ]);
+        } catch {
+          // no-op
+        }
         console.error('Fuzz session envelope failed; restarting browser for next session:', error);
       }
       if (maxSteps && totalSteps >= maxSteps) break;
@@ -2088,7 +2102,7 @@ test.describe('Fuzz Test', () => {
         maxSteps: maxSteps ?? null,
         timeBudgetMs: timeBudgetMs ?? null,
         totalSteps,
-        sessions: sessionIndex,
+        sessions: sessionsStarted,
         shardIndex,
         shardTotal,
         runId,
