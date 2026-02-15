@@ -203,6 +203,7 @@ Notes:
   --video             Records a Playwright walkthrough video.
   --test-e2e          Runs Playwright E2E tests excluding @screenshots.
   --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
+  --test-maestro-docker  Builds/starts web Docker and runs Maestro CI flows against 10.0.2.2:<docker-port> unless --c64u-host overrides it.
   --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
   --coverage          Runs unit + E2E coverage regardless of test category.
   Playwright port     Auto-selected to avoid clashes; set PLAYWRIGHT_PORT to pin a specific port.
@@ -1085,6 +1086,17 @@ case "$PRIMARY_ACTION" in
     RUN_DOCKER_START=true
     ;;
 esac
+
+if [[ "$RUN_TEST_MAESTRO_DOCKER" == "true" ]]; then
+  if [[ "$C64U_TARGET_SET" == "true" && "$C64U_TARGET" != "real" ]]; then
+    echo "--test-maestro-docker requires --c64u-target real" >&2
+    exit 1
+  fi
+  C64U_TARGET="real"
+  if [[ "$C64U_HOST_SET" != "true" ]]; then
+    C64U_HOST="10.0.2.2:${DOCKER_PORT}"
+  fi
+fi
 
 if [[ "$RUN_EMULATOR" == "true" ]]; then
   log "Starting Android emulator flow"

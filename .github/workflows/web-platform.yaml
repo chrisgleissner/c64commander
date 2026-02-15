@@ -1,4 +1,4 @@
-name: Web Platform
+name: Web CI
 
 on:
   pull_request:
