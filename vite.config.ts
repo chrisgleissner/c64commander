@@ -67,7 +67,7 @@ const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
 export default defineConfig(() => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 8064,
     hmr: {
       overlay: false,
     },

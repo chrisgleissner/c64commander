@@ -8,8 +8,8 @@ TRACK_REF="${TRACK_REF:-main}"
 POLL_INTERVAL_SECONDS="${POLL_INTERVAL_SECONDS:-300}"
 CONTAINER_NAME="${CONTAINER_NAME:-c64commander}"
 CONFIG_DIR="${CONFIG_DIR:-$PWD/c64commander-config}"
-HOST_PORT="${HOST_PORT:-8080}"
-CONTAINER_PORT="${CONTAINER_PORT:-8080}"
+HOST_PORT="${HOST_PORT:-8064}"
+CONTAINER_PORT="${CONTAINER_PORT:-8064}"
 IMAGE_REPO="${IMAGE_REPO:-ghcr.io/chrisgleissner/c64commander}"
 DEV_CHECKOUT_DIR="${DEV_CHECKOUT_DIR:-$PWD/.tmp/c64commander-updater/repo}"
 DEV_IMAGE_NAME="${DEV_IMAGE_NAME:-c64commander:dev-auto}"
@@ -31,8 +31,8 @@ Options:
   --interval <seconds>           Poll interval (default: 300)
   --container-name <name>        Docker container name (default: c64commander)
   --config-dir <path>            Host config directory mounted to /config
-  --host-port <port>             Host port to publish (default: 8080)
-  --container-port <port>        Container port (default: 8080)
+    --host-port <port>             Host port to publish (default: 8064)
+    --container-port <port>        Container port (default: 8064)
   --image-repo <repo>            Image repository for tags mode (default: ghcr.io/chrisgleissner/c64commander)
   --dev-checkout-dir <path>      Checkout directory for ref mode local builds
   --dev-image-name <image:tag>   Local image tag for ref mode builds

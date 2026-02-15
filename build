@@ -62,7 +62,7 @@ TRACE_SUITE=""
 MAESTRO_TAGS=""
 DOCKER_IMAGE_TAG="c64commander:local"
 DOCKER_CONTAINER_NAME="c64commander"
-DOCKER_PORT="8080"
+DOCKER_PORT="8064"
 DOCKER_CONFIG_DIR="$ROOT_DIR/.tmp/web-config"
 GRADLE_MAX_WORKERS="${GRADLE_MAX_WORKERS:-6}"
 export GRADLE_MAX_WORKERS
@@ -146,7 +146,7 @@ Test modifiers (require one --test-* primary action):
 Docker modifiers (require --docker-build, --docker-start, or --test-maestro-docker):
   --docker-image <tag>     Docker image tag (default: c64commander:local)
   --docker-name <name>     Docker container name (default: c64commander)
-  --docker-port <port>     Host port mapped to container 8080 (default: 8080)
+  --docker-port <port>     Host port mapped to container 8064 (default: 8064)
   --docker-config-dir <path> Host directory mounted to /config (default: .tmp/web-config)
 
 Fuzz modifiers (require --test-fuzz):
@@ -492,7 +492,7 @@ start_docker_web_container() {
   mkdir -p "$DOCKER_CONFIG_DIR"
   docker rm -f "$DOCKER_CONTAINER_NAME" >/dev/null 2>&1 || true
   log "Starting Docker container: ${DOCKER_CONTAINER_NAME}"
-  (cd "$ROOT_DIR" && docker run -d --name "$DOCKER_CONTAINER_NAME" -p "${DOCKER_PORT}:8080" -v "$DOCKER_CONFIG_DIR:/config" "$DOCKER_IMAGE_TAG" >/dev/null)
+  (cd "$ROOT_DIR" && docker run -d --name "$DOCKER_CONTAINER_NAME" -p "${DOCKER_PORT}:8064" -v "$DOCKER_CONFIG_DIR:/config" "$DOCKER_IMAGE_TAG" >/dev/null)
 
   local health_url="http://127.0.0.1:${DOCKER_PORT}/healthz"
   local i

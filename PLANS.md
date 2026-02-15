@@ -34,7 +34,7 @@ Productionize Web as a first-class platform without duplicating Android-shared l
 - [x] Base image upgraded in all stages: `node:24-trixie-slim`.
 - [x] Multi-stage build retained.
 - [x] Runtime configured as non-root (`USER node`).
-- [x] Explicit `WORKDIR`, `NODE_ENV`, `PORT`, and `EXPOSE 8080` retained.
+- [x] Explicit `WORKDIR`, `NODE_ENV`, `PORT`, and `EXPOSE 8064` retained.
 - [x] `HEALTHCHECK` added and validated against `/healthz`.
 - [x] Deterministic copy order retained.
 - [x] Runtime logs validated via `docker logs`.
@@ -80,11 +80,11 @@ Productionize Web as a first-class platform without duplicating Android-shared l
 
 - `docker build -f web/Dockerfile -t c64commander:local .` succeeded.
 - Container smoke on `:18080` returned `{"ok":true}` from `/healthz`.
-- Runtime log confirms server bind: `C64 Commander web server running on http://0.0.0.0:8080`.
+- Runtime log confirms server bind: `C64 Commander web server running on http://0.0.0.0:8064`.
 - Health status object present in `docker inspect`.
-- Web CI smoke failure root cause was captured from Actions logs: container not reachable on `127.0.0.1:8080` when using host networking.
+- Web CI smoke failure root cause was captured from Actions logs: container not reachable on `127.0.0.1:8064` when using host networking.
 - Remediation applied in `.github/workflows/web-platform.yaml`:
-  - switched container run from `--network host` to `-p 18080:8080`
+  - switched container run from `--network host` to `-p 18080:8064`
   - aligned smoke curl checks to `http://127.0.0.1:18080/healthz`
   - aligned Playwright `PLAYWRIGHT_PORT` to `18080`
   - added writable config mount permission setup (`chmod 0777 .tmp/web-config`) and deterministic log dump on health timeout.

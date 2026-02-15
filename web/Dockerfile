@@ -5,7 +5,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY index.html ./
-COPY base.css ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
 COPY tailwind.config.ts ./
@@ -13,6 +12,7 @@ COPY postcss.config.js ./
 COPY components.json ./
 COPY src ./src
 COPY public ./public
+COPY doc/c64 ./doc/c64
 COPY web ./web
 ENV VITE_WEB_PLATFORM=1
 RUN npm run build && npm run build:web-server
@@ -21,7 +21,7 @@ FROM node:24-trixie-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
-ENV PORT=8080
+ENV PORT=8064
 ENV WEB_CONFIG_DIR=/config
 ENV WEB_DIST_DIR=/app/dist
 COPY package*.json ./
@@ -30,7 +30,7 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/web/server/dist ./web/server/dist
 RUN mkdir -p /config && chown -R node:node /app /config
 USER node
-EXPOSE 8080
+EXPOSE 8064
 VOLUME ["/config"]
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD node -e "const http=require('node:http');const req=http.get('http://127.0.0.1:'+(process.env.PORT||8080)+'/healthz',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD node -e "const http=require('node:http');const req=http.get('http://127.0.0.1:'+(process.env.PORT||8064)+'/healthz',res=>process.exit(res.statusCode===200?0:1));req.on('error',()=>process.exit(1));"
 CMD ["node", "web/server/dist/index.js"]

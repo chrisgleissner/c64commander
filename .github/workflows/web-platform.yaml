@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           mkdir -p .tmp/web-config
           chmod 0777 .tmp/web-config
-          docker run -d --name c64commander-smoke -p 18080:8080 -v "$PWD/.tmp/web-config:/config" c64commander:ci
+          docker run -d --name c64commander-smoke -p 18080:8064 -v "$PWD/.tmp/web-config:/config" c64commander:ci
           healthy=0
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then

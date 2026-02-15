@@ -40,7 +40,9 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
       - [Device becomes unresponsive](#device-becomes-unresponsive)
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
-  - [🙏 Acknowledgments](#-acknowledgments)
+  - [� Advanced Topics](#-advanced-topics)
+    - [Linux auto-update service](#linux-auto-update-service)
+  - [� Acknowledgments](#-acknowledgments)
     - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
     - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
     - [Third-Party Libraries](#third-party-libraries)
@@ -110,7 +112,7 @@ These images also run on Windows/macOS through Docker Desktop virtualization.
 ```bash
 docker run -d \
   --name c64commander \
-  -p 8080:8080 \
+  -p 8064:8064 \
   -v ./c64commander-config:/config \
   --restart unless-stopped \
   ghcr.io/chrisgleissner/c64commander:<version>
@@ -118,12 +120,12 @@ docker run -d \
 
 Then open:
 
-`http://<host-ip>:8080`
+`http://<host-ip>:8064`
 
 Raspberry Pi example (64-bit OS):
 
 ```bash
-docker run -d --name c64commander -p 8080:8080 -v /home/pi/c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
+docker run -d --name c64commander -p 8064:8064 -v /home/pi/c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
 Ensure Docker starts on boot:
@@ -141,7 +143,7 @@ Update to a newer version:
 ```bash
 docker pull ghcr.io/chrisgleissner/c64commander:<version>
 docker rm -f c64commander
-docker run -d --name c64commander -p 8080:8080 -v ./c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
+docker run -d --name c64commander -p 8064:8064 -v ./c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
 > [!WARNING]
@@ -152,78 +154,6 @@ Additional web security defaults:
 - Session cookies are `HttpOnly` + `SameSite=Lax`.
 - `Secure` cookies are enabled automatically when `NODE_ENV=production` (override with `WEB_COOKIE_SECURE=true|false`).
 - FTP host override is disabled by default to prevent open-proxy behavior. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted/dev setups.
-
-#### Advanced: Linux auto-update service
-
-For Linux hosts (including Raspberry Pi), an updater script is available at [scripts/web-auto-update.sh](scripts/web-auto-update.sh).
-
-Recommended mode (`tags`) tracks new GitHub release tags and restarts the container only when a new release appears.
-
-Development mode (`ref`) tracks any branch/ref commit and rebuilds from source on update.
-
-> [!IMPORTANT]
-> Use `--track tags` for normal deployments. Use `--track ref` only when developing/testing branch changes.
-
-Prepare once:
-
-```bash
-chmod +x scripts/web-auto-update.sh
-mkdir -p ./c64commander-config
-```
-
-Run in release-tag mode (recommended):
-
-```bash
-./scripts/web-auto-update.sh \
-  --track tags \
-  --interval 300 \
-  --container-name c64commander \
-  --config-dir ./c64commander-config
-```
-
-Run in branch/ref mode (development):
-
-```bash
-./scripts/web-auto-update.sh \
-  --track ref \
-  --ref feat/web \
-  --interval 120 \
-  --container-name c64commander-dev \
-  --config-dir ./c64commander-config-dev
-```
-
-Run as a systemd service (Linux):
-
-```bash
-sudo tee /etc/systemd/system/c64commander-updater.service >/dev/null <<'EOF'
-[Unit]
-Description=C64 Commander Web Auto Updater
-After=network-online.target docker.service
-Wants=network-online.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/c64commander
-ExecStart=/opt/c64commander/scripts/web-auto-update.sh --track tags --interval 300 --container-name c64commander --config-dir /opt/c64commander/config
-Restart=always
-RestartSec=10
-User=pi
-Group=pi
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now c64commander-updater.service
-```
-
-Optional GitHub API token (helps with rate limits):
-
-```bash
-export GITHUB_TOKEN=<your-token>
-```
-
 
 ### First Connection Checklist
 
@@ -364,7 +294,80 @@ If you want to build, test, or contribute:
 - Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
 - Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
 
-## 🙏 Acknowledgments
+## 🔧 Advanced Topics
+
+### Linux auto-update service
+
+For Linux hosts (including Raspberry Pi), an updater script is available at [scripts/web-auto-update.sh](scripts/web-auto-update.sh).
+
+Recommended mode (`tags`) tracks new GitHub release tags and restarts the container only when a new release appears.
+
+Development mode (`ref`) tracks any branch/ref commit and rebuilds from source on update.
+
+> [!IMPORTANT]
+> Use `--track tags` for normal deployments. Use `--track ref` only when developing/testing branch changes.
+
+Prepare once:
+
+```bash
+chmod +x scripts/web-auto-update.sh
+mkdir -p ./c64commander-config
+```
+
+Run in release-tag mode (recommended):
+
+```bash
+./scripts/web-auto-update.sh \
+  --track tags \
+  --interval 300 \
+  --container-name c64commander \
+  --config-dir ./c64commander-config
+```
+
+Run in branch/ref mode (development):
+
+```bash
+./scripts/web-auto-update.sh \
+  --track ref \
+  --ref feat/web \
+  --interval 120 \
+  --container-name c64commander-dev \
+  --config-dir ./c64commander-config-dev
+```
+
+Run as a systemd service (Linux):
+
+```bash
+sudo tee /etc/systemd/system/c64commander-updater.service >/dev/null <<'EOF'
+[Unit]
+Description=C64 Commander Web Auto Updater
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/c64commander
+ExecStart=/opt/c64commander/scripts/web-auto-update.sh --track tags --interval 300 --container-name c64commander --config-dir /opt/c64commander/config
+Restart=always
+RestartSec=10
+User=pi
+Group=pi
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now c64commander-updater.service
+```
+
+Optional GitHub API token (helps with rate limits):
+
+```bash
+export GITHUB_TOKEN=<your-token>
+```
+
+## � Acknowledgments
 
 This project would not be possible without the following:
 

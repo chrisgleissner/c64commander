@@ -77,9 +77,9 @@ describe('fuzzMode', () => {
         });
 
         it('returns the base URL when set', async () => {
-            localStorageMock.getItem.mockReturnValue('http://localhost:8080');
+            localStorageMock.getItem.mockReturnValue('http://localhost:8064');
             const { getFuzzMockBaseUrl } = await import('./fuzzMode');
-            expect(getFuzzMockBaseUrl()).toBe('http://localhost:8080');
+            expect(getFuzzMockBaseUrl()).toBe('http://localhost:8064');
         });
     });
 
