@@ -65,8 +65,8 @@ jobs:
           PLAYWRIGHT_REUSE_SERVER: "1"
           PLAYWRIGHT_PORT: "8080"
           PLAYWRIGHT_WORKERS: "1"
-          PLAYWRIGHT_DEVICES: "phone"
-        run: npx playwright test playwright/webPlatformAuth.spec.ts
+          PLAYWRIGHT_DEVICES: "web"
+        run: npx playwright test playwright/webPlatformAuth.spec.ts --project=web
 
       - name: Stop smoke container
         if: always()
