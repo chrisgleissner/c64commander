@@ -40,7 +40,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
       - [Device becomes unresponsive](#device-becomes-unresponsive)
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
-  - [� Advanced Topics](#-advanced-topics)
+  - [🔧 Advanced Topics](#-advanced-topics)
     - [Linux auto-update service](#linux-auto-update-service)
   - [� Acknowledgments](#-acknowledgments)
     - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
@@ -136,9 +136,7 @@ sudo systemctl enable --now docker
 Network password model:
 
 - If no network password is configured, the UI opens directly.
-- If a network password is configured, login is required and the server injects the password into proxied C64U requests.
-- You do **not** need to set a password when starting the Docker container.
-- Preferred flow: start without a password, then set **Settings → Device → Network password** in the app.
+- If a network password is configured in **Settings → Device → Network password**, login is required and the server injects the password into proxied C64U requests.
 - After saving that setting, the web server persists it in `/config/web-config.json`; on the next access (or after logout), login is required with that same password.
 - Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`), so you do not re-enter the password on every request.
 
