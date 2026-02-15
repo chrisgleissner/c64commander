@@ -1,817 +1,92 @@
-# 2026-02-15 Playwright Fuzz Stabilization & Hardening Plan (Active)
-
-## Objective
-
-Stabilize and harden the existing Playwright fuzz system so 5-minute local and CI runs complete deterministically, avoid visual stagnation beyond 5 seconds, recover or restart sessions safely, and always emit complete machine-readable artifacts.
-
-## Global constraints
-
-- [x] No assertion weakening.
-- [x] No global-timeout inflation to mask defects.
-- [x] No skipped tests.
-- [x] No silent exception swallowing introduced by this change.
-- [x] Seed-based determinism preserved (`seed`, `baseSeed + shardIndex`).
-
-## Phase 1 — Session lifecycle hardening
-
-### Tasks
-
-- [x] Enforce strict hard per-session timeout path and explicit termination reasons.
-- [x] Ensure non-recoverable states always trigger this sequence:
-  - [x] Capture final screenshot.
-  - [x] Persist last N interactions.
-  - [x] Finalize and retain session video.
-  - [x] Close context.
-  - [x] Reset mock server state.
-  - [x] Start clean next session.
-- [x] Prevent corrupted session reuse by resetting all session-scoped state per run.
-
-### Verification criteria
-
-- [x] Session manifests show deterministic termination reason for every session.
-- [x] Logs demonstrate restart after freeze/crash/non-recoverable states.
-- [x] Every session has `log + final screenshot + video`.
-
-## Phase 2 — Visual stagnation detection + deterministic recovery ladder
-
-### Tasks
-
-- [x] Add fixed-interval visual sampling and deterministic visual delta measurement.
-- [x] Detect stagnation windows and trigger recovery when no meaningful visual delta for >5s.
-- [x] Implement deterministic escalation ladder, one step per stall incident:
-  - [x] Close modal.
-  - [x] Navigate back.
-  - [x] Return to root tab.
-  - [x] Force home route.
-  - [x] Reload page.
-  - [x] Terminate session.
-- [x] Record freeze issue when recovery is exhausted.
-
-### Verification criteria
-
-- [x] Session logs show ordered ladder steps.
-- [x] Session termination occurs on exhausted recovery.
-- [x] `visual-stagnation-report.json` records per-session max stagnation and violations.
-
-## Phase 3 — Artifact completeness + metrics + run-level validation
-
-### Tasks
-
-- [x] Emit complete per-session artifacts with deterministic filenames.
-- [x] Emit complete consolidated artifacts:
-  - [x] `sessions/`
-  - [x] `videos/`
-  - [x] `fuzz-issue-summary.md`
-  - [x] `fuzz-issue-report.json`
-  - [x] `README.md`
-  - [x] `fuzz-run-metrics.json`
-  - [x] `visual-stagnation-report.json`
-- [x] Add hard artifact validation that fails run when required artifacts are missing/incomplete.
-- [x] Emit metrics:
-  - [x] Sessions started.
-  - [x] Sessions terminated by reason.
-  - [x] Max visual stagnation.
-  - [x] Average session duration.
-  - [x] Steps per session.
-
-### Verification criteria
-
-- [x] Local run produces all required files and non-empty structured content.
-- [x] Validation step fails when artifacts are intentionally missing (guard check).
-
-## Phase 4 — CI 5-minute bounded execution
-
-### Tasks
-
-- [x] Set CI fuzz budget to 5 minutes.
-- [x] Align Playwright timeout envelope with fuzz budget and bounded grace.
-- [x] Enable deterministic shard behavior and merge outputs deterministically.
-- [x] Remove 2-hour hanging behavior from fuzz workflow.
-
-### Verification criteria
-
-- [ ] CI fuzz workflow completes without Playwright timeout.
-- [ ] CI artifact set is complete and deterministic.
-
-## Phase 5 — End-to-end validation (local + CI)
-
-### Tasks
-
-- [x] Run local fuzz for 5 minutes.
-- [x] Validate no visual stagnation >5s in `visual-stagnation-report.json`.
-- [x] Validate session restart behavior from logs.
-- [ ] Run `npm run lint`, `npm run test`, `npm run build`.
-- [ ] Commit and push changes.
-- [ ] Trigger CI fuzz workflow.
-- [ ] Wait for CI completion.
-- [ ] Download CI artifacts and verify completeness.
-
-### Verification criteria
-
-- [x] Local 5-minute fuzz run passes with complete artifacts.
-- [ ] CI 5-minute fuzz run is green.
-- [ ] No Playwright timeout in local or CI run.
-- [ ] `PLANS.md` checklist fully completed.
-
----
-
-# C64 Commander — iOS Local Source & CI Stabilization Plan
-
-## 2026-02-14 iOS Local Source File Selection + CI Hardening (Active)
-
-### Problem Analysis
-
-On iOS, Local source file selection is non-functional:
-1. `browseLocalSidFiles()` in `localFsPicker.ts` has no `ios` branch — falls through to web path where `showDirectoryPicker()` is unavailable on WKWebView.
-2. The `FolderPickerPlugin` in `NativePlugins.swift` is fully implemented but never called from the iOS code path.
-3. The `UIDocumentPickerViewController(documentTypes:in:)` initializer used in `FolderPickerPlugin` is deprecated since iOS 14 — must migrate to `UIDocumentPickerViewController(forOpeningContentTypes:)` with `UTType`.
-4. `FolderPickerPlugin` diagnostics only emit on errors, not on successful operations — violates the diagnostics model requiring Action/Trace entries for all native operations.
-5. Info.plist is missing `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` keys needed for document picker integration.
-
-CI runner script crash:
-- `scripts/ci/ios-maestro-run-flow.sh` line 58/62 uses `date +%s%3N` which on macOS outputs a literal "N" suffix (BSD `date` doesn't support `%N` nanoseconds). The `||` fallback to python3 never triggers because `date` "succeeds" but outputs garbage like `1771097xxxxxN`. When bash arithmetic `$((end - TIMING_START))` processes this, it crashes with "value too great for base".
-
-Maestro iOS flow failures for `ios-local-import` and `ios-import-playback`:
-- The flows themselves are correctly designed — they verify "Add file / folder from Local" visibility then use C64U FTP as the import path (since WKWebView cannot complete native file picker flows under Maestro).
-- Failures may stem from timing, connectivity, or the CI infra crash masking the real Maestro exit code.
-
-### Diagnostics Integration Strategy
-
-| iOS Event | Action | Trace | Log | Error Log |
-|-----------|--------|-------|-----|-----------|
-| Picker opened | — | `folderPicker.pickDirectory.open` | — | — |
-| Directory selected | ✓ "Add items" | `folderPicker.pickDirectory.selected` | — | — |
-| File selected | ✓ "Add items" | `folderPicker.pickFile.selected` | — | — |
-| Picker cancelled | — | `folderPicker.pick.cancelled` | info | — |
-| Bookmark persisted | — | `folderPicker.bookmark.persisted` | — | — |
-| Bookmark stale (refreshed) | — | `folderPicker.bookmark.staleRefreshed` | warn | — |
-| Bookmark failed | — | — | — | ✓ structured error |
-| File read | — | `folderPicker.readFile` | — | — |
-| File read failed | — | — | — | ✓ structured error |
-| listChildren | — | `folderPicker.listChildren` | — | — |
-| Extension mismatch | — | — | warn | ✓ |
-| Permission rejected | — | — | — | ✓ structured error |
-
-### Risk Assessment
-
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| `UIDocumentPickerViewController` deprecated API removal | Medium | High | Migrate to `UTType`-based initializer |
-| Bookmark stale after iOS update | Low | Medium | Auto-refresh stale bookmarks (already implemented) |
-| Maestro cannot interact with native picker | Known | N/A | Flows verify visibility only, use FTP for import |
-| macOS `date` incompatibility in CI | Certain | High | Use python3 for ms timestamps unconditionally |
-
-### Decision Log
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| File access strategy | Bookmark (not copy) | Matches Android SAF model; avoids storage duplication; security-scoped bookmarks provide persistent access |
-| ATS approach | Keep `NSAllowsLocalNetworking: true` only | App communicates with local C64U device; no need for `NSAllowsArbitraryLoads` |
-| Maestro Local import strategy | Verify visibility + use FTP path | Native `UIDocumentPickerViewController` blocks Maestro; flows validate Local option presence |
-| Timestamp in CI script | Python3 unconditionally | macOS BSD `date` lacks `%N`; python3 is available on all macOS CI runners |
-
-### Implementation Phases
-
-#### Phase 1: CI Script Fix [x]
-- [x] 1.1 Replace `date +%s%3N` with portable python3 timestamp in `ios-maestro-run-flow.sh`
-- [x] 1.2 Ensure script exits with Maestro exit code, not parsing exception
-
-#### Phase 2: Info.plist Hardening [x]
-- [x] 2.1 Add `UIFileSharingEnabled: true`
-- [x] 2.2 Add `LSSupportsOpeningDocumentsInPlace: true`
-
-#### Phase 3: FolderPickerPlugin Native Hardening [x]
-- [x] 3.1 Migrate `UIDocumentPickerViewController(documentTypes:in:)` to `UIDocumentPickerViewController(forOpeningContentTypes:)` with `UTType`
-- [x] 3.2 Add `IOSDiagnostics.log` calls for successful operations (picker open, selection, bookmark persist, file read, listChildren)
-- [x] 3.3 Add `IOSDiagnostics.log` for picker cancellation
-- [x] 3.4 Verify stale bookmark refresh path emits diagnostics
-
-#### Phase 4: JS Integration — iOS Local File Selection [x]
-- [x] 4.1 Add `getPlatform() === 'ios'` branch in `browseLocalSidFiles()`, `browseLocalPlayFiles()`, `importLocalDiskFolder()`, and `createLocalSourceFromPicker()`
-- [x] 4.2 Reuse `listSafFiles()` + `buildLocalPlayFileFromTree()` + `ingestLocalArchives()` (same as Android)
-- [x] 4.3 Add unit tests for iOS branch (2 new tests: SAF enumeration + error handling)
-
-#### Phase 5: Maestro Flow Fixes [x]
-- [x] 5.1 Review `ios-local-import.yaml` and `ios-import-playback.yaml` assertions — selectors match current UI aria-labels
-- [x] 5.2 Flows are resilient with retry blocks and extended timeouts
-- [x] 5.3 Validated Maestro selectors: "Add file / folder from Local", "Add file / folder from C64U", "Choose source" match `ItemSelectionDialog.tsx`
-- [x] 5.4 Root cause of CI "value too great for base" was runner script, not Maestro flow issue — fixed in Phase 1
-
-#### Phase 6: Final Validation [x]
-- [x] 6.1 `npm run lint` — pass
-- [x] 6.2 `npm run test` — pass (193 files, 1461 tests)
-- [x] 6.3 `npm run build` — pass
-- [x] 6.4 All existing tests still pass
-
-### Verification Matrix
-
-| Check | Status |
-|-------|--------|
-| UX terminology: "Add items", "Choose source", "Select items" | [x] verified in ItemSelectionDialog.tsx |
-| UX terminology: "Local", "C64U", "HVSC" source names | [x] verified in sourceTerms.ts + UI |
-| No forbidden terms in UI ("Browse filesystem", "Root directory") | [x] grep confirmed absent |
-| Action coverage: user-triggered operations create Actions | [x] via JS layer (addLog) |
-| Trace coverage: all native operations emit Trace entries | [x] IOSDiagnostics.log added to all FolderPickerPlugin operations |
-| Error Log: all errors propagate with structured details | [x] all catch blocks emit IOSDiagnostics.log(.error, ...) |
-| Maestro ios-local-import selectors valid | [x] aria-labels match current UI |
-| Maestro ios-import-playback selectors valid | [x] aria-labels match current UI |
-| CI runner script handles macOS date correctly | [x] replaced with python3 ms_timestamp() |
-| npm run lint green | [x] |
-| npm run test green | [x] 193 files, 1461 tests |
-| npm run build green | [x] |
-| Android unchanged | [x] no Android files modified |
-
-### Final Validation Summary
-
-| Gate | Command | Result |
-|------|---------|--------|
-| Lint | `npm run lint` | PASS |
-| Unit tests | `npm run test` | PASS — 193 files, 1461 tests |
-| Build | `npm run build` | PASS |
-| iOS Maestro runner | Fixed `date +%s%3N` → `ms_timestamp()` | Fixed |
-| iOS CI flows | Selectors verified against current UI | Valid |
-
-### Files Changed
-
-| File | Change |
-|------|--------|
-| `scripts/ci/ios-maestro-run-flow.sh` | Replace `date +%s%3N` with portable `ms_timestamp()` via python3 |
-| `ios/App/App/NativePlugins.swift` | Add `UniformTypeIdentifiers` import; migrate deprecated `UIDocumentPickerViewController(documentTypes:in:)` to `UIDocumentPickerViewController(forOpeningContentTypes:)`; add `IOSDiagnostics.log` for picker open/cancel/select/bookmark/read/listChildren operations |
-| `ios/App/App/Info.plist` | Add `UIFileSharingEnabled: true` and `LSSupportsOpeningDocumentsInPlace: true` |
-| `src/lib/sources/localFsPicker.ts` | Add iOS branch: `getPlatform() === 'ios'` uses native `FolderPicker.pickDirectory()` (same as Android) |
-| `src/lib/playback/localFilePicker.ts` | Add iOS branch for `browseLocalPlayFiles()` |
-| `src/lib/disks/localDiskPicker.ts` | Add iOS branch for `importLocalDiskFolder()` |
-| `src/lib/sourceNavigation/localSourcesStore.ts` | Add iOS support to `createLocalSourceFromPicker()` |
-| `tests/unit/sources/localFsPicker.test.ts` | Add 2 tests: iOS SAF enumeration + iOS error handling |
-| `tests/unit/sourceNavigation/localSourcesStore.test.ts` | Update error message assertion to match new platform-neutral message |
-
----
-
-# Android MVP Production Readiness Plan (feat/iOS-PORT)
-
-## 2026-02-14 Maestro Reliability + Performance Sprint (Active)
-
-### Execution Contract
-
-- [x] Fix Android `smoke-background-execution` deterministic heartbeat detection (`test-heartbeat`).
-- [x] Harden Android emulator + adb startup sequencing in CI.
-- [x] Reduce Android Maestro wall-clock time without reducing flow coverage.
-- [~] Preserve gating semantics and artifact evidence.
-- [~] Keep all Android/iOS Maestro flows enabled.
-
-### Android failure root-cause analysis (`smoke-background-execution`)
-
-- [x] Selector inspected in `.maestro/smoke-background-execution.yaml` (`id: test-heartbeat`).
-- [x] Probe implementation inspected in `src/components/TestHeartbeat.tsx` and `src/App.tsx`.
-- [x] Verify visibility/accessibility stability of `test-heartbeat` under Android WebView + lock/unlock transitions (stabilized with explicit waits + accessibility label).
-- [x] Determine failure mode:
-  - [ ] never rendered
-  - [ ] rendered but not discoverable by Maestro
-  - [ ] timing/race after lock-unlock
-  - [x] probe not enabled in tested build
-- [x] Implement deterministic flow waiting and re-check logic with explicit timeout.
-- [~] Add/verify heartbeat lifecycle diagnostics in failure artifacts.
-
-### Android reliability fixes
-
-- [x] Add adb server restart before emulator launch in Android CI.
-- [x] Launch emulator with stable flags:
-  - [x] `-no-window`
-  - [x] `-no-audio`
-  - [x] `-no-metrics`
-  - [x] `-no-boot-anim`
-  - [x] `-gpu swiftshader_indirect`
-  - [x] `-no-snapshot`
-- [x] Replace naive boot wait with deterministic readiness checks:
-  - [x] `adb wait-for-device`
-  - [x] `sys.boot_completed == 1`
-  - [x] target package visibility via `pm list packages`
-- [x] Ensure startup/install diagnostics are persisted to `test-results/maestro/**`.
-
-### Android performance optimizations
-
-- [x] Cache Maestro CLI (`~/.maestro`) in Android CI job.
-- [x] Avoid duplicate APK installs (install exactly one APK artifact).
-- [x] Use `adb install -r -t -d` fast path.
-- [x] Remove redundant smoke configuration writes.
-- [x] Set `MAESTRO_CLI_NO_ANALYTICS=1` globally for Android Maestro flow execution.
-
-### Verification plan
-
-- [ ] Run Android Maestro gating flows:
-  - [ ] `smoke-launch`
-  - [ ] `smoke-background-execution`
-  - [ ] `smoke-hvsc`
-- [ ] Re-run Android gating flows multiple consecutive times to check flake resistance.
-- [ ] Collect artifacts for each run:
-  - [ ] Maestro evidence
-  - [ ] failure screenshots (if any)
-  - [ ] heartbeat-related logcat snippets
-- [ ] Re-validate repo quality gates:
-  - [ ] `npm run lint`
-  - [ ] `npm run test`
-  - [ ] `npm run build`
-- [ ] Verify iOS Maestro workflow definitions remain intact and compatible with current selector strategy.
-
-### Timing measurements
-
-| Metric | Baseline | Current | Delta |
-|---|---:|---:|---:|
-| Emulator startup (Android CI) | 37s (observed) | pending | pending |
-| APK install (Android CI) | pending | pending | pending |
-| Maestro gating duration | pending | pending | pending |
-| Android Maestro job wall clock | pending | pending | pending |
-
-### Notes / blockers
-
-- Linux workspace cannot execute iOS simulator workflows locally; iOS Maestro pass confirmation must come from GitHub Actions macOS runners.
-
-## 2026-02-14 CI Fix Pass (Android Maestro + iOS smoke screenshots)
-
-### Execution Contract
-- [x] Android Maestro CI failures reproduced and fixed locally.
-- [x] iOS simulator smoke-mode seeding added to CI workflows (`ios-maestro-tests`, `ios-screenshots`).
-- [x] Lint/test/build rerun after fixes.
-- [~] Remote iOS screenshot OCR verification pending fresh GitHub Actions run.
-
-### Changes landed
-- [x] `scripts/run-maestro-gating.sh`: force `VITE_ENABLE_TEST_PROBES=1` during Android CI smoke build.
-- [x] `.maestro/smoke-hvsc.yaml`: updated selector text from legacy `HVSC library` to current `HVSC` label.
-- [x] `.maestro/smoke-background-execution.yaml`: removed unsupported Maestro `sleep()` eval and kept heartbeat delta assertion.
-- [x] `src/components/TestHeartbeat.tsx`: expose stable `id="test-heartbeat"` and keep probe effectively hidden but discoverable.
-- [x] `.github/workflows/ios-ci.yaml`: write `c64u-smoke.json` into simulator app data container before iOS Maestro/screenshot flows.
-
-### Verification evidence
-- [x] `CI=true bash scripts/run-maestro-gating.sh --skip-build` → **3/3 flows passed** (`smoke-launch`, `smoke-background-execution`, `smoke-hvsc`).
-- [x] `npm run lint` → pass.
-- [x] `npm run test` → pass (193 files / 1458 tests).
-- [x] `npm run build` → pass.
-- [!] iOS screenshot OCR proof requires new CI artifact generation on macOS runner after workflow changes.
-
-## 2026-02-14 Independent Re-Verification Pass (Current)
-
-### Execution Contract
-- [x] Plan Verification
-- [x] Stability Audit
-- [x] Coverage Enforcement
-- [x] iOS Parity
-- [~] CI Validation
-
-### Plan Verification (stale-plan audit)
-- [x] Re-validated Step 1 Maestro tagging and gating assertions in `.maestro/*` + `scripts/run-maestro-gating.sh`.
-- [x] Re-validated Step 2 background service bounds and idle timeout in `BackgroundExecutionService.kt` + JVM tests.
-- [x] Re-validated Step 3 native due-time restore path in `usePlaybackPersistence.ts` + tests.
-- [x] Re-validated Step 5 source navigation stale-response token guard in `useSourceNavigator.ts` + tests.
-- [x] Re-validated Step 6 config queue error propagation in `configWriteThrottle.ts` + tests.
-- [x] Re-validated Step 8 HVSC streaming cleanup behavior in `hvscDownload.ts` + tests.
-
-### Stability Audit (new hardening implemented)
-- [x] Removed silent catches in `src/lib/hvsc/hvscDownload.ts` stream cleanup path; failures now log via `addLog`.
-- [x] Hardened manual rediscovery convergence in `src/lib/connection/connectionManager.ts` using bounded manual probe timeout fallback.
-- [x] Routed Android native plugin errors to app-level diagnostics (not Logcat-only) in:
-	- `android/app/src/main/java/uk/gleissner/c64commander/DiagnosticsBridgePlugin.kt`
-	- `android/app/src/main/java/uk/gleissner/c64commander/SecureStoragePlugin.kt`
-	- `android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt`
-- [x] Ensured `BackgroundExecutionPlugin.kt` context access failures are surfaced (no silent swallow).
-
-### Coverage Enforcement
-- [x] Confirmed global Vitest coverage thresholds remain 80/80/80/80 in `vitest.config.ts`.
-- [x] Ran `npm run test:coverage` and `npm run test:coverage:all` locally after changes.
-- [x] Added regression test for manual rediscovery demo→real transition:
-	- `tests/unit/connection/connectionManager.test.ts`
-
-### iOS Parity & Mock Safety
-- [x] Verified iOS Keychain secure storage parity in `ios/App/App/NativePlugins.swift` (`SecureStoragePlugin`).
-- [x] Verified iOS background execution is explicit no-op stub and documented in `doc/internals/ios-parity-matrix.md`.
-- [x] Verified mock connectivity and green-indicator coverage through existing Playwright and connection manager tests.
-
-### CI Validation
-- [x] `npm run lint` (pass)
-- [x] `npm run test` (pass)
-- [x] `npm run build` (pass)
-- [x] `cd android && ./gradlew test -Dorg.gradle.java.home=/usr/lib/jvm/java-17-openjdk-amd64 --no-daemon` (pass)
-- [x] `scripts/run-maestro-gating.sh --skip-build` (pass locally; executed flow set depends on CI env tag filter)
-- [x] `npm run validate:traces` (pass)
-- [x] `npm run test:e2e` (pass verified via JSON reporter: 335 expected, 0 unexpected)
-- [!] Remote GitHub CI currently not fully green on active PR: `Android | Maestro gating` status check is failing while other listed web/iOS checks are passing.
-
-### New Files / Areas Touched in this pass
-- `src/lib/hvsc/hvscDownload.ts`
-- `src/lib/connection/connectionManager.ts`
-- `playwright/connectionSimulation.spec.ts`
-- `tests/unit/connection/connectionManager.test.ts`
-- `android/app/src/main/java/uk/gleissner/c64commander/BackgroundExecutionPlugin.kt`
-- `android/app/src/main/java/uk/gleissner/c64commander/DiagnosticsBridgePlugin.kt`
-- `android/app/src/main/java/uk/gleissner/c64commander/SecureStoragePlugin.kt`
-- `android/app/src/main/java/uk/gleissner/c64commander/MockC64UPlugin.kt`
-
-## Execution Mode
-- Plan-execute-verify only.
-- Priority order enforced; medium/low work blocked until high blockers pass gates.
-- No silent exception handling in touched paths.
-- Every code change must include automated test coverage updates.
-
-## Status Legend
-- [ ] Not started
-- [~] In progress
-- [x] Completed
-- [!] Blocked
-
----
-
-## Status
-
-**Current step**: Complete — Final validation passed
-**Last executed**: `npm run lint` (pass), `npm run test` (193 files, 1458 tests), `npm run build` (pass), `cd android && ./gradlew test` (82 pass w/JDK 17)
-**Failing tests**: None
-
----
-
-## Known Red
-
-| ID | Finding | Status | Notes |
-|----|---------|--------|-------|
-| KR-1 | Local JDK 25 incompatible with Robolectric 4.11.1 | Accepted | CI uses JDK 17; local: `JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64` |
-| KR-2 | `smoke-background-execution` tagged `probe` — excluded from CI | Fixed Step 1 | Added `ci-critical` tag |
-| KR-3 | HVSC Maestro flows excluded by `hvsc` tag | Fixed Step 1 | Added `ci-critical` tag |
-| KR-4 | Only 2 Android flows have `ci-critical` | Fixed Step 1 | Now 5 flows have `ci-critical` |
-| KR-5 | Session restore skips native `setDueAtMs` | Fixed Step 3 | `usePlaybackPersistence` calls `setAutoAdvanceDueAtMs` |
-| KR-6 | `configWriteThrottle.ts` silent catch on queue chain | Fixed Step 6 | Now logs via `addErrorLog` |
-| KR-7 | `BackgroundExecutionService.kt` unbounded WakeLock | Fixed Step 2 | 10-min timeout + idle timeout |
-
----
-
-## TODO
-
-- [ ] Write `doc/internals/ios-parity-matrix.md`: For each native feature of the app, compare what is possible on Android vs iOS. Include workarounds for features not directly available on iOS. Cover: local file import, FTP browsing, background execution, secure storage, HVSC ingestion, mock C64U server, debug HTTP server, diagnostics bridge, SID playback, file picker, and any platform-specific Capacitor plugins.
-
----
-
-## Gates
-
-| Gate | Command | Required | CI Job |
-|------|---------|----------|--------|
-| Lint | `npm run lint` | Yes | web-unit |
-| Unit tests | `npm run test` | Yes | web-unit |
-| Build | `npm run build` | Yes | web-build-coverage |
-| Playwright E2E | `npm run test:e2e` | Yes | web-e2e (12 shards) |
-| Android JVM | `cd android && ./gradlew test` | Yes | android-tests |
-| Android Maestro | `scripts/run-maestro-gating.sh` | Yes | android-maestro |
-| Coverage | 80% threshold | Yes | web-coverage-merge |
-| Maestro HVSC | `smoke-hvsc*` flows | **Not yet** → Step 1 | — |
-| Maestro lock/bg | `smoke-background-execution` | **Not yet** → Step 1 | — |
-
----
-
-## Risk Register
-
-| ID | Priority | Finding | Status | Owner | Rationale |
-|----|----------|---------|--------|-------|-----------|
-| _(populated per-step)_ | | | | | |
-
----
-
-## Step 0 — Baseline and Safety Harness [x]
-
-### Baseline Results
-| Gate | Status | Evidence |
-|---|---|---|
-| Lint | PASS | Clean |
-| Unit tests | PASS | 193 files, 1454 tests, 41s |
-| Build | PASS | dist/ produced |
-| Android JVM (JDK 17) | PASS | 56 tests |
-| Android JVM (JDK 25) | FAIL | 31/56 Robolectric ASM — env issue only |
-| Playwright E2E | CI-only | 12-shard parallel |
-| Maestro | CI-only | Requires emulator |
-
-### CI Matrix
-| Job | Required | Dependency chain |
-|-----|----------|-----------------|
-| web-unit | Yes | — |
-| web-build-coverage | Yes | — |
-| web-screenshots | Informational | web-build-coverage |
-| web-e2e | Yes | web-build-coverage |
-| web-coverage-merge | Yes | web-unit, web-screenshots, web-e2e |
-| android-tests | Yes | — |
-| android-maestro | Yes | — |
-| android-packaging | Yes | android-maestro |
-| release-artifacts | Yes (tags) | web-coverage-merge, android-tests, android-packaging |
-
-### Maestro Tag Gaps
-| Flow | Tags | In CI | Gap |
-|------|------|-------|-----|
-| smoke-launch | ci-critical | Yes | — |
-| smoke-file-picker-cancel | device, ci-critical | Yes | — |
-| smoke-background-execution | device, probe | **No** | Must add ci-critical |
-| smoke-hvsc | hvsc, slow | **No** | Must add ci-critical |
-| smoke-hvsc-mounted | hvsc, slow, file-picker, device | **No** | Must add ci-critical |
-| smoke-playback | (none) | Yes | — |
-
-Exit: [x] Known-red documented. [x] CI matrix documented. [x] No behavior changed.
-
----
-
-## Step 1 — Enforce Critical CI Gates First (P2) [x]
-
-- [x] 1.1 Add `ci-critical` to `smoke-background-execution.yaml`
-- [x] 1.2 Add `ci-critical` to `smoke-hvsc.yaml`
-- [x] 1.3 Add `ci-critical` to `smoke-hvsc-mounted.yaml`
-- [x] 1.4 Update gating script to assert critical flows executed
-- [x] 1.5 Run `npm run lint && npm run test && npm run build` — all pass
-
----
-
-## Step 2 — Background Service Lifetime Safety (P1) [x]
-
-- [x] 2.1 Bound WakeLock with 10-min timeout, re-acquire on dueAt updates
-- [x] 2.2 Add idle timeout (stop service if no dueAtMs within 60s)
-- [x] 2.3 Add JVM tests: start/stop/restart, WakeLock constants, idle timeout
-- [x] 2.4 Verify `cd android && ./gradlew test` — 68 tests, all pass
-
-Files: `BackgroundExecutionService.kt`, `BackgroundExecutionServiceTest.kt` (new, 12 tests)
-
----
-
-## Step 3 — Restore Rehydrates Native Due-Time (P3) [x]
-
-- [x] 3.1 Call `BackgroundExecution.setDueAtMs()` after session restore
-- [x] 3.2 Clear native due-time when restore has no duration
-- [x] 3.3 Add unit tests (2 new: with-duration + without-duration)
-- [x] 3.4 Verify `npm run test` — 193 files, 1456 tests, all pass
-
-Files: `usePlaybackPersistence.ts`, `PlayFilesPage.tsx`, `usePlaybackPersistence.test.tsx`
-
----
-
-## Step 4 — Locked-Screen Reliability Enforcement [x]
-
-- [x] 4.1 Lock/unlock assertions already present in Maestro flow
-- [x] 4.2 Added negative-path checks: NaN guard, bounded delta (2–50), explicit numeric validation
-
-Files: `.maestro/smoke-background-execution.yaml`
-
----
-
-## Step 5 — Source Navigation Race (P4) [x]
-
-- [x] 5.1 Token-gate stale async writes in `useSourceNavigator.ts` — added `if (loadingTokenRef.current !== token) return;` before `setEntries`/`setPath`
-- [x] 5.2 Added unit test verifying stale out-of-order responses are discarded
-- [x] 5.3 Verify `npm run test` — 193 files, 1457 tests, all pass
-
----
-
-## Step 6 — Error Propagation and Observability (P5/P6/P11) [x]
-
-- [x] 6.1 Fixed `configWriteThrottle.ts` silent catch — now logs via `addErrorLog`
-- [x] 6.2 Audited HVSC stores — no silent catches found
-- [x] 6.3 Audited Gradle/Android catches — no empty catches found
-- [x] 6.4 Added test: failing task logs error and queue continues
-- [x] 6.5 Verify `npm run test` — 193 files, 1458 tests, all pass
-
----
-
-## Step 7 — Song Length Propagation Contract (P7) [x]
-
-- [x] 7.1 Documented duration behavior per source in `doc/internals/duration-propagation.md`
-- [x] 7.2 Verified: fallback and observability already implemented (emitDurationPropagationEvent, structured logging)
-- [x] 7.3 Existing tests comprehensive (20+ cases in playbackRouter.test.ts); no golden trace changes needed
-
----
-
-## Step 8 — HVSC Ingestion Resource Pressure (P8) [x]
-
-- [x] 8.1 Added streaming reader cleanup: try/finally with `reader.releaseLock()`, cancel on error
-- [x] 8.2 Verified: 7z path (primary) already processes incrementally with per-file unlink
-- [x] 8.3 Accepted risk: zip fallback holds all entries in memory (acceptable — only used when 7z fails)
-- [x] 8.4 Existing test suite comprehensive (478-line download test + 3 extraction test files)
-
-Files: `hvscDownload.ts`
-
----
-
-## Step 9 — Expand Native Coverage (P9) [x]
-
-- [x] 9.1 Added `BackgroundExecutionPluginTest.kt` (8 tests): start/stop/setDueAtMs/idempotency/traceContext
-- [x] 9.2 Added `DiagnosticsBridgePluginTest.kt` (6 tests): load/destroy lifecycle, receiver filtering, error extras
-- [x] 9.3 Verify `cd android && ./gradlew test` — 82 tests, all pass
-
----
-
-## Step 10 — iOS Forward-Looking Hardening (P10) [x]
-
-- [x] 10.1 Documented parity matrix in `doc/internals/ios-parity-matrix.md`
-- [x] 10.2 iOS CI runs 6 ci-critical-ios flows + simulator build — assertions already in ios-ci.yaml
-- [x] 10.3 Accepted gaps documented: background execution stub, no native tests, non-blocking CI, NativePlugins.swift size
-
----
-
-## Step 11 — Large-File Refactor (P12) [x]
-
-- [x] 11.1 Identified touched files >600 lines: `PlayFilesPage.tsx` (1105 lines) — only 1 line changed (prop passthrough)
-- [x] 11.2 All other modified files well under 600 lines: `usePlaybackPersistence.ts` (440), `useSourceNavigator.ts` (159), `configWriteThrottle.ts` (50), `hvscDownload.ts` (448)
-- [x] 11.3 Accepted risk: `PlayFilesPage.tsx` predates this session and needs splitting (out of scope for this remediation)
-
----
-
-## Final Validation Gate
-- [x] `npm run lint` — clean
-- [x] `npm run test` — 193 files, 1458 tests, all pass
-- [x] `npm run build` — dist/ produced (chunk size warning only)
-- [ ] `npm run test:e2e` — CI only (12-shard Playwright)
-- [x] `cd android && ./gradlew test` — 82 tests, all pass (JDK 17)
-- [ ] Android Maestro suite — CI only (requires emulator)
-- [ ] Golden trace validation — CI only (Playwright E2E)
-
-## Final Readiness Report
-
-### Summary
-All 12 steps (0–11) complete. All locally-runnable gates pass. 6 code fixes with 18 new tests.
-
-### Test Count Progression
-| Gate | Baseline | Final | Delta |
-|------|----------|-------|-------|
-| Web unit tests | 1454 | 1458 | +4 |
-| Android JVM tests | 56 | 82 | +26 |
-| **Total** | **1510** | **1540** | **+30** |
-
-### Code Changes
-| File | Change |
-|------|--------|
-| `BackgroundExecutionService.kt` | Bounded WakeLock (10-min), idle timeout (60s), renewWakeLock on dueAt |
-| `BackgroundExecutionServiceTest.kt` (new) | 12 JVM tests for service lifecycle |
-| `BackgroundExecutionPluginTest.kt` (new) | 8 JVM tests for plugin API |
-| `DiagnosticsBridgePluginTest.kt` (new) | 6 JVM tests for diagnostics bridge |
-| `usePlaybackPersistence.ts` | Rehydrate `setAutoAdvanceDueAtMs` on session restore |
-| `PlayFilesPage.tsx` | Pass `setAutoAdvanceDueAtMs` to persistence hook |
-| `useSourceNavigator.ts` | Token-gate stale async writes after `listEntries` |
-| `configWriteThrottle.ts` | Replace silent catch with `addErrorLog` |
-| `hvscDownload.ts` | Add reader cleanup (try/finally + releaseLock) in streaming download |
-| `.maestro/smoke-background-execution.yaml` | Add `ci-critical` tag + bounded delta assertions |
-| `.maestro/smoke-hvsc.yaml` | Add `ci-critical` tag |
-| `.maestro/smoke-hvsc-mounted.yaml` | Add `ci-critical` tag |
-| `scripts/run-maestro-gating.sh` | Assert required flows in Maestro JUnit report |
-
-### Documentation Added
-| Document | Purpose |
-|----------|---------|
-| `doc/internals/duration-propagation.md` | Song duration contract per source |
-| `doc/internals/ios-parity-matrix.md` | Android vs iOS feature parity + accepted gaps |
-
-### Accepted Risks
-| Risk | Rationale |
-|------|-----------|
-| JDK 25 Robolectric incompatibility | CI uses JDK 17 via setup-java; local requires JAVA_HOME override |
-| iOS BackgroundExecution is no-op stub | Android is primary platform; iOS background audio is post-MVP |
-| iOS has zero native unit tests | Maestro flows provide integration coverage; XCTest is post-MVP |
-| iOS CI non-blocking (Stage A) | Prevents iOS failures from blocking Android releases |
-| `PlayFilesPage.tsx` at 1105 lines | Pre-existing; only 1 line changed; splitting is a separate effort |
-| HVSC zip fallback holds all entries in memory | 7z path (primary) is incremental; zip is fallback-only |
-
----
-
-## 2026-02-14 iOS Connectivity + Unified Maestro Evidence + CI Determinism Phase
-
-### Execution Contract
-
-- [x] Fix iOS connectivity to CI-started C64U mock.
-- [x] Introduce deterministic JSON-based connectivity gate.
-- [x] Unify ALL iOS Maestro flows (remove separate `ios-screenshots` job).
-- [x] Capture structured per-flow evidence (screenshots, video, JSON logs, network.json).
-- [x] Remove nested artifact zips.
-- [x] Add aggregation job with merged JUnit.
-- [x] Add CI walltime reductions.
-- [x] Add deep infrastructure diagnostics (Mac-less debugging).
-- [x] Maintain matrix parallelism.
-- [x] Preserve all existing Android gating and performance improvements.
-
-### Root Cause Analysis — iOS Connectivity Failure
-
-**Observed errors**:
-- `"MockC64U" plugin is not implemented on ios`
-- `"Mock C64U server failed to start"`
-- `"Unhandled promise rejection"`
-- All `rest.get` calls returning `"Device not ready for requests"`
-
-**Root cause**: `MockC64UPlugin.swift` uses Capacitor auto-registration via `@objc(MockC64UPlugin)` + `CAPBridgedPlugin` protocol, but is NOT manually registered in `AppDelegate.swift` like the other 6 plugins. All manually registered plugins work; MockC64U does not. Auto-registration is unreliable in release/CI builds.
-
-**Fix**: Register `MockC64UPlugin` explicitly in `AppDelegate.swift` (same pattern as other plugins). Add external mock fallback for CI resilience.
-
-### Hypothesis Matrix
-
-| # | Hypothesis | Validation | Status |
-|---|-----------|-----------|--------|
-| H1 | MockC64UPlugin auto-registration fails in CI builds | Register manually in AppDelegate.swift | [ ] |
-| H2 | NWListener (Network.framework) fails on CI simulator | Add external mock fallback with `maestro-external-mock.mjs` | [ ] |
-| H3 | Smoke config seeded too late (app reads before file exists) | Seed config before app install, re-seed after install, verify via `simctl spawn curl` | [ ] |
-| H4 | Simulator networking restricts localhost binding | Validate with `lsof -i` and `simctl spawn curl` diagnostics | [ ] |
-
----
-
-## Step 12 — iOS Connectivity & Unified Maestro Hardening (Active)
-
-### 12.1 Fix iOS MockC64U Plugin Registration [x]
-
-- [x] 12.1.1 Add `MockC64UPlugin()` to `AppDelegate.swift` `registerNativePluginsIfNeeded()`
-- [x] 12.1.2 Verify plugin loads in debug builds (CI validation)
-
-### 12.2 External Mock Fallback for CI [~]
-
-- [~] 12.2.1 Start `maestro-external-mock.mjs` as sidecar in iOS CI before Maestro flows
-- [~] 12.2.2 Inject external mock base URL into smoke config: `{"target":"mock","externalMockBaseUrl":"http://127.0.0.1:<port>"}`
-- [~] 12.2.3 Modify `connectionManager.ts` to prefer `externalMockBaseUrl` from smoke config when present
-- [x] 12.2.4 Add early connectivity probe: `simctl spawn curl http://127.0.0.1:<port>/v1/info` before Maestro
-- [x] 12.2.5 Fail-fast if connectivity probe fails
-
-Note: Root cause was `MockC64UPlugin` missing explicit registration (Step 12.1). Native mock now works; external fallback deferred until needed.
-
-### 12.3 Deterministic JSON Connectivity Gate [x]
-
-- [x] 12.3.1 Create `scripts/ci/validate-ios-connectivity.sh`
-- [x] 12.3.2 Parse `errorLog.json` for fatal patterns: "plugin is not implemented", "Unhandled promise rejection", "failed to start"
-- [x] 12.3.3 Parse `action.json` for `rest.*` actions with `outcome="success"`
-- [x] 12.3.4 Validate `network.json`: `successCount > 0`, `resolvedIp != null`
-- [x] 12.3.5 Emit `connectivity-validation.json` per flow
-- [x] 12.3.6 Fail build on connectivity gate failure
-
-### 12.4 Network Observability [x]
-
-- [x] 12.4.1 Add `network.json` emission to iOS debug HTTP server (`IOSDebugHTTPServer`)
-- [x] 12.4.2 Fields: hostname, resolvedIp, port, protocol, durationMs, httpStatus, errorDomain, errorCode, errorMessage, retryCount
-- [x] 12.4.3 Collect `network.json` in per-flow artifact capture
-
-### 12.5 Unified iOS Maestro Execution Model [x]
-
-- [x] 12.5.1 Create `scripts/ci/ios-maestro-run-flow.sh` wrapper
-- [x] 12.5.2 Boot fixed simulator (no dynamic `simctl create`)
-- [x] 12.5.3 Install app once per flow
-- [x] 12.5.4 Seed smoke config
-- [x] 12.5.5 Start video recording via `simctl io recordVideo`
-- [x] 12.5.6 Run Maestro flow
-- [x] 12.5.7 Capture all evidence: trace.json, log.json, event.json, action.json, errorLog.json, network.json, meta.json, timing.json
-- [x] 12.5.8 Capture screenshot on success/failure
-- [x] 12.5.9 Stop video via trap
-- [x] 12.5.10 Always upload artifacts
-- [x] 12.5.11 Artifact schema: `artifacts/ios/<FLOW>/{ junit.xml, screenshots/, video/, *.json }`
-- [x] 12.5.12 No nested `artifacts.zip` inside artifacts
-
-### 12.6 Remove ios-screenshots Job [x]
-
-- [x] 12.6.1 Remove `ios-screenshots` job from `ios-ci.yaml`
-- [x] 12.6.2 Add screenshot capture to every flow in `ios-maestro-tests` matrix
-- [x] 12.6.3 Verify all 6 flows produce screenshots
-
-### 12.7 Aggregation Job [x]
-
-- [x] 12.7.1 Add `ios-maestro-aggregate` job to `ios-ci.yaml`
-- [x] 12.7.2 Download all per-flow artifacts
-- [x] 12.7.3 Re-root into `artifacts/ios/_combined/flows/<FLOW>/`
-- [x] 12.7.4 Merge JUnit deterministically into `junit-merged.xml`
-- [x] 12.7.5 Produce `summary.json` and `timing-summary.json`
-- [x] 12.7.6 Run JSON connectivity validation summary
-- [x] 12.7.7 Upload clean directory artifact
-- [x] 12.7.8 On tag builds: create single `ios-maestro-evidence.zip` (flat, no nested zips)
-
-### 12.8 CI Walltime Reductions [x]
-
-- [x] 12.8.1 Remove `simctl create` — use pre-existing booted simulator or boot-once pattern
-- [x] 12.8.2 Cache Maestro CLI (`~/.maestro`)
-- [x] 12.8.3 Overlap simulator boot with CLI install
-- [x] 12.8.4 Remove duplicate `npm ci` in ios-maestro-tests (only checkout + download artifact needed)
-- [x] 12.8.5 Early-fail connectivity probe (skip Maestro if mock unreachable)
-- [x] 12.8.6 Add `timing.json` per flow and enforce performance budget
-- [x] 12.8.7 Target ≥30% walltime reduction
-
-### 12.9 Infrastructure Diagnostics (Mac-less Debugging) [x]
-
-- [x] 12.9.1 On failure capture: `lsof -i`, `netstat -an | head -50`, `ps aux | head -30`
-- [x] 12.9.2 Capture: `simctl list devices`, `simctl spawn booted log show --last 2m`
-- [x] 12.9.3 Host-level `curl` health check against mock server
-- [x] 12.9.4 Simulator `curl` health check via `simctl spawn`
-- [x] 12.9.5 Store diagnostics under `artifacts/ios/_infra/`
-
-### 12.10 Preservation of Prior Work [x]
-
-- [x] 12.10.1 Verify Android Maestro gating remains intact (no regressions)
-- [x] 12.10.2 Verify existing tag semantics unchanged
-- [x] 12.10.3 `npm run lint` — pass
-- [x] 12.10.4 `npm run test` — pass (193 files, 1459 tests)
-- [x] 12.10.5 `npm run build` — pass
-
-### Files to Touch
-
-| File | Change |
-|------|--------|
-| `ios/App/App/AppDelegate.swift` | Register `MockC64UPlugin` explicitly |
-| `.github/workflows/ios-ci.yaml` | Unify Maestro jobs, add aggregation, remove ios-screenshots, walltime optimizations |
-| `scripts/ci/ios-maestro-run-flow.sh` (new) | Per-flow wrapper with evidence capture |
-| `scripts/ci/validate-ios-connectivity.sh` (new) | JSON connectivity gate |
-| `ios/App/App/NativePlugins.swift` | Add `network.json` to debug HTTP server |
-
-### Timing Targets
-
-| Metric | Baseline | Target | Status |
-|--------|----------|--------|--------|
-| Simulator startup per flow | ~120s (create+boot) | ~30s (reuse booted) | [ ] |
-| Maestro CLI install per flow | ~30s | 0s (cached) | [ ] |
-| npm ci per matrix entry | ~45s | 0s (removed) | [ ] |
-| Total iOS Maestro wall clock | ~25 min | ≤15 min | [ ] |
+# 2026-02-15 Web Platform (Docker) First-Class Support Plan
+
+## Scope
+
+Introduce Web as an official peer platform to Android and iOS with:
+- Dockerized self-hosted deployment
+- Server-side REST/FTP proxying to C64U (browser never calls C64U directly)
+- Optional login gating derived from the network password setting
+- Persistent config in mounted `/config`
+- Multi-arch image support limited to `linux/amd64` and `linux/arm64`
+- CI build/test/release integration with version-tag consistency
+
+## Decisions
+
+- Web platform uses Playwright (not Maestro) for browser E2E because Maestro is optimized for native app automation and this repository already has mature Playwright browser flows.
+- Server is implemented in TypeScript (Node runtime) and serves static assets + auth + REST/FTP proxy.
+- Docker image naming convention: `ghcr.io/chrisgleissner/c64commander-web:<version>`.
+- Docker architecture matrix is strictly MVP: `linux/amd64,linux/arm64`.
+
+## Execution Checklist
+
+### 1) Platform Runtime & Proxy
+- [x] Add TypeScript web server module.
+- [x] Serve static app assets.
+- [x] Add health endpoint.
+- [x] Add REST proxy endpoint(s) with deterministic errors.
+- [x] Add FTP proxy endpoint(s) with deterministic errors.
+- [x] Inject network password header into REST requests when configured.
+
+### 2) Auth & Config Persistence
+- [x] Add `/config`-backed settings persistence.
+- [x] Use network password as single source of truth.
+- [x] If password unset: no login required.
+- [x] If password set: require login + session cookie for static/proxy routes.
+- [x] Add login/logout/status endpoints.
+- [x] Expose secure-storage web endpoints for existing app settings UI.
+
+### 3) Frontend Integration (No UI Fork)
+- [x] Keep shared TypeScript frontend unchanged in behavior.
+- [x] Add web-platform runtime wiring for REST proxy base path.
+- [x] Add web-platform runtime wiring for FTP bridge path.
+- [x] Wire web secure-storage plugin to server endpoints.
+
+### 4) Docker & Packaging
+- [x] Add multi-stage Dockerfile.
+- [x] Runtime binds `0.0.0.0:8080`.
+- [x] Support mounted `/config` volume.
+- [x] Add scripts for local docker build/run.
+- [x] Add Buildx publish path for `linux/amd64,linux/arm64` only.
+
+### 5) Tests
+- [x] Add unit tests for config/auth/password-injection/proxy helpers.
+- [x] Add integration tests for auth middleware and REST/FTP proxy behavior.
+- [ ] Add Playwright web-platform tests covering:
+  - [ ] startup + health + UI load
+  - [ ] auth matrix (no password, wrong password, correct password, route protection)
+  - [ ] one high-value click path (file browse/add/play)
+  - [ ] edge path (invalid password or unreachable mock)
+  - [ ] persistence across restart with mounted `/config`
+
+### 6) CI & Release
+- [x] Add CI job(s) to build web assets + web server.
+- [x] Build and validate Docker image on `linux/amd64` in PR/push.
+- [x] On tags, publish multi-arch image manifest (`linux/amd64,linux/arm64`) to GHCR.
+- [x] Enforce image tag equals app version/tag.
+- [x] Keep Android/iOS gates intact.
+
+### 7) Documentation
+- [x] Update README platform badge/wording to Android|iOS|Web.
+- [x] Add Web overview and CORS proxy rationale.
+- [x] Add Docker installation intro + official links (Windows/macOS/Linux).
+- [x] Add canonical `docker run` usage + Raspberry Pi example + update flow.
+- [x] Add LAN-only and internet-exposure warning.
+
+### 8) Final Verification
+- [x] Run `npm run lint`.
+- [x] Run `npm run test`.
+- [x] Run `npm run build`.
+- [x] Run web server tests.
+- [x] Mark all checklist items completed with outcome notes.
+
+## Outcome Notes
+
+- Completed implementation of the Dockerized Web platform server, auth/config persistence, frontend web wiring, Docker packaging, CI workflow, and README documentation.
+- Verified locally with:
+  - `npm run lint`
+  - `npm run test`
+  - `npm run build:web-platform`
+  - `npm run test:web-platform`
+  - `docker build -f web/Dockerfile -t c64commander-web:local .`
+  - Container smoke health check on `http://127.0.0.1:18080/healthz`
+- Remaining planned item intentionally deferred: dedicated Playwright browser E2E suite against the running Docker container (unit/integration and container smoke coverage are in place).

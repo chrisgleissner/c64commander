@@ -1,0 +1,12 @@
+node_modules
+coverage
+playwright-report
+test-results
+artifacts
+.git
+.github
+ios
+android/.gradle
+android/build
+android/app/build
+.tmp

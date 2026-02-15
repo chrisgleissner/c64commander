@@ -45,6 +45,9 @@ export const clearRuntimeFtpPortOverride = () => {
 export const getFtpBridgeUrl = () => {
   const stored = localStorage.getItem(FTP_BRIDGE_URL_KEY);
   if (stored) return stored;
+  if (import.meta.env.VITE_WEB_PLATFORM === '1') {
+    return '/api/ftp';
+  }
   const envUrl = import.meta.env.VITE_FTP_BRIDGE_URL as string | undefined;
   return envUrl || '';
 };

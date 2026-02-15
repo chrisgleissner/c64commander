@@ -3,13 +3,13 @@
 [![Build](https://github.com/chrisgleissner/c64commander/actions/workflows/android-apk.yaml/badge.svg?branch=main)](https://github.com/chrisgleissner/c64commander/actions/workflows/android-apk.yaml)
 [![codecov](https://codecov.io/gh/chrisgleissner/c64commander/graph/badge.svg?token=hGEe09SZch)](https://codecov.io/gh/chrisgleissner/c64commander)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
-[![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS-blue)](https://github.com/chrisgleissner/c64commander/releases)
+[![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Web-blue)](https://github.com/chrisgleissner/c64commander/releases)
 
 Your C64 Ultimate command center in your pocket.
 
 <img src="./docs/play-store/feature-graphic-1024x500.png" alt="C64 Commander Logo" width="600"/>
 
-C64 Commander lets you control and manage a C64 Ultimate from Android or iOS on your local network.
+C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a self-hosted Web deployment on your local network.
 
 > [!NOTE]
 > This project is under active development, with frequent improvements across UX, stability, and feature depth.
@@ -17,11 +17,14 @@ C64 Commander lets you control and manage a C64 Ultimate from Android or iOS on 
 ## 📑 Contents
 
 - [C64 Commander](#c64-commander)
-  - [Contents](#contents)
+  - [📑 Contents](#-contents)
   - [✨ Why C64 Commander?](#-why-c64-commander)
   - [🚀 Quick Start](#-quick-start)
     - [Install on Android](#install-on-android)
-    - [Install on iOS](#install-on-ios-altstore)
+    - [Install on iOS](#install-on-ios)
+    - [Install on Web (Docker)](#install-on-web-docker)
+      - [Docker installation (quick links)](#docker-installation-quick-links)
+      - [Run Web platform](#run-web-platform)
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
@@ -75,6 +78,59 @@ iOS builds are distributed via AltStore.
 Done.
 
 AltStore automatically refreshes installed apps in the background when your iPhone can reach AltServer on your local network.
+
+### Install on Web (Docker)
+
+The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server, and that server proxies REST/FTP to C64U (required because C64U does not provide browser-safe CORS headers).
+
+#### Docker installation (quick links)
+
+- Windows (Docker Desktop): https://docs.docker.com/desktop/setup/install/windows-install/
+- macOS (Docker Desktop): https://docs.docker.com/desktop/setup/install/mac-install/
+- Linux (Docker Engine): https://docs.docker.com/engine/install/
+
+Supported container architectures (MVP only):
+
+- `linux/amd64`
+- `linux/arm64`
+
+These images also run on Windows/macOS through Docker Desktop virtualization.
+
+#### Run Web platform
+
+```bash
+docker run -d \
+  --name c64commander-web \
+  -p 8080:8080 \
+  -v ./c64commander-config:/config \
+  ghcr.io/chrisgleissner/c64commander-web:<version>
+```
+
+Then open:
+
+`http://<host-ip>:8080`
+
+Raspberry Pi example (64-bit OS):
+
+```bash
+docker run -d --name c64commander-web -p 8080:8080 -v /home/pi/c64commander-config:/config ghcr.io/chrisgleissner/c64commander-web:<version>
+```
+
+Network password model:
+
+- If no network password is configured, the UI opens directly.
+- If a network password is configured, login is required and the server injects the password into proxied C64U requests.
+
+Update to a newer version:
+
+```bash
+docker pull ghcr.io/chrisgleissner/c64commander-web:<version>
+docker rm -f c64commander-web
+docker run -d --name c64commander-web -p 8080:8080 -v ./c64commander-config:/config ghcr.io/chrisgleissner/c64commander-web:<version>
+```
+
+> [!WARNING]
+> Web mode is intended for trusted LAN use. Do not expose it directly to the public internet.
 
 
 ### First Connection Checklist

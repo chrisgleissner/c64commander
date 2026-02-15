@@ -1,0 +1,123 @@
+name: Web Platform
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+    tags: ["*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/chrisgleissner/c64commander-web
+  CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  web-build-and-test:
+    name: Web | Build + tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web platform
+        run: npm run build:web-platform
+
+      - name: Run web-platform tests
+        run: npm run test:web-platform
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Build Docker image (amd64 smoke)
+        run: docker build -f web/Dockerfile -t c64commander-web:ci .
+
+      - name: Run Docker container smoke test
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/web-config
+          docker run -d --name c64commander-web-smoke --network host -v "$PWD/.tmp/web-config:/config" c64commander-web:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/healthz | tee /tmp/web-health.json
+
+      - name: Run web-platform Playwright checks
+        env:
+          PLAYWRIGHT_REUSE_SERVER: "1"
+          PLAYWRIGHT_PORT: "8080"
+          PLAYWRIGHT_WORKERS: "1"
+          PLAYWRIGHT_DEVICES: "phone"
+        run: npx playwright test playwright/webPlatformAuth.spec.ts
+
+      - name: Stop smoke container
+        if: always()
+        run: docker rm -f c64commander-web-smoke || true
+
+  web-docker-publish:
+    name: Web | Publish GHCR multi-arch
+    runs-on: ubuntu-latest
+    needs: web-build-and-test
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify tag/version consistency
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$TAG" != "$PKG_VERSION" ]]; then
+            echo "Tag/version mismatch: tag=$TAG package.json=$PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push linux/amd64,linux/arm64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: web/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.IMAGE_NAME }}:latest
