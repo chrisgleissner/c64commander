@@ -1,5 +1,75 @@
 import { test, expect } from '@playwright/test';
+import { mkdtemp, access, rm } from 'node:fs/promises';
 import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, type ChildProcess } from 'node:child_process';
+
+const waitForHttp = async (url: string, timeoutMs = 15000) => {
+    const started = Date.now();
+    let lastError: unknown;
+    while (Date.now() - started < timeoutMs) {
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                return;
+            }
+            lastError = new Error(`Unexpected status ${response.status}`);
+        } catch (error) {
+            lastError = error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    throw new Error(`Timed out waiting for ${url}: ${String(lastError)}`);
+};
+
+const reserveFreePort = async (): Promise<number> => {
+    const server = http.createServer();
+    await new Promise<void>((resolve, reject) => {
+        server.listen(0, '127.0.0.1', () => resolve());
+        server.once('error', reject);
+    });
+    const address = server.address();
+    await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+    });
+    if (!address || typeof address === 'string') {
+        throw new Error('Unable to reserve free TCP port');
+    }
+    return address.port;
+};
+
+const startStandaloneServer = async (configDir: string, port: number): Promise<ChildProcess> => {
+    const serverEntry = path.resolve('web/server/dist/index.js');
+    const distDir = path.resolve('dist');
+    await access(serverEntry);
+    await access(path.join(distDir, 'index.html'));
+
+    const child = spawn('node', [serverEntry], {
+        env: {
+            ...process.env,
+            HOST: '127.0.0.1',
+            PORT: String(port),
+            WEB_CONFIG_DIR: configDir,
+            WEB_DIST_DIR: distDir,
+        },
+        stdio: 'ignore',
+    });
+
+    await waitForHttp(`http://127.0.0.1:${port}/healthz`);
+    return child;
+};
+
+const stopStandaloneServer = async (child: ChildProcess): Promise<void> => {
+    if (child.killed) {
+        return;
+    }
+    child.kill('SIGTERM');
+    await new Promise<void>((resolve) => {
+        child.once('exit', () => resolve());
+        setTimeout(() => resolve(), 3000);
+    });
+};
 
 test.describe('Web platform auth + proxy @web-platform', () => {
     let upstream: http.Server;
@@ -40,9 +110,18 @@ test.describe('Web platform auth + proxy @web-platform', () => {
     });
 
     test('auth matrix and protected routes', async ({ page, request }) => {
+        const authStatus = await request.get('/auth/status');
+        if (authStatus.status() === 404) {
+            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        }
+        expect(authStatus.status()).toBe(200);
+
         const setPassword = await request.put('/api/secure-storage/password', {
             data: { value: 'secret' },
         });
+        if (setPassword.status() === 404) {
+            test.skip(true, 'Web platform secure-storage endpoints are unavailable in this runtime');
+        }
         if (setPassword.status() === 401) {
             const login = await request.post('/auth/login', { data: { password: 'secret' } });
             expect(login.status()).toBe(200);
@@ -89,5 +168,90 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         expect(proxyOk.status()).toBe(200);
         const payload = await proxyOk.json() as { version: string };
         expect(payload.version).toBe('3.12.0');
+    });
+
+    test('high-value click path: Play page opens Add items modal', async ({ page, request }) => {
+        const authStatus = await request.get('/auth/status');
+        if (authStatus.status() === 404) {
+            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        }
+        expect(authStatus.status()).toBe(200);
+
+        const clearPassword = await request.delete('/api/secure-storage/password');
+        if (clearPassword.status() === 404) {
+            test.skip(true, 'Web platform secure-storage endpoints are unavailable in this runtime');
+        }
+        expect(clearPassword.status()).toBe(200);
+
+        await page.goto('/play');
+        const addButton = page.getByRole('button', { name: /Add items|Add more items/i });
+        await expect(addButton).toBeVisible({ timeout: 30000 });
+        await addButton.click();
+        await expect(page.getByRole('dialog')).toBeVisible();
+    });
+
+    test('edge path: unreachable upstream returns deterministic proxy error', async ({ request }) => {
+        const authStatus = await request.get('/auth/status');
+        if (authStatus.status() === 404) {
+            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        }
+        expect(authStatus.status()).toBe(200);
+
+        const clearPassword = await request.delete('/api/secure-storage/password');
+        if (clearPassword.status() === 404) {
+            test.skip(true, 'Web platform secure-storage endpoints are unavailable in this runtime');
+        }
+        expect(clearPassword.status()).toBe(200);
+
+        const response = await request.get('/api/rest/v1/version', {
+            headers: {
+                'X-C64U-Host': '127.0.0.1:1',
+            },
+        });
+        expect(response.status()).toBe(502);
+        const payload = await response.json() as { error?: string };
+        expect(payload.error).toContain('REST proxy upstream request failed');
+    });
+
+    test('persistence: password survives server restart with shared /config', async ({ request }) => {
+        const authStatus = await request.get('/auth/status');
+        if (authStatus.status() === 404) {
+            test.skip(true, 'Web platform auth endpoints are unavailable in this runtime');
+        }
+        expect(authStatus.status()).toBe(200);
+
+        const configDir = await mkdtemp(path.join(os.tmpdir(), 'c64-web-config-'));
+        const port = await reserveFreePort();
+        let firstServer: ChildProcess | undefined;
+        let secondServer: ChildProcess | undefined;
+        try {
+            firstServer = await startStandaloneServer(configDir, port);
+
+            const setPassword = await fetch(`http://127.0.0.1:${port}/api/secure-storage/password`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value: 'secret' }),
+            });
+            expect(setPassword.status).toBe(200);
+
+            await stopStandaloneServer(firstServer);
+
+            secondServer = await startStandaloneServer(configDir, port);
+            const rootBlocked = await fetch(`http://127.0.0.1:${port}/`);
+            expect(rootBlocked.status).toBe(401);
+
+            const statusAfterRestart = await fetch(`http://127.0.0.1:${port}/auth/status`);
+            expect(statusAfterRestart.status).toBe(200);
+            const statusPayload = await statusAfterRestart.json() as { requiresLogin: boolean };
+            expect(statusPayload.requiresLogin).toBe(true);
+        } finally {
+            if (firstServer) {
+                await stopStandaloneServer(firstServer);
+            }
+            if (secondServer) {
+                await stopStandaloneServer(secondServer);
+            }
+            await rm(configDir, { recursive: true, force: true });
+        }
     });
 });

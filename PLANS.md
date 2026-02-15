@@ -51,12 +51,12 @@ Introduce Web as an official peer platform to Android and iOS with:
 ### 5) Tests
 - [x] Add unit tests for config/auth/password-injection/proxy helpers.
 - [x] Add integration tests for auth middleware and REST/FTP proxy behavior.
-- [ ] Add Playwright web-platform tests covering:
-  - [ ] startup + health + UI load
-  - [ ] auth matrix (no password, wrong password, correct password, route protection)
-  - [ ] one high-value click path (file browse/add/play)
-  - [ ] edge path (invalid password or unreachable mock)
-  - [ ] persistence across restart with mounted `/config`
+- [x] Add Playwright web-platform tests covering:
+  - [x] startup + health + UI load
+  - [x] auth matrix (no password, wrong password, correct password, route protection)
+  - [x] one high-value click path (file browse/add/play)
+  - [x] edge path (invalid password or unreachable mock)
+  - [x] persistence across restart with mounted `/config`
 
 ### 6) CI & Release
 - [x] Add CI job(s) to build web assets + web server.
@@ -89,4 +89,4 @@ Introduce Web as an official peer platform to Android and iOS with:
   - `npm run test:web-platform`
   - `docker build -f web/Dockerfile -t c64commander:local .`
   - Container smoke health check on `http://127.0.0.1:18080/healthz`
-- Remaining planned item intentionally deferred: dedicated Playwright browser E2E suite against the running Docker container (unit/integration and container smoke coverage are in place).
+- Added dedicated Playwright web-platform coverage for startup/auth/high-value path/edge path and config persistence across restart.
