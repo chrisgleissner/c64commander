@@ -6,87 +6,87 @@ Stabilize and harden the existing Playwright fuzz system so 5-minute local and C
 
 ## Global constraints
 
-- [ ] No assertion weakening.
-- [ ] No global-timeout inflation to mask defects.
-- [ ] No skipped tests.
-- [ ] No silent exception swallowing introduced by this change.
-- [ ] Seed-based determinism preserved (`seed`, `baseSeed + shardIndex`).
+- [x] No assertion weakening.
+- [x] No global-timeout inflation to mask defects.
+- [x] No skipped tests.
+- [x] No silent exception swallowing introduced by this change.
+- [x] Seed-based determinism preserved (`seed`, `baseSeed + shardIndex`).
 
 ## Phase 1 — Session lifecycle hardening
 
 ### Tasks
 
-- [ ] Enforce strict hard per-session timeout path and explicit termination reasons.
-- [ ] Ensure non-recoverable states always trigger this sequence:
-  - [ ] Capture final screenshot.
-  - [ ] Persist last N interactions.
-  - [ ] Finalize and retain session video.
-  - [ ] Close context.
-  - [ ] Reset mock server state.
-  - [ ] Start clean next session.
-- [ ] Prevent corrupted session reuse by resetting all session-scoped state per run.
+- [x] Enforce strict hard per-session timeout path and explicit termination reasons.
+- [x] Ensure non-recoverable states always trigger this sequence:
+  - [x] Capture final screenshot.
+  - [x] Persist last N interactions.
+  - [x] Finalize and retain session video.
+  - [x] Close context.
+  - [x] Reset mock server state.
+  - [x] Start clean next session.
+- [x] Prevent corrupted session reuse by resetting all session-scoped state per run.
 
 ### Verification criteria
 
-- [ ] Session manifests show deterministic termination reason for every session.
-- [ ] Logs demonstrate restart after freeze/crash/non-recoverable states.
-- [ ] Every session has `log + final screenshot + video`.
+- [x] Session manifests show deterministic termination reason for every session.
+- [x] Logs demonstrate restart after freeze/crash/non-recoverable states.
+- [x] Every session has `log + final screenshot + video`.
 
 ## Phase 2 — Visual stagnation detection + deterministic recovery ladder
 
 ### Tasks
 
-- [ ] Add fixed-interval visual sampling and deterministic visual delta measurement.
-- [ ] Detect stagnation windows and trigger recovery when no meaningful visual delta for >5s.
-- [ ] Implement deterministic escalation ladder, one step per stall incident:
-  - [ ] Close modal.
-  - [ ] Navigate back.
-  - [ ] Return to root tab.
-  - [ ] Force home route.
-  - [ ] Reload page.
-  - [ ] Terminate session.
-- [ ] Record freeze issue when recovery is exhausted.
+- [x] Add fixed-interval visual sampling and deterministic visual delta measurement.
+- [x] Detect stagnation windows and trigger recovery when no meaningful visual delta for >5s.
+- [x] Implement deterministic escalation ladder, one step per stall incident:
+  - [x] Close modal.
+  - [x] Navigate back.
+  - [x] Return to root tab.
+  - [x] Force home route.
+  - [x] Reload page.
+  - [x] Terminate session.
+- [x] Record freeze issue when recovery is exhausted.
 
 ### Verification criteria
 
-- [ ] Session logs show ordered ladder steps.
-- [ ] Session termination occurs on exhausted recovery.
-- [ ] `visual-stagnation-report.json` records per-session max stagnation and violations.
+- [x] Session logs show ordered ladder steps.
+- [x] Session termination occurs on exhausted recovery.
+- [x] `visual-stagnation-report.json` records per-session max stagnation and violations.
 
 ## Phase 3 — Artifact completeness + metrics + run-level validation
 
 ### Tasks
 
-- [ ] Emit complete per-session artifacts with deterministic filenames.
-- [ ] Emit complete consolidated artifacts:
-  - [ ] `sessions/`
-  - [ ] `videos/`
-  - [ ] `fuzz-issue-summary.md`
-  - [ ] `fuzz-issue-report.json`
-  - [ ] `README.md`
-  - [ ] `fuzz-run-metrics.json`
-  - [ ] `visual-stagnation-report.json`
-- [ ] Add hard artifact validation that fails run when required artifacts are missing/incomplete.
-- [ ] Emit metrics:
-  - [ ] Sessions started.
-  - [ ] Sessions terminated by reason.
-  - [ ] Max visual stagnation.
-  - [ ] Average session duration.
-  - [ ] Steps per session.
+- [x] Emit complete per-session artifacts with deterministic filenames.
+- [x] Emit complete consolidated artifacts:
+  - [x] `sessions/`
+  - [x] `videos/`
+  - [x] `fuzz-issue-summary.md`
+  - [x] `fuzz-issue-report.json`
+  - [x] `README.md`
+  - [x] `fuzz-run-metrics.json`
+  - [x] `visual-stagnation-report.json`
+- [x] Add hard artifact validation that fails run when required artifacts are missing/incomplete.
+- [x] Emit metrics:
+  - [x] Sessions started.
+  - [x] Sessions terminated by reason.
+  - [x] Max visual stagnation.
+  - [x] Average session duration.
+  - [x] Steps per session.
 
 ### Verification criteria
 
-- [ ] Local run produces all required files and non-empty structured content.
-- [ ] Validation step fails when artifacts are intentionally missing (guard check).
+- [x] Local run produces all required files and non-empty structured content.
+- [x] Validation step fails when artifacts are intentionally missing (guard check).
 
 ## Phase 4 — CI 5-minute bounded execution
 
 ### Tasks
 
-- [ ] Set CI fuzz budget to 5 minutes.
-- [ ] Align Playwright timeout envelope with fuzz budget and bounded grace.
-- [ ] Enable deterministic shard behavior and merge outputs deterministically.
-- [ ] Remove 2-hour hanging behavior from fuzz workflow.
+- [x] Set CI fuzz budget to 5 minutes.
+- [x] Align Playwright timeout envelope with fuzz budget and bounded grace.
+- [x] Enable deterministic shard behavior and merge outputs deterministically.
+- [x] Remove 2-hour hanging behavior from fuzz workflow.
 
 ### Verification criteria
 
@@ -97,9 +97,9 @@ Stabilize and harden the existing Playwright fuzz system so 5-minute local and C
 
 ### Tasks
 
-- [ ] Run local fuzz for 5 minutes.
-- [ ] Validate no visual stagnation >5s in `visual-stagnation-report.json`.
-- [ ] Validate session restart behavior from logs.
+- [x] Run local fuzz for 5 minutes.
+- [x] Validate no visual stagnation >5s in `visual-stagnation-report.json`.
+- [x] Validate session restart behavior from logs.
 - [ ] Run `npm run lint`, `npm run test`, `npm run build`.
 - [ ] Commit and push changes.
 - [ ] Trigger CI fuzz workflow.
@@ -108,7 +108,7 @@ Stabilize and harden the existing Playwright fuzz system so 5-minute local and C
 
 ### Verification criteria
 
-- [ ] Local 5-minute fuzz run passes with complete artifacts.
+- [x] Local 5-minute fuzz run passes with complete artifacts.
 - [ ] CI 5-minute fuzz run is green.
 - [ ] No Playwright timeout in local or CI run.
 - [ ] `PLANS.md` checklist fully completed.

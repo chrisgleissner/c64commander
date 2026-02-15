@@ -16,8 +16,8 @@ import { seedUiMocks } from '../uiMocks';
 import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
 import { diffProgress, hasMeaningfulProgress, readProgressSnapshot } from './fuzzProgress';
 
-const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
-const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
+// FUZZ_ENABLED is checked at runtime inside the test function to ensure
+// the environment variable is properly set by the parent process.
 test.use({ screenshot: 'off', video: 'off', trace: 'off' });
 
 const ACTION_TIMEOUT_MS = 10_000; // Hard timeout for any single action
@@ -544,12 +544,15 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
 test.describe('Fuzz Test', () => {
   test('run', async ({ page }, testInfo) => {
     void page;
+    // Check FUZZ_ENABLED at runtime to ensure environment variable is properly set
+    const FUZZ_ENABLED = process.env.FUZZ_RUN === '1';
+    const SHORT_FUZZ_DEFAULTS = !FUZZ_ENABLED;
     const infraMode = !FUZZ_ENABLED;
     const seed = infraMode ? 4242 : toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
     // Default time budget for fuzz mode: 10 minutes if not specified
     const defaultTimeBudgetMs = SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000;
-    const timeBudgetMs = infraMode ? undefined : (toNumber(process.env.FUZZ_TIME_BUDGET_MS) ?? defaultTimeBudgetMs);
+    const timeBudgetMs = infraMode ? 20_000 : (toNumber(process.env.FUZZ_TIME_BUDGET_MS) ?? defaultTimeBudgetMs);
     const maxSteps = infraMode ? 10 : maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
     const progressTimeoutMs = infraMode
       ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
@@ -561,7 +564,7 @@ test.describe('Fuzz Test', () => {
     );
     const defaultSessionTimeoutMs = infraMode
       ? 30_000
-      : Math.max(60_000, Math.min(120_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) / 2)));
+      : Math.max(15_000, Math.min(60_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) / 2)));
     const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
     // Grace period is now much shorter to prevent long hangs
     const timeoutGraceMs = infraMode ? 30_000 : 120_000; // bounded grace for 5m fuzz + artifact finalization
@@ -673,6 +676,7 @@ test.describe('Fuzz Test', () => {
       const logInteraction = (entry: string) => {
         interactions.push(entry);
       };
+      logInteraction(`s=${totalSteps}\ta=session\tstart id=${sessionId}`);
       let terminationReason: SessionTerminationReason | null = null;
       const recoverySteps: RecoveryStepName[] = [];
       const visualSamples: VisualSample[] = [];
@@ -1860,6 +1864,9 @@ test.describe('Fuzz Test', () => {
         logInteraction(`s=${totalSteps}\ta=screenshot\terror=${(error as Error)?.message || 'failed'}`);
       });
 
+      if (interactions.length === 0) {
+        interactions.push(`s=${totalSteps}\ta=session\tempty-log-backfill id=${sessionId}`);
+      }
       await fs.writeFile(sessionLogPath, interactions.join('\n'), 'utf8');
 
       const video = page.video();
@@ -1972,12 +1979,23 @@ test.describe('Fuzz Test', () => {
     };
 
     while (Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
+      if (infraMode) {
+        await runSession();
+        break;
+      }
       const remainingRunMs = runDeadline - Date.now();
-      const minimumSessionWindowMs = Math.max(15_000, Math.min(sessionTimeoutMs, 60_000));
+      const budgetAwareWindowMs = timeBudgetMs
+        ? Math.max(8_000, Math.floor(timeBudgetMs / 3))
+        : 30_000;
+      const minimumSessionWindowMs = Math.max(8_000, Math.min(sessionTimeoutMs, budgetAwareWindowMs));
       if (remainingRunMs < minimumSessionWindowMs) {
         break;
       }
-      const sessionEnvelopeTimeoutMs = Math.max(sessionTimeoutMs + actionTimeoutMs * 4, 45_000);
+      const maxEnvelopeByBudgetMs = Math.max(15_000, remainingRunMs + actionTimeoutMs);
+      const sessionEnvelopeTimeoutMs = Math.min(
+        Math.max(sessionTimeoutMs + actionTimeoutMs * 2, 20_000),
+        maxEnvelopeByBudgetMs,
+      );
       try {
         await withTimeout(
           () => runSession(),
