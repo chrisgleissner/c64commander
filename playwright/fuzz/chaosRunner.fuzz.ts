@@ -649,6 +649,9 @@ test.describe('Fuzz Test', () => {
       ? Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 2000)
       : Math.max(500, toNumber(process.env.FUZZ_PROGRESS_TIMEOUT_MS) ?? 5000);
     const actionTimeoutMs = Math.max(5000, toNumber(process.env.FUZZ_ACTION_TIMEOUT_MS) ?? ACTION_TIMEOUT_MS);
+    const platform = process.env.FUZZ_PLATFORM || 'android-phone';
+    const runMode = infraMode ? 'infra' : (process.env.FUZZ_RUN_MODE || 'local');
+    const isCiRun = runMode === 'ci';
     const visualSampleTimeoutMs = Math.max(
       1000,
       Math.min(actionTimeoutMs, toNumber(process.env.FUZZ_VISUAL_SAMPLE_TIMEOUT_MS) ?? VISUAL_SAMPLE_TIMEOUT_MS),
@@ -664,9 +667,6 @@ test.describe('Fuzz Test', () => {
     const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
     testInfo.setTimeout(timeoutMs);
-    const platform = process.env.FUZZ_PLATFORM || 'android-phone';
-    const runMode = infraMode ? 'infra' : (process.env.FUZZ_RUN_MODE || 'local');
-    const isCiRun = runMode === 'ci';
     const runId = process.env.FUZZ_RUN_ID || `${seed}`;
     const shardIndex = toNumber(process.env.FUZZ_SHARD_INDEX) ?? 0;
     const shardTotal = toNumber(process.env.FUZZ_SHARD_TOTAL) ?? 1;

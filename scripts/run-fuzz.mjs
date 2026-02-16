@@ -637,6 +637,7 @@ const mergeReports = async () => {
     for (const sessionJsonPath of sessionJsonFiles) {
       const raw = await fs.readFile(sessionJsonPath, 'utf8');
       const parsed = JSON.parse(raw);
+      const sessionId = parsed?.sessionId || path.basename(sessionJsonPath, '.json');
 
       if (concurrency > 1) {
         if (parsed?.interactionLog) {
@@ -743,7 +744,6 @@ const mergeReports = async () => {
         }
       }
 
-      const sessionId = parsed?.sessionId || path.basename(sessionJsonPath, '.json');
       const sessionDurationMs = Number(parsed?.durationMs || 0);
       const videoRelativePath = parsed?.video;
       if (!videoRelativePath || !Number.isFinite(sessionDurationMs) || sessionDurationMs <= 0) {
@@ -897,7 +897,8 @@ const mergeReports = async () => {
 
 const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const basePort = Number(process.env.PLAYWRIGHT_PORT || '4173');
+const defaultBasePort = 18_000 + (baseSeed % 10_000);
+const basePort = Number(process.env.PLAYWRIGHT_PORT || String(defaultBasePort));
 
 const runCommand = (command, argsList, commandEnv) =>
   new Promise((resolve, reject) => {
