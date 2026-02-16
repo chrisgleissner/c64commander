@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createMockFtpServer, type MockFtpServer } from '../../contract/mockFtpServer.js';
@@ -121,6 +121,34 @@ describe('web server platform runtime', () => {
         expect(authed.status).toBe(200);
 
         await server.close();
+    });
+
+    it('falls back to runtime defaults when config directory is not writable', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-readonly-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>ok</body></html>', 'utf8');
+        await chmod(configDir, 0o555);
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        try {
+            const health = await fetch(`${server.baseUrl}/healthz`);
+            expect(health.status).toBe(200);
+
+            const authStatus = await fetch(`${server.baseUrl}/auth/status`);
+            expect(authStatus.status).toBe(200);
+            const payload = await authStatus.json() as { requiresLogin: boolean; authenticated: boolean };
+            expect(payload.requiresLogin).toBe(false);
+            expect(payload.authenticated).toBe(false);
+        } finally {
+            await server.close();
+            await chmod(configDir, 0o755);
+        }
     });
 
     it('injects network password header in REST proxy requests', async () => {

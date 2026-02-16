@@ -344,12 +344,41 @@ const getContentType = (filePath: string) => {
     return 'application/octet-stream';
 };
 
+const buildDefaultConfig = (): AppConfig => ({
+    networkPassword: normalizePassword(process.env.C64U_NETWORK_PASSWORD) ?? null,
+    defaultDeviceHost: sanitizeHost(process.env.C64U_DEVICE_HOST) ?? 'c64u',
+});
+
+const isConfigPermissionError = (error: unknown) => {
+    const direct = error as NodeJS.ErrnoException | undefined;
+    const directCode = direct?.code;
+    if (directCode === 'EACCES' || directCode === 'EPERM' || directCode === 'EROFS') {
+        return true;
+    }
+    const cause = (error as { cause?: unknown } | undefined)?.cause as NodeJS.ErrnoException | undefined;
+    const causeCode = cause?.code;
+    if (causeCode === 'EACCES' || causeCode === 'EPERM' || causeCode === 'EROFS') {
+        return true;
+    }
+    const message = (error as Error | undefined)?.message || '';
+    return /\b(EACCES|EPERM|EROFS)\b/.test(message);
+};
+
 const loadConfig = async (): Promise<AppConfig> => {
-    const defaultConfig: AppConfig = {
-        networkPassword: normalizePassword(process.env.C64U_NETWORK_PASSWORD) ?? null,
-        defaultDeviceHost: sanitizeHost(process.env.C64U_DEVICE_HOST) ?? 'c64u',
-    };
-    await fs.mkdir(configDir, { recursive: true });
+    const defaultConfig = buildDefaultConfig();
+    try {
+        await fs.mkdir(configDir, { recursive: true });
+    } catch (error) {
+        if (isConfigPermissionError(error)) {
+            log('warn', 'Web config directory is not writable; using runtime defaults only', {
+                configDir,
+                configPath,
+                ...errorDetails(error),
+            });
+            return defaultConfig;
+        }
+        throw error;
+    }
     try {
         const raw = await fs.readFile(configPath, 'utf8');
         const parsed = JSON.parse(raw) as Partial<AppConfig>;
@@ -358,19 +387,53 @@ const loadConfig = async (): Promise<AppConfig> => {
         return { networkPassword, defaultDeviceHost };
     } catch (error) {
         const err = error as NodeJS.ErrnoException;
+        if (err.code === 'ENOENT') {
+            try {
+                await saveConfig(defaultConfig);
+            } catch (saveError) {
+                if (!isConfigPermissionError(saveError)) {
+                    throw saveError;
+                }
+                log('warn', 'Web config file missing and cannot be created; using runtime defaults only', {
+                    configPath,
+                    ...errorDetails(saveError),
+                });
+            }
+            return defaultConfig;
+        }
+        if (isConfigPermissionError(error)) {
+            log('warn', 'Web config file is not readable; using runtime defaults only', {
+                configPath,
+                ...errorDetails(error),
+            });
+            return defaultConfig;
+        }
+        if (error instanceof SyntaxError) {
+            log('warn', 'Web config JSON is invalid; using runtime defaults only', {
+                configPath,
+                ...errorDetails(error),
+            });
+            return defaultConfig;
+        }
         if (err.code !== 'ENOENT') {
             log('error', 'Failed to load web config', errorDetails(error));
             throw error;
         }
-        await saveConfig(defaultConfig);
         return defaultConfig;
     }
 };
 
 const saveConfig = async (config: AppConfig): Promise<void> => {
-    await fs.mkdir(configDir, { recursive: true });
-    const payload = JSON.stringify(config, null, 2);
-    await fs.writeFile(configPath, payload, 'utf8');
+    try {
+        await fs.mkdir(configDir, { recursive: true });
+        const payload = JSON.stringify(config, null, 2);
+        await fs.writeFile(configPath, payload, 'utf8');
+    } catch (error) {
+        throw new Error(
+            `Failed to persist web config at ${configPath}: ${(error as Error)?.message || String(error)}`,
+            { cause: error as Error },
+        );
+    }
 };
 
 const isAuthenticated = (req: IncomingMessage): boolean => {

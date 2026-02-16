@@ -118,6 +118,13 @@ These images also run on Windows/macOS through Docker Desktop virtualization.
 
 #### Run Docker container
 
+Prepare a writable config directory first:
+
+```bash
+mkdir -p ./c64commander-config
+chmod 0777 ./c64commander-config
+```
+
 ```bash
 docker run -d --name c64commander -p 8064:8064 \
   -v ./c64commander-config:/config --restart unless-stopped \
