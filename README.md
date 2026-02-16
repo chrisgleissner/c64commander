@@ -60,7 +60,7 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 - **Cross-platform access**: Native Android and iOS apps, plus a web interface served via Docker on macOS, Windows, or Linux.
 - **Quick dashboard**: Access common actions and advanced controls in a clean mobile interface.
 - **Deep configuration**: Browse and edit the full C64 Ultimate configuration from one place.
-- **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or the High Voltage SID Collection ([HVSC](https://hvsc.c64.org)). Quickly find what you want with powerful search and filtering.
+- **Explore your collection**: Build playlists from local files, C64 Ultimate storage, or the High Voltage SID Collection. Quickly find what you want with powerful search and filtering.
 - **Manage disks efficiently**: Mount, unmount, and handle drive workflows with fewer steps.
 - **Troubleshoot with confidence**: Inspect logs, traces, and activity when behavior needs a closer look.
 

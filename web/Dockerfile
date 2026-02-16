@@ -26,9 +26,9 @@ ENV WEB_CONFIG_DIR=/config
 ENV WEB_DIST_DIR=/app/dist
 COPY package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/web/server/dist ./web/server/dist
-RUN mkdir -p /config && chown -R node:node /app /config
+COPY --chown=node:node --from=build /app/dist ./dist
+COPY --chown=node:node --from=build /app/web/server/dist ./web/server/dist
+RUN mkdir -p /config && chown node:node /config
 USER node
 EXPOSE 8064
 VOLUME ["/config"]
