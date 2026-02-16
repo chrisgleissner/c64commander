@@ -1018,6 +1018,20 @@ jobs:
             "artifacts/release-aab/c64commander-${APP_VERSION}-android-play.aab" \
             --clobber
 
+      - name: Verify Android release assets are attached
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          assets_json="$(gh release view "${GITHUB_REF_NAME}" --json assets --jq '.assets[].name')"
+          echo "Release assets:"
+          echo "$assets_json"
+
+          grep -Fx "c64commander-${APP_VERSION}-android.apk" <<<"$assets_json" >/dev/null
+          grep -Fx "c64commander-${APP_VERSION}-android.apk.sha256" <<<"$assets_json" >/dev/null
+          grep -Fx "c64commander-${APP_VERSION}-android-play.aab" <<<"$assets_json" >/dev/null
+
       - name: Upload AAB to Google Play (internal)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: r0adkll/upload-google-play@v1
