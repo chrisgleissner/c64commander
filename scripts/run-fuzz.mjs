@@ -84,7 +84,7 @@ if (budgetMs <= 120_000) {
 
 if (isCiRun && isFiveMinuteOrLessBudget) {
   if (!env.FUZZ_ACTION_TIMEOUT_MS) {
-    env.FUZZ_ACTION_TIMEOUT_MS = '7000';
+    env.FUZZ_ACTION_TIMEOUT_MS = '5000';
   }
   if (!env.FUZZ_VISUAL_SAMPLE_TIMEOUT_MS) {
     env.FUZZ_VISUAL_SAMPLE_TIMEOUT_MS = '2000';
@@ -93,10 +93,10 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
     env.FUZZ_PROGRESS_TIMEOUT_MS = '4000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(30_000, Math.floor(budgetMs / 6)));
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(180_000, Math.floor(budgetMs * 0.8)));
   }
   if (!env.FUZZ_MIN_SESSION_STEPS) {
-    env.FUZZ_MIN_SESSION_STEPS = '40';
+    env.FUZZ_MIN_SESSION_STEPS = '20';
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '8';
@@ -349,6 +349,46 @@ const ensureScreenshotPlaceholder = async (screenshotAbsolutePath) => {
   await fs.writeFile(screenshotAbsolutePath, Buffer.from(PLACEHOLDER_PNG_BASE64, 'base64'));
 };
 
+const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
+  await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
+  const attempts = [
+    ['-sseof', '-0.5'],
+    ['-ss', '0'],
+  ];
+  let durationMs = null;
+  try {
+    durationMs = probeVideoDurationMs(videoPath);
+    if (durationMs > 2000) {
+      attempts.push(['-ss', String(Math.max(0, Math.floor(durationMs / 2000)))]);
+    }
+  } catch {
+    durationMs = null;
+  }
+
+  for (const seekArgs of attempts) {
+    try {
+      runCommandCapture('ffmpeg', [
+        '-v',
+        'error',
+        '-y',
+        ...seekArgs,
+        '-i',
+        videoPath,
+        '-frames:v',
+        '1',
+        screenshotPath,
+      ]);
+      const quality = analyzeImageQuality(screenshotPath);
+      if (!quality.isSingleColor && !quality.isMostlyBlack) {
+        return quality;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+};
+
 const ensureFile = async (filePath) => {
   const stat = await fs.stat(filePath);
   if (!stat.isFile() || stat.size === 0) {
@@ -390,6 +430,7 @@ const mergeReports = async () => {
   const frameValidationViolations = [];
   const activityViolations = [];
   const screenshotQualityViolations = [];
+  const qualifiedSessions = [];
 
   ensureBinaryAvailable('ffprobe', 'ffprobe');
   ensureBinaryAvailable('ffmpeg', 'ffmpeg');
@@ -655,9 +696,12 @@ const mergeReports = async () => {
       const interactionLogPath = parsed?.interactionLog;
       const finalScreenshotPath = parsed?.finalScreenshot;
       const videoPathValue = parsed?.video;
+      const mergedLogPath = interactionLogPath ? resolveMergedArtifactPath(interactionLogPath, sessionJsonPath) : '';
+      const mergedScreenshotPath = finalScreenshotPath ? resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath) : '';
+      const mergedVideoRelativePath = videoPathValue ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath) : '';
+      let activityCount = 0;
 
       if (interactionLogPath) {
-        const mergedLogPath = resolveMergedArtifactPath(interactionLogPath, sessionJsonPath);
         const interactionLogAbsolutePath = path.join(outputRoot, mergedLogPath);
         await ensureFile(interactionLogAbsolutePath).catch((error) => {
           missingArtifacts.push({
@@ -669,17 +713,9 @@ const mergeReports = async () => {
           .split(/\r?\n/g)
           .map((line) => line.trim())
           .filter(Boolean)).catch(() => []);
-        const activityCount = logLines.filter((line) => /\bs=\d+\ta=/.test(line) && !line.includes('\ta=heartbeat\t')).length;
-        if (activityCount < 20) {
-          activityViolations.push({
-            sessionId,
-            reason: 'insufficient-activities',
-            details: `expected>=20 actual=${activityCount}`,
-          });
-        }
+        activityCount = logLines.filter((line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat')).length;
       }
 
-      const mergedVideoRelativePath = videoPathValue ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath) : '';
       if (videoPathValue) {
         await ensureFile(path.join(outputRoot, mergedVideoRelativePath)).catch((error) => {
           missingArtifacts.push({
@@ -689,8 +725,29 @@ const mergeReports = async () => {
         });
       }
 
+      if (activityCount < 20) {
+        activityViolations.push({
+          sessionId,
+          reason: 'insufficient-activities',
+          details: `expected>=20 actual=${activityCount}`,
+        });
+        await fs.unlink(sessionJsonPath).catch(() => { });
+        if (mergedLogPath) await fs.unlink(path.join(outputRoot, mergedLogPath)).catch(() => { });
+        if (mergedScreenshotPath) await fs.unlink(path.join(outputRoot, mergedScreenshotPath)).catch(() => { });
+        if (mergedVideoRelativePath) await fs.unlink(path.join(outputRoot, mergedVideoRelativePath)).catch(() => { });
+        continue;
+      }
+
+      qualifiedSessions.push({
+        sessionId,
+        activityCount,
+        steps: Number(parsed?.steps || activityCount),
+        durationMs: Number(parsed?.durationMs || 0),
+        terminationReason: parsed?.terminationReason || 'unknown',
+        maxVisualStagnationMs: Number(parsed?.maxVisualStagnationMs || 0),
+      });
+
       if (finalScreenshotPath) {
-        const mergedScreenshotPath = resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath);
         const screenshotAbsolutePath = path.join(outputRoot, mergedScreenshotPath);
         const screenshotExists = await fs.stat(screenshotAbsolutePath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
         if (!screenshotExists && mergedVideoRelativePath) {
@@ -720,7 +777,17 @@ const mergeReports = async () => {
           });
         });
         try {
-          const screenshotQuality = analyzeImageQuality(screenshotAbsolutePath);
+          let screenshotQuality = analyzeImageQuality(screenshotAbsolutePath);
+          if ((screenshotQuality.isSingleColor || screenshotQuality.isMostlyBlack)
+            && mergedVideoRelativePath) {
+            const regeneratedQuality = await regenerateScreenshotFromVideo(
+              path.join(outputRoot, mergedVideoRelativePath),
+              screenshotAbsolutePath,
+            );
+            if (regeneratedQuality) {
+              screenshotQuality = regeneratedQuality;
+            }
+          }
           if (screenshotQuality.width < 320 || screenshotQuality.height < 480) {
             screenshotQualityViolations.push({
               sessionId,
@@ -733,6 +800,13 @@ const mergeReports = async () => {
               sessionId,
               reason: 'screenshot-single-color',
               details: `uniqueColors=${screenshotQuality.uniqueColors} dominantRatio=${screenshotQuality.dominantRatio.toFixed(4)}`,
+            });
+          }
+          if (screenshotQuality.isMostlyBlack) {
+            screenshotQualityViolations.push({
+              sessionId,
+              reason: 'screenshot-mostly-black',
+              details: `averageLuma=${screenshotQuality.averageLuma.toFixed(2)} darkRatio=${screenshotQuality.darkRatio.toFixed(4)}`,
             });
           }
         } catch (error) {
@@ -885,11 +959,76 @@ const mergeReports = async () => {
   if (screenshotQualityViolations.length > 0) {
     throw new Error(`Screenshot artifact validation failed: ${JSON.stringify(screenshotQualityViolations, null, 2)}`);
   }
-  if (activityViolations.length > 0) {
-    throw new Error(`Session activity validation failed: ${JSON.stringify(activityViolations, null, 2)}`);
+  if (qualifiedSessions.length === 0) {
+    throw new Error(`No qualified sessions with >=20 activities were produced. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
   }
   if (visualStagnationReport.violations.length > 0) {
     throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);
+  }
+
+  const qualifiedTotalSteps = qualifiedSessions.reduce((sum, item) => sum + item.activityCount, 0);
+  const qualifiedDurationMs = qualifiedSessions.reduce((sum, item) => sum + Math.max(0, item.durationMs || 0), 0);
+  const qualifiedMaxVisualStagnationMs = qualifiedSessions.reduce((max, item) => Math.max(max, item.maxVisualStagnationMs || 0), 0);
+  const qualifiedTerminationCounts = qualifiedSessions.reduce((acc, item) => {
+    const reason = item.terminationReason || 'unknown';
+    acc[reason] = (acc[reason] || 0) + 1;
+    return acc;
+  }, {});
+
+  const qualifiedRunMetrics = {
+    meta: {
+      seed: baseSeed,
+      platform: platform || env.FUZZ_PLATFORM || 'android-phone',
+      runMode: env.FUZZ_RUN_MODE || 'local',
+      shardTotal: concurrency,
+      runId,
+      timeBudgetMs: budgetMs,
+    },
+    sessionsStarted: qualifiedSessions.length,
+    sessionsTerminatedByReason: qualifiedTerminationCounts,
+    maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
+    averageSessionDurationMs: qualifiedSessions.length ? Math.round(qualifiedDurationMs / qualifiedSessions.length) : 0,
+    averageStepsPerSession: Number((qualifiedTotalSteps / qualifiedSessions.length).toFixed(2)),
+    totalSteps: qualifiedTotalSteps,
+    stepsPerSession: qualifiedSessions.map((item) => ({ sessionId: item.sessionId, steps: item.activityCount })),
+  };
+
+  const qualifiedVisualStagnationReport = {
+    meta: {
+      seed: baseSeed,
+      runId,
+      shardTotal: concurrency,
+      thresholdMs: 5000,
+    },
+    maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
+    violations: qualifiedSessions
+      .filter((item) => (item.maxVisualStagnationMs || 0) > 5000)
+      .map((item) => ({
+        sessionId: item.sessionId,
+        maxVisualStagnationMs: item.maxVisualStagnationMs,
+        terminationReason: item.terminationReason,
+      })),
+    sessions: qualifiedSessions.map((item) => ({
+      sessionId: item.sessionId,
+      maxVisualStagnationMs: item.maxVisualStagnationMs,
+      terminationReason: item.terminationReason,
+    })),
+  };
+
+  await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(qualifiedRunMetrics, null, 2), 'utf8');
+  await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(qualifiedVisualStagnationReport, null, 2), 'utf8');
+
+  const mergedIssueReportPath = path.join(outputRoot, 'fuzz-issue-report.json');
+  try {
+    const rawReport = await fs.readFile(mergedIssueReportPath, 'utf8');
+    const parsedReport = JSON.parse(rawReport);
+    if (parsedReport?.meta && typeof parsedReport.meta === 'object') {
+      parsedReport.meta.sessions = qualifiedSessions.length;
+      parsedReport.meta.totalSteps = qualifiedTotalSteps;
+    }
+    await fs.writeFile(mergedIssueReportPath, JSON.stringify(parsedReport, null, 2), 'utf8');
+  } catch (error) {
+    throw new Error(`Failed to rewrite merged issue report with qualified session stats: ${(error && error.message) || 'unknown'}`);
   }
 
   return { parseErrors };

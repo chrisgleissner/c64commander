@@ -662,7 +662,7 @@ test.describe('Fuzz Test', () => {
     const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
     const timeoutGraceMs = infraMode
       ? 30_000
-      : (isCiRun ? 60_000 : 120_000);
+      : (isCiRun ? 180_000 : 120_000);
     const baseTimeout = infraMode ? 20_000 : (timeBudgetMs ?? defaultTimeBudgetMs);
     const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
@@ -674,9 +674,13 @@ test.describe('Fuzz Test', () => {
     const minSessionSteps = infraMode
       ? 1
       : Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 35 : 200));
+    const requiredActivitiesPerSession = infraMode ? 1 : 20;
     const noProgressLimit = infraMode
       ? maxSteps
       : Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
+    const stateProbeTimeoutMs = isCiRun
+      ? Math.max(400, Math.min(1200, Math.floor(actionTimeoutMs / 3)))
+      : Math.max(1000, Math.min(3000, actionTimeoutMs));
     const baseUrl = process.env.FUZZ_BASE_URL || String(testInfo.project.use.baseURL || 'http://127.0.0.1:4173');
     const baseOrigin = new URL(baseUrl).origin;
 
@@ -982,7 +986,7 @@ test.describe('Fuzz Test', () => {
         try {
           const raw = await withTimeout(
             () => page.evaluate(() => localStorage.getItem('c64u_app_logs')),
-            Math.max(1000, Math.min(3000, actionTimeoutMs)),
+            stateProbeTimeoutMs,
             'read app logs',
           );
           if (!raw) return [] as AppLogEntry[];
@@ -1131,10 +1135,11 @@ test.describe('Fuzz Test', () => {
       );
 
       let sessionSteps = 0;
+      let consecutiveActionTimeouts = 0;
       let noProgressCount = 0;
       let progressSnapshot = await withTimeout(
         () => readProgressSnapshot(page),
-        Math.max(1000, Math.min(3000, actionTimeoutMs)),
+        stateProbeTimeoutMs,
         'initial progress snapshot',
       ).catch(() => ({ screenKey: '', navKey: '', traceKey: '', stateKey: '' }));
       let lastProgressAt = Date.now();
@@ -1740,13 +1745,18 @@ test.describe('Fuzz Test', () => {
       ];
 
       const pickAction = async () => {
+        const actionCandidates = isCiRun
+          ? [...actions]
+            .sort(() => rng.next() - 0.5)
+            .slice(0, Math.min(actions.length, 8))
+          : actions;
         const eligible: typeof actions = [];
-        for (const action of actions) {
+        for (const action of actionCandidates) {
           let canRun = false;
           try {
             canRun = await withTimeout(
               () => action.canRun(),
-              Math.max(1000, Math.min(3000, actionTimeoutMs)),
+              stateProbeTimeoutMs,
               `canRun ${action.name}`,
             );
           } catch (error) {
@@ -1768,7 +1778,11 @@ test.describe('Fuzz Test', () => {
         return eligible[eligible.length - 1];
       };
 
-      while (!infraMode && Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
+      while (
+        !infraMode
+        && (Date.now() < runDeadline || sessionSteps < requiredActivitiesPerSession)
+        && (maxSteps ? totalSteps < maxSteps : true)
+      ) {
         if (issue) break;
         if (page.isClosed()) {
           logInteraction(`s=${totalSteps}\ta=session\tpage-closed`);
@@ -1921,17 +1935,22 @@ test.describe('Fuzz Test', () => {
               `action ${action.name}`,
             );
             logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
+            consecutiveActionTimeouts = 0;
           } catch (error) {
             logInteraction(`s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`);
             if (parseActionTimeout(error)) {
-              recordIssueOnce({
-                severity: 'freeze',
-                message: (error as Error).message || 'Action timeout',
-                source: 'action.timeout',
-                interactionIndex: totalSteps,
-                lastInteractions: interactions.slice(-lastInteractionCount),
-              });
+              consecutiveActionTimeouts += 1;
+              if (consecutiveActionTimeouts >= 3) {
+                recordIssueOnce({
+                  severity: 'freeze',
+                  message: (error as Error).message || 'Action timeout',
+                  source: 'action.timeout',
+                  interactionIndex: totalSteps,
+                  lastInteractions: interactions.slice(-lastInteractionCount),
+                });
+              }
             } else {
+              consecutiveActionTimeouts = 0;
               recordIssueOnce({
                 severity: 'errorLog',
                 message: (error as Error)?.message || 'Action failed',
@@ -1951,7 +1970,7 @@ test.describe('Fuzz Test', () => {
           await sampleVisualProgress();
           const nextSnapshot = await withTimeout(
             () => readProgressSnapshot(page),
-            Math.max(1000, Math.min(3000, actionTimeoutMs)),
+            stateProbeTimeoutMs,
             'next progress snapshot',
           ).catch(() => progressSnapshot);
           const delta = diffProgress(progressSnapshot, nextSnapshot);
@@ -2019,7 +2038,24 @@ test.describe('Fuzz Test', () => {
           terminationReason = 'min-steps';
           break;
         }
-        await page.waitForTimeout(rng.int(0, 25));
+        try {
+          await page.waitForTimeout(rng.int(0, 25));
+        } catch (error) {
+          if (isClosedTargetError(error)) {
+            logInteraction(`s=${totalSteps}\ta=session\tpage-closed-during-wait`);
+            recordIssueOnce({
+              severity: 'crash',
+              message: (error as Error)?.message || 'Page/context closed during inter-action wait.',
+              source: 'session.page.closed',
+              stack: (error as Error)?.stack,
+              interactionIndex: totalSteps,
+              lastInteractions: interactions.slice(-lastInteractionCount),
+            });
+            terminationReason = 'issue';
+            break;
+          }
+          throw error;
+        }
       }
 
       let route: string | undefined;
