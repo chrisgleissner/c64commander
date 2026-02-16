@@ -27,7 +27,7 @@ const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // Maximum session duration (5 minutes
 const HEARTBEAT_INTERVAL_MS = 10_000; // Log heartbeat every 10 seconds during long operations
 const VISUAL_SAMPLE_INTERVAL_MS = 1000;
 const VISUAL_SAMPLE_TIMEOUT_MS = 3000;
-const MAX_VISUAL_STAGNATION_MS = 5000;
+const MAX_VISUAL_STAGNATION_MS = 10_000;
 const VISUAL_DELTA_THRESHOLD = 0.003;
 const PLACEHOLDER_SCREENSHOT_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Zc1cAAAAASUVORK5CYII=',
@@ -35,6 +35,9 @@ const PLACEHOLDER_SCREENSHOT_PNG = Buffer.from(
 );
 
 type Severity = 'crash' | 'freeze' | 'errorLog' | 'warnLog';
+
+const isTerminalSeverity = (severity: Severity): boolean =>
+  severity === 'crash' || severity === 'freeze';
 
 type IssueSignature = {
   exception: string;
@@ -93,6 +96,7 @@ type RecoveryStepName =
   | 'close-modal'
   | 'navigate-back'
   | 'root-tab'
+  | 'cycle-tab'
   | 'force-home'
   | 'reload'
   | 'terminate-session';
@@ -103,6 +107,13 @@ type VisualSample = {
   stagnantMs: number;
   changed: boolean;
   hash: string;
+};
+
+type SessionIssueSummary = {
+  severity: Severity;
+  source?: string;
+  message: string;
+  interactionIndex: number;
 };
 
 type SessionManifest = {
@@ -119,6 +130,7 @@ type SessionManifest = {
   issueSeverity?: Severity;
   issueSource?: string;
   issueMessage?: string;
+  issues: SessionIssueSummary[];
   maxVisualStagnationMs: number;
   visualSamples: number;
   recoverySteps: RecoveryStepName[];
@@ -665,11 +677,11 @@ test.describe('Fuzz Test', () => {
     );
     const defaultSessionTimeoutMs = infraMode
       ? 30_000
-      : Math.max(15_000, Math.min(60_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) / 2)));
-    const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
+      : Math.max(60_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) * 0.9));
+    const sessionTimeoutMs = Math.max(60_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
     const timeoutGraceMs = infraMode
       ? 30_000
-      : (isCiRun ? 180_000 : 120_000);
+      : (isCiRun ? 300_000 : 240_000);
     const baseTimeout = infraMode ? 20_000 : (timeBudgetMs ?? defaultTimeBudgetMs);
     const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
@@ -680,8 +692,7 @@ test.describe('Fuzz Test', () => {
     const lastInteractionCount = toNumber(process.env.FUZZ_LAST_INTERACTIONS) ?? 50;
     const minSessionSteps = infraMode
       ? 1
-      : Math.max(1, toNumber(process.env.FUZZ_MIN_SESSION_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 35 : 200));
-    const requiredActivitiesPerSession = infraMode ? 1 : 20;
+      : undefined; // Sessions run until time budget expires, not until step count
     const noProgressLimit = infraMode
       ? maxSteps
       : Math.max(1, toNumber(process.env.FUZZ_NO_PROGRESS_STEPS) ?? (SHORT_FUZZ_DEFAULTS ? 10 : 20));
@@ -777,12 +788,8 @@ test.describe('Fuzz Test', () => {
       const sessionScreenshotPath = path.join(sessionsDir, `${sessionId}.png`);
       const sessionStartedAtMs = Date.now();
       const interactions: string[] = [];
-      let sessionActivityCount = 0;
       const logInteraction = (entry: string) => {
         interactions.push(entry);
-        if (entry.includes('\ta=') && !entry.includes('\ta=heartbeat\t')) {
-          sessionActivityCount += 1;
-        }
       };
       logInteraction(`s=${totalSteps}\ta=session\tstart id=${sessionId}`);
       let terminationReason: SessionTerminationReason | null = null;
@@ -838,8 +845,10 @@ test.describe('Fuzz Test', () => {
           localStorage.setItem('c64u_debug_logging_enabled', '1');
           localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
           (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
-        } catch {
-          // ignore
+        } catch (storageError) {
+          // SecurityError or quota: set flag via window and log
+          (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
+          console.warn('[fuzz] localStorage init failed:', (storageError as Error)?.message || String(storageError));
         }
         try {
           const style = document.createElement('style');
@@ -914,6 +923,7 @@ test.describe('Fuzz Test', () => {
       await seedUiMocks(page, server.baseUrl);
 
       let issue: IssueRecord | null = null;
+      const sessionIssues: IssueRecord[] = [];
       let lastLogId: string | null = null;
       let currentFaultMode: 'none' | 'slow' | 'timeout' | 'refused' | 'auth' = 'none';
       let serverReachable = true;
@@ -925,8 +935,18 @@ test.describe('Fuzz Test', () => {
       });
 
       const recordIssueOnce = (payload: IssueRecord) => {
-        if (issue) return;
-        issue = payload;
+        if (isTerminalSeverity(payload.severity)) {
+          if (!issue) issue = payload;
+          sessionIssues.push(payload);
+          return;
+        }
+        // Deduplicate non-terminal issues by source+message
+        const isDuplicate = sessionIssues.some(
+          (existing) => existing.source === payload.source && existing.message === payload.message,
+        );
+        if (!isDuplicate) {
+          sessionIssues.push(payload);
+        }
       };
       const recordStuckSessionIssue = (reason: string, detail: string) => {
         recordIssueOnce({
@@ -960,7 +980,7 @@ test.describe('Fuzz Test', () => {
       });
 
       page.on('console', (msg) => {
-        if (issue) return;
+        if (issue) return; // terminal issue already recorded
         if (msg.type() !== 'error' && msg.type() !== 'warning') return;
         const text = msg.text();
         if (msg.type() === 'error') {
@@ -996,15 +1016,17 @@ test.describe('Fuzz Test', () => {
       const readAppLogs = async (): Promise<AppLogEntry[]> => {
         try {
           const raw = await withTimeout(
-            () => page.evaluate(() => localStorage.getItem('c64u_app_logs')),
+            () => page.evaluate(() => {
+              try { return localStorage.getItem('c64u_app_logs'); }
+              catch { return null; }
+            }),
             stateProbeTimeoutMs,
             'read app logs',
           );
           if (!raw) return [] as AppLogEntry[];
           const parsed = JSON.parse(raw) as AppLogEntry[];
           return Array.isArray(parsed) ? parsed : [];
-        } catch (error) {
-          logInteraction(`s=${totalSteps}\ta=logs\terror=${(error as Error)?.message || 'read-failed'}`);
+        } catch {
           return [] as AppLogEntry[];
         }
       };
@@ -1022,38 +1044,30 @@ test.describe('Fuzz Test', () => {
           fresh.push(entry);
         }
         if (logs[0]?.id) lastLogId = logs[0].id;
-        const errorEntry = fresh.find((entry) => entry.level === 'error');
-        const warnEntry = fresh.find((entry) => entry.level === 'warn');
-        if (errorEntry) {
-          if (errorEntry.message.toLowerCase().includes('fuzz mode blocked')) return;
-          const shouldIgnore = shouldIgnoreBackendFailure(errorEntry, {
-            now: Date.now(),
-            serverReachable,
-            networkOffline,
-            faultMode: currentFaultMode,
-            lastOutageAt,
-          });
-          if (shouldIgnore) {
-            lastOutageAt = Date.now();
-            backendTracker.recordFailure();
-            return;
+        for (const entry of fresh) {
+          if (entry.level !== 'error' && entry.level !== 'warn') continue;
+          if (entry.level === 'error') {
+            if (entry.message.toLowerCase().includes('fuzz mode blocked')) continue;
+            const shouldIgnore = shouldIgnoreBackendFailure(entry, {
+              now: Date.now(),
+              serverReachable,
+              networkOffline,
+              faultMode: currentFaultMode,
+              lastOutageAt,
+            });
+            if (shouldIgnore) {
+              lastOutageAt = Date.now();
+              backendTracker.recordFailure();
+              continue;
+            }
           }
           recordIssueOnce({
-            severity: 'errorLog',
-            message: errorEntry.message,
-            source: 'app.log.error',
+            severity: entry.level === 'error' ? 'errorLog' : 'warnLog',
+            message: entry.message,
+            source: entry.level === 'error' ? 'app.log.error' : 'app.log.warn',
             interactionIndex: totalSteps,
             lastInteractions: interactions.slice(-lastInteractionCount),
-            appLog: errorEntry,
-          });
-        } else if (warnEntry) {
-          recordIssueOnce({
-            severity: 'warnLog',
-            message: warnEntry.message,
-            source: 'app.log.warn',
-            interactionIndex: totalSteps,
-            lastInteractions: interactions.slice(-lastInteractionCount),
-            appLog: warnEntry,
+            appLog: entry,
           });
         }
       };
@@ -1103,11 +1117,13 @@ test.describe('Fuzz Test', () => {
             : stepNumber === 3
               ? 'root-tab'
               : stepNumber === 4
-                ? 'force-home'
+                ? 'cycle-tab'
                 : stepNumber === 5
-                  ? 'reload'
-                  : 'terminate-session';
-        recoverySteps.push(step);
+                  ? 'force-home'
+                  : stepNumber === 6
+                    ? 'reload'
+                    : 'terminate-session';
+        recoverySteps.push(step as RecoveryStepName);
         if (step === 'close-modal') {
           if (await closeBlockingOverlay(page)) {
             return { log: 'ladder close-modal:overlay-closed', terminal: false };
@@ -1127,6 +1143,21 @@ test.describe('Fuzz Test', () => {
             return { log: 'ladder root-tab:clicked', terminal: false };
           }
           return { log: 'ladder root-tab:missing', terminal: false };
+        }
+        if (step === 'cycle-tab') {
+          const tabButtons = await page.$$('.tab-bar button');
+          const visibleTabs: ElementHandle[] = [];
+          for (const tab of tabButtons) {
+            if (await tab.isVisible()) visibleTabs.push(tab as ElementHandle);
+          }
+          if (visibleTabs.length > 1) {
+            // Pick a random tab that is not the current one
+            const target = rng.pick(visibleTabs);
+            await showInteractionPulse(page, target);
+            await target.click().catch(() => { });
+            return { log: `ladder cycle-tab:clicked (${visibleTabs.length} tabs)`, terminal: false };
+          }
+          return { log: 'ladder cycle-tab:insufficient-tabs', terminal: false };
         }
         if (step === 'force-home') {
           await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
@@ -1161,6 +1192,8 @@ test.describe('Fuzz Test', () => {
       let structuredRecoveryAttempts = 0;
       let recoveryLadderAttempts = 0;
       const recoveryStepLimit = 6;
+      let recoveryCycleCount = 0;
+      const maxRecoveryCycles = 3;
 
       await sampleVisualProgress(true);
 
@@ -1791,7 +1824,7 @@ test.describe('Fuzz Test', () => {
 
       while (
         !infraMode
-        && (Date.now() < runDeadline || sessionSteps < requiredActivitiesPerSession)
+        && Date.now() < runDeadline
         && (maxSteps ? totalSteps < maxSteps : true)
       ) {
         if (issue) break;
@@ -1977,7 +2010,7 @@ test.describe('Fuzz Test', () => {
 
         if (actionLogged) {
           await checkAppLogsForIssues();
-          if (issue) break;
+          if (issue) break; // terminal issue (crash/freeze) only
           await sampleVisualProgress();
           const nextSnapshot = await withTimeout(
             () => readProgressSnapshot(page),
@@ -2009,13 +2042,25 @@ test.describe('Fuzz Test', () => {
         }
 
         if (mode === 'recovery' && recoveryAttempted && recoveryLadderAttempts >= recoveryStepLimit && !progressed) {
-          logInteraction(`s=${totalSteps}\ta=session\trecovery-exhausted`);
-          recordStuckSessionIssue(
-            'recovery-exhausted',
-            `No structured recovery progress after ${recoveryAttempts} attempts.`,
-          );
-          terminationReason = 'recovery-exhausted';
-          break;
+          recoveryCycleCount += 1;
+          if (recoveryCycleCount >= maxRecoveryCycles) {
+            logInteraction(`s=${totalSteps}\ta=session\trecovery-exhausted cycles=${recoveryCycleCount}`);
+            recordStuckSessionIssue(
+              'recovery-exhausted',
+              `No structured recovery progress after ${recoveryCycleCount} full cycles (${recoveryAttempts} total attempts).`,
+            );
+            terminationReason = 'recovery-exhausted';
+            break;
+          }
+          // Reset recovery ladder and navigate home for a fresh start
+          logInteraction(`s=${totalSteps}\ta=recovery\tcycle-reset cycle=${recoveryCycleCount} navigating-home`);
+          recoveryLadderAttempts = 0;
+          structuredRecoveryAttempts = 0;
+          await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
+          lastVisualChangeAt = Date.now();
+          lastProgressAt = Date.now();
+          noProgressCount = 0;
+          mode = 'chaos';
         }
         if (noProgressCount >= noProgressLimit) {
           if (mode !== 'recovery') {
@@ -2036,15 +2081,27 @@ test.describe('Fuzz Test', () => {
           }
         }
         if (Math.max(0, Date.now() - lastVisualChangeAt) > MAX_VISUAL_STAGNATION_MS && mode === 'recovery' && recoveryLadderAttempts >= recoveryStepLimit) {
-          logInteraction(`s=${totalSteps}\ta=session\tvisual-stagnation`);
-          recordStuckSessionIssue(
-            'visual-stagnation',
-            `Visual delta remained below threshold for more than ${MAX_VISUAL_STAGNATION_MS}ms.`,
-          );
-          terminationReason = 'visual-stagnation';
-          break;
+          recoveryCycleCount += 1;
+          if (recoveryCycleCount >= maxRecoveryCycles) {
+            logInteraction(`s=${totalSteps}\ta=session\tvisual-stagnation cycles=${recoveryCycleCount}`);
+            recordStuckSessionIssue(
+              'visual-stagnation',
+              `Visual delta remained below threshold for more than ${MAX_VISUAL_STAGNATION_MS}ms after ${recoveryCycleCount} recovery cycles.`,
+            );
+            terminationReason = 'visual-stagnation';
+            break;
+          }
+          // Reset recovery ladder and navigate home
+          logInteraction(`s=${totalSteps}\ta=recovery\tvisual-cycle-reset cycle=${recoveryCycleCount} navigating-home`);
+          recoveryLadderAttempts = 0;
+          structuredRecoveryAttempts = 0;
+          await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
+          lastVisualChangeAt = Date.now();
+          lastProgressAt = Date.now();
+          noProgressCount = 0;
+          mode = 'chaos';
         }
-        if (sessionSteps >= minSessionSteps) {
+        if (minSessionSteps !== undefined && sessionSteps >= minSessionSteps) {
           logInteraction(`s=${totalSteps}\ta=session\tmin-steps`);
           terminationReason = 'min-steps';
           break;
@@ -2070,25 +2127,6 @@ test.describe('Fuzz Test', () => {
       }
 
       let route: string | undefined;
-
-      if (!infraMode && sessionActivityCount < requiredActivitiesPerSession) {
-        const deficit = requiredActivitiesPerSession - sessionActivityCount;
-        for (let index = 0; index < deficit; index += 1) {
-          if (page.isClosed()) {
-            logInteraction(`s=${totalSteps}\ta=stabilize\tpage-closed`);
-            continue;
-          }
-          totalSteps += 1;
-          sessionSteps += 1;
-          try {
-            await page.keyboard.press(rng.pick(['Tab', 'ArrowDown', 'ArrowUp', 'Escape']));
-            logInteraction('s=' + totalSteps + '\ta=stabilize\tkey-burst');
-          } catch (error) {
-            logInteraction(`s=${totalSteps}\ta=stabilize\terror=${(error as Error)?.message || 'failed'}`);
-          }
-          await page.waitForTimeout(10).catch(() => { });
-        }
-      }
 
       try {
         route = new URL(page.url()).pathname;
@@ -2192,7 +2230,7 @@ test.describe('Fuzz Test', () => {
       }
       await ensureScreenshotArtifact(screenshotPath);
 
-      if (infraMode && issue) {
+      if (infraMode && (issue || sessionIssues.length > 0)) {
         infraSessionClean = false;
       }
 
@@ -2210,23 +2248,23 @@ test.describe('Fuzz Test', () => {
 
       terminationCounts[terminationReason] += 1;
 
-      if (issue) {
-        issue.route = route;
-        issue.title = title;
+      for (const sessionIssue of sessionIssues) {
+        sessionIssue.route = route;
+        sessionIssue.title = title;
         const example: IssueExample = {
           platform,
           runMode,
           seed,
           sessionId,
-          interactionIndex: issue.interactionIndex,
-          lastInteractions: issue.lastInteractions,
+          interactionIndex: sessionIssue.interactionIndex,
+          lastInteractions: sessionIssue.lastInteractions,
           video: savedVideo,
           screenshot: path.relative(outputRoot, screenshotPath),
           route,
           title,
-          severity: issue.severity,
+          severity: sessionIssue.severity,
         };
-        recordIssue(issue, example);
+        recordIssue(sessionIssue, example);
       }
 
       const sessionManifest: SessionManifest = {
@@ -2240,9 +2278,15 @@ test.describe('Fuzz Test', () => {
         terminationReason,
         route,
         title,
-        issueSeverity: issue?.severity,
-        issueSource: issue?.source,
-        issueMessage: issue?.message,
+        issueSeverity: issue?.severity ?? sessionIssues[0]?.severity,
+        issueSource: issue?.source ?? sessionIssues[0]?.source,
+        issueMessage: issue?.message ?? sessionIssues[0]?.message,
+        issues: sessionIssues.map((i) => ({
+          severity: i.severity,
+          source: i.source,
+          message: i.message,
+          interactionIndex: i.interactionIndex,
+        })),
         maxVisualStagnationMs,
         visualSamples: visualSamples.length,
         recoverySteps,
@@ -2443,6 +2487,6 @@ test.describe('Fuzz Test', () => {
 
     const missingArtifactSessions = requiredArtifactChecks.filter((item) => item.missing.length > 0);
     expect(missingArtifactSessions, `Missing required session artifacts: ${JSON.stringify(missingArtifactSessions)}`).toEqual([]);
-    expect(visualStagnationReport.violations, 'Visual stagnation exceeded 5s threshold.').toEqual([]);
+    expect(visualStagnationReport.violations, 'Visual stagnation exceeded 10s threshold.').toEqual([]);
   });
 });

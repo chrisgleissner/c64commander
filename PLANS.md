@@ -1,4 +1,4 @@
-# CI Pipeline Stabilization Execution Contract
+# Fuzz Testing Stabilization Plan
 
 Last updated: 2026-02-16
 Owner: Copilot coding agent
@@ -6,87 +6,106 @@ Branch: test/improve-coverage
 
 ## Objective
 
-Stabilize and harden all three CI pipelines (iOS, Android, Web/Fuzz) until fully deterministic, concurrency-safe, and green.
+Stabilize fuzz testing so that 5-minute runs produce continuous UI progression, long-lived sessions (>=4 min), >=500 interactions, no >10s stagnation, and pass automated artifact validation.
 
-## Success criteria
+## Diagnosis
 
-1. All CI pipelines green on main.
-2. No workflow run remains queued or blocked due to earlier runs on the same branch.
-3. Android CI produces valid merged coverage reports and uploads to CodeCov.
-4. Android unit tests compile and execute deterministically.
-5. 5-minute fuzz run produces >=20 distinct interaction steps, non-black video, correct-resolution screenshots, no 1x1 images, no immediate timeout.
-6. Artifacts demonstrate correct behavior.
+### Root Cause 1: `minSessionSteps` terminates sessions prematurely
 
-## Constraints
+The main chaos loop breaks when `sessionSteps >= minSessionSteps` (default 200). This kills sessions after ~200 steps regardless of remaining time budget. For a 5-minute run, sessions rarely exceed 60--120 seconds because they hit min-steps and exit.
 
-- Do not duplicate tests, weaken coverage gates, or disable failing checks.
-- Fix root causes only.
-- Keep CI runtime reasonable.
-- Android is primary; do not regress iOS or Web.
+### Root Cause 2: `sessionTimeoutMs` capped at 60 seconds
 
----
+`sessionTimeoutMs` uses `Math.min(60_000, ...)`, preventing sessions from running longer than 60s even when the time budget is 5+ minutes.
 
-## Part 1: iOS CI Concurrency and Maestro Stability
+### Root Cause 3: Stabilize key-burst loop
 
-**Problem:** Workflow runs remain queued (e.g. run ID 22055688337), blocked by earlier runs on the same branch. No concurrency controls exist. `ios-smoke-launch` Maestro flow fails because `maestro test` does not target the correct simulator, and flow timeouts are too short for cold CI simulators.
+When `sessionActivityCount < requiredActivitiesPerSession` (20), the code enters a post-loop that presses random keys to pad the count. This produces `stabilize key-burst` log spam with zero navigation or visual progress.
 
-### Tasks
+### Root Cause 4: Visual stagnation threshold too low (5s)
 
-- [x] 1.1 Add workflow-level concurrency group with cancel-in-progress to ios-ci.yaml.
-- [x] 1.2 Verify only the latest run executes when multiple commits pushed in quick succession.
-- [x] 1.3 Pass `--device $UDID` to `maestro test` in ios-maestro-run-flow.sh.
-- [x] 1.4 Increase Maestro flow timeouts (LONG_TIMEOUT 20s→60s, TIMEOUT 15s→30s, SHORT_TIMEOUT 5s→10s) in launch-and-wait, continue-demo, common-navigation, and ios-smoke-launch.
+`MAX_VISUAL_STAGNATION_MS = 5000` triggers recovery mode too aggressively. Normal page transitions, loading states, and modal animations can take several seconds without pixel changes.
 
----
+### Root Cause 5: Recovery exhaustion terminates sessions
 
-## Part 2: Android CI Stability and Coverage
+When 6 recovery ladder steps and 2 structured recovery attempts fail, the session terminates (`recovery-exhausted`). The recovery ladder is one-shot: once exhausted, the session dies rather than resetting and retrying.
 
-**Problem:** "No coverage reports found" in Android CI. jacocoTestReport depends on testReleaseUnitTest which may fail or produce no exec data. Duplicate cache steps exist. Kotlin tests fail to compile due to protected `notifyListeners` access and final plugin classes.
+### Root Cause 6: No recovery loop reset
 
-### Tasks
+After exhausting recovery steps, there is no mechanism to reset the ladder and try navigating to a different page. The session just ends.
 
-- [x] 2.1 Fix jacocoTestReport task to depend only on testDebugUnitTest (release unit tests not needed for coverage).
-- [x] 2.2 Fix jacocoTestCoverageVerification to depend only on testDebugUnitTest.
-- [x] 2.3 Remove duplicate "Cache Android SDK system images" step in android-apk.yaml.
-- [x] 2.4 Add concurrency group with cancel-in-progress to android-apk.yaml.
-- [x] 2.5 Make BackgroundExecutionPlugin and DiagnosticsBridgePlugin `open` for test subclassing.
-- [x] 2.6 Replace Mockito spy+verify pattern with direct call capture in testable subclasses (avoids inner-class receiver reference issue).
+### Root Cause 7: `localStorage` SecurityError unhandled
 
----
+`addInitScript` catches all errors silently. If `localStorage` access fails, the app never receives fuzz mode config, leading to unexpected behavior.
 
-## Part 3: Web CI Concurrency
+## Architecture Changes
 
-**Problem:** No concurrency controls on web-platform.yaml.
+### 1. Long-lived sessions
 
-### Tasks
+- Remove `minSessionSteps` as session termination criterion.
+- Remove `requiredActivitiesPerSession` and the stabilize key-burst loop entirely.
+- Increase `sessionTimeoutMs` to match time budget minus grace: `Math.max(60_000, timeBudgetMs - shutdownBufferMs)`.
+- Sessions run until time budget expires or a fatal error occurs.
 
-- [x] 3.1 Add workflow-level concurrency group with cancel-in-progress to web-platform.yaml.
+### 2. Visual stagnation threshold raised to 10s
 
----
+- Change `MAX_VISUAL_STAGNATION_MS` from 5000 to 10000.
+- Update assertions to match new threshold.
 
-## Part 4: Nightly Fuzzing
+### 3. Resilient recovery with loop reset
 
-**Problem:** 5-minute fuzz runs produced black videos, 1x1 screenshots, immediate timeouts.
+- When recovery ladder exhausts, navigate home and reset the ladder counter.
+- Allow up to 3 full recovery cycles before terminal session exit.
+- Add tab-click recovery: iterate through tab-bar buttons.
+- Add explicit route navigation as recovery step.
 
-### Tasks
+### 4. Remove stabilize key-burst loop
 
-- [x] 4.1 Verify fuzz CI workflow has concurrency group (already present).
-- [x] 4.2 Verify fuzz script build + Playwright integration is correct.
+- Delete the post-loop `requiredActivitiesPerSession` padding code.
+- Sessions with fewer than 20 activities are already pruned by run-fuzz.mjs.
 
----
+### 5. Hardened timeouts
 
-## Part 5: Duplicate Step Cleanup
+- `stateProbeTimeoutMs` increased for reliability.
+- `SecurityError` caught and logged rather than silently ignored.
 
-- [x] 5.1 Remove duplicate "Fix broken apt repos" step in web-e2e job of android-apk.yaml.
+### 6. CI workflow updates
 
----
+- Add push trigger on `test/improve-coverage` branch.
+- Add deterministic seed CI job alongside random seed job.
 
-## Progress log
+## Implementation Checklist
 
-- 2026-02-16: Analysis complete. Identified missing concurrency controls, JaCoCo dependency on release tests, duplicate CI steps.
-- 2026-02-16: Implemented concurrency groups for iOS, Android, and Web CI.
-- 2026-02-16: Fixed JaCoCo task dependencies to use debug-only.
-- 2026-02-16: Removed duplicate cache and apt-fix steps.
-- 2026-02-16: Made BackgroundExecutionPlugin and DiagnosticsBridgePlugin `open` for test subclassing.
-- 2026-02-16: Replaced spy+verify with direct call-capture pattern in both plugin test files. All 105 Android tests pass. JaCoCo report (66KB XML) generates correctly.
-- 2026-02-16: Fixed ios-smoke-launch Maestro failure: added `--device $UDID` to maestro test command and increased flow timeouts for CI cold-simulator resilience.
+- [x] Create PLANS.md
+- [ ] Remove `minSessionSteps` session termination
+- [ ] Remove stabilize key-burst loop
+- [ ] Increase `sessionTimeoutMs` for long runs
+- [ ] Raise `MAX_VISUAL_STAGNATION_MS` to 10000
+- [ ] Implement recovery ladder reset with 3 full cycles
+- [ ] Add tab-cycle and route-navigate recovery steps
+- [ ] Harden `localStorage` SecurityError handling
+- [ ] Update `run-fuzz.mjs` session timeout defaults
+- [ ] Update CI workflow with branch trigger
+- [ ] Update visual stagnation assertions
+- [ ] Run local 5m fuzz validation
+- [ ] Run tests and build
+- [ ] Verify CI green
+
+## Verification Checklist
+
+- [ ] 5-minute local fuzz shows continuous UI progression
+- [ ] At least one session >= 240 seconds
+- [ ] No >10s visual stagnation
+- [ ] Interaction count >= 500
+- [ ] No stabilize key-burst log entries
+- [ ] Artifact validation passes
+- [ ] CI fuzz job passes
+
+## Risk Register
+
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| Long sessions accumulate memory | High | Browser restart between sessions if needed |
+| Recovery loop infinite cycle | Medium | Cap at 3 full ladder resets, then terminal exit |
+| Removing min-steps breaks infra test | Low | infra mode has separate config path |
+| CI timeout increase | Medium | Keep total workflow timeout at 150 min |

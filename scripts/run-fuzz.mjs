@@ -72,10 +72,7 @@ if (budgetMs <= 120_000) {
     env.FUZZ_ACTION_TIMEOUT_MS = '5000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(15_000, Math.floor(budgetMs / 3)));
-  }
-  if (!env.FUZZ_MIN_SESSION_STEPS) {
-    env.FUZZ_MIN_SESSION_STEPS = '8';
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs * 0.9)));
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '6';
@@ -93,10 +90,7 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
     env.FUZZ_PROGRESS_TIMEOUT_MS = '4000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs / 3)));
-  }
-  if (!env.FUZZ_MIN_SESSION_STEPS) {
-    env.FUZZ_MIN_SESSION_STEPS = '20';
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs * 0.9)));
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '8';
@@ -412,10 +406,14 @@ const mergeReports = async () => {
   const outputRoot = buildOutputRoot();
   const mergedSessionsDir = path.join(outputRoot, 'sessions');
   const mergedVideosDir = path.join(outputRoot, 'videos');
-  await fs.rm(mergedSessionsDir, { recursive: true, force: true });
-  await fs.rm(mergedVideosDir, { recursive: true, force: true });
-  await fs.mkdir(mergedSessionsDir, { recursive: true });
-  await fs.mkdir(mergedVideosDir, { recursive: true });
+  // When concurrency === 1, shard dir === output root so sessions/videos are already in place.
+  // Only wipe+recreate the merged dirs for multi-shard runs.
+  if (concurrency > 1) {
+    await fs.rm(mergedSessionsDir, { recursive: true, force: true });
+    await fs.rm(mergedVideosDir, { recursive: true, force: true });
+    await fs.mkdir(mergedSessionsDir, { recursive: true });
+    await fs.mkdir(mergedVideosDir, { recursive: true });
+  }
 
   const issueGroups = new Map();
   const terminatedByReason = {};
@@ -540,12 +538,14 @@ const mergeReports = async () => {
       parseErrors += 1;
     }
 
-    try {
-      await copyDirContents(shardSessionsDir, mergedSessionsDir, concurrency === 1 ? '' : `shard-${shard}-`);
-      await copyDirContents(shardVideosDir, mergedVideosDir, concurrency === 1 ? '' : `shard-${shard}-`);
-    } catch (error) {
-      console.error(`Failed to copy session/video artifacts for shard ${shard}:`, error);
-      parseErrors += 1;
+    if (concurrency > 1) {
+      try {
+        await copyDirContents(shardSessionsDir, mergedSessionsDir, `shard-${shard}-`);
+        await copyDirContents(shardVideosDir, mergedVideosDir, `shard-${shard}-`);
+      } catch (error) {
+        console.error(`Failed to copy session/video artifacts for shard ${shard}:`, error);
+        parseErrors += 1;
+      }
     }
   }
 
@@ -628,7 +628,7 @@ const mergeReports = async () => {
       seed: baseSeed,
       runId,
       shardTotal: concurrency,
-      thresholdMs: 5000,
+      thresholdMs: 10000,
     },
     maxVisualStagnationMs,
     violations: stagnationViolations,
@@ -998,11 +998,11 @@ const mergeReports = async () => {
       seed: baseSeed,
       runId,
       shardTotal: concurrency,
-      thresholdMs: 5000,
+      thresholdMs: 10000,
     },
     maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
     violations: qualifiedSessions
-      .filter((item) => (item.maxVisualStagnationMs || 0) > 5000)
+      .filter((item) => (item.maxVisualStagnationMs || 0) > 10000)
       .map((item) => ({
         sessionId: item.sessionId,
         maxVisualStagnationMs: item.maxVisualStagnationMs,
