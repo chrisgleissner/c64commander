@@ -126,7 +126,7 @@ Then launch C64 Commander by opening http://`<host-ip>`:8064 in a browser.
 4.  Enter the correct C64U IP address or hostname.
 5.  Check that the C64U logo on the top-right of C64 Commander turns green.
 
-You are now connected to your C64U.
+🎉 **DONE!** C64 Commander is now connected to your C64 Ultimate.
 
 ## 🧩 What You Can Do
 
