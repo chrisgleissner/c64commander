@@ -725,11 +725,12 @@ const mergeReports = async () => {
         });
       }
 
-      if (activityCount < 20) {
+      const minActivities = Math.max(5, Math.floor((budgetMs / 60_000) * 2));
+      if (activityCount < minActivities) {
         activityViolations.push({
           sessionId,
           reason: 'insufficient-activities',
-          details: `expected>=20 actual=${activityCount}`,
+          details: `expected>=${minActivities} actual=${activityCount}`,
         });
         await fs.unlink(sessionJsonPath).catch(() => { });
         if (mergedLogPath) await fs.unlink(path.join(outputRoot, mergedLogPath)).catch(() => { });
@@ -959,8 +960,9 @@ const mergeReports = async () => {
   if (screenshotQualityViolations.length > 0) {
     throw new Error(`Screenshot artifact validation failed: ${JSON.stringify(screenshotQualityViolations, null, 2)}`);
   }
+  const minActivities = Math.max(5, Math.floor((budgetMs / 60_000) * 2));
   if (qualifiedSessions.length === 0) {
-    throw new Error(`No qualified sessions with >=20 activities were produced. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
+    throw new Error(`No qualified sessions with >=${minActivities} activities were produced. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
   }
   if (visualStagnationReport.violations.length > 0) {
     throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);

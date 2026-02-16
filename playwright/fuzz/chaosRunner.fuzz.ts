@@ -1788,13 +1788,15 @@ test.describe('Fuzz Test', () => {
         },
       ];
 
-      const pickAction = async () => {
+      const pickAction = async (): Promise<{ action: (typeof actions)[number] | null; pageUnresponsive: boolean }> => {
         const actionCandidates = isCiRun
           ? [...actions]
             .sort(() => rng.next() - 0.5)
             .slice(0, Math.min(actions.length, 8))
           : actions;
         const eligible: typeof actions = [];
+        let consecutiveTimeouts = 0;
+        let shortCircuited = false;
         for (const action of actionCandidates) {
           let canRun = false;
           try {
@@ -1803,23 +1805,31 @@ test.describe('Fuzz Test', () => {
               stateProbeTimeoutMs,
               `canRun ${action.name}`,
             );
+            consecutiveTimeouts = 0;
           } catch (error) {
             if (isClosedTargetError(error)) {
               throw error;
             }
             logInteraction(`s=${totalSteps}\ta=canRun:${action.name}\terror=${(error as Error)?.message || 'failed'}`);
+            consecutiveTimeouts += 1;
+            // Short-circuit: if 3+ canRun checks timeout in a row, page is likely unresponsive
+            if (consecutiveTimeouts >= 3) {
+              logInteraction(`s=${totalSteps}\ta=canRun\tshort-circuit after ${consecutiveTimeouts} consecutive timeouts`);
+              shortCircuited = true;
+              break;
+            }
             continue;
           }
           if (canRun) eligible.push(action);
         }
-        if (!eligible.length) return null;
+        if (!eligible.length) return { action: null, pageUnresponsive: shortCircuited };
         const totalWeight = eligible.reduce((sum, action) => sum + action.weight, 0);
         let roll = rng.next() * totalWeight;
         for (const action of eligible) {
           roll -= action.weight;
-          if (roll <= 0) return action;
+          if (roll <= 0) return { action, pageUnresponsive: false };
         }
-        return eligible[eligible.length - 1];
+        return { action: eligible[eligible.length - 1], pageUnresponsive: false };
       };
 
       while (
@@ -1948,8 +1958,11 @@ test.describe('Fuzz Test', () => {
           actionLogged = true;
         } else {
           let action: (typeof actions)[number] | null;
+          let pageUnresponsive = false;
           try {
-            action = await pickAction();
+            const pickResult = await pickAction();
+            action = pickResult.action;
+            pageUnresponsive = pickResult.pageUnresponsive;
           } catch (error) {
             if (isClosedTargetError(error)) {
               logInteraction(`s=${totalSteps}\ta=session\tpage-closed-during-action-pick`);
@@ -1966,51 +1979,68 @@ test.describe('Fuzz Test', () => {
             }
             throw error;
           }
-          if (!action) {
+          if (!action && pageUnresponsive) {
+            // Page is unresponsive — jump directly to aggressive recovery (force-home)
+            logInteraction(`s=${totalSteps}\ta=session\tpage-unresponsive, force-home recovery`);
+            mode = 'recovery';
+            recoveryAttempts = 0;
+            structuredRecoveryAttempts = 2; // skip structured recovery; it can't help a frozen page
+            recoveryLadderAttempts = 4; // skip close-modal/navigate-back/root-tab/cycle-tab; jump to force-home
+            await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
+            lastVisualChangeAt = Date.now();
+            lastProgressAt = Date.now();
+            noProgressCount = 0;
+            actionLogged = true;
+          } else if (!action) {
             logInteraction(`s=${totalSteps}\ta=session\tno-action`);
             recordStuckSessionIssue('no-action', 'No eligible action was available.');
             break;
-          }
-          try {
-            // Wrap action execution with a hard timeout to prevent hangs
-            const result = await withTimeout(
-              () => action.run(),
-              actionTimeoutMs,
-              `action ${action.name}`,
-            );
-            logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
-            consecutiveActionTimeouts = 0;
-          } catch (error) {
-            logInteraction(`s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`);
-            if (parseActionTimeout(error)) {
-              consecutiveActionTimeouts += 1;
-              if (consecutiveActionTimeouts >= 3) {
+          } else {
+            try {
+              // Wrap action execution with a hard timeout to prevent hangs
+              const result = await withTimeout(
+                () => action.run(),
+                actionTimeoutMs,
+                `action ${action.name}`,
+              );
+              logInteraction(`s=${totalSteps}\ta=${action.name}\t${result.log}`);
+              consecutiveActionTimeouts = 0;
+            } catch (error) {
+              logInteraction(`s=${totalSteps}\ta=${action.name}\terror=${(error as Error)?.message || 'unknown'}`);
+              if (parseActionTimeout(error)) {
+                consecutiveActionTimeouts += 1;
+                if (consecutiveActionTimeouts >= 3) {
+                  recordIssueOnce({
+                    severity: 'freeze',
+                    message: (error as Error).message || 'Action timeout',
+                    source: 'action.timeout',
+                    interactionIndex: totalSteps,
+                    lastInteractions: interactions.slice(-lastInteractionCount),
+                  });
+                }
+              } else {
+                consecutiveActionTimeouts = 0;
                 recordIssueOnce({
-                  severity: 'freeze',
-                  message: (error as Error).message || 'Action timeout',
-                  source: 'action.timeout',
+                  severity: 'errorLog',
+                  message: (error as Error)?.message || 'Action failed',
+                  source: (error as Error)?.name || 'action.error',
+                  stack: (error as Error)?.stack,
                   interactionIndex: totalSteps,
                   lastInteractions: interactions.slice(-lastInteractionCount),
                 });
               }
-            } else {
-              consecutiveActionTimeouts = 0;
-              recordIssueOnce({
-                severity: 'errorLog',
-                message: (error as Error)?.message || 'Action failed',
-                source: (error as Error)?.name || 'action.error',
-                stack: (error as Error)?.stack,
-                interactionIndex: totalSteps,
-                lastInteractions: interactions.slice(-lastInteractionCount),
-              });
             }
           }
           actionLogged = true;
         }
 
         if (actionLogged) {
-          await checkAppLogsForIssues();
-          if (issue) break; // terminal issue (crash/freeze) only
+          // Skip expensive probes during recovery — localStorage reads and screenshots
+          // will just timeout against an unresponsive page, wasting ~7s per iteration.
+          if (mode !== 'recovery') {
+            await checkAppLogsForIssues();
+            if (issue) break; // terminal issue (crash/freeze) only
+          }
           await sampleVisualProgress();
           const nextSnapshot = await withTimeout(
             () => readProgressSnapshot(page),
