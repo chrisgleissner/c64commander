@@ -1,106 +1,78 @@
-# iOS CI Startup Delay + Maestro False-Negative Investigation Plan
+# Release Artifact Naming Standardization Plan
 
-## Scope
+## Objective
+Implement a clean, production-grade artifact naming scheme for GitHub Releases.
 
-Investigate and fix severe iOS startup delay and premature Maestro assertion failure in `ios-secure-storage-persist` with deterministic, structured evidence.
+## Target Artifact Names
+- `c64commander-<version>-android.apk`
+- `c64commander-<version>-android.apk.sha256`
+- `c64commander-<version>-android-play.aab`
+- `c64commander-<version>-ios.ipa`
+- `c64commander-<version>-ios.ipa.sha256`
 
-## Authoritative Goals
+## Artifacts to Exclude from Public Releases
+- Debug APKs
+- `app-release.aab` (rename to standardized name)
+- Any artifact containing "debug", "unsigned", or tool-specific names like "altstore"
 
-1. Emit deterministic timing traces with millisecond precision for each iOS Maestro flow.
-2. Capture raw streams required for root-cause analysis:
-   - Maestro raw debug output
-   - iOS unified log stream
-   - simulator diagnostics
-   - app debug payloads
-   - accessibility snapshot(s)
-3. Diagnose and fix:
-   - startup delay bottleneck
-   - false `Home` assertion in `ios-secure-storage-persist`
-4. Keep iOS-only scope; no Android behavior changes.
+## Tasks
 
-## Required Event Timeline
+### 1. Locate Build Outputs
+- [x] Identify Android APK build output location
+- [x] Identify Android AAB build output location
+- [x] Identify iOS IPA build output location
+- [x] Document current artifact names
 
-Per flow, emit chronologically ordered events in:
+### 2. Analyze CI Workflows
+- [x] Find APK build workflow
+- [x] Find AAB build workflow
+- [x] Find IPA build workflow
+- [x] Find release upload workflow
 
-- `artifacts/ios/<flow>/timing-trace.json`
+### 3. Modify CI Workflows
+- [x] Add APK rename step: `c64commander-${VERSION}-android.apk`
+- [x] Add AAB rename step: `c64commander-${VERSION}-android-play.aab`
+- [x] Add IPA rename step: `c64commander-${VERSION}-ios.ipa`
+- [x] Add SHA256 checksum generation for each artifact
 
-Required event types:
+### 4. Filter Release Artifacts
+- [x] Exclude debug APKs from release uploads
+- [x] Exclude files containing "debug" or "unsigned"
+- [x] Remove old `app-release.aab` naming
 
-- `simulator.boot.start`
-- `simulator.boot.ready`
-- `app.install.start`
-- `app.install.end`
-- `maestro.flow.start`
-- `maestro.command.first_sent`
-- `maestro.lookup.first`
-- `maestro.assertion.evaluated`
-- `app.process.first_spawn`
-- `app.uiwindow.first_created`
-- `app.uiwindow.first_visible`
-- `app.frame.first_rendered`
-- `app.accessibility.first_available`
+### 5. Update Documentation
+- [x] Update README if artifact names are referenced (not needed - uses generic terms)
 
-## Hypotheses Matrix (A–J)
+### 6. Validation
+- [ ] Verify artifact names match required format
+- [ ] Verify no debug artifacts in release
+- [ ] Verify checksums are correct
 
-| ID | Hypothesis | Status | Evidence | Notes |
-| --- | --- | --- | --- | --- |
-| A | Simulator boot delay | IN_PROGRESS | pending instrumentation | Capture boot start/ready in workflow + trace |
-| B | App cold start regression | IN_PROGRESS | pending instrumentation | App startup markers via native logs |
-| C | Metal/GPU scaler driver issue | IN_PROGRESS | pending instrumentation | Capture scaler warnings + correlate with startup lag |
-| D | Accessibility tree delayed | IN_PROGRESS | pending instrumentation | Capture hierarchy snapshots and first available timestamp |
-| E | Maestro timeout too short | CONFIRMED | static flow analysis | `ios-open-play-add-items` waits `Home` with `TIMEOUT=30000` and 3 retries (~90s + overhead), consistent with ~1m48 failure |
-| F | Maestro/app sync incorrect | IN_PROGRESS | pending instrumentation | Compare `maestro.flow.start` vs app readiness markers |
-| G | Secure storage blocks main thread | IN_PROGRESS | pending instrumentation | Compare first launch vs relaunch timing in secure-storage flow |
-| H | CI runner performance regression | IN_PROGRESS | pending instrumentation | Compare stage durations from traces |
-| I | Video recording interference | IN_PROGRESS | pending instrumentation | Capture with explicit video start marker and correlate |
-| J | Capacitor plugin blocks launch | IN_PROGRESS | pending instrumentation | Capture native startup sequence markers |
+## Constraints
+- Do not change versioning semantics
+- Do not change signing configuration
+- Do not modify build contents
+- Only change artifact naming and release packaging
 
-## Implementation Tasks
+## Implementation Summary
 
-1. Add iOS CI-safe timing event collector in `scripts/ci/ios-maestro-run-flow.sh`.
-2. Emit app startup lifecycle markers from iOS native code.
-3. Capture raw Maestro debug logs and parse first command/lookup/assertion timestamps.
-4. Capture iOS unified log stream per flow and extract app process/UI events.
-5. Capture accessibility snapshots (at least at failure and post-flow).
-6. Fix `ios-secure-storage-persist` synchronization based on evidence (not blind timeout growth).
-7. Preserve existing artifact paths; add stable `timing-trace.json` per flow.
-8. Validate lint/tests/build/coverage.
+### Android Workflow Changes (`.github/workflows/android.yaml`)
 
-## Evidence Contract
+1. **android-packaging job**:
+   - Added rename step for release APK: `c64commander-${APP_VERSION}-android.apk`
+   - Added SHA256 checksum generation for APK
+   - Added rename step for AAB: `c64commander-${APP_VERSION}-android-play.aab`
+   - Updated artifact upload paths
 
-Each `timing-trace.json` must be:
+2. **release-artifacts job**:
+   - Removed debug APK download and upload steps
+   - Updated release APK path to use new naming
+   - Updated AAB path to use new naming
+   - Added SHA256 checksum file to release upload
 
-- deterministic ordering
-- millisecond timestamps
-- stable schema
-- machine-readable and CI-safe
+### iOS Workflow Changes (`.github/workflows/ios.yaml`)
 
-Schema:
-
-```json
-{
-  "flow": "ios-secure-storage-persist",
-  "group": "group-3",
-  "events": [
-    {
-      "tsMs": 0,
-      "type": "maestro.flow.start",
-      "source": "maestro",
-      "details": {}
-    }
-  ]
-}
-```
-
-## Progress Log
-
-- 2026-02-16: Replaced prior optimization-only plan with this incident plan.
-- 2026-02-16: Hypothesis E marked CONFIRMED by deterministic flow timeout analysis.
-- 2026-02-16: Instrumentation and fixes in progress.
-
-## Exit Criteria
-
-- `ios-secure-storage-persist` passes reliably in CI.
-- `timing-trace.json` is present and valid for each flow.
-- Hypotheses matrix updated to CONFIRMED/REJECTED with evidence.
-- CI pipeline green with artifacts containing required raw streams.
+1. **ios-package-altstore job** (renamed to "iOS | Package IPA"):
+   - Changed IPA naming from `c64commander-${APP_VERSION}-altstore-unsigned.ipa` to `c64commander-${APP_VERSION}-ios.ipa`
+   - Updated artifact name from `ios-altstore-unsigned-ipa` to `ios-ipa`
+   - SHA256 checksum already generated (kept existing logic)

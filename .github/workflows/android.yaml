@@ -892,19 +892,39 @@ jobs:
           name: c64commander-debug-apk
           path: android/app/build/outputs/apk/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
 
+      - name: Rename release APK for publishing
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        run: |
+          mv android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk \
+             android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk
+
+      - name: Generate APK SHA256 checksum
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        run: |
+          cd android/app/build/outputs/apk/release
+          sha256sum c64commander-${{ env.APP_VERSION }}-android.apk > c64commander-${{ env.APP_VERSION }}-android.apk.sha256
+
       - name: Upload APK artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: c64commander-release-apk
-          path: android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk
+          path: |
+            android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk
+            android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk.sha256
+
+      - name: Rename AAB for publishing
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        run: |
+          mv android/app/build/outputs/bundle/release/app-release.aab \
+             android/app/build/outputs/bundle/release/c64commander-${{ env.APP_VERSION }}-android-play.aab
 
       - name: Upload AAB artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: c64-commander-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+          name: c64commander-release-aab
+          path: android/app/build/outputs/bundle/release/c64commander-${{ env.APP_VERSION }}-android-play.aab
 
   release-artifacts:
     name: Release | Attach APK/AAB
@@ -939,12 +959,6 @@ jobs:
             echo "HAS_KEYSTORE=false" >> $GITHUB_ENV
           fi
 
-      - name: Download debug APK artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: c64commander-debug-apk
-          path: artifacts/debug
-
       - name: Download release APK artifact
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/download-artifact@v4
@@ -956,27 +970,23 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: c64-commander-release-aab
+          name: c64commander-release-aab
           path: artifacts/release-aab
-
-      - name: Upload debug APK to GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2.5.0
-        with:
-          files: artifacts/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
-          generate_release_notes: true
 
       - name: Upload release APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: softprops/action-gh-release@v2.5.0
         with:
-          files: artifacts/release-apk/c64commander-${{ env.APP_VERSION }}.apk
+          files: |
+            artifacts/release-apk/c64commander-${{ env.APP_VERSION }}-android.apk
+            artifacts/release-apk/c64commander-${{ env.APP_VERSION }}-android.apk.sha256
+          generate_release_notes: true
 
       - name: Upload release AAB to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: softprops/action-gh-release@v2.5.0
         with:
-          files: artifacts/release-aab/app-release.aab
+          files: artifacts/release-aab/c64commander-${{ env.APP_VERSION }}-android-play.aab
 
       - name: Upload AAB to Google Play (internal)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
@@ -984,7 +994,7 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: uk.gleissner.c64commander
-          releaseFiles: artifacts/release-aab/app-release.aab
+          releaseFiles: artifacts/release-aab/c64commander-${{ env.APP_VERSION }}-android-play.aab
           track: internal
           # TODO Change to 'completed' once all requirements met and app submitted once manually
           status: draft

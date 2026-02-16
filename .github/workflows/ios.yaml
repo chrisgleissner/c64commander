@@ -542,7 +542,7 @@ jobs:
           if-no-files-found: warn
 
   ios-package-altstore:
-    name: iOS | Package AltStore IPA
+    name: iOS | Package IPA
     runs-on: macos-15
     needs: ios-prepare
 
@@ -601,10 +601,10 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Package AltStore unsigned IPA
+      - name: Package iOS IPA
         run: |
           set -euo pipefail
-          IPA_BASENAME="c64commander-${APP_VERSION}-altstore-unsigned"
+          IPA_BASENAME="c64commander-${APP_VERSION}-ios"
           rm -rf ios/build/Payload
           mkdir -p ios/build/Payload
           cp -R ios/build/Build/Products/Release-iphoneos/App.app ios/build/Payload/App.app
@@ -614,22 +614,22 @@ jobs:
           )
           shasum -a 256 "ios/build/${IPA_BASENAME}.ipa" | awk '{print $1}' > "ios/build/${IPA_BASENAME}.ipa.sha256"
 
-      - name: Upload AltStore IPA artifact
+      - name: Upload iOS IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-altstore-unsigned-ipa
+          name: ios-ipa
           path: |
-            ios/build/c64commander-*-altstore-unsigned.ipa
-            ios/build/c64commander-*-altstore-unsigned.ipa.sha256
+            ios/build/c64commander-*-ios.ipa
+            ios/build/c64commander-*-ios.ipa.sha256
           if-no-files-found: error
 
-      - name: Publish AltStore IPA on tags
+      - name: Publish iOS IPA on tags
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ios/build/c64commander-*-altstore-unsigned.ipa
-            ios/build/c64commander-*-altstore-unsigned.ipa.sha256
+            ios/build/c64commander-*-ios.ipa
+            ios/build/c64commander-*-ios.ipa.sha256
 
   ios-package-paid:
     name: iOS | Package paid signing
