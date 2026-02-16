@@ -264,6 +264,7 @@ log "Running Maestro flow: ${FLOW}"
 MAESTRO_CLI_NO_ANALYTICS=1 \
 MAESTRO_DRIVER_STARTUP_TIMEOUT=120000 \
   "$MAESTRO_BIN" test ".maestro/${FLOW}.yaml" \
+    --device "$UDID" \
     --format junit \
     --output "${FLOW_DIR}/junit.xml" \
   && FLOW_EXIT=0 || FLOW_EXIT=$?
