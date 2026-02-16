@@ -280,6 +280,8 @@ jobs:
               fh.write(f"runtime={runtime_identifier}\n")
               fh.write(f"device_type={iphone_13['identifier']}\n")
               fh.write(f"udid={udid}\n")
+              fh.write(f"boot_start_ms={boot_start_ms}\n")
+              fh.write(f"boot_ready_ms={boot_end_ms}\n")
               fh.write(f"boot_seconds={boot_seconds}\n")
           PY
         env:
@@ -288,6 +290,12 @@ jobs:
       - name: Run Maestro flows with evidence capture (${{ matrix.group.name }})
         env:
           MAESTRO_CLI_NO_ANALYTICS: 1
+          MAESTRO_LOG_LEVEL: debug
+          MAESTRO_CLI_LOG_LEVEL: debug
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
+          IOS_MAESTRO_RECORD_VIDEO: "0"
+          SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
+          SIM_BOOT_READY_MS: ${{ steps.simulator.outputs.boot_ready_ms }}
           CI: "true"
         run: |
           set -euo pipefail
