@@ -11,6 +11,7 @@ package uk.gleissner.c64commander
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -172,5 +173,64 @@ class BackgroundExecutionPluginTest {
         pluginWithoutBridge.stop(call)
 
         verify(call).reject(eq("Failed to stop background execution"), any(Exception::class.java))
+    }
+
+    @Test
+    fun startRejectsWhenPluginContextGetterThrows() {
+        val throwingBridge = mock(Bridge::class.java)
+        `when`(throwingBridge.context).thenThrow(RuntimeException("bridge context unavailable"))
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, throwingBridge)
+
+        val call = mock(PluginCall::class.java)
+        val traceContext = JSObject()
+        traceContext.put("correlationId", "corr-start")
+        traceContext.put("trackInstanceId", 17)
+        traceContext.put("playlistItemId", "playlist-17")
+        traceContext.put("sourceKind", "local")
+        traceContext.put("localAccessMode", "filesystem")
+        traceContext.put("lifecycleState", "queued")
+        `when`(call.getObject("traceContext")).thenReturn(traceContext)
+
+        target.start(call)
+
+        verify(call).reject(eq("Failed to start background execution"), any(Exception::class.java))
+    }
+
+    @Test
+    fun loadHandlesReceiverRegistrationFailure() {
+        val brokenContext = mock(Context::class.java)
+        `when`(
+            brokenContext.registerReceiver(any(BroadcastReceiver::class.java), any(IntentFilter::class.java)),
+        ).thenThrow(RuntimeException("register failed"))
+
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(brokenContext)
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        target.load()
+    }
+
+    @Test
+    fun handleOnDestroyHandlesReceiverUnregisterFailure() {
+        val brokenContext = mock(Context::class.java)
+        doThrow(RuntimeException("unregister failed")).`when`(brokenContext)
+            .unregisterReceiver(any(BroadcastReceiver::class.java))
+
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(brokenContext)
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        val method = Plugin::class.java.getDeclaredMethod("handleOnDestroy")
+        method.isAccessible = true
+        method.invoke(target)
     }
 }

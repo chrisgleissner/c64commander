@@ -10,7 +10,9 @@ package uk.gleissner.c64commander
 
 import android.util.Base64
 import com.getcapacitor.JSObject
+import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
+import com.getcapacitor.Bridge
 import org.apache.commons.net.ftp.FTPClient
 import org.apache.commons.net.ftp.FTPFile
 import org.junit.Assert.assertEquals
@@ -26,11 +28,14 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.mockito.ArgumentMatchers.eq
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.shadows.ShadowLog
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import androidx.test.core.app.ApplicationProvider
+import android.content.Context
 
 @RunWith(RobolectricTestRunner::class)
 class FtpClientPluginTest {
@@ -273,6 +278,174 @@ class FtpClientPluginTest {
     assertEquals(payload.toByteArray().size, sizeValue)
 
     server.stop()
+  }
+
+  @Test
+  fun readFileRejectsOnLoginFailure() {
+    val root = tempFolder.newFolder("ftp-root-read-fail")
+    File(root, "demo.sid").writeText("sid")
+
+    val server = MockFtpServer(root, "secret")
+    server.start()
+
+    val plugin = FtpClientPlugin()
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(server.port)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("wrong")
+    `when`(call.getString("path")).thenReturn("/demo.sid")
+
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject("FTP login failed")
+
+    plugin.readFile(call)
+
+    assertTrue(latch.await(3, TimeUnit.SECONDS))
+    server.stop()
+  }
+
+  @Test
+  fun listDirectoryUsesTraceContextOnException() {
+    val plugin = FtpClientPlugin()
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val bridge = mock(Bridge::class.java)
+    `when`(bridge.context).thenReturn(context)
+    val field = Plugin::class.java.getDeclaredField("bridge")
+    field.isAccessible = true
+    field.set(plugin, bridge)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(2)
+    val traceContext = JSObject()
+    traceContext.put("correlationId", "corr-ftp")
+    traceContext.put("trackInstanceId", 99)
+    traceContext.put("playlistItemId", "pl-9")
+    traceContext.put("sourceKind", "hvsc")
+    traceContext.put("localAccessMode", "ftp")
+    traceContext.put("lifecycleState", "playing")
+    `when`(call.getObject("traceContext")).thenReturn(traceContext)
+
+    val latch = CountDownLatch(1)
+    doAnswer {
+      latch.countDown()
+      null
+    }.`when`(call).reject(any(String::class.java), any(Exception::class.java))
+
+    plugin.listDirectory(call)
+    assertTrue(latch.await(3, TimeUnit.SECONDS))
+  }
+
+  @Test
+  fun listDirectoryHandlesNullNameAndDisconnectFailure() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    val nullNamed = FTPFile().apply { name = null }
+    val valid = FTPFile().apply {
+      name = "valid.sid"
+      size = 123
+    }
+    `when`(ftpClient.login("user", "secret")).thenReturn(true)
+    `when`(ftpClient.mlistDir("/")).thenReturn(arrayOf(nullNamed, valid))
+    `when`(ftpClient.isConnected).thenReturn(true)
+    doAnswer { throw RuntimeException("disconnect failed") }.`when`(ftpClient).disconnect()
+
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val bridge = mock(Bridge::class.java)
+    `when`(bridge.context).thenReturn(context)
+    val bridgeField = Plugin::class.java.getDeclaredField("bridge")
+    bridgeField.isAccessible = true
+    bridgeField.set(plugin, bridge)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getInt("port")).thenReturn(21)
+    `when`(call.getString("username")).thenReturn("user")
+    `when`(call.getString("password")).thenReturn("secret")
+    `when`(call.getString("path")).thenReturn("/")
+
+    var resolved: JSObject? = null
+    doAnswer { invocation ->
+      resolved = invocation.getArgument(0) as JSObject
+      null
+    }.`when`(call).resolve(any())
+
+    plugin.listDirectory(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    val entries = resolved?.getJSONArray("entries")
+    assertEquals(1, entries?.length())
+    assertEquals("valid.sid", entries?.getJSONObject(0)?.getString("name"))
+  }
+
+  @Test
+  fun readFileUsesDefaultsAndRejectsWhenReadFails() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    `when`(ftpClient.login("user", "")).thenReturn(true)
+    `when`(ftpClient.retrieveFile(eq("/missing.sid"), any())).thenReturn(false)
+    `when`(ftpClient.isConnected).thenReturn(true)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/missing.sid")
+    `when`(call.getInt("port")).thenReturn(null)
+    `when`(call.getString("username")).thenReturn(null)
+    `when`(call.getString("password")).thenReturn(null)
+
+    plugin.readFile(call)
+
+    verify(ftpClient).connect("127.0.0.1", 21)
+    verify(ftpClient).login("user", "")
+    verify(call).reject("FTP file read failed")
+  }
+
+  @Test
+  fun readFileCoversTraceAndDisconnectWarningOnException() {
+    val plugin = FtpClientPlugin()
+    plugin.runTask = { runnable -> runnable.run() }
+
+    val ftpClient = mock(FTPClient::class.java)
+    plugin.ftpClientFactory = { ftpClient }
+
+    doAnswer { throw RuntimeException("connect failed") }.`when`(ftpClient).connect(any(String::class.java), any(Int::class.java))
+    `when`(ftpClient.isConnected).thenReturn(true)
+    doAnswer { throw RuntimeException("disconnect failed") }.`when`(ftpClient).disconnect()
+
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val bridge = mock(Bridge::class.java)
+    `when`(bridge.context).thenReturn(context)
+    val bridgeField = Plugin::class.java.getDeclaredField("bridge")
+    bridgeField.isAccessible = true
+    bridgeField.set(plugin, bridge)
+
+    val call = mock(PluginCall::class.java)
+    `when`(call.getString("host")).thenReturn("127.0.0.1")
+    `when`(call.getString("path")).thenReturn("/x")
+    val traceContext = JSObject()
+    traceContext.put("correlationId", "corr-read")
+    traceContext.put("trackInstanceId", 123)
+    traceContext.put("playlistItemId", "p-22")
+    traceContext.put("sourceKind", "hvsc")
+    traceContext.put("localAccessMode", "ftp")
+    traceContext.put("lifecycleState", "stopped")
+    `when`(call.getObject("traceContext")).thenReturn(traceContext)
+
+    plugin.readFile(call)
+
+    verify(call).reject(any(String::class.java), any(Exception::class.java))
   }
 
   @Test

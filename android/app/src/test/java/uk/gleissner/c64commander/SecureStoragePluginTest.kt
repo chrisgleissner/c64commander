@@ -22,6 +22,7 @@ import org.junit.runner.RunWith
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.any
 import org.robolectric.RobolectricTestRunner
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -104,5 +105,43 @@ class SecureStoragePluginTest {
     plugin.getPassword(getAfterClearCall)
     assertTrue(getAfterClearLatch.await(2, TimeUnit.SECONDS))
     assertEquals(null, clearedPayload?.getString("value"))
+  }
+
+  @Test
+  fun setPasswordRejectsWhenPrefsProviderFails() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.prefsProvider = { throw RuntimeException("prefs set failed") }
+
+    val call = mock(PluginCall::class.java)
+    org.mockito.Mockito.`when`(call.getString("value")).thenReturn("secret")
+
+    plugin.setPassword(call)
+
+    verify(call).reject(any(), any(Exception::class.java))
+  }
+
+  @Test
+  fun getPasswordRejectsWhenPrefsProviderFails() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.prefsProvider = { throw RuntimeException("prefs get failed") }
+
+    val call = mock(PluginCall::class.java)
+    plugin.getPassword(call)
+
+    verify(call).reject(any(), any(Exception::class.java))
+  }
+
+  @Test
+  fun clearPasswordRejectsWhenPrefsProviderFails() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    setPluginBridge(plugin, context)
+    plugin.prefsProvider = { throw RuntimeException("prefs clear failed") }
+
+    val call = mock(PluginCall::class.java)
+    plugin.clearPassword(call)
+
+    verify(call).reject(any(), any(Exception::class.java))
   }
 }
