@@ -16,6 +16,7 @@ import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
 import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
 import { diffProgress, hasMeaningfulProgress, readProgressSnapshot } from './fuzzProgress';
+import { attemptStructuredRecovery } from './fuzzRecovery';
 
 // FUZZ_ENABLED is checked at runtime inside the test function to ensure
 // the environment variable is properly set by the parent process.
@@ -88,6 +89,7 @@ type SessionTerminationReason =
   | 'visual-stagnation';
 
 type RecoveryStepName =
+  | 'structured-recovery'
   | 'close-modal'
   | 'navigate-back'
   | 'root-tab'
@@ -192,6 +194,11 @@ const buildGroupId = (signature: IssueSignature) => {
 const parseActionTimeout = (error: unknown) => {
   const message = (error as Error)?.message || String(error);
   return /timeout/i.test(message);
+};
+
+const isClosedTargetError = (error: unknown) => {
+  const message = (error as Error)?.message || String(error);
+  return /Target page, context or browser has been closed|Execution context was destroyed|Browser has been closed|context has been closed/i.test(message);
 };
 
 /**
@@ -722,77 +729,6 @@ test.describe('Fuzz Test', () => {
       'visual-stagnation': 0,
     };
 
-    const createSyntheticTimeoutSession = async (detail: string, durationMs: number) => {
-      const effectiveSessionIndex = Math.max(1, sessionIndex);
-      const sessionId = `session-${String(effectiveSessionIndex).padStart(4, '0')}`;
-      const sessionLogPath = path.join(sessionsDir, `${sessionId}.log`);
-      const sessionJsonPath = path.join(sessionsDir, `${sessionId}.json`);
-      const sessionScreenshotPath = path.join(sessionsDir, `${sessionId}.png`);
-      const sessionVideoPath = path.join(videosDir, `${sessionId}.webm`);
-
-      const alreadyExists = await fs.stat(sessionJsonPath).then((stat) => stat.isFile()).catch(() => false);
-      if (alreadyExists) return;
-
-      await fs.writeFile(sessionLogPath, `s=0\ta=session\tsynthetic-timeout\tdetail=${detail}\n`, 'utf8');
-
-      const seconds = Math.max(1, Math.ceil(durationMs / 1000));
-      const videoResult = spawnSync(
-        'ffmpeg',
-        [
-          '-v',
-          'error',
-          '-y',
-          '-f',
-          'lavfi',
-          '-i',
-          'color=c=black:s=360x740:r=1',
-          '-t',
-          String(seconds),
-          '-c:v',
-          'libvpx-vp9',
-          '-pix_fmt',
-          'yuv420p',
-          sessionVideoPath,
-        ],
-        { stdio: ['ignore', 'pipe', 'pipe'] },
-      );
-      if (videoResult.error || videoResult.status !== 0) {
-        throw new Error(`Synthetic timeout video creation failed: ${(videoResult.stderr || videoResult.error?.message || 'ffmpeg failed').toString()}`);
-      }
-
-      try {
-        try {
-          extractScreenshotFromVideo(sessionVideoPath, sessionScreenshotPath);
-        } catch (error) {
-          console.warn('Synthetic timeout screenshot extraction failed, using placeholder:', error);
-        }
-        await ensureScreenshotArtifact(sessionScreenshotPath);
-      } catch {
-        await fs.writeFile(sessionScreenshotPath, PLACEHOLDER_SCREENSHOT_PNG);
-      }
-
-      const syntheticManifest: SessionManifest = {
-        sessionId,
-        seed,
-        shardIndex,
-        startTime: new Date().toISOString(),
-        endTime: new Date(Date.now() + durationMs).toISOString(),
-        durationMs,
-        steps: 0,
-        terminationReason: 'session-timeout',
-        maxVisualStagnationMs: MAX_VISUAL_STAGNATION_MS,
-        visualSamples: 0,
-        recoverySteps: ['terminate-session'],
-        interactionLog: path.relative(outputRoot, sessionLogPath),
-        finalScreenshot: path.relative(outputRoot, sessionScreenshotPath),
-        video: path.relative(outputRoot, sessionVideoPath),
-      };
-
-      sessionManifests.push(syntheticManifest);
-      terminationCounts['session-timeout'] += 1;
-      await writeJson(sessionJsonPath, syntheticManifest);
-    };
-
     const recordIssue = (issue: IssueRecord, example: IssueExample) => {
       const signature = buildSignature(issue);
       const groupId = buildGroupId(signature);
@@ -1205,6 +1141,8 @@ test.describe('Fuzz Test', () => {
       let lastHeartbeatAt = sessionStartTime;
       let mode: 'chaos' | 'recovery' = 'chaos';
       let recoveryAttempts = 0;
+      let structuredRecoveryAttempts = 0;
+      let recoveryLadderAttempts = 0;
       const recoveryStepLimit = 6;
 
       await sampleVisualProgress(true);
@@ -1803,7 +1741,21 @@ test.describe('Fuzz Test', () => {
       const pickAction = async () => {
         const eligible: typeof actions = [];
         for (const action of actions) {
-          if (await action.canRun()) eligible.push(action);
+          let canRun = false;
+          try {
+            canRun = await withTimeout(
+              () => action.canRun(),
+              Math.max(1000, Math.min(3000, actionTimeoutMs)),
+              `canRun ${action.name}`,
+            );
+          } catch (error) {
+            if (isClosedTargetError(error)) {
+              throw error;
+            }
+            logInteraction(`s=${totalSteps}\ta=canRun:${action.name}\terror=${(error as Error)?.message || 'failed'}`);
+            continue;
+          }
+          if (canRun) eligible.push(action);
         }
         if (!eligible.length) return null;
         const totalWeight = eligible.reduce((sum, action) => sum + action.weight, 0);
@@ -1817,23 +1769,23 @@ test.describe('Fuzz Test', () => {
 
       while (!infraMode && Date.now() < runDeadline && (maxSteps ? totalSteps < maxSteps : true)) {
         if (issue) break;
+        if (page.isClosed()) {
+          logInteraction(`s=${totalSteps}\ta=session\tpage-closed`);
+          recordIssueOnce({
+            severity: 'crash',
+            message: 'Session page closed unexpectedly while fuzzing.',
+            source: 'session.page.closed',
+            interactionIndex: totalSteps,
+            lastInteractions: interactions.slice(-lastInteractionCount),
+          });
+          terminationReason = 'issue';
+          break;
+        }
 
         await sampleVisualProgress();
 
         if (Date.now() - sessionStartTime >= sessionTimeoutMs) {
           logInteraction(`s=${totalSteps}\ta=session\ttimeout ${Math.round((Date.now() - sessionStartTime) / 1000)}s`);
-          recordStuckSessionIssue(
-            'session-timeout',
-            `Session exceeded maximum duration of ${sessionTimeoutMs / 1000}s after ${sessionSteps} steps.`,
-          );
-          terminationReason = 'session-timeout';
-          break;
-        }
-
-        // Session-level timeout check - prevent sessions from running forever
-        const sessionElapsed = Date.now() - sessionStartTime;
-        if (sessionElapsed >= sessionTimeoutMs) {
-          logInteraction(`s=${totalSteps}\ta=session\ttimeout ${Math.round(sessionElapsed / 1000)}s`);
           recordStuckSessionIssue(
             'session-timeout',
             `Session exceeded maximum duration of ${sessionTimeoutMs / 1000}s after ${sessionSteps} steps.`,
@@ -1855,11 +1807,15 @@ test.describe('Fuzz Test', () => {
         if (mode === 'chaos' && visualStagnantMs > MAX_VISUAL_STAGNATION_MS) {
           mode = 'recovery';
           recoveryAttempts = 0;
+          structuredRecoveryAttempts = 0;
+          recoveryLadderAttempts = 0;
           logInteraction(`s=${totalSteps}\ta=visual\tstagnation ${visualStagnantMs}ms`);
         }
         if (mode === 'chaos' && now - lastProgressAt >= progressTimeoutMs) {
           mode = 'recovery';
           recoveryAttempts = 0;
+          structuredRecoveryAttempts = 0;
+          recoveryLadderAttempts = 0;
           logInteraction(`s=${totalSteps}\ta=progress\twatchdog ${now - lastProgressAt}ms`);
         }
 
@@ -1884,20 +1840,56 @@ test.describe('Fuzz Test', () => {
         } else if (mode === 'recovery') {
           recoveryAttempts += 1;
           recoveryAttempted = true;
-          const recoveryResult = await runRecoveryStep(recoveryAttempts);
-          logInteraction(`s=${totalSteps}\ta=recovery\t${recoveryResult.log}`);
-          if (recoveryResult.terminal) {
-            logInteraction(`s=${totalSteps}\ta=session\trecovery-terminate`);
-            recordStuckSessionIssue(
-              'recovery-exhausted',
-              'Deterministic recovery ladder exhausted all steps.',
-            );
-            terminationReason = 'recovery-exhausted';
-            break;
+          let usedStructuredRecovery = false;
+          if (structuredRecoveryAttempts < 2) {
+            structuredRecoveryAttempts += 1;
+            const structured = await attemptStructuredRecovery(page, {
+              seed,
+              sessionId,
+              attempt: structuredRecoveryAttempts,
+            });
+            if (structured.recovered) {
+              recoverySteps.push('structured-recovery');
+              logInteraction(`s=${totalSteps}\ta=recovery\tstructured ${structured.log}`);
+              usedStructuredRecovery = true;
+            }
+          }
+
+          if (!usedStructuredRecovery) {
+            recoveryLadderAttempts += 1;
+            const recoveryResult = await runRecoveryStep(recoveryLadderAttempts);
+            logInteraction(`s=${totalSteps}\ta=recovery\t${recoveryResult.log}`);
+            if (recoveryResult.terminal) {
+              logInteraction(`s=${totalSteps}\ta=session\trecovery-terminate`);
+              recordStuckSessionIssue(
+                'recovery-exhausted',
+                'Structured recovery and deterministic recovery ladder exhausted all steps.',
+              );
+              terminationReason = 'recovery-exhausted';
+              break;
+            }
           }
           actionLogged = true;
         } else {
-          const action = await pickAction();
+          let action: (typeof actions)[number] | null;
+          try {
+            action = await pickAction();
+          } catch (error) {
+            if (isClosedTargetError(error)) {
+              logInteraction(`s=${totalSteps}\ta=session\tpage-closed-during-action-pick`);
+              recordIssueOnce({
+                severity: 'crash',
+                message: (error as Error)?.message || 'Page/context closed while selecting action.',
+                source: 'session.page.closed',
+                stack: (error as Error)?.stack,
+                interactionIndex: totalSteps,
+                lastInteractions: interactions.slice(-lastInteractionCount),
+              });
+              terminationReason = 'issue';
+              break;
+            }
+            throw error;
+          }
           if (!action) {
             logInteraction(`s=${totalSteps}\ta=session\tno-action`);
             recordStuckSessionIssue('no-action', 'No eligible action was available.');
@@ -1960,13 +1952,15 @@ test.describe('Fuzz Test', () => {
               );
               mode = 'chaos';
               recoveryAttempts = 0;
+              structuredRecoveryAttempts = 0;
+              recoveryLadderAttempts = 0;
             }
           } else if (mode === 'chaos') {
             noProgressCount += 1;
           }
         }
 
-        if (mode === 'recovery' && recoveryAttempted && recoveryAttempts >= recoveryStepLimit && !progressed) {
+        if (mode === 'recovery' && recoveryAttempted && recoveryLadderAttempts >= recoveryStepLimit && !progressed) {
           logInteraction(`s=${totalSteps}\ta=session\trecovery-exhausted`);
           recordStuckSessionIssue(
             'recovery-exhausted',
@@ -1976,15 +1970,24 @@ test.describe('Fuzz Test', () => {
           break;
         }
         if (noProgressCount >= noProgressLimit) {
-          logInteraction(`s=${totalSteps}\ta=session\tno-progress`);
-          recordStuckSessionIssue(
-            'no-progress',
-            `No interaction progress after ${noProgressCount} steps in chaos mode.`,
-          );
-          terminationReason = 'no-progress';
-          break;
+          if (mode !== 'recovery') {
+            mode = 'recovery';
+            recoveryAttempts = 0;
+            structuredRecoveryAttempts = 0;
+            recoveryLadderAttempts = 0;
+            logInteraction(`s=${totalSteps}\ta=session\tno-progress->recovery (${noProgressCount})`);
+            noProgressCount = 0;
+          } else {
+            logInteraction(`s=${totalSteps}\ta=session\tno-progress`);
+            recordStuckSessionIssue(
+              'no-progress',
+              `No interaction progress after ${noProgressCount} steps while recovery mode was active.`,
+            );
+            terminationReason = 'no-progress';
+            break;
+          }
         }
-        if (Math.max(0, Date.now() - lastVisualChangeAt) > MAX_VISUAL_STAGNATION_MS && mode === 'recovery' && recoveryAttempts >= recoveryStepLimit) {
+        if (Math.max(0, Date.now() - lastVisualChangeAt) > MAX_VISUAL_STAGNATION_MS && mode === 'recovery' && recoveryLadderAttempts >= recoveryStepLimit) {
           logInteraction(`s=${totalSteps}\ta=session\tvisual-stagnation`);
           recordStuckSessionIssue(
             'visual-stagnation',
@@ -2179,42 +2182,18 @@ test.describe('Fuzz Test', () => {
       const budgetAwareWindowMs = timeBudgetMs
         ? Math.max(8_000, Math.floor(timeBudgetMs / 3))
         : 30_000;
-      const minimumSessionWindowMs = Math.max(8_000, Math.min(sessionTimeoutMs, budgetAwareWindowMs));
+      const minimumSessionWindowMs = Math.max(
+        15_000,
+        Math.min(Math.max(sessionTimeoutMs + actionTimeoutMs * 2, 15_000), budgetAwareWindowMs),
+      );
       if (remainingRunMs < minimumSessionWindowMs) {
         break;
       }
-      const envelopeMultiplier = isCiRun ? 1 : 3;
-      const minimumEnvelopeMs = isCiRun ? 15_000 : 20_000;
-      const maxEnvelopeByBudgetMs = Math.max(minimumEnvelopeMs, remainingRunMs + actionTimeoutMs * envelopeMultiplier);
-      let sessionEnvelopeTimeoutMs = Math.min(
-        Math.max(sessionTimeoutMs + actionTimeoutMs * envelopeMultiplier, minimumEnvelopeMs),
-        maxEnvelopeByBudgetMs,
-      );
-      if (isCiRun) {
-        sessionEnvelopeTimeoutMs = Math.min(sessionEnvelopeTimeoutMs, 60_000);
-      }
       try {
-        await withTimeout(
-          () => runSession(),
-          sessionEnvelopeTimeoutMs,
-          `session envelope (${sessionEnvelopeTimeoutMs}ms)`,
-        );
+        await runSession();
       } catch (error) {
         browserNeedsRestart = true;
-        await createSyntheticTimeoutSession(
-          (error as Error)?.message || 'session-envelope-timeout',
-          sessionEnvelopeTimeoutMs,
-        ).catch((artifactError) => {
-          console.error('Failed to create synthetic timeout session artifacts:', artifactError);
-        });
-        console.error('Fuzz session envelope failed; restarting browser for next session:', error);
-        if (isCiRun) {
-          const ciTimeoutSessions = sessionManifests.filter((item) => item.terminationReason === 'session-timeout').length;
-          if (ciTimeoutSessions >= 2) {
-            console.error('Stopping CI fuzz loop after repeated session envelope timeouts to preserve bounded execution.');
-            break;
-          }
-        }
+        console.error('Fuzz session failed unexpectedly; restarting browser for next session:', error);
       }
       if (maxSteps && totalSteps >= maxSteps) break;
     }

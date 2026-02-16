@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       time_budget:
-        description: "Fuzz time budget (default 5m)"
+        description: "Fuzz time budget for manual runs (default 5m)"
         required: false
         default: "5m"
 
@@ -14,7 +14,7 @@ jobs:
   fuzz:
     name: Fuzz Test (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 150
     concurrency:
       group: fuzz-test-${{ github.ref }}
       cancel-in-progress: true
@@ -52,7 +52,11 @@ jobs:
           VITE_FUZZ_MODE: "1"
         run: |
           SEED=${{ github.run_id }}
-          TIME_BUDGET="${{ github.event.inputs.time_budget || '5m' }}"
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            TIME_BUDGET="2h"
+          else
+            TIME_BUDGET="${{ github.event.inputs.time_budget || '5m' }}"
+          fi
           node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget "$TIME_BUDGET" --fuzz-concurrency 2 --fuzz-platform android-phone
 
       - name: Upload fuzz artifacts
