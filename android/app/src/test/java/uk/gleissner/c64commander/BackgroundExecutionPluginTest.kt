@@ -8,7 +8,10 @@
 
 package uk.gleissner.c64commander
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import com.getcapacitor.Bridge
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -20,6 +23,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 
 @RunWith(RobolectricTestRunner::class)
 class BackgroundExecutionPluginTest {
@@ -113,5 +117,120 @@ class BackgroundExecutionPluginTest {
         // start should still resolve even with traceContext set
         plugin.start(call)
         verify(call).resolve()
+    }
+
+    @Test
+    fun loadRegistersAutoSkipReceiver() {
+        plugin.load()
+        val shadowApp = Shadows.shadowOf(context as android.app.Application)
+        val hasReceiver = shadowApp.registeredReceivers.any { wrapper ->
+            wrapper.intentFilter.hasAction(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE)
+        }
+        assertTrue("Auto-skip receiver should be registered after load()", hasReceiver)
+    }
+
+    @Test
+    fun autoSkipReceiverIgnoresWrongAction() {
+        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        receiver.onReceive(context, Intent("uk.gleissner.c64commander.WRONG"))
+    }
+
+    @Test
+    fun autoSkipReceiverIgnoresInvalidDueValues() {
+        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        val invalidIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
+            putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
+            putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, 0L)
+        }
+        receiver.onReceive(context, invalidIntent)
+    }
+
+    @Test
+    fun autoSkipReceiverAcceptsValidPayload() {
+        val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        val now = System.currentTimeMillis()
+        val validIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
+            putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, now - 1_000L)
+            putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, now)
+        }
+        receiver.onReceive(context, validIntent)
+    }
+
+    @Test
+    fun stopRejectsWhenPluginContextIsUnavailable() {
+        val pluginWithoutBridge = BackgroundExecutionPlugin()
+        val call = mock(PluginCall::class.java)
+
+        pluginWithoutBridge.stop(call)
+
+        verify(call).reject(eq("Failed to stop background execution"), any(Exception::class.java))
+    }
+
+    @Test
+    fun startRejectsWhenPluginContextGetterThrows() {
+        val throwingBridge = mock(Bridge::class.java)
+        `when`(throwingBridge.context).thenThrow(RuntimeException("bridge context unavailable"))
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, throwingBridge)
+
+        val call = mock(PluginCall::class.java)
+        val traceContext = JSObject()
+        traceContext.put("correlationId", "corr-start")
+        traceContext.put("trackInstanceId", 17)
+        traceContext.put("playlistItemId", "playlist-17")
+        traceContext.put("sourceKind", "local")
+        traceContext.put("localAccessMode", "filesystem")
+        traceContext.put("lifecycleState", "queued")
+        `when`(call.getObject("traceContext")).thenReturn(traceContext)
+
+        target.start(call)
+
+        verify(call).reject(eq("Failed to start background execution"), any(Exception::class.java))
+    }
+
+    @Test
+    fun loadHandlesReceiverRegistrationFailure() {
+        val brokenContext = mock(Context::class.java)
+        `when`(
+            brokenContext.registerReceiver(any(BroadcastReceiver::class.java), any(IntentFilter::class.java)),
+        ).thenThrow(RuntimeException("register failed"))
+
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(brokenContext)
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        target.load()
+    }
+
+    @Test
+    fun handleOnDestroyHandlesReceiverUnregisterFailure() {
+        val brokenContext = mock(Context::class.java)
+        doThrow(RuntimeException("unregister failed")).`when`(brokenContext)
+            .unregisterReceiver(any(BroadcastReceiver::class.java))
+
+        val bridge = mock(Bridge::class.java)
+        `when`(bridge.context).thenReturn(brokenContext)
+        val target = BackgroundExecutionPlugin()
+        val field = Plugin::class.java.getDeclaredField("bridge")
+        field.isAccessible = true
+        field.set(target, bridge)
+
+        val method = Plugin::class.java.getDeclaredMethod("handleOnDestroy")
+        method.isAccessible = true
+        method.invoke(target)
     }
 }

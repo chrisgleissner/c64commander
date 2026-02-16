@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.getcapacitor.Bridge
@@ -106,5 +107,38 @@ class DiagnosticsBridgePluginTest {
         val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG)
         // No extras at all — receiver should handle gracefully
         context.sendBroadcast(intent)
+    }
+
+    @Test
+    fun receiverProcessesDetailedPayloadViaDirectInvocation() {
+        val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
+            putExtra(AppLogger.EXTRA_LEVEL, "warn")
+            putExtra(AppLogger.EXTRA_MESSAGE, "native warning")
+            putExtra(AppLogger.EXTRA_COMPONENT, "Bridge")
+            putExtra(AppLogger.EXTRA_CORRELATION_ID, "corr-123")
+            putExtra(AppLogger.EXTRA_TRACK_INSTANCE_ID, "7")
+            putExtra(AppLogger.EXTRA_PLAYLIST_ITEM_ID, "p-11")
+            putExtra(AppLogger.EXTRA_SOURCE_KIND, "hvsc")
+            putExtra(AppLogger.EXTRA_LOCAL_ACCESS_MODE, "ftp")
+            putExtra(AppLogger.EXTRA_LIFECYCLE_STATE, "playing")
+            putExtra(AppLogger.EXTRA_ERROR_NAME, "IllegalStateException")
+            putExtra(AppLogger.EXTRA_ERROR_MESSAGE, "boom")
+            putExtra(AppLogger.EXTRA_ERROR_STACK, "stack")
+        }
+
+        receiver.onReceive(context, intent)
+    }
+
+    @Test
+    fun receiverIgnoresNullIntentViaDirectInvocation() {
+        val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        receiver.onReceive(context, null)
     }
 }

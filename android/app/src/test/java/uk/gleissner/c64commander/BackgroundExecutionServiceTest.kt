@@ -10,6 +10,8 @@ package uk.gleissner.c64commander
 
 import android.content.Intent
 import android.os.Build
+import android.os.Looper
+import androidx.test.core.app.ApplicationProvider
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -18,8 +20,10 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
+import org.robolectric.shadows.ShadowLooper
 import org.robolectric.android.controller.ServiceController
 import org.robolectric.annotation.Config
+import java.util.concurrent.TimeUnit
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [Build.VERSION_CODES.TIRAMISU])
@@ -165,5 +169,53 @@ class BackgroundExecutionServiceTest {
     fun onBindReturnsNull() {
         controller.create()
         assertNull("onBind should return null for a started service", service.onBind(null))
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.N])
+    fun companionStartUsesStartServiceOnPreO() {
+        setIsRunning(false)
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.start(appContext)
+
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        val started = shadowApp.nextStartedService
+        assertNotNull("Expected startService intent on pre-O", started)
+        assertEquals(BackgroundExecutionService::class.java.name, started?.component?.className)
+    }
+
+    @Test
+    @Config(sdk = [Build.VERSION_CODES.N])
+    fun updateDueAtUsesStartServiceOnPreO() {
+        val appContext = ApplicationProvider.getApplicationContext<android.content.Context>()
+
+        BackgroundExecutionService.updateDueAt(appContext, System.currentTimeMillis() + 10_000L)
+
+        val shadowApp = Shadows.shadowOf(appContext as android.app.Application)
+        val started = shadowApp.nextStartedService
+        assertNotNull("Expected updateDueAt to start service on pre-O", started)
+        assertEquals(
+            BackgroundExecutionService.ACTION_UPDATE_DUE_AT,
+            started?.action,
+        )
+    }
+
+    @Test
+    fun updateDueAtInternalFiresBroadcastWhenDueIsInPast() {
+        controller.create()
+        controller.startCommand(0, 0)
+
+        val update = Intent(BackgroundExecutionService.ACTION_UPDATE_DUE_AT)
+        update.putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, System.currentTimeMillis() - 10L)
+        service.onStartCommand(update, 0, 1)
+
+        ShadowLooper.shadowMainLooper().idleFor(50, TimeUnit.MILLISECONDS)
+
+        val broadcasts = Shadows.shadowOf(service.application as android.app.Application).broadcastIntents
+        val autoSkip = broadcasts.lastOrNull { it.action == BackgroundExecutionService.ACTION_AUTO_SKIP_DUE }
+        assertNotNull("Expected auto-skip broadcast for past due value", autoSkip)
+        assertTrue((autoSkip?.getLongExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L) ?: -1L) > 0L)
+        assertTrue((autoSkip?.getLongExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, -1L) ?: -1L) > 0L)
     }
 }

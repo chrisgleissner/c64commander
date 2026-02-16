@@ -41,7 +41,12 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
   - [🔧 Advanced Topics](#-advanced-topics)
-    - [Linux auto-update service](#linux-auto-update-service)
+    - [Web Server Details](#web-server-details)
+      - [Network password model](#network-password-model)
+      - [Web security](#web-security)
+      - [Web logging](#web-logging)
+      - [Update to a newer version](#update-to-a-newer-version)
+      - [Linux auto-update](#linux-auto-update)
   - [� Acknowledgments](#-acknowledgments)
     - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
     - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
@@ -76,7 +81,7 @@ Done.
 
 iOS builds are distributed via AltStore.
 
-1. Install **AltServer** on a Mac or Windows PC from https://altstore.io, then connect your iPhone via USB.
+1. Install **AltServer** on a Mac or Windows PC from [AltStore](https://altstore.io), then connect your iPhone via USB.
 2. In AltServer, choose **Install AltStore → [your iPhone]** and sign in with your Apple ID.
 3. Open **AltStore** on your iPhone.
 4. Download `c64commander-altstore-<version>.ipa` from the latest GitHub release and transfer it to your iPhone.
@@ -90,15 +95,19 @@ AltStore automatically refreshes installed apps in the background when your iPho
 ### Install for Web Access
 
 The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server which in turn calls your C64U via REST/FTP.
+
 - The C64 Commander web server can be hosted on Windows, Mac, or Linux.
-- Using a Raspberry Pi Zero 2W, 4B or above with at least 512MiB RAM is recommended due to its low cost and power use.
-- If desired, access can be secured via the same Network password that also protects your C64 Ultimate.
+- A Raspberry Pi Zero 2W, 4B or similar with at least 512MiB RAM is recommended due to its low cost and power use.
+- If a C64U network password is specified in the Settings, it also secures the website.
+
+> [!NOTE]
+> Web mode is intended for trusted LAN use. Do not expose it directly to the public internet.
 
 #### Docker installation
 
-- Windows (Docker Desktop): https://docs.docker.com/desktop/setup/install/windows-install/
-- macOS (Docker Desktop): https://docs.docker.com/desktop/setup/install/mac-install/
-- Linux (Docker Engine): https://docs.docker.com/engine/install/
+- Windows: [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+- macOS: [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/)
+- Linux: [Docker Engine](https://docs.docker.com/engine/install/)
 
 Supported container architectures (MVP only):
 
@@ -110,11 +119,8 @@ These images also run on Windows/macOS through Docker Desktop virtualization.
 #### Run Docker container
 
 ```bash
-docker run -d \
-  --name c64commander \
-  -p 8064:8064 \
-  -v ./c64commander-config:/config \
-  --restart unless-stopped \
+docker run -d --name c64commander -p 8064:8064 \
+  -v ./c64commander-config:/config --restart unless-stopped \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
@@ -122,45 +128,11 @@ Then open:
 
 `http://<host-ip>:8064`
 
-Raspberry Pi example (64-bit OS):
+On a Raspberry Pi, the following command ensures that Docker starts on boot:
 
-```bash
-docker run -d --name c64commander -p 8064:8064 -v /home/pi/c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
-```
-
-Ensure Docker starts on boot:
 ```bash
 sudo systemctl enable --now docker
 ```
-
-Network password model:
-
-- If no network password is configured, the UI opens directly.
-- If a network password is configured in **Settings → Device → Network password**, login is required and the server injects the password into proxied C64U requests.
-- After saving that setting, the web server persists it in `/config/web-config.json`; on the next access (or after logout), login is required with that same password.
-- Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`), so you do not re-enter the password on every request.
-
-Update to a newer version:
-
-```bash
-docker pull ghcr.io/chrisgleissner/c64commander:<version>
-docker rm -f c64commander
-docker run -d --name c64commander -p 8064:8064 -v ./c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
-```
-
-> [!WARNING]
-> Web mode is intended for trusted LAN use. Do not expose it directly to the public internet.
-
-Additional web security defaults:
-
-- Session cookies are `HttpOnly` + `SameSite=Lax`.
-- `Secure` cookies are enabled automatically when `NODE_ENV=production` (override with `WEB_COOKIE_SECURE=true|false`).
-- FTP host override is disabled by default to prevent open-proxy behavior. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted/dev setups.
-
-Web logging behavior:
-
-- Web server logs are emitted to container stdout/stderr (for Docker logs) and mirrored into the in-app diagnostics logs overlay.
-- `basic-ftp` is a runtime dependency because FTP list/read requests are executed by the web server process.
 
 ### First Connection Checklist
 
@@ -303,7 +275,34 @@ If you want to build, test, or contribute:
 
 ## 🔧 Advanced Topics
 
-### Linux auto-update service
+### Web Server Details
+
+#### Network password model
+
+- If no network password is configured, the UI opens directly.
+- If a network password is configured in **Settings → Device → Network password**, login is required and the server injects the password into proxied C64U requests.
+- After saving that setting, the web server persists it in `/config/web-config.json`; on the next access (or after logout), login is required with that same password.
+- Successful login creates an authenticated session cookie (`HttpOnly`, `SameSite=Lax`, optional `Secure`), so you do not re-enter the password on every request.
+
+#### Web security
+
+- `Secure` cookies are enabled automatically when `NODE_ENV=production` (override with `WEB_COOKIE_SECURE=true|false`).
+- FTP host override is disabled by default to prevent open-proxy behavior. Set `WEB_ALLOW_REMOTE_FTP_HOSTS=true` only in trusted/dev setups.
+
+#### Web logging
+
+- Web server logs are emitted to container stdout/stderr (for Docker logs) and mirrored into the in-app diagnostics logs overlay.
+- `basic-ftp` is a runtime dependency because FTP list/read requests are executed by the web server process.
+
+#### Update to a newer version
+
+```bash
+docker pull ghcr.io/chrisgleissner/c64commander:<version>
+docker rm -f c64commander
+docker run -d --name c64commander -p 8064:8064 -v ./c64commander-config:/config --restart unless-stopped ghcr.io/chrisgleissner/c64commander:<version>
+```
+
+#### Linux auto-update
 
 For Linux hosts (including Raspberry Pi), an updater script is available at [scripts/web-auto-update.sh](scripts/web-auto-update.sh).
 
