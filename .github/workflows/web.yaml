@@ -118,22 +118,32 @@ jobs:
           cache: npm
 
       - name: Verify publish tag format
+        id: verify_tag
         shell: bash
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG_RAW="${GITHUB_REF_NAME}"
+          TAG="${TAG_RAW#v}"
           if ! printf '%s\n' "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
-            echo "Unsupported publish tag format: $TAG"
+            echo "Unsupported publish tag format: $TAG_RAW"
             echo "Expected: X.Y.Z or X.Y.Z-rcN"
             exit 1
           fi
-          PKG_VERSION="$(node -p "require('./package.json').version")"
-          TAG_BASE="${TAG%%-rc*}"
-          if [ "$TAG_BASE" != "$PKG_VERSION" ]; then
-            echo "Tag/version mismatch: tag=$TAG package.json=$PKG_VERSION"
-            echo "Expected tag to match package version (or package version + -rcN)"
-            exit 1
+
+          IS_RC="false"
+          if printf '%s\n' "$TAG" | grep -Eq -- '-rc[0-9]+$'; then
+            IS_RC="true"
           fi
+
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG_VERSION" ] && [ "$TAG" != "${PKG_VERSION}-rc${TAG##*-rc}" ]; then
+            echo "Tag/package version differ: tag=$TAG package.json=$PKG_VERSION"
+            echo "Continuing publish because tag format is valid."
+          fi
+
+          echo "normalized_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "raw_tag=$TAG_RAW" >> "$GITHUB_OUTPUT"
+          echo "is_rc=$IS_RC" >> "$GITHUB_OUTPUT"
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
@@ -156,5 +166,6 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ steps.verify_tag.outputs.normalized_tag }}
+            ${{ steps.verify_tag.outputs.raw_tag != steps.verify_tag.outputs.normalized_tag && format('{0}:{1}', env.IMAGE_NAME, steps.verify_tag.outputs.raw_tag) || '' }}
+            ${{ steps.verify_tag.outputs.is_rc != 'true' && format('{0}:latest', env.IMAGE_NAME) || '' }}
