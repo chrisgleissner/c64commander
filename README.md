@@ -79,9 +79,9 @@ Done.
 
 ### Install on iOS
 
-iOS builds are distributed via AltStore.
+iOS builds are distributed via [AltStore](https://altstore.io/):
 
-1. Install **AltServer** on a Mac or Windows PC from [AltStore](https://altstore.io), then connect your iPhone via USB.
+1. Install **AltServer** by following the instructions for [MacOS](https://faq.altstore.io/altstore-classic/how-to-install-altstore-macos) or [Windows](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows), then connect your iPhone via USB.
 2. In AltServer, choose **Install AltStore → [your iPhone]** and sign in with your Apple ID.
 3. Open **AltStore** on your iPhone.
 4. Download `c64commander-altstore-<version>.ipa` from the latest GitHub release and transfer it to your iPhone.
