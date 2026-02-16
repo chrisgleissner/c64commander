@@ -118,17 +118,18 @@ jobs:
           cache: npm
 
       - name: Verify publish tag format
+        shell: bash
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME#v}"
-          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+          if ! printf '%s\n' "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$'; then
             echo "Unsupported publish tag format: $TAG"
             echo "Expected: X.Y.Z or X.Y.Z-rcN"
             exit 1
           fi
-          PKG_VERSION="$(node -p \"require('./package.json').version\")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
           TAG_BASE="${TAG%%-rc*}"
-          if [[ "$TAG_BASE" != "$PKG_VERSION" ]]; then
+          if [ "$TAG_BASE" != "$PKG_VERSION" ]; then
             echo "Tag/version mismatch: tag=$TAG package.json=$PKG_VERSION"
             echo "Expected tag to match package version (or package version + -rcN)"
             exit 1
