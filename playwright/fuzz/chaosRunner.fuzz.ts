@@ -1878,14 +1878,20 @@ test.describe('Fuzz Test', () => {
           recoveryAttempts = 0;
           structuredRecoveryAttempts = 0;
           recoveryLadderAttempts = 0;
-          logInteraction(`s=${totalSteps}\ta=visual\tstagnation ${visualStagnantMs}ms`);
+          server.setFaultMode('none');
+          server.setLatencyMs(null);
+          currentFaultMode = 'none';
+          logInteraction(`s=${totalSteps}\ta=visual\tstagnation ${visualStagnantMs}ms, faults-cleared`);
         }
         if (mode === 'chaos' && now - lastProgressAt >= progressTimeoutMs) {
           mode = 'recovery';
           recoveryAttempts = 0;
           structuredRecoveryAttempts = 0;
           recoveryLadderAttempts = 0;
-          logInteraction(`s=${totalSteps}\ta=progress\twatchdog ${now - lastProgressAt}ms`);
+          server.setFaultMode('none');
+          server.setLatencyMs(null);
+          currentFaultMode = 'none';
+          logInteraction(`s=${totalSteps}\ta=progress\twatchdog ${now - lastProgressAt}ms, faults-cleared`);
         }
 
         const backoffUntil = backendTracker.getBackoffUntilMs();
@@ -1981,7 +1987,10 @@ test.describe('Fuzz Test', () => {
           }
           if (!action && pageUnresponsive) {
             // Page is unresponsive — jump directly to aggressive recovery (force-home)
-            logInteraction(`s=${totalSteps}\ta=session\tpage-unresponsive, force-home recovery`);
+            server.setFaultMode('none');
+            server.setLatencyMs(null);
+            currentFaultMode = 'none';
+            logInteraction(`s=${totalSteps}\ta=session\tpage-unresponsive, force-home recovery, faults-cleared`);
             mode = 'recovery';
             recoveryAttempts = 0;
             structuredRecoveryAttempts = 2; // skip structured recovery; it can't help a frozen page
@@ -2083,7 +2092,10 @@ test.describe('Fuzz Test', () => {
             break;
           }
           // Reset recovery ladder and navigate home for a fresh start
-          logInteraction(`s=${totalSteps}\ta=recovery\tcycle-reset cycle=${recoveryCycleCount} navigating-home`);
+          server.setFaultMode('none');
+          server.setLatencyMs(null);
+          currentFaultMode = 'none';
+          logInteraction(`s=${totalSteps}\ta=recovery\tcycle-reset cycle=${recoveryCycleCount} navigating-home, faults-cleared`);
           recoveryLadderAttempts = 0;
           structuredRecoveryAttempts = 0;
           await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
@@ -2098,7 +2110,10 @@ test.describe('Fuzz Test', () => {
             recoveryAttempts = 0;
             structuredRecoveryAttempts = 0;
             recoveryLadderAttempts = 0;
-            logInteraction(`s=${totalSteps}\ta=session\tno-progress->recovery (${noProgressCount})`);
+            server.setFaultMode('none');
+            server.setLatencyMs(null);
+            currentFaultMode = 'none';
+            logInteraction(`s=${totalSteps}\ta=session\tno-progress->recovery (${noProgressCount}), faults-cleared`);
             noProgressCount = 0;
           } else {
             logInteraction(`s=${totalSteps}\ta=session\tno-progress`);
@@ -2122,7 +2137,10 @@ test.describe('Fuzz Test', () => {
             break;
           }
           // Reset recovery ladder and navigate home
-          logInteraction(`s=${totalSteps}\ta=recovery\tvisual-cycle-reset cycle=${recoveryCycleCount} navigating-home`);
+          server.setFaultMode('none');
+          server.setLatencyMs(null);
+          currentFaultMode = 'none';
+          logInteraction(`s=${totalSteps}\ta=recovery\tvisual-cycle-reset cycle=${recoveryCycleCount} navigating-home, faults-cleared`);
           recoveryLadderAttempts = 0;
           structuredRecoveryAttempts = 0;
           await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
