@@ -1,7 +1,7 @@
 ---
 name: c64-coverage
 description: Raise Codecov-reported test coverage for C64 Commander to a defined target without duplicating tests or degrading signal quality.
-argument-hint: [target-percentage]
+argument-hint: target-percentage
 user-invokable: true
 disable-model-invocation: true
 ---
