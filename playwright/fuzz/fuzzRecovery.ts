@@ -21,6 +21,11 @@ export type RecoveryResult = {
   clicked: boolean;
 };
 
+const isClosedTargetError = (error: unknown) => {
+  const message = (error as Error)?.message || String(error);
+  return /Target page, context or browser has been closed|Execution context was destroyed|Browser has been closed|context has been closed/i.test(message);
+};
+
 const dialogSelector = '[role="dialog"], [data-radix-dialog-content], [data-state="open"][role="dialog"]';
 
 const resolveDialogText = async (element: ElementHandle<HTMLElement>) =>
@@ -91,7 +96,16 @@ const pickPrimaryButton = async (buttons: ElementHandle<HTMLElement>[]) => {
   const negative = /(cancel|close|dismiss|back|no)/i;
   const scored: Array<{ button: ElementHandle<HTMLElement>; score: number; label: string }> = [];
   for (const button of buttons) {
-    if (!(await button.isVisible())) continue;
+    let visible = false;
+    try {
+      visible = await button.isVisible();
+    } catch (error) {
+      if (isClosedTargetError(error)) {
+        return null;
+      }
+      continue;
+    }
+    if (!visible) continue;
     if (await isElementDisabled(button)) continue;
     const label = await resolveButtonText(button);
     let score = 0;
@@ -109,8 +123,17 @@ export const attemptStructuredRecovery = async (
   page: Page,
   context: RecoveryContext,
 ): Promise<RecoveryResult> => {
-  const dialog = await page.$(dialogSelector);
-  const scope = dialog ?? (await page.$('main')) ?? null;
+  let dialog: ElementHandle<HTMLElement> | null = null;
+  let scope: ElementHandle<HTMLElement> | null = null;
+  try {
+    dialog = (await page.$(dialogSelector)) as ElementHandle<HTMLElement> | null;
+    scope = dialog ?? ((await page.$('main')) as ElementHandle<HTMLElement> | null) ?? null;
+  } catch (error) {
+    if (isClosedTargetError(error)) {
+      return { recovered: false, log: 'recovery skip (page/context closed)', filledValues: [], clicked: false };
+    }
+    throw error;
+  }
   if (!scope) {
     return { recovered: false, log: 'recovery skip (no scope)', filledValues: [], clicked: false };
   }
@@ -128,7 +151,16 @@ export const attemptStructuredRecovery = async (
 
   for (let index = 0; index < inputs.length; index += 1) {
     const input = inputs[index];
-    if (!(await input.isVisible())) continue;
+    let visible = false;
+    try {
+      visible = await input.isVisible();
+    } catch (error) {
+      if (isClosedTargetError(error)) {
+        return { recovered: false, log: 'recovery skip (page/context closed)', filledValues, clicked: false };
+      }
+      continue;
+    }
+    if (!visible) continue;
     const value = await input.evaluate((node) => {
       if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
         return node.value || '';

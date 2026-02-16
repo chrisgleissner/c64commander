@@ -641,8 +641,8 @@ test.describe('Fuzz Test', () => {
     const infraMode = !FUZZ_ENABLED;
     const seed = infraMode ? 4242 : toNumber(process.env.FUZZ_SEED) ?? Date.now();
     const maxStepsInput = toNumber(process.env.FUZZ_MAX_STEPS);
-    // Default time budget for fuzz mode: 10 minutes if not specified
-    const defaultTimeBudgetMs = SHORT_FUZZ_DEFAULTS ? 120_000 : 10 * 60 * 1000;
+    // Default time budget for fuzz mode: 5 minutes if not specified
+    const defaultTimeBudgetMs = SHORT_FUZZ_DEFAULTS ? 120_000 : 5 * 60 * 1000;
     const timeBudgetMs = infraMode ? 20_000 : (toNumber(process.env.FUZZ_TIME_BUDGET_MS) ?? defaultTimeBudgetMs);
     const maxSteps = infraMode ? 10 : maxStepsInput ?? (timeBudgetMs ? undefined : (SHORT_FUZZ_DEFAULTS ? 35 : 500));
     const progressTimeoutMs = infraMode
@@ -657,8 +657,9 @@ test.describe('Fuzz Test', () => {
       ? 30_000
       : Math.max(15_000, Math.min(60_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) / 2)));
     const sessionTimeoutMs = Math.max(30_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
-    // Grace period is now much shorter to prevent long hangs
-    const timeoutGraceMs = infraMode ? 30_000 : 120_000; // bounded grace for 5m fuzz + artifact finalization
+    const timeoutGraceMs = infraMode
+      ? 30_000
+      : (isCiRun ? 60_000 : 120_000);
     const baseTimeout = infraMode ? 20_000 : (timeBudgetMs ?? defaultTimeBudgetMs);
     const timeoutMs = baseTimeout + timeoutGraceMs;
     test.setTimeout(timeoutMs);
@@ -1843,15 +1844,32 @@ test.describe('Fuzz Test', () => {
           let usedStructuredRecovery = false;
           if (structuredRecoveryAttempts < 2) {
             structuredRecoveryAttempts += 1;
-            const structured = await attemptStructuredRecovery(page, {
-              seed,
-              sessionId,
-              attempt: structuredRecoveryAttempts,
-            });
-            if (structured.recovered) {
-              recoverySteps.push('structured-recovery');
-              logInteraction(`s=${totalSteps}\ta=recovery\tstructured ${structured.log}`);
-              usedStructuredRecovery = true;
+            try {
+              const structured = await attemptStructuredRecovery(page, {
+                seed,
+                sessionId,
+                attempt: structuredRecoveryAttempts,
+              });
+              if (structured.recovered) {
+                recoverySteps.push('structured-recovery');
+                logInteraction(`s=${totalSteps}\ta=recovery\tstructured ${structured.log}`);
+                usedStructuredRecovery = true;
+              }
+            } catch (error) {
+              if (isClosedTargetError(error)) {
+                logInteraction(`s=${totalSteps}\ta=recovery\tstructured page-closed`);
+                recordIssueOnce({
+                  severity: 'crash',
+                  message: (error as Error)?.message || 'Page/context closed during structured recovery.',
+                  source: 'session.page.closed',
+                  stack: (error as Error)?.stack,
+                  interactionIndex: totalSteps,
+                  lastInteractions: interactions.slice(-lastInteractionCount),
+                });
+                terminationReason = 'issue';
+                break;
+              }
+              throw error;
             }
           }
 
