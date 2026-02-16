@@ -886,12 +886,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: cd android && ./gradlew bundleRelease
 
-      - name: Upload APK artifact (debug)
-        uses: actions/upload-artifact@v4
-        with:
-          name: c64commander-debug-apk
-          path: android/app/build/outputs/apk/debug/c64commander-${{ env.APP_VERSION }}-debug.apk
-
       - name: Rename release APK for publishing
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         run: |
@@ -972,6 +966,15 @@ jobs:
         with:
           name: c64commander-release-aab
           path: artifacts/release-aab
+
+      - name: Validate release artifact filenames
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
+        run: |
+          set -euo pipefail
+          test -f "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk"
+          test -f "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk.sha256"
+          test -f "artifacts/release-aab/c64commander-${APP_VERSION}-android-play.aab"
+          ! find artifacts -type f | grep -Ei '(debug|unsigned|altstore|app-release\.aab)'
 
       - name: Upload release APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'

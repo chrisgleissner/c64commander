@@ -612,15 +612,15 @@ jobs:
             cd ios/build
             zip -qry "${IPA_BASENAME}.ipa" Payload
           )
-          shasum -a 256 "ios/build/${IPA_BASENAME}.ipa" | awk '{print $1}' > "ios/build/${IPA_BASENAME}.ipa.sha256"
+          sha256sum "ios/build/${IPA_BASENAME}.ipa" > "ios/build/${IPA_BASENAME}.ipa.sha256"
 
       - name: Upload iOS IPA artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
           path: |
-            ios/build/c64commander-*-ios.ipa
-            ios/build/c64commander-*-ios.ipa.sha256
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
           if-no-files-found: error
 
       - name: Publish iOS IPA on tags
@@ -628,8 +628,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ios/build/c64commander-*-ios.ipa
-            ios/build/c64commander-*-ios.ipa.sha256
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
 
   ios-package-paid:
     name: iOS | Package paid signing

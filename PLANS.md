@@ -1,78 +1,42 @@
 # Release Artifact Naming Standardization Plan
 
 ## Objective
-Implement a clean, production-grade artifact naming scheme for GitHub Releases.
+Standardize public GitHub Release artifact names for Android and iOS and remove internal/CI-style names from published assets.
 
-## Target Artifact Names
+## Required Public Artifact Names
 - `c64commander-<version>-android.apk`
 - `c64commander-<version>-android.apk.sha256`
 - `c64commander-<version>-android-play.aab`
 - `c64commander-<version>-ios.ipa`
 - `c64commander-<version>-ios.ipa.sha256`
 
-## Artifacts to Exclude from Public Releases
-- Debug APKs
-- `app-release.aab` (rename to standardized name)
-- Any artifact containing "debug", "unsigned", or tool-specific names like "altstore"
-
-## Tasks
-
-### 1. Locate Build Outputs
-- [x] Identify Android APK build output location
-- [x] Identify Android AAB build output location
-- [x] Identify iOS IPA build output location
-- [x] Document current artifact names
-
-### 2. Analyze CI Workflows
-- [x] Find APK build workflow
-- [x] Find AAB build workflow
-- [x] Find IPA build workflow
-- [x] Find release upload workflow
-
-### 3. Modify CI Workflows
-- [x] Add APK rename step: `c64commander-${VERSION}-android.apk`
-- [x] Add AAB rename step: `c64commander-${VERSION}-android-play.aab`
-- [x] Add IPA rename step: `c64commander-${VERSION}-ios.ipa`
-- [x] Add SHA256 checksum generation for each artifact
-
-### 4. Filter Release Artifacts
-- [x] Exclude debug APKs from release uploads
-- [x] Exclude files containing "debug" or "unsigned"
-- [x] Remove old `app-release.aab` naming
-
-### 5. Update Documentation
-- [x] Update README if artifact names are referenced (not needed - uses generic terms)
-
-### 6. Validation
-- [ ] Verify artifact names match required format
-- [ ] Verify no debug artifacts in release
-- [ ] Verify checksums are correct
-
 ## Constraints
-- Do not change versioning semantics
-- Do not change signing configuration
-- Do not modify build contents
-- Only change artifact naming and release packaging
+- Keep versioning semantics unchanged
+- Keep signing configuration unchanged
+- Keep build contents unchanged
+- Change only artifact naming and release packaging
+- Keep CI logic intact unless required for renaming/filtering
 
-## Implementation Summary
+## Execution Tasks
+1. Locate Android and iOS build outputs.
+2. Identify current artifact names and upload paths.
+3. Modify CI workflows to rename APK, AAB, and IPA before upload.
+4. Remove debug artifacts from release publishing.
+5. Exclude artifacts containing `debug` or `unsigned` from published release assets.
+6. Update checksum generation logic to:
+   - `sha256sum <artifact> > <artifact>.sha256`
+7. Ensure release uploads publish only standardized artifacts.
+8. Update README references if artifact names are documented.
+9. Validate dry-run outputs and checksum correctness.
 
-### Android Workflow Changes (`.github/workflows/android.yaml`)
-
-1. **android-packaging job**:
-   - Added rename step for release APK: `c64commander-${APP_VERSION}-android.apk`
-   - Added SHA256 checksum generation for APK
-   - Added rename step for AAB: `c64commander-${APP_VERSION}-android-play.aab`
-   - Updated artifact upload paths
-
-2. **release-artifacts job**:
-   - Removed debug APK download and upload steps
-   - Updated release APK path to use new naming
-   - Updated AAB path to use new naming
-   - Added SHA256 checksum file to release upload
-
-### iOS Workflow Changes (`.github/workflows/ios.yaml`)
-
-1. **ios-package-altstore job** (renamed to "iOS | Package IPA"):
-   - Changed IPA naming from `c64commander-${APP_VERSION}-altstore-unsigned.ipa` to `c64commander-${APP_VERSION}-ios.ipa`
-   - Updated artifact name from `ios-altstore-unsigned-ipa` to `ios-ipa`
-   - SHA256 checksum already generated (kept existing logic)
+## Validation Steps
+- Run web build/test checks required by repository policy.
+- Validate workflow YAML references only standardized release filenames.
+- Confirm no uploaded release asset path contains `debug`, `unsigned`, `altstore`, or `app-release.aab`.
+- Confirm checksum commands use `sha256sum <artifact> > <artifact>.sha256`.
+- Confirm final expected release asset set is exactly:
+  - `c64commander-<version>-android.apk`
+  - `c64commander-<version>-android.apk.sha256`
+  - `c64commander-<version>-android-play.aab`
+  - `c64commander-<version>-ios.ipa`
+  - `c64commander-<version>-ios.ipa.sha256`
