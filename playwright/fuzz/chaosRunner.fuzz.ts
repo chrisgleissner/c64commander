@@ -355,20 +355,27 @@ const showInteractionPulse = async (
 };
 
 const closeBlockingOverlay = async (page: import('@playwright/test').Page) => {
-  const toastViewport = await page.$('[data-radix-toast-viewport], [role="region"][aria-label*="Notifications"]');
-  if (toastViewport) {
-    await toastViewport.evaluate((node) => {
-      const el = node as HTMLElement;
-      el.style.pointerEvents = 'none';
-      el.style.opacity = '0';
-    });
-    return false;
+  try {
+    const toastViewport = await page.$('[data-radix-toast-viewport], [role="region"][aria-label*="Notifications"]');
+    if (toastViewport) {
+      await toastViewport.evaluate((node) => {
+        const el = node as HTMLElement;
+        el.style.pointerEvents = 'none';
+        el.style.opacity = '0';
+      });
+      return false;
+    }
+    const overlay = await page.$('[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]');
+    if (!overlay) return false;
+    await page.keyboard.press('Escape').catch(() => { });
+    await page.waitForTimeout(50);
+    return true;
+  } catch (error) {
+    if (isClosedTargetError(error)) {
+      return false;
+    }
+    throw error;
   }
-  const overlay = await page.$('[data-state="open"][data-aria-hidden="true"], [data-state="open"][aria-hidden="true"]');
-  if (!overlay) return false;
-  await page.keyboard.press('Escape').catch(() => { });
-  await page.waitForTimeout(50);
-  return true;
 };
 
 const jitterClick = async (
