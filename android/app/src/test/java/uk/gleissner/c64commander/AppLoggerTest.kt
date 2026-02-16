@@ -63,8 +63,10 @@ class AppLoggerTest {
     }
 
     @Test
-    fun emitsNothingWhenContextIsNull() {
+    fun emitsLogcatButNoBroadcastWhenContextIsNull() {
         ShadowLog.clear()
+        val appContext = ApplicationProvider.getApplicationContext<Context>() as android.app.Application
+        val initialBroadcastCount = Shadows.shadowOf(appContext).broadcastIntents.size
 
         AppLogger.debug(null, "AppLoggerTest", "debug", "AppLoggerTest")
         AppLogger.info(null, "AppLoggerTest", "info", "AppLoggerTest")
@@ -73,5 +75,7 @@ class AppLoggerTest {
 
         val logs = ShadowLog.getLogsForTag("AppLoggerTest")
         assertTrue(logs.isNotEmpty())
+        val finalBroadcastCount = Shadows.shadowOf(appContext).broadcastIntents.size
+        assertEquals(initialBroadcastCount, finalBroadcastCount)
     }
 }

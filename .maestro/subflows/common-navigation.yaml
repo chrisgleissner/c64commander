@@ -30,28 +30,28 @@ tags:
             text: "Home"
           timeout: ${TIMEOUT}
 - tapOn:
-    point: "25%,95%"
+    text: "Play"
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}
 - assertVisible: "Playlist"
 - takeScreenshot: play-tab
 - tapOn:
-    point: "75%,95%"
+    text: "Settings"
 - extendedWaitUntil:
     visible: "Settings"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Settings"
 - takeScreenshot: settings-tab
 - tapOn:
-    point: "58%,95%"
+    text: "Config"
 - extendedWaitUntil:
     visible: "Config"
     timeout: ${SHORT_TIMEOUT}
 - assertVisible: "Config"
 - takeScreenshot: config-tab
 - tapOn:
-    point: "8%,95%"
+    text: "Home"
 - extendedWaitUntil:
     visible: "Home"
     timeout: ${SHORT_TIMEOUT}

@@ -21,6 +21,8 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
@@ -131,31 +133,38 @@ class BackgroundExecutionPluginTest {
 
     @Test
     fun autoSkipReceiverIgnoresWrongAction() {
+        val target = spy(plugin)
         val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(plugin) as BroadcastReceiver
+        val receiver = receiverField.get(target) as BroadcastReceiver
 
         receiver.onReceive(context, Intent("uk.gleissner.c64commander.WRONG"))
+
+        verify(target, never()).notifyListeners(eq("backgroundAutoSkipDue"), any(JSObject::class.java))
     }
 
     @Test
     fun autoSkipReceiverIgnoresInvalidDueValues() {
+        val target = spy(plugin)
         val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(plugin) as BroadcastReceiver
+        val receiver = receiverField.get(target) as BroadcastReceiver
 
         val invalidIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
             putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
             putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, 0L)
         }
         receiver.onReceive(context, invalidIntent)
+
+        verify(target, never()).notifyListeners(eq("backgroundAutoSkipDue"), any(JSObject::class.java))
     }
 
     @Test
     fun autoSkipReceiverAcceptsValidPayload() {
+        val target = spy(plugin)
         val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(plugin) as BroadcastReceiver
+        val receiver = receiverField.get(target) as BroadcastReceiver
 
         val now = System.currentTimeMillis()
         val validIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
@@ -163,6 +172,13 @@ class BackgroundExecutionPluginTest {
             putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, now)
         }
         receiver.onReceive(context, validIntent)
+
+        val payloadCaptor = ArgumentCaptor.forClass(JSObject::class.java)
+        verify(target).notifyListeners(eq("backgroundAutoSkipDue"), payloadCaptor.capture())
+        val payload = payloadCaptor.value
+        assertTrue(payload.getLong("dueAtMs") > 0L)
+        assertTrue(payload.getLong("firedAtMs") > 0L)
+        assertTrue(payload.getLong("firedAtMs") >= payload.getLong("dueAtMs"))
     }
 
     @Test

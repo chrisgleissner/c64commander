@@ -122,6 +122,13 @@ jobs:
             echo "Expected: X.Y.Z or X.Y.Z-rcN"
             exit 1
           fi
+          PKG_VERSION="$(node -p \"require('./package.json').version\")"
+          TAG_BASE="${TAG%%-rc*}"
+          if [[ "$TAG_BASE" != "$PKG_VERSION" ]]; then
+            echo "Tag/version mismatch: tag=$TAG package.json=$PKG_VERSION"
+            echo "Expected tag to match package version (or package version + -rcN)"
+            exit 1
+          fi
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3

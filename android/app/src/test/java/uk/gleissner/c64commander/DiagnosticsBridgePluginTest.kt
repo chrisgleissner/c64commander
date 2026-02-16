@@ -12,12 +12,15 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.getcapacitor.Bridge
+import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
@@ -111,9 +114,10 @@ class DiagnosticsBridgePluginTest {
 
     @Test
     fun receiverProcessesDetailedPayloadViaDirectInvocation() {
+        val target = spy(plugin)
         val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(plugin) as BroadcastReceiver
+        val receiver = receiverField.get(target) as BroadcastReceiver
 
         val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
             putExtra(AppLogger.EXTRA_LEVEL, "warn")
@@ -131,14 +135,32 @@ class DiagnosticsBridgePluginTest {
         }
 
         receiver.onReceive(context, intent)
+
+        val payloadCaptor = ArgumentCaptor.forClass(JSObject::class.java)
+        verify(target).notifyListeners(eq("diagnosticsLog"), payloadCaptor.capture())
+        val payload = payloadCaptor.value
+        assertEquals("warn", payload.getString("level"))
+        assertEquals("native warning", payload.getString("message"))
+        val details = payload.getJSObject("details")
+        assertNotNull(details)
+        assertEquals("Bridge", details?.getString("component"))
+        assertEquals("native", details?.getString("origin"))
+        assertEquals("corr-123", details?.getString("correlationId"))
+        val error = details?.getJSObject("error")
+        assertNotNull(error)
+        assertEquals("IllegalStateException", error?.getString("name"))
+        assertEquals("boom", error?.getString("message"))
     }
 
     @Test
     fun receiverIgnoresNullIntentViaDirectInvocation() {
+        val target = spy(plugin)
         val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(plugin) as BroadcastReceiver
+        val receiver = receiverField.get(target) as BroadcastReceiver
 
         receiver.onReceive(context, null)
+
+        verify(target, never()).notifyListeners(eq("diagnosticsLog"), any(JSObject::class.java))
     }
 }
