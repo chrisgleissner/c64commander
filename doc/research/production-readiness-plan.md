@@ -325,7 +325,7 @@ Primary modules:
 1. `ios/App/App/NativePlugins.swift`
 2. `ios/App/App/Info.plist`
 3. `ios/App/App/AppDelegate.swift`
-4. `.github/workflows/ios-ci.yaml`
+4. `.github/workflows/ios.yaml`
 
 Actions:
 

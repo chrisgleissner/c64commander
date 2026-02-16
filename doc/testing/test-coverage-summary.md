@@ -29,7 +29,7 @@
 
 4. **✅ Codecov Integration**
    - Created `codecov.yml` with appropriate configuration
-   - Updated `.github/workflows/android-apk.yaml` to:
+   - Updated `.github/workflows/android.yaml` to:
      - Run unit tests with coverage before E2E tests
      - Upload coverage to Codecov after test completion
    - Added `@vitest/coverage-v8@3.2.4` to devDependencies
@@ -112,7 +112,7 @@
 3. **eslint.config.js**
    - Added ignores for `coverage/**` and `playwright-report/**`
 
-4. **.github/workflows/android-apk.yaml**
+4. **.github/workflows/android.yaml**
    - Added unit test coverage step before E2E tests
    - Added Codecov upload step after tests
    - Configured to upload lcov.info on every run

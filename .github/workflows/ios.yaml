@@ -1,4 +1,4 @@
-name: iOS CI
+name: ios
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ios-ci-${{ github.ref }}
+  group: ios-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

@@ -43,7 +43,7 @@ Rather than compromise the existing stable test suite or deliver failing tests, 
 
 **Status:** ✅ Complete
 
-- Updated `.github/workflows/android-apk.yaml`
+- Updated `.github/workflows/android.yaml`
 - Changed artifact upload from `test-results/evidence` to `test-results/**`
 - Ensures full test results (PNGs, WEBMs, traces) are captured and downloadable
 
@@ -127,7 +127,7 @@ Some tests had flaky behavior or timing sensitivity that would fail CI randomly.
 
 ### CI Configuration
 
-- Modified `.github/workflows/android-apk.yaml`
+- Modified `.github/workflows/android.yaml`
 - Artifact upload: `test-results/**`
 - Artifact name: `playwright-test-results`
 - Upload condition: `if: always()` (captures failures too)
@@ -360,7 +360,7 @@ const shuffleCheckbox = page.locator('div:has(span:text-is("Shuffle"))').getByRo
 
 ## CI Configuration Updates
 
-**File:** `.github/workflows/android-apk.yaml`
+**File:** `.github/workflows/android.yaml`
 
 **Change:**
 

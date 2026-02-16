@@ -1,4 +1,4 @@
-name: Web CI
+name: web
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: web-ci-${{ github.ref }}
+  group: web-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

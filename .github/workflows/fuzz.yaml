@@ -1,9 +1,6 @@
-name: Fuzz Test (Nightly)
+name: fuzz
 
 on:
-  push:
-    branches:
-      - test/improve-coverage
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:

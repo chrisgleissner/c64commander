@@ -1,4 +1,4 @@
-name: Android CI
+name: android
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: android-ci-${{ github.ref }}
+  group: android-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
