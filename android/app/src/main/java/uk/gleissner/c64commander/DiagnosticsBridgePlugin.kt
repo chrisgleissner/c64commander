@@ -17,7 +17,7 @@ import com.getcapacitor.Plugin
 import com.getcapacitor.annotation.CapacitorPlugin
 
 @CapacitorPlugin(name = "DiagnosticsBridge")
-class DiagnosticsBridgePlugin : Plugin() {
+open class DiagnosticsBridgePlugin : Plugin() {
   private val logTag = "DiagnosticsBridgePlugin"
 
   private val diagnosticsReceiver = object : BroadcastReceiver() {

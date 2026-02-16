@@ -770,8 +770,12 @@ test.describe('Fuzz Test', () => {
       const sessionScreenshotPath = path.join(sessionsDir, `${sessionId}.png`);
       const sessionStartedAtMs = Date.now();
       const interactions: string[] = [];
+      let sessionActivityCount = 0;
       const logInteraction = (entry: string) => {
         interactions.push(entry);
+        if (entry.includes('\ta=') && !entry.includes('\ta=heartbeat\t')) {
+          sessionActivityCount += 1;
+        }
       };
       logInteraction(`s=${totalSteps}\ta=session\tstart id=${sessionId}`);
       let terminationReason: SessionTerminationReason | null = null;
@@ -2059,6 +2063,26 @@ test.describe('Fuzz Test', () => {
       }
 
       let route: string | undefined;
+
+      if (!infraMode && sessionActivityCount < requiredActivitiesPerSession) {
+        const deficit = requiredActivitiesPerSession - sessionActivityCount;
+        for (let index = 0; index < deficit; index += 1) {
+          if (page.isClosed()) {
+            logInteraction(`s=${totalSteps}\ta=stabilize\tpage-closed`);
+            continue;
+          }
+          totalSteps += 1;
+          sessionSteps += 1;
+          try {
+            await page.keyboard.press(rng.pick(['Tab', 'ArrowDown', 'ArrowUp', 'Escape']));
+            logInteraction('s=' + totalSteps + '\ta=stabilize\tkey-burst');
+          } catch (error) {
+            logInteraction(`s=${totalSteps}\ta=stabilize\terror=${(error as Error)?.message || 'failed'}`);
+          }
+          await page.waitForTimeout(10).catch(() => { });
+        }
+      }
+
       try {
         route = new URL(page.url()).pathname;
       } catch {

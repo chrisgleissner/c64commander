@@ -21,21 +21,29 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 
+/** Test-only subclass that captures notifyListeners calls for verification. */
+private open class TestableBackgroundExecutionPlugin : BackgroundExecutionPlugin() {
+    val notifyListenersCalls = mutableListOf<Pair<String?, JSObject?>>()
+
+    public override fun notifyListeners(eventName: String?, data: JSObject?) {
+        notifyListenersCalls.add(Pair(eventName, data))
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 class BackgroundExecutionPluginTest {
-    private lateinit var plugin: BackgroundExecutionPlugin
+    private lateinit var plugin: TestableBackgroundExecutionPlugin
     private lateinit var context: Context
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        plugin = BackgroundExecutionPlugin()
+        plugin = TestableBackgroundExecutionPlugin()
         injectBridge(plugin, context)
         // Ensure the service is stopped before each test
         BackgroundExecutionService.stop(context)
@@ -133,49 +141,54 @@ class BackgroundExecutionPluginTest {
 
     @Test
     fun autoSkipReceiverIgnoresWrongAction() {
-        val target = spy(plugin)
+        plugin.load()
         val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(target) as BroadcastReceiver
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
 
+        plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, Intent("uk.gleissner.c64commander.WRONG"))
 
-        verify(target, never()).notifyListeners(eq("backgroundAutoSkipDue"), any(JSObject::class.java))
+        assertTrue("notifyListeners should not be called for wrong action",
+            plugin.notifyListenersCalls.none { it.first == "backgroundAutoSkipDue" })
     }
 
     @Test
     fun autoSkipReceiverIgnoresInvalidDueValues() {
-        val target = spy(plugin)
+        plugin.load()
         val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(target) as BroadcastReceiver
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
 
         val invalidIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
             putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, -1L)
             putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, 0L)
         }
+        plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, invalidIntent)
 
-        verify(target, never()).notifyListeners(eq("backgroundAutoSkipDue"), any(JSObject::class.java))
+        assertTrue("notifyListeners should not be called for invalid due values",
+            plugin.notifyListenersCalls.none { it.first == "backgroundAutoSkipDue" })
     }
 
     @Test
     fun autoSkipReceiverAcceptsValidPayload() {
-        val target = spy(plugin)
+        plugin.load()
         val receiverField = BackgroundExecutionPlugin::class.java.getDeclaredField("autoSkipReceiver")
         receiverField.isAccessible = true
-        val receiver = receiverField.get(target) as BroadcastReceiver
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
 
         val now = System.currentTimeMillis()
         val validIntent = Intent(BackgroundExecutionService.ACTION_AUTO_SKIP_DUE).apply {
             putExtra(BackgroundExecutionService.EXTRA_DUE_AT_MS, now - 1_000L)
             putExtra(BackgroundExecutionService.EXTRA_FIRED_AT_MS, now)
         }
+        plugin.notifyListenersCalls.clear()
         receiver.onReceive(context, validIntent)
 
-        val payloadCaptor = ArgumentCaptor.forClass(JSObject::class.java)
-        verify(target).notifyListeners(eq("backgroundAutoSkipDue"), payloadCaptor.capture())
-        val payload = payloadCaptor.value
+        val calls = plugin.notifyListenersCalls.filter { it.first == "backgroundAutoSkipDue" }
+        assertEquals("notifyListeners should be called once", 1, calls.size)
+        val payload = calls[0].second!!
         assertTrue(payload.getLong("dueAtMs") > 0L)
         assertTrue(payload.getLong("firedAtMs") > 0L)
         assertTrue(payload.getLong("firedAtMs") >= payload.getLong("dueAtMs"))

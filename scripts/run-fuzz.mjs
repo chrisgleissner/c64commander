@@ -93,7 +93,7 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
     env.FUZZ_PROGRESS_TIMEOUT_MS = '4000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(180_000, Math.floor(budgetMs * 0.8)));
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs / 3)));
   }
   if (!env.FUZZ_MIN_SESSION_STEPS) {
     env.FUZZ_MIN_SESSION_STEPS = '20';
