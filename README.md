@@ -23,8 +23,8 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
     - [Install for Web Access](#install-for-web-access)
-      - [Docker installation](#docker-installation)
-      - [Run Docker container](#run-docker-container)
+      - [Docker installation](#install-docker)
+      - [Run the container](#run-the-container)
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
@@ -64,83 +64,69 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 - **Manage disks efficiently**: Mount, unmount, and handle drive workflows with fewer steps.
 - **Troubleshoot with confidence**: Inspect logs, traces, and activity when behavior needs a closer look.
 
-
 ## 🚀 Quick Start
 
 ### Install on Android
 
-1. Download the latest C64 Commander **APK file** from the [GitHub Releases page](https://github.com/chrisgleissner/c64commander/releases).
-2. Open the downloaded APK file.
-3. Allow installs from unknown sources if prompted.
-4. Tap **Install**.
-5. Launch C64 Commander.
+1.  Download the latest **APK** (e.g. `c64commander-0.5.0-android.apk`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+2.  Open the APK.
+3.  Allow installs from unknown sources if prompted.
+4.  Tap **Install** and launch C64 Commander.
 
 ### Install on iOS
 
-1. [Set up SideStore](https://docs.sidestore.io/)
-2. Download the latest C64 Commander **IPA file** from the [GitHub Releases page](https://github.com/chrisgleissner/c64commander/releases).
-3. Open **SideStore → My Apps**, tap **+**, and select the IPA file.
-4. Launch C64 Commander.
+1.  Set up [SideStore](https://docs.sidestore.io/).
+2.  Download the latest **IPA** (e.g. `c64commander-0.5.0-ios.ipa`) from the [Releases](https://github.com/chrisgleissner/c64commander/releases) page.
+3.  In **SideStore → My Apps**, tap **+** and select the IPA.
+4.  Launch C64 Commander.
 
-SideStore automatically refreshes installed apps every 7 days to renew their signature and keep them usable.
+SideStore refreshes apps every 7 days to renew the signature automatically.
 
 ### Install for Web Access
 
-The Web platform is self-hosted and LAN-accessible. The browser talks to a local C64 Commander server which in turn calls your C64U via REST/FTP.
+The Web version is self-hosted and intended for LAN use. The browser connects to a local C64 Commander server, which communicates with your C64U via REST/FTP.
 
-- The C64 Commander web server can be hosted on Windows, Mac, or Linux.
-- A Raspberry Pi Zero 2W, 4B or similar with at least 512MiB RAM is recommended due to its low cost and power use.
-- If a C64U network password is specified in the Settings, it also secures the website.
+-   Runs on Windows, macOS, or Linux.
+-   Raspberry Pi Zero 2W, 4B, or similar with ≥ 512 MiB RAM recommended.
+-   If a C64U network password is configured in Settings, it also protects the web interface.
 
-> [!NOTE]
-> Web mode is intended for trusted LAN use. Do not expose it directly to the public internet.
+> [!NOTE] Intended for trusted LAN use only. Do not expose directly to the public internet.
 
-#### Docker installation
+#### Install Docker
 
-- Windows: [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
-- macOS: [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/)
-- Linux: [Docker Engine](https://docs.docker.com/engine/install/)
+- For Windows and macOS, install [Docker Desktop](https://docs.docker.com/desktop/).
+- For Linux, install the [Docker Engine](https://docs.docker.com/engine/install/).
 
-Supported container architectures (MVP only):
+The Docker image supports both `linux/amd64` and `linux/arm64` architectures. Windows and macOS run the image via Docker Desktop virtualization.
 
-- `linux/amd64`
-- `linux/arm64`
+#### Run the Container
 
-These images also run on Windows/macOS through Docker Desktop virtualization.
+Create a writable config directory:
 
-#### Run Docker container
-
-Prepare a writable config directory first:
-
-```bash
+``` bash
 mkdir -p ./c64commander-config
 chmod 0777 ./c64commander-config
 ```
 
-```bash
+Start the container:
+
+``` bash
 docker run -d --name c64commander -p 8064:8064 \
   -v ./c64commander-config:/config --restart unless-stopped \
   ghcr.io/chrisgleissner/c64commander:<version>
 ```
 
-Then open:
-
-`http://<host-ip>:8064`
-
-On a Raspberry Pi, the following command ensures that Docker starts on boot:
-
-```bash
-sudo systemctl enable --now docker
-```
+Then launch C64 Commander by opening http://`<host-ip>`:8064 in a browser.
 
 ### First Connection Checklist
 
-Before first use:
+1.  Power on the C64 Ultimate.
+2.  Ensure C64 Commander and C64U are on the same network.
+3.  In C64 Commander open **Settings → Device → Connection**.
+4.  Enter the correct C64U IP address or hostname.
+5.  Check that the C64U logo on the top-right of C64 Commander turns green.
 
-1. Power on your C64 Ultimate.
-2. Make sure your phone and C64 Ultimate are on the same network.
-3. In the app, open **Settings → Device → Connection**.
-4. Enter the correct C64 Ultimate IP address or hostname.
+You are now connected to your C64U.
 
 ## 🧩 What You Can Do
 
