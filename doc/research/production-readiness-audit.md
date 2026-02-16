@@ -243,8 +243,8 @@ iOS is structurally integrated but still **forward-looking / non-parity** (not a
 
 ### Build configuration risks
 
-- iOS CI exists with simulator build + Maestro smoke lanes (`.github/workflows/ios-ci.yaml:70`, `.github/workflows/ios-ci.yaml:375`).
-- Rollout policy marks iOS progression as staged/informational (`.github/workflows/ios-ci.yaml:18`).
+- iOS CI exists with simulator build + Maestro smoke lanes (`.github/workflows/ios.yaml:70`, `.github/workflows/ios.yaml:375`).
+- Rollout policy marks iOS progression as staged/informational (`.github/workflows/ios.yaml:18`).
 
 ### Anticipated platform divergence
 

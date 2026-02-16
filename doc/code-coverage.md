@@ -105,7 +105,7 @@ View report: `open app/build/reports/jacoco/jacocoTestReport/html/index.html`
 
 ### CI Pipeline Coverage
 
-The GitHub Actions workflow (`.github/workflows/android-apk.yaml`) automatically:
+The GitHub Actions workflow (`.github/workflows/android.yaml`) automatically:
 
 1. **Run TypeScript tests with coverage**:
 

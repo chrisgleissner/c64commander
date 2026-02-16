@@ -1,0 +1,123 @@
+name: fuzz
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      time_budget:
+        description: "Fuzz time budget for manual runs (default 5m)"
+        required: false
+        default: "5m"
+      seed:
+        description: "Fixed seed for deterministic reproduction (leave blank for random)"
+        required: false
+
+jobs:
+  fuzz-deterministic:
+    name: Fuzz Test (Deterministic Seed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: fuzz-det-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ffmpeg tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run fuzz test (deterministic)
+        env:
+          FUZZ_RUN_MODE: ci
+          VITE_FUZZ_MODE: "1"
+        run: |
+          node scripts/run-fuzz.mjs --fuzz-seed 4242 --fuzz-time-budget 5m --fuzz-concurrency 1 --fuzz-platform android-phone
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-deterministic-artifacts
+          path: test-results/fuzz/**
+
+  fuzz:
+    name: Fuzz Test (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    concurrency:
+      group: fuzz-test-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install ffmpeg tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Run fuzz test
+        env:
+          FUZZ_RUN_MODE: ci
+          VITE_FUZZ_MODE: "1"
+        run: |
+          SEED=${{ inputs.seed || github.run_id }}
+          if [[ "${GITHUB_EVENT_NAME}" == "schedule" ]]; then
+            TIME_BUDGET="2h"
+          else
+            TIME_BUDGET="${{ github.event.inputs.time_budget || '5m' }}"
+          fi
+          node scripts/run-fuzz.mjs --fuzz-seed "$SEED" --fuzz-time-budget "$TIME_BUDGET" --fuzz-concurrency 2 --fuzz-platform android-phone
+
+      - name: Upload fuzz artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-test-artifacts
+          path: test-results/fuzz/**

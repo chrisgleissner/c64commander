@@ -143,7 +143,7 @@
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
-    "ftp-srv": "^4.6.1",
+    "ftp-srv": "4.6.3",
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
     "lcov-result-merger": "^5.0.1",
@@ -164,6 +164,6 @@
   "overrides": {
     "esbuild": "0.25.0",
     "sucrase": "3.35.1",
-    "tar": "7.5.3"
+    "tar": "7.5.9"
   }
 }

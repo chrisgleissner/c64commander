@@ -24,7 +24,7 @@ import com.getcapacitor.annotation.CapacitorPlugin
  * [BackgroundExecutionService]. Both methods are idempotent.
  */
 @CapacitorPlugin(name = "BackgroundExecution")
-class BackgroundExecutionPlugin : Plugin() {
+open class BackgroundExecutionPlugin : Plugin() {
     private val logTag = "BackgroundExecutionPlugin"
 
     private val autoSkipReceiver = object : BroadcastReceiver() {

@@ -433,7 +433,7 @@ CI guardrails:
 Download artifacts:
 
 ```bash
-gh run list --workflow android-apk.yaml --limit 5
+gh run list --workflow android.yaml --limit 5
 gh run download <run-id> --name playwright-evidence --dir /tmp/c64-evidence
 gh run download <run-id> --name playwright-report --dir /tmp/c64-report
 ```

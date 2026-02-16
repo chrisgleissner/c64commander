@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createMockFtpServer, type MockFtpServer } from '../../contract/mockFtpServer.js';
@@ -123,6 +123,135 @@ describe('web server platform runtime', () => {
         await server.close();
     });
 
+    it('blocks login after repeated failed attempts from same client', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>private</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+            C64U_NETWORK_PASSWORD: 'secret',
+        });
+
+        for (let i = 0; i < 5; i += 1) {
+            const wrong = await fetch(`${server.baseUrl}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: 'wrong' }),
+            });
+            expect(wrong.status).toBe(401);
+        }
+
+        const blocked = await fetch(`${server.baseUrl}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password: 'secret' }),
+        });
+        expect(blocked.status).toBe(429);
+
+        await server.close();
+    });
+
+    it('returns 405 for unsupported auth and secure storage methods', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>ok</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        const loginGet = await fetch(`${server.baseUrl}/auth/login`, { method: 'GET' });
+        expect(loginGet.status).toBe(405);
+
+        const securePatch = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: 'secret' }),
+        });
+        expect(securePatch.status).toBe(405);
+
+        await server.close();
+    });
+
+    it('issues a session cookie when setting a new password while unauthenticated', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>ok</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        const setPassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: 'new-secret' }),
+        });
+        expect(setPassword.status).toBe(200);
+        expect(setPassword.headers.get('set-cookie')).toContain('c64_session=');
+
+        const requiresAuth = await fetch(`${server.baseUrl}/`);
+        expect(requiresAuth.status).toBe(401);
+
+        await server.close();
+    });
+
+    it('rejects malformed static asset encodings', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>ok</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        const malformed = await fetch(`${server.baseUrl}/%E0%A4%A`);
+        expect(malformed.status).toBe(400);
+
+        await server.close();
+    });
+
+    it('falls back to runtime defaults when config directory is not writable', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-readonly-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>ok</body></html>', 'utf8');
+        await chmod(configDir, 0o555);
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        try {
+            const health = await fetch(`${server.baseUrl}/healthz`);
+            expect(health.status).toBe(200);
+
+            const authStatus = await fetch(`${server.baseUrl}/auth/status`);
+            expect(authStatus.status).toBe(200);
+            const payload = await authStatus.json() as { requiresLogin: boolean; authenticated: boolean };
+            expect(payload.requiresLogin).toBe(false);
+            expect(payload.authenticated).toBe(false);
+        } finally {
+            await server.close();
+            await chmod(configDir, 0o755);
+        }
+    });
+
     it('injects network password header in REST proxy requests', async () => {
         const distDir = await makeTempDir('c64-web-dist-');
         const configDir = await makeTempDir('c64-web-config-');
@@ -225,6 +354,27 @@ describe('web server platform runtime', () => {
         expect(readRes.status).toBe(200);
         const readPayload = await readRes.json() as { data: string };
         expect(Buffer.from(readPayload.data, 'base64').toString('utf8')).toBe('PSID_DATA');
+
+        await server.close();
+    });
+
+    it('returns 405 for unsupported FTP endpoint methods', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>ftp</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        const listGet = await fetch(`${server.baseUrl}/api/ftp/list`, { method: 'GET' });
+        expect(listGet.status).toBe(405);
+
+        const readGet = await fetch(`${server.baseUrl}/api/ftp/read`, { method: 'GET' });
+        expect(readGet.status).toBe(405);
 
         await server.close();
     });

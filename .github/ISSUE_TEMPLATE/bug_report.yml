@@ -1,0 +1,183 @@
+name: Bug report
+description: Report a reproducible defect or regression
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug.
+        Please provide complete and accurate information so the issue can be reproduced and resolved efficiently.
+        Incomplete reports may be closed as insufficient for diagnosis.
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 1. C64 Ultimate device
+
+  - type: textarea
+    id: c64_hardware
+    attributes:
+      label: C64 Ultimate device and firmware
+      description: Provide details about the Commodore 64 Ultimate hardware used.
+      placeholder: |
+        Device model (e.g. Ultimate 64 Elite I/II, Commodore 64 Ultimate):
+        Firmware version (e.g. 3.14):
+        Additional hardware (if any):
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 2. Local device and app version
+
+  - type: dropdown
+    id: local_device_type
+    attributes:
+      label: Local device type
+      description: What type of device are you running C64 Commander on?
+      options:
+        - Android
+        - iOS
+        - Server (web browser)
+    validations:
+      required: true
+
+  - type: textarea
+    id: local_device_details
+    attributes:
+      label: Local device details
+      description: Provide details about the device running C64 Commander.
+      placeholder: |
+        Operating system and version (e.g. Android 14, iOS 17.2, Windows 11 23H2, Ubuntu 24.04, macOS 15.x):
+        Device model (e.g. Samsung Galaxy S24, iPhone 15 Pro, or hardware specs):
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: C64 Commander version
+      description: Specify the app version. You can find this in Settings → About.
+      placeholder: "e.g. 1.2.3"
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 3. Network settings
+
+  - type: textarea
+    id: network
+    attributes:
+      label: Network setup
+      description: Describe the network topology between the C64 Ultimate and your local device.
+      placeholder: |
+        Connection type (direct, via switch, via router):
+        Network speed / bandwidth:
+        Router or switch model:
+        Wired or wireless:
+        Other relevant network details:
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 4. Settings export
+
+        **Export your settings:**
+        1. Open C64 Commander and go to **Settings**
+        2. Scroll down to the **Settings transfer** section
+        3. Tap **Export settings** to download `c64commander-settings.json`
+        4. Attach the exported file below
+
+        Settings exports contain non-sensitive configuration (connection timing, safety presets, etc.) that helps with diagnosis.
+        Issues missing settings exports may be closed as incomplete.
+
+  - type: textarea
+    id: settings_export
+    attributes:
+      label: Settings export
+      description: |
+        Attach the exported settings file.
+
+        To export:
+        1. Go to Settings in C64 Commander
+        2. Find "Settings transfer" section
+        3. Tap "Export settings" button
+        4. Attach the downloaded `c64commander-settings.json` file here
+
+      placeholder: |
+        Drag and drop the exported .json file here.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 5. Diagnostics export
+
+        **Export diagnostics from the Diagnostics tab:**
+        1. Open C64 Commander and tap the activity indicator in the header, or go to **Settings → Diagnostics**
+        2. In the Diagnostics dialog, select the relevant tab (Errors, Logs, Traces, or Actions)
+        3. Tap the **Share** button to export the diagnostics as a ZIP file
+        4. Attach the exported ZIP file below
+
+        Diagnostics exports contain error logs, action traces, and other diagnostic data that helps identify the root cause.
+
+  - type: textarea
+    id: diagnostics_export
+    attributes:
+      label: Diagnostics export
+      description: |
+        Attach the exported diagnostics ZIP file.
+
+        To export:
+        1. Open Diagnostics (tap activity indicator in header, or Settings → Diagnostics)
+        2. Select the relevant tab (Errors, Logs, Traces, or Actions)
+        3. Tap "Share" button to export
+        4. Attach the downloaded ZIP file here
+
+      placeholder: |
+        Drag and drop the exported .zip file here.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 6. Reproduction steps
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide exact steps to reliably reproduce the issue.
+      placeholder: |
+        1.
+        2.
+        3.
+
+        Expected result:
+        Actual result:
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 7. Additional diagnostics
+
+  - type: textarea
+    id: diagnosis
+    attributes:
+      label: Diagnostics already performed
+      description: Include any troubleshooting, testing, or analysis already carried out.
+      placeholder: |
+        - Tests performed:
+        - Observations:
+        - Suspected cause (if any):
+    validations:
+      required: false

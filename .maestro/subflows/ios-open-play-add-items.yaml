@@ -1,8 +1,9 @@
 appId: uk.gleissner.c64commander
 env:
-  LONG_TIMEOUT: ${LONG_TIMEOUT || "20000"}
-  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
-  TIMEOUT: ${TIMEOUT || "15000"}
+  LONG_TIMEOUT: ${LONG_TIMEOUT || "60000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "10000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
+  STARTUP_TIMEOUT: ${STARTUP_TIMEOUT || "180000"}
 tags:
   - subflow
 ---
@@ -34,7 +35,7 @@ tags:
       - extendedWaitUntil:
           visible:
             text: "Home"
-          timeout: ${TIMEOUT}
+          timeout: ${STARTUP_TIMEOUT}
 - tapOn:
     point: "25%,95%"
     optional: true

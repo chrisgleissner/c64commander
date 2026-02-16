@@ -1,4 +1,4 @@
-name: iOS CI
+name: ios
 
 on:
   pull_request:
@@ -6,6 +6,10 @@ on:
     branches: ["main"]
     tags: ["*"]
   workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -26,6 +30,12 @@ env:
 # 2) Simulator unavailable: inspect `xcrun simctl list devicetypes` and selected device.
 # 3) Maestro selector drift: inspect `test-results/maestro/**` artifacts and update flows/selectors.
 # 4) Packaging errors: inspect archive/zip steps and verify `ios/build/App.xcarchive` content.
+#
+# OPTIMIZATION: Grouped matrix (4 groups, P=4 concurrency)
+# - Each group runs multiple flows sequentially on one simulator
+# - Reduces simulator lifecycle overhead from 9x to 4x
+# - Expected wall-clock reduction: ~40% (25min -> 15min)
+# - Runtime model: T_grouped = O + 3F vs T_current = 3O + 3F
 
 jobs:
   ios-prepare:
@@ -133,24 +143,23 @@ jobs:
           if-no-files-found: error
 
   ios-maestro-tests:
-    name: iOS | Maestro ${{ matrix.flow }}
+    name: iOS | Maestro ${{ matrix.group.name }}
     runs-on: macos-15
     needs: ios-build-simulator
-    timeout-minutes: 15
+    timeout-minutes: 45
 
     strategy:
       fail-fast: false
       matrix:
-        flow:
-          - ios-smoke-launch
-          - ios-playback-basics
-          - ios-diagnostics-export
-          - ios-ftp-browse
-          - ios-local-import
-          - ios-secure-storage-persist
-          - ios-import-playback
-          - ios-hvsc-browse
-          - ios-config-persistence
+        group:
+          - name: group-1
+            flows: "ios-smoke-launch,ios-playback-basics,ios-diagnostics-export"
+          - name: group-2
+            flows: "ios-ftp-browse,ios-local-import"
+          - name: group-3
+            flows: "ios-secure-storage-persist,ios-import-playback"
+          - name: group-4
+            flows: "ios-hvsc-browse,ios-config-persistence"
 
     steps:
       - name: Checkout
@@ -192,6 +201,7 @@ jobs:
           import os
           import subprocess
           import sys
+          import time
 
           runtimes = json.loads(
               subprocess.check_output(["xcrun", "simctl", "list", "runtimes", "-j"], text=True)
@@ -230,10 +240,13 @@ jobs:
               print("Simulator device type iPhone 13 is unavailable", file=sys.stderr)
               sys.exit(1)
 
-          flow = os.environ.get("MATRIX_FLOW", "unknown")
+          group = os.environ.get("MATRIX_GROUP", "unknown")
           run_id = os.environ.get("GITHUB_RUN_ID", "local")
           run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT", "1")
-          sim_name = f"C64Commander-{flow}-{run_id}-{run_attempt}"
+          sim_name = f"C64Commander-{group}-{run_id}-{run_attempt}"
+
+          # Record boot start time for timing instrumentation
+          boot_start_ms = int(time.time() * 1000)
 
           udid = subprocess.check_output(
               ["xcrun", "simctl", "create", sim_name, iphone_13["identifier"], runtime_identifier],
@@ -260,38 +273,59 @@ jobs:
               print(bootstatus.stderr, file=sys.stderr)
               sys.exit(bootstatus.returncode)
 
+          boot_end_ms = int(time.time() * 1000)
+          boot_seconds = (boot_end_ms - boot_start_ms) // 1000
+
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
               fh.write(f"runtime={runtime_identifier}\n")
               fh.write(f"device_type={iphone_13['identifier']}\n")
               fh.write(f"udid={udid}\n")
+              fh.write(f"boot_start_ms={boot_start_ms}\n")
+              fh.write(f"boot_ready_ms={boot_end_ms}\n")
+              fh.write(f"boot_seconds={boot_seconds}\n")
           PY
         env:
-          MATRIX_FLOW: ${{ matrix.flow }}
+          MATRIX_GROUP: ${{ matrix.group.name }}
 
-      - name: Run Maestro flow with evidence capture (${{ matrix.flow }})
+      - name: Run Maestro flows with evidence capture (${{ matrix.group.name }})
         env:
           MAESTRO_CLI_NO_ANALYTICS: 1
+          MAESTRO_LOG_LEVEL: debug
+          MAESTRO_CLI_LOG_LEVEL: debug
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "420000"
+          MAESTRO_MAX_ATTEMPTS: "2"
+          MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS: "300"
+          IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS: "3"
+          IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS: "1"
+          IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS: "2"
+          IOS_MAESTRO_RECORD_VIDEO: "0"
+          SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
+          SIM_BOOT_READY_MS: ${{ steps.simulator.outputs.boot_ready_ms }}
           CI: "true"
         run: |
           set -euo pipefail
           bash scripts/ci/ios-maestro-run-flow.sh \
-            --flow "${{ matrix.flow }}" \
+            --flows "${{ matrix.group.flows }}" \
+            --group "${{ matrix.group.name }}" \
             --udid "${{ steps.simulator.outputs.udid }}" \
             --app-path "App.app"
 
-      - name: Validate connectivity (${{ matrix.flow }})
+      - name: Validate connectivity (${{ matrix.group.name }})
         if: always()
         run: |
-          bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${{ matrix.flow }}" || true
+          # Validate connectivity for each flow in the group
+          IFS=',' read -ra FLOW_ARRAY <<< "${{ matrix.group.flows }}"
+          for flow in "${FLOW_ARRAY[@]}"; do
+            bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}" || true
+          done
 
-      - name: Upload per-flow artifacts
+      - name: Upload per-group artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-maestro-${{ matrix.flow }}
+          name: ios-maestro-${{ matrix.group.name }}
           path: |
-            artifacts/ios/${{ matrix.flow }}/**
-            artifacts/ios/_infra/${{ matrix.flow }}/**
+            artifacts/ios/**
           if-no-files-found: warn
 
       - name: Shutdown and delete simulator
@@ -314,7 +348,7 @@ jobs:
         with:
           ref: ${{ env.CI_SHA }}
 
-      - name: Download all per-flow artifacts
+      - name: Download all per-group artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: ios-maestro-*
@@ -326,28 +360,28 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/ios/_combined/flows
 
-          # Re-root per-flow artifacts
-          for flow_dir in downloaded-artifacts/ios-maestro-*/; do
-            flow_name="$(basename "$flow_dir" | sed 's/^ios-maestro-//')"
-            if [[ -d "$flow_dir" ]]; then
-              # Handle nested artifact structure
-              if [[ -d "$flow_dir/artifacts/ios/$flow_name" ]]; then
-                cp -r "$flow_dir/artifacts/ios/$flow_name" "artifacts/ios/_combined/flows/$flow_name"
-              elif [[ -d "$flow_dir/$flow_name" ]]; then
-                cp -r "$flow_dir/$flow_name" "artifacts/ios/_combined/flows/$flow_name"
-              else
-                mkdir -p "artifacts/ios/_combined/flows/$flow_name"
-                cp -r "$flow_dir"/* "artifacts/ios/_combined/flows/$flow_name/" 2>/dev/null || true
-              fi
-            fi
-          done
+          # Re-root per-flow artifacts from group directories
+          for group_dir in downloaded-artifacts/ios-maestro-*/; do
+            group_name="$(basename "$group_dir" | sed 's/^ios-maestro-//')"
 
-          # Copy infra diagnostics if present
-          for infra_dir in downloaded-artifacts/ios-maestro-*/artifacts/ios/_infra/*/; do
-            if [[ -d "$infra_dir" ]]; then
-              flow_name="$(basename "$infra_dir")"
-              mkdir -p "artifacts/ios/_infra/$flow_name"
-              cp -r "$infra_dir"/* "artifacts/ios/_infra/$flow_name/" 2>/dev/null || true
+            # Process flow directories
+            if [[ -d "$group_dir/artifacts/ios" ]]; then
+              for flow_dir in "$group_dir/artifacts/ios"/*/; do
+                flow_name="$(basename "$flow_dir")"
+                # Skip _infra directory at this level
+                if [[ "$flow_name" == "_infra" ]]; then
+                  continue
+                fi
+                if [[ -d "$flow_dir" ]]; then
+                  cp -r "$flow_dir" "artifacts/ios/_combined/flows/$flow_name"
+                fi
+              done
+
+              # Copy infra diagnostics
+              if [[ -d "$group_dir/artifacts/ios/_infra" ]]; then
+                mkdir -p "artifacts/ios/_infra"
+                cp -r "$group_dir/artifacts/ios/_infra"/* "artifacts/ios/_infra/" 2>/dev/null || true
+              fi
             fi
           done
 
@@ -411,7 +445,7 @@ jobs:
           with open(os.path.join(out_dir, "summary.json"), "w") as f:
               json.dump(summary, f, indent=2)
 
-          # Timing summary
+          # Timing summary - aggregate from all flows
           timing_entries = []
           for timing_path in sorted(glob.glob("artifacts/ios/_combined/flows/*/timing.json")):
               try:
@@ -420,8 +454,22 @@ jobs:
               except Exception:
                   pass
 
+          # Also include group-level timing
+          group_timing = []
+          for group_timing_path in sorted(glob.glob("artifacts/ios/_infra/*/timing.json")):
+              try:
+                  with open(group_timing_path) as f:
+                      data = json.load(f)
+                      data["source"] = "group"
+                      group_timing.append(data)
+              except Exception:
+                  pass
+
           with open(os.path.join(out_dir, "timing-summary.json"), "w") as f:
-              json.dump({"flows": timing_entries}, f, indent=2)
+              json.dump({
+                  "flows": timing_entries,
+                  "groups": group_timing
+              }, f, indent=2)
 
           print(f"Merged {len(flow_summaries)} flows: {total_tests} tests, {total_failures} failures, {total_errors} errors")
           MERGE
@@ -494,7 +542,7 @@ jobs:
           if-no-files-found: warn
 
   ios-package-altstore:
-    name: iOS | Package AltStore IPA
+    name: iOS | Package IPA
     runs-on: macos-15
     needs: ios-prepare
 
@@ -553,10 +601,10 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Package AltStore unsigned IPA
+      - name: Package iOS IPA
         run: |
           set -euo pipefail
-          IPA_BASENAME="c64commander-${APP_VERSION}-altstore-unsigned"
+          IPA_BASENAME="c64commander-${APP_VERSION}-ios"
           rm -rf ios/build/Payload
           mkdir -p ios/build/Payload
           cp -R ios/build/Build/Products/Release-iphoneos/App.app ios/build/Payload/App.app
@@ -564,24 +612,24 @@ jobs:
             cd ios/build
             zip -qry "${IPA_BASENAME}.ipa" Payload
           )
-          shasum -a 256 "ios/build/${IPA_BASENAME}.ipa" | awk '{print $1}' > "ios/build/${IPA_BASENAME}.ipa.sha256"
+          sha256sum "ios/build/${IPA_BASENAME}.ipa" > "ios/build/${IPA_BASENAME}.ipa.sha256"
 
-      - name: Upload AltStore IPA artifact
+      - name: Upload iOS IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ios-altstore-unsigned-ipa
+          name: ios-ipa
           path: |
-            ios/build/c64commander-*-altstore-unsigned.ipa
-            ios/build/c64commander-*-altstore-unsigned.ipa.sha256
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
           if-no-files-found: error
 
-      - name: Publish AltStore IPA on tags
+      - name: Publish iOS IPA on tags
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ios/build/c64commander-*-altstore-unsigned.ipa
-            ios/build/c64commander-*-altstore-unsigned.ipa.sha256
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
+            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
 
   ios-package-paid:
     name: iOS | Package paid signing

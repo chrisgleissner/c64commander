@@ -1,119 +1,42 @@
-# Web + Multi-Platform Productionization Contract (Node 24)
+# Release Artifact Naming Standardization Plan
 
-Last updated: 2026-02-15
-Owner: Copilot coding agent
-Branch: feat/web
+## Objective
+Standardize public GitHub Release artifact names for Android and iOS and remove internal/CI-style names from published assets.
 
-## Goal
+## Required Public Artifact Names
+- `c64commander-<version>-android.apk`
+- `c64commander-<version>-android.apk.sha256`
+- `c64commander-<version>-android-play.aab`
+- `c64commander-<version>-ios.ipa`
+- `c64commander-<version>-ios.ipa.sha256`
 
-Productionize Web as a first-class platform without duplicating Android-shared logic tests, and upgrade the repository from Node 22/20 references to Node 24 LTS with Docker runtime alignment to `node:24-trixie-slim`.
+## Constraints
+- Keep versioning semantics unchanged
+- Keep signing configuration unchanged
+- Keep build contents unchanged
+- Change only artifact naming and release packaging
+- Keep CI logic intact unless required for renaming/filtering
 
-## Phase Status
+## Execution Tasks
+1. Locate Android and iOS build outputs.
+2. Identify current artifact names and upload paths.
+3. Modify CI workflows to rename APK, AAB, and IPA before upload.
+4. Remove debug artifacts from release publishing.
+5. Exclude artifacts containing `debug` or `unsigned` from published release assets.
+6. Update checksum generation logic to:
+   - `sha256sum <artifact> > <artifact>.sha256`
+7. Ensure release uploads publish only standardized artifacts.
+8. Update README references if artifact names are documented.
+9. Validate dry-run outputs and checksum correctness.
 
-### Phase 1 — Inventory & Baseline
-
-- [x] Inventory all Node references (`package.json`, workflows, Dockerfile, runtime pin files).
-- [x] Inventory current Web container hardening state.
-- [x] Inventory platform-specific test coverage and duplication risk.
-- [x] Capture baseline validation outputs.
-
-### Phase 2 — Node 24 Upgrade & Toolchain Alignment
-
-- [x] Enforce Node 24 via `package.json` engines (`>=24 <25`) and npm floor (`>=10`).
-- [x] Upgrade workflow Node pins to 24:
-  - `.github/workflows/android-apk.yaml`
-  - `.github/workflows/ios-ci.yaml`
-  - `.github/workflows/web-platform.yaml`
-  - `.github/workflows/fuzz-chaos.yaml`
-- [x] Add `.nvmrc` with `24`.
-- [x] Upgrade Node-sensitive types package: `@types/node` to `^24.7.2`.
-- [x] Regenerate lockfile and validate deterministic install (`npm install`, then `npm ci`).
-
-### Phase 3 — Web Docker Hardening & Runtime Readiness
-
-- [x] Base image upgraded in all stages: `node:24-trixie-slim`.
-- [x] Multi-stage build retained.
-- [x] Runtime configured as non-root (`USER node`).
-- [x] Explicit `WORKDIR`, `NODE_ENV`, `PORT`, and `EXPOSE 8064` retained.
-- [x] `HEALTHCHECK` added and validated against `/healthz`.
-- [x] Deterministic copy order retained.
-- [x] Runtime logs validated via `docker logs`.
-
-### Phase 4 — Multi-Arch Validation (`linux/amd64`, `linux/arm64`, RPi64)
-
-- [x] Base image manifest evidence captured for `linux/amd64` and `linux/arm64/v8` via `docker buildx imagetools inspect node:24-trixie-slim`.
-- [x] Raspberry Pi 64-bit compatibility documented via arm64/v8 manifest presence.
-- [x] Multi-arch validation completed with available evidence.
-  - Captured official `node:24-trixie-slim` manifest support for `linux/amd64` and `linux/arm64/v8`.
-  - Verified CI pipeline is configured to execute Buildx multi-arch publish (`linux/amd64,linux/arm64`) on tags.
-  - Local rootless arm64 emulation remained environment-constrained, but production compatibility evidence and CI gating coverage are in place.
-
-### Phase 5 — Test Strategy Deduplication & Platform-Specific Scope
-
-- [x] Confirmed Android remains canonical for shared domain logic.
-- [x] No new duplicate Web/iOS tests were added for shared behavior.
-- [x] Web-only coverage retained in existing tests:
-  - `tests/unit/web/webServer.test.ts` (auth/health/proxy/ftp)
-  - `playwright/webPlatformAuth.spec.ts` (auth matrix, proxy edge path, persistence)
-- [x] iOS-only behavior remains in iOS workflow + Maestro flows (`ios-ci.yaml`) without duplicating Android shared logic.
-
-### Phase 6 — Cross-Platform Validation Matrix + CI Gate
-
-- [x] `npm ci`
-- [x] `npm run lint`
-- [x] `npm run test`
-- [x] `npm run build`
-- [x] `npm run build:web-platform`
-- [x] `npm run test:web-platform`
-- [x] `npm run android:apk`
-- [ ] `npm run ios:build:sim` (environment-bound on Linux: `xcodebuild: not found`)
-- [~] `gh pr checks 40` (35 successful, 2 skipped, 1 pending `codecov/project`, no failures at capture time)
-
-## Verification Evidence
-
-### Node/toolchain evidence
-
-- Local runtime: `node v24.11.0`, `npm 11.6.1`.
-- Clean install constraint validated by lock mismatch failure followed by lock regeneration and successful `npm ci`.
-
-### Docker/runtime evidence
-
-- `docker build -f web/Dockerfile -t c64commander:local .` succeeded.
-- Container smoke on `:18080` returned `{"ok":true}` from `/healthz`.
-- Runtime log confirms server bind: `C64 Commander web server running on http://0.0.0.0:8064`.
-- Health status object present in `docker inspect`.
-- Web CI smoke failure root cause was captured from Actions logs: container not reachable on `127.0.0.1:8064` when using host networking.
-- Remediation applied in `.github/workflows/web-platform.yaml`:
-  - switched container run from `--network host` to `-p 18080:8064`
-  - aligned smoke curl checks to `http://127.0.0.1:18080/healthz`
-  - aligned Playwright `PLAYWRIGHT_PORT` to `18080`
-  - added writable config mount permission setup (`chmod 0777 .tmp/web-config`) and deterministic log dump on health timeout.
-
-### Multi-arch/base image evidence
-
-- `docker buildx imagetools inspect node:24-trixie-slim` reported manifests for:
-  - `linux/amd64`
-  - `linux/arm64/v8`
-
-### CI evidence snapshot
-
-- `gh pr checks 40` reached all-green state after reruns (no failing checks).
-- One flaky failure sequence was handled to completion:
-  - `Web | Build + tests` failure (health reachability) diagnosed and fixed in workflow.
-  - transient `Web | E2E (sharded)` failure was rerun via `gh run rerun --failed` and cleared.
-
-## Risk Log
-
-- [x] Node 24 dependency compatibility risk mitigated by successful `npm ci`, lint, test, build, and web-platform validation.
-- [x] Docker runtime hardening risk mitigated by successful local smoke + healthcheck + logs.
-- [ ] Rootless local arm64 emulation for Buildx remains environment-constrained; rely on CI multi-arch pipeline execution.
-- [x] Test matrix explosion avoided (no redundant cross-platform duplication introduced).
-
-## Definition of Done
-
-- [x] Node 24 enforced across package metadata and CI workflows.
-- [x] Web Docker image aligned to `node:24-trixie-slim` with pragmatic hardening.
-- [x] Web local Docker runtime + healthcheck validated.
-- [x] Android remains primary shared-logic surface; no redundant Web/iOS duplication added.
-- [x] Platform-specific Web coverage remains focused on Web-only behavior.
-- [x] Full end-state CI gate settled green for PR #40.
+## Validation Steps
+- Run web build/test checks required by repository policy.
+- Validate workflow YAML references only standardized release filenames.
+- Confirm no uploaded release asset path contains `debug`, `unsigned`, `altstore`, or `app-release.aab`.
+- Confirm checksum commands use `sha256sum <artifact> > <artifact>.sha256`.
+- Confirm final expected release asset set is exactly:
+  - `c64commander-<version>-android.apk`
+  - `c64commander-<version>-android.apk.sha256`
+  - `c64commander-<version>-android-play.aab`
+  - `c64commander-<version>-ios.ipa`
+  - `c64commander-<version>-ios.ipa.sha256`

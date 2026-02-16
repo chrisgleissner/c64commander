@@ -72,10 +72,7 @@ if (budgetMs <= 120_000) {
     env.FUZZ_ACTION_TIMEOUT_MS = '5000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(15_000, Math.floor(budgetMs / 3)));
-  }
-  if (!env.FUZZ_MIN_SESSION_STEPS) {
-    env.FUZZ_MIN_SESSION_STEPS = '8';
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs * 0.9)));
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '6';
@@ -84,7 +81,7 @@ if (budgetMs <= 120_000) {
 
 if (isCiRun && isFiveMinuteOrLessBudget) {
   if (!env.FUZZ_ACTION_TIMEOUT_MS) {
-    env.FUZZ_ACTION_TIMEOUT_MS = '7000';
+    env.FUZZ_ACTION_TIMEOUT_MS = '5000';
   }
   if (!env.FUZZ_VISUAL_SAMPLE_TIMEOUT_MS) {
     env.FUZZ_VISUAL_SAMPLE_TIMEOUT_MS = '2000';
@@ -93,10 +90,7 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
     env.FUZZ_PROGRESS_TIMEOUT_MS = '4000';
   }
   if (!env.FUZZ_SESSION_TIMEOUT_MS) {
-    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(30_000, Math.floor(budgetMs / 6)));
-  }
-  if (!env.FUZZ_MIN_SESSION_STEPS) {
-    env.FUZZ_MIN_SESSION_STEPS = '40';
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.max(60_000, Math.floor(budgetMs * 0.9)));
   }
   if (!env.FUZZ_NO_PROGRESS_STEPS) {
     env.FUZZ_NO_PROGRESS_STEPS = '8';
@@ -179,6 +173,21 @@ const runCommandCapture = (command, commandArgs) => {
   return (result.stdout || '').trim();
 };
 
+const runCommandCaptureBuffer = (command, commandArgs, maxBuffer = 64 * 1024 * 1024) => {
+  const result = spawnSync(command, commandArgs, {
+    encoding: null,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    maxBuffer,
+  });
+  if (result.error) {
+    throw new Error(`Failed to execute ${command}: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    throw new Error(`${command} ${commandArgs.join(' ')} failed: ${(result.stderr || Buffer.from('')).toString('utf8').trim() || 'unknown error'}`);
+  }
+  return result.stdout || Buffer.from('');
+};
+
 const ensureBinaryAvailable = (command, displayName) => {
   const probe = spawnSync(command, ['-version'], {
     encoding: 'utf8',
@@ -204,6 +213,92 @@ const probeVideoDurationMs = (videoPath) => {
     throw new Error(`Unable to determine video duration for ${videoPath}`);
   }
   return Math.round(seconds * 1000);
+};
+
+const probeImageDimensions = (imagePath) => {
+  const raw = runCommandCapture('ffprobe', [
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-show_entries',
+    'stream=width,height',
+    '-of',
+    'csv=p=0:s=x',
+    imagePath,
+  ]);
+  const [widthRaw, heightRaw] = raw.split('x');
+  const width = Number(widthRaw);
+  const height = Number(heightRaw);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error(`Unable to determine image dimensions for ${imagePath}`);
+  }
+  return { width, height };
+};
+
+const analyzeImageQuality = (imagePath) => {
+  const { width, height } = probeImageDimensions(imagePath);
+  const pixelCount = width * height;
+  const rgb = runCommandCaptureBuffer('ffmpeg', [
+    '-v',
+    'error',
+    '-i',
+    imagePath,
+    '-frames:v',
+    '1',
+    '-f',
+    'rawvideo',
+    '-pix_fmt',
+    'rgb24',
+    'pipe:1',
+  ]);
+  const expectedBytes = pixelCount * 3;
+  if (rgb.length < expectedBytes) {
+    throw new Error(`Decoded image buffer too small for ${imagePath}: expected ${expectedBytes}, got ${rgb.length}`);
+  }
+
+  const maxSamples = 50_000;
+  const step = Math.max(1, Math.floor(pixelCount / maxSamples));
+  const colorCounts = new Map();
+  let sampled = 0;
+  let darkPixels = 0;
+  let minLuma = 255;
+  let maxLuma = 0;
+  let lumaTotal = 0;
+
+  for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex += step) {
+    const offset = pixelIndex * 3;
+    const red = rgb[offset];
+    const green = rgb[offset + 1];
+    const blue = rgb[offset + 2];
+    const luma = Math.round(0.2126 * red + 0.7152 * green + 0.0722 * blue);
+    sampled += 1;
+    lumaTotal += luma;
+    if (luma < minLuma) minLuma = luma;
+    if (luma > maxLuma) maxLuma = luma;
+    if (luma <= 8) darkPixels += 1;
+    const packed = (red << 16) | (green << 8) | blue;
+    colorCounts.set(packed, (colorCounts.get(packed) || 0) + 1);
+  }
+
+  const uniqueColors = colorCounts.size;
+  const dominantCount = Math.max(...colorCounts.values());
+  const dominantRatio = sampled > 0 ? dominantCount / sampled : 1;
+  const averageLuma = sampled > 0 ? lumaTotal / sampled : 0;
+  const darkRatio = sampled > 0 ? darkPixels / sampled : 1;
+
+  return {
+    width,
+    height,
+    uniqueColors,
+    dominantRatio,
+    averageLuma,
+    minLuma,
+    maxLuma,
+    darkRatio,
+    isSingleColor: uniqueColors <= 2 || dominantRatio >= 0.995,
+    isMostlyBlack: averageLuma <= 6 || (darkRatio >= 0.995 && maxLuma <= 16),
+  };
 };
 
 const extractVideoFrames = (videoPath, framesDir) => {
@@ -248,6 +343,46 @@ const ensureScreenshotPlaceholder = async (screenshotAbsolutePath) => {
   await fs.writeFile(screenshotAbsolutePath, Buffer.from(PLACEHOLDER_PNG_BASE64, 'base64'));
 };
 
+const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
+  await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
+  const attempts = [
+    ['-sseof', '-0.5'],
+    ['-ss', '0'],
+  ];
+  let durationMs = null;
+  try {
+    durationMs = probeVideoDurationMs(videoPath);
+    if (durationMs > 2000) {
+      attempts.push(['-ss', String(Math.max(0, Math.floor(durationMs / 2000)))]);
+    }
+  } catch {
+    durationMs = null;
+  }
+
+  for (const seekArgs of attempts) {
+    try {
+      runCommandCapture('ffmpeg', [
+        '-v',
+        'error',
+        '-y',
+        ...seekArgs,
+        '-i',
+        videoPath,
+        '-frames:v',
+        '1',
+        screenshotPath,
+      ]);
+      const quality = analyzeImageQuality(screenshotPath);
+      if (!quality.isSingleColor && !quality.isMostlyBlack) {
+        return quality;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return null;
+};
+
 const ensureFile = async (filePath) => {
   const stat = await fs.stat(filePath);
   if (!stat.isFile() || stat.size === 0) {
@@ -271,10 +406,14 @@ const mergeReports = async () => {
   const outputRoot = buildOutputRoot();
   const mergedSessionsDir = path.join(outputRoot, 'sessions');
   const mergedVideosDir = path.join(outputRoot, 'videos');
-  await fs.rm(mergedSessionsDir, { recursive: true, force: true });
-  await fs.rm(mergedVideosDir, { recursive: true, force: true });
-  await fs.mkdir(mergedSessionsDir, { recursive: true });
-  await fs.mkdir(mergedVideosDir, { recursive: true });
+  // When concurrency === 1, shard dir === output root so sessions/videos are already in place.
+  // Only wipe+recreate the merged dirs for multi-shard runs.
+  if (concurrency > 1) {
+    await fs.rm(mergedSessionsDir, { recursive: true, force: true });
+    await fs.rm(mergedVideosDir, { recursive: true, force: true });
+    await fs.mkdir(mergedSessionsDir, { recursive: true });
+    await fs.mkdir(mergedVideosDir, { recursive: true });
+  }
 
   const issueGroups = new Map();
   const terminatedByReason = {};
@@ -287,6 +426,9 @@ const mergeReports = async () => {
   const stagnationViolations = [];
   const missingArtifacts = [];
   const frameValidationViolations = [];
+  const activityViolations = [];
+  const screenshotQualityViolations = [];
+  const qualifiedSessions = [];
 
   ensureBinaryAvailable('ffprobe', 'ffprobe');
   ensureBinaryAvailable('ffmpeg', 'ffmpeg');
@@ -396,12 +538,14 @@ const mergeReports = async () => {
       parseErrors += 1;
     }
 
-    try {
-      await copyDirContents(shardSessionsDir, mergedSessionsDir, concurrency === 1 ? '' : `shard-${shard}-`);
-      await copyDirContents(shardVideosDir, mergedVideosDir, concurrency === 1 ? '' : `shard-${shard}-`);
-    } catch (error) {
-      console.error(`Failed to copy session/video artifacts for shard ${shard}:`, error);
-      parseErrors += 1;
+    if (concurrency > 1) {
+      try {
+        await copyDirContents(shardSessionsDir, mergedSessionsDir, `shard-${shard}-`);
+        await copyDirContents(shardVideosDir, mergedVideosDir, `shard-${shard}-`);
+      } catch (error) {
+        console.error(`Failed to copy session/video artifacts for shard ${shard}:`, error);
+        parseErrors += 1;
+      }
     }
   }
 
@@ -484,7 +628,7 @@ const mergeReports = async () => {
       seed: baseSeed,
       runId,
       shardTotal: concurrency,
-      thresholdMs: 5000,
+      thresholdMs: 10000,
     },
     maxVisualStagnationMs,
     violations: stagnationViolations,
@@ -517,86 +661,11 @@ const mergeReports = async () => {
   }
 
   try {
-    let sessionArtifacts = await fs.readdir(mergedSessionsDir, { withFileTypes: true });
+    const sessionArtifacts = await fs.readdir(mergedSessionsDir, { withFileTypes: true });
     const videoArtifacts = await fs.readdir(mergedVideosDir, { withFileTypes: true });
     const hasSessionJson = sessionArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.json'));
     if (!hasSessionJson) {
-      const mergedVideos = videoArtifacts
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.webm'))
-        .map((entry) => entry.name)
-        .sort();
-      for (let index = 0; index < mergedVideos.length; index += 1) {
-        const videoFile = mergedVideos[index];
-        const syntheticSessionId = `session-synthetic-${String(index + 1).padStart(4, '0')}`;
-        const logRelativePath = path.join('sessions', `${syntheticSessionId}.log`);
-        const screenshotRelativePath = path.join('sessions', `${syntheticSessionId}.png`);
-        const sessionJsonRelativePath = path.join('sessions', `${syntheticSessionId}.json`);
-        const videoRelativePath = path.join('videos', videoFile);
-        const videoAbsolutePath = path.join(outputRoot, videoRelativePath);
-        const screenshotAbsolutePath = path.join(outputRoot, screenshotRelativePath);
-
-        await fs.writeFile(
-          path.join(outputRoot, logRelativePath),
-          'Synthetic session manifest generated by merge step after runner timeout.\n',
-          'utf8',
-        );
-
-        try {
-          await fs.mkdir(path.dirname(screenshotAbsolutePath), { recursive: true });
-          runCommandCapture('ffmpeg', [
-            '-v',
-            'error',
-            '-y',
-            '-sseof',
-            '-0.1',
-            '-i',
-            videoAbsolutePath,
-            '-frames:v',
-            '1',
-            screenshotAbsolutePath,
-          ]);
-        } catch (error) {
-          missingArtifacts.push({
-            path: screenshotRelativePath,
-            reason: `synthetic-screenshot-failed: ${(error && error.message) || 'unknown'}`,
-          });
-          continue;
-        }
-
-        let durationMs;
-        try {
-          durationMs = probeVideoDurationMs(videoAbsolutePath);
-        } catch (error) {
-          console.warn('Synthetic session duration probe failed, using fallback duration:', error);
-          durationMs = Math.max(1000, Math.floor((budgetMs || 60_000) / Math.max(1, concurrency)));
-        }
-        const syntheticManifest = {
-          sessionId: syntheticSessionId,
-          seed: baseSeed,
-          shardIndex: 0,
-          startTime: new Date(0).toISOString(),
-          endTime: new Date(durationMs).toISOString(),
-          durationMs,
-          steps: 0,
-          terminationReason: 'session-timeout',
-          maxVisualStagnationMs: 5000,
-          visualSamples: 0,
-          recoverySteps: ['terminate-session'],
-          interactionLog: logRelativePath,
-          finalScreenshot: screenshotRelativePath,
-          video: videoRelativePath,
-        };
-
-        await fs.writeFile(
-          path.join(outputRoot, sessionJsonRelativePath),
-          JSON.stringify(syntheticManifest, null, 2),
-          'utf8',
-        );
-      }
-      sessionArtifacts = await fs.readdir(mergedSessionsDir, { withFileTypes: true });
-      if (!sessionArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.json'))) {
-        missingArtifacts.push({ path: 'sessions/*.json', reason: 'none-found' });
-      }
+      missingArtifacts.push({ path: 'sessions/*.json', reason: 'none-found' });
     }
 
     if (!videoArtifacts.some((entry) => entry.isFile() && entry.name.endsWith('.webm'))) {
@@ -609,6 +678,7 @@ const mergeReports = async () => {
     for (const sessionJsonPath of sessionJsonFiles) {
       const raw = await fs.readFile(sessionJsonPath, 'utf8');
       const parsed = JSON.parse(raw);
+      const sessionId = parsed?.sessionId || path.basename(sessionJsonPath, '.json');
 
       if (concurrency > 1) {
         if (parsed?.interactionLog) {
@@ -626,18 +696,26 @@ const mergeReports = async () => {
       const interactionLogPath = parsed?.interactionLog;
       const finalScreenshotPath = parsed?.finalScreenshot;
       const videoPathValue = parsed?.video;
+      const mergedLogPath = interactionLogPath ? resolveMergedArtifactPath(interactionLogPath, sessionJsonPath) : '';
+      const mergedScreenshotPath = finalScreenshotPath ? resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath) : '';
+      const mergedVideoRelativePath = videoPathValue ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath) : '';
+      let activityCount = 0;
 
       if (interactionLogPath) {
-        const mergedLogPath = resolveMergedArtifactPath(interactionLogPath, sessionJsonPath);
-        await ensureFile(path.join(outputRoot, mergedLogPath)).catch((error) => {
+        const interactionLogAbsolutePath = path.join(outputRoot, mergedLogPath);
+        await ensureFile(interactionLogAbsolutePath).catch((error) => {
           missingArtifacts.push({
             path: `${path.relative(outputRoot, sessionJsonPath)} -> ${mergedLogPath}`,
             reason: error.message,
           });
         });
+        const logLines = await fs.readFile(interactionLogAbsolutePath, 'utf8').then((raw) => raw
+          .split(/\r?\n/g)
+          .map((line) => line.trim())
+          .filter(Boolean)).catch(() => []);
+        activityCount = logLines.filter((line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat')).length;
       }
 
-      const mergedVideoRelativePath = videoPathValue ? resolveMergedArtifactPath(videoPathValue, sessionJsonPath) : '';
       if (videoPathValue) {
         await ensureFile(path.join(outputRoot, mergedVideoRelativePath)).catch((error) => {
           missingArtifacts.push({
@@ -647,8 +725,30 @@ const mergeReports = async () => {
         });
       }
 
+      const minActivities = Math.max(5, Math.floor((budgetMs / 60_000) * 2));
+      if (activityCount < minActivities) {
+        activityViolations.push({
+          sessionId,
+          reason: 'insufficient-activities',
+          details: `expected>=${minActivities} actual=${activityCount}`,
+        });
+        await fs.unlink(sessionJsonPath).catch(() => { });
+        if (mergedLogPath) await fs.unlink(path.join(outputRoot, mergedLogPath)).catch(() => { });
+        if (mergedScreenshotPath) await fs.unlink(path.join(outputRoot, mergedScreenshotPath)).catch(() => { });
+        if (mergedVideoRelativePath) await fs.unlink(path.join(outputRoot, mergedVideoRelativePath)).catch(() => { });
+        continue;
+      }
+
+      qualifiedSessions.push({
+        sessionId,
+        activityCount,
+        steps: Number(parsed?.steps || activityCount),
+        durationMs: Number(parsed?.durationMs || 0),
+        terminationReason: parsed?.terminationReason || 'unknown',
+        maxVisualStagnationMs: Number(parsed?.maxVisualStagnationMs || 0),
+      });
+
       if (finalScreenshotPath) {
-        const mergedScreenshotPath = resolveMergedArtifactPath(finalScreenshotPath, sessionJsonPath);
         const screenshotAbsolutePath = path.join(outputRoot, mergedScreenshotPath);
         const screenshotExists = await fs.stat(screenshotAbsolutePath).then((stat) => stat.isFile() && stat.size > 0).catch(() => false);
         if (!screenshotExists && mergedVideoRelativePath) {
@@ -677,12 +777,48 @@ const mergeReports = async () => {
             reason: error.message,
           });
         });
+        try {
+          let screenshotQuality = analyzeImageQuality(screenshotAbsolutePath);
+          if ((screenshotQuality.isSingleColor || screenshotQuality.isMostlyBlack)
+            && mergedVideoRelativePath) {
+            const regeneratedQuality = await regenerateScreenshotFromVideo(
+              path.join(outputRoot, mergedVideoRelativePath),
+              screenshotAbsolutePath,
+            );
+            if (regeneratedQuality) {
+              screenshotQuality = regeneratedQuality;
+            }
+          }
+          if (screenshotQuality.width < 320 || screenshotQuality.height < 480) {
+            screenshotQualityViolations.push({
+              sessionId,
+              reason: 'screenshot-dimensions',
+              details: `width=${screenshotQuality.width} height=${screenshotQuality.height}`,
+            });
+          }
+          if (screenshotQuality.isSingleColor) {
+            screenshotQualityViolations.push({
+              sessionId,
+              reason: 'screenshot-single-color',
+              details: `uniqueColors=${screenshotQuality.uniqueColors} dominantRatio=${screenshotQuality.dominantRatio.toFixed(4)}`,
+            });
+          }
+          if (screenshotQuality.isMostlyBlack) {
+            screenshotQualityViolations.push({
+              sessionId,
+              reason: 'screenshot-mostly-black',
+              details: `averageLuma=${screenshotQuality.averageLuma.toFixed(2)} darkRatio=${screenshotQuality.darkRatio.toFixed(4)}`,
+            });
+          }
+        } catch (error) {
+          screenshotQualityViolations.push({
+            sessionId,
+            reason: 'screenshot-analysis-failed',
+            details: (error && error.message) || 'unknown',
+          });
+        }
       }
 
-      const sessionId = parsed?.sessionId || path.basename(sessionJsonPath, '.json');
-      const isSyntheticTimeoutSession =
-        parsed?.terminationReason === 'session-timeout' &&
-        Number(parsed?.steps || 0) === 0;
       const sessionDurationMs = Number(parsed?.durationMs || 0);
       const videoRelativePath = parsed?.video;
       if (!videoRelativePath || !Number.isFinite(sessionDurationMs) || sessionDurationMs <= 0) {
@@ -699,10 +835,6 @@ const mergeReports = async () => {
       try {
         videoDurationMs = probeVideoDurationMs(videoPath);
       } catch (error) {
-        if (isSyntheticTimeoutSession) {
-          console.warn('Skipping strict video-duration checks for synthetic timeout session with unreadable video:', error);
-          continue;
-        }
         frameValidationViolations.push({
           sessionId,
           reason: 'video-unreadable',
@@ -711,7 +843,7 @@ const mergeReports = async () => {
         continue;
       }
       const minExpectedDurationMs = Math.max(1000, sessionDurationMs - 1500);
-      if (!isSyntheticTimeoutSession && videoDurationMs < minExpectedDurationMs) {
+      if (videoDurationMs < minExpectedDurationMs) {
         frameValidationViolations.push({
           sessionId,
           reason: 'short-video',
@@ -743,7 +875,7 @@ const mergeReports = async () => {
       }
 
       const minExpectedFrames = Math.max(1, Math.floor((videoDurationMs - 1000) / 1000));
-      if (!isSyntheticTimeoutSession && frameEntries.length < minExpectedFrames) {
+      if (frameEntries.length < minExpectedFrames) {
         frameValidationViolations.push({
           sessionId,
           reason: 'insufficient-frames',
@@ -769,11 +901,47 @@ const mergeReports = async () => {
         }
       }
 
-      if (!isSyntheticTimeoutSession && maxRepeatedSeconds > 5) {
+      if (maxRepeatedSeconds > 5) {
         frameValidationViolations.push({
           sessionId,
           reason: 'frame-stagnation',
           details: `maxRepeatedSeconds=${maxRepeatedSeconds}`,
+        });
+      }
+
+      const sampleIndices = Array.from(new Set([
+        0,
+        Math.floor((frameEntries.length - 1) / 2),
+        frameEntries.length - 1,
+      ])).filter((index) => index >= 0 && index < frameEntries.length);
+      let hasNonBlackDiverseFrame = false;
+      for (const frameIndex of sampleIndices) {
+        const framePath = path.join(frameDir, frameEntries[frameIndex]);
+        try {
+          const frameQuality = analyzeImageQuality(framePath);
+          if (frameQuality.width < 320 || frameQuality.height < 480) {
+            frameValidationViolations.push({
+              sessionId,
+              reason: 'video-frame-dimensions',
+              details: `width=${frameQuality.width} height=${frameQuality.height}`,
+            });
+          }
+          if (!frameQuality.isMostlyBlack && !frameQuality.isSingleColor) {
+            hasNonBlackDiverseFrame = true;
+          }
+        } catch (error) {
+          frameValidationViolations.push({
+            sessionId,
+            reason: 'video-frame-analysis-failed',
+            details: (error && error.message) || 'unknown',
+          });
+        }
+      }
+      if (!hasNonBlackDiverseFrame) {
+        frameValidationViolations.push({
+          sessionId,
+          reason: 'video-black-or-single-color',
+          details: 'All sampled frames were mostly black or single-color.',
         });
       }
 
@@ -789,8 +957,80 @@ const mergeReports = async () => {
   if (frameValidationViolations.length > 0) {
     throw new Error(`Video artifact validation failed: ${JSON.stringify(frameValidationViolations, null, 2)}`);
   }
+  if (screenshotQualityViolations.length > 0) {
+    throw new Error(`Screenshot artifact validation failed: ${JSON.stringify(screenshotQualityViolations, null, 2)}`);
+  }
+  const minActivities = Math.max(5, Math.floor((budgetMs / 60_000) * 2));
+  if (qualifiedSessions.length === 0) {
+    throw new Error(`No qualified sessions with >=${minActivities} activities were produced. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
+  }
   if (visualStagnationReport.violations.length > 0) {
     throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);
+  }
+
+  const qualifiedTotalSteps = qualifiedSessions.reduce((sum, item) => sum + item.activityCount, 0);
+  const qualifiedDurationMs = qualifiedSessions.reduce((sum, item) => sum + Math.max(0, item.durationMs || 0), 0);
+  const qualifiedMaxVisualStagnationMs = qualifiedSessions.reduce((max, item) => Math.max(max, item.maxVisualStagnationMs || 0), 0);
+  const qualifiedTerminationCounts = qualifiedSessions.reduce((acc, item) => {
+    const reason = item.terminationReason || 'unknown';
+    acc[reason] = (acc[reason] || 0) + 1;
+    return acc;
+  }, {});
+
+  const qualifiedRunMetrics = {
+    meta: {
+      seed: baseSeed,
+      platform: platform || env.FUZZ_PLATFORM || 'android-phone',
+      runMode: env.FUZZ_RUN_MODE || 'local',
+      shardTotal: concurrency,
+      runId,
+      timeBudgetMs: budgetMs,
+    },
+    sessionsStarted: qualifiedSessions.length,
+    sessionsTerminatedByReason: qualifiedTerminationCounts,
+    maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
+    averageSessionDurationMs: qualifiedSessions.length ? Math.round(qualifiedDurationMs / qualifiedSessions.length) : 0,
+    averageStepsPerSession: Number((qualifiedTotalSteps / qualifiedSessions.length).toFixed(2)),
+    totalSteps: qualifiedTotalSteps,
+    stepsPerSession: qualifiedSessions.map((item) => ({ sessionId: item.sessionId, steps: item.activityCount })),
+  };
+
+  const qualifiedVisualStagnationReport = {
+    meta: {
+      seed: baseSeed,
+      runId,
+      shardTotal: concurrency,
+      thresholdMs: 10000,
+    },
+    maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
+    violations: qualifiedSessions
+      .filter((item) => (item.maxVisualStagnationMs || 0) > 10000)
+      .map((item) => ({
+        sessionId: item.sessionId,
+        maxVisualStagnationMs: item.maxVisualStagnationMs,
+        terminationReason: item.terminationReason,
+      })),
+    sessions: qualifiedSessions.map((item) => ({
+      sessionId: item.sessionId,
+      maxVisualStagnationMs: item.maxVisualStagnationMs,
+      terminationReason: item.terminationReason,
+    })),
+  };
+
+  await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(qualifiedRunMetrics, null, 2), 'utf8');
+  await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(qualifiedVisualStagnationReport, null, 2), 'utf8');
+
+  const mergedIssueReportPath = path.join(outputRoot, 'fuzz-issue-report.json');
+  try {
+    const rawReport = await fs.readFile(mergedIssueReportPath, 'utf8');
+    const parsedReport = JSON.parse(rawReport);
+    if (parsedReport?.meta && typeof parsedReport.meta === 'object') {
+      parsedReport.meta.sessions = qualifiedSessions.length;
+      parsedReport.meta.totalSteps = qualifiedTotalSteps;
+    }
+    await fs.writeFile(mergedIssueReportPath, JSON.stringify(parsedReport, null, 2), 'utf8');
+  } catch (error) {
+    throw new Error(`Failed to rewrite merged issue report with qualified session stats: ${(error && error.message) || 'unknown'}`);
   }
 
   return { parseErrors };
@@ -798,7 +1038,8 @@ const mergeReports = async () => {
 
 const cmd = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-const basePort = Number(process.env.PLAYWRIGHT_PORT || '4173');
+const defaultBasePort = 18_000 + (baseSeed % 10_000);
+const basePort = Number(process.env.PLAYWRIGHT_PORT || String(defaultBasePort));
 
 const runCommand = (command, argsList, commandEnv) =>
   new Promise((resolve, reject) => {

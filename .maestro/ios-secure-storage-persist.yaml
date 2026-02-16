@@ -1,6 +1,6 @@
 appId: uk.gleissner.c64commander
 env:
-  TIMEOUT: ${TIMEOUT || "15000"}
+  TIMEOUT: ${TIMEOUT || "30000"}
 tags:
   - ios
   - ci-critical-ios

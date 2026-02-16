@@ -1,12 +1,37 @@
 import UIKit
 import Capacitor
 
+private enum IOSStartupTrace {
+    private static let lock = NSLock()
+    private static var emittedEvents = Set<String>()
+
+    static func emit(_ event: String, details: [String: Any] = [:], once: Bool = true) {
+        lock.lock()
+        if once, emittedEvents.contains(event) {
+            lock.unlock()
+            return
+        }
+        if once {
+            emittedEvents.insert(event)
+        }
+        lock.unlock()
+
+        let uptimeMs = Int(ProcessInfo.processInfo.systemUptime * 1000)
+        var payload = details
+        payload["origin"] = "startup"
+        payload["event"] = event
+        payload["uptimeMs"] = uptimeMs
+        IOSDiagnostics.log(.info, "C64_STARTUP_EVENT|\(event)|\(uptimeMs)", details: payload)
+    }
+}
+
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
     private var nativePluginsRegistered = false
     private weak var nativePluginsBridge: (any CAPBridgeProtocol)?
+    private var startupObserversRegistered = false
 
     private func registerNativePluginsIfNeeded() {
         guard let bridgeViewController = window?.rootViewController as? CAPBridgeViewController,
@@ -29,8 +54,34 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         nativePluginsBridge = bridge
     }
 
+    private func registerStartupObserversIfNeeded() {
+        if startupObserversRegistered {
+            return
+        }
+        startupObserversRegistered = true
+
+        NotificationCenter.default.addObserver(
+            forName: UIWindow.didBecomeVisibleNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            IOSStartupTrace.emit("app.uiwindow.first_created")
+            IOSStartupTrace.emit("app.uiwindow.first_visible")
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: UIAccessibility.elementFocusedNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            IOSStartupTrace.emit("app.accessibility.focus_event")
+        }
+    }
+
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
+        IOSStartupTrace.emit("app.process.first_spawn")
+        registerStartupObserversIfNeeded()
         registerNativePluginsIfNeeded()
 #if DEBUG
         IOSDebugHTTPServer.shared.start()
@@ -55,6 +106,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func applicationDidBecomeActive(_ application: UIApplication) {
         // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
         registerNativePluginsIfNeeded()
+        DispatchQueue.main.async {
+            IOSStartupTrace.emit("app.frame.first_rendered")
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {

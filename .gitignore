@@ -58,3 +58,11 @@ tmp-ci-artifacts
 
 # Planning artifacts
 .planning/
+
+# Container image analysis artifacts
+dive-report*.json
+dive-ci*.txt
+dive-summary*.json
+docker-history*.txt
+docker-inspect*.json
+filecount*.txt

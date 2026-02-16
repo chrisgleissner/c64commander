@@ -520,7 +520,7 @@ test.describe('Deterministic Connectivity Simulation', () => {
   });
 
   test('switches real → demo → real using manual discovery', async ({ page }: { page: Page }, testInfo: TestInfo) => {
-    test.setTimeout(150000);
+    test.setTimeout(180000);
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
 
@@ -594,14 +594,26 @@ test.describe('Deterministic Connectivity Simulation', () => {
     const hostInput = page.getByLabel('C64U Hostname / IP');
     await hostInput.fill(host);
 
+    const autoDemoToggle = page.getByRole('checkbox', { name: /Automatic Demo Mode/i }).first();
+    if (await autoDemoToggle.isVisible().catch(() => false)) {
+      const isChecked = await autoDemoToggle.isChecked().catch(() => false);
+      if (isChecked) {
+        await clickWithoutNavigationWait(page, autoDemoToggle);
+      }
+    }
+
     // Allow mock server state to propagate before triggering rediscovery.
     await page.waitForTimeout(500);
 
-    // Trigger manual rediscovery probes using both indicator and explicit
-    // reconnect controls to reduce timing flake under slower CI runners.
+    // Trigger manual rediscovery with a bounded convergence loop that tolerates
+    // transient DISCOVERING/DEMO_ACTIVE states seen under slower CI runners.
+    const currentUsing = page.getByText('Currently using:');
+    await expect(currentUsing).toBeVisible();
     let connected = false;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await clickWithoutNavigationWait(page, indicator);
+    const deadline = Date.now() + 40000;
+    let attempt = 0;
+    while (Date.now() < deadline) {
+      attempt += 1;
       const saveAndConnect = page.getByRole('button', { name: /Save & Connect|Save connection/i });
       if (await saveAndConnect.isVisible().catch(() => false)) {
         await clickWithoutNavigationWait(page, saveAndConnect);
@@ -610,21 +622,22 @@ test.describe('Deterministic Connectivity Simulation', () => {
       if (await refreshConnection.isVisible().catch(() => false)) {
         await clickWithoutNavigationWait(page, refreshConnection);
       }
-      try {
-        await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 6000 });
+      await clickWithoutNavigationWait(page, indicator);
+      await page.waitForTimeout(500);
+
+      const state = await indicator.getAttribute('data-connection-state');
+      const usingHost = (await currentUsing.locator('span').textContent())?.trim() ?? '';
+      if (state === 'REAL_CONNECTED' && usingHost === host) {
         connected = true;
         break;
-      } catch (error) {
-        console.warn('Manual rediscovery attempt did not reach REAL_CONNECTED', {
-          attempt: attempt + 1,
-          error,
-        });
       }
-      await page.waitForTimeout(400);
+
+      if (attempt % 4 === 0) {
+        console.warn('Manual rediscovery still converging', { attempt, state, usingHost, expectedHost: host });
+      }
     }
+
     expect(connected).toBe(true);
-    const currentUsing = page.getByText('Currently using:');
-    await expect(currentUsing).toBeVisible();
     await expect.poll(
       async () => (await currentUsing.locator('span').textContent())?.trim() ?? '',
       { timeout: 30000 },

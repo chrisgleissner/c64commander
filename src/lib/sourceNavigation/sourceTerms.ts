@@ -5,7 +5,7 @@ export const SOURCE_LABELS = {
 } as const;
 
 export const SOURCE_EXPLANATIONS = {
-  local: 'Local Android Device',
+  local: 'Local Device',
   c64u: 'Commodore 64 Ultimate',
   hvsc: 'High Voltage SID Collection',
 } as const;

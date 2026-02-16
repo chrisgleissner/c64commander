@@ -146,7 +146,7 @@ Use this policy:
 
 ## 6. CI design (GitHub-hosted, implementation-ready)
 
-Create a dedicated workflow: `.github/workflows/ios-ci.yaml`.
+Create a dedicated workflow: `.github/workflows/ios.yaml`.
 
 Keep Android workflow unchanged as primary and independent.
 
@@ -424,7 +424,7 @@ When implementation starts, enforce these rules:
 Deliverables:
 
 - `ios/` project committed.
-- `ios-ci.yaml` with `ios-prepare` + `ios-build-simulator` jobs green.
+- `ios.yaml` with `ios-prepare` + `ios-build-simulator` jobs green.
 
 Done when:
 
@@ -536,7 +536,7 @@ Rating scale used:
 | R5 | C64U communication uses cleartext HTTP; ATS can block iOS runtime traffic | `src/lib/c64api.ts:28`, `src/lib/c64api.ts:243` | High | High | High | Add explicit ATS policy for local device traffic in `Info.plist`; verify with simulator integration test against mock C64U | Connection and control requests succeed on iOS without ATS runtime errors |
 | R6 | Background execution semantics differ (Android service vs iOS no-op fallback) | `src/lib/native/backgroundExecution.ts:28`, `src/lib/native/backgroundExecution.web.ts:14`, `src/pages/PlayFilesPage.tsx:335` | Medium | High | High | Define iOS behavior contract now: no-op with explicit logging short-term, optional native background mode later | Auto-advance behavior on iOS is deterministic and documented; tests assert expected behavior |
 | R7 | Exception handling policy violation exists in native diagnostics bridge (`catch` without logging/rethrow) | `src/lib/native/diagnosticsBridge.ts:68` | Medium | High | High | Replace silent catch with structured `warn`/`error` logging including context and stack | No silent catches remain in iOS-touching code paths |
-| R8 | iOS CI lane is absent, so regressions will ship undetected | `.github/workflows/android-apk.yaml:1` (Android-only), no iOS workflow present | High | High | High | Add `ios-ci.yaml` with simulator build + Maestro critical flows + screenshot artifacts + AltStore artifact packaging | PRs run iOS jobs on macOS and block on failures for selected iOS critical tests |
+| R8 | iOS CI lane is absent, so regressions will ship undetected | `.github/workflows/android.yaml:1` (Android-only), no iOS workflow present | High | High | High | Add `ios.yaml` with simulator build + Maestro critical flows + screenshot artifacts + AltStore artifact packaging | PRs run iOS jobs on macOS and block on failures for selected iOS critical tests |
 | R9 | Existing Maestro config/flows are Android-specific and not reusable as-is for iOS | `.maestro/config.yaml:16`, `doc/testing/maestro.md:20`, `.maestro/smoke-hvsc-mounted.yaml:37` | High | Medium | High | Add iOS tags/subflows and selector variants; keep shared flow structure where possible | iOS-tagged Maestro suite runs green without Android selectors/permissions assumptions |
 | R10 | Runtime/version drift on GitHub macOS runners can break deterministic iOS testing | chapter 6 runtime fallback policy; no runtime resolver implemented yet | Medium | Medium | Medium | Keep explicit runtime discovery + fallback (26→18→17) + fail-fast diagnostics in workflow | CI logs selected runtime/device every run and fails with actionable output if unavailable |
 | R11 | AltStore free-account constraints can make release usability brittle | AltStore-first distribution path and free-signing constraints | Medium | Medium | Medium | Publish operational guidance (refresh cadence, app-id limits) and keep paid-signing lane prewired but disabled | Release notes include operator checklist; paid lane can be activated by flag/secrets only |

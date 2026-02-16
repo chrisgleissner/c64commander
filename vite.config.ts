@@ -17,16 +17,29 @@ const pkg = JSON.parse(
   fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
 );
 
-const runGit = (args: string[], label: string) => {
+type RunGitOptions = {
+  quiet?: boolean;
+  suppressStderrPattern?: RegExp;
+};
+
+const runGit = (args: string[], label: string, options: RunGitOptions = {}) => {
   const result = spawnSync("git", args, { encoding: "utf-8" });
   if (result.status === 0) return result.stdout.trim();
+  const stderr = result.stderr?.trim() || "";
+  const shouldSuppress = Boolean(
+    options.suppressStderrPattern && stderr && options.suppressStderrPattern.test(stderr),
+  );
+  if (options.quiet || shouldSuppress) return "";
   if (result.error) {
     console.warn(`[build] ${label} failed: ${result.error.message}`);
-  } else if (result.stderr?.trim()) {
-    console.warn(`[build] ${label} failed: ${result.stderr.trim()}`);
+  } else if (stderr) {
+    console.warn(`[build] ${label} failed: ${stderr}`);
   }
   return "";
 };
+
+const EXPECTED_GIT_DESCRIBE_NO_TAGS =
+  /(?:No names found|cannot describe anything|no tag exactly matches)/i;
 
 const gitTagFromEnv =
   (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME) || "";
@@ -38,10 +51,15 @@ const resolveGitSha = () =>
   runGit(["rev-parse", "HEAD"], "git rev-parse");
 
 const resolveExactGitTag = () =>
-  gitTagFromEnv || runGit(["describe", "--tags", "--exact-match"], "git describe --exact-match");
+  gitTagFromEnv ||
+  runGit(["describe", "--tags", "--exact-match"], "git describe --exact-match", {
+    suppressStderrPattern: EXPECTED_GIT_DESCRIBE_NO_TAGS,
+  });
 
 const resolveLatestGitTag = () =>
-  runGit(["describe", "--tags", "--abbrev=0"], "git describe --abbrev=0");
+  runGit(["describe", "--tags", "--abbrev=0"], "git describe --abbrev=0", {
+    suppressStderrPattern: EXPECTED_GIT_DESCRIBE_NO_TAGS,
+  });
 
 const resolveAppVersion = (gitShaValue: string) => {
   const envVersion = process.env.VITE_APP_VERSION || process.env.VERSION_NAME || "";

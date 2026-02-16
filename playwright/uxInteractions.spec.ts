@@ -746,7 +746,7 @@ test.describe('UX Interaction Patterns', () => {
 
     if (localVisible && c64uVisible) {
       await expect(localButton).toContainText('Local');
-      await expect(localButton).toContainText('Local Android Device');
+      await expect(localButton).toContainText('Local Device');
       await expect(c64uButton).toContainText('C64U');
       await expect(c64uButton).toContainText('Commodore 64 Ultimate');
       await attachStepScreenshot(page, testInfo, 'source-buttons-consistent');

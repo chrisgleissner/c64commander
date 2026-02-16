@@ -92,6 +92,12 @@ Violine this rule is a release blocker.
 - Keep the repository buildable. If changes break builds, fix them before declaring work complete.
 - Exceptions must never be ignored; log them or let them bubble up.
 
+## MANDATORY: Coverage gate before completion
+
+- For any plan/task that includes code changes, run `npm run test:coverage` before declaring completion.
+- The run must satisfy a safety margin of at least **82% branch coverage** (global), even if CI thresholds are lower.
+- If branch coverage is below 82%, continue adding meaningful tests until it is >= 82%.
+
 ## MANDATORY: Concurrent changes
 
 - If unexpected changes appear in the worktree, keep them as-is and continue. They are created by a concurrently running LLM.

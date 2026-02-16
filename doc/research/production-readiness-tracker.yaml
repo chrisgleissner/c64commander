@@ -209,7 +209,7 @@ audit_findings:
     modules:
       - ios/App/App/NativePlugins.swift
       - ios/App/App/Info.plist
-      - .github/workflows/ios-ci.yaml
+      - .github/workflows/ios.yaml
     plan_steps: [step_10]
     required_tests:
       - ios_smoke_supported_capabilities

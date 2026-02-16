@@ -8,9 +8,11 @@
 
 package uk.gleissner.c64commander
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.getcapacitor.Bridge
+import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.*
@@ -21,15 +23,24 @@ import org.mockito.Mockito.*
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows
 
+/** Test-only subclass that captures notifyListeners calls for verification. */
+private open class TestableDiagnosticsBridgePlugin : DiagnosticsBridgePlugin() {
+    val notifyListenersCalls = mutableListOf<Pair<String?, JSObject?>>()
+
+    public override fun notifyListeners(eventName: String?, data: JSObject?) {
+        notifyListenersCalls.add(Pair(eventName, data))
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 class DiagnosticsBridgePluginTest {
-    private lateinit var plugin: DiagnosticsBridgePlugin
+    private lateinit var plugin: TestableDiagnosticsBridgePlugin
     private lateinit var context: Context
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        plugin = DiagnosticsBridgePlugin()
+        plugin = TestableDiagnosticsBridgePlugin()
         injectBridge(plugin, context)
     }
 
@@ -106,5 +117,58 @@ class DiagnosticsBridgePluginTest {
         val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG)
         // No extras at all — receiver should handle gracefully
         context.sendBroadcast(intent)
+    }
+
+    @Test
+    fun receiverProcessesDetailedPayloadViaDirectInvocation() {
+        val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        val intent = Intent(AppLogger.ACTION_DIAGNOSTICS_LOG).apply {
+            putExtra(AppLogger.EXTRA_LEVEL, "warn")
+            putExtra(AppLogger.EXTRA_MESSAGE, "native warning")
+            putExtra(AppLogger.EXTRA_COMPONENT, "Bridge")
+            putExtra(AppLogger.EXTRA_CORRELATION_ID, "corr-123")
+            putExtra(AppLogger.EXTRA_TRACK_INSTANCE_ID, "7")
+            putExtra(AppLogger.EXTRA_PLAYLIST_ITEM_ID, "p-11")
+            putExtra(AppLogger.EXTRA_SOURCE_KIND, "hvsc")
+            putExtra(AppLogger.EXTRA_LOCAL_ACCESS_MODE, "ftp")
+            putExtra(AppLogger.EXTRA_LIFECYCLE_STATE, "playing")
+            putExtra(AppLogger.EXTRA_ERROR_NAME, "IllegalStateException")
+            putExtra(AppLogger.EXTRA_ERROR_MESSAGE, "boom")
+            putExtra(AppLogger.EXTRA_ERROR_STACK, "stack")
+        }
+
+        plugin.notifyListenersCalls.clear()
+        receiver.onReceive(context, intent)
+
+        val calls = plugin.notifyListenersCalls.filter { it.first == "diagnosticsLog" }
+        assertEquals("notifyListeners should be called once", 1, calls.size)
+        val payload = calls[0].second!!
+        assertEquals("warn", payload.getString("level"))
+        assertEquals("native warning", payload.getString("message"))
+        val details = payload.getJSObject("details")
+        assertNotNull(details)
+        assertEquals("Bridge", details?.getString("component"))
+        assertEquals("native", details?.getString("origin"))
+        assertEquals("corr-123", details?.getString("correlationId"))
+        val error = details?.getJSObject("error")
+        assertNotNull(error)
+        assertEquals("IllegalStateException", error?.getString("name"))
+        assertEquals("boom", error?.getString("message"))
+    }
+
+    @Test
+    fun receiverIgnoresNullIntentViaDirectInvocation() {
+        val receiverField = DiagnosticsBridgePlugin::class.java.getDeclaredField("diagnosticsReceiver")
+        receiverField.isAccessible = true
+        val receiver = receiverField.get(plugin) as BroadcastReceiver
+
+        plugin.notifyListenersCalls.clear()
+        receiver.onReceive(context, null)
+
+        assertTrue("notifyListeners should not be called for null intent",
+            plugin.notifyListenersCalls.none { it.first == "diagnosticsLog" })
     }
 }

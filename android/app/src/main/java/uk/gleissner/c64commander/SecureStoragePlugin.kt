@@ -9,6 +9,7 @@
 package uk.gleissner.c64commander
 
 import android.util.Log
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.getcapacitor.JSObject
@@ -22,8 +23,9 @@ class SecureStoragePlugin : Plugin() {
   private val prefsName = "c64_secure_storage"
   private val passwordStorageKey = "c64u_password"
   private val logTag = "SecureStoragePlugin"
+  internal var prefsProvider: (() -> SharedPreferences)? = null
 
-  private fun getPrefs() = EncryptedSharedPreferences.create(
+  private fun getPrefs() = prefsProvider?.invoke() ?: EncryptedSharedPreferences.create(
     context,
     prefsName,
     MasterKey.Builder(context)

@@ -27,6 +27,8 @@ import java.util.concurrent.Executors
 class FtpClientPlugin : Plugin() {
   private val executor = Executors.newSingleThreadExecutor()
   private val logTag = "FtpClientPlugin"
+  internal var ftpClientFactory: () -> FTPClient = { FTPClient() }
+  internal var runTask: (Runnable) -> Unit = { runnable -> executor.execute(runnable) }
 
   private fun traceFields(call: PluginCall): AppLogger.TraceFields {
     val trace = call.getObject("traceContext") ?: return AppLogger.TraceFields()
@@ -60,14 +62,14 @@ class FtpClientPlugin : Plugin() {
     val password = call.getString("password") ?: ""
     val path = call.getString("path") ?: "/"
 
-    executor.execute {
-      val client = FTPClient()
+    runTask(Runnable {
+      val client = ftpClientFactory()
       try {
         client.connect(host, port)
         val loggedIn = client.login(username, password)
         if (!loggedIn) {
           call.reject("FTP login failed")
-          return@execute
+            return@Runnable
         }
         client.enterLocalPassiveMode()
         client.setFileType(FTP.BINARY_FILE_TYPE)
@@ -111,7 +113,7 @@ class FtpClientPlugin : Plugin() {
           AppLogger.warn(pluginContextOrNull(), logTag, "Failed to disconnect FTP client", "FtpClientPlugin", error)
         }
       }
-    }
+    })
   }
 
   @PluginMethod
@@ -130,14 +132,14 @@ class FtpClientPlugin : Plugin() {
     val username = call.getString("username") ?: "user"
     val password = call.getString("password") ?: ""
 
-    executor.execute {
-      val client = FTPClient()
+    runTask(Runnable {
+      val client = ftpClientFactory()
       try {
         client.connect(host, port)
         val loggedIn = client.login(username, password)
         if (!loggedIn) {
           call.reject("FTP login failed")
-          return@execute
+            return@Runnable
         }
         client.enterLocalPassiveMode()
         client.setFileType(FTP.BINARY_FILE_TYPE)
@@ -146,7 +148,7 @@ class FtpClientPlugin : Plugin() {
         val success = client.retrieveFile(path, output)
         if (!success) {
           call.reject("FTP file read failed")
-          return@execute
+            return@Runnable
         }
         val bytes = output.toByteArray()
         val encoded = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
@@ -171,7 +173,7 @@ class FtpClientPlugin : Plugin() {
           AppLogger.warn(pluginContextOrNull(), logTag, "Failed to disconnect FTP client", "FtpClientPlugin", error)
         }
       }
-    }
+    })
   }
 
   private fun resolveListing(client: FTPClient, path: String): Array<FTPFile> {

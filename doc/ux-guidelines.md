@@ -348,7 +348,7 @@ The following terms are consistently used across the UI:
 Terminology rule:
 
 - Use only `Local`, `C64U`, and `HVSC` when naming sources in code and user-facing text.
-- The long forms `Local Android Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in:
+- The long forms `Local Device`, `Commodore 64 Ultimate`, and `High Voltage SID Collection` are allowed only in:
   - the source-selection interstitial (as subtitles/explanations), and
   - the Docs page (as explanatory text).
 - "Select all" / "Deselect all" - Bulk selection
