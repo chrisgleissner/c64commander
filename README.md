@@ -69,28 +69,20 @@ Because it gives you full control of your C64 Ultimate from any modern device:
 
 ### Install on Android
 
-1. Download `c64commander-<version>.apk` from the latest GitHub release.
-2. Open the file on your phone.
+1. Download the latest C64 Commander **APK file** from the [GitHub Releases page](https://github.com/chrisgleissner/c64commander/releases).
+2. Open the downloaded APK file.
 3. Allow installs from unknown sources if prompted.
 4. Tap **Install**.
-5. Launch C64 Commander from your home screen.
-
-Done.
+5. Launch C64 Commander.
 
 ### Install on iOS
 
-iOS builds are distributed via [AltStore](https://altstore.io/):
+1. [Set up SideStore](https://docs.sidestore.io/)
+2. Download the latest C64 Commander **IPA file** from the [GitHub Releases page](https://github.com/chrisgleissner/c64commander/releases).
+3. Open **SideStore → My Apps**, tap **+**, and select the IPA file.
+4. Launch C64 Commander.
 
-1. Install **AltServer** by following the instructions for [MacOS](https://faq.altstore.io/altstore-classic/how-to-install-altstore-macos) or [Windows](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows), then connect your iPhone via USB.
-2. In AltServer, choose **Install AltStore → [your iPhone]** and sign in with your Apple ID.
-3. Open **AltStore** on your iPhone.
-4. Download `c64commander-altstore-<version>.ipa` from the latest GitHub release and transfer it to your iPhone.
-5. In **AltStore → My Apps**, tap `+` and select the IPA.
-6. Launch C64 Commander from your home screen.
-
-Done.
-
-AltStore automatically refreshes installed apps in the background when your iPhone can reach AltServer on your local network.
+SideStore automatically refreshes installed apps every 7 days to renew their signature and keep them usable.
 
 ### Install for Web Access
 

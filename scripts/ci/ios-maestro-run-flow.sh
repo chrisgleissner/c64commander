@@ -31,6 +31,11 @@ MAESTRO_LOG_LEVEL="${MAESTRO_LOG_LEVEL:-debug}"
 MAESTRO_CLI_LOG_LEVEL="${MAESTRO_CLI_LOG_LEVEL:-debug}"
 MAESTRO_DRIVER_STARTUP_TIMEOUT_MS="${MAESTRO_DRIVER_STARTUP_TIMEOUT:-300000}"
 IOS_MAESTRO_RECORD_VIDEO="${IOS_MAESTRO_RECORD_VIDEO:-0}"
+MAESTRO_MAX_ATTEMPTS="${MAESTRO_MAX_ATTEMPTS:-3}"
+MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS="${MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS:-240}"
+DEBUG_PAYLOAD_MAX_ATTEMPTS="${IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS:-3}"
+DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS="${IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS:-1}"
+DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS="${IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS:-3}"
 UNIFIED_LOG_PID=""
 INSTALL_START_MS=""
 INSTALL_END_MS=""
@@ -324,11 +329,36 @@ preflight_maestro_driver_retry() {
   local flow_dir="$2"
 
   trace_event "$flow_dir" "maestro.driver.preflight" "runner" "{\"reason\":\"ios_driver_timeout\"}"
-  xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1 || true
+  log "Driver timeout preflight: rebooting simulator and reinstalling app for ${flow}"
+
+  xcrun simctl terminate "$UDID" "$APP_ID" >/dev/null 2>&1 || true
+  xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true
+
+  if ! xcrun simctl boot "$UDID" >/dev/null 2>&1; then
+    trace_event "$flow_dir" "maestro.driver.preflight.boot" "runner" "{\"status\":\"boot-command-failed\"}"
+    log "Simulator boot command failed during retry preflight (${flow})"
+    return 1
+  fi
+
+  if ! timeout "$MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS" xcrun simctl bootstatus "$UDID" -b >/dev/null 2>&1; then
+    trace_event "$flow_dir" "maestro.driver.preflight.boot" "runner" "{\"status\":\"bootstatus-timeout\"}"
+    log "Simulator bootstatus timeout during retry preflight (${flow})"
+    return 1
+  fi
+
+  if ! xcrun simctl install "$UDID" "$APP_PATH" >/dev/null 2>&1; then
+    trace_event "$flow_dir" "maestro.driver.preflight.install" "runner" "{\"status\":\"install-failed\"}"
+    log "App reinstall failed during retry preflight (${flow})"
+    return 1
+  fi
+
+  seed_smoke_config "$flow" || true
   xcrun simctl launch "$UDID" "$APP_ID" >/dev/null 2>&1 || true
-  sleep 4
+  sleep 5
   xcrun simctl terminate "$UDID" "$APP_ID" >/dev/null 2>&1 || true
   sleep 2
+
+  trace_event "$flow_dir" "maestro.driver.preflight" "runner" "{\"status\":\"ready\"}"
   log "Prepared simulator/app state for Maestro retry (${flow})"
 }
 
@@ -528,15 +558,17 @@ collect_debug_payloads() {
     local endpoint="${endpoints[$i]}"
     local filename="${filenames[$i]}"
     local attempt=0
-    while [[ $attempt -lt 5 ]]; do
+    while [[ $attempt -lt "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; do
       if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
+        --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
+        --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
         "http://127.0.0.1:39877/debug/${endpoint}" > "${flow_dir}/${filename}" 2>/dev/null; then
         break
       fi
       attempt=$((attempt + 1))
       sleep 1
     done
-    if [[ $attempt -ge 5 ]]; then
+    if [[ $attempt -ge "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; then
       echo "[]" > "${flow_dir}/${filename}"
       log "Failed to collect debug/${endpoint} — wrote empty array"
     fi
@@ -544,15 +576,17 @@ collect_debug_payloads() {
 
   # Collect network.json if available
   local net_attempt=0
-  while [[ $net_attempt -lt 3 ]]; do
+  while [[ $net_attempt -lt "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; do
     if xcrun simctl spawn "$UDID" /usr/bin/curl --silent --show-error --fail \
+      --connect-timeout "$DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS" \
+      --max-time "$DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS" \
       "http://127.0.0.1:39877/debug/network" > "${flow_dir}/network.json" 2>/dev/null; then
       break
     fi
     net_attempt=$((net_attempt + 1))
     sleep 1
   done
-  if [[ $net_attempt -ge 3 ]]; then
+  if [[ $net_attempt -ge "$DEBUG_PAYLOAD_MAX_ATTEMPTS" ]]; then
     echo '{"requests":[],"successCount":0,"failureCount":0}' > "${flow_dir}/network.json"
     log "No network.json endpoint — wrote empty stub"
   fi
@@ -681,7 +715,7 @@ TJSON
   # Run Maestro
   log "Running Maestro flow: ${flow}"
   local attempt=1
-  local max_attempts=2
+  local max_attempts="$MAESTRO_MAX_ATTEMPTS"
   while [[ $attempt -le $max_attempts ]]; do
     trace_event "$flow_dir" "maestro.command.first_sent" "runner" "{\"command\":\"maestro test\",\"attempt\":${attempt}}"
     MAESTRO_CLI_NO_ANALYTICS=1 \
@@ -696,9 +730,12 @@ TJSON
     fi
 
     if [[ $attempt -lt $max_attempts ]] && is_driver_startup_timeout_failure "$flow_dir"; then
-      log "Detected iOS driver startup timeout for ${flow}; retrying once with preflight"
+      log "Detected iOS driver startup timeout for ${flow}; retrying with preflight"
       trace_event "$flow_dir" "maestro.driver.retry" "runner" "{\"attempt\":${attempt},\"reason\":\"ios_driver_timeout\"}"
-      preflight_maestro_driver_retry "$flow" "$flow_dir"
+      if ! preflight_maestro_driver_retry "$flow" "$flow_dir"; then
+        log "Preflight retry failed for ${flow}; aborting retries"
+        break
+      fi
       attempt=$((attempt + 1))
       continue
     fi

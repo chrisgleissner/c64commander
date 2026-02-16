@@ -292,7 +292,12 @@ jobs:
           MAESTRO_CLI_NO_ANALYTICS: 1
           MAESTRO_LOG_LEVEL: debug
           MAESTRO_CLI_LOG_LEVEL: debug
-          MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
+          MAESTRO_DRIVER_STARTUP_TIMEOUT: "420000"
+          MAESTRO_MAX_ATTEMPTS: "2"
+          MAESTRO_DRIVER_RETRY_BOOT_TIMEOUT_SECONDS: "300"
+          IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS: "3"
+          IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS: "1"
+          IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS: "2"
           IOS_MAESTRO_RECORD_VIDEO: "0"
           SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
           SIM_BOOT_READY_MS: ${{ steps.simulator.outputs.boot_ready_ms }}
