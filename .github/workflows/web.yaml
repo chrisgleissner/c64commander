@@ -29,7 +29,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            platform_key: linux-amd64
+          - platform: linux/arm64
+            platform_key: linux-arm64
 
     steps:
       - name: Checkout
@@ -82,7 +86,10 @@ jobs:
             TELEMETRY_DOCKER_CONTAINER_NAME=c64commander-smoke \
             TELEMETRY_DEVICE_NAME="${{ matrix.platform }}-docker" \
             TELEMETRY_EXPECT_CONTAINER_UP=0 \
-            ci/telemetry/docker/monitor_docker.sh || status=$?
+            ci/telemetry/docker/monitor_docker.sh &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > ci-artifacts/telemetry/docker/monitor.child.pid
+            wait "$monitor_child_pid" || status=$?
             echo "$status" > ci-artifacts/telemetry/docker/monitor.exitcode
           ) > ci-artifacts/telemetry/docker/monitor-run.log 2>&1 &
           echo $! > ci-artifacts/telemetry/docker/monitor.pid
@@ -133,15 +140,26 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          child_pid=""
+          if [[ -f ci-artifacts/telemetry/docker/monitor.child.pid ]]; then
+            child_pid="$(cat ci-artifacts/telemetry/docker/monitor.child.pid)"
+          fi
           if [[ -f ci-artifacts/telemetry/docker/monitor.pid ]]; then
             pid="$(cat ci-artifacts/telemetry/docker/monitor.pid)"
-            kill -TERM "$pid" 2>/dev/null || true
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
             for _ in $(seq 1 20); do
               if [[ -f ci-artifacts/telemetry/docker/monitor.exitcode ]]; then
                 break
               fi
               sleep 1
             done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
             fi
@@ -164,7 +182,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: web-docker-telemetry-${{ matrix.platform }}
+          name: web-docker-telemetry-${{ matrix.platform_key }}
           path: |
             ci-artifacts/telemetry/docker/**
             ci-artifacts/telemetry/summary.json
