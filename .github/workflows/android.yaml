@@ -589,7 +589,11 @@ jobs:
       ANDROID_API_LEVEL: "34"
       ANDROID_SYSTEM_IMAGE: "system-images;android-34;google_apis;x86_64"
       ANDROID_DEVICE_PROFILE: "pixel_6"
-      ANDROID_AVD_NAME: "c64-ci"
+      ANDROID_AVD_NAME: "c64-ci-lowram"
+      ANDROID_AVD_RAM_MB: "512"
+      ANDROID_AVD_HEAP_MB: "128"
+      ANDROID_AVD_CPU_CORES: "1"
+      ANDROID_AVD_LOW_RAM: "yes"
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
       MAESTRO_TIMEOUT_SECS: "300"
@@ -676,9 +680,21 @@ jobs:
             exit 1
           fi
 
+          AVD_CONFIG="$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd/config.ini"
+          if [[ -f "$AVD_CONFIG" ]]; then
+            sed -i "s/^hw.ramSize=.*/hw.ramSize=${ANDROID_AVD_RAM_MB}/" "$AVD_CONFIG" || true
+            sed -i "s/^vm.heapSize=.*/vm.heapSize=${ANDROID_AVD_HEAP_MB}/" "$AVD_CONFIG" || true
+            sed -i "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}/" "$AVD_CONFIG" || true
+            sed -i "s/^hw.device.lowram=.*/hw.device.lowram=${ANDROID_AVD_LOW_RAM}/" "$AVD_CONFIG" || true
+            grep -q '^hw.ramSize=' "$AVD_CONFIG" || echo "hw.ramSize=${ANDROID_AVD_RAM_MB}" >> "$AVD_CONFIG"
+            grep -q '^vm.heapSize=' "$AVD_CONFIG" || echo "vm.heapSize=${ANDROID_AVD_HEAP_MB}" >> "$AVD_CONFIG"
+            grep -q '^hw.cpu.ncore=' "$AVD_CONFIG" || echo "hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}" >> "$AVD_CONFIG"
+            grep -q '^hw.device.lowram=' "$AVD_CONFIG" || echo "hw.device.lowram=${ANDROID_AVD_LOW_RAM}" >> "$AVD_CONFIG"
+          fi
+
           echo "=== Starting emulator in background ==="
           mkdir -p test-results/maestro
-          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-audio -no-metrics -no-boot-anim -no-snapshot -gpu swiftshader_indirect -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-audio -no-metrics -no-boot-anim -no-snapshot -no-snapshot-load -no-snapshot-save -gpu swiftshader_indirect -netdelay none -netspeed full -memory "${ANDROID_AVD_RAM_MB}" -cores "${ANDROID_AVD_CPU_CORES}" > test-results/maestro/emulator.log 2>&1 &
           EMULATOR_PID=$!
           echo $EMULATOR_PID > test-results/maestro/emulator.pid
           echo "Emulator started with PID: $EMULATOR_PID"

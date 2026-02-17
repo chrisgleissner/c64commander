@@ -19,7 +19,15 @@ vi.mock('@capacitor/filesystem', () => ({
 }));
 
 vi.mock('@capacitor/core', () => ({
-  Capacitor: { isNativePlatform: vi.fn(() => false) },
+  registerPlugin: vi.fn(() => ({
+    ingestHvsc: vi.fn(),
+    cancelIngestion: vi.fn(async () => undefined),
+    addListener: vi.fn(async () => ({ remove: vi.fn(async () => undefined) })),
+  })),
+  Capacitor: {
+    isNativePlatform: vi.fn(() => false),
+    isPluginAvailable: vi.fn(() => false),
+  },
 }));
 
 vi.mock('@/lib/hvsc/hvscFilesystem', () => ({

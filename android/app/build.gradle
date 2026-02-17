@@ -169,6 +169,7 @@ dependencies {
     implementation "androidx.documentfile:documentfile:1.0.1"
     implementation "androidx.security:security-crypto:1.1.0-alpha06"
     implementation "commons-net:commons-net:3.9.0"
+    implementation "org.apache.commons:commons-compress:1.26.2"
     implementation project(':capacitor-android')
     implementation project(':capacitor-cordova-android-plugins')
     testImplementation "junit:junit:$junitVersion"

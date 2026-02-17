@@ -8,6 +8,7 @@
 
 package uk.gleissner.c64commander
 
+import android.app.ActivityManager
 import android.os.Bundle
 import com.getcapacitor.BridgeActivity
 
@@ -18,8 +19,19 @@ class MainActivity : BridgeActivity() {
     registerPlugin(MockC64UPlugin::class.java)
     registerPlugin(FeatureFlagsPlugin::class.java)
     registerPlugin(FtpClientPlugin::class.java)
+    registerPlugin(HvscIngestionPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
     registerPlugin(DiagnosticsBridgePlugin::class.java)
     super.onCreate(savedInstanceState)
+
+    val manager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager
+    val memoryClass = manager?.memoryClass
+    val largeMemoryClass = manager?.largeMemoryClass
+    AppLogger.info(
+      this,
+      "MainActivity",
+      "Android memory class detected: memoryClass=$memoryClass, largeMemoryClass=$largeMemoryClass",
+      "MainActivity",
+    )
   }
 }

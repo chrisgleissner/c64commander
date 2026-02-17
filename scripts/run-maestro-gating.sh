@@ -14,6 +14,10 @@ AVD_NAME="${ANDROID_AVD_NAME:-c64-ci}"
 API_LEVEL="${ANDROID_API_LEVEL:-34}"
 SYSTEM_IMAGE="${ANDROID_SYSTEM_IMAGE:-system-images;android-34;google_apis;x86_64}"
 DEVICE_PROFILE="${ANDROID_DEVICE_PROFILE:-pixel_6}"
+AVD_RAM_MB="${ANDROID_AVD_RAM_MB:-512}"
+AVD_HEAP_MB="${ANDROID_AVD_HEAP_MB:-128}"
+AVD_CPU_CORES="${ANDROID_AVD_CPU_CORES:-1}"
+AVD_LOW_RAM="${ANDROID_AVD_LOW_RAM:-yes}"
 EMULATOR_HEADLESS="${EMULATOR_HEADLESS:-1}"
 EMULATOR_PORT="${EMULATOR_PORT:-5556}"
 SKIP_BUILD=0
@@ -165,16 +169,34 @@ wait_for_device() {
 
 ensure_avd() {
   if avdmanager list avd | grep -q "Name: $AVD_NAME"; then
+    local config_path="$ANDROID_AVD_HOME/${AVD_NAME}.avd/config.ini"
+    if [[ -f "$config_path" ]]; then
+      sed -i "s/^hw.ramSize=.*/hw.ramSize=${AVD_RAM_MB}/" "$config_path" || true
+      sed -i "s/^vm.heapSize=.*/vm.heapSize=${AVD_HEAP_MB}/" "$config_path" || true
+      sed -i "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${AVD_CPU_CORES}/" "$config_path" || true
+      sed -i "s/^hw.device.lowram=.*/hw.device.lowram=${AVD_LOW_RAM}/" "$config_path" || true
+      grep -q '^hw.ramSize=' "$config_path" || echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
+      grep -q '^vm.heapSize=' "$config_path" || echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
+      grep -q '^hw.cpu.ncore=' "$config_path" || echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
+      grep -q '^hw.device.lowram=' "$config_path" || echo "hw.device.lowram=${AVD_LOW_RAM}" >> "$config_path"
+    fi
     return 0
   fi
   log "Creating AVD $AVD_NAME"
   sdkmanager "platform-tools" "emulator" "platforms;android-${API_LEVEL}" "$SYSTEM_IMAGE"
   echo "no" | avdmanager create avd -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "$DEVICE_PROFILE"
+  local config_path="$ANDROID_AVD_HOME/${AVD_NAME}.avd/config.ini"
+  if [[ -f "$config_path" ]]; then
+    echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
+    echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
+    echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
+    echo "hw.device.lowram=${AVD_LOW_RAM}" >> "$config_path"
+  fi
 }
 
 start_emulator() {
   log "Starting emulator $AVD_NAME"
-  local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-boot-anim" "-no-audio" "-no-metrics" "-gpu" "swiftshader_indirect" "-netdelay" "none" "-netspeed" "full")
+  local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-snapshot-load" "-no-snapshot-save" "-no-boot-anim" "-no-audio" "-no-metrics" "-gpu" "swiftshader_indirect" "-netdelay" "none" "-netspeed" "full" "-memory" "$AVD_RAM_MB" "-cores" "$AVD_CPU_CORES")
   args+=("-port" "$EMULATOR_PORT")
   if [[ "$EMULATOR_HEADLESS" == "1" ]]; then
     args+=("-no-window")

@@ -49,8 +49,14 @@ vi.mock('@capacitor/filesystem', () => ({
 }));
 
 vi.mock('@capacitor/core', () => ({
+  registerPlugin: vi.fn(() => ({
+    ingestHvsc: vi.fn(),
+    cancelIngestion: vi.fn(async () => undefined),
+    addListener: vi.fn(async () => ({ remove: vi.fn(async () => undefined) })),
+  })),
   Capacitor: {
     isNativePlatform: vi.fn(),
+    isPluginAvailable: vi.fn(() => false),
   },
 }));
 

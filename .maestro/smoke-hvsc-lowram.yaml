@@ -1,0 +1,28 @@
+appId: uk.gleissner.c64commander
+tags:
+  - ci-critical
+  - hvsc-lowram
+env:
+  HVSC_INGEST_TIMEOUT: ${HVSC_INGEST_TIMEOUT || "900000"}
+  SHORT_TIMEOUT: ${SHORT_TIMEOUT || "5000"}
+  TIMEOUT: ${TIMEOUT || "15000"}
+---
+- runFlow: subflows/launch-and-wait.yaml
+- tapOn:
+    point: "25%,95%"
+- extendedWaitUntil:
+    visible: "Playlist"
+    timeout: ${SHORT_TIMEOUT}
+- scrollUntilVisible:
+    element: "HVSC"
+    direction: DOWN
+    timeout: ${TIMEOUT}
+- tapOn: "Download HVSC"
+- extendedWaitUntil:
+    visible: "HVSC downloaded successfully"
+    timeout: ${HVSC_INGEST_TIMEOUT}
+- assertVisible: "Ingested"
+- assertNotVisible: "Ingested 0 of 0 songs"
+- assertVisible: "Status: Ready"
+- assertNotVisible: "HVSC download failed"
+- takeScreenshot: hvsc-lowram-ingest-complete

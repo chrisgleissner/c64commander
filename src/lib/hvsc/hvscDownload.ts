@@ -251,6 +251,23 @@ export const getCacheStatusInternal = async () => {
 export const readArchiveBuffer = async (archivePath: string) => {
     const heapBefore = readHeapUsageBytes();
     const cacheDir = getHvscCacheDir();
+    let statSize: number | null = null;
+    try {
+        const stat = await Filesystem.stat({
+            directory: Directory.Data,
+            path: `${cacheDir}/${archivePath}`,
+        });
+        statSize = stat?.size ?? null;
+    } catch (error) {
+        addLog('warn', 'Failed to stat archive before guarded read', {
+            archivePath,
+            error: (error as Error).message,
+        });
+    }
+    const maxBridgeReadBytes = 5 * 1024 * 1024;
+    if (statSize !== null && statSize > maxBridgeReadBytes) {
+        throw new Error(`HVSC bridge read blocked for large archive (${statSize} bytes): ${archivePath}`);
+    }
     const archiveData = await Filesystem.readFile({
         directory: Directory.Data,
         path: `${cacheDir}/${archivePath}`,
