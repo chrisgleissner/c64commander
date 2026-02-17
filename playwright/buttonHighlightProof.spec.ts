@@ -13,8 +13,33 @@ test.describe('CTA highlight proof', () => {
         await expect(target).toBeVisible();
         await target.scrollIntoViewIfNeeded();
 
-        await target.click({ force: true, timeout: 60000 });
-        await expect(target).toHaveAttribute('data-c64-tap-flash', 'true');
+        const sawFlash = await Promise.all([
+            target.evaluate((element) => {
+                return new Promise<boolean>((resolve) => {
+                    const attr = 'data-c64-tap-flash';
+                    if (element.getAttribute(attr) === 'true') {
+                        resolve(true);
+                        return;
+                    }
+
+                    const observer = new MutationObserver(() => {
+                        if (element.getAttribute(attr) === 'true') {
+                            observer.disconnect();
+                            resolve(true);
+                        }
+                    });
+
+                    observer.observe(element, { attributes: true, attributeFilter: [attr] });
+                    setTimeout(() => {
+                        observer.disconnect();
+                        resolve(element.getAttribute(attr) === 'true');
+                    }, 1200);
+                });
+            }),
+            target.click({ force: true, timeout: 60000 }),
+        ]).then(([observed]) => observed);
+
+        expect(sawFlash).toBe(true);
 
         const activePath = testInfo.outputPath('button-highlight-active.png');
         await target.screenshot({ path: activePath });
@@ -23,7 +48,7 @@ test.describe('CTA highlight proof', () => {
             contentType: 'image/png',
         });
 
-        await page.waitForTimeout(320);
+        await page.waitForTimeout(400);
 
         await expect(target).not.toHaveAttribute('data-c64-tap-flash', 'true');
 
