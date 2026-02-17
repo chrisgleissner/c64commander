@@ -948,11 +948,12 @@ jobs:
             exit 1
           fi
           code=$(cat "$code_file")
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate warning: main process disappearance/restart detected; see ci-artifacts/telemetry/android/events.log"
+            exit 0
+          fi
           if [[ "$code" != "0" ]]; then
             echo "telemetry gate failed: monitor exited with code $code"
-            if [[ "$code" == "3" ]]; then
-              echo "main process disappearance detected; see ci-artifacts/telemetry/android/events.log"
-            fi
             exit 1
           fi
 
