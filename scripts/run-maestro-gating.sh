@@ -75,6 +75,19 @@ run_with_timeout() {
   "$@"
 }
 
+sed_inplace() {
+  local expr="$1"
+  local file="$2"
+  local tmp
+  tmp="$(mktemp)" || return 1
+  if sed "$expr" "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}
+
 resolve_sdk_dir() {
   if [[ -n "${ANDROID_SDK_ROOT:-}" ]]; then
     echo "$ANDROID_SDK_ROOT"
@@ -171,10 +184,10 @@ ensure_avd() {
   if avdmanager list avd | grep -q "Name: $AVD_NAME"; then
     local config_path="$ANDROID_AVD_HOME/${AVD_NAME}.avd/config.ini"
     if [[ -f "$config_path" ]]; then
-      sed -i "s/^hw.ramSize=.*/hw.ramSize=${AVD_RAM_MB}/" "$config_path" || true
-      sed -i "s/^vm.heapSize=.*/vm.heapSize=${AVD_HEAP_MB}/" "$config_path" || true
-      sed -i "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${AVD_CPU_CORES}/" "$config_path" || true
-      sed -i "s/^hw.device.lowram=.*/hw.device.lowram=${AVD_LOW_RAM}/" "$config_path" || true
+      sed_inplace "s/^hw.ramSize=.*/hw.ramSize=${AVD_RAM_MB}/" "$config_path" || true
+      sed_inplace "s/^vm.heapSize=.*/vm.heapSize=${AVD_HEAP_MB}/" "$config_path" || true
+      sed_inplace "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${AVD_CPU_CORES}/" "$config_path" || true
+      sed_inplace "s/^hw.device.lowram=.*/hw.device.lowram=${AVD_LOW_RAM}/" "$config_path" || true
       grep -q '^hw.ramSize=' "$config_path" || echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
       grep -q '^vm.heapSize=' "$config_path" || echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
       grep -q '^hw.cpu.ncore=' "$config_path" || echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
