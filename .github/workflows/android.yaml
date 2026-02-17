@@ -439,12 +439,10 @@ jobs:
               APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
             fi
           fi
+
           APP_VERSION="${APP_VERSION_RAW#v}"
-          VERSION_CODE="$(date -u +%s)"
-          if (( VERSION_CODE > 2147483647 )); then
-            echo "Computed VERSION_CODE exceeds Android int max: $VERSION_CODE" >&2
-            exit 1
-          fi
+          VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
@@ -874,12 +872,10 @@ jobs:
               APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
             fi
           fi
+
           APP_VERSION="${APP_VERSION_RAW#v}"
-          VERSION_CODE="$(date -u +%s)"
-          if (( VERSION_CODE > 2147483647 )); then
-            echo "Computed VERSION_CODE exceeds Android int max: $VERSION_CODE" >&2
-            exit 1
-          fi
+          VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
