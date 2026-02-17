@@ -21,7 +21,10 @@ vi.mock('@capacitor/filesystem', () => ({
 import { Filesystem } from '@capacitor/filesystem';
 import {
   buildHvscBrowseIndexFromEntries,
+  getHvscFoldersWithParent,
+  getHvscSongFromBrowseIndex,
   listFolderFromBrowseIndex,
+  listHvscFolderTracks,
   verifyHvscBrowseIndexIntegrity,
 } from '@/lib/hvsc/hvscBrowseIndexStore';
 
@@ -60,5 +63,82 @@ describe('hvscBrowseIndexStore', () => {
     const result = await verifyHvscBrowseIndexIntegrity(snapshot, 2);
     expect(result.isValid).toBe(false);
     expect(result.missingPaths.length).toBeGreaterThan(0);
+  });
+
+  it('returns valid for empty index in integrity check', async () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([]);
+    const result = await verifyHvscBrowseIndexIntegrity(snapshot);
+    expect(result.isValid).toBe(true);
+    expect(result.sampled).toBe(0);
+    expect(result.missingPaths).toEqual([]);
+  });
+
+  it('gets song from browse index by path', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+    ]);
+    const song = getHvscSongFromBrowseIndex(snapshot, '/DEMOS/A/One.sid');
+    expect(song).not.toBeNull();
+    expect(song?.fileName).toBe('One.sid');
+  });
+
+  it('returns null for missing song in browse index', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+    ]);
+    const song = getHvscSongFromBrowseIndex(snapshot, '/nonexist/Song.sid');
+    expect(song).toBeNull();
+  });
+
+  it('gets folders with parent', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+      { path: '/DEMOS/B/Two.sid', name: 'Two.sid', type: 'sid' },
+    ]);
+    const folders = getHvscFoldersWithParent(snapshot, '/DEMOS');
+    expect(folders.length).toBe(2);
+    expect(folders.map((f) => f.folderName).sort()).toEqual(['A', 'B']);
+  });
+
+  it('returns empty array for non-existent parent folder', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+    ]);
+    const folders = getHvscFoldersWithParent(snapshot, '/NONEXIST');
+    expect(folders).toEqual([]);
+  });
+
+  it('lists folder tracks', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+      { path: '/DEMOS/A/Two.sid', name: 'Two.sid', type: 'sid' },
+    ]);
+    const tracks = listHvscFolderTracks(snapshot, '/DEMOS/A');
+    expect(tracks.length).toBe(2);
+    expect(tracks.map((t) => t.fileName).sort()).toEqual(['One.sid', 'Two.sid']);
+  });
+
+  it('returns empty array for non-existent folder tracks', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([]);
+    const tracks = listHvscFolderTracks(snapshot, '/NONEXIST');
+    expect(tracks).toEqual([]);
+  });
+
+  it('filters songs by query in listFolderFromBrowseIndex', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/Alpha.sid', name: 'Alpha.sid', type: 'sid' },
+      { path: '/DEMOS/A/Beta.sid', name: 'Beta.sid', type: 'sid' },
+    ]);
+    const result = listFolderFromBrowseIndex(snapshot, '/DEMOS/A', 'alpha', 0, 50);
+    expect(result.totalSongs).toBe(1);
+    expect(result.songs[0]?.fileName).toBe('Alpha.sid');
+  });
+
+  it('normalizes trailing-slash folder path', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+    ]);
+    const result = listFolderFromBrowseIndex(snapshot, '/DEMOS/A/', '', 0, 50);
+    expect(result.totalSongs).toBe(1);
   });
 });

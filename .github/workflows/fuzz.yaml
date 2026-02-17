@@ -59,8 +59,14 @@ jobs:
           TELEMETRY_PLATFORM: fuzz-deterministic
         run: |
           mkdir -p "$TELEMETRY_OUTPUT_DIR"
-          bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 &
+          ( status=0; bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 || status=$?; echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ) &
           echo $! > "$TELEMETRY_OUTPUT_DIR/monitor.pid"
+          sleep 2
+          if ! kill -0 "$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")" 2>/dev/null; then
+            echo "telemetry monitor failed to start" >&2
+            cat "$TELEMETRY_OUTPUT_DIR/monitor.log" >&2 || true
+            exit 1
+          fi
 
       - name: Run fuzz test (deterministic)
         env:
@@ -78,7 +84,9 @@ jobs:
             MONITOR_PID="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")"
             if kill -0 "$MONITOR_PID" 2>/dev/null; then
               kill "$MONITOR_PID" || true
-              wait "$MONITOR_PID" || true
+              for i in $(seq 1 20); do kill -0 "$MONITOR_PID" 2>/dev/null || break; sleep 1; done
+              if kill -0 "$MONITOR_PID" 2>/dev/null; then kill -9 "$MONITOR_PID" || true; fi
+              wait "$MONITOR_PID" 2>/dev/null || true
             fi
           fi
 
@@ -89,14 +97,14 @@ jobs:
           TELEMETRY_SUMMARY_OUT_JSON: ci-artifacts/telemetry/fuzz-deterministic/summary.json
           TELEMETRY_SUMMARY_OUT_MD: ci-artifacts/telemetry/fuzz-deterministic/summary.md
         run: |
-          python3 ci/telemetry/summarize_metrics.py || true
+          python3 ci/telemetry/summarize_metrics.py
 
       - name: Render telemetry charts
         if: always()
         env:
           TELEMETRY_SUMMARY_DIR: ci-artifacts/telemetry/fuzz-deterministic
         run: |
-          python3 ci/telemetry/render_charts.py || true
+          python3 ci/telemetry/render_charts.py
 
       - name: Upload fuzz artifacts
         if: always()
@@ -109,7 +117,7 @@ jobs:
             ci-artifacts/telemetry/fuzz-deterministic/events.log
             ci-artifacts/telemetry/fuzz-deterministic/metadata.json
             ci-artifacts/telemetry/fuzz-deterministic/monitor.log
-            ci-artifacts/telemetry/fuzz-deterministic/monitor_exit_code
+            ci-artifacts/telemetry/fuzz-deterministic/monitor.exitcode
             ci-artifacts/telemetry/fuzz-deterministic/summary.json
             ci-artifacts/telemetry/fuzz-deterministic/summary.md
             ci-artifacts/telemetry/fuzz-deterministic/charts/**
@@ -119,25 +127,31 @@ jobs:
         env:
           TELEMETRY_OUTPUT_DIR: ci-artifacts/telemetry/fuzz-deterministic
         run: |
-          if [[ ! -f "$TELEMETRY_OUTPUT_DIR/metrics.csv" ]]; then
-            echo "missing telemetry CSV" >&2
+          csv="$TELEMETRY_OUTPUT_DIR/metrics.csv"
+          code_file="$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv" >&2
             exit 1
           fi
-          if [[ ! -s "$TELEMETRY_OUTPUT_DIR/metrics.csv" ]]; then
-            echo "empty telemetry CSV" >&2
+          line_count="$(wc -l < "$csv")"
+          if [[ "$line_count" -le 1 ]]; then
+            echo "telemetry gate failed: empty CSV ($line_count lines)" >&2
             exit 1
           fi
-          if [[ "$(wc -l < "$TELEMETRY_OUTPUT_DIR/metrics.csv")" -le 1 ]]; then
-            echo "telemetry CSV has no samples" >&2
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing" >&2
             exit 1
           fi
-          if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor_exit_code" ]]; then
-            EXIT_CODE="$(cat "$TELEMETRY_OUTPUT_DIR/monitor_exit_code")"
-            if [[ "$EXIT_CODE" != "0" ]]; then
-              echo "telemetry monitor exit code: $EXIT_CODE" >&2
-              exit "$EXIT_CODE"
-            fi
+          code="$(cat "$code_file")"
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate failed: target process disappeared (exit code 3)" >&2
+            exit 1
           fi
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code" >&2
+            exit 1
+          fi
+          echo "telemetry gates passed: $line_count samples, monitor exit code $code"
 
   fuzz:
     name: Fuzz Test (Playwright)
@@ -184,8 +198,14 @@ jobs:
           TELEMETRY_PLATFORM: fuzz
         run: |
           mkdir -p "$TELEMETRY_OUTPUT_DIR"
-          bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 &
+          ( status=0; bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 || status=$?; echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ) &
           echo $! > "$TELEMETRY_OUTPUT_DIR/monitor.pid"
+          sleep 2
+          if ! kill -0 "$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")" 2>/dev/null; then
+            echo "telemetry monitor failed to start" >&2
+            cat "$TELEMETRY_OUTPUT_DIR/monitor.log" >&2 || true
+            exit 1
+          fi
 
       - name: Run fuzz test
         env:
@@ -209,7 +229,9 @@ jobs:
             MONITOR_PID="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")"
             if kill -0 "$MONITOR_PID" 2>/dev/null; then
               kill "$MONITOR_PID" || true
-              wait "$MONITOR_PID" || true
+              for i in $(seq 1 20); do kill -0 "$MONITOR_PID" 2>/dev/null || break; sleep 1; done
+              if kill -0 "$MONITOR_PID" 2>/dev/null; then kill -9 "$MONITOR_PID" || true; fi
+              wait "$MONITOR_PID" 2>/dev/null || true
             fi
           fi
 
@@ -220,14 +242,14 @@ jobs:
           TELEMETRY_SUMMARY_OUT_JSON: ci-artifacts/telemetry/fuzz/summary.json
           TELEMETRY_SUMMARY_OUT_MD: ci-artifacts/telemetry/fuzz/summary.md
         run: |
-          python3 ci/telemetry/summarize_metrics.py || true
+          python3 ci/telemetry/summarize_metrics.py
 
       - name: Render telemetry charts
         if: always()
         env:
           TELEMETRY_SUMMARY_DIR: ci-artifacts/telemetry/fuzz
         run: |
-          python3 ci/telemetry/render_charts.py || true
+          python3 ci/telemetry/render_charts.py
 
       - name: Upload fuzz artifacts
         if: always()
@@ -240,7 +262,7 @@ jobs:
             ci-artifacts/telemetry/fuzz/events.log
             ci-artifacts/telemetry/fuzz/metadata.json
             ci-artifacts/telemetry/fuzz/monitor.log
-            ci-artifacts/telemetry/fuzz/monitor_exit_code
+            ci-artifacts/telemetry/fuzz/monitor.exitcode
             ci-artifacts/telemetry/fuzz/summary.json
             ci-artifacts/telemetry/fuzz/summary.md
             ci-artifacts/telemetry/fuzz/charts/**
@@ -250,22 +272,28 @@ jobs:
         env:
           TELEMETRY_OUTPUT_DIR: ci-artifacts/telemetry/fuzz
         run: |
-          if [[ ! -f "$TELEMETRY_OUTPUT_DIR/metrics.csv" ]]; then
-            echo "missing telemetry CSV" >&2
+          csv="$TELEMETRY_OUTPUT_DIR/metrics.csv"
+          code_file="$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv" >&2
             exit 1
           fi
-          if [[ ! -s "$TELEMETRY_OUTPUT_DIR/metrics.csv" ]]; then
-            echo "empty telemetry CSV" >&2
+          line_count="$(wc -l < "$csv")"
+          if [[ "$line_count" -le 1 ]]; then
+            echo "telemetry gate failed: empty CSV ($line_count lines)" >&2
             exit 1
           fi
-          if [[ "$(wc -l < "$TELEMETRY_OUTPUT_DIR/metrics.csv")" -le 1 ]]; then
-            echo "telemetry CSV has no samples" >&2
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing" >&2
             exit 1
           fi
-          if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor_exit_code" ]]; then
-            EXIT_CODE="$(cat "$TELEMETRY_OUTPUT_DIR/monitor_exit_code")"
-            if [[ "$EXIT_CODE" != "0" ]]; then
-              echo "telemetry monitor exit code: $EXIT_CODE" >&2
-              exit "$EXIT_CODE"
-            fi
+          code="$(cat "$code_file")"
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate failed: target process disappeared (exit code 3)" >&2
+            exit 1
           fi
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code" >&2
+            exit 1
+          fi
+          echo "telemetry gates passed: $line_count samples, monitor exit code $code"

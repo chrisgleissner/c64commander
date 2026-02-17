@@ -141,7 +141,7 @@ while (( running == 1 )); do
     if metrics="$(read_ps_metrics "$app_pid" || true)"; then
       read -r cpu_percent rss_kb threads <<< "$metrics"
       cpu_percent="$(awk -v c="${cpu_percent:-0}" 'BEGIN{printf "%.1f", c+0.0}')"
-      printf '%s,ios,%s,%s,%s,%s,%s,,,,\n' \
+      printf '%s,ios,%s,%s,%s,%s,%s,%s,,,,,\n' \
         "$sample_ts" \
         "$DEVICE_NAME" \
         "$PACKAGE_BUNDLE_ID" \
@@ -158,7 +158,7 @@ while (( running == 1 )); do
       if wk_metrics="$(read_ps_metrics "$wk_pid" || true)"; then
         read -r wk_cpu wk_rss wk_threads <<< "$wk_metrics"
         wk_cpu="$(awk -v c="${wk_cpu:-0}" 'BEGIN{printf "%.1f", c+0.0}')"
-        printf '%s,ios,%s,%s,%s,%s,%s,,,,\n' \
+        printf '%s,ios,%s,%s,%s,%s,%s,%s,,,,,\n' \
           "$sample_ts" \
           "$DEVICE_NAME" \
           "$wk_comm" \

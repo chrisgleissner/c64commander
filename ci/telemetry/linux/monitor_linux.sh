@@ -105,19 +105,19 @@ while :; do
         if [[ "$delta_proc" -lt 0 ]]; then
           delta_proc=0
         fi
-        cpu_percent="$(awk -v dp="$delta_proc" -v dt="$delta_total" 'BEGIN { printf "%.2f", (dt > 0 ? (dp * 100.0 / dt) : 0) }')"
+        cpu_percent="$(awk -v dp="$delta_proc" -v dt="$delta_total" 'BEGIN { printf "%.1f", (dt > 0 ? (dp * 100.0 / dt) : 0) }')"
       fi
 
       prev_proc_jiffies="$proc_jiffies"
       prev_total_jiffies="$total_jiffies"
 
       printf '%s,%s,%s,%s,%s,%s,%s,%s,,,,\n' \
-        "$rel_ts" \
+        "$now_epoch" \
         "$TELEMETRY_PLATFORM" \
-        "linux-host" \
-        "run-fuzz" \
+        "${TELEMETRY_DEVICE_NAME:-linux-host}" \
+        "$TELEMETRY_PROCESS_MATCH" \
         "$pid" \
-        "$cpu_percent" \
+        "${cpu_percent:-0.0}" \
         "$rss_kb" \
         "$threads" >>"$METRICS_CSV"
     fi
@@ -134,6 +134,19 @@ while :; do
 
   sleep "$TELEMETRY_INTERVAL_SEC"
 done
+
+# Update metadata with end state
+{
+  printf '{\n'
+  printf '  "platform": "%s",\n' "$TELEMETRY_PLATFORM"
+  printf '  "interval_sec": %s,\n' "$TELEMETRY_INTERVAL_SEC"
+  printf '  "process_match": "%s",\n' "$TELEMETRY_PROCESS_MATCH"
+  printf '  "started_at": "%s",\n' "$(date -u -d @"$start_epoch" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '  "ended_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '  "main_seen_once": %s,\n' "$seen_pid"
+  printf '  "main_disappeared": %s\n' "$main_disappeared"
+  printf '}\n'
+} >"$META_JSON"
 
 exit_code=0
 if [[ "$seen_pid" -eq 1 && "$main_disappeared" -eq 1 ]]; then

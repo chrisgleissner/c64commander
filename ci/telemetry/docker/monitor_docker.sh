@@ -123,7 +123,7 @@ while (( running == 1 )); do
     rss_kb="$(to_kb "$mem_raw")"
   fi
 
-  printf '%s,docker,%s,%s,%s,%s,%s,,,,\n' \
+  printf '%s,docker,%s,%s,%s,%s,%s,,,,,\n' \
     "$ts" "$DEVICE_NAME" "$CONTAINER_NAME" "$pid" "$cpu_percent" "${rss_kb:-}" >> "$CSV_PATH"
 
   log "telemetry(docker): sample ts=$ts"
