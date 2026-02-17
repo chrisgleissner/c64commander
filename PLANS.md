@@ -6,6 +6,7 @@ Two systemic issues are being fixed:
 
 1. Custom CTA-like UI elements can remain visually highlighted/focused after click.
 2. Demo mode does not reliably auto-transition to real mode when the configured C64U becomes reachable later.
+3. Provide objective proof that CTA highlight activation clears automatically after the configured timeout.
 
 This plan is the authoritative tracker and is updated as work progresses.
 
@@ -149,6 +150,7 @@ Inventory command used:
 7. [ ] Run lint/tests/coverage/build/full build helper
 8. [ ] Push branch and verify CI green via `gh` run monitoring
 9. [ ] Finalize this plan with validation evidence
+10. [x] Add screenshot-based transient highlight proof requirement and generate evidence
 
 ---
 
@@ -217,6 +219,12 @@ Inventory command used:
 
 - Existing connection simulation/demo mode suites remain required for CI
 - Existing representative page interactions cover broad CTA surface in Playwright
+- Dedicated proof capture: take screenshot immediately after activation and shortly after timeout, while asserting transient attribute clears
+
+### Proof Requirement (Added)
+
+- Must provide screenshot evidence for CTA highlight activation and post-timeout cleared state.
+- Acceptable proof includes a deterministic Playwright test with before/after screenshots and explicit attribute assertions.
 
 ---
 
@@ -230,3 +238,24 @@ Inventory command used:
 - [ ] All required local checks green (lint, test, coverage, build, full build helper)
 - [ ] CI green and verified via `gh`
 - [ ] Plan updated with final evidence and zero remaining TODOs
+
+---
+
+## Verification Evidence (Proof: CTA Highlight Timeout)
+
+### Automated proof run
+
+- Command: `npx playwright test playwright/buttonHighlightProof.spec.ts --project=android-phone`
+- Result: `1 passed`
+
+### What was asserted
+
+- On CTA activation, `data-c64-tap-flash="true"` is present.
+- After `320ms`, the same CTA no longer has `data-c64-tap-flash="true"`.
+
+### Screenshot artifacts generated
+
+- Activation screenshot:
+  - `test-results/playwright/buttonHighlightProof-CTA-h-d026d-ars-after-transient-timeout-android-phone/button-highlight-active.png`
+- Post-timeout screenshot:
+  - `test-results/playwright/buttonHighlightProof-CTA-h-d026d-ars-after-transient-timeout-android-phone/button-highlight-cleared.png`

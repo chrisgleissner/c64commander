@@ -61,4 +61,19 @@ describe('buttonInteraction', () => {
 
     cleanup();
   });
+
+  it('applies interaction model for touch pointer events', () => {
+    const cleanup = registerGlobalButtonInteractionModel();
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+
+    const event = new Event('pointerup', { bubbles: true }) as PointerEvent;
+    Object.defineProperty(event, 'button', { value: -1 });
+    Object.defineProperty(event, 'pointerType', { value: 'touch' });
+
+    button.dispatchEvent(event);
+    expect(button.getAttribute('data-c64-tap-flash')).toBe('true');
+
+    cleanup();
+  });
 });

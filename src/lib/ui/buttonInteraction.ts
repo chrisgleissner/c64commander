@@ -78,7 +78,7 @@ export const handlePointerButtonClick = (event: { detail: number; currentTarget:
 
 export const registerGlobalButtonInteractionModel = () => {
   const handler = (event: PointerEvent) => {
-    if (event.button !== 0) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     const interactive = resolveInteractiveElement(event.target);
     if (!interactive) return;
     applyPointerButtonInteraction(interactive);
