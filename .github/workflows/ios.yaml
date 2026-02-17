@@ -304,6 +304,25 @@ jobs:
           CI: "true"
         run: |
           set -euo pipefail
+          mkdir -p artifacts/ios/_infra/telemetry
+          (
+            status=0
+            TELEMETRY_INTERVAL_SEC=1 \
+            TELEMETRY_OUTPUT_DIR=artifacts/ios/_infra/telemetry \
+            SIMULATOR_UDID="${{ steps.simulator.outputs.udid }}" \
+            TELEMETRY_DEVICE_NAME="${{ matrix.group.name }}-${{ steps.simulator.outputs.udid }}" \
+            BUNDLE_ID="${APP_ID}" \
+            ci/telemetry/ios/monitor_ios.sh || status=$?
+            echo "$status" > artifacts/ios/_infra/telemetry/monitor.exitcode
+          ) > artifacts/ios/_infra/telemetry/monitor-run.log 2>&1 &
+          echo $! > artifacts/ios/_infra/telemetry/monitor.pid
+          sleep 2
+          if ! kill -0 "$(cat artifacts/ios/_infra/telemetry/monitor.pid)" 2>/dev/null; then
+            echo "iOS telemetry monitor failed to start"
+            cat artifacts/ios/_infra/telemetry/monitor-run.log || true
+            exit 1
+          fi
+
           bash scripts/ci/ios-maestro-run-flow.sh \
             --flows "${{ matrix.group.flows }}" \
             --group "${{ matrix.group.name }}" \
@@ -319,6 +338,37 @@ jobs:
             bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}" || true
           done
 
+      - name: Stop iOS telemetry monitor
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f artifacts/ios/_infra/telemetry/monitor.pid ]]; then
+            pid="$(cat artifacts/ios/_infra/telemetry/monitor.pid)"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+              if [[ -f artifacts/ios/_infra/telemetry/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          fi
+          cat artifacts/ios/_infra/telemetry/monitor-run.log || true
+
+      - name: Summarize telemetry (${{ matrix.group.name }})
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=artifacts/ios/_infra/telemetry python3 ci/telemetry/summarize_metrics.py
+
+      - name: Render telemetry charts (${{ matrix.group.name }})
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=artifacts/ios/_infra/telemetry python3 ci/telemetry/render_charts.py
+
       - name: Upload per-group artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -326,7 +376,40 @@ jobs:
           name: ios-maestro-${{ matrix.group.name }}
           path: |
             artifacts/ios/**
+            artifacts/ios/_infra/telemetry/metrics.csv
+            artifacts/ios/_infra/telemetry/events.log
+            artifacts/ios/_infra/telemetry/summary.json
+            artifacts/ios/_infra/telemetry/summary.md
+            artifacts/ios/_infra/telemetry/charts/**
           if-no-files-found: warn
+
+      - name: Enforce iOS telemetry gates (${{ matrix.group.name }})
+        if: always()
+        run: |
+          set -euo pipefail
+          csv="artifacts/ios/_infra/telemetry/metrics.csv"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv"
+            exit 1
+          fi
+          line_count=$(wc -l < "$csv")
+          if [[ "$line_count" -le 1 ]]; then
+            echo "telemetry gate failed: empty CSV"
+            exit 1
+          fi
+          code_file="artifacts/ios/_infra/telemetry/monitor.exitcode"
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing"
+            exit 1
+          fi
+          code=$(cat "$code_file")
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code"
+            if [[ "$code" == "3" ]]; then
+              echo "app process disappearance detected; see artifacts/ios/_infra/telemetry/events.log"
+            fi
+            exit 1
+          fi
 
       - name: Shutdown and delete simulator
         if: always()

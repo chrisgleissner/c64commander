@@ -18,6 +18,11 @@ permissions:
 env:
   IMAGE_NAME: ghcr.io/chrisgleissner/c64commander
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  DOCKER_LIMIT_MEMORY: 512m
+  DOCKER_LIMIT_CPUS: "2"
+  DOCKER_LIMIT_CPU_PERIOD: "100000"
+  DOCKER_LIMIT_CPU_QUOTA: "200000"
+  DOCKER_TARGET_CPU_FREQ_MHZ: "2000"
 
 jobs:
   web-build-and-test:
@@ -68,12 +73,43 @@ jobs:
             -t c64commander:ci \
             .
 
+      - name: Start Docker telemetry monitor
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts/telemetry/docker
+          (
+            status=0
+            TELEMETRY_INTERVAL_SEC=1 \
+            TELEMETRY_OUTPUT_DIR=ci-artifacts/telemetry/docker \
+            TELEMETRY_DOCKER_CONTAINER_NAME=c64commander-smoke \
+            TELEMETRY_DEVICE_NAME="${{ matrix.platform }}-docker" \
+            TELEMETRY_EXPECT_CONTAINER_UP=0 \
+            ci/telemetry/docker/monitor_docker.sh || status=$?
+            echo "$status" > ci-artifacts/telemetry/docker/monitor.exitcode
+          ) > ci-artifacts/telemetry/docker/monitor-run.log 2>&1 &
+          echo $! > ci-artifacts/telemetry/docker/monitor.pid
+          sleep 2
+          if ! kill -0 "$(cat ci-artifacts/telemetry/docker/monitor.pid)" 2>/dev/null; then
+            echo "Docker telemetry monitor failed to start"
+            cat ci-artifacts/telemetry/docker/monitor-run.log || true
+            exit 1
+          fi
+
       - name: Run Docker container smoke test
         run: |
           set -euo pipefail
           mkdir -p .tmp/web-config
           chmod 0777 .tmp/web-config
-          docker run -d --name c64commander-smoke --add-host=host.docker.internal:host-gateway -p 18080:8064 -v "$PWD/.tmp/web-config:/config" c64commander:ci
+          docker run -d --name c64commander-smoke \
+            --add-host=host.docker.internal:host-gateway \
+            --memory "${DOCKER_LIMIT_MEMORY}" \
+            --memory-swap "${DOCKER_LIMIT_MEMORY}" \
+            --cpus "${DOCKER_LIMIT_CPUS}" \
+            --cpu-period "${DOCKER_LIMIT_CPU_PERIOD}" \
+            --cpu-quota "${DOCKER_LIMIT_CPU_QUOTA}" \
+            -p 18080:8064 \
+            -v "$PWD/.tmp/web-config:/config" \
+            c64commander:ci
           healthy=0
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:18080/healthz >/dev/null; then
@@ -96,6 +132,75 @@ jobs:
           PLAYWRIGHT_WORKERS: "1"
           PLAYWRIGHT_DEVICES: "web"
         run: npx playwright test playwright/webPlatformAuth.spec.ts --project=web
+
+      - name: Stop Docker telemetry monitor
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f ci-artifacts/telemetry/docker/monitor.pid ]]; then
+            pid="$(cat ci-artifacts/telemetry/docker/monitor.pid)"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+              if [[ -f ci-artifacts/telemetry/docker/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          fi
+          cat ci-artifacts/telemetry/docker/monitor-run.log || true
+
+      - name: Summarize Docker telemetry
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/summarize_metrics.py
+
+      - name: Render Docker telemetry charts
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/render_charts.py
+
+      - name: Upload Docker telemetry artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-docker-telemetry-${{ matrix.platform }}
+          path: |
+            ci-artifacts/telemetry/docker/**
+            ci-artifacts/telemetry/summary.json
+            ci-artifacts/telemetry/summary.md
+            ci-artifacts/telemetry/charts/**
+            /tmp/web-health.json
+          if-no-files-found: warn
+
+      - name: Enforce Docker telemetry gates
+        if: always()
+        run: |
+          set -euo pipefail
+          csv="ci-artifacts/telemetry/docker/metrics.csv"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv"
+            exit 1
+          fi
+          line_count=$(wc -l < "$csv")
+          if [[ "$line_count" -le 1 ]]; then
+            echo "telemetry gate failed: empty CSV"
+            exit 1
+          fi
+          code_file="ci-artifacts/telemetry/docker/monitor.exitcode"
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing"
+            exit 1
+          fi
+          code=$(cat "$code_file")
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code"
+            exit 1
+          fi
 
       - name: Stop smoke container
         if: always()

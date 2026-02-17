@@ -810,6 +810,27 @@ jobs:
           end=$(date +%s)
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Start Android telemetry monitor
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts/telemetry/android
+          (
+            status=0
+            TELEMETRY_INTERVAL_SEC=1 \
+            TELEMETRY_OUTPUT_DIR=ci-artifacts/telemetry/android \
+            ANDROID_PACKAGE_NAME=uk.gleissner.c64commander \
+            TELEMETRY_DEVICE_NAME="${ANDROID_AVD_NAME}" \
+            ci/telemetry/android/monitor_android.sh || status=$?
+            echo "$status" > ci-artifacts/telemetry/android/monitor.exitcode
+          ) > ci-artifacts/telemetry/android/monitor-run.log 2>&1 &
+          echo $! > ci-artifacts/telemetry/android/monitor.pid
+          sleep 2
+          if ! kill -0 "$(cat ci-artifacts/telemetry/android/monitor.pid)" 2>/dev/null; then
+            echo "Android telemetry monitor failed to start"
+            cat ci-artifacts/telemetry/android/monitor-run.log || true
+            exit 1
+          fi
+
       - name: Run Maestro gating flows
         env:
           CI: "true"
@@ -849,6 +870,37 @@ jobs:
             exit 1
           }
 
+      - name: Stop Android telemetry monitor
+        if: always()
+        run: |
+          set -euo pipefail
+          if [[ -f ci-artifacts/telemetry/android/monitor.pid ]]; then
+            pid="$(cat ci-artifacts/telemetry/android/monitor.pid)"
+            kill -TERM "$pid" 2>/dev/null || true
+            for _ in $(seq 1 20); do
+              if [[ -f ci-artifacts/telemetry/android/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          fi
+          cat ci-artifacts/telemetry/android/monitor-run.log || true
+
+      - name: Summarize telemetry
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/summarize_metrics.py
+
+      - name: Render telemetry charts
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/render_charts.py
+
       - name: Upload Maestro evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -857,6 +909,38 @@ jobs:
           path: |
             test-results/maestro/**
             test-results/evidence/maestro/**
+            ci-artifacts/telemetry/android/**
+            ci-artifacts/telemetry/summary.json
+            ci-artifacts/telemetry/summary.md
+            ci-artifacts/telemetry/charts/**
+
+      - name: Enforce Android telemetry gates
+        if: always()
+        run: |
+          set -euo pipefail
+          csv="ci-artifacts/telemetry/android/metrics.csv"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv"
+            exit 1
+          fi
+          line_count=$(wc -l < "$csv")
+          if [[ "$line_count" -le 1 ]]; then
+            echo "telemetry gate failed: empty CSV"
+            exit 1
+          fi
+          code_file="ci-artifacts/telemetry/android/monitor.exitcode"
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing"
+            exit 1
+          fi
+          code=$(cat "$code_file")
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code"
+            if [[ "$code" == "3" ]]; then
+              echo "main process disappearance detected; see ci-artifacts/telemetry/android/events.log"
+            fi
+            exit 1
+          fi
 
   android-packaging:
     name: Android | Packaging
