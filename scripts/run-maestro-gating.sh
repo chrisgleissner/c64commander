@@ -484,7 +484,13 @@ if [[ "${CI:-false}" == "true" ]]; then
     "$ROOT_DIR/.maestro/smoke-hvsc.yaml"
     "$ROOT_DIR/.maestro/smoke-hvsc-lowram.yaml"
   )
-  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+  CI_MAESTRO_ENV_ARGS=(
+    -e "HVSC_INGEST_TIMEOUT=900000"
+    -e "LONG_TIMEOUT=30000"
+    -e "TIMEOUT=20000"
+    -e "SHORT_TIMEOUT=7000"
+  )
+  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" "${CI_MAESTRO_ENV_ARGS[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
     MAESTRO_EXIT_CODE=$?
   fi
 else
