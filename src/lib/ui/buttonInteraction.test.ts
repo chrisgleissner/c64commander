@@ -7,7 +7,12 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyPointerButtonInteraction, handlePointerButtonClick } from './buttonInteraction';
+import {
+  applyPointerButtonInteraction,
+  CTA_HIGHLIGHT_DURATION_MS,
+  handlePointerButtonClick,
+  registerGlobalButtonInteractionModel,
+} from './buttonInteraction';
 
 describe('buttonInteraction', () => {
   afterEach(() => {
@@ -24,13 +29,13 @@ describe('buttonInteraction', () => {
     applyPointerButtonInteraction(button);
     expect(button.getAttribute('data-c64-tap-flash')).toBe('true');
 
-    vi.advanceTimersByTime(210);
+    vi.advanceTimersByTime(CTA_HIGHLIGHT_DURATION_MS);
     expect(button.hasAttribute('data-c64-tap-flash')).toBe(false);
   });
 
-  it('skips tap flash for toggle-mode buttons', () => {
+  it('skips transient flash for persistent-active buttons', () => {
     const button = document.createElement('button');
-    button.setAttribute('data-button-mode', 'toggle');
+    button.setAttribute('data-c64-persistent-active', 'true');
     document.body.appendChild(button);
 
     applyPointerButtonInteraction(button);
@@ -43,5 +48,17 @@ describe('buttonInteraction', () => {
 
     handlePointerButtonClick({ detail: 0, currentTarget: button });
     expect(button.hasAttribute('data-c64-tap-flash')).toBe(false);
+  });
+
+  it('applies interaction model globally to non-button CTAs', () => {
+    const cleanup = registerGlobalButtonInteractionModel();
+    const link = document.createElement('a');
+    link.href = '#';
+    document.body.appendChild(link);
+
+    link.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, button: 0 }));
+    expect(link.getAttribute('data-c64-tap-flash')).toBe('true');
+
+    cleanup();
   });
 });

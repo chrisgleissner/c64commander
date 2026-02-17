@@ -465,6 +465,59 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
   });
 
+  it('prevents overlapping background probes and preserves in-flight success', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchStub = vi.mocked(fetch);
+    fetchStub.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    let abortCount = 0;
+    fetchStub.mockImplementation((_: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((resolve, reject) => {
+        if (signal?.aborted) {
+          abortCount += 1;
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+
+        const onAbort = () => {
+          abortCount += 1;
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+
+        setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }));
+        }, 150);
+      });
+    });
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    const firstProbe = discoverConnection('background');
+    const secondProbe = discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(220);
+    await Promise.all([firstProbe, secondProbe]);
+
+    expect(abortCount).toBe(0);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
   it('does not auto-enable demo when automatic demo mode is disabled', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');

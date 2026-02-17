@@ -1,126 +1,232 @@
-# HVSC Download + Ingestion Regression Elimination Plan
+# PLAN: CTA Highlight Reset + Demo Auto-Reconnect
 
-## Scope
+## Problem Summary
 
-This plan is the authoritative execution tracker for eliminating HVSC ingestion regressions and enforcing low-RAM CI barriers.
+Two systemic issues are being fixed:
 
-## Root Cause Analysis
+1. Custom CTA-like UI elements can remain visually highlighted/focused after click.
+2. Demo mode does not reliably auto-transition to real mode when the configured C64U becomes reachable later.
 
-### Prior crash: OOM on Base64 bridge path
+This plan is the authoritative tracker and is updated as work progresses.
 
-- HVSC archive bytes crossed the Capacitor bridge via `Filesystem.readFile()` as Base64.
-- On constrained devices this multiplied memory use (`byte[]` + Base64 string + JS decode copies), causing deterministic heap exhaustion.
+---
 
-### Current crash: `NoClassDefFoundError` for `org.tukaani.xz.LZMA2Options`
+## Architectural Analysis (UI Layer)
 
-- Native ingestion uses `org.apache.commons.compress.archivers.sevenz.SevenZFile`.
-- SevenZ decoder requires XZ classes at runtime (`org.tukaani.xz.*`) for LZMA/LZMA2 handling.
-- The app had no explicit `org.tukaani:xz` dependency and no shrinker keep rules for SevenZ/XZ classes, creating runtime class resolution risk.
+### Existing CTA interaction stack
 
-## File-level Changes
+- Global interaction hook: `src/lib/ui/buttonInteraction.ts` via `registerGlobalButtonInteractionModel()` mounted in `src/App.tsx`.
+- Shared button primitive: `src/components/ui/button.tsx` with click delegation into `handlePointerButtonClick()`.
+- Additional CTA wrappers: e.g. `QuickActionCard`, tab bar, list rows, settings cards, diagnostics controls.
+- Visual feedback currently relies on:
+  - Focus ring/flash (`focus-visible` + `.focus-flash`)
+  - transient tap attribute (`data-c64-tap-flash`)
+  - component-level active/selected styles
 
-- `android/app/build.gradle`
-  - Add explicit `implementation "org.tukaani:xz:1.10"`.
-  - Add `minifiedDebug` build type (`minifyEnabled true`) so CI can enforce shrinker/runtime checks on a minified variant.
-  - Add compile-only annotation deps needed by R8 in the minified variant.
-- `android/app/proguard-rules.pro`
-  - Add keep rules:
-    - `org.tukaani.xz.**`
-    - `org.apache.commons.compress.archivers.sevenz.**`
-- `android/app/src/test/java/uk/gleissner/c64commander/HvscSevenZipRuntimeTest.kt`
-  - Add regression tests:
-    - hard runtime class load check (`Class.forName("org.tukaani.xz.LZMA2Options")`)
-    - open and enumerate `.7z` fixture using `SevenZFile`
-- `android/app/src/test/fixtures/HVSC_LZMA2_tiny.7z`
-  - Add tiny deterministic LZMA2 fixture for SevenZ runtime regression tests.
-- `android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt`
-  - Add explicit XZ class anchor (`LZMA2Options::class.java`) and runtime guard before SevenZ ingestion.
-- `scripts/verify-android-apk-lzma2.sh`
-  - Add CI gate script to scan APK DEX payload for:
-    - `org.tukaani.xz.LZMA2Options`
-    - `org.apache.commons.compress.archivers.sevenz.SevenZFile`
-- `.github/workflows/android.yaml`
-  - Add dependency graph inspection and dependency insight for XZ.
-  - Build `debug` and `minifiedDebug` APKs in CI.
-  - Verify required SevenZ/XZ classes are present in APK DEX.
-  - Print constrained AVD config readback from `config.ini`.
-  - Assert `adb shell getprop ro.config.low_ram` is `true/1` and fail otherwise.
-  - Assert startup memory class log exists after Maestro gating.
-- `scripts/run-maestro-gating.sh`
-  - Enforce low-RAM runtime property check in CI before Maestro run.
-  - Include `.maestro/smoke-hvsc-lowram.yaml` in CI flow set.
-  - Assert `smoke-hvsc-lowram` appears in Maestro JUnit report.
-- `src/lib/hvsc/hvscBridgeGuards.test.ts`
-  - Add guard test forbidding direct `Filesystem.readFile(` usage inside `hvscIngestionRuntime.ts`.
+### Root cause for highlight persistence
 
-## Risk List + Mitigations
+- Global interaction detection was too narrow (button-role-centric), so non-button CTAs could miss deterministic transient reset behavior.
+- Highlight duration constant was not aligned to required value (`200ms` vs `~220ms`).
+- Coverage for non-button semantics (links/tab roles/tabIndex-driven CTAs) was incomplete.
 
-- Risk: shrinker strips optional decoder classes.
-  - Mitigation: explicit keep rules + minified variant build + APK DEX class scan in CI.
-- Risk: missing XZ transitive dependency goes unnoticed.
-  - Mitigation: explicit dependency + runtime class-load unit test + dependencyInsight output in CI.
-- Risk: constrained emulator profile drifts from intended settings.
-  - Mitigation: deterministic `config.ini` rewrite + readback logging + runtime low-ram property assertion.
-- Risk: HVSC gating silently excludes low-ram flow.
-  - Mitigation: explicit CI flow file list + required flow assertion against Maestro report.
+---
 
-## CI Enforcement
+## Exhaustive CTA Inventory
 
-- Runtime class presence in APK DEX is now a hard gate for `debug` and `minifiedDebug` APKs.
-- Low-RAM mode (`ro.config.low_ram`) is now a hard gate in Android Maestro CI.
-- Low-RAM HVSC Maestro flow is now mandatory in CI report validation.
-- Memory class logging from `MainActivity` is now asserted in CI logcat.
+Inventory command used:
 
-## Verification Checklist
+- `rg --no-heading "onClick=|onPointerDown=|onMouseDown=|role=\"button\"|tabIndex=\{" src --glob '**/*.tsx' --glob '**/*.ts' | cut -d: -f1 | sort -u`
 
-### Local reproduction + verification commands
+### CTA abstraction files
 
-1. `npm ci`
-2. `npm run cap:build`
-3. `cd android && ./gradlew :app:dependencies --configuration debugRuntimeClasspath`
-4. `cd android && ./gradlew :app:dependencyInsight --dependency xz --configuration debugRuntimeClasspath`
-5. `cd android && ./gradlew :app:testDebugUnitTest`
-6. `cd android && ./gradlew :app:assembleDebug :app:assembleMinifiedDebug`
-7. `bash scripts/verify-android-apk-lzma2.sh android/app/build/outputs/apk/debug/*.apk android/app/build/outputs/apk/minifiedDebug/*.apk`
-8. `npm run lint`
-9. `npm run test`
-10. `npm run test:coverage`
-11. `npm run build`
-12. `./build`
+- `src/components/ui/button.tsx`
+- `src/lib/ui/buttonInteraction.ts`
+- `src/components/QuickActionCard.tsx`
+- `src/components/TabBar.tsx`
+- `src/components/ConnectivityIndicator.tsx`
+- `src/components/DiagnosticsActivityIndicator.tsx`
 
-### Expected outputs
+### Files with direct click/pointer handlers (41)
 
-- Dependency insight lists `org.tukaani:xz` in `debugRuntimeClasspath`.
-- `HvscSevenZipRuntimeTest` passes and `Class.forName("org.tukaani.xz.LZMA2Options")` succeeds.
-- APK verification script prints `OK: required SevenZ/XZ runtime classes found` for both APK variants.
-- Maestro CI logs show:
-  - AVD config values (`hw.ramSize=512`, `vm.heapSize=128`, `hw.cpu.ncore=1`, `hw.device.lowram=yes`)
-  - `ro.config.low_ram=true` (or `1`)
-  - required flow `smoke-hvsc-lowram` present in report.
+- `src/App.tsx`
+- `src/components/AppBar.tsx`
+- `src/components/ConnectivityIndicator.tsx`
+- `src/components/DemoModeInterstitial.tsx`
+- `src/components/DiagnosticsActivityIndicator.tsx`
+- `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`
+- `src/components/disks/DiskTree.tsx`
+- `src/components/disks/HomeDiskManager.tsx`
+- `src/components/itemSelection/AddItemsProgressOverlay.tsx`
+- `src/components/itemSelection/ItemSelectionDialog.tsx`
+- `src/components/itemSelection/ItemSelectionView.tsx`
+- `src/components/lists/SelectableActionList.tsx`
+- `src/components/QuickActionCard.tsx`
+- `src/components/SectionHeader.tsx`
+- `src/components/TabBar.tsx`
+- `src/components/ui/button.tsx`
+- `src/components/ui/carousel.tsx`
+- `src/components/ui/sidebar.tsx`
+- `src/components/ui/slider.test.tsx`
+- `src/components/ui/slider.tsx`
+- `src/lib/ui/buttonInteraction.ts`
+- `src/pages/ConfigBrowserPage.tsx`
+- `src/pages/DocsPage.tsx`
+- `src/pages/home/components/MachineControls.tsx`
+- `src/pages/home/components/PrinterManager.tsx`
+- `src/pages/home/components/StreamStatus.tsx`
+- `src/pages/home/components/SystemInfo.tsx`
+- `src/pages/home/dialogs/LoadConfigDialog.tsx`
+- `src/pages/home/dialogs/ManageConfigDialog.tsx`
+- `src/pages/home/dialogs/PowerOffDialog.tsx`
+- `src/pages/home/dialogs/SaveConfigDialog.tsx`
+- `src/pages/home/DriveCard.tsx`
+- `src/pages/HomePage.tsx`
+- `src/pages/home/SidCard.tsx`
+- `src/pages/MusicPlayerPage.tsx`
+- `src/pages/playFiles/components/HvscControls.tsx`
+- `src/pages/playFiles/components/PlaybackControlsCard.tsx`
+- `src/pages/playFiles/components/PlaybackSettingsPanel.tsx`
+- `src/pages/playFiles/components/PlaylistPanel.tsx`
+- `src/pages/playFiles/components/VolumeControls.tsx`
+- `src/pages/SettingsPage.tsx`
 
-## Execution Status
+---
 
-- [x] Add explicit XZ dependency
-- [x] Add shrinker keep rules for XZ + SevenZ
-- [x] Add runtime class + SevenZ fixture regression tests
-- [x] Add APK DEX class verification gate script
-- [x] Add CI minified variant build + class checks
-- [x] Enforce low-RAM property in Maestro CI
-- [x] Require low-RAM HVSC Maestro flow in CI gate
-- [x] Add grep-style guard against direct HVSC runtime `Filesystem.readFile`
-- [x] Run full verification suite and capture outcomes below
+## Exhaustive CSS Active/Focus Inventory
 
-## Verification Evidence
+Inventory command used:
 
-- `npm ci` ✅
-- `npm run cap:build` ✅
-- `cd android && ./gradlew :app:dependencies --configuration debugRuntimeClasspath` ✅
-- `cd android && ./gradlew :app:dependencyInsight --dependency xz --configuration debugRuntimeClasspath` ✅
-- `cd android && ./gradlew :app:testDebugUnitTest` ✅ (includes `HvscSevenZipRuntimeTest`)
-- `cd android && ./gradlew :app:assembleDebug :app:assembleMinifiedDebug` ✅
-- `bash scripts/verify-android-apk-lzma2.sh android/app/build/outputs/apk/debug/*.apk android/app/build/outputs/apk/minifiedDebug/*.apk` ✅
-- `npm run lint` ✅
-- `npm run test` ✅ (`195` files, `1480` tests passed)
-- `npm run test:coverage` ✅ (global branch coverage measured from `coverage/coverage-final.json`: `80.12%`, raw `6841/8538`)
-- `npm run build` ✅
-- `./build` ✅
+- `rg --no-heading ":active|:focus|:focus-visible|\\.active\\b|data-\\[state=active\\]|data-c64-tap-flash" src --glob '**/*.css' --glob '**/*.tsx' --glob '**/*.ts' | cut -d: -f1 | sort -u`
+
+### Files controlling active/focus/pressed visual states (7)
+
+- `src/index.css`
+- `src/components/ui/tabs.tsx`
+- `src/components/ui/toast.tsx`
+- `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx`
+- `src/pages/SettingsPage.tsx`
+- `src/lib/ui/buttonInteraction.ts`
+- `src/lib/ui/buttonInteraction.test.ts`
+
+### Key state selectors/classes audited
+
+- `button:focus-visible`, `.focus-flash:focus-visible`
+- `data-c64-tap-flash`
+- `.tab-item.active`
+- Tailwind active/focus tokens used by base UI primitives (`focus-visible:*`, `data-[state=active]:*`)
+
+---
+
+## Connection Lifecycle Analysis
+
+### Entry/ownership
+
+- Connection lifecycle source of truth: `src/lib/connection/connectionManager.ts`
+- Runtime orchestration and timers: `src/components/ConnectionController.tsx`
+
+### Current lifecycle (audited)
+
+- Startup: `initializeConnectionManager()` then `discoverConnection('startup')`
+- Manual/settings/background triggers call shared `discoverConnection()`
+- Demo transition sets mock runtime endpoint and `DEMO_ACTIVE`
+- Background rediscovery is scheduled while in `DEMO_ACTIVE` or `OFFLINE_NO_DEMO`
+
+### Root-cause gap fixed
+
+- Duplicate background triggers could overlap/cancel in-flight probe behavior.
+- Requirement is explicit: avoid duplicate concurrent probes and auto-transition seamlessly once real device is reachable.
+
+---
+
+## Implementation Plan (Live)
+
+1. [x] Complete exhaustive CTA and style inventory
+2. [x] Introduce shared CTA highlight constant at `220ms`
+3. [x] Centralize and broaden interactive element detection for transient highlight reset
+4. [x] Keep only explicit persistent-active exception path for long-running CTA state
+5. [x] Harden background discovery to prevent overlapping probe cancellation races
+6. [x] Add/update deterministic unit tests for both issues
+7. [ ] Run lint/tests/coverage/build/full build helper
+8. [ ] Push branch and verify CI green via `gh` run monitoring
+9. [ ] Finalize this plan with validation evidence
+
+---
+
+## Changes Implemented So Far
+
+### CTA fix implementation
+
+- Updated `src/lib/ui/buttonInteraction.ts`
+  - Added shared constants:
+    - `CTA_HIGHLIGHT_DURATION_MS = 220`
+    - `CTA_HIGHLIGHT_ATTR = 'data-c64-tap-flash'`
+  - Expanded interactive target selector to include semantic and custom CTA targets:
+    - buttons, links, summary, role-based controls, and focusable tabIndex controls
+  - Kept keyboard accessibility (`event.detail === 0` click path unchanged)
+  - Added explicit persistent-active opt-out attribute: `data-c64-persistent-active='true'`
+- Updated `src/index.css`
+  - Expanded tap-highlight suppression coverage for non-button CTAs
+  - Applied transient flash style to any `[data-c64-tap-flash='true']`
+- Updated Play control exception:
+  - `src/pages/playFiles/components/PlaybackControlsCard.tsx`
+  - Play button now marks persistent active state while playback is active
+
+### Demo auto-reconnect hardening
+
+- Updated `src/lib/connection/connectionManager.ts`
+  - Background trigger no longer preemptively cancels active discovery
+  - Duplicate background probe requests are skipped while one is already active
+  - In-flight background probe cleanup made deterministic via `try/finally`
+
+### Tests added/updated
+
+- `src/lib/ui/buttonInteraction.test.ts`
+  - Verifies transient flash uses shared `220ms` constant
+  - Verifies persistent-active CTA exemption
+  - Verifies global interaction model covers non-button CTA (`a[href]`)
+- `tests/unit/connection/connectionManager.test.ts`
+  - Added regression test ensuring overlapping background rediscovery calls do not abort in-flight success and still transition demo → real
+
+---
+
+## Risk Analysis
+
+- **Risk:** broad selector could include unintended elements.
+  - **Mitigation:** constrained to interactive semantics (`button`, `a[href]`, role-based controls, explicit tabIndex, explicit data marker).
+- **Risk:** breaking keyboard focus behavior.
+  - **Mitigation:** transient flash still pointer-only; keyboard click path remains exempt.
+- **Risk:** race conditions in discovery transitions.
+  - **Mitigation:** background dedupe + in-flight guard + deterministic cleanup.
+- **Risk:** visual regressions in intentional stateful controls.
+  - **Mitigation:** explicit persistent-active path for long-running play CTA.
+
+---
+
+## Test Matrix
+
+### Unit
+
+- CTA highlight duration and cleanup at `220ms`
+- Pointer-only behavior; keyboard-triggered click exempt
+- Persistent-active CTA exemption
+- Global model applies to non-button CTA targets
+- Demo mode background rediscovery transitions demo→real
+- Duplicate background trigger does not cancel in-flight probe
+
+### Integration / E2E
+
+- Existing connection simulation/demo mode suites remain required for CI
+- Existing representative page interactions cover broad CTA surface in Playwright
+
+---
+
+## Definition of Done
+
+- [x] Shared single highlight duration constant set to `220ms`
+- [x] CTA highlight reset centralized in reusable abstraction
+- [x] Play button active playback state is explicit persistent-active exception
+- [x] Exhaustive CTA and CSS state inventory documented
+- [x] Demo mode auto-reconnect path hardened with non-overlapping probes
+- [ ] All required local checks green (lint, test, coverage, build, full build helper)
+- [ ] CI green and verified via `gh`
+- [ ] Plan updated with final evidence and zero remaining TODOs

@@ -420,7 +420,14 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
  * - Settings-triggered rediscovery
  */
 export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
-  cancelActiveDiscovery();
+  if (trigger === 'background') {
+    if (activeDiscovery) {
+      addLog('debug', 'Background discovery skipped because a probe is already active');
+      return;
+    }
+  } else {
+    cancelActiveDiscovery();
+  }
 
   const smokeConfig = getSmokeConfig();
   if (smokeConfig) {
@@ -475,28 +482,33 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
   if (trigger === 'background') {
     if (snapshot.state !== 'DEMO_ACTIVE' && snapshot.state !== 'OFFLINE_NO_DEMO') return;
     const abort = new AbortController();
-    activeDiscovery = { abort, cancel: () => { } };
-    setSnapshot({ lastDiscoveryTrigger: trigger });
-    const ok = await probeOnce({ signal: abort.signal });
-    setSnapshot({ lastProbeAtMs: Date.now() });
-    if (ok) {
-      setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
-      addLog('info', 'Discovery probe succeeded', { trigger });
-      if (isSmokeModeEnabled()) {
-        console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
+    activeDiscovery = { abort, cancel: () => abort.abort() };
+    try {
+      setSnapshot({ lastDiscoveryTrigger: trigger });
+      const ok = await probeOnce({ signal: abort.signal });
+      setSnapshot({ lastProbeAtMs: Date.now() });
+      if (ok) {
+        setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+        addLog('info', 'Discovery probe succeeded', { trigger });
+        if (isSmokeModeEnabled()) {
+          console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
+        }
+        if (snapshot.state === 'DEMO_ACTIVE') {
+          addLog('info', 'Real device detected during demo mode', { trigger });
+        }
+        await transitionToRealConnected(trigger);
+      } else {
+        setSnapshot({ lastProbeFailedAtMs: Date.now() });
+        addLog('debug', 'Discovery probe failed', { trigger });
+        if (isSmokeModeEnabled()) {
+          console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
+        }
       }
-      if (snapshot.state === 'DEMO_ACTIVE') {
-        addLog('info', 'Real device detected during demo mode', { trigger });
-      }
-      await transitionToRealConnected(trigger);
-    } else {
-      setSnapshot({ lastProbeFailedAtMs: Date.now() });
-      addLog('debug', 'Discovery probe failed', { trigger });
-      if (isSmokeModeEnabled()) {
-        console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
+    } finally {
+      if (activeDiscovery?.abort === abort) {
+        activeDiscovery = null;
       }
     }
-    activeDiscovery = null;
     return;
   }
 
