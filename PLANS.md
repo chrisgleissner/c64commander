@@ -1,41 +1,72 @@
-# PLAN: Cross-Platform CI Telemetry (Android Emulator + iOS Simulator)
+# PLAN: CI Telemetry Completion (Android + iOS, GitHub-Hosted)
 
-## Scope
+## Current Implementation Status
 
-Implement deterministic low-overhead telemetry for CI runs at a fixed 3-second cadence, covering:
-- Android Maestro and Android fuzz lanes (emulator)
-- iOS Maestro lanes (simulator)
+- Android monitor exists at `ci/telemetry/android/monitor_android.sh` and emits `metrics.csv`, `events.log`, `metadata.json`, `monitor.log`.
+- iOS monitor exists at `ci/telemetry/ios/monitor_ios.sh` with the same output schema and file naming.
+- Both monitors default to `TELEMETRY_INTERVAL_SEC=1` and sample CPU/RAM with low-overhead process probes.
+- CI workflows already start monitors before Maestro and stop them after Maestro in:
+  - `.github/workflows/android.yaml`
+  - `.github/workflows/ios.yaml`
+- Telemetry summary/chart generation and artifact upload are already present.
 
-Deliverables include raw CSV logs, event logs, metadata, deterministic summaries, workflow integration, and artifact upload on success/failure.
+## Platform-Specific Gaps
 
-## Constraints
+### Android (ubuntu-latest, emulator)
 
-- No interactive profilers (Android Studio/Xcode Instruments GUI)
-- Low overhead hot loop using lightweight process probes
-- Headless CI-compatible
-- Stable machine-readable output schema
-- Fail loudly on monitor startup errors and empty logs
+- Validate robust PID discovery under CI timing and transient `adb` instability.
+- Enforce minimal CSV correctness checks beyond non-empty file (header + multiple samples).
+- Confirm monitor lifecycle is resilient when Maestro fails and still exits cleanly after stop signal.
 
-## Execution Plan (authoritative)
+### iOS (macos-latest, simulator)
 
-1. [in-progress] Create telemetry subsystem files under `ci/telemetry/`
-   - Android monitor script
-   - iOS monitor script
-   - Deterministic summarizer
-   - Telemetry README
-2. [pending] Integrate telemetry start/stop and summarization into workflows
-   - `.github/workflows/android.yaml`
-   - `.github/workflows/ios.yaml`
-   - `.github/workflows/fuzz.yaml`
-3. [pending] Enforce failure handling
-   - monitor startup failure -> fail job
-   - empty CSV -> fail job
-   - unexpected app PID disappearance -> fail at end (after artifact upload)
-4. [pending] Add synthetic example outputs under `docs/telemetry-example/`
-5. [pending] Validate with lint/test/coverage/build
-6. [pending] Finalize this plan with completion evidence
+- Harden app PID discovery fallback when simulator `ps` output format differs across macOS images.
+- Enforce minimal CSV correctness checks beyond non-empty file (header + multiple samples).
+- Confirm monitor lifecycle remains active through Maestro runtime and only exits at explicit stop.
+
+## CI Integration Gaps
+
+- Guarantee telemetry artifacts are uploaded with `if: always()` before any telemetry gate step that can fail the job.
+- Ensure telemetry gates verify:
+  - CSV exists
+  - CSV has expected header
+  - CSV has multiple data rows (not just header)
+- Preserve Maestro failure semantics while still collecting and uploading telemetry artifacts.
+
+## Risks
+
+- GitHub runner infra instability (emulator/simulator boot intermittency) can fail jobs independently of telemetry.
+- `adb` device enumeration latency may delay PID visibility on first samples.
+- `simctl spawn ... ps` output differences can reduce PID detection reliability if not handled defensively.
+- If monitor stop is not signaled/awaited correctly, telemetry may terminate late and miss final flush.
+
+## Validation Gates
+
+1. Android telemetry gate (in `android.yaml`):
+   - `ci-artifacts/telemetry/android/metrics.csv` exists
+   - header matches telemetry CSV schema
+   - at least 2 data rows
+   - `monitor.exitcode` exists and is acceptable
+2. iOS telemetry gate (in `ios.yaml`):
+   - `artifacts/ios/_infra/telemetry/metrics.csv` exists
+   - header matches telemetry CSV schema
+   - at least 2 data rows
+   - `monitor.exitcode` exists and is acceptable
+3. Artifact upload runs with `if: always()` and includes telemetry outputs even when Maestro fails.
+
+## Execution Steps (Authoritative)
+
+1. [in-progress] Audit current monitor + workflow implementation against required behavior.
+2. [pending] Patch Android telemetry lifecycle/gates (if gaps confirmed).
+3. [pending] Patch iOS telemetry lifecycle/gates (if gaps confirmed).
+4. [pending] Validate with repo-required checks:
+   - `npm run test:coverage`
+   - `npm run lint`
+   - `npm run test`
+   - `npm run build`
+   - `./build`
+5. [pending] If CI remains non-green due infra-only failures, produce residual limitations report with evidence.
 
 ## Progress Log
 
-- 2026-02-17: Replaced prior unrelated plan with telemetry plan and began implementation.
-- 2026-02-17: Updated telemetry cadence defaults to 1s for Android/iOS/Docker(web) and added Android PSS throttling to keep monitoring overhead low.
+- 2026-02-17: Rebased plan to the telemetry completion objective and confirmed existing monitor/workflow baseline.

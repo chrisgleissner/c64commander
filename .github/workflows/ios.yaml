@@ -401,14 +401,22 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          expected_header="timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb"
           csv="artifacts/ios/_infra/telemetry/metrics.csv"
           if [[ ! -f "$csv" ]]; then
             echo "telemetry gate failed: missing $csv"
             exit 1
           fi
+          header=$(head -n 1 "$csv")
+          if [[ "$header" != "$expected_header" ]]; then
+            echo "telemetry gate failed: unexpected CSV header"
+            echo "expected: $expected_header"
+            echo "actual:   $header"
+            exit 1
+          fi
           line_count=$(wc -l < "$csv")
-          if [[ "$line_count" -le 1 ]]; then
-            echo "telemetry gate failed: empty CSV"
+          if [[ "$line_count" -le 2 ]]; then
+            echo "telemetry gate failed: expected multiple data rows, found $((line_count-1))"
             exit 1
           fi
           code_file="artifacts/ios/_infra/telemetry/monitor.exitcode"

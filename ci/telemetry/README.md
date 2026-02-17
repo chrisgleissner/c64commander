@@ -48,6 +48,7 @@ Script: `ci/telemetry/ios/monitor_ios.sh`
 
 - Resolves simulator via `SIMULATOR_UDID` or booted simulator fallback
 - Detects app PID using `BUNDLE_ID` against simulator `ps`
+- Falls back to `TELEMETRY_IOS_APP_PROCESS_NAME` (default `App`) when bundle-id matching is unavailable in `ps` output
 - Samples per PID via `xcrun simctl spawn <udid> ps -p <pid> -o %cpu=,rss=,nlwp=`
 - Optionally attempts WebKit child capture only when process parent relation is explicit in simulator `ps`
 - Optional slow metric path (`TELEMETRY_ENABLE_VMMAP=1`) reads `vmmap -summary` every 30s

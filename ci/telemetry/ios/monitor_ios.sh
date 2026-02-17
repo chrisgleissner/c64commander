@@ -14,6 +14,7 @@ require_cmd ps
 
 SAMPLING_INTERVAL_SEC="${TELEMETRY_INTERVAL_SEC:-1}"
 PACKAGE_BUNDLE_ID="${BUNDLE_ID:-${APP_ID:-uk.gleissner.c64commander}}"
+APP_PROCESS_NAME="${TELEMETRY_IOS_APP_PROCESS_NAME:-App}"
 DEVICE_NAME="${TELEMETRY_DEVICE_NAME:-ios-simulator}"
 OUT_DIR="${TELEMETRY_OUTPUT_DIR:-ci-artifacts/telemetry/ios}"
 CSV_PATH="${TELEMETRY_CSV_PATH:-$OUT_DIR/metrics.csv}"
@@ -83,9 +84,33 @@ spawn_ps() {
 
 find_app_pid() {
   local ps_out="$1"
-  awk -v bundle="$PACKAGE_BUNDLE_ID" '
+  local pid
+
+  pid="$(awk -v bundle="$PACKAGE_BUNDLE_ID" '
     index($0, bundle) > 0 {
       if ($1 ~ /^[0-9]+$/) { print $1; exit }
+    }
+  ' <<< "$ps_out")"
+  if [[ -n "$pid" ]]; then
+    printf '%s' "$pid"
+    return 0
+  fi
+
+  pid="$(awk -v comm="$APP_PROCESS_NAME" '
+    $3 == comm && $1 ~ /^[0-9]+$/ {
+      print $1
+      exit
+    }
+  ' <<< "$ps_out")"
+  if [[ -n "$pid" ]]; then
+    printf '%s' "$pid"
+    return 0
+  fi
+
+  awk -v comm="$APP_PROCESS_NAME" '
+    index($0, "/" comm ".app/" comm) > 0 && $1 ~ /^[0-9]+$/ {
+      print $1
+      exit
     }
   ' <<< "$ps_out"
 }
@@ -141,8 +166,8 @@ if [[ -z "$SIMULATOR_UDID" ]]; then
   exit 1
 fi
 
-log "telemetry(ios): started udid=$SIMULATOR_UDID bundle=$PACKAGE_BUNDLE_ID interval=${SAMPLING_INTERVAL_SEC}s"
-log_event "monitor_started" "$PACKAGE_BUNDLE_ID" "" "udid=$SIMULATOR_UDID interval=${SAMPLING_INTERVAL_SEC}s"
+log "telemetry(ios): started udid=$SIMULATOR_UDID bundle=$PACKAGE_BUNDLE_ID app_process=$APP_PROCESS_NAME interval=${SAMPLING_INTERVAL_SEC}s"
+log_event "monitor_started" "$PACKAGE_BUNDLE_ID" "" "udid=$SIMULATOR_UDID app_process=$APP_PROCESS_NAME interval=${SAMPLING_INTERVAL_SEC}s"
 
 while (( running == 1 )); do
   sample_ts="$(date -u +%s)"
