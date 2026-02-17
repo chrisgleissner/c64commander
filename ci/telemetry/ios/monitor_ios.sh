@@ -10,6 +10,7 @@ require_cmd() {
 
 require_cmd xcrun
 require_cmd awk
+require_cmd ps
 
 SAMPLING_INTERVAL_SEC="${TELEMETRY_INTERVAL_SEC:-1}"
 PACKAGE_BUNDLE_ID="${BUNDLE_ID:-${APP_ID:-uk.gleissner.c64commander}}"
@@ -55,7 +56,29 @@ resolve_udid() {
 }
 
 spawn_ps() {
-  xcrun simctl spawn "$SIMULATOR_UDID" ps -A -o pid=,ppid=,comm=,args= 2>/dev/null
+  local out=""
+
+  if [[ "$process_source" == "simulator" ]]; then
+    out="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -A -o pid=,ppid=,comm=,args= 2>/dev/null || true)"
+    if [[ -n "$out" ]]; then
+      printf '%s' "$out"
+      return 0
+    fi
+
+    out="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -ax -o pid=,ppid=,comm=,args= 2>/dev/null || true)"
+    if [[ -n "$out" ]]; then
+      printf '%s' "$out"
+      return 0
+    fi
+
+    process_source="host"
+    if [[ "$logged_host_fallback" == "0" ]]; then
+      log_event "sample_warning" "$PACKAGE_BUNDLE_ID:event" "" "simctl process listing unavailable; falling back to host ps"
+      logged_host_fallback=1
+    fi
+  fi
+
+  ps -axo pid=,ppid=,comm=,args= 2>/dev/null
 }
 
 find_app_pid() {
@@ -80,13 +103,21 @@ find_webkit_children() {
 read_ps_metrics() {
   local pid="$1"
   local line
-  line="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -p "$pid" -o %cpu=,rss=,nlwp= 2>/dev/null | awk 'NF{print $1" "$2" "$3; exit}')"
+  if [[ "$process_source" == "simulator" ]]; then
+    line="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -p "$pid" -o %cpu=,rss=,nlwp= 2>/dev/null | awk 'NF{print $1" "$2" "$3; exit}')"
+  else
+    line="$(ps -p "$pid" -o %cpu=,rss=,nlwp= 2>/dev/null | awk 'NF{print $1" "$2" "$3; exit}')"
+  fi
   if [[ -n "$line" ]]; then
     printf '%s' "$line"
     return 0
   fi
 
-  line="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -p "$pid" -o %cpu=,rss= 2>/dev/null | awk 'NF{print $1" "$2; exit}')"
+  if [[ "$process_source" == "simulator" ]]; then
+    line="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -p "$pid" -o %cpu=,rss= 2>/dev/null | awk 'NF{print $1" "$2; exit}')"
+  else
+    line="$(ps -p "$pid" -o %cpu=,rss= 2>/dev/null | awk 'NF{print $1" "$2; exit}')"
+  fi
   if [[ -z "$line" ]]; then
     return 1
   fi
@@ -99,6 +130,8 @@ main_disappeared=0
 last_app_pid=""
 last_vmmap_ts=0
 run_start_ts="$(date -u +%s)"
+process_source="simulator"
+logged_host_fallback=0
 
 trap 'running=0' INT TERM
 
