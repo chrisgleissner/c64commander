@@ -88,5 +88,10 @@ describe('sidSilence', () => {
     await expect(silenceSidTargets({ writeMemory }, targets)).rejects.toThrow('SID Socket 1: first failure');
     expect(writeMemory).toHaveBeenCalledTimes(20);
   });
+
+  it('throws when targets array is empty', async () => {
+    const writeMemory = vi.fn();
+    await expect(silenceSidTargets({ writeMemory }, [])).rejects.toThrow('No configured SID chips found');
+  });
 });
 

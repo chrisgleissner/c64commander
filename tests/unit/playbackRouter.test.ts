@@ -377,6 +377,117 @@ describe('playbackRouter', () => {
     expect(() => buildPlayPlan({ source: 'local', path: 'demo.txt' })).toThrow('Unsupported');
   });
 
+  it('routes MOD upload from local file', async () => {
+    const api = createApiMock();
+    const file = new File(['mod'], 'demo.mod');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.mod', file });
+    await executePlayPlan(api as any, plan);
+    expect(api.playModUpload).toHaveBeenCalled();
+  });
+
+  it('throws when local MOD data is missing', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.mod' });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local MOD data');
+  });
+
+  it('routes CRT playback for Ultimate', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/carts/game.crt' });
+    await executePlayPlan(api as any, plan);
+    expect(api.runCartridge).toHaveBeenCalledWith('/carts/game.crt');
+  });
+
+  it('throws when local CRT data is missing', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.crt' });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local CRT data');
+  });
+
+  it('routes PRG from Ultimate in load mode', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/demo.prg' });
+    await executePlayPlan(api as any, plan, { loadMode: 'load' });
+    expect(api.loadPrg).toHaveBeenCalledWith('/demo.prg');
+  });
+
+  it('routes PRG upload from local file in run mode', async () => {
+    const api = createApiMock();
+    const file = new File(['prg'], 'demo.prg');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.prg', file });
+    await executePlayPlan(api as any, plan, { loadMode: 'run' });
+    expect(api.runPrgUpload).toHaveBeenCalled();
+  });
+
+  it('throws when local PRG data is missing', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.prg' });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Missing local PRG data');
+  });
+
+  it('mounts local D64 without reset when resetBeforeMount is false', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    const file = new File(['disk'], 'demo.d64');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
+    const task = executePlayPlan(api as any, plan, {
+      drive: 'a',
+      resetBeforeMount: false,
+      rebootBeforeMount: false,
+    });
+    await vi.runAllTimersAsync();
+    await task;
+    expect(api.machineReset).not.toHaveBeenCalled();
+    expect(api.machineReboot).not.toHaveBeenCalled();
+    expect(api.mountDriveUpload).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('includes songNr in SID play call', async () => {
+    const api = createApiMock();
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', songNr: 3 });
+    await executePlayPlan(api as any, plan);
+    expect(api.playSid).toHaveBeenCalledWith('/MUSIC/DEMO.SID', 3);
+  });
+
+  it('includes SSL blob for local SID when duration is provided', async () => {
+    const api = createApiMock();
+    const file = new File(['sid'], 'demo.sid');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.sid', file, durationMs: 60000 });
+    await executePlayPlan(api as any, plan);
+    expect(api.playSidUpload).toHaveBeenCalledTimes(1);
+    const sslBlobArg = api.playSidUpload.mock.calls[0][2];
+    expect(sslBlobArg).toBeInstanceOf(Blob);
+  });
+
+  it('handles FTP SID size mismatch by returning null blob and falling back', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53]);
+    const encoded = Buffer.from(sidBytes).toString('base64');
+    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: 999 });
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/MISMATCH.SID', durationMs: 120000 });
+    await executePlayPlan(api as any, plan);
+    // Should fall back to direct play since blob is null due to size mismatch
+    expect(api.playSid).toHaveBeenCalled();
+  });
+
+  it('local disk mount with DMA for D71 type', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    class TestBlob extends Blob {
+      async arrayBuffer() {
+        return new ArrayBuffer(4);
+      }
+    }
+    const file = new TestBlob(['disk'], { type: 'application/octet-stream' }) as unknown as File;
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d71', file });
+    const task = executePlayPlan(api as any, plan, { drive: 'a', diskAutostartMode: 'dma' });
+    await vi.runAllTimersAsync();
+    await task;
+    expect(vi.mocked(loadFirstDiskPrgViaDma)).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('local SID blob upload sends correct bytes matching the file content', async () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44, 0x00, 0x02]); // PSID header stub

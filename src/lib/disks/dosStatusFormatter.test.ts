@@ -68,4 +68,12 @@ describe('formatDiskDosStatus', () => {
         expect(result.code).toBeNull();
         expect(result.raw).toBe(raw);
     });
+
+    it('treats non-numeric leading token as raw-only', () => {
+        const raw = 'ABC, OK, 00, 00';
+        const result = formatDiskDosStatus(raw);
+        expect(result.code).toBeNull();
+        expect(result.severity).toBe('INFO');
+        expect(result.raw).toBe(raw);
+    });
 });

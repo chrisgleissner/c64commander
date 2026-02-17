@@ -53,6 +53,7 @@ describe('diagnosticsSeverity', () => {
     expect(resolveActionSeverity('blocked')).toBe('warn');
     expect(resolveActionSeverity('timeout')).toBe('warn');
     expect(resolveActionSeverity('incomplete')).toBe('warn');
+    expect(resolveActionSeverity('unknown' as Parameters<typeof resolveActionSeverity>[0])).toBe('info');
   });
 
   it('maps trace errors to error severity and others to info', () => {
