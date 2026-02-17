@@ -411,7 +411,6 @@ const ingestArchivePathNative = async (options: {
   let { baselineInstalled } = options;
 
   if (plan.type === 'baseline') {
-    await resetLibraryRoot();
     baselineInstalled = plan.version;
   }
 
