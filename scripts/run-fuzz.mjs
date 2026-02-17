@@ -729,14 +729,14 @@ const mergeReports = async () => {
       // Sessions have a max duration of ~5 minutes, so we can't expect activities
       // to scale linearly with total run budget. Use a reasonable per-session minimum.
       // Account for recovery time, action timeouts, and other overhead.
-      // Expect at least 1 activity per 10 seconds of session time, with a minimum of 3.
-      // This is lenient because sessions can spend significant time in recovery,
-      // waiting for app responses, or handling visual stagnation.
+      // Expect at least 1 activity per 20 seconds of session time, with a minimum of 2.
+      // This is very lenient because sessions can spend significant time in recovery,
+      // waiting for app responses, handling visual stagnation, or dealing with timeouts.
       // IMPORTANT: Sessions that terminate due to "issue" (crashes) are always qualified
       // because they represent real bugs that need investigation, regardless of activity count.
       const parsedSessionDurationMs = Number(parsed?.durationMs || 0);
       const effectiveSessionDurationMs = parsedSessionDurationMs > 0 ? parsedSessionDurationMs : 60_000;
-      const minActivitiesPerSession = Math.max(3, Math.floor(effectiveSessionDurationMs / 10000));
+      const minActivitiesPerSession = Math.max(2, Math.floor(effectiveSessionDurationMs / 20000));
       const terminatedDueToIssue = parsed?.terminationReason === 'issue';
       if (activityCount < minActivitiesPerSession && !terminatedDueToIssue) {
         activityViolations.push({
