@@ -169,8 +169,8 @@ while (( running == 1 )); do
           main_disappeared=1
         fi
       fi
-      unset 'prev_pid[$role]'
-      unset 'prev_proc_jiffies[$role]'
+      unset "prev_pid[$role]"
+      unset "prev_proc_jiffies[$role]"
       continue
     fi
 
@@ -178,7 +178,7 @@ while (( running == 1 )); do
       log_event "process_appeared" "$process_name:event" "$pid" "process detected"
     elif [[ "${prev_pid[$role]}" != "$pid" ]]; then
       log_event "process_restarted" "$process_name:event" "$pid" "previous_pid=${prev_pid[$role]}"
-      unset 'prev_proc_jiffies[$role]'
+      unset "prev_proc_jiffies[$role]"
     fi
 
     prev_pid[$role]="$pid"

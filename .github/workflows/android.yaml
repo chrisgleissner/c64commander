@@ -820,7 +820,10 @@ jobs:
             TELEMETRY_OUTPUT_DIR=ci-artifacts/telemetry/android \
             ANDROID_PACKAGE_NAME=uk.gleissner.c64commander \
             TELEMETRY_DEVICE_NAME="${ANDROID_AVD_NAME}" \
-            ci/telemetry/android/monitor_android.sh || status=$?
+            ci/telemetry/android/monitor_android.sh &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > ci-artifacts/telemetry/android/monitor.child.pid
+            wait "$monitor_child_pid" || status=$?
             echo "$status" > ci-artifacts/telemetry/android/monitor.exitcode
           ) > ci-artifacts/telemetry/android/monitor-run.log 2>&1 &
           echo $! > ci-artifacts/telemetry/android/monitor.pid
@@ -874,15 +877,26 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          child_pid=""
+          if [[ -f ci-artifacts/telemetry/android/monitor.child.pid ]]; then
+            child_pid="$(cat ci-artifacts/telemetry/android/monitor.child.pid)"
+          fi
           if [[ -f ci-artifacts/telemetry/android/monitor.pid ]]; then
             pid="$(cat ci-artifacts/telemetry/android/monitor.pid)"
-            kill -TERM "$pid" 2>/dev/null || true
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
             for _ in $(seq 1 20); do
               if [[ -f ci-artifacts/telemetry/android/monitor.exitcode ]]; then
                 break
               fi
               sleep 1
             done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
             fi

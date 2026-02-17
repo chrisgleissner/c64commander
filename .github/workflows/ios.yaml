@@ -312,7 +312,10 @@ jobs:
             SIMULATOR_UDID="${{ steps.simulator.outputs.udid }}" \
             TELEMETRY_DEVICE_NAME="${{ matrix.group.name }}-${{ steps.simulator.outputs.udid }}" \
             BUNDLE_ID="${APP_ID}" \
-            ci/telemetry/ios/monitor_ios.sh || status=$?
+            ci/telemetry/ios/monitor_ios.sh &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > artifacts/ios/_infra/telemetry/monitor.child.pid
+            wait "$monitor_child_pid" || status=$?
             echo "$status" > artifacts/ios/_infra/telemetry/monitor.exitcode
           ) > artifacts/ios/_infra/telemetry/monitor-run.log 2>&1 &
           echo $! > artifacts/ios/_infra/telemetry/monitor.pid
@@ -342,15 +345,26 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          child_pid=""
+          if [[ -f artifacts/ios/_infra/telemetry/monitor.child.pid ]]; then
+            child_pid="$(cat artifacts/ios/_infra/telemetry/monitor.child.pid)"
+          fi
           if [[ -f artifacts/ios/_infra/telemetry/monitor.pid ]]; then
             pid="$(cat artifacts/ios/_infra/telemetry/monitor.pid)"
-            kill -TERM "$pid" 2>/dev/null || true
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
             for _ in $(seq 1 20); do
               if [[ -f artifacts/ios/_infra/telemetry/monitor.exitcode ]]; then
                 break
               fi
               sleep 1
             done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
             fi
