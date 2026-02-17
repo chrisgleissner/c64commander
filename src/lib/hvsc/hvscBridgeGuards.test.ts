@@ -29,4 +29,9 @@ describe('HVSC bridge guardrails', () => {
         const runtime = readWorkspaceFile('src/lib/hvsc/hvscIngestionRuntime.ts');
         expect(runtime).not.toContain('const archiveBuffer = await readArchiveBuffer(cached);');
     });
+
+    it('does not use Filesystem.readFile in native ingestion runtime path', () => {
+        const runtime = readWorkspaceFile('src/lib/hvsc/hvscIngestionRuntime.ts');
+        expect(runtime).not.toContain('Filesystem.readFile(');
+    });
 });

@@ -395,6 +395,21 @@ if [[ -n "${boot_start_time:-}" ]]; then
   write_timing "emulator_boot_seconds" "$boot_duration"
 fi
 
+if [[ "${CI:-false}" == "true" ]]; then
+  LOW_RAM_PROP=$(adb -s "$DEVICE_ID" shell getprop ro.config.low_ram | tr -d '\r' || true)
+  DALVIK_HEAP_PROP=$(adb -s "$DEVICE_ID" shell getprop dalvik.vm.heapsize | tr -d '\r' || true)
+  {
+    echo "ro.config.low_ram=${LOW_RAM_PROP}"
+    echo "dalvik.vm.heapsize=${DALVIK_HEAP_PROP}"
+  } | tee "$RAW_OUTPUT_DIR/low-ram-props.txt"
+
+  if [[ "$LOW_RAM_PROP" != "true" && "$LOW_RAM_PROP" != "1" ]]; then
+    log "GATE VIOLATION: ro.config.low_ram expected true/1 but was '${LOW_RAM_PROP}'"
+    capture_failure_artifacts "$DEVICE_ID"
+    exit 1
+  fi
+fi
+
 adb -s "$DEVICE_ID" shell settings put global window_animation_scale 0 || true
 adb -s "$DEVICE_ID" shell settings put global transition_animation_scale 0 || true
 adb -s "$DEVICE_ID" shell settings put global animator_duration_scale 0 || true
@@ -454,6 +469,7 @@ if [[ "${CI:-false}" == "true" ]]; then
   CI_FLOW_FILES=(
     "$ROOT_DIR/.maestro/smoke-launch.yaml"
     "$ROOT_DIR/.maestro/smoke-hvsc.yaml"
+    "$ROOT_DIR/.maestro/smoke-hvsc-lowram.yaml"
   )
   if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
     MAESTRO_EXIT_CODE=$?
@@ -476,7 +492,7 @@ if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
   fi
 
   # Assert critical flows actually executed (ci-critical gate integrity)
-  REQUIRED_FLOWS=("smoke-hvsc" "smoke-launch")
+  REQUIRED_FLOWS=("smoke-hvsc" "smoke-hvsc-lowram" "smoke-launch")
   if [[ "${CI:-false}" == "true" ]]; then
     for FLOW in "${REQUIRED_FLOWS[@]}"; do
       if ! grep -q "$FLOW" "$RAW_OUTPUT_DIR/maestro-report.xml"; then

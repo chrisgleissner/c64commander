@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry
 import org.apache.commons.compress.archivers.sevenz.SevenZFile
+import org.tukaani.xz.LZMA2Options
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
@@ -48,6 +49,15 @@ class HvscIngestionPlugin : Plugin() {
 
   private companion object {
     private const val MAX_DELETION_LIST_SIZE_BYTES = 10L * 1024 * 1024
+    private val REQUIRED_XZ_CLASS: Class<*> = LZMA2Options::class.java
+  }
+
+  private fun ensureSevenZipRuntimeClasses() {
+    try {
+      REQUIRED_XZ_CLASS.name
+    } catch (error: Throwable) {
+      throw IllegalStateException("Missing required XZ runtime classes for SevenZ ingestion", error)
+    }
   }
 
   private fun pluginContextOrNull() = try {
@@ -279,6 +289,8 @@ class HvscIngestionPlugin : Plugin() {
     val pendingDeletions = mutableListOf<String>()
     val pendingUpserts = mutableListOf<SongUpsertRow>()
     var metadataUpserts = 0
+
+    ensureSevenZipRuntimeClasses()
 
     SevenZFile(archiveFile).use { sevenZip ->
       var entry: SevenZArchiveEntry? = sevenZip.nextEntry

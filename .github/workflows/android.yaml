@@ -531,6 +531,26 @@ jobs:
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Inspect SevenZ/XZ dependency graph
+        run: |
+          set -e
+          cd android
+          ./gradlew :app:dependencies --configuration debugRuntimeClasspath
+          ./gradlew :app:dependencyInsight --dependency xz --configuration debugRuntimeClasspath
+
+      - name: Build debug + minifiedDebug APKs
+        run: |
+          set -e
+          cd android
+          ./gradlew :app:assembleDebug :app:assembleMinifiedDebug
+
+      - name: Verify SevenZ/XZ runtime classes in APK DEX
+        run: |
+          set -euo pipefail
+          DEBUG_APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -n 1)
+          MINIFIED_DEBUG_APK=$(ls android/app/build/outputs/apk/minifiedDebug/*.apk | head -n 1)
+          bash scripts/verify-android-apk-lzma2.sh "$DEBUG_APK" "$MINIFIED_DEBUG_APK"
+
       - name: Run Android tests with coverage
         run: |
           start=$(date +%s)
@@ -690,6 +710,8 @@ jobs:
             grep -q '^vm.heapSize=' "$AVD_CONFIG" || echo "vm.heapSize=${ANDROID_AVD_HEAP_MB}" >> "$AVD_CONFIG"
             grep -q '^hw.cpu.ncore=' "$AVD_CONFIG" || echo "hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}" >> "$AVD_CONFIG"
             grep -q '^hw.device.lowram=' "$AVD_CONFIG" || echo "hw.device.lowram=${ANDROID_AVD_LOW_RAM}" >> "$AVD_CONFIG"
+            echo "=== AVD config readback ==="
+            grep -E '^(hw\.ramSize|vm\.heapSize|hw\.cpu\.ncore|hw\.device\.lowram)=' "$AVD_CONFIG" | sort
           fi
 
           echo "=== Starting emulator in background ==="
@@ -723,6 +745,12 @@ jobs:
           timeout 180 bash -c "until adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '1'; do sleep 3; done" || { echo "Boot did not complete"; adb -s $SERIAL shell getprop sys.boot_completed || true; cat test-results/maestro/emulator.log || true; exit 1; }
           echo "Waiting for boot animation to stop..."
           timeout 60 bash -c "until adb -s $SERIAL shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' | grep -q 'stopped'; do sleep 2; done" || true
+          LOW_RAM_PROP=$(adb -s "$SERIAL" shell getprop ro.config.low_ram | tr -d '\r')
+          echo "ro.config.low_ram=$LOW_RAM_PROP"
+          if [[ "$LOW_RAM_PROP" != "true" && "$LOW_RAM_PROP" != "1" ]]; then
+            echo "Low-RAM mode not enabled in emulator runtime"
+            exit 1
+          fi
           boot_end=$(date +%s)
           echo "- emulator boot: $((boot_end-boot_start))s" >> $GITHUB_STEP_SUMMARY
           echo "emulator_boot_seconds=$((boot_end-boot_start))" >> test-results/maestro/timings.txt
@@ -780,6 +808,22 @@ jobs:
           }
           end=$(date +%s)
           echo "- maestro gating: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Assert memory class logging
+        if: always()
+        run: |
+          set -e
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
+          if [[ -z "$SERIAL" ]]; then
+            echo "No emulator serial found for memory class assertion"
+            exit 1
+          fi
+          adb -s "$SERIAL" logcat -d | grep -q "Android memory class detected:" || {
+            echo "MainActivity memory class log not found"
+            exit 1
+          }
 
       - name: Upload Maestro evidence
         if: always()
