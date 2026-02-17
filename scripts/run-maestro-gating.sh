@@ -14,10 +14,11 @@ AVD_NAME="${ANDROID_AVD_NAME:-c64-ci}"
 API_LEVEL="${ANDROID_API_LEVEL:-34}"
 SYSTEM_IMAGE="${ANDROID_SYSTEM_IMAGE:-system-images;android-34;google_apis;x86_64}"
 DEVICE_PROFILE="${ANDROID_DEVICE_PROFILE:-pixel_6}"
-AVD_RAM_MB="${ANDROID_AVD_RAM_MB:-512}"
-AVD_HEAP_MB="${ANDROID_AVD_HEAP_MB:-128}"
-AVD_CPU_CORES="${ANDROID_AVD_CPU_CORES:-1}"
-AVD_LOW_RAM="${ANDROID_AVD_LOW_RAM:-yes}"
+AVD_RAM_MB="${ANDROID_AVD_RAM_MB:-3072}"
+AVD_HEAP_MB="${ANDROID_AVD_HEAP_MB:-512}"
+AVD_CPU_CORES="${ANDROID_AVD_CPU_CORES:-4}"
+AVD_CPU_FREQ_MHZ="${ANDROID_AVD_CPU_FREQ_MHZ:-2000}"
+AVD_LOW_RAM="${ANDROID_AVD_LOW_RAM:-no}"
 EMULATOR_HEADLESS="${EMULATOR_HEADLESS:-1}"
 EMULATOR_PORT="${EMULATOR_PORT:-5556}"
 SKIP_BUILD=0
@@ -187,10 +188,12 @@ ensure_avd() {
       sed_inplace "s/^hw.ramSize=.*/hw.ramSize=${AVD_RAM_MB}/" "$config_path" || true
       sed_inplace "s/^vm.heapSize=.*/vm.heapSize=${AVD_HEAP_MB}/" "$config_path" || true
       sed_inplace "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${AVD_CPU_CORES}/" "$config_path" || true
+      sed_inplace "s/^hw.cpu.speed=.*/hw.cpu.speed=${AVD_CPU_FREQ_MHZ}/" "$config_path" || true
       sed_inplace "s/^hw.device.lowram=.*/hw.device.lowram=${AVD_LOW_RAM}/" "$config_path" || true
       grep -q '^hw.ramSize=' "$config_path" || echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
       grep -q '^vm.heapSize=' "$config_path" || echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
       grep -q '^hw.cpu.ncore=' "$config_path" || echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
+      grep -q '^hw.cpu.speed=' "$config_path" || echo "hw.cpu.speed=${AVD_CPU_FREQ_MHZ}" >> "$config_path"
       grep -q '^hw.device.lowram=' "$config_path" || echo "hw.device.lowram=${AVD_LOW_RAM}" >> "$config_path"
     fi
     return 0
@@ -203,6 +206,7 @@ ensure_avd() {
     echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
     echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
     echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
+    echo "hw.cpu.speed=${AVD_CPU_FREQ_MHZ}" >> "$config_path"
     echo "hw.device.lowram=${AVD_LOW_RAM}" >> "$config_path"
   fi
 }
@@ -396,15 +400,24 @@ if [[ -n "${boot_start_time:-}" ]]; then
 fi
 
 if [[ "${CI:-false}" == "true" ]]; then
-  LOW_RAM_PROP=$(adb -s "$DEVICE_ID" shell getprop ro.config.low_ram | tr -d '\r' || true)
+  CPU_COUNT=$(adb -s "$DEVICE_ID" shell "grep -c '^processor' /proc/cpuinfo" | tr -d '\r' || true)
+  MEM_TOTAL_KB=$(adb -s "$DEVICE_ID" shell "awk '/MemTotal/ {print \$2; exit}' /proc/meminfo" | tr -d '\r' || true)
   DALVIK_HEAP_PROP=$(adb -s "$DEVICE_ID" shell getprop dalvik.vm.heapsize | tr -d '\r' || true)
   {
-    echo "ro.config.low_ram=${LOW_RAM_PROP}"
+    echo "cpu_count=${CPU_COUNT}"
+    echo "mem_total_kb=${MEM_TOTAL_KB}"
     echo "dalvik.vm.heapsize=${DALVIK_HEAP_PROP}"
-  } | tee "$RAW_OUTPUT_DIR/low-ram-props.txt"
+    echo "assumed_cpu_freq_mhz=${AVD_CPU_FREQ_MHZ}"
+  } | tee "$RAW_OUTPUT_DIR/emulator-profile-props.txt"
 
-  if [[ "$LOW_RAM_PROP" != "true" && "$LOW_RAM_PROP" != "1" ]]; then
-    log "GATE VIOLATION: ro.config.low_ram expected true/1 but was '${LOW_RAM_PROP}'"
+  if [[ ! "$CPU_COUNT" =~ ^[0-9]+$ || "$CPU_COUNT" -lt 2 ]]; then
+    log "GATE VIOLATION: CPU cores below required profile (expected >=2, got '${CPU_COUNT}')"
+    capture_failure_artifacts "$DEVICE_ID"
+    exit 1
+  fi
+
+  if [[ -z "$MEM_TOTAL_KB" || "$MEM_TOTAL_KB" -lt 2500000 ]]; then
+    log "GATE VIOLATION: MemTotal below required ~3GB profile (got '${MEM_TOTAL_KB}')"
     capture_failure_artifacts "$DEVICE_ID"
     exit 1
   fi

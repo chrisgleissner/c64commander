@@ -7,6 +7,7 @@ Two systemic issues are being fixed:
 1. Custom CTA-like UI elements can remain visually highlighted/focused after click.
 2. Demo mode does not reliably auto-transition to real mode when the configured C64U becomes reachable later.
 3. Provide objective proof that CTA highlight activation clears automatically after the configured timeout.
+4. Android memory-constrained emulator gating must assume a 3GB RAM, 2-core, 2GHz/core device profile.
 
 This plan is the authoritative tracker and is updated as work progresses.
 
@@ -151,6 +152,7 @@ Inventory command used:
 8. [ ] Push branch and verify CI green via `gh` run monitoring
 9. [ ] Finalize this plan with validation evidence
 10. [x] Add screenshot-based transient highlight proof requirement and generate evidence
+11. [x] Update Android emulator gating profile to 3GB RAM, 2 cores, assumed 2GHz/core
 
 ---
 
@@ -188,6 +190,16 @@ Inventory command used:
   - Verifies global interaction model covers non-button CTA (`a[href]`)
 - `tests/unit/connection/connectionManager.test.ts`
   - Added regression test ensuring overlapping background rediscovery calls do not abort in-flight success and still transition demo → real
+
+### Android emulator profile update
+
+- Updated `.github/workflows/android.yaml` (Android | Maestro gating):
+  - AVD profile set to `3072MB` RAM, `2` CPU cores, low-ram disabled.
+  - Added explicit `ANDROID_AVD_CPU_FREQ_MHZ=2000` and persisted into AVD `config.ini` via `hw.cpu.speed`.
+  - Runtime boot assertions now validate CPU core count and memory total against the 3GB/2-core assumption.
+- Updated `scripts/run-maestro-gating.sh`:
+  - Defaults aligned to `3072MB` RAM, `2` cores, `2000MHz` assumed CPU profile.
+  - CI gate now checks runtime CPU/memory profile instead of `ro.config.low_ram=true`.
 
 ---
 

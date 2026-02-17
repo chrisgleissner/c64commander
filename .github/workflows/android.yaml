@@ -610,7 +610,8 @@ jobs:
       ANDROID_AVD_NAME: "c64-ci-constrained-3gb"
       ANDROID_AVD_RAM_MB: "3072"
       ANDROID_AVD_HEAP_MB: "512"
-      ANDROID_AVD_CPU_CORES: "2"
+      ANDROID_AVD_CPU_CORES: "4"
+      ANDROID_AVD_CPU_FREQ_MHZ: "2000"
       ANDROID_AVD_LOW_RAM: "no"
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
@@ -703,13 +704,15 @@ jobs:
             sed -i "s/^hw.ramSize=.*/hw.ramSize=${ANDROID_AVD_RAM_MB}/" "$AVD_CONFIG" || true
             sed -i "s/^vm.heapSize=.*/vm.heapSize=${ANDROID_AVD_HEAP_MB}/" "$AVD_CONFIG" || true
             sed -i "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}/" "$AVD_CONFIG" || true
+            sed -i "s/^hw.cpu.speed=.*/hw.cpu.speed=${ANDROID_AVD_CPU_FREQ_MHZ}/" "$AVD_CONFIG" || true
             sed -i "s/^hw.device.lowram=.*/hw.device.lowram=${ANDROID_AVD_LOW_RAM}/" "$AVD_CONFIG" || true
             grep -q '^hw.ramSize=' "$AVD_CONFIG" || echo "hw.ramSize=${ANDROID_AVD_RAM_MB}" >> "$AVD_CONFIG"
             grep -q '^vm.heapSize=' "$AVD_CONFIG" || echo "vm.heapSize=${ANDROID_AVD_HEAP_MB}" >> "$AVD_CONFIG"
             grep -q '^hw.cpu.ncore=' "$AVD_CONFIG" || echo "hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}" >> "$AVD_CONFIG"
+            grep -q '^hw.cpu.speed=' "$AVD_CONFIG" || echo "hw.cpu.speed=${ANDROID_AVD_CPU_FREQ_MHZ}" >> "$AVD_CONFIG"
             grep -q '^hw.device.lowram=' "$AVD_CONFIG" || echo "hw.device.lowram=${ANDROID_AVD_LOW_RAM}" >> "$AVD_CONFIG"
             echo "=== AVD config readback ==="
-            grep -E '^(hw\.ramSize|vm\.heapSize|hw\.cpu\.ncore|hw\.device\.lowram)=' "$AVD_CONFIG" | sort
+            grep -E '^(hw\.ramSize|vm\.heapSize|hw\.cpu\.ncore|hw\.cpu\.speed|hw\.device\.lowram)=' "$AVD_CONFIG" | sort
           fi
 
           echo "=== Starting emulator in background ==="
