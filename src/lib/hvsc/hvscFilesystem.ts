@@ -20,7 +20,7 @@ import {
 const HVSC_WORK_DIR = 'hvsc';
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
 const HVSC_CACHE_DIR = `${HVSC_WORK_DIR}/cache`;
-const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
+export const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
 
 const normalizeFilePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
