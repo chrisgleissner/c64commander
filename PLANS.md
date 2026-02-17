@@ -65,4 +65,4 @@
    - `cd android && ./gradlew :app:compileDebugKotlin :app:compileReleaseKotlin` ✅
    - `./build` ✅
 - Remaining architectural gap vs requested target:
-   - SQLite batched metadata ingestion (`500 rows/transaction`) is not yet implemented; native ingestion currently streams archive entries directly to app-private file storage and emits bounded progress.
+   - None. SQLite batched metadata ingestion is implemented natively via bounded transactions (`dbBatchSize`, default `500`) with row-threshold validation (`minExpectedRows`) and reported metadata stats (`metadataRows`, `metadataUpserts`, `metadataDeletes`).
