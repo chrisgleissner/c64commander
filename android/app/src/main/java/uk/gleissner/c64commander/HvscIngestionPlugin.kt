@@ -46,6 +46,10 @@ class HvscIngestionPlugin : Plugin() {
   private var activeJob: Job? = null
   private val cancellationRequested = AtomicBoolean(false)
 
+  private companion object {
+    private const val MAX_DELETION_LIST_SIZE_BYTES = 10L * 1024 * 1024
+  }
+
   private fun pluginContextOrNull() = try {
     context
   } catch (_: Throwable) {
@@ -291,15 +295,25 @@ class HvscIngestionPlugin : Plugin() {
             targetFile.parentFile?.mkdirs()
 
             if (isDeletionList(normalizedPath)) {
-              val bytes = ByteArray(currentEntry.size.toInt())
-              var offset = 0
-              while (offset < bytes.size) {
-                val read = sevenZip.read(bytes, offset, bytes.size - offset)
-                if (read <= 0) break
-                offset += read
+              val entrySize = currentEntry.size
+              if (entrySize in 1..MAX_DELETION_LIST_SIZE_BYTES) {
+                val bytes = ByteArray(entrySize.toInt())
+                var offset = 0
+                while (offset < bytes.size) {
+                  val read = sevenZip.read(bytes, offset, bytes.size - offset)
+                  if (read <= 0) break
+                  offset += read
+                }
+                val text = String(bytes, Charsets.UTF_8)
+                pendingDeletions.addAll(parseDeletionList(text))
+              } else {
+                AppLogger.warn(
+                  pluginContextOrNull(),
+                  logTag,
+                  "Skipping deletion list due to unexpected size: path=$normalizedPath entrySize=$entrySize",
+                  "HvscIngestionPlugin",
+                )
               }
-              val text = String(bytes, Charsets.UTF_8)
-              pendingDeletions.addAll(parseDeletionList(text))
             } else if (lowered.endsWith("songlengths.md5") || lowered.endsWith("songlengths.txt")) {
               BufferedOutputStream(FileOutputStream(targetFile)).use { output ->
                 val buffer = ByteArray(32 * 1024)
