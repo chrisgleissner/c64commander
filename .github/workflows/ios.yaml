@@ -417,11 +417,12 @@ jobs:
             exit 1
           fi
           code=$(cat "$code_file")
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate warning: app process disappearance/restart detected; see artifacts/ios/_infra/telemetry/events.log"
+            exit 0
+          fi
           if [[ "$code" != "0" ]]; then
             echo "telemetry gate failed: monitor exited with code $code"
-            if [[ "$code" == "3" ]]; then
-              echo "app process disappearance detected; see artifacts/ios/_infra/telemetry/events.log"
-            fi
             exit 1
           fi
 

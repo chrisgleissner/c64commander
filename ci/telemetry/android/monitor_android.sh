@@ -160,7 +160,7 @@ while (( running == 1 )); do
       role="main"
     fi
 
-    pid="$(adb_shell "pidof $process_name" | awk '{print $1; exit}')"
+    pid="$(adb_shell "pidof $process_name" | awk '{print $1; exit}' || true)"
 
     if [[ -z "$pid" ]]; then
       if [[ -n "${prev_pid[$role]:-}" ]]; then
