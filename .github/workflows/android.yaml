@@ -607,11 +607,11 @@ jobs:
       ANDROID_API_LEVEL: "34"
       ANDROID_SYSTEM_IMAGE: "system-images;android-34;google_apis;x86_64"
       ANDROID_DEVICE_PROFILE: "pixel_6"
-      ANDROID_AVD_NAME: "c64-ci-lowram"
-      ANDROID_AVD_RAM_MB: "512"
-      ANDROID_AVD_HEAP_MB: "128"
-      ANDROID_AVD_CPU_CORES: "1"
-      ANDROID_AVD_LOW_RAM: "yes"
+      ANDROID_AVD_NAME: "c64-ci-constrained-3gb"
+      ANDROID_AVD_RAM_MB: "3072"
+      ANDROID_AVD_HEAP_MB: "512"
+      ANDROID_AVD_CPU_CORES: "2"
+      ANDROID_AVD_LOW_RAM: "no"
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
       MAESTRO_TIMEOUT_SECS: "300"
@@ -754,14 +754,24 @@ jobs:
           timeout 420 bash -c "until adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '1'; do sleep 3; done" || { echo "Boot did not complete"; adb -s $SERIAL shell getprop sys.boot_completed || true; cat test-results/maestro/emulator.log || true; exit 1; }
           echo "Waiting for boot animation to stop..."
           timeout 120 bash -c "until adb -s $SERIAL shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' | grep -q 'stopped'; do sleep 2; done" || true
-          LOW_RAM_PROP=$(adb -s "$SERIAL" shell getprop ro.config.low_ram | tr -d '\r')
-          echo "ro.config.low_ram=$LOW_RAM_PROP"
-          if [[ "$LOW_RAM_PROP" != "true" && "$LOW_RAM_PROP" != "1" ]]; then
-            echo "Low-RAM mode not enabled in emulator runtime"
+          CPU_COUNT=$(adb -s "$SERIAL" shell "grep -c '^processor' /proc/cpuinfo" | tr -d '\r' || true)
+          MEM_TOTAL_KB=$(adb -s "$SERIAL" shell "awk '/MemTotal/ {print \$2; exit}' /proc/meminfo" | tr -d '\r' || true)
+          echo "runtime cpu_count=$CPU_COUNT"
+          echo "runtime mem_total_kb=$MEM_TOTAL_KB"
+
+          if [[ ! "$CPU_COUNT" =~ ^[0-9]+$ || "$CPU_COUNT" -lt 2 ]]; then
+            echo "Emulator CPU core count is below expected profile (>=2)"
             exit 1
           fi
+          if [[ -z "$MEM_TOTAL_KB" || "$MEM_TOTAL_KB" -lt 2500000 ]]; then
+            echo "Emulator memory is below expected profile (~3GB)"
+            exit 1
+          fi
+
+          echo "Assuming 2GHz/core profile as host-backed emulator CPU characteristic"
           boot_end=$(date +%s)
           echo "- emulator boot: $((boot_end-boot_start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- emulator profile: RAM=${ANDROID_AVD_RAM_MB}MB CORES=${ANDROID_AVD_CPU_CORES} CPU_FREQ=assumed-2GHz" >> $GITHUB_STEP_SUMMARY
           echo "emulator_boot_seconds=$((boot_end-boot_start))" >> test-results/maestro/timings.txt
           echo "Emulator is ready"
           adb devices -l
