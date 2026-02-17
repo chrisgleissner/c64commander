@@ -20,8 +20,6 @@ env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   DOCKER_LIMIT_MEMORY: 512m
   DOCKER_LIMIT_CPUS: "2"
-  DOCKER_LIMIT_CPU_PERIOD: "100000"
-  DOCKER_LIMIT_CPU_QUOTA: "200000"
   DOCKER_TARGET_CPU_FREQ_MHZ: "2000"
 
 jobs:
@@ -105,8 +103,6 @@ jobs:
             --memory "${DOCKER_LIMIT_MEMORY}" \
             --memory-swap "${DOCKER_LIMIT_MEMORY}" \
             --cpus "${DOCKER_LIMIT_CPUS}" \
-            --cpu-period "${DOCKER_LIMIT_CPU_PERIOD}" \
-            --cpu-quota "${DOCKER_LIMIT_CPU_QUOTA}" \
             -p 18080:8064 \
             -v "$PWD/.tmp/web-config:/config" \
             c64commander:ci
@@ -197,10 +193,15 @@ jobs:
             exit 1
           fi
           code=$(cat "$code_file")
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate failed: container disappeared (exit code 3)"
+            exit 1
+          fi
           if [[ "$code" != "0" ]]; then
             echo "telemetry gate failed: monitor exited with code $code"
             exit 1
           fi
+          echo "telemetry gates passed: $line_count samples, monitor exit code $code"
 
       - name: Stop smoke container
         if: always()
