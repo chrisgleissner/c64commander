@@ -1,6 +1,6 @@
 # CI Telemetry
 
-This directory contains low-overhead CI telemetry for Android emulator and iOS simulator runs.
+This directory contains low-overhead CI telemetry for Android emulator, iOS simulator, Docker, and Linux-host fuzz runs.
 
 ## Outputs
 
@@ -13,6 +13,11 @@ Each monitor writes:
 Summary generation writes:
 - `ci-artifacts/telemetry/summary.json`
 - `ci-artifacts/telemetry/summary.md`
+
+Chart rendering writes:
+- `ci-artifacts/telemetry/charts/*.svg`
+- `ci-artifacts/telemetry/charts/*.png`
+- `ci-artifacts/telemetry/charts/index.md`
 
 ## CSV schema
 
@@ -47,6 +52,15 @@ Script: `ci/telemetry/ios/monitor_ios.sh`
 - Optionally attempts WebKit child capture only when process parent relation is explicit in simulator `ps`
 - Optional slow metric path (`TELEMETRY_ENABLE_VMMAP=1`) reads `vmmap -summary` every 30s
 
+## Linux monitor (fuzz)
+
+Script: `ci/telemetry/linux/monitor_linux.sh`
+
+- Matches process command line with `TELEMETRY_PROCESS_MATCH`
+- Samples every `TELEMETRY_INTERVAL_SEC` (default `1`)
+- Uses `/proc` for CPU, RSS, and thread count
+- Emits process lifecycle events and end-of-run disappearance status
+
 ## Summarizer
 
 Script: `ci/telemetry/summarize_metrics.py`
@@ -55,6 +69,13 @@ Script: `ci/telemetry/summarize_metrics.py`
 - Computes min/median/max for per-process and aggregate views
 - Handles missing fields cleanly
 - Writes machine-readable and markdown summaries
+
+## Charts
+
+Script: `ci/telemetry/render_charts.py`
+
+- Renders deterministic SVG and PNG charts from telemetry `metrics.csv`
+- Emits one chart per platform plus `charts/index.md`
 
 ## Capacitor interpretation notes
 
