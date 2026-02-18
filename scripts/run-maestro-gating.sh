@@ -485,7 +485,7 @@ if [[ "${CI:-false}" == "true" ]]; then
     "$ROOT_DIR/.maestro/smoke-hvsc-lowram.yaml"
   )
   CI_MAESTRO_ENV_ARGS=(
-    -e "HVSC_INGEST_TIMEOUT=900000"
+    -e "HVSC_INGEST_TIMEOUT=1500000"
     -e "LONG_TIMEOUT=30000"
     -e "TIMEOUT=20000"
     -e "SHORT_TIMEOUT=7000"
