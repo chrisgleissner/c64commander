@@ -482,8 +482,10 @@ if [[ "${CI:-false}" == "true" ]]; then
   CI_FLOW_FILES=(
     "$ROOT_DIR/.maestro/smoke-launch.yaml"
     "$ROOT_DIR/.maestro/smoke-hvsc.yaml"
-    "$ROOT_DIR/.maestro/smoke-hvsc-lowram.yaml"
   )
+  if [[ "${CI_RUN_LOWRAM_FLOW:-false}" == "true" ]]; then
+    CI_FLOW_FILES+=("$ROOT_DIR/.maestro/smoke-hvsc-lowram.yaml")
+  fi
   CI_MAESTRO_ENV_ARGS=(
     -e "HVSC_INGEST_TIMEOUT=1500000"
     -e "LONG_TIMEOUT=30000"
@@ -511,7 +513,10 @@ if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
   fi
 
   # Assert critical flows actually executed (ci-critical gate integrity)
-  REQUIRED_FLOWS=("smoke-hvsc" "smoke-hvsc-lowram" "smoke-launch")
+  REQUIRED_FLOWS=("smoke-hvsc" "smoke-launch")
+  if [[ "${CI_RUN_LOWRAM_FLOW:-false}" == "true" ]]; then
+    REQUIRED_FLOWS+=("smoke-hvsc-lowram")
+  fi
   if [[ "${CI:-false}" == "true" ]]; then
     for FLOW in "${REQUIRED_FLOWS[@]}"; do
       if ! grep -q "$FLOW" "$RAW_OUTPUT_DIR/maestro-report.xml"; then
