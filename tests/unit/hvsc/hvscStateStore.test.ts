@@ -9,6 +9,11 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadHvscState } from '@/lib/hvsc/hvscStateStore';
+import { addLog } from '@/lib/logging';
+
+vi.mock('@/lib/logging', () => ({
+  addLog: vi.fn(),
+}));
 
 describe('hvscStateStore', () => {
   beforeEach(() => {
@@ -32,13 +37,14 @@ describe('hvscStateStore', () => {
   });
 
   it('logs and returns defaults when storage is corrupted', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     localStorage.setItem('c64u_hvsc_state:v1', '{broken');
 
     const state = loadHvscState();
 
     expect(state.ingestionState).toBe('idle');
-    expect(warnSpy).toHaveBeenCalledWith('Failed to load HVSC state from storage', expect.any(Object));
-    warnSpy.mockRestore();
+    expect(addLog).toHaveBeenCalledWith('warn', 'Failed to load HVSC state from storage', expect.objectContaining({
+      storageKey: 'c64u_hvsc_state:v1',
+      error: expect.any(String),
+    }));
   });
 });

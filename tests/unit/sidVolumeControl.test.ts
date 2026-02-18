@@ -16,6 +16,7 @@ import {
   buildSidEnablement,
   buildSidVolumeSteps,
   filterEnabledSidVolumeItems,
+  isSidEnabledForName,
   type SidEnablement,
   type SidVolumeItem,
 } from '@/lib/config/sidVolumeControl';
@@ -128,5 +129,42 @@ describe('sid volume control helpers', () => {
     const numericSteps = steps.filter((step) => !step.isOff && step.numeric !== null);
     expect(numericSteps[0]?.numeric).toBe(-6);
     expect(numericSteps[numericSteps.length - 1]?.numeric).toBe(6);
+  });
+
+  it('handles empty and non-off volume option lists', () => {
+    expect(buildSidVolumeSteps([])).toEqual([]);
+
+    const noOffSteps = buildSidVolumeSteps([' +9 dB ', 'n/a', '-3 dB']);
+    expect(noOffSteps.map((step) => step.option)).toEqual(['-3 dB', ' +9 dB ']);
+    expect(noOffSteps.every((step) => !step.isOff)).toBe(true);
+  });
+
+  it('maps enablement from flat payload values and retains unknown names', () => {
+    const sockets = {
+      items: {
+        'SID Socket 1': 1,
+        'SID Socket 2': { selected: '' },
+      },
+    };
+    const addressing = {
+      items: {
+        'UltiSID 1 Address': { selected: 'OFF' },
+        'UltiSID 2 Address': { selected: '$D500' },
+      },
+    };
+
+    expect(buildSidEnablement(sockets, addressing)).toEqual({
+      socket1: true,
+      socket2: undefined,
+      ultiSid1: false,
+      ultiSid2: true,
+    });
+
+    expect(isSidEnabledForName('Filter Mode', { socket1: false, socket2: false, ultiSid1: false, ultiSid2: false })).toBe(true);
+  });
+
+  it('returns empty restore updates when no snapshot and no fallback target are available', () => {
+    const updates = buildEnabledSidRestoreUpdates(items, { socket1: true, socket2: true, ultiSid1: true, ultiSid2: true }, null, null);
+    expect(updates).toEqual({});
   });
 });

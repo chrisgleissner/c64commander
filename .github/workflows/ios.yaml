@@ -438,7 +438,11 @@ jobs:
           fi
           code=$(cat "$code_file")
           if [[ "$code" == "3" ]]; then
-            echo "telemetry gate warning: app process disappearance/restart detected; see artifacts/ios/_infra/telemetry/events.log"
+            if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_REF_NAME}" == release/* ]]; then
+              echo "telemetry gate failed: app process disappearance/restart detected on release flow; see artifacts/ios/_infra/telemetry/events.log"
+              exit 1
+            fi
+            echo "telemetry gate warning: app process disappearance/restart detected (non-release flow); see artifacts/ios/_infra/telemetry/events.log"
             exit 0
           fi
           if [[ "$code" != "0" ]]; then

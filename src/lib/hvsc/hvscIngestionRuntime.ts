@@ -103,6 +103,29 @@ const canUseNativeHvscIngestion = () => {
   }
 };
 
+const canUseNonNativeHvscIngestion = () => {
+  if (import.meta.env.MODE === 'test') {
+    return true;
+  }
+  if (import.meta.env.DEV) {
+    return true;
+  }
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') {
+    return true;
+  }
+  return import.meta.env.VITE_ENABLE_NON_NATIVE_HVSC_INGESTION === '1';
+};
+
+const assertNonNativeHvscIngestionAllowed = () => {
+  if (canUseNativeHvscIngestion()) {
+    return;
+  }
+  if (canUseNonNativeHvscIngestion()) {
+    return;
+  }
+  throw new Error('HVSC ingestion requires the native ingestion plugin on this platform. Set VITE_ENABLE_NON_NATIVE_HVSC_INGESTION=1 to override.');
+};
+
 // ── Listener management ──────────────────────────────────────────
 
 export const addHvscProgressListener = async (listener: (event: HvscProgressEvent) => void) => {
@@ -592,6 +615,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 
       const cached = await resolveCachedArchive(prefix, plan.version);
       const archivePath = cached ?? archiveName;
+      assertNonNativeHvscIngestionAllowed();
       updateHvscState({
         ingestionState: plan.type === 'baseline' ? 'installing' : 'updating',
         ingestionError: null,
@@ -819,6 +843,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       if (!cached) {
         throw new Error('No cached HVSC archives available.');
       }
+      assertNonNativeHvscIngestionAllowed();
       currentArchive = cached;
       currentArchiveType = plan.type;
       currentArchiveVersion = plan.version;

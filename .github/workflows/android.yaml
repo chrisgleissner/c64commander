@@ -384,6 +384,7 @@ jobs:
       - name: Enforce coverage threshold
         env:
           COVERAGE_MIN: "80"
+          COVERAGE_FILE: "coverage/lcov.info"
         run: node scripts/check-coverage-threshold.mjs
 
       - name: Enforce coverage paths
@@ -963,7 +964,11 @@ jobs:
           fi
           code=$(cat "$code_file")
           if [[ "$code" == "3" ]]; then
-            echo "telemetry gate warning: main process disappearance/restart detected; see ci-artifacts/telemetry/android/events.log"
+            if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_REF_NAME}" == release/* ]]; then
+              echo "telemetry gate failed: main process disappearance/restart detected on release flow; see ci-artifacts/telemetry/android/events.log"
+              exit 1
+            fi
+            echo "telemetry gate warning: main process disappearance/restart detected (non-release flow); see ci-artifacts/telemetry/android/events.log"
             exit 0
           fi
           if [[ "$code" != "0" ]]; then
