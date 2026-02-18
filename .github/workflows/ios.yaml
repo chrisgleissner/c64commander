@@ -332,12 +332,17 @@ jobs:
             mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
           fi
 
-          bash scripts/ci/ios-maestro-run-flow.sh \
-            --flows "${{ matrix.group.flows }}" \
-            --group "${{ matrix.group.name }}" \
-            --udid "${{ steps.simulator.outputs.udid }}" \
-            --app-path "App.app" \
-            "${mock_port_args[@]}"
+          maestro_cmd=(
+            bash scripts/ci/ios-maestro-run-flow.sh
+            --flows "${{ matrix.group.flows }}"
+            --group "${{ matrix.group.name }}"
+            --udid "${{ steps.simulator.outputs.udid }}"
+            --app-path "App.app"
+          )
+          if [[ ${#mock_port_args[@]} -gt 0 ]]; then
+            maestro_cmd+=("${mock_port_args[@]}")
+          fi
+          "${maestro_cmd[@]}"
 
       - name: Validate connectivity (${{ matrix.group.name }})
         if: always()
