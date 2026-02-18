@@ -25,25 +25,31 @@ This matrix is mandatory evidence for release hardening tasks `R-02`, `R-03`, `R
 
 ## Commands
 
-1. Stage assets:
+1. Regenerate deterministic local-source assets:
+
+```bash
+npm run fixtures:local-source
+```
+
+2. Stage assets:
 
 ```bash
 bash scripts/startup/stage-local-assets-adb.sh
 ```
 
-2. Collect startup baseline (10 loops):
+3. Collect startup baseline (10 loops):
 
 ```bash
 npm run startup:baseline
 ```
 
-3. Enforce startup budgets:
+4. Enforce startup budgets:
 
 ```bash
 npm run startup:gate
 ```
 
-4. Enforce HVSC startup safety:
+5. Enforce HVSC startup safety:
 
 ```bash
 npm run startup:gate:hvsc
