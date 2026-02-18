@@ -23,6 +23,8 @@ dist/
 dist-ssr/
 .tmp*
 nohup.out
+__pycache__/
+*.py[cod]
 
 # Test output
 .nyc_output/

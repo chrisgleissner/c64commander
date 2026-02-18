@@ -28,6 +28,7 @@ vi.mock('@/lib/native/platform', () => ({
 }));
 
 import {
+  buildAppMetadata,
   clearTraceEvents,
   exportTraceZip,
   getLastTraceExport,
@@ -40,6 +41,7 @@ import {
   recordRestRequest,
   recordRestResponse,
   recordTraceError,
+  replaceTraceEvents,
   resetTraceSession,
   persistTracesToSession,
   restoreTracesFromSession,
@@ -64,7 +66,7 @@ describe('traceSession', () => {
 
   it('records action lifecycle events', () => {
     // Need window for event dispatch (appendEvent)
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
 
     recordActionStart(action);
     recordActionScopeStart(action, 'scope');
@@ -79,7 +81,7 @@ describe('traceSession', () => {
   });
 
   it('records backend decisions once per correlation', () => {
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordRestRequest(action, {
       method: 'GET',
       url: 'http://device',
@@ -101,7 +103,7 @@ describe('traceSession', () => {
   });
 
   it('records REST and FTP responses', () => {
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordRestResponse(action, {
       status: 200,
       body: { ok: true },
@@ -126,9 +128,9 @@ describe('traceSession', () => {
 
     const dispatchSpy = vi.fn();
     vi.stubGlobal('window', {
-        dispatchEvent: dispatchSpy,
-        setTimeout: setTimeout,
-        CustomEvent: class CustomEvent { constructor(public type: string, public detail?: any) {} }
+      dispatchEvent: dispatchSpy,
+      setTimeout: setTimeout,
+      CustomEvent: class CustomEvent { constructor(public type: string, public detail?: any) { } }
     });
 
     recordTraceError(action, error);
@@ -157,7 +159,7 @@ describe('traceSession', () => {
       getItem: (key: string) => storage[key] || null,
       removeItem: (key: string) => { delete storage[key]; }
     });
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
 
     recordActionStart({ ...action, correlationId: 'C1' });
     const countersBefore = getCurrentTraceIdCounters();
@@ -182,16 +184,16 @@ describe('traceSession', () => {
   it('handles restore with no data', () => {
     vi.stubGlobal('sessionStorage', {
       getItem: () => null,
-      removeItem: () => {}
+      removeItem: () => { }
     });
-     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
 
     restoreTracesFromSession();
     expect(getTraceEvents()).toHaveLength(0);
   });
 
   it('records device guard event', () => {
-     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordDeviceGuard(action, { allowed: true });
     const events = getTraceEvents();
     expect(events).toContainEqual(expect.objectContaining({
@@ -201,17 +203,138 @@ describe('traceSession', () => {
   });
 
   it('handles storage errors gracefully', () => {
-     const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-     vi.stubGlobal('sessionStorage', {
-       setItem: () => { throw new Error('Full'); },
-       getItem: () => { throw new Error('Corrupt'); }
-     });
-     vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class{} });
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+    vi.stubGlobal('sessionStorage', {
+      setItem: () => { throw new Error('Full'); },
+      getItem: () => { throw new Error('Corrupt'); }
+    });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
 
-     persistTracesToSession();
-     expect(consoleSpy).toHaveBeenCalledWith('Failed to persist traces:', expect.any(Error));
+    persistTracesToSession();
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to persist traces:', expect.any(Error));
 
-     restoreTracesFromSession();
-     expect(consoleSpy).toHaveBeenCalledWith('Failed to restore traces:', expect.any(Error));
+    restoreTracesFromSession();
+    expect(consoleSpy).toHaveBeenCalledWith('Failed to restore traces:', expect.any(Error));
+  });
+
+  it('records action-end with error status', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordActionEnd(action, new Error('failed'));
+    const events = getTraceEvents();
+    const endEvent = events.find((e) => e.type === 'action-end');
+    expect(endEvent?.data).toEqual(expect.objectContaining({ status: 'error' }));
+  });
+
+  it('records action-scope-end with error status', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordActionScopeEnd(action, 'scope', new Error('oops'));
+    const events = getTraceEvents();
+    const scopeEnd = events.find((e) => e.type === 'action-scope-end');
+    expect(scopeEnd?.data).toEqual(expect.objectContaining({ status: 'error' }));
+  });
+
+  it('records rest-response with errorMessage parameter', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordRestResponse(action, {
+      status: 500,
+      body: null,
+      durationMs: 50,
+      error: null,
+      errorMessage: 'custom error msg',
+    });
+    const events = getTraceEvents();
+    const resp = events.find((e) => e.type === 'rest-response');
+    expect(resp?.data).toEqual(expect.objectContaining({ error: 'custom error msg' }));
+  });
+
+  it('records rest-response with error.message fallback', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordRestResponse(action, {
+      status: 500,
+      body: null,
+      durationMs: 50,
+      error: new Error('from error obj'),
+    });
+    const events = getTraceEvents();
+    const resp = events.find((e) => e.type === 'rest-response');
+    expect(resp?.data).toEqual(expect.objectContaining({ error: 'from error obj' }));
+  });
+
+  it('records rest-response with null error when both null', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordRestResponse(action, {
+      status: 200,
+      body: null,
+      durationMs: 50,
+      error: null,
+    });
+    const events = getTraceEvents();
+    const resp = events.find((e) => e.type === 'rest-response');
+    expect(resp?.data).toEqual(expect.objectContaining({ error: null }));
+  });
+
+  it('builds app metadata with fallback values', () => {
+    const metadata = buildAppMetadata();
+    expect(metadata).toHaveProperty('platform');
+    expect(metadata).toHaveProperty('appVersion');
+    expect(metadata).toHaveProperty('gitSha');
+    expect(metadata).toHaveProperty('buildTime');
+    expect(metadata).toHaveProperty('userAgent');
+  });
+
+  it('replaceTraceEvents rebuilds decision set', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    replaceTraceEvents([
+      { id: 'E-1', timestamp: new Date().toISOString(), relativeMs: 0, type: 'backend-decision', origin: 'user', correlationId: 'D-1', data: {} },
+    ]);
+    // Recording another decision for same correlation should be suppressed
+    recordRestRequest({ ...action, correlationId: 'D-1' }, {
+      method: 'GET', url: 'http://x', normalizedUrl: 'http://x', headers: {}, body: null,
+    });
+    const decisions = getTraceEvents().filter((e) => e.type === 'backend-decision');
+    expect(decisions).toHaveLength(1);
+  });
+
+  it('restores traces deduplicating against existing events', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    // Record one event
+    recordActionStart({ ...action, correlationId: 'DUP-1' });
+    const events = getTraceEvents();
+    const existingId = events[0].id;
+
+    const storage: Record<string, string> = {};
+    vi.stubGlobal('sessionStorage', {
+      setItem: (key: string, value: string) => { storage[key] = value; },
+      getItem: (key: string) => storage[key] ?? null,
+      removeItem: (key: string) => { delete storage[key]; },
+    });
+
+    // Store the same event in session
+    storage['__c64uPersistedTraces'] = JSON.stringify([events[0]]);
+    restoreTracesFromSession();
+
+    // Should NOT duplicate
+    const allEvents = getTraceEvents();
+    const matchingIds = allEvents.filter((e) => e.id === existingId);
+    expect(matchingIds).toHaveLength(1);
+  });
+
+  it('does not dispatch window event when window is undefined', () => {
+    // No window stub — the appendEvent path with typeof window !== 'undefined' should not throw
+    recordActionStart(action);
+    expect(getTraceEvents()).toHaveLength(1);
+  });
+
+  it('estimateEventSize fallback when TextEncoder is unavailable', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    const origTE = globalThis.TextEncoder;
+    // @ts-expect-error -- deliberately removing TextEncoder
+    delete globalThis.TextEncoder;
+    try {
+      recordActionStart(action);
+      expect(getTraceEvents()).toHaveLength(1);
+    } finally {
+      globalThis.TextEncoder = origTE;
+    }
   });
 });

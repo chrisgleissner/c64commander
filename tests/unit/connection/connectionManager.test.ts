@@ -465,6 +465,59 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
   });
 
+  it('prevents overlapping background probes and preserves in-flight success', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchStub = vi.mocked(fetch);
+    fetchStub.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    let abortCount = 0;
+    fetchStub.mockImplementation((_: RequestInfo | URL, init?: RequestInit) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return new Promise<Response>((resolve, reject) => {
+        if (signal?.aborted) {
+          abortCount += 1;
+          reject(new DOMException('Aborted', 'AbortError'));
+          return;
+        }
+
+        const onAbort = () => {
+          abortCount += 1;
+          reject(new DOMException('Aborted', 'AbortError'));
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+
+        setTimeout(() => {
+          signal?.removeEventListener('abort', onAbort);
+          resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }));
+        }, 150);
+      });
+    });
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    const firstProbe = discoverConnection('background');
+    const secondProbe = discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(220);
+    await Promise.all([firstProbe, secondProbe]);
+
+    expect(abortCount).toBe(0);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
   it('does not auto-enable demo when automatic demo mode is disabled', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');
@@ -489,6 +542,124 @@ describe('connectionManager', () => {
 
     expect(getConnectionSnapshot().state).toBe('OFFLINE_NO_DEMO');
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+  });
+
+  it('rejects payload with non-empty errors array', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: ['something wrong'] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('rejects payload with empty product string', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: '   ', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('accepts payload with no product field and no errors', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ version: '1.0' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(true);
+  });
+
+  it('rejects probe when HTTP status is not ok', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('handles non-JSON content type by returning null payload (healthy if response ok)', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response('OK', {
+        status: 200,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    );
+
+    // Non-JSON means payload is null, isProbePayloadHealthy(null) => false
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('manual probe without auto-demo transitions to OFFLINE_NO_DEMO', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    await discoverConnection('manual');
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(getConnectionSnapshot().state).toBe('OFFLINE_NO_DEMO');
+  });
+
+  it('background probe on READY state does nothing', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+
+    // Background probe should not change state when already REAL_CONNECTED
+    await discoverConnection('background');
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
   });
 
   it('demo fallback applies mock routing details when available', async () => {

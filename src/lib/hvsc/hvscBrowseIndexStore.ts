@@ -191,6 +191,31 @@ const readFilesystemSnapshot = async () => {
   }
 };
 
+export const clearHvscBrowseIndexSnapshot = async () => {
+  if (typeof window !== 'undefined') {
+    try {
+      await Filesystem.deleteFile({ directory: Directory.Data, path: STORAGE_PATH });
+    } catch (error) {
+      addLog('warn', 'Failed to delete HVSC browse snapshot', {
+        path: STORAGE_PATH,
+        error: (error as Error).message,
+      });
+    }
+    try {
+      await Filesystem.deleteFile({ directory: Directory.Data, path: MEDIA_INDEX_STORAGE_PATH });
+    } catch (error) {
+      addLog('warn', 'Failed to delete HVSC media snapshot', {
+        path: MEDIA_INDEX_STORAGE_PATH,
+        error: (error as Error).message,
+      });
+    }
+  }
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(MEDIA_INDEX_STORAGE_KEY);
+  }
+};
+
 const writeFilesystemSnapshot = async (snapshot: HvscBrowseIndexSnapshot) => {
   await Filesystem.mkdir({ directory: Directory.Data, path: 'hvsc/index', recursive: true });
   await Filesystem.writeFile({

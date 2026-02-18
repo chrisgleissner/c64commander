@@ -26,6 +26,7 @@ vi.mock('@capacitor/filesystem', () => ({
 }));
 
 vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
+    MAX_BRIDGE_READ_BYTES: 5 * 1024 * 1024,
     getHvscCacheDir: vi.fn(() => 'hvsc/cache'),
     writeCachedArchive: vi.fn(async () => undefined),
     deleteCachedArchive: vi.fn(async () => undefined),

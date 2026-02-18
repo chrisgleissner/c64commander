@@ -1,0 +1,7 @@
+timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb
+1739788800,android,c64-ci-constrained-3gb,uk.gleissner.c64commander,1234,12.4,210432,38,240120,52200,161300,240120
+1739788800,android,c64-ci-constrained-3gb,uk.gleissner.c64commander:renderer,1266,21.8,188320,24,210500,11200,171900,210500
+1739788803,android,c64-ci-constrained-3gb,uk.gleissner.c64commander,1234,14.1,214100,39,243410,53010,163700,243410
+1739788803,docker,linux-amd64-docker,c64commander-smoke,8412,36.2,120340,,,,
+1739788806,ios,group-1-UDID,uk.gleissner.c64commander,912,17.6,165220,31,,,,
+1739788806,ios,group-1-UDID,com.apple.WebKit.WebContent,1001,23.4,142110,19,,,,

@@ -20,6 +20,7 @@ import {
 const HVSC_WORK_DIR = 'hvsc';
 const HVSC_LIBRARY_DIR = `${HVSC_WORK_DIR}/library`;
 const HVSC_CACHE_DIR = `${HVSC_WORK_DIR}/cache`;
+export const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
 
 const normalizeFilePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
@@ -82,6 +83,23 @@ const statPath = async (path: string) => {
     });
     return null;
   }
+};
+
+const readFileWithSizeGuard = async (path: string) => {
+  let statSize: number | null = null;
+  try {
+    const stat = await Filesystem.stat({ directory: Directory.Data, path });
+    statSize = stat?.size ?? null;
+  } catch (error) {
+    logFilesystemWarning('Failed to stat before guarded read', {
+      path,
+      error,
+    });
+  }
+  if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES) {
+    throw new Error(`HVSC Filesystem.readFile blocked for large file (${statSize} bytes): ${path}`);
+  }
+  return Filesystem.readFile({ directory: Directory.Data, path });
 };
 
 const writeFileWithRetry = async (path: string, data: string) => {
@@ -252,7 +270,7 @@ export const getHvscSongByVirtualPath = async (virtualPath: string): Promise<Hvs
   const path = resolveLibraryPath(virtualPath);
   try {
     await ensureHvscSonglengthsReadyOnColdStart();
-    const result = await Filesystem.readFile({ directory: Directory.Data, path });
+    const result = await readFileWithSizeGuard(path);
     const duration = await resolveHvscSonglengthDuration({
       virtualPath,
       fileName: virtualPath.split('/').pop() || virtualPath,
@@ -313,7 +331,7 @@ export const resetLibraryRoot = async () => {
 };
 
 export const readCachedArchive = async (relativePath: string) => {
-  const result = await Filesystem.readFile({ directory: Directory.Data, path: `${HVSC_CACHE_DIR}/${relativePath}` });
+  const result = await readFileWithSizeGuard(`${HVSC_CACHE_DIR}/${relativePath}`);
   return base64ToUint8(result.data);
 };
 
@@ -339,10 +357,7 @@ export const writeCachedArchiveMarker = async (relativePath: string, marker: Hvs
 
 export const readCachedArchiveMarker = async (relativePath: string): Promise<HvscArchiveMarker | null> => {
   try {
-    const result = await Filesystem.readFile({
-      directory: Directory.Data,
-      path: getHvscCacheMarkerPath(relativePath),
-    });
+    const result = await readFileWithSizeGuard(getHvscCacheMarkerPath(relativePath));
     const parsed = JSON.parse(decodeBase64Text(result.data)) as HvscArchiveMarker;
     if (!parsed?.completedAt) return null;
     return parsed;

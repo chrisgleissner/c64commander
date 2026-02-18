@@ -10,6 +10,12 @@ import { describe, expect, it } from 'vitest';
 import { calculatePlaylistTotals } from '@/lib/playback/playlistTotals';
 
 describe('calculatePlaylistTotals', () => {
+  it('returns undefined for empty durations array', () => {
+    const totals = calculatePlaylistTotals([], 0);
+    expect(totals.total).toBeUndefined();
+    expect(totals.remaining).toBeUndefined();
+  });
+
   it('returns dash when durations unknown', () => {
     const totals = calculatePlaylistTotals([5000, undefined], 0);
     expect(totals.total).toBeUndefined();

@@ -9,7 +9,7 @@
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import type { HvscProgressEvent } from './hvscTypes';
-import { getHvscCacheDir, writeCachedArchive, deleteCachedArchive, writeCachedArchiveMarker, readCachedArchiveMarker } from './hvscFilesystem';
+import { getHvscCacheDir, writeCachedArchive, deleteCachedArchive, writeCachedArchiveMarker, readCachedArchiveMarker, MAX_BRIDGE_READ_BYTES } from './hvscFilesystem';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { base64ToUint8 } from '@/lib/sid/sidUtils';
 
@@ -251,6 +251,22 @@ export const getCacheStatusInternal = async () => {
 export const readArchiveBuffer = async (archivePath: string) => {
     const heapBefore = readHeapUsageBytes();
     const cacheDir = getHvscCacheDir();
+    let statSize: number | null = null;
+    try {
+        const stat = await Filesystem.stat({
+            directory: Directory.Data,
+            path: `${cacheDir}/${archivePath}`,
+        });
+        statSize = stat?.size ?? null;
+    } catch (error) {
+        addLog('warn', 'Failed to stat archive before guarded read', {
+            archivePath,
+            error: (error as Error).message,
+        });
+    }
+    if (statSize !== null && statSize > MAX_BRIDGE_READ_BYTES) {
+        throw new Error(`HVSC bridge read blocked for large archive (${statSize} bytes): ${archivePath}`);
+    }
     const archiveData = await Filesystem.readFile({
         directory: Directory.Data,
         path: `${cacheDir}/${archivePath}`,

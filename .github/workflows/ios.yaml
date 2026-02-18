@@ -40,7 +40,7 @@ env:
 jobs:
   ios-prepare:
     name: iOS | Prepare
-    runs-on: macos-15
+    runs-on: macos-latest
 
     steps:
       - name: Checkout
@@ -94,7 +94,7 @@ jobs:
 
   ios-build-simulator:
     name: iOS | Build simulator
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-prepare
     timeout-minutes: 25
 
@@ -144,7 +144,7 @@ jobs:
 
   ios-maestro-tests:
     name: iOS | Maestro ${{ matrix.group.name }}
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-build-simulator
     timeout-minutes: 45
 
@@ -153,13 +153,13 @@ jobs:
       matrix:
         group:
           - name: group-1
-            flows: "ios-smoke-launch,ios-playback-basics,ios-diagnostics-export"
+            flows: "ios-smoke-launch,ios-diagnostics-export"
           - name: group-2
             flows: "ios-ftp-browse,ios-local-import"
           - name: group-3
             flows: "ios-secure-storage-persist,ios-import-playback"
           - name: group-4
-            flows: "ios-hvsc-browse,ios-config-persistence"
+            flows: "ios-hvsc-browse,ios-config-persistence,ios-playback-basics"
 
     steps:
       - name: Checkout
@@ -298,17 +298,51 @@ jobs:
           IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS: "3"
           IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS: "1"
           IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS: "2"
-          IOS_MAESTRO_RECORD_VIDEO: "0"
+          IOS_MAESTRO_RECORD_VIDEO: ${{ vars.IOS_MAESTRO_RECORD_VIDEO || '0' }}
+          IOS_MAESTRO_MOCK_PORT: ${{ vars.IOS_MAESTRO_MOCK_PORT || '' }}
           SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
           SIM_BOOT_READY_MS: ${{ steps.simulator.outputs.boot_ready_ms }}
           CI: "true"
         run: |
           set -euo pipefail
-          bash scripts/ci/ios-maestro-run-flow.sh \
-            --flows "${{ matrix.group.flows }}" \
-            --group "${{ matrix.group.name }}" \
-            --udid "${{ steps.simulator.outputs.udid }}" \
+          mkdir -p artifacts/ios/_infra/telemetry
+          (
+            status=0
+            TELEMETRY_INTERVAL_SEC=1 \
+            TELEMETRY_OUTPUT_DIR=artifacts/ios/_infra/telemetry \
+            SIMULATOR_UDID="${{ steps.simulator.outputs.udid }}" \
+            TELEMETRY_DEVICE_NAME="${{ matrix.group.name }}-${{ steps.simulator.outputs.udid }}" \
+            BUNDLE_ID="${APP_ID}" \
+            ci/telemetry/ios/monitor_ios.sh &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > artifacts/ios/_infra/telemetry/monitor.child.pid
+            wait "$monitor_child_pid" || status=$?
+            echo "$status" > artifacts/ios/_infra/telemetry/monitor.exitcode
+          ) > artifacts/ios/_infra/telemetry/monitor-run.log 2>&1 &
+          echo $! > artifacts/ios/_infra/telemetry/monitor.pid
+          sleep 2
+          if ! kill -0 "$(cat artifacts/ios/_infra/telemetry/monitor.pid)" 2>/dev/null; then
+            echo "iOS telemetry monitor failed to start"
+            cat artifacts/ios/_infra/telemetry/monitor-run.log || true
+            exit 1
+          fi
+
+          mock_port_args=()
+          if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
+            mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
+          fi
+
+          maestro_cmd=(
+            bash scripts/ci/ios-maestro-run-flow.sh
+            --flows "${{ matrix.group.flows }}"
+            --group "${{ matrix.group.name }}"
+            --udid "${{ steps.simulator.outputs.udid }}"
             --app-path "App.app"
+          )
+          if [[ ${#mock_port_args[@]} -gt 0 ]]; then
+            maestro_cmd+=("${mock_port_args[@]}")
+          fi
+          "${maestro_cmd[@]}"
 
       - name: Validate connectivity (${{ matrix.group.name }})
         if: always()
@@ -319,6 +353,48 @@ jobs:
             bash scripts/ci/validate-ios-connectivity.sh "artifacts/ios/${flow}" || true
           done
 
+      - name: Stop iOS telemetry monitor
+        if: always()
+        run: |
+          set -euo pipefail
+          child_pid=""
+          if [[ -f artifacts/ios/_infra/telemetry/monitor.child.pid ]]; then
+            child_pid="$(cat artifacts/ios/_infra/telemetry/monitor.child.pid)"
+          fi
+          if [[ -f artifacts/ios/_infra/telemetry/monitor.pid ]]; then
+            pid="$(cat artifacts/ios/_infra/telemetry/monitor.pid)"
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
+            for _ in $(seq 1 20); do
+              if [[ -f artifacts/ios/_infra/telemetry/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          fi
+          cat artifacts/ios/_infra/telemetry/monitor-run.log || true
+
+      - name: Summarize telemetry (${{ matrix.group.name }})
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=artifacts/ios/_infra/telemetry python3 ci/telemetry/summarize_metrics.py
+
+      - name: Render telemetry charts (${{ matrix.group.name }})
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=artifacts/ios/_infra/telemetry python3 ci/telemetry/render_charts.py
+
       - name: Upload per-group artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -326,7 +402,49 @@ jobs:
           name: ios-maestro-${{ matrix.group.name }}
           path: |
             artifacts/ios/**
+            artifacts/ios/_infra/telemetry/metrics.csv
+            artifacts/ios/_infra/telemetry/events.log
+            artifacts/ios/_infra/telemetry/summary.json
+            artifacts/ios/_infra/telemetry/summary.md
+            artifacts/ios/_infra/telemetry/charts/**
           if-no-files-found: warn
+
+      - name: Enforce iOS telemetry gates (${{ matrix.group.name }})
+        if: always()
+        run: |
+          set -euo pipefail
+          expected_header="timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb"
+          csv="artifacts/ios/_infra/telemetry/metrics.csv"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv"
+            exit 1
+          fi
+          header=$(head -n 1 "$csv")
+          if [[ "$header" != "$expected_header" ]]; then
+            echo "telemetry gate failed: unexpected CSV header"
+            echo "expected: $expected_header"
+            echo "actual:   $header"
+            exit 1
+          fi
+          line_count=$(wc -l < "$csv")
+          if [[ "$line_count" -le 2 ]]; then
+            echo "telemetry gate failed: expected multiple data rows, found $((line_count-1))"
+            exit 1
+          fi
+          code_file="artifacts/ios/_infra/telemetry/monitor.exitcode"
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing"
+            exit 1
+          fi
+          code=$(cat "$code_file")
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate warning: app process disappearance/restart detected; see artifacts/ios/_infra/telemetry/events.log"
+            exit 0
+          fi
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code"
+            exit 1
+          fi
 
       - name: Shutdown and delete simulator
         if: always()
@@ -543,7 +661,7 @@ jobs:
 
   ios-package-altstore:
     name: iOS | Package IPA
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-prepare
 
     steps:
@@ -653,7 +771,7 @@ jobs:
 
   ios-package-paid:
     name: iOS | Package paid signing
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-prepare
     if: vars.IOS_PAID_SIGNING_ENABLED == 'true'
     # Required repository variables/secrets when enabling this lane:

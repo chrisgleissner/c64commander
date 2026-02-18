@@ -327,4 +327,128 @@ describe('diskFirstPrg DMA loader', () => {
 
     await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('PRG payload exceeds C64 address space');
   });
+
+  it('loads 40-track D64 images', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const tracks = 40;
+    const totalSecs = totalSectors1541(tracks);
+    const image = new Uint8Array(totalSecs * 256);
+    writeDirectoryEntry(image, 1, 0, 'EXT', 0x82);
+    writePrgSector(image, 1, 0, prg);
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd64');
+    expect(result.loadAddress).toBe(0x1000);
+  });
+
+  it('loads D64 with error table (40-track)', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const tracks = 40;
+    const totalSecs = totalSectors1541(tracks);
+    const baseSize = totalSecs * 256;
+    const image = new Uint8Array(baseSize + totalSecs);
+    writeDirectoryEntry(image, 1, 0, 'ERR40', 0x82);
+    writePrgSector(image, 1, 0, prg);
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd64');
+    expect(result.loadAddress).toBe(0x1000);
+  });
+
+  it('loads D71 image with error table', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    let totalSecs = 0;
+    for (let t = 1; t <= 70; t++) totalSecs += sectorsPerTrack1571(t);
+    const baseSize = totalSecs * 256;
+    const image = new Uint8Array(baseSize + totalSecs);
+    writeDirectoryEntryGeneric(image, sectorsPerTrack1571, 18, 1, 1, 0, 'D71ERR');
+    writePrgSectorGeneric(image, sectorsPerTrack1571, 1, 0, prg);
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd71');
+    expect(result.loadAddress).toBe(0x1000);
+  });
+
+  it('rejects unsupported D71 sizes', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const image = new Uint8Array(1234);
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd71')).rejects.toThrow('Unsupported D71 size');
+  });
+
+  it('loads D81 image with error table', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const prg = makeSysPrg();
+    const totalSecs = 80 * 40;
+    const baseSize = totalSecs * 256;
+    const image = new Uint8Array(baseSize + totalSecs);
+    writeDirectoryEntryGeneric(image, sectorsPerTrack1581, 40, 3, 1, 0, 'D81ERR');
+    writePrgSectorGeneric(image, sectorsPerTrack1581, 1, 0, prg);
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd81');
+    expect(result.loadAddress).toBe(0x1000);
+  });
+
+  it('rejects unsupported D81 sizes', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const image = new Uint8Array(5678);
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd81')).rejects.toThrow('Unsupported D81 size');
+  });
+
+  it('throws on unsupported disk image type', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    const image = new Uint8Array(1000);
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'xyz' as any)).rejects.toThrow('Unsupported disk type');
+  });
+
+  it('throws when DMA load fails after retries', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockRejectedValue(new Error('write fail')),
+    };
+    const prg = makeBasicPrg();
+    const image = createDiskImage(prg, 'RETRY');
+
+    await expect(loadFirstDiskPrgViaDma(api as any, image, 'd64')).rejects.toThrow('DMA load failed after retries');
+  });
+
+  it('reads multi-sector PRG chains', async () => {
+    const api: ApiMock = {
+      writeMemoryBlock: vi.fn().mockResolvedValue({ errors: [] }),
+    };
+    // Build a 2-sector PRG: sector 1,0 -> sector 1,1 -> end
+    const image = createDiskImage(new Uint8Array([0x01, 0x08, 0xaa]), 'MULTI');
+    // Overwrite the PRG sector at (1,0) to chain to (1,1)
+    const offset0 = tsOffset(1, 0);
+    const payload0 = new Uint8Array(254).fill(0xbb);
+    payload0[0] = 0x01; // load address low
+    payload0[1] = 0x08; // load address high
+    image[offset0] = 1;  // next track
+    image[offset0 + 1] = 1; // next sector
+    image.set(payload0, offset0 + 2);
+
+    // Write final sector at (1,1)
+    const offset1 = tsOffset(1, 1);
+    image[offset1] = 0;   // no next track
+    image[offset1 + 1] = 4; // 4 bytes used
+    image[offset1 + 2] = 0xcc;
+    image[offset1 + 3] = 0xdd;
+    image[offset1 + 4] = 0xee;
+    image[offset1 + 5] = 0xff;
+
+    const result = await loadFirstDiskPrgViaDma(api as any, image, 'd64');
+    expect(result.loadAddress).toBe(0x0801);
+  });
 });

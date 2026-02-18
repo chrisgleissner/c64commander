@@ -131,4 +131,108 @@ describe('buildActionSummaries', () => {
     expect(second.ftpCount).toBeUndefined();
     expect(second.errorCount).toBeUndefined();
   });
+
+  it('resolves success outcome', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.outcome).toBe('success');
+    expect(summary.errorCount).toBeUndefined();
+  });
+
+  it('resolves blocked outcome', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'blocked' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.outcome).toBe('blocked');
+  });
+
+  it('resolves timeout outcome', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'timeout' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.outcome).toBe('timeout');
+  });
+
+  it('uses fallback action name when actionStart has no name', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'COR-ANON', relativeMs: 0, data: {} }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'COR-ANON', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.actionName).toBe('Action COR-ANON');
+  });
+
+  it('handles error status with no error events as errorCount 1', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'error', error: 'bad' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.errorCount).toBe(1);
+    expect(summary.errorMessage).toBe('bad');
+  });
+
+  it('handles REST response without matching request', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-response', correlationId: 'C1', relativeMs: 50, data: { status: 200, durationMs: 50 } }),
+      buildTrace({ id: 'E3', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.effects).toBeUndefined();
+  });
+
+  it('handles non-string error coercion in REST response', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-request', correlationId: 'C1', relativeMs: 10, data: { method: 'GET', url: '/api', target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'rest-response', correlationId: 'C1', relativeMs: 50, data: { status: 500, error: 42, durationMs: 40 } }),
+      buildTrace({ id: 'E4', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'error' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const restEffect = summary.effects?.find((e) => e.type === 'REST');
+    expect(restEffect && 'error' in restEffect ? restEffect.error : undefined).toBe('42');
+  });
+
+  it('sorts by startRelativeMs then by correlationId', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C-BBB', relativeMs: 100, data: { name: 'b' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C-BBB', relativeMs: 200, data: { status: 'success' } }),
+      buildTrace({ id: 'E3', type: 'action-start', correlationId: 'C-AAA', relativeMs: 100, data: { name: 'a' } }),
+      buildTrace({ id: 'E4', type: 'action-end', correlationId: 'C-AAA', relativeMs: 200, data: { status: 'success' } }),
+    ];
+    const summaries = buildActionSummaries(traces);
+    expect(summaries[0].correlationId).toBe('C-AAA');
+    expect(summaries[1].correlationId).toBe('C-BBB');
+  });
+
+  it('marks durationMsMissing when timestamps are invalid', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: NaN, timestamp: 'bad', data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: NaN, timestamp: 'bad', data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.durationMsMissing).toBe(true);
+    expect(summary.durationMs).toBeNull();
+  });
+
+  it('handles unmatched pending REST requests', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-request', correlationId: 'C1', relativeMs: 10, data: { method: 'POST', normalizedUrl: '/api/fire', target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'error', error: 'timeout' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.restCount).toBe(1);
+    const restEffect = summary.effects?.find((e) => e.type === 'REST');
+    expect(restEffect && 'error' in restEffect ? restEffect.error : undefined).toBe('timeout');
+    expect(restEffect && 'durationMs' in restEffect ? restEffect.durationMs : undefined).toBeNull();
+  });
 });

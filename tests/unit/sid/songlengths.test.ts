@@ -89,4 +89,119 @@ describe('parseSonglengths', () => {
     const duration = await resolveSonglengthsDurationMs(data, '/songs/demo.sid', null, 1);
     expect(duration).toBe(25 * 1000);
   });
+
+  it('returns null duration when data is null', async () => {
+    expect(await resolveSonglengthsDurationMs(null, '/any.sid')).toBeNull();
+  });
+
+  it('returns null duration when data is undefined', async () => {
+    expect(await resolveSonglengthsDurationMs(undefined, '/any.sid')).toBeNull();
+  });
+
+  it('returns 0 count for null or undefined data', () => {
+    expect(countSonglengthsEntries(null)).toBe(0);
+    expect(countSonglengthsEntries(undefined)).toBe(0);
+  });
+
+  it('returns null seconds for null data', () => {
+    expect(resolveSonglengthsSeconds(null, '/any.sid')).toBeNull();
+  });
+
+  it('returns null when songNr exceeds available entries', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30');
+    expect(resolveSonglengthsSeconds(data, '/demo.sid', null, 5)).toBeNull();
+  });
+
+  it('defaults songNr 0 to first entry', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30 0:45');
+    expect(resolveSonglengthsSeconds(data, '/demo.sid', null, 0)).toBe(30);
+  });
+
+  it('handles backslash path normalization', () => {
+    const data = parseSonglengths('; /HVSC\\Demos\\demo.sid\nabc=0:30');
+    expect(resolveSonglengthsSeconds(data, '/HVSC/Demos/demo.sid', null, 1)).toBe(30);
+  });
+
+  it('handles paths without leading slash', () => {
+    const data = parseSonglengths('; HVSC/Demos/demo.sid\nabc=0:30');
+    expect(resolveSonglengthsSeconds(data, 'HVSC/Demos/demo.sid', null, 1)).toBe(30);
+  });
+
+  it('skips bracket lines in HVSC format', () => {
+    const input = '; /demo.sid\n[Database]\nabc=0:30';
+    const data = parseSonglengths(input);
+    expect(data.pathToSeconds.get('/demo.sid')).toEqual([30]);
+  });
+
+  it('skips lines with hash comment prefix', () => {
+    const input = '# comment line\n; /demo.sid\nabc=0:30';
+    const data = parseSonglengths(input);
+    expect(data.pathToSeconds.size).toBe(1);
+  });
+
+  it('skips lines with colon prefix and treats as path', () => {
+    const input = ': /HVSC/Songs/tune.sid\nabc=1:00';
+    const data = parseSonglengths(input);
+    expect(data.pathToSeconds.get('/HVSC/Songs/tune.sid')).toEqual([60]);
+  });
+
+  it('handles sub-second durations with fractional parts', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=1:30.500');
+    expect(resolveSonglengthsSeconds(data, '/demo.sid', null, 1)).toBe(91);
+  });
+
+  it('handles md5 lookup with whitespace padding', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30');
+    expect(resolveSonglengthsSeconds(data, '/nope.sid', '  ABC  ', 1)).toBe(30);
+  });
+
+  it('returns null when md5 fallback also misses', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30');
+    expect(resolveSonglengthsSeconds(data, '/nope.sid', 'missing_md5', 1)).toBeNull();
+  });
+
+  it('returns null when md5 is falsy', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30');
+    expect(resolveSonglengthsSeconds(data, '/nope.sid', null, 1)).toBeNull();
+    expect(resolveSonglengthsSeconds(data, '/nope.sid', '', 1)).toBeNull();
+  });
+
+  it('handles md5 fallback in resolveSonglengthsDurationMs when computeSidMd5 returns known md5', async () => {
+    const md5Fixture = 'deadbeefdeadbeefdeadbeefdeadbeef=0:42';
+    const data = parseSonglengths(md5Fixture);
+    const file = {
+      name: 'test.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    };
+    const duration = await resolveSonglengthsDurationMs(data, '/unknown.sid', file, 1);
+    expect(duration).toBe(42 * 1000);
+  });
+
+  it('returns null when computeSidMd5 md5 is also not found', async () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30');
+    const file = {
+      name: 'test.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    };
+    const duration = await resolveSonglengthsDurationMs(data, '/unknown.sid', file, 1);
+    expect(duration).toBeNull();
+  });
+
+  it('ignores empty md5 or value in equals-format lines', () => {
+    const data = parseSonglengths('=0:30\nabc=');
+    expect(data.md5ToSeconds.size).toBe(0);
+    expect(data.pathToSeconds.size).toBe(0);
+  });
+
+  it('ignores durations with unparseable tokens', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=notaTime');
+    expect(data.md5ToSeconds.get('abc')).toBeUndefined();
+  });
+
+  it('ignores legacy lines with only path and no duration', () => {
+    const data = parseSonglengths('/just/path.sid');
+    expect(data.pathToSeconds.size).toBe(0);
+  });
 });

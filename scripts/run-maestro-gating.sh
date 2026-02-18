@@ -14,6 +14,11 @@ AVD_NAME="${ANDROID_AVD_NAME:-c64-ci}"
 API_LEVEL="${ANDROID_API_LEVEL:-34}"
 SYSTEM_IMAGE="${ANDROID_SYSTEM_IMAGE:-system-images;android-34;google_apis;x86_64}"
 DEVICE_PROFILE="${ANDROID_DEVICE_PROFILE:-pixel_6}"
+AVD_RAM_MB="${ANDROID_AVD_RAM_MB:-3072}"
+AVD_HEAP_MB="${ANDROID_AVD_HEAP_MB:-512}"
+AVD_CPU_CORES="${ANDROID_AVD_CPU_CORES:-4}"
+AVD_CPU_FREQ_MHZ="${ANDROID_AVD_CPU_FREQ_MHZ:-2000}"
+AVD_LOW_RAM="${ANDROID_AVD_LOW_RAM:-no}"
 EMULATOR_HEADLESS="${EMULATOR_HEADLESS:-1}"
 EMULATOR_PORT="${EMULATOR_PORT:-5556}"
 SKIP_BUILD=0
@@ -69,6 +74,19 @@ run_with_timeout() {
     return $?
   fi
   "$@"
+}
+
+sed_inplace() {
+  local expr="$1"
+  local file="$2"
+  local tmp
+  tmp="$(mktemp)" || return 1
+  if sed "$expr" "$file" > "$tmp"; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 resolve_sdk_dir() {
@@ -165,16 +183,37 @@ wait_for_device() {
 
 ensure_avd() {
   if avdmanager list avd | grep -q "Name: $AVD_NAME"; then
+    local config_path="$ANDROID_AVD_HOME/${AVD_NAME}.avd/config.ini"
+    if [[ -f "$config_path" ]]; then
+      sed_inplace "s/^hw.ramSize=.*/hw.ramSize=${AVD_RAM_MB}/" "$config_path" || true
+      sed_inplace "s/^vm.heapSize=.*/vm.heapSize=${AVD_HEAP_MB}/" "$config_path" || true
+      sed_inplace "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${AVD_CPU_CORES}/" "$config_path" || true
+      sed_inplace "s/^hw.cpu.speed=.*/hw.cpu.speed=${AVD_CPU_FREQ_MHZ}/" "$config_path" || true
+      sed_inplace "s/^hw.device.lowram=.*/hw.device.lowram=${AVD_LOW_RAM}/" "$config_path" || true
+      grep -q '^hw.ramSize=' "$config_path" || echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
+      grep -q '^vm.heapSize=' "$config_path" || echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
+      grep -q '^hw.cpu.ncore=' "$config_path" || echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
+      grep -q '^hw.cpu.speed=' "$config_path" || echo "hw.cpu.speed=${AVD_CPU_FREQ_MHZ}" >> "$config_path"
+      grep -q '^hw.device.lowram=' "$config_path" || echo "hw.device.lowram=${AVD_LOW_RAM}" >> "$config_path"
+    fi
     return 0
   fi
   log "Creating AVD $AVD_NAME"
   sdkmanager "platform-tools" "emulator" "platforms;android-${API_LEVEL}" "$SYSTEM_IMAGE"
   echo "no" | avdmanager create avd -n "$AVD_NAME" -k "$SYSTEM_IMAGE" -d "$DEVICE_PROFILE"
+  local config_path="$ANDROID_AVD_HOME/${AVD_NAME}.avd/config.ini"
+  if [[ -f "$config_path" ]]; then
+    echo "hw.ramSize=${AVD_RAM_MB}" >> "$config_path"
+    echo "vm.heapSize=${AVD_HEAP_MB}" >> "$config_path"
+    echo "hw.cpu.ncore=${AVD_CPU_CORES}" >> "$config_path"
+    echo "hw.cpu.speed=${AVD_CPU_FREQ_MHZ}" >> "$config_path"
+    echo "hw.device.lowram=${AVD_LOW_RAM}" >> "$config_path"
+  fi
 }
 
 start_emulator() {
   log "Starting emulator $AVD_NAME"
-  local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-boot-anim" "-no-audio" "-no-metrics" "-gpu" "swiftshader_indirect" "-netdelay" "none" "-netspeed" "full")
+  local args=("-avd" "$AVD_NAME" "-no-snapshot" "-no-snapshot-load" "-no-snapshot-save" "-no-boot-anim" "-no-audio" "-no-metrics" "-gpu" "swiftshader_indirect" "-netdelay" "none" "-netspeed" "full" "-memory" "$AVD_RAM_MB" "-cores" "$AVD_CPU_CORES")
   args+=("-port" "$EMULATOR_PORT")
   if [[ "$EMULATOR_HEADLESS" == "1" ]]; then
     args+=("-no-window")
@@ -360,6 +399,30 @@ if [[ -n "${boot_start_time:-}" ]]; then
   write_timing "emulator_boot_seconds" "$boot_duration"
 fi
 
+if [[ "${CI:-false}" == "true" ]]; then
+  CPU_COUNT=$(adb -s "$DEVICE_ID" shell "grep -c '^processor' /proc/cpuinfo" | tr -d '\r' || true)
+  MEM_TOTAL_KB=$(adb -s "$DEVICE_ID" shell "awk '/MemTotal/ {print \$2; exit}' /proc/meminfo" | tr -d '\r' || true)
+  DALVIK_HEAP_PROP=$(adb -s "$DEVICE_ID" shell getprop dalvik.vm.heapsize | tr -d '\r' || true)
+  {
+    echo "cpu_count=${CPU_COUNT}"
+    echo "mem_total_kb=${MEM_TOTAL_KB}"
+    echo "dalvik.vm.heapsize=${DALVIK_HEAP_PROP}"
+    echo "assumed_cpu_freq_mhz=${AVD_CPU_FREQ_MHZ}"
+  } | tee "$RAW_OUTPUT_DIR/emulator-profile-props.txt"
+
+  if [[ ! "$CPU_COUNT" =~ ^[0-9]+$ || "$CPU_COUNT" -lt 2 ]]; then
+    log "GATE VIOLATION: CPU cores below required profile (expected >=2, got '${CPU_COUNT}')"
+    capture_failure_artifacts "$DEVICE_ID"
+    exit 1
+  fi
+
+  if [[ -z "$MEM_TOTAL_KB" || "$MEM_TOTAL_KB" -lt 2500000 ]]; then
+    log "GATE VIOLATION: MemTotal below required ~3GB profile (got '${MEM_TOTAL_KB}')"
+    capture_failure_artifacts "$DEVICE_ID"
+    exit 1
+  fi
+fi
+
 adb -s "$DEVICE_ID" shell settings put global window_animation_scale 0 || true
 adb -s "$DEVICE_ID" shell settings put global transition_animation_scale 0 || true
 adb -s "$DEVICE_ID" shell settings put global animator_duration_scale 0 || true
@@ -420,7 +483,16 @@ if [[ "${CI:-false}" == "true" ]]; then
     "$ROOT_DIR/.maestro/smoke-launch.yaml"
     "$ROOT_DIR/.maestro/smoke-hvsc.yaml"
   )
-  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
+  if [[ "${CI_RUN_LOWRAM_FLOW:-false}" == "true" ]]; then
+    CI_FLOW_FILES+=("$ROOT_DIR/.maestro/smoke-hvsc-lowram.yaml")
+  fi
+  CI_MAESTRO_ENV_ARGS=(
+    -e "HVSC_INGEST_TIMEOUT=1500000"
+    -e "LONG_TIMEOUT=30000"
+    -e "TIMEOUT=20000"
+    -e "SHORT_TIMEOUT=7000"
+  )
+  if ! run_with_timeout "$MAESTRO_TIMEOUT_SECS" maestro test "${CI_FLOW_FILES[@]}" "${CI_MAESTRO_ENV_ARGS[@]}" --udid "$DEVICE_ID" --format JUNIT --output "$RAW_OUTPUT_DIR/maestro-report.xml" --test-output-dir "$RAW_OUTPUT_DIR" --debug-output "$RAW_OUTPUT_DIR/debug"; then
     MAESTRO_EXIT_CODE=$?
   fi
 else
@@ -442,6 +514,9 @@ if [[ -f "$RAW_OUTPUT_DIR/maestro-report.xml" ]]; then
 
   # Assert critical flows actually executed (ci-critical gate integrity)
   REQUIRED_FLOWS=("smoke-hvsc" "smoke-launch")
+  if [[ "${CI_RUN_LOWRAM_FLOW:-false}" == "true" ]]; then
+    REQUIRED_FLOWS+=("smoke-hvsc-lowram")
+  fi
   if [[ "${CI:-false}" == "true" ]]; then
     for FLOW in "${REQUIRED_FLOWS[@]}"; do
       if ! grep -q "$FLOW" "$RAW_OUTPUT_DIR/maestro-report.xml"; then

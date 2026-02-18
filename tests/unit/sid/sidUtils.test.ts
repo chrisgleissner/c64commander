@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { buildSidTrackSubsongs, createSslPayload, getSidSongCount, parseSidHeaderMetadata } from '@/lib/sid/sidUtils';
+import { base64ToUint8, buildSidTrackSubsongs, createSslPayload, getSidSongCount, parseSidHeaderMetadata } from '@/lib/sid/sidUtils';
 
 const createSidHeader = (options?: {
   magic?: 'PSID' | 'RSID';
@@ -126,5 +126,163 @@ describe('sidUtils', () => {
       { songNr: 2, isDefault: true },
       { songNr: 3, isDefault: false },
     ]);
+  });
+
+  it('defaults to 1 song when songs is 0', () => {
+    const result = buildSidTrackSubsongs(0, 1);
+    expect(result).toHaveLength(1);
+    expect(result[0].isDefault).toBe(true);
+  });
+
+  it('defaults to 1 song when songs is NaN', () => {
+    const result = buildSidTrackSubsongs(NaN, 1);
+    expect(result).toHaveLength(1);
+  });
+
+  it('defaults startSong to 1 when NaN', () => {
+    const result = buildSidTrackSubsongs(3, NaN);
+    expect(result[0].isDefault).toBe(true);
+  });
+
+  it('clamps startSong to totalSongs', () => {
+    const result = buildSidTrackSubsongs(2, 10);
+    expect(result.find((s) => s.isDefault)!.songNr).toBe(2);
+  });
+
+  it('throws for header shorter than 124 bytes', () => {
+    expect(() => parseSidHeaderMetadata(new Uint8Array(100))).toThrow('124 bytes');
+  });
+
+  it('throws for unsupported magic', () => {
+    const bytes = new Uint8Array(124);
+    bytes.set([0x4D, 0x41, 0x47, 0x49], 0); // 'MAGI'
+    expect(() => parseSidHeaderMetadata(bytes)).toThrow('Unsupported SID magic');
+  });
+
+  it('defaults songs to 1 when songs field is 0', () => {
+    const metadata = parseSidHeaderMetadata(createSidHeader({ songs: 0 }));
+    expect(metadata.songs).toBe(1);
+  });
+
+  it('defaults startSong to 1 when startSong field is 0', () => {
+    const metadata = parseSidHeaderMetadata(createSidHeader({ startSong: 0 }));
+    expect(metadata.startSong).toBe(1);
+  });
+
+  it('clamps startSong when greater than songs', () => {
+    const metadata = parseSidHeaderMetadata(createSidHeader({ songs: 2, startSong: 5 }));
+    expect(metadata.startSong).toBe(2);
+  });
+
+  it('parses version 1 header with null flags', () => {
+    const metadata = parseSidHeaderMetadata(createSidHeader({ version: 1 }));
+    expect(metadata.flags).toBeNull();
+    expect(metadata.psidSpecific).toBeNull();
+    expect(metadata.c64BasicFlag).toBeNull();
+    expect(metadata.clock).toBe('unknown');
+    expect(metadata.sid1Model).toBe('unknown');
+    expect(metadata.musPlayer).toBe(false);
+  });
+
+  it('parses version 2 header with null sid2 address', () => {
+    const header = createSidHeader({ version: 2 });
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Adress).toBeNull();
+    expect(metadata.sid2Address).toBeNull();
+  });
+
+  it('parses version 3 header with null sid3 address', () => {
+    const header = createSidHeader({ version: 3 });
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Adress).toBe(0x42);
+    // sid3Adress only available in version >= 4
+    expect(metadata.sidChipCount).toBe(2);
+  });
+
+  it('validates valid RSID with all zero constraints', () => {
+    const metadata = parseSidHeaderMetadata(createSidHeader({
+      magic: 'RSID',
+      loadAddress: 0,
+      playAddress: 0,
+      speedBits: 0,
+    }));
+    expect(metadata.rsidValid).toBe(true);
+    expect(metadata.parserWarnings).toHaveLength(0);
+  });
+
+  it('accepts ArrayBuffer input not just Uint8Array', () => {
+    const header = createSidHeader();
+    const metadata = parseSidHeaderMetadata(header.buffer as ArrayBuffer);
+    expect(metadata.magicId).toBe('PSID');
+  });
+
+  it('decodes unmapped Windows-1252 byte as replacement character', () => {
+    // 0x81 is NOT in the WINDOWS_1252_EXTENDED map
+    const metadata = parseSidHeaderMetadata(createSidHeader({
+      nameBytes: [0x41, 0x81, 0x42, 0x00],
+    }));
+    expect(metadata.name).toContain('\uFFFD');
+  });
+
+  it('returns 1 for buffer shorter than 18 bytes', () => {
+    expect(getSidSongCount(new ArrayBuffer(10))).toBe(1);
+  });
+
+  it('returns 1 for buffer with bad magic', () => {
+    const buf = new ArrayBuffer(20);
+    const view = new DataView(buf);
+    view.setUint8(0, 0x4D); // M
+    view.setUint8(1, 0x41); // A
+    view.setUint8(2, 0x47); // G
+    view.setUint8(3, 0x49); // I
+    expect(getSidSongCount(buf)).toBe(1);
+  });
+
+  it('returns 1 when songs field is 0 in getSidSongCount', () => {
+    const buf = new ArrayBuffer(20);
+    const view = new DataView(buf);
+    // PSID header
+    view.setUint8(0, 0x50); // P
+    view.setUint8(1, 0x53); // S
+    view.setUint8(2, 0x49); // I
+    view.setUint8(3, 0x44); // D
+    view.setUint16(14, 0, false); // 0 songs
+    expect(getSidSongCount(buf)).toBe(1);
+  });
+
+  it('returns correct song count for valid buffer', () => {
+    const buf = new ArrayBuffer(20);
+    const view = new DataView(buf);
+    view.setUint8(0, 0x50); // P
+    view.setUint8(1, 0x53); // S
+    view.setUint8(2, 0x49); // I
+    view.setUint8(3, 0x44); // D
+    view.setUint16(14, 5, false);
+    expect(getSidSongCount(buf)).toBe(5);
+  });
+
+  it('decodes base64 to Uint8Array', () => {
+    const result = base64ToUint8('AQID'); // [1, 2, 3]
+    expect(Array.from(result)).toEqual([1, 2, 3]);
+  });
+
+  it('parses sid2Address out of range returns null', () => {
+    // sid2Adress byte that produces address < 0xD420 (e.g. byte=0x01 -> 0xD010)
+    const header = createSidHeader({ version: 4 });
+    const view = new DataView(header.buffer);
+    view.setUint8(122, 0x01); // 0xD010, out of range
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Address).toBeNull();
+  });
+
+  it('parses sid2Address byte of 0 returns null', () => {
+    const header = createSidHeader({ version: 4 });
+    const view = new DataView(header.buffer);
+    view.setUint8(122, 0x00);
+    const metadata = parseSidHeaderMetadata(header);
+    expect(metadata.sid2Adress).toBe(0);
+    expect(metadata.sid2Address).toBeNull();
+    expect(metadata.sid2Model).toBeNull();
+    expect(metadata.sidChipCount).toBe(2); // sid3Adress still set
   });
 });

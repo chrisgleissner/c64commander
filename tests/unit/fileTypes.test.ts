@@ -43,4 +43,8 @@ describe('fileTypes', () => {
     expect(formatPlayCategory('crt')).toBe('CRT cartridge');
     expect(formatPlayCategory('disk')).toBe('Disk image');
   });
+
+  it('returns File for unknown play category', () => {
+    expect(formatPlayCategory('unknown' as Parameters<typeof formatPlayCategory>[0])).toBe('File');
+  });
 });

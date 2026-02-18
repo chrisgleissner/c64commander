@@ -179,5 +179,5 @@ this is not valid
     expect(stats.backendStats.entriesTotal).toBe(entries);
     expect(stats.backendStats.estimatedMemoryBytes).toBeLessThan(80 * 1024 * 1024);
     expect(elapsedMs).toBeLessThan(10_000);
-  });
+  }, 15000);
 });

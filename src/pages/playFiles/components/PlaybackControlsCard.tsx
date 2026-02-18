@@ -119,6 +119,7 @@ export const PlaybackControlsCard = ({
           size="icon"
           onClick={isPlaying ? onStop : onPlay}
           disabled={!hasPlaylist || isPlaylistLoading}
+          data-c64-persistent-active={isPlaying ? 'true' : undefined}
           id="playlist-play"
           data-testid="playlist-play"
           aria-label={isPlaying ? 'Stop' : 'Play'}

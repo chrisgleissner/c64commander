@@ -41,6 +41,16 @@ describe('fileLibraryUtils', () => {
     expect(localId).toBe('source-1:/Local/Demo.sid');
   });
 
+  it('falls back to hvsc when hvsc source has no sourceId', () => {
+    expect(buildFileLibraryId('hvsc', '/MUSICIANS/test.sid')).toBe('hvsc:/MUSICIANS/test.sid');
+    expect(buildFileLibraryId('hvsc', '/MUSICIANS/test.sid', null)).toBe('hvsc:/MUSICIANS/test.sid');
+  });
+
+  it('falls back to local when local source has no sourceId', () => {
+    expect(buildFileLibraryId('local', '/test.sid')).toBe('local:/test.sid');
+    expect(buildFileLibraryId('local', '/test.sid', null)).toBe('local:/test.sid');
+  });
+
   it('builds local play files that read from FolderPicker', async () => {
     await mockFolderPicker(btoa('hello'));
     const file = buildLocalPlayFileFromUri('demo.sid', '/demo.sid', 'content://demo/sid');

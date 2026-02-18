@@ -10,24 +10,41 @@ type InteractiveElement = HTMLElement & {
   __c64TapFlashTimeoutId?: number;
 };
 
-const TAP_FLASH_ATTR = 'data-c64-tap-flash';
-const TAP_FLASH_DURATION_MS = 200;
-const BUTTON_SELECTOR = 'button,[role="button"],input[type="button"],input[type="submit"]';
+export const CTA_HIGHLIGHT_ATTR = 'data-c64-tap-flash';
+export const CTA_HIGHLIGHT_DURATION_MS = 220;
+const CTA_PERSISTENT_ACTIVE_ATTR = 'data-c64-persistent-active';
+const INTERACTIVE_SELECTOR = [
+  'button',
+  'a[href]',
+  'summary',
+  'input[type="button"]',
+  'input[type="submit"]',
+  'input[type="reset"]',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="tab"]',
+  '[role="menuitem"]',
+  '[role="option"]',
+  '[role="switch"]',
+  '[role="checkbox"]',
+  '[data-c64-interactive="true"]',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
 
 const clearTapFlash = (element: InteractiveElement) => {
   if (typeof element.__c64TapFlashTimeoutId === 'number') {
     window.clearTimeout(element.__c64TapFlashTimeoutId);
   }
   delete element.__c64TapFlashTimeoutId;
-  element.removeAttribute(TAP_FLASH_ATTR);
+  element.removeAttribute(CTA_HIGHLIGHT_ATTR);
 };
 
 const setTapFlash = (element: InteractiveElement) => {
   clearTapFlash(element);
-  element.setAttribute(TAP_FLASH_ATTR, 'true');
+  element.setAttribute(CTA_HIGHLIGHT_ATTR, 'true');
   element.__c64TapFlashTimeoutId = window.setTimeout(() => {
     clearTapFlash(element);
-  }, TAP_FLASH_DURATION_MS);
+  }, CTA_HIGHLIGHT_DURATION_MS);
 };
 
 const clearPointerFocus = (element: HTMLElement) => {
@@ -35,10 +52,14 @@ const clearPointerFocus = (element: HTMLElement) => {
   window.setTimeout(() => element.blur(), 0);
 };
 
-const shouldSkipStatelessInteraction = (element: HTMLElement) => {
-  const mode = element.getAttribute('data-button-mode');
-  if (mode && mode.toLowerCase() === 'toggle') return true;
-  return false;
+const shouldSkipStatelessInteraction = (element: HTMLElement) =>
+  element.getAttribute(CTA_PERSISTENT_ACTIVE_ATTR) === 'true';
+
+const resolveInteractiveElement = (target: EventTarget | null) => {
+  if (!(target instanceof Element)) return null;
+  const interactive = target.closest(INTERACTIVE_SELECTOR);
+  if (!(interactive instanceof HTMLElement)) return null;
+  return interactive;
 };
 
 export const applyPointerButtonInteraction = (element: HTMLElement) => {
@@ -49,19 +70,18 @@ export const applyPointerButtonInteraction = (element: HTMLElement) => {
 
 export const handlePointerButtonClick = (event: { detail: number; currentTarget: EventTarget | null }) => {
   if (event.detail === 0) return;
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLElement)) return;
+  const target = resolveInteractiveElement(event.currentTarget)
+    ?? (event.currentTarget instanceof HTMLElement ? event.currentTarget : null);
+  if (!target) return;
   applyPointerButtonInteraction(target);
 };
 
 export const registerGlobalButtonInteractionModel = () => {
   const handler = (event: PointerEvent) => {
-    if (event.button !== 0) return;
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    const button = target.closest(BUTTON_SELECTOR);
-    if (!(button instanceof HTMLElement)) return;
-    applyPointerButtonInteraction(button);
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const interactive = resolveInteractiveElement(event.target);
+    if (!interactive) return;
+    applyPointerButtonInteraction(interactive);
   };
 
   document.addEventListener('pointerup', handler, true);

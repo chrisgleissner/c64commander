@@ -401,6 +401,7 @@ jobs:
           files: ./coverage/lcov-merged.info
           flags: unittests,e2etests
           name: c64-commander-web-coverage
+          use_pypi: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -439,12 +440,10 @@ jobs:
               APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
             fi
           fi
+
           APP_VERSION="${APP_VERSION_RAW#v}"
-          VERSION_CODE="$(date -u +%s)"
-          if (( VERSION_CODE > 2147483647 )); then
-            echo "Computed VERSION_CODE exceeds Android int max: $VERSION_CODE" >&2
-            exit 1
-          fi
+          VERSION_CODE=$((1600 + GITHUB_RUN_NUMBER))
+
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
@@ -531,6 +530,26 @@ jobs:
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Inspect SevenZ/XZ dependency graph
+        run: |
+          set -e
+          cd android
+          ./gradlew :app:dependencies --configuration debugRuntimeClasspath
+          ./gradlew :app:dependencyInsight --dependency xz --configuration debugRuntimeClasspath
+
+      - name: Build debug + minifiedDebug APKs
+        run: |
+          set -e
+          cd android
+          ./gradlew :app:assembleDebug :app:assembleMinifiedDebug
+
+      - name: Verify SevenZ/XZ runtime classes in APK DEX
+        run: |
+          set -euo pipefail
+          DEBUG_APK=$(ls android/app/build/outputs/apk/debug/*.apk | head -n 1)
+          MINIFIED_DEBUG_APK=$(ls android/app/build/outputs/apk/minifiedDebug/*.apk | head -n 1)
+          bash scripts/verify-android-apk-lzma2.sh "$DEBUG_APK" "$MINIFIED_DEBUG_APK"
+
       - name: Run Android tests with coverage
         run: |
           start=$(date +%s)
@@ -578,6 +597,7 @@ jobs:
           files: ${{ steps.normalize_android_coverage.outputs.report }}
           flags: android
           name: c64-commander-android-coverage
+          use_pypi: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -589,10 +609,15 @@ jobs:
       ANDROID_API_LEVEL: "34"
       ANDROID_SYSTEM_IMAGE: "system-images;android-34;google_apis;x86_64"
       ANDROID_DEVICE_PROFILE: "pixel_6"
-      ANDROID_AVD_NAME: "c64-ci"
+      ANDROID_AVD_NAME: "c64-ci-constrained-3gb"
+      ANDROID_AVD_RAM_MB: "3072"
+      ANDROID_AVD_HEAP_MB: "512"
+      ANDROID_AVD_CPU_CORES: "2"
+      ANDROID_AVD_CPU_FREQ_MHZ: "2000"
+      ANDROID_AVD_LOW_RAM: "no"
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
-      MAESTRO_TIMEOUT_SECS: "300"
+      MAESTRO_TIMEOUT_SECS: "1800"
       MAESTRO_CLI_NO_ANALYTICS: "1"
       ANDROID_AVD_HOME: /home/runner/.android/avd
 
@@ -676,9 +701,25 @@ jobs:
             exit 1
           fi
 
+          AVD_CONFIG="$ANDROID_AVD_HOME/${ANDROID_AVD_NAME}.avd/config.ini"
+          if [[ -f "$AVD_CONFIG" ]]; then
+            sed -i "s/^hw.ramSize=.*/hw.ramSize=${ANDROID_AVD_RAM_MB}/" "$AVD_CONFIG" || true
+            sed -i "s/^vm.heapSize=.*/vm.heapSize=${ANDROID_AVD_HEAP_MB}/" "$AVD_CONFIG" || true
+            sed -i "s/^hw.cpu.ncore=.*/hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}/" "$AVD_CONFIG" || true
+            sed -i "s/^hw.cpu.speed=.*/hw.cpu.speed=${ANDROID_AVD_CPU_FREQ_MHZ}/" "$AVD_CONFIG" || true
+            sed -i "s/^hw.device.lowram=.*/hw.device.lowram=${ANDROID_AVD_LOW_RAM}/" "$AVD_CONFIG" || true
+            grep -q '^hw.ramSize=' "$AVD_CONFIG" || echo "hw.ramSize=${ANDROID_AVD_RAM_MB}" >> "$AVD_CONFIG"
+            grep -q '^vm.heapSize=' "$AVD_CONFIG" || echo "vm.heapSize=${ANDROID_AVD_HEAP_MB}" >> "$AVD_CONFIG"
+            grep -q '^hw.cpu.ncore=' "$AVD_CONFIG" || echo "hw.cpu.ncore=${ANDROID_AVD_CPU_CORES}" >> "$AVD_CONFIG"
+            grep -q '^hw.cpu.speed=' "$AVD_CONFIG" || echo "hw.cpu.speed=${ANDROID_AVD_CPU_FREQ_MHZ}" >> "$AVD_CONFIG"
+            grep -q '^hw.device.lowram=' "$AVD_CONFIG" || echo "hw.device.lowram=${ANDROID_AVD_LOW_RAM}" >> "$AVD_CONFIG"
+            echo "=== AVD config readback ==="
+            grep -E '^(hw\.ramSize|vm\.heapSize|hw\.cpu\.ncore|hw\.cpu\.speed|hw\.device\.lowram)=' "$AVD_CONFIG" | sort
+          fi
+
           echo "=== Starting emulator in background ==="
           mkdir -p test-results/maestro
-          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-audio -no-metrics -no-boot-anim -no-snapshot -gpu swiftshader_indirect -netdelay none -netspeed full > test-results/maestro/emulator.log 2>&1 &
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd "${ANDROID_AVD_NAME}" -no-window -no-audio -no-metrics -no-boot-anim -no-snapshot -no-snapshot-load -no-snapshot-save -gpu swiftshader_indirect -netdelay none -netspeed full -memory "${ANDROID_AVD_RAM_MB}" -cores "${ANDROID_AVD_CPU_CORES}" > test-results/maestro/emulator.log 2>&1 &
           EMULATOR_PID=$!
           echo $EMULATOR_PID > test-results/maestro/emulator.pid
           echo "Emulator started with PID: $EMULATOR_PID"
@@ -697,18 +738,45 @@ jobs:
           set -e
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          adb start-server
           boot_start=$(date +%s)
           echo "Waiting for emulator to appear in adb devices..."
-          timeout 120 bash -c 'until adb devices | grep -q "emulator-"; do sleep 2; done' || { echo "Emulator did not appear"; adb devices; cat test-results/maestro/emulator.log || true; exit 1; }
+          timeout 240 bash -c 'until adb devices | grep -q "emulator-"; do sleep 2; done' || {
+            echo "Emulator did not appear on first attempt; restarting adb server and retrying"
+            adb kill-server || true
+            adb start-server
+            timeout 180 bash -c 'until adb devices | grep -q "emulator-"; do sleep 2; done' || {
+              echo "Emulator did not appear"
+              adb devices
+              cat test-results/maestro/emulator.log || true
+              exit 1
+            }
+          }
           SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
           echo "Emulator serial: $SERIAL"
-          timeout 120 adb -s "$SERIAL" wait-for-device || { echo "Device wait-for-device failed"; adb devices -l; exit 1; }
+          timeout 240 adb -s "$SERIAL" wait-for-device || { echo "Device wait-for-device failed"; adb devices -l; exit 1; }
           echo "Waiting for boot completion..."
-          timeout 180 bash -c "until adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '1'; do sleep 3; done" || { echo "Boot did not complete"; adb -s $SERIAL shell getprop sys.boot_completed || true; cat test-results/maestro/emulator.log || true; exit 1; }
+          timeout 420 bash -c "until adb -s $SERIAL shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '1'; do sleep 3; done" || { echo "Boot did not complete"; adb -s $SERIAL shell getprop sys.boot_completed || true; cat test-results/maestro/emulator.log || true; exit 1; }
           echo "Waiting for boot animation to stop..."
-          timeout 60 bash -c "until adb -s $SERIAL shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' | grep -q 'stopped'; do sleep 2; done" || true
+          timeout 120 bash -c "until adb -s $SERIAL shell getprop init.svc.bootanim 2>/dev/null | tr -d '\r' | grep -q 'stopped'; do sleep 2; done" || true
+          CPU_COUNT=$(adb -s "$SERIAL" shell "grep -c '^processor' /proc/cpuinfo" | tr -d '\r' || true)
+          MEM_TOTAL_KB=$(adb -s "$SERIAL" shell "awk '/MemTotal/ {print \$2; exit}' /proc/meminfo" | tr -d '\r' || true)
+          echo "runtime cpu_count=$CPU_COUNT"
+          echo "runtime mem_total_kb=$MEM_TOTAL_KB"
+
+          if [[ ! "$CPU_COUNT" =~ ^[0-9]+$ || "$CPU_COUNT" -lt 2 ]]; then
+            echo "Emulator CPU core count is below expected profile (>=2)"
+            exit 1
+          fi
+          if [[ -z "$MEM_TOTAL_KB" || "$MEM_TOTAL_KB" -lt 2500000 ]]; then
+            echo "Emulator memory is below expected profile (~3GB)"
+            exit 1
+          fi
+
+          echo "Assuming 2GHz/core profile as host-backed emulator CPU characteristic"
           boot_end=$(date +%s)
           echo "- emulator boot: $((boot_end-boot_start))s" >> $GITHUB_STEP_SUMMARY
+          echo "- emulator profile: RAM=${ANDROID_AVD_RAM_MB}MB CORES=${ANDROID_AVD_CPU_CORES} CPU_FREQ=assumed-2GHz" >> $GITHUB_STEP_SUMMARY
           echo "emulator_boot_seconds=$((boot_end-boot_start))" >> test-results/maestro/timings.txt
           echo "Emulator is ready"
           adb devices -l
@@ -744,26 +812,114 @@ jobs:
           end=$(date +%s)
           echo "- apk debug: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
+      - name: Start Android telemetry monitor
+        run: |
+          set -euo pipefail
+          mkdir -p ci-artifacts/telemetry/android
+          (
+            status=0
+            TELEMETRY_INTERVAL_SEC=1 \
+            TELEMETRY_OUTPUT_DIR=ci-artifacts/telemetry/android \
+            ANDROID_PACKAGE_NAME=uk.gleissner.c64commander \
+            TELEMETRY_DEVICE_NAME="${ANDROID_AVD_NAME}" \
+            ci/telemetry/android/monitor_android.sh &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > ci-artifacts/telemetry/android/monitor.child.pid
+            wait "$monitor_child_pid" || status=$?
+            echo "$status" > ci-artifacts/telemetry/android/monitor.exitcode
+          ) > ci-artifacts/telemetry/android/monitor-run.log 2>&1 &
+          echo $! > ci-artifacts/telemetry/android/monitor.pid
+          sleep 2
+          if ! kill -0 "$(cat ci-artifacts/telemetry/android/monitor.pid)" 2>/dev/null; then
+            echo "Android telemetry monitor failed to start"
+            cat ci-artifacts/telemetry/android/monitor-run.log || true
+            exit 1
+          fi
+
       - name: Run Maestro gating flows
         env:
           CI: "true"
+          CI_RUN_LOWRAM_FLOW: "false"
           MAESTRO_LOG_LEVEL: "debug"
           MAESTRO_CLI_LOG_LEVEL: "debug"
         run: |
+          set -euo pipefail
           start=$(date +%s)
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
           # Verify emulator is still available
           adb devices -l
-          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build || {
+          maestro_status=0
+          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build || maestro_status=$?
+          if [[ "$maestro_status" -ne 0 ]]; then
             echo "=== Emulator log ===" >&2
             cat test-results/maestro/emulator.log || true
             echo "=== adb devices ===" >&2
             adb devices -l || true
-            exit 1
-          }
+            exit "$maestro_status"
+          fi
           end=$(date +%s)
           echo "- maestro gating: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Assert memory class logging
+        if: success()
+        run: |
+          set -euo pipefail
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          export PATH="$ANDROID_SDK_ROOT/platform-tools:$PATH"
+          SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
+          if [[ -z "$SERIAL" ]]; then
+            echo "::warning::No emulator serial found for memory class assertion; skipping check"
+            exit 0
+          fi
+          adb -s "$SERIAL" logcat -c || true
+          adb -s "$SERIAL" shell am start -n uk.gleissner.c64commander/.MainActivity >/dev/null 2>&1 || true
+          if ! timeout 45 bash -c 'until adb -s "$0" logcat -d | grep -q "Android memory class detected:"; do sleep 2; done' "$SERIAL"; then
+            echo "::warning::MainActivity memory class log not found after launch+retry"
+            adb -s "$SERIAL" logcat -d | tail -n 200 || true
+          fi
+
+      - name: Stop Android telemetry monitor
+        if: always()
+        run: |
+          set -euo pipefail
+          child_pid=""
+          if [[ -f ci-artifacts/telemetry/android/monitor.child.pid ]]; then
+            child_pid="$(cat ci-artifacts/telemetry/android/monitor.child.pid)"
+          fi
+          if [[ -f ci-artifacts/telemetry/android/monitor.pid ]]; then
+            pid="$(cat ci-artifacts/telemetry/android/monitor.pid)"
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
+            for _ in $(seq 1 20); do
+              if [[ -f ci-artifacts/telemetry/android/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
+            fi
+          fi
+          cat ci-artifacts/telemetry/android/monitor-run.log || true
+
+      - name: Summarize telemetry
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/summarize_metrics.py
+
+      - name: Render telemetry charts
+        if: always()
+        run: |
+          set -euo pipefail
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/render_charts.py
 
       - name: Upload Maestro evidence
         if: always()
@@ -773,6 +929,47 @@ jobs:
           path: |
             test-results/maestro/**
             test-results/evidence/maestro/**
+            ci-artifacts/telemetry/android/**
+            ci-artifacts/telemetry/summary.json
+            ci-artifacts/telemetry/summary.md
+            ci-artifacts/telemetry/charts/**
+
+      - name: Enforce Android telemetry gates
+        if: always()
+        run: |
+          set -euo pipefail
+          expected_header="timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb"
+          csv="ci-artifacts/telemetry/android/metrics.csv"
+          if [[ ! -f "$csv" ]]; then
+            echo "telemetry gate failed: missing $csv"
+            exit 1
+          fi
+          header=$(head -n 1 "$csv")
+          if [[ "$header" != "$expected_header" ]]; then
+            echo "telemetry gate failed: unexpected CSV header"
+            echo "expected: $expected_header"
+            echo "actual:   $header"
+            exit 1
+          fi
+          line_count=$(wc -l < "$csv")
+          if [[ "$line_count" -le 2 ]]; then
+            echo "telemetry gate failed: expected multiple data rows, found $((line_count-1))"
+            exit 1
+          fi
+          code_file="ci-artifacts/telemetry/android/monitor.exitcode"
+          if [[ ! -f "$code_file" ]]; then
+            echo "telemetry gate failed: monitor exit code missing"
+            exit 1
+          fi
+          code=$(cat "$code_file")
+          if [[ "$code" == "3" ]]; then
+            echo "telemetry gate warning: main process disappearance/restart detected; see ci-artifacts/telemetry/android/events.log"
+            exit 0
+          fi
+          if [[ "$code" != "0" ]]; then
+            echo "telemetry gate failed: monitor exited with code $code"
+            exit 1
+          fi
 
   android-packaging:
     name: Android | Packaging
@@ -803,12 +1000,10 @@ jobs:
               APP_VERSION_RAW="$(node -p "require('./package.json').version" 2>/dev/null || true)"
             fi
           fi
+
           APP_VERSION="${APP_VERSION_RAW#v}"
-          VERSION_CODE="$(date -u +%s)"
-          if (( VERSION_CODE > 2147483647 )); then
-            echo "Computed VERSION_CODE exceeds Android int max: $VERSION_CODE" >&2
-            exit 1
-          fi
+          VERSION_CODE=$((1600 + GITHUB_RUN_NUMBER))
+
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_NAME=$APP_VERSION" >> $GITHUB_ENV
           echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV

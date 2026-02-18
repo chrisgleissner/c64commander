@@ -39,6 +39,11 @@ describe('diskTypes helpers', () => {
     expect(getLeafFolderName('/')).toBeNull();
   });
 
+  it('returns null for single-segment disk image path', () => {
+    // disk image at root level — no parent folder
+    expect(getLeafFolderName('/Disk 1.d64')).toBeNull();
+  });
+
   it('creates disk entries with defaults', () => {
     const nowSpy = vi.spyOn(Date.prototype, 'toISOString').mockReturnValue('2024-01-01T00:00:00Z');
     const entry = createDiskEntry({

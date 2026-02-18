@@ -12,6 +12,7 @@ import { ingestArchiveBuffer, type IngestArchiveBufferOptions } from '@/lib/hvsc
 import type { PipelineStateMachine } from '@/lib/hvsc/hvscIngestionPipeline';
 
 vi.mock('@/lib/hvsc/hvscFilesystem', () => ({
+    MAX_BRIDGE_READ_BYTES: 5 * 1024 * 1024,
     writeLibraryFile: vi.fn(async () => undefined),
     deleteLibraryFile: vi.fn(async () => undefined),
     resetLibraryRoot: vi.fn(async () => undefined),
