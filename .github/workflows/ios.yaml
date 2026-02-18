@@ -40,7 +40,7 @@ env:
 jobs:
   ios-prepare:
     name: iOS | Prepare
-    runs-on: macos-15
+    runs-on: macos-latest
 
     steps:
       - name: Checkout
@@ -94,7 +94,7 @@ jobs:
 
   ios-build-simulator:
     name: iOS | Build simulator
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-prepare
     timeout-minutes: 25
 
@@ -144,7 +144,7 @@ jobs:
 
   ios-maestro-tests:
     name: iOS | Maestro ${{ matrix.group.name }}
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-build-simulator
     timeout-minutes: 45
 
@@ -649,7 +649,7 @@ jobs:
 
   ios-package-altstore:
     name: iOS | Package IPA
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-prepare
 
     steps:
@@ -759,7 +759,7 @@ jobs:
 
   ios-package-paid:
     name: iOS | Package paid signing
-    runs-on: macos-15
+    runs-on: macos-latest
     needs: ios-prepare
     if: vars.IOS_PAID_SIGNING_ENABLED == 'true'
     # Required repository variables/secrets when enabling this lane:

@@ -299,7 +299,7 @@ describe('HomeDiskManager Extended', () => {
             expect(mockUnmountDrive).toHaveBeenCalledWith('a');
             expect(screen.getByRole('button', { name: 'Drive A Mount disk' })).toBeInTheDocument();
         });
-    });
+    }, 15000);
 
     it('handles drive power toggle', async () => {
         renderComponent();

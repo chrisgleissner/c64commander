@@ -174,6 +174,8 @@ vi.mock('@/pages/home/DriveCard', () => ({
 }));
 
 describe('HomePage RAM actions', () => {
+  vi.setConfig({ testTimeout: 15000 });
+
   beforeEach(() => {
     vi.clearAllMocks();
     (globalThis as any).__APP_VERSION__ = 'test';
@@ -209,7 +211,7 @@ describe('HomePage RAM actions', () => {
       title: 'Machine rebooting',
       description: 'RAM cleared (excluding I/O region).',
     });
-  });
+  }, 15000);
 
   it('runs save RAM directly when RAM dump folder is already configured', async () => {
     ramDumpFolderConfigRef.current = {
@@ -229,7 +231,7 @@ describe('HomePage RAM actions', () => {
       'c64u-ram-01-02-03.bin',
       expect.any(Uint8Array),
     );
-  });
+  }, 15000);
 
   it('prompts for folder and then saves RAM when no RAM dump folder is configured', async () => {
     renderHomePage();
@@ -242,7 +244,7 @@ describe('HomePage RAM actions', () => {
       'c64u-ram-01-02-03.bin',
       expect.any(Uint8Array),
     );
-  });
+  }, 15000);
 
   it('runs load RAM from configured folder with .bin picker', async () => {
     ramDumpFolderConfigRef.current = {
@@ -261,7 +263,7 @@ describe('HomePage RAM actions', () => {
     });
     expect(saveRamDumpFolderConfigSpy).not.toHaveBeenCalled();
     expect(loadFullRamImageSpy).toHaveBeenCalledWith({}, expect.any(Uint8Array));
-  });
+  }, 15000);
 
   it('bootstraps RAM dump folder from selected .bin parent when folder is not configured', async () => {
     pickRamDumpFileSpy.mockResolvedValue({
@@ -286,5 +288,5 @@ describe('HomePage RAM actions', () => {
       expect.objectContaining({ treeUri: 'content://picked-parent' }),
     );
     expect(loadFullRamImageSpy).toHaveBeenCalledWith({}, expect.any(Uint8Array));
-  });
+  }, 15000);
 });

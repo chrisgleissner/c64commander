@@ -1,72 +1,89 @@
 # PLAN: CI Telemetry Completion (Android + iOS, GitHub-Hosted)
 
-## Current Implementation Status
+## Current Telemetry Implementation Status
 
-- Android monitor exists at `ci/telemetry/android/monitor_android.sh` and emits `metrics.csv`, `events.log`, `metadata.json`, `monitor.log`.
-- iOS monitor exists at `ci/telemetry/ios/monitor_ios.sh` with the same output schema and file naming.
-- Both monitors default to `TELEMETRY_INTERVAL_SEC=1` and sample CPU/RAM with low-overhead process probes.
-- CI workflows already start monitors before Maestro and stop them after Maestro in:
-  - `.github/workflows/android.yaml`
-  - `.github/workflows/ios.yaml`
-- Telemetry summary/chart generation and artifact upload are already present.
+- Android monitor is active at `ci/telemetry/android/monitor_android.sh` and uses 1 Hz sampling via `TELEMETRY_INTERVAL_SEC=1`.
+- iOS monitor is active at `ci/telemetry/ios/monitor_ios.sh` and uses 1 Hz sampling via `TELEMETRY_INTERVAL_SEC=1`.
+- Both monitors write the existing output set and file naming:
+  - `metrics.csv`
+  - `events.log`
+  - `metadata.json`
+  - `monitor.log`
+- Android CI telemetry lifecycle is wired in `.github/workflows/android.yaml`:
+  - start before Maestro
+  - stop after Maestro with `if: always()`
+  - upload telemetry artifacts with `if: always()`
+  - enforce CSV/header/row-count/exitcode gates
+- iOS CI telemetry lifecycle is wired in `.github/workflows/ios.yaml`:
+  - start before Maestro
+  - stop after Maestro with `if: always()`
+  - upload telemetry artifacts with `if: always()`
+  - enforce CSV/header/row-count/exitcode gates
 
-## Platform-Specific Gaps
+## Platform-Specific Gaps (Audit Findings and Closure)
 
 ### Android (ubuntu-latest, emulator)
 
-- Validate robust PID discovery under CI timing and transient `adb` instability.
-- Enforce minimal CSV correctness checks beyond non-empty file (header + multiple samples).
-- Confirm monitor lifecycle is resilient when Maestro fails and still exits cleanly after stop signal.
+- Closed: Maestro exit code is now preserved in `.github/workflows/android.yaml`.
+- Closed: PID detection now uses `pidof` plus `/proc/*/cmdline` fallback.
+- Closed: transient adb empty reads are retried; short misses no longer immediately mark process disappearance.
 
 ### iOS (macos-latest, simulator)
 
-- Harden app PID discovery fallback when simulator `ps` output format differs across macOS images.
-- Enforce minimal CSV correctness checks beyond non-empty file (header + multiple samples).
-- Confirm monitor lifecycle remains active through Maestro runtime and only exits at explicit stop.
+- Closed: simulator PID discovery now adds `simctl launchctl list` fallback.
+- Closed: CPU/RSS per-process sampling is explicitly host-level (`ps`) on macOS.
+- Closed: fallback to host process list is non-sticky; each sample still retries simulator process listing first.
 
 ## CI Integration Gaps
 
-- Guarantee telemetry artifacts are uploaded with `if: always()` before any telemetry gate step that can fail the job.
-- Ensure telemetry gates verify:
-  - CSV exists
-  - CSV has expected header
-  - CSV has multiple data rows (not just header)
-- Preserve Maestro failure semantics while still collecting and uploading telemetry artifacts.
+- No open telemetry integration gap remains in workflow wiring.
+- `runs-on` for iOS jobs is now `macos-latest` to match GitHub-hosted runner requirement.
 
 ## Risks
 
-- GitHub runner infra instability (emulator/simulator boot intermittency) can fail jobs independently of telemetry.
-- `adb` device enumeration latency may delay PID visibility on first samples.
-- `simctl spawn ... ps` output differences can reduce PID detection reliability if not handled defensively.
-- If monitor stop is not signaled/awaited correctly, telemetry may terminate late and miss final flush.
+- Emulator/simulator boot instability on GitHub-hosted runners can fail jobs independently of telemetry.
+- `adb` and `simctl` transient command failures can create short sampling gaps.
+- macOS image differences can change simulator process-list output formatting.
 
 ## Validation Gates
 
-1. Android telemetry gate (in `android.yaml`):
+1. Android telemetry gate:
    - `ci-artifacts/telemetry/android/metrics.csv` exists
-   - header matches telemetry CSV schema
-   - at least 2 data rows
-   - `monitor.exitcode` exists and is acceptable
-2. iOS telemetry gate (in `ios.yaml`):
+   - header matches expected schema
+   - file has header + multiple data rows
+   - `ci-artifacts/telemetry/android/monitor.exitcode` exists and is acceptable
+2. iOS telemetry gate:
    - `artifacts/ios/_infra/telemetry/metrics.csv` exists
-   - header matches telemetry CSV schema
-   - at least 2 data rows
-   - `monitor.exitcode` exists and is acceptable
-3. Artifact upload runs with `if: always()` and includes telemetry outputs even when Maestro fails.
+   - header matches expected schema
+   - file has header + multiple data rows
+   - `artifacts/ios/_infra/telemetry/monitor.exitcode` exists and is acceptable
+3. Artifact upload:
+   - upload step runs with `if: always()`
+   - telemetry files are included even if Maestro fails
 
-## Execution Steps (Authoritative)
+## Authoritative Execution Steps
 
-1. [in-progress] Audit current monitor + workflow implementation against required behavior.
-2. [pending] Patch Android telemetry lifecycle/gates (if gaps confirmed).
-3. [pending] Patch iOS telemetry lifecycle/gates (if gaps confirmed).
-4. [pending] Validate with repo-required checks:
+1. [completed] Audit monitor/workflow implementation and identify concrete gaps.
+2. [completed] Patch Android monitor + workflow for PID robustness and Maestro exit-code preservation.
+3. [completed] Patch iOS monitor + workflow for robust `simctl` PID detection and host-level 1 Hz CPU/RSS sampling.
+4. [completed] Re-validate telemetry gates and artifact behavior in workflows.
+5. [completed] Run required local checks before completion:
    - `npm run test:coverage`
    - `npm run lint`
    - `npm run test`
    - `npm run build`
    - `./build`
-5. [pending] If CI remains non-green due infra-only failures, produce residual limitations report with evidence.
+6. [completed] Blocker handling path prepared; no local infrastructure blocker encountered.
 
 ## Progress Log
 
-- 2026-02-17: Rebased plan to the telemetry completion objective and confirmed existing monitor/workflow baseline.
+- 2026-02-17: Completed telemetry audit; identified Android exit-code masking and iOS PID/sampling robustness gaps.
+- 2026-02-18: Implemented Android PID/read robustness and preserved Maestro exit code.
+- 2026-02-18: Implemented iOS `simctl` PID fallback and host-level per-process CPU/RSS sampling.
+- 2026-02-18: Switched iOS workflow jobs to `macos-latest`.
+- 2026-02-18: Verified required local gates:
+  - `npm run test:coverage` passed with branch coverage 82.01%.
+  - `npm run lint` passed.
+  - `npm run test` passed.
+  - `npm run build` passed.
+  - `./build` passed.

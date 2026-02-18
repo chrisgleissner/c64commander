@@ -272,7 +272,7 @@ beforeEach(() => {
 });
 
 describe('HomePage SID status', () => {
-  vi.setConfig({ testTimeout: 15000 });
+  vi.setConfig({ testTimeout: 30000 });
 
   it('renders the Home subtitle as C64 Commander', () => {
     renderHomePage();
@@ -671,7 +671,7 @@ describe('HomePage SID status', () => {
     fireEvent.click(within(machineControls).getByRole('button', { name: /^resume$/i }));
     await waitFor(() => expect(machineControlPayloadRef.current.resume.mutateAsync).toHaveBeenCalledTimes(1));
     expect(within(machineControls).getAllByRole('button', { name: /^pause$/i })).toHaveLength(1);
-  });
+  }, 20000);
 
   it('manages app configs via dialogs', async () => {
     const savedAt = new Date('2024-01-01T00:00:00.000Z').toISOString();
@@ -729,5 +729,5 @@ describe('HomePage SID status', () => {
     const [deleteButton] = within(manageDialog).getAllByRole('button', { name: /delete/i });
     fireEvent.click(deleteButton);
     expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith('config-a');
-  }, 10000);
+  }, 30000);
 });

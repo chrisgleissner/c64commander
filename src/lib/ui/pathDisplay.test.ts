@@ -15,6 +15,8 @@ describe('pathDisplay', () => {
   it('extracts filename from paths', () => {
     expect(getFileNameFromPath('/a/b/c/file.sid')).toBe('file.sid');
     expect(getFileNameFromPath('file.sid')).toBe('file.sid');
+    expect(getFileNameFromPath('C:\\music\\folder\\file.sid')).toBe('file.sid');
+    expect(getFileNameFromPath('')).toBe('');
   });
 
   it('uses filename fallback when full path does not fit', () => {
@@ -38,5 +40,22 @@ describe('pathDisplay', () => {
     const path = '/C64Music/DEMOS/Very/Long/Folder/superlongfilename.sid';
     const display = fitPathToWidth(path, 10, monoMeasure, 'start-and-filename');
     expect(display).toBe('superlongfilename.sid');
+  });
+
+  it('returns original path when path is empty or max width is non-positive', () => {
+    expect(fitPathToWidth('', 10, monoMeasure, 'filename-fallback')).toBe('');
+    expect(fitPathToWidth('/a/b/file.sid', 0, monoMeasure, 'filename-fallback')).toBe('/a/b/file.sid');
+    expect(fitPathToWidth('/a/b/file.sid', -5, monoMeasure, 'start-and-filename')).toBe('/a/b/file.sid');
+  });
+
+  it('falls back to empty label when ellipsis cannot fit', () => {
+    const path = '/very/long/path/file.sid';
+    expect(fitPathToWidth(path, 2, monoMeasure, 'filename-fallback')).toBe('');
+  });
+
+  it('trims path with trailing slash in start-and-filename mode', () => {
+    const path = '/very/long/path/';
+    const display = fitPathToWidth(path, 10, monoMeasure, 'start-and-filename');
+    expect(display).toBe('/.../path');
   });
 });

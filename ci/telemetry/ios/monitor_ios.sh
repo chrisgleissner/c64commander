@@ -59,27 +59,35 @@ resolve_udid() {
 spawn_ps() {
   local out=""
 
-  if [[ "$process_source" == "simulator" ]]; then
-    out="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -A -o pid=,ppid=,comm=,args= 2>/dev/null || true)"
-    if [[ -n "$out" ]]; then
-      printf '%s' "$out"
-      return 0
-    fi
-
-    out="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -ax -o pid=,ppid=,comm=,args= 2>/dev/null || true)"
-    if [[ -n "$out" ]]; then
-      printf '%s' "$out"
-      return 0
-    fi
-
-    process_source="host"
-    if [[ "$logged_host_fallback" == "0" ]]; then
-      log_event "sample_warning" "$PACKAGE_BUNDLE_ID:event" "" "simctl process listing unavailable; falling back to host ps"
-      logged_host_fallback=1
-    fi
+  out="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -A -o pid=,ppid=,comm=,args= 2>/dev/null || true)"
+  if [[ -n "$out" ]]; then
+    process_source="simulator"
+    printf '%s' "$out"
+    return 0
   fi
 
+  out="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -ax -o pid=,ppid=,comm=,args= 2>/dev/null || true)"
+  if [[ -n "$out" ]]; then
+    process_source="simulator"
+    printf '%s' "$out"
+    return 0
+  fi
+
+  if [[ "$logged_host_fallback" == "0" || "$process_source" != "host" ]]; then
+    log_event "sample_warning" "$PACKAGE_BUNDLE_ID:event" "" "simctl process listing unavailable; falling back to host ps"
+    logged_host_fallback=1
+  fi
+  process_source="host"
   ps -axo pid=,ppid=,comm=,args= 2>/dev/null
+}
+
+find_app_pid_launchctl() {
+  xcrun simctl spawn "$SIMULATOR_UDID" launchctl list 2>/dev/null | awk -v bundle="$PACKAGE_BUNDLE_ID" '
+    $1 ~ /^[0-9]+$/ && $3 == bundle {
+      print $1
+      exit
+    }
+  '
 }
 
 find_app_pid() {
@@ -97,7 +105,7 @@ find_app_pid() {
   fi
 
   pid="$(awk -v comm="$APP_PROCESS_NAME" '
-    $3 == comm && $1 ~ /^[0-9]+$/ {
+    index($0, "/" comm ".app/" comm) > 0 && $1 ~ /^[0-9]+$/ {
       print $1
       exit
     }
@@ -107,12 +115,14 @@ find_app_pid() {
     return 0
   fi
 
-  awk -v comm="$APP_PROCESS_NAME" '
-    index($0, "/" comm ".app/" comm) > 0 && $1 ~ /^[0-9]+$/ {
+  if [[ "$process_source" == "simulator" ]]; then
+    awk -v comm="$APP_PROCESS_NAME" '
+    $3 == comm && $1 ~ /^[0-9]+$/ {
       print $1
       exit
     }
   ' <<< "$ps_out"
+  fi
 }
 
 find_webkit_children() {
@@ -128,21 +138,14 @@ find_webkit_children() {
 read_ps_metrics() {
   local pid="$1"
   local line
-  if [[ "$process_source" == "simulator" ]]; then
-    line="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -p "$pid" -o %cpu=,rss=,nlwp= 2>/dev/null | awk 'NF{print $1" "$2" "$3; exit}')"
-  else
-    line="$(ps -p "$pid" -o %cpu=,rss=,nlwp= 2>/dev/null | awk 'NF{print $1" "$2" "$3; exit}')"
-  fi
+  # CPU/RSS sampling is intentionally host-level on macOS runners.
+  line="$(ps -p "$pid" -o %cpu=,rss=,nlwp= 2>/dev/null | awk 'NF{print $1" "$2" "$3; exit}')"
   if [[ -n "$line" ]]; then
     printf '%s' "$line"
     return 0
   fi
 
-  if [[ "$process_source" == "simulator" ]]; then
-    line="$(xcrun simctl spawn "$SIMULATOR_UDID" ps -p "$pid" -o %cpu=,rss= 2>/dev/null | awk 'NF{print $1" "$2; exit}')"
-  else
-    line="$(ps -p "$pid" -o %cpu=,rss= 2>/dev/null | awk 'NF{print $1" "$2; exit}')"
-  fi
+  line="$(ps -p "$pid" -o %cpu=,rss= 2>/dev/null | awk 'NF{print $1" "$2; exit}')"
   if [[ -z "$line" ]]; then
     return 1
   fi
@@ -180,6 +183,9 @@ while (( running == 1 )); do
   fi
 
   app_pid="$(find_app_pid "$ps_out" || true)"
+  if [[ -z "$app_pid" && "$process_source" == "simulator" ]]; then
+    app_pid="$(find_app_pid_launchctl || true)"
+  fi
 
   if [[ -z "$app_pid" ]]; then
     if [[ -n "$last_app_pid" ]]; then
@@ -199,7 +205,7 @@ while (( running == 1 )); do
     if metrics="$(read_ps_metrics "$app_pid" || true)"; then
       read -r cpu_percent rss_kb threads <<< "$metrics"
       cpu_percent="$(awk -v c="${cpu_percent:-0}" 'BEGIN{printf "%.1f", c+0.0}')"
-      printf '%s,ios,%s,%s,%s,%s,%s,%s,,,,,\n' \
+      printf '%s,ios,%s,%s,%s,%s,%s,%s,,,,\n' \
         "$sample_ts" \
         "$DEVICE_NAME" \
         "$PACKAGE_BUNDLE_ID" \
@@ -216,7 +222,7 @@ while (( running == 1 )); do
       if wk_metrics="$(read_ps_metrics "$wk_pid" || true)"; then
         read -r wk_cpu wk_rss wk_threads <<< "$wk_metrics"
         wk_cpu="$(awk -v c="${wk_cpu:-0}" 'BEGIN{printf "%.1f", c+0.0}')"
-        printf '%s,ios,%s,%s,%s,%s,%s,%s,,,,,\n' \
+        printf '%s,ios,%s,%s,%s,%s,%s,%s,,,,\n' \
           "$sample_ts" \
           "$DEVICE_NAME" \
           "$wk_comm" \

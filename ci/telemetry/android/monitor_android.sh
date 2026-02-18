@@ -50,6 +50,25 @@ adb_shell() {
   adb -s "$ADB_SERIAL" shell "$cmd" 2>/dev/null | tr -d '\r'
 }
 
+adb_shell_retry_nonempty() {
+  local cmd="$1"
+  local attempts="${2:-3}"
+  local out=""
+  local i
+  for (( i=1; i<=attempts; i++ )); do
+    out="$(adb_shell "$cmd" || true)"
+    if [[ -n "$out" ]]; then
+      printf '%s' "$out"
+      return 0
+    fi
+    if (( i < attempts )); then
+      sleep 0.2
+    fi
+  done
+  printf '%s' "$out"
+  return 0
+}
+
 resolve_serial() {
   if [[ -n "${ANDROID_SERIAL:-}" ]]; then
     printf '%s' "$ANDROID_SERIAL"
@@ -88,12 +107,12 @@ read_cpu_count() {
 }
 
 read_total_jiffies() {
-  adb_shell "awk '/^cpu / {s=0; for(i=2;i<=NF;i++) s+=\$i; print s; exit}' /proc/stat" | awk 'NF{print $1; exit}'
+  adb_shell_retry_nonempty "awk '/^cpu / {s=0; for(i=2;i<=NF;i++) s+=\$i; print s; exit}' /proc/stat" 3 | awk 'NF{print $1; exit}'
 }
 
 read_proc_jiffies() {
   local pid="$1"
-  adb_shell "awk '{print \$14+\$15}' /proc/$pid/stat" | awk 'NF{print $1; exit}'
+  adb_shell_retry_nonempty "awk '{print \$14+\$15}' /proc/$pid/stat" 2 | awk 'NF{print $1; exit}'
 }
 
 read_rss_threads() {
@@ -104,7 +123,7 @@ read_rss_threads() {
 read_pss_breakdown() {
   local pid="$1"
   local dump
-  dump="$(adb_shell "dumpsys meminfo $pid" || true)"
+  dump="$(adb_shell_retry_nonempty "dumpsys meminfo $pid" 2 || true)"
   if [[ -z "$dump" ]]; then
     printf '   '
     return 0
@@ -123,6 +142,25 @@ read_pss_breakdown() {
   printf '%s %s %s %s' "${total_pss:-}" "${dalvik:-}" "${native:-}" "${total_pss:-}"
 }
 
+resolve_process_pid() {
+  local process_name="$1"
+  local pid=""
+
+  pid="$(adb_shell "pidof $process_name" | awk '{print $1; exit}' || true)"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$pid"
+    return 0
+  fi
+
+  pid="$(adb_shell "for f in /proc/[0-9]*/cmdline; do p=\${f#/proc/}; p=\${p%/cmdline}; c=\$(tr '\000' '\n' < \"\$f\" 2>/dev/null | awk 'NR==1{print; exit}'); if [ \"\$c\" = \"$process_name\" ]; then echo \"\$p\"; break; fi; done" | awk 'NF{print $1; exit}' || true)"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$pid"
+    return 0
+  fi
+
+  return 1
+}
+
 main_seen_once=0
 main_disappeared=0
 running=1
@@ -138,10 +176,9 @@ log_event "monitor_started" "$PACKAGE_NAME" "" "serial=$ADB_SERIAL interval=${SA
 
 prev_total_jiffies=""
 declare -A prev_proc_jiffies
-ndeclare_dummy=1
-unset ndeclare_dummy
 
 declare -A prev_pid
+declare -A missing_streak
 declare -A cached_pss
 declare -A last_pss_ts
 
@@ -160,19 +197,24 @@ while (( running == 1 )); do
       role="main"
     fi
 
-    pid="$(adb_shell "pidof $process_name" | awk '{print $1; exit}' || true)"
+    pid="$(resolve_process_pid "$process_name" || true)"
 
     if [[ -z "$pid" ]]; then
-      if [[ -n "${prev_pid[$role]:-}" ]]; then
-        log_event "process_disappeared" "$process_name:event" "${prev_pid[$role]}" "process no longer visible"
-        if [[ "$role" == "main" ]]; then
-          main_disappeared=1
+      missing_streak[$role]=$(( ${missing_streak[$role]:-0} + 1 ))
+      if (( ${missing_streak[$role]} >= 2 )); then
+        if [[ -n "${prev_pid[$role]:-}" ]]; then
+          log_event "process_disappeared" "$process_name:event" "${prev_pid[$role]}" "process no longer visible"
+          if [[ "$role" == "main" ]]; then
+            main_disappeared=1
+          fi
         fi
+        unset "prev_pid[$role]"
+        unset "prev_proc_jiffies[$role]"
       fi
-      unset "prev_pid[$role]"
-      unset "prev_proc_jiffies[$role]"
       continue
     fi
+
+    missing_streak[$role]=0
 
     if [[ -z "${prev_pid[$role]:-}" ]]; then
       log_event "process_appeared" "$process_name:event" "$pid" "process detected"

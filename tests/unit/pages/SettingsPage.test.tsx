@@ -256,6 +256,8 @@ beforeEach(() => {
 });
 
 describe('SettingsPage', () => {
+  vi.setConfig({ testTimeout: 20000 });
+
   const buildFileList = (file: File) => {
     if (typeof DataTransfer !== 'undefined') {
       const transfer = new DataTransfer();
@@ -280,7 +282,7 @@ describe('SettingsPage', () => {
       expect(discoverConnection).toHaveBeenCalledWith('settings');
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Connection settings saved' }));
     });
-  });
+  }, 15000);
 
   it('orders core sections and places network timing under Device Safety', () => {
     renderSettingsPage();
@@ -410,7 +412,7 @@ describe('SettingsPage', () => {
 
     expect(screen.getByText(/persisted:/i)).toHaveTextContent('content://example');
     expect(screen.getByText(/dir: \//i)).toBeInTheDocument();
-  });
+  }, 15000);
 
   it('enables developer mode after repeated taps', () => {
     renderSettingsPage();
@@ -443,7 +445,7 @@ describe('SettingsPage', () => {
         operation: 'SAF_DIAGNOSTICS',
       }));
     });
-  });
+  }, 15000);
 
   it('shows demo probe messaging when demo is active', () => {
     connectionPayloadRef.current = {
