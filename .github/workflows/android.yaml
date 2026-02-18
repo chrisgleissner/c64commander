@@ -401,6 +401,7 @@ jobs:
           files: ./coverage/lcov-merged.info
           flags: unittests,e2etests
           name: c64-commander-web-coverage
+          use_pypi: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -596,6 +597,7 @@ jobs:
           files: ${{ steps.normalize_android_coverage.outputs.report }}
           flags: android
           name: c64-commander-android-coverage
+          use_pypi: true
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
 

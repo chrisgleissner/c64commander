@@ -19,7 +19,7 @@ env:
     timeout: ${TIMEOUT}
 - tapOn: "Download HVSC"
 - extendedWaitUntil:
-    visible: "HVSC downloaded successfully"
+    visible: "Status: Ready"
     timeout: ${HVSC_INGEST_TIMEOUT}
 - assertVisible: "Ingested"
 - assertNotVisible: "Ingested 0 of 0 songs"
