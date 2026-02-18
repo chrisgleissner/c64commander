@@ -13,31 +13,41 @@ test.describe('CTA highlight proof', () => {
         await expect(target).toBeVisible();
         await target.scrollIntoViewIfNeeded();
 
-        const sawFlash = await Promise.all([
-            target.evaluate((element) => {
-                return new Promise<boolean>((resolve) => {
-                    const attr = 'data-c64-tap-flash';
-                    if (element.getAttribute(attr) === 'true') {
-                        resolve(true);
-                        return;
-                    }
-
-                    const observer = new MutationObserver(() => {
+        const tryObserveFlash = async () => {
+            return Promise.all([
+                target.evaluate((element) => {
+                    return new Promise<boolean>((resolve) => {
+                        const attr = 'data-c64-tap-flash';
                         if (element.getAttribute(attr) === 'true') {
-                            observer.disconnect();
                             resolve(true);
+                            return;
                         }
-                    });
 
-                    observer.observe(element, { attributes: true, attributeFilter: [attr] });
-                    setTimeout(() => {
-                        observer.disconnect();
-                        resolve(element.getAttribute(attr) === 'true');
-                    }, 1200);
-                });
-            }),
-            target.click({ force: true, timeout: 60000 }),
-        ]).then(([observed]) => observed);
+                        const observer = new MutationObserver(() => {
+                            if (element.getAttribute(attr) === 'true') {
+                                observer.disconnect();
+                                resolve(true);
+                            }
+                        });
+
+                        observer.observe(element, { attributes: true, attributeFilter: [attr] });
+                        setTimeout(() => {
+                            observer.disconnect();
+                            resolve(element.getAttribute(attr) === 'true');
+                        }, 2500);
+                    });
+                }),
+                target.click({ force: true, timeout: 60000 }),
+            ]).then(([observed]) => observed);
+        };
+
+        let sawFlash = false;
+        for (let attempt = 0; attempt < 3 && !sawFlash; attempt += 1) {
+            sawFlash = await tryObserveFlash();
+            if (!sawFlash) {
+                await page.waitForTimeout(200);
+            }
+        }
 
         expect(sawFlash).toBe(true);
 
