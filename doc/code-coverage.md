@@ -14,8 +14,8 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 
 ### TypeScript/TSX Coverage (Vitest + V8)
 
-**Tool**: Vitest with V8 coverage provider  
-**Configuration**: `vitest.config.ts`  
+**Tool**: Vitest with V8 coverage provider
+**Configuration**: `vitest.config.ts`
 **Command**: `npm run test:coverage`
 
 **What's covered**:
@@ -43,8 +43,8 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 
 ### Kotlin Coverage (Jacoco)
 
-**Tool**: Jacoco via Gradle  
-**Configuration**: `android/app/build.gradle`  
+**Tool**: Jacoco via Gradle
+**Configuration**: `android/app/build.gradle`
 **Command**: `cd android && ./gradlew testDebugUnitTest jacocoTestReport`
 
 **What's covered**:
@@ -64,8 +64,8 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 
 ### E2E Testing (Playwright)
 
-**Tool**: Playwright  
-**Configuration**: `playwright.config.ts`  
+**Tool**: Playwright
+**Configuration**: `playwright.config.ts`
 **Commands**:
 
 - `npm run test:e2e` - Run all E2E tests
@@ -140,6 +140,12 @@ The GitHub Actions workflow (`.github/workflows/android.yaml`) automatically:
        flags: unittests,android
        token: ${{ secrets.CODECOV_TOKEN }}
    ```
+
+### CI Threshold Policy (Unit vs Merged LCOV)
+
+- Branch/line threshold enforcement in CI uses **unit-test LCOV** (`coverage/lcov.info`) via `scripts/check-coverage-threshold.mjs`.
+- The merged file (`coverage/lcov-merged.info`) is still produced and uploaded to Codecov for cross-suite reporting and historical trend analysis.
+- Rationale: merged E2E instrumentation can significantly expand the branch denominator and produce unstable gating behavior; release gate quality is anchored to deterministic unit coverage while preserving merged observability in Codecov.
 
 ### Codecov Integration
 
