@@ -153,13 +153,13 @@ jobs:
       matrix:
         group:
           - name: group-1
-            flows: "ios-smoke-launch,ios-playback-basics,ios-diagnostics-export"
+            flows: "ios-smoke-launch,ios-diagnostics-export"
           - name: group-2
             flows: "ios-ftp-browse,ios-local-import"
           - name: group-3
             flows: "ios-secure-storage-persist,ios-import-playback"
           - name: group-4
-            flows: "ios-hvsc-browse,ios-config-persistence"
+            flows: "ios-hvsc-browse,ios-config-persistence,ios-playback-basics"
 
     steps:
       - name: Checkout
@@ -298,7 +298,8 @@ jobs:
           IOS_DEBUG_PAYLOAD_MAX_ATTEMPTS: "3"
           IOS_DEBUG_PAYLOAD_CONNECT_TIMEOUT_SECONDS: "1"
           IOS_DEBUG_PAYLOAD_CURL_MAX_TIME_SECONDS: "2"
-          IOS_MAESTRO_RECORD_VIDEO: "0"
+          IOS_MAESTRO_RECORD_VIDEO: ${{ vars.IOS_MAESTRO_RECORD_VIDEO || '0' }}
+          IOS_MAESTRO_MOCK_PORT: ${{ vars.IOS_MAESTRO_MOCK_PORT || '' }}
           SIM_BOOT_START_MS: ${{ steps.simulator.outputs.boot_start_ms }}
           SIM_BOOT_READY_MS: ${{ steps.simulator.outputs.boot_ready_ms }}
           CI: "true"
@@ -326,11 +327,17 @@ jobs:
             exit 1
           fi
 
+          mock_port_args=()
+          if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
+            mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
+          fi
+
           bash scripts/ci/ios-maestro-run-flow.sh \
             --flows "${{ matrix.group.flows }}" \
             --group "${{ matrix.group.name }}" \
             --udid "${{ steps.simulator.outputs.udid }}" \
-            --app-path "App.app"
+            --app-path "App.app" \
+            "${mock_port_args[@]}"
 
       - name: Validate connectivity (${{ matrix.group.name }})
         if: always()

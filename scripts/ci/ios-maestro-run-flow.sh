@@ -523,7 +523,7 @@ seed_smoke_config() {
 # ── Connectivity Probe ─────────────────────────────────────────
 connectivity_probe() {
   if [[ -z "$MOCK_PORT" ]]; then
-    log "No mock port specified — skipping connectivity probe"
+    log "No external mock port configured — skipping external connectivity probe (smoke config is seeded in-app)"
     return 0
   fi
 
@@ -601,7 +601,7 @@ start_video() {
   local flow="$1"
   local flow_dir="$2"
   if [[ "$IOS_MAESTRO_RECORD_VIDEO" != "1" ]]; then
-    log "Video recording disabled for flow ${flow}"
+    log "Video recording disabled for flow ${flow} (IOS_MAESTRO_RECORD_VIDEO=${IOS_MAESTRO_RECORD_VIDEO})"
     return
   fi
   local video_path="${flow_dir}/video/${flow}.mov"
