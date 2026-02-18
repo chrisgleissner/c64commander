@@ -42,17 +42,22 @@ export const parseStartupMetricsFromLines = (lines) => {
     let inFlight = 0;
     let nullStringWarnings = 0;
     let hvscStartupDownloads = 0;
+    let startupWindowOpen = true;
 
     const configRequestCounts = new Map();
     const userLatencySamples = [];
 
     for (const line of lines) {
         const lowered = line.toLowerCase();
+        if (lowered.includes('capacitor: app resumed') || lowered.includes('capacitor: app started')) {
+            startupWindowOpen = false;
+        }
         if (lowered.includes('convertjavastringtoutf8 called with null string')) {
             nullStringWarnings += 1;
         }
 
-        const looksLikeRequest = lowered.includes('capacitorhttp') || lowered.includes('c64 api request') || lowered.includes('fetch(');
+        const looksLikeRequest = startupWindowOpen
+            && (lowered.includes('capacitorhttp') || lowered.includes('c64 api request') || lowered.includes('fetch('));
         if (looksLikeRequest) {
             const path = extractUrl(line) ?? '';
             if (path) {

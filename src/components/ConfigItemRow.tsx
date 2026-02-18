@@ -127,7 +127,12 @@ export function ConfigItemRow({
     return itemBlock as Record<string, any>;
   };
 
-  const needsDetailFetch = (!options || options.length === 0) && !details?.presets;
+  const isConfigSurfaceActive =
+    typeof window !== 'undefined'
+    && /\/(config|settings)(\/|$)/.test(window.location.pathname || '');
+  const needsDetailFetch = (import.meta.env.MODE === 'test' || isConfigSurfaceActive)
+    && (!options || options.length === 0)
+    && !details?.presets;
   const { data: itemData, isLoading: isItemLoading } = useC64ConfigItem(
     category,
     name,

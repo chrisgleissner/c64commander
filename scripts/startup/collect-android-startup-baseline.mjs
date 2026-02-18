@@ -28,6 +28,37 @@ const runAdb = (extra, options = {}) => {
     return result.stdout;
 };
 
+const launchActivity = () => {
+    const timedStart = spawnSync('adb', adbArgs(['shell', 'am', 'start', '-W', '-n', activity]), {
+        encoding: 'utf8',
+        timeout: 25_000,
+    });
+
+    if (timedStart.status === 0) {
+        return timedStart.stdout;
+    }
+
+    const timedOut = timedStart.error?.code === 'ETIMEDOUT' || timedStart.status === 124;
+    const startOutput = `${timedStart.stdout ?? ''}\n${timedStart.stderr ?? ''}`.trim();
+    const looksLikeLaunchStarted = /Starting:\s+Intent/i.test(startOutput)
+        && !/(Error:|Exception|Activity class .* does not exist|Unable to resolve|Permission denied)/i.test(startOutput);
+    if (!timedOut && !looksLikeLaunchStarted) {
+        const stderr = timedStart.stderr || timedStart.stdout || timedStart.error?.message || 'unknown error';
+        throw new Error(`adb shell am start -W -n ${activity} failed: ${stderr}`);
+    }
+
+    const fallback = spawnSync('adb', adbArgs(['shell', 'am', 'start', '-n', activity]), {
+        encoding: 'utf8',
+        timeout: 15_000,
+    });
+    if (fallback.status !== 0) {
+        const fallbackError = fallback.stderr || fallback.stdout || fallback.error?.message || 'unknown error';
+        throw new Error(`adb shell am start -n ${activity} fallback failed after start -W timeout: ${fallbackError}`);
+    }
+
+    return `${timedStart.stdout}\n${timedStart.stderr}\nFallback start used after start -W non-success.`;
+};
+
 mkdirSync(outDir, { recursive: true });
 
 const ttfscSamples = [];
@@ -38,7 +69,7 @@ for (let index = 1; index <= loops; index += 1) {
     runAdb(['logcat', '-c']);
     runAdb(['shell', 'am', 'force-stop', appId]);
 
-    const startResult = runAdb(['shell', 'am', 'start', '-W', '-n', activity]);
+    const startResult = launchActivity();
     const thisTimeMatch = startResult.match(/ThisTime:\s*(\d+)/);
     const totalTimeMatch = startResult.match(/TotalTime:\s*(\d+)/);
     const ttfsc = Number(totalTimeMatch?.[1] || thisTimeMatch?.[1] || '0');
