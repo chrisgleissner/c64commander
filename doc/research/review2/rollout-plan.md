@@ -1,0 +1,186 @@
+# Productionization Rollout Plan (Sequential, Test-Gated)
+
+## Required Reading (Before S0)
+
+Read these documents before starting implementation. Treat this as a blocking prerequisite.
+
+| Document | Why it is required | Primarily impacts steps |
+| --- | --- | --- |
+| `AGENTS.md` | Repository-level mandatory execution rules, coverage floor (`>=82%` branch), no silent exception handling, and build/test completion policy. | `S0-S15` |
+| `.github/copilot-instructions.md` | Authoritative workflow expectations, required full build discipline, and test/build sequencing. | `S0-S15` |
+| `README.md` | Platform setup, supported run/build paths, troubleshooting, and release context for Android/iOS/Web. | `S0`, `S15` |
+| `doc/architecture.md` | Normative architecture contracts (playlist/query/storage boundaries) and crash-reporting model referenced by findings. | `S2-S5`, `S8` |
+| `doc/developer.md` | Detailed testing architecture, diagnostics logging contract, CI/coverage behavior, and local validation workflow. | `S0-S1`, `S6-S15` |
+| `doc/research/review2/productionization-review.md` | Source backlog (`F-01..F-08`) plus release-gate and physical-device closure actions that must be tracked to done. | `S0-S15` |
+| `doc/c64/c64u-openapi.yaml` | Canonical REST contract used to validate parser/error behavior and endpoint semantics. | `S2` |
+| `doc/c64/c64u-rest-api.md` | Human-readable REST endpoint semantics and payload expectations used for negative/contract tests. | `S2` |
+| `doc/c64/c64u-ftp.md` | FTP capability/auth/command constraints needed for unified timeout/retry policy design and tests. | `S4` |
+| `doc/ux-guidelines.md` | UX consistency rules for CTA, modal, and interaction behavior to avoid regressions while hardening reliability. | `S6`, `S8` |
+| `doc/ux-interactions.md` | CTA inventory and coverage map used to target missing tests and verify interaction-critical paths. | `S0`, `S6` |
+| `doc/testing/testing-infrastructure-review.md` | Current CI/test blind spots and failure-detection weaknesses; baseline for hardening gates. | `S0-S1`, `S9`, `S11-S15` |
+| `doc/testing/contract-test.md` | Device contract pacing/concurrency matrix for robust REST/FTP reliability tests. | `S2`, `S4` |
+| `doc/code-coverage.md` | Coverage strategy and CI aggregation model for enforcing rollout completion gates. | `S0`, `S9`, `S15` |
+| `doc/diagnostics/tracing-spec.md` | Trace and error-event semantics needed when adjusting failure visibility and diagnostics assertions. | `S1`, `S8` |
+| `doc/diagnostics/action-summary-spec.md` | Action derivation rules to keep diagnostics consistency when logging/error pathways are changed. | `S8` |
+
+### Conditional Required Reading
+
+| Document | Read when |
+| --- | --- |
+| `doc/testing/maestro.md` | Any task changes `.maestro/*` flows or Maestro CI behavior. |
+| `doc/testing/chaos-fuzz.md` | Any task adds stress/fuzz reliability validation beyond deterministic suites. |
+| `doc/research/review1/production-readiness-audit.md` | Additional historical risk context is needed for unresolved edge cases. |
+| `doc/research/review1/production-readiness-plan.md` | You need a prior remediation dependency map to sequence new work. |
+
+## Execution Contract (LLM)
+
+1. Execute tasks strictly in order (`S0` -> `S15`).
+2. A task checkbox may be marked `[x]` only after all required tests for that task pass.
+3. If a later change breaks an earlier task's tests, reopen the earlier task (`[ ]`) and revalidate.
+4. Each completed task must include proof in its `Evidence` field: commit hash + exact passing command(s).
+5. Do not start the next task until the current task is complete and proven.
+
+## Startup Hardening Goal (New Blocking Scope)
+
+- Primary outcome: minimize the time from app launch to first successful user-triggered device call (for example reset).
+- Define and track startup KPIs on physical-device runs:
+  - `TTFSC` = time-to-first-successful-command (`launch` -> successful reset API effect).
+  - `StartupRequestCount` = count of REST calls issued before first successful user-triggered call.
+  - `StartupConfigCalls` = count of `/v1/configs/*` requests issued before first successful user-triggered call.
+  - `DuplicateStartupConfigKeyRequests` = repeated requests for the same config key during startup window.
+  - `StartupBacklogDepth` = peak queued/in-flight startup task count before first successful user-triggered call.
+  - `UserTriggeredCommandLatencyMs` = end-to-end latency for key user-triggered control calls (`machine:reset`, `machine:reboot`) once UI is interactive.
+- Release targets (must be met unless explicitly re-baselined with evidence and approval):
+  - `StartupRequestCount <= 25`
+  - `StartupConfigCalls <= 12`
+  - `DuplicateStartupConfigKeyRequests == 0` (unless explicitly justified and documented)
+  - `TTFSC p50 <= 5s` and `TTFSC p95 <= 8s` on local physical-device matrix
+  - `StartupBacklogDepth` is bounded and non-growing (no unbounded queue growth)
+  - `UserTriggeredCommandLatencyMs p95 <= 900ms` on physical-device runs to host `c64u`
+
+## Observed Real-Device Log Signals (2026-02-18, Incorporated into Scope)
+
+- Startup shows dense bursts of `CapacitorHttp` requests to `http://c64u/v1/configs/...` and matching `CapacitorCookies` lookups, consistent with config prefetch fan-out.
+- Log stream includes repeated `chromium` warning `ConvertJavaStringToUTF8 called with null string.` during startup request burst.
+- User-triggered control call evidence exists in logs (example `http://c64u/v1/machine:reboot` with measured fetch duration around `529ms`), and should be tracked as a first-class KPI.
+- Recurrent NFC HAL/service errors (for example `android.hardware.nfc@1.0::INfc/default` registration failures) are device/system noise unless directly tied to app regressions.
+- Device-wide noise (NFC/sensors/wificond/system services) appears interleaved with app logs; profiling and gating must filter app-specific events to avoid false attribution.
+- These observations are treated as actionable startup risks and are covered by `R-03`, `R-05`, and `R-06` tasks below.
+
+## Physical Device Assumption (This Productionization Scope)
+
+- Local execution assumption: at least one physical Android device is connected for all local hardening work.
+- CI assumption: physical devices are not guaranteed and must not be relied on.
+- Device identity is dynamic: do not hardcode serial `2113b87f`; it is only an example of current `adb devices` output (`2113b87f        device`) and may change.
+- For this rollout, hardware-sensitive validation must run on the connected physical device(s), not only emulator/simulator.
+- Real device target for this rollout: physical C64U is available at host `c64u`; startup and key-action hardening must include runs against that host.
+- Steps that must use physical-device execution and artifacts: `S3` (HVSC memory/soak), `S4` (FTP resilience under real network), `S10` (mandatory physical-device matrix), `S11-S14` (startup and HVSC hardening), and `S15` (final evidence check).
+
+## Local Test Asset Provisioning (ADB, Mandatory)
+
+- Because the device is not pre-seeded, all local-source test assets must be staged onto the connected physical device via `adb` before executing physical-device validation.
+- Required asset types: `.sid`, `.mod`, `.crt`, `.prg`, `.d64`, `.d71`, `.d81`, and `Songlengths.md5`.
+- Asset source of truth must be repository-controlled fixtures or explicitly documented local inputs (no ad-hoc unknown files).
+- Every physical-device step that depends on local source browsing/import must include:
+  1. `adb push` (or equivalent) staging command(s),
+  2. on-device existence verification,
+  3. cleanup policy (remove or keep) documented in Evidence.
+- Device serial remains dynamic; ADB commands must resolve target serial at runtime and must not hardcode `2113b87f`.
+
+## ADB/Logcat Profiling Requirements (Mandatory for Startup Work)
+
+For startup-hardening steps, collect evidence using ADB tooling, including:
+
+- `adb logcat` capture with app, Capacitor, and network traces.
+- `adb logcat --pid <app_pid>` (or equivalent filtering) for app-only startup timelines.
+- app lifecycle timing via `adb shell am start -W ...`.
+- process/thread/memory snapshots via `adb shell dumpsys` (activity, meminfo, gfxinfo as applicable).
+- optional deeper traces where supported (`perfetto`/`atrace`) for startup bottleneck analysis.
+- repeated-run scripts (multiple cold starts) with machine-readable output saved as artifacts.
+- structured parsing of `CapacitorHttp`/`CapacitorCookies` lines to compute startup call counts, endpoint mix, duplicate keys, and backlog indicators.
+- structured parsing of `Capacitor/Plugin` and `Capacitor/Console` fetch timing lines to derive per-endpoint user-command latency.
+- explicit separation of app logs vs. unrelated system logs (NFC/sensors/wifi/etc.) in startup reports.
+
+No startup-performance step may be marked complete without attached ADB evidence.
+
+## HVSC Remote Safety Guardrails (Mandatory)
+
+- Do not trigger HVSC archive/database download unless explicitly user-initiated from HVSC actions.
+- Startup and normal key-action profiling must prove no redundant HVSC download requests are issued.
+- If HVSC metadata checks are needed, they must be throttled/single-flight and cache-aware.
+- Productionization must avoid undue load on remote HVSC infrastructure; this is a release blocker.
+
+## Startup Config-Fetch Guardrails (Mandatory)
+
+- Do not eagerly fetch the full configuration catalog at startup.
+- Startup must prioritize only reset-ready and connection-critical config paths; non-critical config data must be lazy-loaded.
+- Config reads during startup must be single-flight and deduplicated by key.
+- Opening the Config UI may trigger additional reads, but only after startup window and under bounded concurrency.
+
+## Status Legend
+
+- `[ ]` Not started or not yet proven by tests.
+- `[x]` Implemented and proven by required tests.
+
+## Sequential Rollout Tasks
+
+| Step | Task | Depends On | Required Test Proof (must pass before `[x]`) | Evidence | Status |
+| --- | --- | --- | --- | --- | --- |
+| S0 | Baseline and safety harness. Record current behavior for all findings `F-01..F-08` plus release gaps `R-01` (coverage policy weakness), `R-02` (physical-device realism closure), `R-03` (startup request storm/latency), `R-04` (HVSC remote safety), `R-05` (startup config fan-out + null-string warning triage), and `R-06` (user-triggered command latency path), and establish a reproducible test command list. | None | `npm run test`; `npm run test:coverage`; capture baseline coverage and failing/passing areas in an audit note. | _TBD_ | [ ] |
+| S1 | Hard-fail CI telemetry on process disappearance (`monitor.exitcode==3`) for release/tag flows (`F-02`). Keep non-release behavior explicit and intentional. | S0 | Add/extend telemetry gate tests for Android+iOS workflow logic; run those tests; run `npm run test` to ensure no regressions in tooling scripts. | _TBD_ | [ ] |
+| S2 | Make malformed HTTP 200 payload handling explicit (no synthetic silent success) in REST parsing path (`F-03`). | S1 | Add unit tests for non-JSON/invalid-JSON HTTP 200 responses; ensure callers receive explicit failure state; run targeted c64api tests + `npm run test`. | _TBD_ | [ ] |
+| S3 | Reduce non-native HVSC memory amplification and enforce bounded behavior for large archives (`F-01`). | S2 | Add stress/integration tests for non-native ingestion memory constraints and completion behavior; run HVSC test suites + `npm run test`. If soak criteria are not met, add feature-gate tests proving HVSC is blocked on affected non-native targets. | _TBD_ | [ ] |
+| S4 | Unify FTP timeout/retry policy across web/native bridge layers with deterministic transient-failure behavior (`F-04`). | S3 | Add FTP transient-failure matrix tests (timeout/reset/delay); run FTP/native adapter tests + `npm run test`. | _TBD_ | [ ] |
+| S5 | Align playlist persistence with architecture limits (avoid large blob persistence paths) (`F-05`). | S4 | Add large-playlist persistence tests (size/count thresholds and fallback behavior); run playlist persistence tests + `npm run test`. | _TBD_ | [ ] |
+| S6 | Add dedicated hook-level race-condition tests for volume/mute synchronization logic (`F-06`). | S5 | Add tests for deferred sync/apply/clear decisions, timer expiry, and stale target resolution; run hook tests + `npm run test`. | _TBD_ | [ ] |
+| S7 | Add Android JVM tests for `HvscIngestionPlugin` success/cancel/error/progress semantics (`F-07`). | S6 | Add JVM tests with fixtures and mocked plugin calls; run `cd android && ./gradlew test`; then run `npm run test` for cross-layer safety. | _TBD_ | [ ] |
+| S8 | Route parse-failure warnings through centralized diagnostics logging path (`F-08`) without changing fail-closed behavior. | S7 | Add unit tests asserting diagnostics logging entries for corrupted store payloads; run logging/store tests + `npm run test`. | _TBD_ | [ ] |
+| S9 | Enforce release coverage policy in CI (`R-01`): branch coverage gate must be first-class (>=82%), not line-only. | S8 | Add/update threshold checks and tests around coverage gate script behavior; run coverage-gate tests + `npm run test`; run `npm run test:coverage` and confirm branch gate pass/fail behavior is enforced. | _TBD_ | [ ] |
+| S10 | Close device-realism evidence gap (`R-02`): define and execute mandatory physical-device validation matrix for HVSC ingest, FTP browse, RAM save/load, and local-source imports with telemetry/traces artifacts. | S9 | Produce reproducible manual test protocol and execute matrix tests; stage required local test assets via ADB (`.sid/.mod/.crt/.prg/.d64/.d71/.d81/Songlengths.md5`), verify on-device presence, then collect telemetry logs, exported traces, and pass/fail records for Android and iOS physical-device runs; validate artifact bundle integrity with existing evidence tooling where applicable. | _TBD_ | [ ] |
+| S11 | Build startup profiling harness (`R-03`, `R-05`, `R-06`) using ADB tooling and app diagnostics, targeting physical device + host `c64u`; generate reproducible baseline for `TTFSC`, `StartupRequestCount`, `StartupConfigCalls`, `DuplicateStartupConfigKeyRequests`, `StartupBacklogDepth`, and `UserTriggeredCommandLatencyMs`. | S10 | Run scripted cold-start loops with `adb logcat`, `am start -W`, and `dumpsys` evidence capture; baseline report must include call timeline, top startup call contributors, duplicate config-key counts, null-string warning counts, and reboot/reset latency samples; run `npm run test` for harness-side code/script changes. | _TBD_ | [ ] |
+| S12 | Reduce startup request storm and task backlog (`R-03`, `R-05`) by prioritizing critical user-path calls and deferring/lazily loading non-critical config fetches; keep reset-ready path first, eliminate startup config fan-out, and protect user-triggered control latency (`R-06`). | S11 | Add/extend tests proving bounded startup call count, reduced `/v1/configs/*` startup volume, deduplicated startup config keys, and successful early reset/reboot action with bounded latency; run targeted startup tests + `npm run test`; validate improved physical-device startup metrics against `S11` baseline. | _TBD_ | [ ] |
+| S13 | Add startup performance regression gates (`R-03`, `R-05`, `R-06`) for local physical-device runs and CI-safe synthetic checks; enforce no regression in startup KPIs while preserving key activities. | S12 | Add repeatable benchmark/test scripts and assertions; run gating tests + `npm run test`; provide trend report from at least 10 cold-start iterations on physical device; include smoke proofs that reset/play/disks/config key actions still succeed (using ADB-staged local assets where required); include guardrail assertions for config-call budget, duplicate-key budget, and user-command latency budget. | _TBD_ | [ ] |
+| S14 | Enforce HVSC remote safety (`R-04`): guarantee no redundant HVSC DB/archive downloads during startup and core actions; protect remote HVSC servers from unnecessary load. | S13 | Add/extend tests asserting zero startup-triggered HVSC archive download calls unless explicit user action; run HVSC/startup tests + `npm run test`; provide log evidence from physical-device runs against `c64u`. | _TBD_ | [ ] |
+| S15 | Final release gate verification and go/no-go package. | S14 | `npm run test`; `npm run test:coverage` with global branch coverage `>=82%`; `npm run lint`; `npm run build`; verify telemetry release-gate behavior; verify physical-device evidence bundle exists and is complete; verify startup KPI targets and HVSC safety constraints are met; verify ADB-based local asset staging evidence is present for local-source flows. | _TBD_ | [ ] |
+
+## Issue-to-Step Traceability (Must Stay Complete)
+
+| Review issue | Description | Resolving step(s) |
+| --- | --- | --- |
+| `F-01` | Non-native HVSC memory amplification / OOM risk | `S3` |
+| `F-02` | CI telemetry soft-pass on process disappearance | `S1` |
+| `F-03` | Malformed HTTP 200 parse returns synthetic success | `S2` |
+| `F-04` | FTP timeout/retry inconsistency across platforms | `S4` |
+| `F-05` | Large playlist blob persistence scalability mismatch | `S5` |
+| `F-06` | Missing hook-level race tests for volume/mute | `S6` |
+| `F-07` | Missing Android JVM tests for `HvscIngestionPlugin` | `S7` |
+| `F-08` | Parse-failure warnings bypass diagnostics pipeline | `S8` |
+| `R-01` | Coverage gate quality gap (branch policy not enforced as release gate) | `S9` |
+| `R-02` | Device realism closure action missing (physical-device artifacts) | `S10` |
+| `R-03` | Startup is slow with high REST call volume and backlog before user-triggered control is reliably available | `S11-S13` |
+| `R-04` | Risk of redundant HVSC DB/archive downloads causing undue stress on remote HVSC infrastructure | `S14` |
+| `R-05` | Startup config endpoint fan-out (`/v1/configs/*`) and repeated `jni_string` null warnings during request bursts on real device | `S11-S13` |
+| `R-06` | User-triggered device control calls (for example `machine:reboot`) need consistently low latency after launch under startup load | `S11-S13` |
+| `R-07` | Local-source validation blocked unless required media fixtures are staged to device via ADB | `S10`, `S13`, `S15` |
+
+## Completion Criteria
+
+The rollout is complete only when all steps `S0..S15` are `[x]` with non-empty `Evidence`, and `S15` proves:
+
+1. Global branch coverage is at least `82%`.
+2. No failing unit/integration/JVM tests.
+3. CI telemetry crash detection is release-blocking.
+4. Coverage gate policy is enforced in CI at release level (branch-focused, not line-only).
+5. Physical-device validation evidence exists for HVSC ingest, FTP browse, and RAM save/load.
+6. All findings (`F-01..F-08`) are closed and validated by tests/artifacts.
+7. Startup hardening targets are met (`StartupRequestCount <= 25`, `TTFSC p50 <= 5s`, `TTFSC p95 <= 8s`, bounded backlog).
+8. HVSC remote safety is proven (no redundant startup/core-action HVSC downloads without explicit user initiation).
+9. Key activities still work after startup hardening (reset, playback controls, disk browse/mount, config apply/save).
+10. Startup config fan-out is controlled (`StartupConfigCalls <= 12`, `DuplicateStartupConfigKeyRequests == 0` unless justified).
+11. `ConvertJavaStringToUTF8 called with null string` warnings are either eliminated from startup path or triaged with root-cause evidence proving no functional/performance impact.
+12. User-triggered control latency budget is met (`UserTriggeredCommandLatencyMs p95 <= 900ms` for reset/reboot actions against `c64u`).
+13. Local-source media validation is reproducible via ADB staging (`.sid/.mod/.crt/.prg/.d64/.d71/.d81/Songlengths.md5`) with evidence of push + verification.
+
+## Suggested Evidence Format Per Step
+
+`<commit_sha> | <date> | <commands run> | <pass summary> | <artifact path or log reference>`
