@@ -81,4 +81,36 @@ describe('check-coverage-threshold', () => {
             rmSync(root, { recursive: true, force: true });
         }
     });
+
+    it('prefers DA/BRDA detail records over inconsistent summary counters', () => {
+        const root = mkdtempSync(path.join(os.tmpdir(), 'coverage-detail-preferred-'));
+        try {
+            mkdirSync(path.join(root, 'coverage'), { recursive: true });
+            writeFileSync(path.join(root, 'coverage/lcov.info'), [
+                'TN:',
+                'SF:src/file.ts',
+                'DA:1,1',
+                'DA:2,1',
+                'LF:2',
+                'LH:1',
+                'BRDA:1,0,0,1',
+                'BRDA:1,0,1,1',
+                'BRF:2',
+                'BRH:0',
+                'end_of_record',
+            ].join('\n'), 'utf8');
+
+            const result = runScript(root, {
+                COVERAGE_FILE: 'coverage/lcov.info',
+                COVERAGE_MIN: '80',
+                COVERAGE_MIN_BRANCH: '82',
+            });
+
+            expect(result.status).toBe(0);
+            expect(result.stdout).toContain('Line coverage: 100.00%');
+            expect(result.stdout).toContain('Branch coverage: 100.00%');
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
+    });
 });

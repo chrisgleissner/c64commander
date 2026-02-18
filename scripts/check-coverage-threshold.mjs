@@ -24,58 +24,60 @@ try {
   console.warn(`Coverage file ${coverageFile} missing; using ${fallbackCoverageFile} instead.`);
 }
 
-let totalLines = 0;
-let coveredLines = 0;
-let totalBranches = 0;
-let coveredBranches = 0;
-let sawSummary = false;
-let sawDA = false;
-let sawBranchSummary = false;
-let sawBRDA = false;
+let summaryTotalLines = 0;
+let summaryCoveredLines = 0;
+let detailTotalLines = 0;
+let detailCoveredLines = 0;
+let summaryTotalBranches = 0;
+let summaryCoveredBranches = 0;
+let detailTotalBranches = 0;
+let detailCoveredBranches = 0;
 
 for (const line of content.split('\n')) {
   if (line.startsWith('LF:')) {
-    totalLines += Number(line.slice(3)) || 0;
-    sawSummary = true;
+    summaryTotalLines += Number(line.slice(3)) || 0;
   } else if (line.startsWith('LH:')) {
-    coveredLines += Number(line.slice(3)) || 0;
-    sawSummary = true;
+    summaryCoveredLines += Number(line.slice(3)) || 0;
   } else if (line.startsWith('DA:')) {
     const parts = line.slice(3).split(',');
     if (parts.length >= 2) {
       const hitCount = Number(parts[1]) || 0;
-      totalLines += 1;
+      detailTotalLines += 1;
       if (hitCount > 0) {
-        coveredLines += 1;
+        detailCoveredLines += 1;
       }
-      sawDA = true;
     }
   } else if (line.startsWith('BRF:')) {
-    totalBranches += Number(line.slice(4)) || 0;
-    sawBranchSummary = true;
+    summaryTotalBranches += Number(line.slice(4)) || 0;
   } else if (line.startsWith('BRH:')) {
-    coveredBranches += Number(line.slice(4)) || 0;
-    sawBranchSummary = true;
+    summaryCoveredBranches += Number(line.slice(4)) || 0;
   } else if (line.startsWith('BRDA:')) {
     const parts = line.slice(5).split(',');
     if (parts.length >= 4) {
       const hitRaw = parts[3]?.trim() ?? '0';
       const hitCount = hitRaw === '-' ? 0 : Number(hitRaw) || 0;
-      totalBranches += 1;
+      detailTotalBranches += 1;
       if (hitCount > 0) {
-        coveredBranches += 1;
+        detailCoveredBranches += 1;
       }
-      sawBRDA = true;
     }
   }
 }
 
-if (!sawSummary && !sawDA) {
+const useLineDetail = detailTotalLines > 0;
+const totalLines = useLineDetail ? detailTotalLines : summaryTotalLines;
+const coveredLines = useLineDetail ? detailCoveredLines : summaryCoveredLines;
+
+const useBranchDetail = detailTotalBranches > 0;
+const totalBranches = useBranchDetail ? detailTotalBranches : summaryTotalBranches;
+const coveredBranches = useBranchDetail ? detailCoveredBranches : summaryCoveredBranches;
+
+if (totalLines === 0) {
   console.error(`No coverage entries found in ${coverageFile}`);
   process.exit(1);
 }
 
-if (!sawBranchSummary && !sawBRDA) {
+if (totalBranches === 0) {
   console.error(`No branch coverage entries found in ${coverageFile}`);
   process.exit(1);
 }
