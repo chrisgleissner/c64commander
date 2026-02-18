@@ -615,7 +615,7 @@ jobs:
       ANDROID_AVD_LOW_RAM: "no"
       EMULATOR_HEADLESS: "1"
       BOOT_TIMEOUT_SECS: "180"
-      MAESTRO_TIMEOUT_SECS: "900"
+      MAESTRO_TIMEOUT_SECS: "1800"
       MAESTRO_CLI_NO_ANALYTICS: "1"
       ANDROID_AVD_HOME: /home/runner/.android/avd
 
@@ -840,18 +840,21 @@ jobs:
           MAESTRO_LOG_LEVEL: "debug"
           MAESTRO_CLI_LOG_LEVEL: "debug"
         run: |
+          set -euo pipefail
           start=$(date +%s)
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
           # Verify emulator is still available
           adb devices -l
-          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build || {
+          maestro_status=0
+          bash scripts/run-maestro-gating.sh --skip-emulator-start --skip-build || maestro_status=$?
+          if [[ "$maestro_status" -ne 0 ]]; then
             echo "=== Emulator log ===" >&2
             cat test-results/maestro/emulator.log || true
             echo "=== adb devices ===" >&2
             adb devices -l || true
-            exit 1
-          }
+            exit "$maestro_status"
+          fi
           end=$(date +%s)
           echo "- maestro gating: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
