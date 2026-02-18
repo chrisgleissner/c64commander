@@ -5,7 +5,8 @@ import path from 'node:path';
 const defaultCoverageFile = 'coverage/lcov-merged.info';
 const fallbackCoverageFile = 'coverage/lcov.info';
 const coverageFile = process.env.COVERAGE_FILE ?? defaultCoverageFile;
-const minCoverage = Number(process.env.COVERAGE_MIN ?? '80');
+const minLineCoverage = Number(process.env.COVERAGE_MIN ?? '80');
+const minBranchCoverage = Number(process.env.COVERAGE_MIN_BRANCH ?? '82');
 
 const filePath = path.resolve(process.cwd(), coverageFile);
 let content = '';
@@ -25,8 +26,12 @@ try {
 
 let totalLines = 0;
 let coveredLines = 0;
+let totalBranches = 0;
+let coveredBranches = 0;
 let sawSummary = false;
 let sawDA = false;
+let sawBranchSummary = false;
+let sawBRDA = false;
 
 for (const line of content.split('\n')) {
   if (line.startsWith('LF:')) {
@@ -45,6 +50,23 @@ for (const line of content.split('\n')) {
       }
       sawDA = true;
     }
+  } else if (line.startsWith('BRF:')) {
+    totalBranches += Number(line.slice(4)) || 0;
+    sawBranchSummary = true;
+  } else if (line.startsWith('BRH:')) {
+    coveredBranches += Number(line.slice(4)) || 0;
+    sawBranchSummary = true;
+  } else if (line.startsWith('BRDA:')) {
+    const parts = line.slice(5).split(',');
+    if (parts.length >= 4) {
+      const hitRaw = parts[3]?.trim() ?? '0';
+      const hitCount = hitRaw === '-' ? 0 : Number(hitRaw) || 0;
+      totalBranches += 1;
+      if (hitCount > 0) {
+        coveredBranches += 1;
+      }
+      sawBRDA = true;
+    }
   }
 }
 
@@ -53,16 +75,29 @@ if (!sawSummary && !sawDA) {
   process.exit(1);
 }
 
-const percent = totalLines === 0 ? 0 : (coveredLines / totalLines) * 100;
-const summary = `Line coverage: ${percent.toFixed(2)}% (covered ${coveredLines} / ${totalLines})`;
-
-console.log(summary);
-
-if (process.env.GITHUB_STEP_SUMMARY) {
-  await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${summary}\n`, 'utf8');
+if (!sawBranchSummary && !sawBRDA) {
+  console.error(`No branch coverage entries found in ${coverageFile}`);
+  process.exit(1);
 }
 
-if (percent + 1e-6 < minCoverage) {
-  console.error(`Coverage below minimum threshold: ${percent.toFixed(2)}% < ${minCoverage}%`);
+const linePercent = totalLines === 0 ? 0 : (coveredLines / totalLines) * 100;
+const branchPercent = totalBranches === 0 ? 0 : (coveredBranches / totalBranches) * 100;
+const lineSummary = `Line coverage: ${linePercent.toFixed(2)}% (covered ${coveredLines} / ${totalLines})`;
+const branchSummary = `Branch coverage: ${branchPercent.toFixed(2)}% (covered ${coveredBranches} / ${totalBranches})`;
+
+console.log(lineSummary);
+console.log(branchSummary);
+
+if (process.env.GITHUB_STEP_SUMMARY) {
+  await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, `- ${lineSummary}\n- ${branchSummary}\n`, 'utf8');
+}
+
+if (linePercent + 1e-6 < minLineCoverage) {
+  console.error(`Line coverage below minimum threshold: ${linePercent.toFixed(2)}% < ${minLineCoverage}%`);
+  process.exit(1);
+}
+
+if (branchPercent + 1e-6 < minBranchCoverage) {
+  console.error(`Branch coverage below minimum threshold: ${branchPercent.toFixed(2)}% < ${minBranchCoverage}%`);
   process.exit(1);
 }

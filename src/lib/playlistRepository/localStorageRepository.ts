@@ -8,6 +8,7 @@ import type {
   TrackRecord,
 } from './types';
 import type { PlaylistDataRepository } from './repository';
+import { addLog } from '@/lib/logging';
 
 type PersistedState = {
   version: 1;
@@ -79,7 +80,10 @@ const safeReadState = (): PersistedState => {
       randomSessionsByPlaylistId: parsed.randomSessionsByPlaylistId ?? {},
     };
   } catch (error) {
-    console.warn('Failed to parse localStorage playlist repository state. Resetting repository state.', { error });
+    addLog('warn', 'Failed to parse localStorage playlist repository state. Resetting repository state.', {
+      storageKey: STORAGE_KEY,
+      error: (error as Error).message,
+    });
     return defaultState();
   }
 };

@@ -7,6 +7,7 @@
  */
 
 import type { HvscIngestionState, HvscStatus } from './hvscTypes';
+import { addLog } from '@/lib/logging';
 
 type HvscUpdateRecord = {
   version: number;
@@ -54,7 +55,10 @@ export const loadHvscState = (): HvscState => {
       updates: parsed.updates ?? {},
     };
   } catch (error) {
-    console.warn('Failed to load HVSC state from storage', { error });
+    addLog('warn', 'Failed to load HVSC state from storage', {
+      storageKey: STORAGE_KEY,
+      error: (error as Error).message,
+    });
     return defaultState();
   }
 };

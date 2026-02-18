@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getLocalStoragePlaylistDataRepository } from '@/lib/playlistRepository';
 import type { PlaylistItemRecord, PlaylistSessionRecord, TrackRecord } from '@/lib/playlistRepository';
+import { addLog } from '@/lib/logging';
+
+vi.mock('@/lib/logging', () => ({
+    addLog: vi.fn(),
+}));
 
 const now = '2026-02-12T00:00:00.000Z';
 
@@ -39,14 +44,15 @@ describe('localStorage playlist repository', () => {
     });
 
     it('recovers from malformed or incompatible persisted state', async () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
-
         localStorage.setItem('c64u_playlist_repo:v1', '{bad json');
         let repository = getLocalStoragePlaylistDataRepository();
         let result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
         expect(result.rows).toEqual([]);
         expect(result.totalMatchCount).toBe(0);
-        expect(warn).toHaveBeenCalled();
+        expect(addLog).toHaveBeenCalledWith('warn', 'Failed to parse localStorage playlist repository state. Resetting repository state.', expect.objectContaining({
+            storageKey: 'c64u_playlist_repo:v1',
+            error: expect.any(String),
+        }));
 
         localStorage.setItem('c64u_playlist_repo:v1', JSON.stringify({ version: 999, tracks: {} }));
         repository = getLocalStoragePlaylistDataRepository();

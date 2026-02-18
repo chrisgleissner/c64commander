@@ -7,6 +7,7 @@ import {
     isSongCategory,
     parseModifiedAt,
 } from '../playFilesUtils';
+import { shouldPersistLegacyPlaylistBlob } from './playbackPersistenceBudget';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { resolveLocalRuntimeFile } from '@/lib/sourceNavigation/localSourceAdapter';
 import { buildLocalPlayFileFromTree, buildLocalPlayFileFromUri } from '@/lib/playback/fileLibraryUtils';
@@ -388,10 +389,23 @@ export function usePlaybackPersistence({
         };
         try {
             const payload = JSON.stringify(stored);
-            localStorage.setItem(playlistStorageKey, payload);
-            const defaultKey = buildPlaylistStorageKey('default');
-            if (playlistStorageKey !== defaultKey) {
-                localStorage.setItem(defaultKey, payload);
+            const payloadBytes = new TextEncoder().encode(payload).byteLength;
+            const shouldPersistLegacy = shouldPersistLegacyPlaylistBlob(playlist, payloadBytes);
+            if (shouldPersistLegacy) {
+                localStorage.setItem(playlistStorageKey, payload);
+                const defaultKey = buildPlaylistStorageKey('default');
+                if (playlistStorageKey !== defaultKey) {
+                    localStorage.setItem(defaultKey, payload);
+                }
+            } else {
+                addErrorLog('Skipping legacy playlist blob persistence due to size budget', {
+                    playlistStorageKey,
+                    playlistItems: playlist.length,
+                    payloadBytes,
+                });
+                localStorage.removeItem(playlistStorageKey);
+                const defaultKey = buildPlaylistStorageKey('default');
+                localStorage.removeItem(defaultKey);
             }
             const serialized = serializePlaylistToRepository(playlist, playlistStorageKey);
             void persistSerializedPlaylist(serialized).catch((error) => {

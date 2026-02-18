@@ -244,15 +244,19 @@ describe('c64api', () => {
     expect(headers['X-C64U-Host']).toBeUndefined();
   });
 
-  it('handles non-json responses gracefully', async () => {
+  it('fails on non-json 200 responses', async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(
       new Response('not-json', { status: 200, headers: { 'content-type': 'text/plain' } }),
     );
 
     const api = new C64API('http://c64u');
-    const result = await api.getVersion();
-    expect(result.errors).toEqual([]);
+    await expect(api.getVersion()).rejects.toThrow('Malformed JSON response for /v1/version');
+    expect(addErrorLogMock).toHaveBeenCalledWith('C64 API parse failed', expect.objectContaining({
+      status: 200,
+      reason: 'non-json-content-type',
+      contentType: 'text/plain',
+    }));
     expect(addLogMock).toHaveBeenCalledWith('debug', 'C64 API request', expect.objectContaining({
       method: 'GET',
       path: '/v1/version',
@@ -385,9 +389,12 @@ describe('c64api', () => {
     );
 
     const api = new C64API('http://c64u');
-    const result = await api.getInfo();
-    expect(result.errors).toEqual([]);
-    expect(addErrorLogMock).toHaveBeenCalledWith('C64 API parse failed', expect.any(Object));
+    await expect(api.getInfo()).rejects.toThrow('Malformed JSON response for /v1/info');
+    expect(addErrorLogMock).toHaveBeenCalledWith('C64 API parse failed', expect.objectContaining({
+      status: 200,
+      reason: 'invalid-json',
+      parseError: expect.any(String),
+    }));
   });
 
   it('throws for native http errors', async () => {
@@ -554,7 +561,7 @@ describe('c64api', () => {
       const api = new C64API('http://c64u');
       const controller = new AbortController();
       const pending = api.getInfo({ signal: controller.signal });
-      void pending.catch(() => {});
+      void pending.catch(() => { });
 
       await Promise.resolve();
       controller.abort();

@@ -41,7 +41,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 @CapacitorPlugin(name = "HvscIngestion")
-class HvscIngestionPlugin : Plugin() {
+open class HvscIngestionPlugin : Plugin() {
   private val logTag = "HvscIngestionPlugin"
   private val scope = CoroutineScope(Dispatchers.IO)
   private var activeJob: Job? = null

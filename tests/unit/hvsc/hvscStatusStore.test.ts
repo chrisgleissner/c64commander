@@ -17,6 +17,11 @@ import {
   updateHvscStatusSummaryFromEvent,
   type HvscStatusSummary,
 } from '@/lib/hvsc/hvscStatusStore';
+import { addLog } from '@/lib/logging';
+
+vi.mock('@/lib/logging', () => ({
+  addLog: vi.fn(),
+}));
 
 describe('hvscStatusStore', () => {
   beforeEach(() => {
@@ -88,12 +93,13 @@ describe('hvscStatusStore', () => {
     });
 
     it('ignores updates when storage is corrupted', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       localStorage.setItem('c64u_hvsc_status:v1', 'invalid-json{');
       const loaded = loadHvscStatusSummary();
       expect(loaded).toEqual(getDefaultHvscStatusSummary());
-      expect(warnSpy).toHaveBeenCalledWith('Failed to load HVSC status summary', expect.any(Object));
-      warnSpy.mockRestore();
+      expect(addLog).toHaveBeenCalledWith('warn', 'Failed to load HVSC status summary', expect.objectContaining({
+        storageKey: 'c64u_hvsc_status:v1',
+        error: expect.any(String),
+      }));
     });
 
     it('ignores updates when summary misses core properties', () => {

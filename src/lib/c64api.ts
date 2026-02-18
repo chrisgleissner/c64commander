@@ -492,17 +492,54 @@ export class C64API {
     return headers;
   }
 
-  private async parseResponseJson<T>(response: Response): Promise<T> {
+  private buildMalformedResponseError(path: string, response: Response, reason: 'non-json-content-type' | 'invalid-json', details?: { contentType?: string; parseError?: string }) {
+    const contentType = details?.contentType ?? response.headers.get('content-type')?.toLowerCase() ?? '';
+    const error = new Error(`Malformed JSON response for ${path}: HTTP ${response.status} (${reason})`) as Error & {
+      code?: 'C64API_MALFORMED_JSON_RESPONSE';
+      c64api?: {
+        path: string;
+        status: number;
+        reason: 'non-json-content-type' | 'invalid-json';
+        contentType: string;
+      };
+    };
+    error.code = 'C64API_MALFORMED_JSON_RESPONSE';
+    error.c64api = {
+      path,
+      status: response.status,
+      reason,
+      contentType,
+    };
+    addErrorLog('C64 API parse failed', buildErrorLogDetails(error, {
+      path,
+      status: response.status,
+      reason,
+      contentType,
+      parseError: details?.parseError,
+    }));
+    return error;
+  }
+
+  private async parseResponseJson<T>(response: Response, path: string, options?: { allowNonJsonSuccess?: boolean }): Promise<T> {
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
     if (!contentType.includes('application/json')) {
-      return { errors: [] } as T;
+      if (options?.allowNonJsonSuccess) {
+        addLog('warn', 'C64 API non-JSON success payload accepted', {
+          path,
+          status: response.status,
+          contentType,
+        });
+        return { errors: [] } as T;
+      }
+      throw this.buildMalformedResponseError(path, response, 'non-json-content-type', { contentType });
     }
     try {
       return await response.clone().json() as T;
     } catch (error) {
-      const err = error as Error;
-      addErrorLog('C64 API parse failed', buildErrorLogDetails(err));
-      return { errors: [] } as T;
+      throw this.buildMalformedResponseError(path, response, 'invalid-json', {
+        contentType,
+        parseError: (error as Error).message,
+      });
     }
   }
 
@@ -671,7 +708,7 @@ export class C64API {
             throw err;
           }
 
-          const parsedBody = await this.parseResponseJson<T>(response);
+          const parsedBody = await this.parseResponseJson<T>(response, path);
           recordRestResponse(action, { status: response.status, body: parsedBody, durationMs, error: null });
           responseRecorded = true;
 
@@ -1075,7 +1112,7 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response);
+    return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
   }
 
   // Drive endpoints
@@ -1149,7 +1186,7 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response);
+    return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
   }
 
   async unmountDrive(drive: 'a' | 'b'): Promise<{ errors: string[] }> {
@@ -1236,7 +1273,7 @@ export class C64API {
           throw error;
         }
 
-        return this.parseResponseJson(response);
+        return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
       } catch (error) {
         const err = error as Error;
         lastError = err;
@@ -1306,7 +1343,7 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response);
+    return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
   }
 
   async runPrg(file: string): Promise<{ errors: string[] }> {
@@ -1350,7 +1387,7 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response);
+    return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
   }
 
   async loadPrg(file: string): Promise<{ errors: string[] }> {
@@ -1394,7 +1431,7 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response);
+    return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
   }
 
   async runCartridge(file: string): Promise<{ errors: string[] }> {
@@ -1438,7 +1475,7 @@ export class C64API {
       throw error;
     }
 
-    return this.parseResponseJson(response);
+    return this.parseResponseJson(response, path, { allowNonJsonSuccess: true });
   }
 }
 

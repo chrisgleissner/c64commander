@@ -144,6 +144,15 @@ Lock/unlock cannot be fully validated in CI. For local Android validation:
 
 If you create/update a Maestro flow for this, follow `doc/testing/maestro.md` and keep the flow runnable locally.
 
+For productionization evidence runs (physical device + startup KPIs), use `doc/testing/physical-device-matrix.md` and execute:
+
+```bash
+bash scripts/startup/stage-local-assets-adb.sh
+npm run startup:baseline
+npm run startup:gate
+npm run startup:gate:hvsc
+```
+
 ## UI typography stability
 
 Root cause (resolved): the app bar and several UI labels used the `font-mono` class, but JetBrains Mono is not bundled. When styles re-applied after interactions, browsers swapped to the default monospace fallback, causing visible font shifts and header height changes. The fix standardizes UI labels/values on the sans-serif stack (`Inter` → `Arial` → system) and removes monospace usage from standard UI elements.

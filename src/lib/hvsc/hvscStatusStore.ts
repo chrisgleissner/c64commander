@@ -7,6 +7,7 @@
  */
 
 import type { HvscProgressEvent } from './hvscTypes';
+import { addLog } from '@/lib/logging';
 
 export type HvscFailureCategory =
   | 'network'
@@ -66,7 +67,10 @@ export const loadHvscStatusSummary = (): HvscStatusSummary => {
     if (!parsed?.download || !parsed?.extraction) return getDefaultHvscStatusSummary();
     return parsed;
   } catch (error) {
-    console.warn('Failed to load HVSC status summary', { error });
+    addLog('warn', 'Failed to load HVSC status summary', {
+      storageKey: STORAGE_KEY,
+      error: (error as Error).message,
+    });
     return getDefaultHvscStatusSummary();
   }
 };

@@ -14,6 +14,11 @@ import {
     saveHvscState,
     updateHvscState,
 } from './hvscStateStore';
+import { addLog } from '@/lib/logging';
+
+vi.mock('@/lib/logging', () => ({
+    addLog: vi.fn(),
+}));
 
 const STORAGE_KEY = 'c64u_hvsc_state:v1';
 
@@ -78,8 +83,6 @@ describe('hvscStateStore', () => {
         it('returns default state when JSON parse fails', () => {
             localStorageMock.getItem.mockReturnValue('invalid json');
 
-            const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
-
             const state = loadHvscState();
 
             expect(state).toEqual({
@@ -91,12 +94,11 @@ describe('hvscStateStore', () => {
                 ingestionSummary: null,
                 updates: {},
             });
-            expect(consoleWarnSpy).toHaveBeenCalledWith(
+            expect(addLog).toHaveBeenCalledWith(
+                'warn',
                 'Failed to load HVSC state from storage',
-                expect.objectContaining({ error: expect.any(SyntaxError) })
+                expect.objectContaining({ error: expect.any(String), storageKey: 'c64u_hvsc_state:v1' })
             );
-
-            consoleWarnSpy.mockRestore();
         });
 
         it('returns default state when parsed value is null', () => {
