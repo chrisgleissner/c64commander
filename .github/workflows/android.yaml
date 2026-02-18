@@ -839,6 +839,7 @@ jobs:
       - name: Run Maestro gating flows
         env:
           CI: "true"
+          CI_RUN_LOWRAM_FLOW: "false"
           MAESTRO_LOG_LEVEL: "debug"
           MAESTRO_CLI_LOG_LEVEL: "debug"
         run: |
