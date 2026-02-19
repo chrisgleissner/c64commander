@@ -41,6 +41,7 @@ const RETRYABLE_IDLE_RECOVERY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const DEDUPEABLE_READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 const READ_REQUEST_BUDGET_WINDOW_MS = 500;
 const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
+const READ_REQUEST_BUDGET_MAX_VALUE_BYTES = 64 * 1024;
 
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
@@ -165,6 +166,22 @@ const cloneBudgetValue = <T>(value: T): T => {
       error: (error as Error).message,
     });
     return value;
+  }
+};
+
+const estimateBudgetValueBytes = (value: unknown): number | null => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'string') return value.length;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value).length;
+  if (value instanceof ArrayBuffer) return value.byteLength;
+  if (ArrayBuffer.isView(value)) return value.byteLength;
+  try {
+    return JSON.stringify(value).length;
+  } catch (error) {
+    addLog('warn', 'Failed to estimate request budget value size', {
+      error: (error as Error).message,
+    });
+    return null;
   }
 };
 
@@ -632,9 +649,19 @@ export class C64API {
   private saveReadRequestBudgetValue(key: string, value: unknown) {
     const nowMs = Date.now();
     this.pruneReadRequestBudget(nowMs);
+    const budgetValue = cloneBudgetValue(value);
+    const estimatedBytes = estimateBudgetValueBytes(budgetValue);
+    if (estimatedBytes !== null && estimatedBytes > READ_REQUEST_BUDGET_MAX_VALUE_BYTES) {
+      addLog('debug', 'Skipping oversized C64 API request budget value', {
+        key,
+        estimatedBytes,
+        maxBytes: READ_REQUEST_BUDGET_MAX_VALUE_BYTES,
+      });
+      return;
+    }
     this.readRequestBudget.set(key, {
       recordedAtMs: nowMs,
-      value: cloneBudgetValue(value),
+      value: budgetValue,
     });
     while (this.readRequestBudget.size > READ_REQUEST_BUDGET_MAX_ENTRIES) {
       const oldestKey = this.readRequestBudget.keys().next().value;

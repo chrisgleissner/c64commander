@@ -103,4 +103,35 @@ describe('ConnectionController', () => {
         expect(invalidateSpy.mock.calls.length).toBe(callCountAfterConnect + 1);
         expect(invalidateSpy).toHaveBeenLastCalledWith({ queryKey: ['c64-info'] });
     });
+
+    it('stops background rediscovery scheduling after leaving demo state', async () => {
+        vi.useFakeTimers();
+        try {
+            connectionState.value = 'DEMO_ACTIVE';
+            const queryClient = new QueryClient();
+
+            const view = render(
+                <QueryClientProvider client={queryClient}>
+                    <ConnectionController />
+                </QueryClientProvider>,
+            );
+
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            connectionState.value = 'REAL_CONNECTED';
+            view.rerender(
+                <QueryClientProvider client={queryClient}>
+                    <ConnectionController />
+                </QueryClientProvider>,
+            );
+
+            discoverConnectionMock.mockClear();
+
+            await vi.advanceTimersByTimeAsync(180_000);
+
+            expect(discoverConnectionMock).not.toHaveBeenCalledWith('background');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

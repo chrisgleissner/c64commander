@@ -13,6 +13,7 @@ import {
   addHvscProgressListener,
   cancelHvscInstall,
   checkForHvscUpdates,
+  recoverStaleIngestionState,
   getHvscCacheStatus,
   getHvscFolderListing,
   getHvscSong,
@@ -99,6 +100,12 @@ vi.mock('@/lib/hvsc/hvscStateStore', () => ({
 }));
 
 vi.mock('@/lib/hvsc/hvscStatusStore', () => ({
+  loadHvscStatusSummary: vi.fn(() => ({
+    download: { status: 'idle' },
+    extraction: { status: 'idle' },
+    lastUpdatedAt: new Date(0).toISOString(),
+  })),
+  saveHvscStatusSummary: vi.fn(),
   updateHvscStatusSummaryFromEvent: vi.fn(),
 }));
 
@@ -692,5 +699,53 @@ describe('hvscIngestionRuntime', () => {
     await ingestCachedHvsc('token-skip');
 
     expect(extractArchiveEntries).not.toHaveBeenCalled();
+  });
+
+  it('recovers stale ingestion state on cold start', async () => {
+    const { loadHvscStatusSummary, saveHvscStatusSummary } = await import('@/lib/hvsc/hvscStatusStore');
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'installing',
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(loadHvscStatusSummary as any).mockReturnValue({
+      download: { status: 'in-progress' },
+      extraction: { status: 'in-progress' },
+      lastUpdatedAt: new Date(0).toISOString(),
+    });
+
+    const recovered = recoverStaleIngestionState();
+
+    expect(recovered).toBe(true);
+    expect(updateHvscState).toHaveBeenCalledWith(
+      expect.objectContaining({ ingestionState: 'error' }),
+    );
+    expect(vi.mocked(saveHvscStatusSummary as any)).toHaveBeenCalled();
+  });
+
+  it('returns false when stale recovery is not needed', () => {
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    expect(recoverStaleIngestionState()).toBe(false);
+  });
+
+  it('logs warning when native cancellation fails', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    nativeHvscPlugin.cancelIngestion.mockRejectedValueOnce(new Error('cancel failed'));
+
+    await cancelHvscInstall('token-cancel-fail');
+
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      'Failed to cancel native HVSC ingestion',
+      expect.objectContaining({ token: 'token-cancel-fail' }),
+    );
   });
 });

@@ -636,6 +636,37 @@ describe('c64api', () => {
     }
   });
 
+  it('does not retain oversized read responses in the request budget replay cache', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({
+          errors: [],
+          payload: 'x'.repeat(70 * 1024),
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const api = new C64API('http://c64u');
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(addLogMock).toHaveBeenCalledWith(
+        'debug',
+        'Skipping oversized C64 API request budget value',
+        expect.objectContaining({
+          maxBytes: 64 * 1024,
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('bypasses read dedupe and budget replay when bypassCache is true', async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(

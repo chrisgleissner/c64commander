@@ -130,6 +130,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   }, [queue, currentIndex, playTrackInternal]);
 
   useEffect(() => {
+    if (!isPlaying) return;
     const timer = window.setInterval(() => {
       if (!isPlaying || startedAtRef.current === null) return;
       const now = Date.now();

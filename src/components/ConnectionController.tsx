@@ -26,6 +26,7 @@ export function ConnectionController() {
   const queryClient = useQueryClient();
   const { state } = useConnectionState();
   const backgroundTimerRef = useRef<number | null>(null);
+  const backgroundScheduleTokenRef = useRef(0);
   const backgroundFailureCountRef = useRef(0);
   const lastSettingsRef = useRef<{ baseUrl: string; password: string; deviceHost: string } | null>(null);
   const previousStateRef = useRef(state);
@@ -43,6 +44,9 @@ export function ConnectionController() {
   }, [queryClient, state]);
 
   useEffect(() => {
+    const scheduleToken = backgroundScheduleTokenRef.current + 1;
+    backgroundScheduleTokenRef.current = scheduleToken;
+
     const clearTimer = () => {
       if (backgroundTimerRef.current) {
         window.clearTimeout(backgroundTimerRef.current);
@@ -65,6 +69,10 @@ export function ConnectionController() {
       const delayMs = getBackgroundRediscoveryDelayMs(intervalMs, failureCount);
       clearTimer();
       backgroundTimerRef.current = window.setTimeout(() => {
+        if (backgroundScheduleTokenRef.current !== scheduleToken) {
+          clearTimer();
+          return;
+        }
         if (!allowBackgroundRediscovery()) {
           clearTimer();
           return;
@@ -76,7 +84,11 @@ export function ConnectionController() {
             lastProbeFailedAtMs: snapshot.lastProbeFailedAtMs,
           });
           backgroundFailureCountRef.current = nextFailureCount;
-          if (state === 'DEMO_ACTIVE' || state === 'OFFLINE_NO_DEMO') {
+          if (backgroundScheduleTokenRef.current !== scheduleToken) {
+            clearTimer();
+            return;
+          }
+          if (snapshot.state === 'DEMO_ACTIVE' || snapshot.state === 'OFFLINE_NO_DEMO') {
             scheduleNextProbe(nextFailureCount);
           }
         });
