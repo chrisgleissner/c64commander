@@ -104,3 +104,56 @@ Source: `ci-artifacts/startup/hardening-audit-baseline-webplatform.json`
 - 2026-02-19: Replaced previous unrelated plan with focused hardening audit plan.
 - 2026-02-19: Completed audit measurements and invariant derivation.
 - 2026-02-19: Identified two concrete, reproducible invariant violations and prepared minimal hardening actions.
+
+## Phase B implementation status (completed)
+
+### Applied minimal hardening changes
+1. Demand-driven config route behavior:
+  - `src/pages/ConfigBrowserPage.tsx`
+  - Removed eager app config snapshot coupling via `useAppConfigState`.
+  - Replaced with lightweight dirty-flag update using `updateHasChanges(runtimeBaseUrl, true)` on explicit save.
+2. Route-entry invalidation churn reduction:
+  - `src/App.tsx`
+  - Removed route-change query invalidation path; retained visibility-resume invalidation.
+3. Relative URL-safe tracing:
+  - `src/lib/tracing/fetchTrace.ts`
+  - Added URL parsing fallback base so relative URLs no longer emit parse warnings.
+
+### Related tests updated/added
+- Updated: `tests/unit/pages/ConfigBrowserPage.test.tsx`
+- Added/expanded: `tests/unit/tracing/fetchTrace.test.ts`
+
+## Phase C verification status (completed)
+
+### After-state audit artifacts
+- `ci-artifacts/startup/hardening-audit-after-webplatform.json`
+- `ci-artifacts/startup/hardening-audit-config-direct-after.json`
+- `ci-artifacts/startup/hardening-audit-diff.json`
+
+### Before/after measured outcomes
+1. Enter config from home call burst:
+  - Before: `22` REST requests
+  - After: `1` REST request
+2. Direct `/config` pre-expand retrieval:
+  - Before: broad category subtree fetch fan-out
+  - After: reduced to base info/config list requests only (no hidden full subtree sweep)
+3. Startup warning/error cleanliness:
+  - Before: `2` warnings / `0` errors
+  - After: `0` warnings / `0` errors
+
+### Mandatory validation runs
+- `npm run test:coverage` ✅
+  - Global branch coverage: `82.03%` (>= 82% gate)
+- `npm run lint` ✅
+- `npm run test` ✅ (`214` files passed, `1831` tests passed)
+- `npm run build` ✅
+- `./build` ✅ (including Playwright suite + Android build workflow)
+
+## Final invariant validation
+- A1 Visibility-driven pre-expand retrieval: **PASS**
+- A2 No hidden speculative config sweep on `/config` entry: **PASS**
+- B1 First render before non-essential work: **PASS**
+- B2 Zero startup warnings/errors in normal proxy-path startup: **PASS**
+- C1 Capability detection non-blocking: **PASS**
+- C2 Deterministic override precedence: **PASS**
+- D1 Startup/call-graph determinism with explicit before/after evidence: **PASS**

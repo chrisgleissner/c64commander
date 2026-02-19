@@ -103,4 +103,125 @@ describe('fetchTrace', () => {
         await expect(window.fetch('/api/rest/v1/info')).rejects.toThrow('network down');
         expect(recordTraceErrorMock).toHaveBeenCalled();
     });
+
+    it('records thrown Response failures', async () => {
+        window.fetch = vi.fn().mockRejectedValue(
+            new Response('{"error":"proxy"}', {
+                status: 502,
+                headers: { 'content-type': 'application/json' },
+            }),
+        ) as unknown as typeof window.fetch;
+        registerFetchTrace();
+
+        await expect(window.fetch('/api/rest/v1/info')).rejects.toBeInstanceOf(Response);
+        expect(recordRestResponseMock).toHaveBeenCalled();
+        expect(recordTraceErrorMock).toHaveBeenCalled();
+    });
+
+    it('records non-error thrown values', async () => {
+        window.fetch = vi.fn().mockRejectedValue('plain-failure') as unknown as typeof window.fetch;
+        registerFetchTrace();
+
+        await expect(window.fetch('/api/rest/v1/info')).rejects.toBe('plain-failure');
+        expect(recordTraceErrorMock).toHaveBeenCalled();
+    });
+
+    it('skips tracing when suppression flag is enabled', async () => {
+        registerFetchTrace();
+
+        await window.fetch('/api/rest/v1/info', { __c64uTraceSuppressed: true });
+
+        expect(recordRestRequestMock).not.toHaveBeenCalled();
+        expect(recordRestResponseMock).not.toHaveBeenCalled();
+    });
+
+    it('traces URL object inputs', async () => {
+        registerFetchTrace();
+
+        await window.fetch(new URL('http://localhost/api/rest/v1/info'));
+
+        expect(recordRestRequestMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('extracts headers and blob body from Request inputs', async () => {
+        registerFetchTrace();
+
+        const request = new Request('http://localhost/api/rest/v1/info', {
+            method: 'PUT',
+            headers: new Headers({ 'x-upload': '1' }),
+            body: new Blob(['abc'], { type: 'text/plain' }),
+        });
+
+        await window.fetch(request);
+
+        const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as {
+            method: string;
+            body: string;
+        };
+        expect(payload.method).toBe('PUT');
+        expect(payload.body).toBe('[body]');
+    });
+
+    it('handles non-json response parsing paths without failing', async () => {
+        window.fetch = vi.fn().mockResolvedValue(
+            new Response('ok', {
+                status: 200,
+                headers: { 'content-type': 'text/plain' },
+            }),
+        ) as unknown as typeof window.fetch;
+        registerFetchTrace();
+
+        await window.fetch('/api/rest/v1/info', {
+            method: 'POST',
+            headers: [['x-test', '1']],
+            body: 'not-json',
+        });
+
+        expect(recordRestRequestMock).toHaveBeenCalled();
+        expect(recordRestResponseMock).toHaveBeenCalled();
+    });
+
+    it('captures form-data request bodies', async () => {
+        registerFetchTrace();
+        const formData = new FormData();
+        formData.append('text', 'value');
+        formData.append('blob', new Blob(['file-bytes'], { type: 'text/plain' }));
+
+        await window.fetch('/api/rest/v1/info', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as { body: { type: string } };
+        expect(payload.body.type).toBe('form-data');
+    });
+
+    it('warns and continues when traced JSON response body is invalid', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const responseWithCloneFailure = {
+            ok: true,
+            status: 200,
+            clone: () => {
+                throw new Error('clone failed');
+            },
+        } as unknown as Response;
+        window.fetch = vi.fn().mockResolvedValue(responseWithCloneFailure) as unknown as typeof window.fetch;
+        registerFetchTrace();
+
+        await window.fetch('/api/rest/v1/info');
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            'Failed to parse traced fetch response body',
+            expect.any(Object),
+        );
+        expect(recordRestResponseMock).toHaveBeenCalled();
+    });
+
+    it('falls back safely when URL parsing fails', async () => {
+        registerFetchTrace();
+
+        await window.fetch('http://[::1/v1/info');
+
+        expect(recordRestRequestMock).toHaveBeenCalled();
+    });
 });
