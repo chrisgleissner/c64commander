@@ -1,207 +1,101 @@
-# PLANS: Review-3 Production Readiness Audit
+# PLANS: End-to-End Production Readiness Research Audit
 
-## Mission
-Deliver an evidence-driven production-readiness review for C64 Core Commander without modifying production code. Final outputs must be written under `doc/research/review-3/` and include `REPORT.md`, required tables, metrics, logs, and artifacts.
+## Scope
+Deep research-only audit of C64 Commander for performance, reliability, memory, rendering, network efficiency, playback robustness, HVSC ingest resilience, test/CI coverage, and architecture/concurrency risk. No production code edits are permitted.
 
-## Hard Rule
-- No production code changes are allowed.
-- Allowed edits are limited to:
-  - `PLANS.md`
-  - files under `doc/research/review-3/`
+## Evidence Rules
+- Primary runtime evidence must come from Android device `SM_N9005` on serial `2113b87f`.
+- User-requested serial `2113B87f` is case-variant; adb resolves only lowercase serial in this environment.
+- All adb/logcat/install/instrumentation commands must explicitly include `-s 2113b87f`.
+- No evidence from Samsung S21 FE (`R5CRC3ZY9XH`) or emulator is admissible for runtime findings.
 
-## Stage 0: Setup and Guardrails
-Status: `completed`
+## Deliverables
+1. `PLANS.md` (this file): authoritative execution state.
+2. `doc/research/review-4/PRODUCTION_RESEARCH_AUDIT.md`: full final report with 100+ uniquely identified issues (`C64C-001`+).
+3. Supporting raw artifacts under `doc/research/review-4/`:
+   - `artifacts/`
+   - `logs/`
+   - `metrics/`
+   - `tables/`
+   - `screenshots/`
 
-### Tasks
-- Create/verify artifact directories:
-  - `doc/research/review-3/artifacts/`
-  - `doc/research/review-3/metrics/`
-  - `doc/research/review-3/logs/`
-  - `doc/research/review-3/screenshots/`
-  - `doc/research/review-3/tables/`
-- Initialize command chronicle in `doc/research/review-3/logs/commands-run.md`.
-- Capture environment snapshot (tool versions, OS, Node, npm, Java if present).
+## Phase Plan
 
-### Checkpoint
-- Artifact tree exists and command log has first entries.
+### Phase 1 - Build and Deployment Validation
+Status: `in_progress`
+- Build latest codebase and Android debug APK.
+- Install on `2113b87f`.
+- Verify installed version/build identity.
+- Determine whether dynamic animation-reduction exists and capture evidence.
+- Measure cold start and warm start with timestamps/logcat markers.
 
-### Acceptance Criteria
-- All required directories exist.
-- Repro environment details captured.
+### Phase 2 - Startup Performance Profiling
+Status: `pending`
+- Measure time to first meaningful interaction.
+- Measure time to home page interactive.
+- Capture startup logcat.
+- Identify synchronous startup blockers and bridge initialization weight.
+- Detect redundant startup REST traffic.
 
-## Stage 1: Architecture + Hot-Path Mapping (Static)
-Status: `completed`
+### Phase 3 - High-Value Interactive Exploration
+Status: `pending`
+- Derive interaction routes from Playwright + Maestro coverage.
+- Execute scripted tap/swipe/navigation loops on device.
+- Stress Home/Play/Disks/Config/Settings/Docs.
+- Exercise expand/collapse, sliders, repeated tab switching, config/disks ping-pong.
+- Observe lag, frame pacing symptoms, pressed-state persistence, delayed overlays, REST bursts.
 
-### Tasks
-- Read architecture-critical files and map top sensitive flows:
-  - startup/first interactive
-  - navigation among main pages
-  - discovery/connection lifecycle
-  - REST + FTP interaction patterns
-  - HVSC/large ingest paths
-  - dense rendering surfaces (Home/Play lists)
-- Produce suspect module inventory and risk hypotheses.
+### Phase 4 - Network and REST Behaviour Analysis
+Status: `pending`
+- Quantify requests on Config entry, panel expand/collapse, Disks<->Config switching.
+- Detect duplicate/idempotent bursts and call rates.
+- Evaluate lazy-loading and cache usage effectiveness.
 
-### Data Capture
-- `doc/research/review-3/tables/top-suspect-modules.md`
-- Notes in `doc/research/review-3/artifacts/static-hot-path-notes.md`
+### Phase 5 - Animation and Rendering Analysis
+Status: `pending`
+- Evaluate collapsible animation lag, slider latency, page transition smoothness.
+- Validate dynamic animation reduction behavior (if implemented).
+- Record frame pacing indicators and main-thread stall evidence.
 
-### Checkpoint
-- Each required flow mapped to concrete files/components.
+### Phase 6 - Music Playback Reliability
+Status: `pending`
+- Validate autoplay progression behavior.
+- Lock/unlock and background reliability checks.
+- Assess audio focus, media session, foreground service/wakelock handling.
 
-### Acceptance Criteria
-- Every target flow includes involved components, potential bottlenecks, memory/I-O notes.
+### Phase 7 - HVSC Download and Ingest Robustness
+Status: `pending`
+- Observe download/ingest memory pressure.
+- Inspect partial download, resume, and concurrency/backpressure behavior.
+- Capture OOM/ANR/error patterns where present.
 
-## Stage 2: Empirical Web + Docker Readiness Analysis
-Status: `completed`
+### Phase 8 - Memory and Resource Profiling
+Status: `pending`
+- Collect heap/native memory, CPU sampling, GC activity across idle and stress scenarios.
+- Compare startup/navigation/playback/HVSC ingest footprints.
+- Identify leak indicators and repeated listener/subscription buildup.
 
-### Tasks
-- Build and inspect bundle/chunks.
-- Measure startup and key timing proxies available in existing scripts.
-- Review web server runtime configuration and memory behavior assumptions.
-- Assess low-resource constraints:
-  - concrete Pi Zero 2 W target
-  - artificial worst-case reference `<=512 MB RAM`, `2 cores @ 2 GHz`
+### Phase 9 - Test Coverage and CI Gaps
+Status: `pending`
+- Audit unit/integration/E2E/Maestro/native coverage.
+- Identify missing real-device lifecycle and stress scenarios.
+- Run coverage and map blind spots to production risks.
 
-### Commands (planned)
-- `npm run build`
-- `npm run build:web-server`
-- `npm run startup:baseline` (if runnable)
-- `npm run test:web-platform` (if useful)
-- inspect `dist/` and `web/server/`
+### Phase 10 - Architecture and Concurrency Audit
+Status: `pending`
+- Review event/state architecture, lifecycle boundaries, bridge call frequency, render cascades, debounce/throttle correctness.
+- Classify systemic risks and coupling hotspots.
 
-### Data Capture
-- `doc/research/review-3/metrics/web-bundle-sizes.txt`
-- `doc/research/review-3/metrics/web-runtime-notes.md`
-- optional exported artifacts in `doc/research/review-3/artifacts/`
+### Phase 11 - Consolidation and Prioritization
+Status: `pending`
+- Produce `PRODUCTION_RESEARCH_AUDIT.md` with:
+  - Executive summary, methodology, tooling, environment
+  - Phase findings
+  - 100+ issues with required fields and evidence
+  - Severity/effort matrix, risk heatmap, top-20 remediation candidates
+  - Anti-patterns, systemic architecture risks
+  - Test expansion and instrumentation recommendations
 
-### Checkpoint
-- Bundle and runtime observations recorded with evidence.
-
-### Acceptance Criteria
-- Web Docker section includes verified measurements + explicit gaps.
-
-## Stage 3: Android + iOS Runtime Risk Review
-Status: `completed`
-
-### Tasks
-- Android: review Capacitor bridge overhead surfaces, lifecycle transitions, memory-pressure risk points, JSON payload handling.
-- iOS: review WKWebView + bridge lifecycle constraints and platform-specific pitfalls from source + existing CI/workflows.
-- Select and justify a low-resource iOS baseline comparable to Android baseline.
-
-### Commands (planned)
-- `npm run cap:build` (if feasible)
-- `cd android && ./gradlew test`
-- `npm run ios:build:sim` (if feasible in environment)
-- inspect native plugin code under `android/` and `ios/`.
-
-### Data Capture
-- `doc/research/review-3/metrics/android-jvm-tests.txt`
-- `doc/research/review-3/metrics/ios-baseline-rationale.md`
-- logs excerpts in `doc/research/review-3/artifacts/native-risk-notes.md`
-
-### Checkpoint
-- Android/iOS findings grounded in code and runnable evidence where possible.
-
-### Acceptance Criteria
-- Baseline mapping and lifecycle/perf risk statements marked verified vs inferred.
-
-## Stage 4: Test Adequacy + Flakiness Investigation
-Status: `completed`
-
-### Tasks
-- Inventory all test layers (unit, Playwright, Maestro, Android JVM, fuzz, coverage gates).
-- Build feature-to-test matrix.
-- Run representative suites and coverage.
-- Identify flaky patterns (timeouts, sleeps, race-sensitive selectors, nondeterminism).
-
-### Commands (planned)
-- `npm run test`
-- `npm run test:e2e` (or scoped subset if full run is infeasible)
-- `npm run test:coverage`
-- inspect Maestro and Playwright configs/flows.
-
-### Data Capture
-- `doc/research/review-3/tables/coverage-matrix.md`
-- `doc/research/review-3/tables/maestro-flaky-suspects.md`
-- `doc/research/review-3/metrics/coverage-summary.txt`
-
-### Checkpoint
-- Coverage matrix and flakiness suspects fully populated.
-
-### Acceptance Criteria
-- Gaps are concrete, prioritized, and tied to features and risk.
-
-## Stage 5: UI Consistency + Small-Screen Readability Scrub
-Status: `completed`
-
-### Tasks
-- Audit visual consistency across pages/components against UX guidelines.
-- Focus on 5.5-inch screen constraints: typography, spacing, truncation, touch target size, loading/error consistency.
-- Use available screenshots and test artifacts; generate additional snapshots if feasible.
-
-### Data Capture
-- `doc/research/review-3/tables/ui-consistency-audit.md`
-- screenshots under `doc/research/review-3/screenshots/`
-
-### Checkpoint
-- High-value small-scope consistency follow-ups identified.
-
-### Acceptance Criteria
-- No major refactor proposals; recommendations are incremental and specific.
-
-## Stage 6: Production Rollout Risk Register
-Status: `completed`
-
-### Tasks
-- Consolidate crash, memory, performance, network resilience, and observability risks.
-- Add severity, likelihood, evidence, and mitigation proposals.
-
-### Data Capture
-- `doc/research/review-3/tables/risk-register.md`
-
-### Checkpoint
-- Top-10 ordered risks ready for executive summary.
-
-### Acceptance Criteria
-- Each risk has evidence path and clear rationale.
-
-## Stage 7: Final Report Synthesis
-Status: `completed`
-
-### Tasks
-- Write `doc/research/review-3/REPORT.md` with all required sections:
-  - executive summary + top 10 risks
-  - verified vs inferred statements
-  - baseline rationale/mapping
-  - findings by category with evidence
-  - evidence appendix with links
-  - prioritized follow-up backlog (impact, effort, validation, rollback risk)
-  - reproducibility section with commands/environment assumptions
-- Internal consistency check across all artifacts.
-
-### Checkpoint
-- Report references existing artifact files only.
-
-### Acceptance Criteria
-- Report is complete, evidence-backed, and reproducible.
-
-## Investigation Risks and Mitigations
-- Risk: local environment cannot run Android/iOS/Docker profiling fully.
-  - Mitigation: mark as partial verification, capture static evidence, and define explicit follow-up experiments.
-- Risk: long-running suites exceed time budget.
-  - Mitigation: run targeted representative subsets and clearly document limits.
-- Risk: noisy/dirty worktree from concurrent agents.
-  - Mitigation: do not revert unrelated changes; confine edits to approved paths.
-
-## Progress Ledger
-- 2026-02-18: Stage 0 started.
-- 2026-02-18: Stage 0 completed (artifact tree + command log + environment snapshot).
-- 2026-02-18: Stage 1 started.
-- 2026-02-18: Stage 1 completed (hot-path mapping + suspect module table + static notes).
-- 2026-02-18: Stage 2 completed (web build + Docker constrained runtime + startup baseline metrics consolidated).
-- 2026-02-18: Stage 3 completed (Android/iOS native risk review + iOS baseline rationale captured).
-- 2026-02-18: Stage 4 completed (unit + coverage + targeted Playwright + flakiness matrix artifacts).
-- 2026-02-18: Stage 5 completed (small-screen/readability audit + screenshot bundle).
-- 2026-02-18: Stage 6 completed (prioritized risk register with evidence links).
-- 2026-02-18: Stage 7 completed (`REPORT.md` synthesized with reproducibility appendix and follow-up backlog).
+## Progress Log
+- 2026-02-19: Plan initialized for full audit execution.
+- 2026-02-19: User requirement updated: place all research findings under `doc/research/review-4/`.
