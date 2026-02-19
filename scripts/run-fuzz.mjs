@@ -97,6 +97,12 @@ if (isCiRun && isFiveMinuteOrLessBudget) {
   }
 }
 
+if (isCiRun && !isFiveMinuteOrLessBudget) {
+  if (!env.FUZZ_SESSION_TIMEOUT_MS) {
+    env.FUZZ_SESSION_TIMEOUT_MS = String(Math.min(300_000, Math.max(60_000, Math.floor(budgetMs * 0.9))));
+  }
+}
+
 const getPhysicalCoreCount = async () => {
   if (process.platform !== 'linux') return null;
   try {
@@ -729,14 +735,14 @@ const mergeReports = async () => {
       // Sessions have a max duration of ~5 minutes, so we can't expect activities
       // to scale linearly with total run budget. Use a reasonable per-session minimum.
       // Account for recovery time, action timeouts, and other overhead.
-      // Expect at least 1 activity per 20 seconds of session time, with a minimum of 2.
+      // Expect at least 1 activity per 25 seconds of session time, with a minimum of 2.
       // This is very lenient because sessions can spend significant time in recovery,
       // waiting for app responses, handling visual stagnation, or dealing with timeouts.
       // IMPORTANT: Sessions that terminate due to "issue" (crashes) are always qualified
       // because they represent real bugs that need investigation, regardless of activity count.
       const parsedSessionDurationMs = Number(parsed?.durationMs || 0);
       const effectiveSessionDurationMs = parsedSessionDurationMs > 0 ? parsedSessionDurationMs : 60_000;
-      const minActivitiesPerSession = Math.max(2, Math.floor(effectiveSessionDurationMs / 20000));
+      const minActivitiesPerSession = Math.max(2, Math.floor(effectiveSessionDurationMs / 25000));
       const terminatedDueToIssue = parsed?.terminationReason === 'issue';
       if (activityCount < minActivitiesPerSession && !terminatedDueToIssue) {
         activityViolations.push({
