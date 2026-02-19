@@ -31,7 +31,7 @@ import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace'
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction';
 import { installConsoleDiagnosticsBridge } from '@/lib/diagnostics/logger';
-import { invalidateForRouteChange, invalidateForVisibilityResume } from '@/lib/query/c64QueryInvalidation';
+import { invalidateForVisibilityResume } from '@/lib/query/c64QueryInvalidation';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ConfigBrowserPage = lazy(() => import('./pages/ConfigBrowserPage'));
@@ -54,21 +54,10 @@ const queryClient = new QueryClient({
 const RouteRefresher = () => {
   const location = useLocation();
   const client = useQueryClient();
-  const [isVisible, setIsVisible] = useState(() => !document.hidden);
-  const didInitRouteRefresher = useRef(false);
-
-  useEffect(() => {
-    if (!didInitRouteRefresher.current) {
-      didInitRouteRefresher.current = true;
-      return;
-    }
-    invalidateForRouteChange(client, location.pathname);
-  }, [location.pathname, client]);
 
   useEffect(() => {
     const handleVisibility = () => {
       const visible = !document.hidden;
-      setIsVisible(visible);
       if (visible) {
         invalidateForVisibilityResume(client, location.pathname);
       }

@@ -11,7 +11,6 @@ import { wrapUserEvent } from '@/lib/tracing/userTrace';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, ChevronDown, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 import { useC64Categories, useC64Category, useC64SetConfig, useC64Connection } from '@/hooks/useC64Connection';
-import { useAppConfigState } from '@/hooks/useAppConfigState';
 import { ConfigItemRow } from '@/components/ConfigItemRow';
 import { useC64UpdateConfigBatch } from '@/hooks/useC64Connection';
 import { Input } from '@/components/ui/input';
@@ -33,6 +32,7 @@ import {
 } from '@/lib/config/audioMixerSolo';
 import { normalizeConfigItem, type NormalizedConfigItem } from '@/lib/config/normalizeConfigItem';
 import { AppBar } from '@/components/AppBar';
+import { updateHasChanges } from '@/lib/config/appConfigStore';
 
 type ConfigListItem = {
   name: string;
@@ -576,11 +576,13 @@ function CategorySection({
 }
 
 export default function ConfigBrowserPage() {
-  const { status } = useC64Connection();
+  const { status, runtimeBaseUrl } = useC64Connection();
   const { data: categoriesData, isLoading } = useC64Categories();
   const [searchQuery, setSearchQuery] = useState('');
   const { setConfigExpanded } = useRefreshControl();
-  const { isApplying, markChanged } = useAppConfigState();
+  const markChanged = useCallback(() => {
+    updateHasChanges(runtimeBaseUrl, true);
+  }, [runtimeBaseUrl]);
 
   const filteredCategories = useMemo(() => {
     if (!categoriesData?.categories) return [];
@@ -598,7 +600,6 @@ export default function ConfigBrowserPage() {
         subtitle={
           <span>
             {categoriesData?.categories.length || 0} categories
-            {isApplying ? <span className="ml-2 text-[11px] text-muted-foreground">Applying changes…</span> : null}
           </span>
         }
       >

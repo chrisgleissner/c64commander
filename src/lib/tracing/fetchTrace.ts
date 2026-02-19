@@ -11,9 +11,16 @@ import { decrementRestInFlight, incrementRestInFlight } from '@/lib/diagnostics/
 import { recordRestRequest, recordRestResponse, recordTraceError } from '@/lib/tracing/traceSession';
 import type { TraceActionContext } from '@/lib/tracing/types';
 
+const parseUrl = (url: string) => {
+  const fallbackBase = typeof window !== 'undefined'
+    ? window.location.origin
+    : 'http://localhost';
+  return new URL(url, fallbackBase);
+};
+
 const normalizeUrlPath = (url: string) => {
   try {
-    const parsed = new URL(url);
+    const parsed = parseUrl(url);
     return `${parsed.pathname}${parsed.search}`;
   } catch (error) {
     console.warn('Failed to normalize fetch trace URL', { url, error });
@@ -96,7 +103,7 @@ const extractBody = (body: BodyInit | null | undefined) => {
 
 const shouldTraceUrl = (url: string) => {
   try {
-    const parsed = new URL(url);
+    const parsed = parseUrl(url);
     return parsed.pathname.includes('/v1/');
   } catch (error) {
     console.warn('Failed to parse fetch trace URL for filtering', { url, error });
