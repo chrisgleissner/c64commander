@@ -41,6 +41,7 @@ vi.mock('@/lib/config/appSettings', () => ({
 describe('smokeMode', () => {
   beforeEach(() => {
     localStorage.clear();
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = false;
     vi.mocked(addLog).mockClear();
     vi.mocked(saveDebugLoggingEnabled).mockClear();
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
@@ -75,6 +76,7 @@ describe('smokeMode', () => {
 
   it('loads config from native storage when local storage is empty', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    (window as Window & { __c64uReadSmokeConfigFromFilesystem?: boolean }).__c64uReadSmokeConfigFromFilesystem = true;
     vi.mocked(Filesystem.readFile).mockResolvedValue({
       data: JSON.stringify({
         target: 'mock',

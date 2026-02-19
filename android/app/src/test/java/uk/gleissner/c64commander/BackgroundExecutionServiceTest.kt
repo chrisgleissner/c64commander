@@ -56,6 +56,12 @@ class BackgroundExecutionServiceTest {
         field.set(null, value)
     }
 
+    private fun getPrivateField(name: String): Any? {
+        val field = BackgroundExecutionService::class.java.getDeclaredField(name)
+        field.isAccessible = true
+        return field.get(service)
+    }
+
     @Test
     fun serviceStartsSetsIsRunning() {
         controller.create()
@@ -148,21 +154,34 @@ class BackgroundExecutionServiceTest {
     }
 
     @Test
-    fun wakelockTimeoutConstantIsReasonable() {
-        // WakeLock timeout must be bounded and positive
-        assertTrue("WakeLock timeout must be positive",
-            BackgroundExecutionService.WAKELOCK_TIMEOUT_MS > 0)
-        assertTrue("WakeLock timeout must be at most 30 minutes",
-            BackgroundExecutionService.WAKELOCK_TIMEOUT_MS <= 30 * 60 * 1000L)
+    fun serviceDoesNotAutoStopWithoutDueAt() {
+        controller.create()
+        controller.startCommand(0, 0)
+
+        ShadowLooper.shadowMainLooper().idleFor(2, TimeUnit.MINUTES)
+
+        assertTrue("Service should remain running without dueAt until explicit stop", BackgroundExecutionService.isRunning)
     }
 
     @Test
-    fun idleTimeoutConstantIsReasonable() {
-        // Idle timeout must be bounded and positive
-        assertTrue("Idle timeout must be positive",
-            BackgroundExecutionService.IDLE_TIMEOUT_MS > 0)
-        assertTrue("Idle timeout must be at most 5 minutes",
-            BackgroundExecutionService.IDLE_TIMEOUT_MS <= 5 * 60 * 1000L)
+    fun serviceStartInitializesMediaSessionAndAudioFocusState() {
+        controller.create()
+        controller.startCommand(0, 0)
+
+        assertNotNull("MediaSession should be initialized when service starts", getPrivateField("mediaSession"))
+        assertNotNull("AudioManager should be initialized when service starts", getPrivateField("audioManager"))
+    }
+
+    @Test
+    fun serviceDestroyReleasesMediaSessionAndAudioFocusState() {
+        controller.create()
+        controller.startCommand(0, 0)
+
+        controller.destroy()
+
+        assertNull("MediaSession should be released on destroy", getPrivateField("mediaSession"))
+        assertNull("AudioManager reference should clear on destroy", getPrivateField("audioManager"))
+        assertNull("AudioFocusRequest should clear on destroy", getPrivateField("audioFocusRequest"))
     }
 
     @Test

@@ -7,6 +7,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem } from '@capacitor/filesystem';
 
 // Mock Capacitor before importing smokeMode
 vi.mock('@capacitor/core', () => ({
@@ -56,9 +58,11 @@ describe('smokeMode', () => {
             configurable: true,
         });
         vi.clearAllMocks();
+        vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     });
 
     afterEach(() => {
+        vi.unstubAllEnvs();
         vi.resetModules();
     });
 
@@ -164,6 +168,40 @@ describe('smokeMode', () => {
             await initializeSmokeMode();
 
             expect(localStorageMock.setItem).toHaveBeenCalledWith('c64u_device_host', '192.168.1.100');
+        });
+
+        it('skips native smoke file read on startup when no bootstrap signal is present', async () => {
+            localStorageMock.getItem.mockImplementation((key: string) => {
+                if (key === 'c64u_smoke_config') return null;
+                if (key === 'c64u_smoke_mode_enabled') return null;
+                return null;
+            });
+            vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+
+            const { initializeSmokeMode } = await import('./smokeMode');
+            await initializeSmokeMode();
+
+            expect(Filesystem.readFile).not.toHaveBeenCalled();
+        });
+
+        it('reads native smoke file when explicit bootstrap flag is enabled', async () => {
+            localStorageMock.getItem.mockImplementation((key: string) => {
+                if (key === 'c64u_smoke_config') return null;
+                if (key === 'c64u_smoke_mode_enabled') return null;
+                return null;
+            });
+            vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+            vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
+            vi.mocked(Filesystem.readFile).mockResolvedValue({
+                data: JSON.stringify({ target: 'mock', readOnly: true, debugLogging: false }),
+            } as any);
+
+            const { initializeSmokeMode } = await import('./smokeMode');
+            const result = await initializeSmokeMode();
+
+            expect(Filesystem.readFile).toHaveBeenCalledTimes(1);
+            expect(result?.target).toBe('mock');
+            vi.unstubAllEnvs();
         });
     });
 

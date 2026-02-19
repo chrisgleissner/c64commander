@@ -2,13 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { installApk, waitForBoot, getDeviceModel } from './helpers/device.mjs';
+import { ensureDeviceReadyForAutomation, installApk, waitForBoot, getDeviceModel } from './helpers/device.mjs';
 import { writeSmokeConfig, waitForSmokeState, readSmokeStatus } from './helpers/smokeConfig.mjs';
 import { createEvidenceManager } from './helpers/evidence.mjs';
 import { startExternalMockServer } from './helpers/mockC64Server.mjs';
 import { tapTab, tapConnectivityIndicator } from './helpers/ui.mjs';
 import { sleep, sanitizeSegment } from './helpers/utils.mjs';
-import { adbForceStop, adbClearApp, adbStartActivity } from './helpers/adb.mjs';
+import { adbForceStop, adbClearApp } from './helpers/adb.mjs';
 
 const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -166,7 +166,7 @@ const run = async () => {
         sleep,
         capture: (label) => evidence.captureScreenshot(label),
         startFreshApp: async () => {
-          await adbForceStop(options.emulatorId, options.appId).catch(() => {});
+          await adbForceStop(options.emulatorId, options.appId).catch(() => { });
           await adbClearApp(options.emulatorId, options.appId);
           await writeSmokeConfig(options.emulatorId, options.appId, {
             target: options.target,
@@ -174,8 +174,12 @@ const run = async () => {
             readOnly: true,
             debugLogging: true,
           });
-          await adbStartActivity(options.emulatorId, options.mainActivity);
-          await sleep(3000);
+          await ensureDeviceReadyForAutomation({
+            deviceId: options.emulatorId,
+            appId: options.appId,
+            mainActivity: options.mainActivity,
+          });
+          await sleep(1200);
         },
         waitForSmokeState: async (state, timeoutSeconds) => {
           const payload = await waitForSmokeState(options.emulatorId, options.appId, state, timeoutSeconds);
@@ -252,7 +256,7 @@ const run = async () => {
     }
   }
 
-  await mockServer?.close?.().catch(() => {});
+  await mockServer?.close?.().catch(() => { });
 
   if (failures.length) {
     throw new Error(`Android emulator smoke tests failed:\n${failures.join('\n')}`);

@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@capacitor/filesystem', () => ({
     Directory: { Data: 'DATA' },
     Filesystem: {
+        mkdir: vi.fn(),
+        stat: vi.fn(),
         readdir: vi.fn(),
         readFile: vi.fn(),
     },
@@ -63,12 +65,14 @@ describe('hvscSongLengthService', () => {
 
     describe('ensureHvscSonglengthsReadyOnColdStart', () => {
         it('calls loadOnColdStart on first invocation', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
             await ensureHvscSonglengthsReadyOnColdStart();
             expect(mockFacade.loadOnColdStart).toHaveBeenCalledTimes(1);
         });
 
         it('is idempotent on second invocation', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
             await ensureHvscSonglengthsReadyOnColdStart();
             await ensureHvscSonglengthsReadyOnColdStart();
@@ -93,9 +97,13 @@ describe('hvscSongLengthService', () => {
 
     describe('discoverSonglengthFiles', () => {
         it('returns md5 before txt and skips missing roots', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir)
                 .mockResolvedValueOnce({ files: ['Songlengths.txt', 'Songlengths.md5'] } as any)
                 .mockRejectedValueOnce(new Error('missing'));
+            vi.mocked(Filesystem.stat)
+                .mockResolvedValueOnce({ type: 'file' } as any)
+                .mockResolvedValueOnce({ type: 'file' } as any);
             vi.mocked(Filesystem.readFile)
                 .mockResolvedValueOnce({ data: btoa('md5=0:10') } as any)
                 .mockResolvedValueOnce({ data: btoa('txt=0:20') } as any);
@@ -106,10 +114,24 @@ describe('hvscSongLengthService', () => {
             expect(files[0].path.toLowerCase().endsWith('.md5')).toBe(true);
             expect(files[1].path.toLowerCase().endsWith('.txt')).toBe(true);
         });
+
+        it('skips stat-missing files without read attempts', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+            vi.mocked(Filesystem.readdir)
+                .mockResolvedValueOnce({ files: ['Songlengths.md5'] } as any)
+                .mockResolvedValueOnce({ files: [] } as any);
+            vi.mocked(Filesystem.stat).mockRejectedValueOnce(new Error('File does not exist'));
+
+            const files = await __test__.discoverSonglengthFiles();
+
+            expect(files).toEqual([]);
+            expect(Filesystem.readFile).not.toHaveBeenCalled();
+        });
     });
 
     describe('reloadHvscSonglengthsOnConfigChange', () => {
         it('calls reloadOnConfigChange', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
             await reloadHvscSonglengthsOnConfigChange();
             expect(mockFacade.reloadOnConfigChange).toHaveBeenCalledTimes(1);
@@ -118,6 +140,7 @@ describe('hvscSongLengthService', () => {
 
     describe('resolveHvscSonglengthDuration', () => {
         it('ensures cold-start loaded then delegates to facade', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
             const result = await resolveHvscSonglengthDuration({ virtualPath: '/DEMOS/test.sid' });
             expect(result.durationSeconds).toBe(42);
@@ -134,6 +157,7 @@ describe('hvscSongLengthService', () => {
 
     describe('resetHvscSonglengths', () => {
         it('resets state and allows re-load', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
             await ensureHvscSonglengthsReadyOnColdStart();
             expect(mockFacade.loadOnColdStart).toHaveBeenCalledTimes(1);
@@ -146,6 +170,7 @@ describe('hvscSongLengthService', () => {
 
     describe('concurrent load deduplication', () => {
         it('coalesces concurrent calls into a single load', async () => {
+            vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
             vi.mocked(Filesystem.readdir).mockResolvedValue({ files: [] } as any);
             let resolveLoad!: () => void;
             mockFacade.reloadOnConfigChange.mockReturnValue(

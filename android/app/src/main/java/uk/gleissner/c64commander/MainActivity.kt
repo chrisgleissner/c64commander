@@ -11,9 +11,52 @@ package uk.gleissner.c64commander
 import android.app.ActivityManager
 import android.os.Bundle
 import com.getcapacitor.BridgeActivity
+import java.io.File
 
 class MainActivity : BridgeActivity() {
+  private fun ensureCapacitorPluginAssetPath() {
+    val pluginsPath = File(filesDir, "public/plugins")
+    if (pluginsPath.isFile) return
+    try {
+      if (pluginsPath.isDirectory && !pluginsPath.deleteRecursively()) {
+        AppLogger.warn(
+          this,
+          "MainActivity",
+          "Failed to reset Capacitor plugin asset path",
+          "MainActivity",
+          IllegalStateException("deleteRecursively returned false for ${pluginsPath.absolutePath}"),
+        )
+        return
+      }
+
+      val parent = pluginsPath.parentFile
+      if (parent != null && !parent.exists() && !parent.mkdirs()) {
+        AppLogger.warn(
+          this,
+          "MainActivity",
+          "Failed to create Capacitor plugin asset parent directory",
+          "MainActivity",
+          IllegalStateException("mkdirs returned false for ${parent.absolutePath}"),
+        )
+        return
+      }
+
+      if (!pluginsPath.exists()) {
+        pluginsPath.writeText("[]")
+      }
+    } catch (error: Exception) {
+      AppLogger.warn(
+        this,
+        "MainActivity",
+        "Failed to prepare Capacitor plugin asset path",
+        "MainActivity",
+        error,
+      )
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
+    ensureCapacitorPluginAssetPath()
     registerPlugin(BackgroundExecutionPlugin::class.java)
     registerPlugin(FolderPickerPlugin::class.java)
     registerPlugin(MockC64UPlugin::class.java)
@@ -21,7 +64,6 @@ class MainActivity : BridgeActivity() {
     registerPlugin(FtpClientPlugin::class.java)
     registerPlugin(HvscIngestionPlugin::class.java)
     registerPlugin(SecureStoragePlugin::class.java)
-    registerPlugin(DiagnosticsBridgePlugin::class.java)
     super.onCreate(savedInstanceState)
 
     val manager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager

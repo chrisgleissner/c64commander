@@ -12,7 +12,9 @@ import { installAsyncContextPropagation } from "./lib/tracing/traceActionContext
 import { registerFetchTrace } from "./lib/tracing/fetchTrace";
 import { registerUserInteractionCapture } from "./lib/tracing/userInteractionCapture";
 import { registerTraceBridge } from "./lib/tracing/traceBridge";
-import { primeStoredPassword } from "./lib/secureStorage";
+import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
+import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
+import { addErrorLog } from "./lib/logging";
 import "./index.css";
 
 const loadFonts = () => {
@@ -23,12 +25,54 @@ const loadFonts = () => {
 	document.head.appendChild(link);
 };
 
-loadFonts();
-// Install async context propagation first - must be before any tracing setup
-installAsyncContextPropagation();
-registerTraceBridge();
-registerFetchTrace();
-registerUserInteractionCapture();
-void primeStoredPassword();
+const scheduleAfterFirstPaint = (work: () => void) => {
+	if (import.meta.env.VITE_ENABLE_TEST_PROBES === "1") {
+		work();
+		return;
+	}
+	if (typeof window === "undefined") {
+		work();
+		return;
+	}
+	const runWhenIdle = () => {
+		const win = window as Window & {
+			requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+		};
+		if (typeof win.requestIdleCallback === "function") {
+			win.requestIdleCallback(() => work(), { timeout: 1200 });
+			return;
+		}
+		window.setTimeout(work, 0);
+	};
+	window.requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
+			runWhenIdle();
+		});
+	});
+};
 
+const startDeferredStartupBootstrap = () => {
+	loadFonts();
+	// Async context propagation must be installed before trace hooks.
+	installAsyncContextPropagation();
+	registerTraceBridge();
+	registerFetchTrace();
+	registerUserInteractionCapture();
+	markStartupBootstrapComplete();
+	void import("./lib/secureStorage")
+		.then(({ primeStoredPassword }) => primeStoredPassword())
+		.catch((error) => {
+			const err = error as Error;
+			addErrorLog("Deferred secure storage bootstrap failed", {
+				error: {
+					name: err.name,
+					message: err.message,
+					stack: err.stack,
+				},
+			});
+		});
+};
+
+initializeRuntimeMotionMode();
 createRoot(document.getElementById("root")!).render(<App />);
+scheduleAfterFirstPaint(startDeferredStartupBootstrap);

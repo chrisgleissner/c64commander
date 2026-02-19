@@ -886,21 +886,79 @@ public final class BackgroundExecutionPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setDueAtMs", returnType: CAPPluginReturnPromise),
     ]
 
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var dueTimer: DispatchSourceTimer?
+
+    private func clearDueTimer() {
+        dueTimer?.cancel()
+        dueTimer = nil
+    }
+
+    private func endBackgroundTaskIfNeeded() {
+        guard backgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTask)
+        backgroundTask = .invalid
+    }
+
     @objc public func start(_ call: CAPPluginCall) {
-        IOSDiagnostics.log(.info, "BackgroundExecution start is a no-op on iOS", details: ["origin": "native"])
+        if backgroundTask != .invalid {
+            call.resolve()
+            return
+        }
+
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "C64CommanderBackgroundExecution") { [weak self] in
+            IOSDiagnostics.log(.warn, "BackgroundExecution task expired on iOS", details: ["origin": "native"])
+            self?.endBackgroundTaskIfNeeded()
+        }
+
+        if backgroundTask == .invalid {
+            IOSDiagnostics.log(.warn, "BackgroundExecution start unavailable on iOS", details: ["origin": "native"])
+        } else {
+            IOSDiagnostics.log(.info, "BackgroundExecution task started on iOS", details: ["origin": "native"])
+        }
         call.resolve()
     }
 
     @objc public func stop(_ call: CAPPluginCall) {
-        IOSDiagnostics.log(.info, "BackgroundExecution stop is a no-op on iOS", details: ["origin": "native"])
+        clearDueTimer()
+        endBackgroundTaskIfNeeded()
+        IOSDiagnostics.log(.info, "BackgroundExecution task stopped on iOS", details: ["origin": "native"])
         call.resolve()
     }
 
     @objc public func setDueAtMs(_ call: CAPPluginCall) {
-        let dueAtMs = call.getInt("dueAtMs")
-        IOSDiagnostics.log(.debug, "BackgroundExecution setDueAtMs is a no-op on iOS", details: [
+        clearDueTimer()
+        guard let dueAtMs = call.getInt("dueAtMs") else {
+            IOSDiagnostics.log(.debug, "BackgroundExecution due timer cleared on iOS", details: ["origin": "native"])
+            call.resolve()
+            return
+        }
+
+        let nowMs = Int(Date().timeIntervalSince1970 * 1000)
+        let delayMs = max(0, dueAtMs - nowMs)
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+        timer.schedule(deadline: .now() + .milliseconds(delayMs), repeating: .never)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            let firedAtMs = Int(Date().timeIntervalSince1970 * 1000)
+            self.notifyListeners("backgroundAutoSkipDue", data: [
+                "dueAtMs": dueAtMs,
+                "firedAtMs": firedAtMs,
+            ])
+            IOSDiagnostics.log(.info, "BackgroundExecution due timer fired on iOS", details: [
+                "origin": "native",
+                "dueAtMs": dueAtMs,
+                "firedAtMs": firedAtMs,
+            ])
+            self.clearDueTimer()
+        }
+        dueTimer = timer
+        timer.resume()
+
+        IOSDiagnostics.log(.debug, "BackgroundExecution due timer set on iOS", details: [
             "origin": "native",
-            "dueAtMs": dueAtMs as Any,
+            "dueAtMs": dueAtMs,
+            "delayMs": delayMs,
         ])
         call.resolve()
     }

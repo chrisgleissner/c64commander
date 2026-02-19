@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --c64-motion-duration-scale: 1;
+}
+
+:root[data-c64-motion-mode='reduced'] {
+  --c64-motion-duration-scale: 0;
+}
+
+:root.c64-motion-reduced * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
 /* C64 Ultimate Controller - Design System */
 
 @layer base {

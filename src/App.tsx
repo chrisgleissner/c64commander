@@ -11,24 +11,15 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
-import React, { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import React, { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { TabBar } from "@/components/TabBar";
 import { ConnectionController } from '@/components/ConnectionController';
 import { DemoModeInterstitial } from '@/components/DemoModeInterstitial';
-import HomePage from './pages/HomePage';
-import ConfigBrowserPage from "./pages/ConfigBrowserPage";
-import SettingsPage from "./pages/SettingsPage";
-import DocsPage from "./pages/DocsPage";
-import NotFound from "./pages/NotFound";
-import PlayFilesPage from './pages/PlayFilesPage';
-import DisksPage from './pages/DisksPage.tsx';
-import CoverageProbePage from './pages/CoverageProbePage';
 import { RefreshControlProvider } from "@/hooks/useRefreshControl";
 import { addErrorLog, addLog } from "@/lib/logging";
 import { loadDebugLoggingEnabled } from "@/lib/config/appSettings";
-import { FolderPicker } from "@/lib/native/folderPicker";
 import { getPlatform } from "@/lib/native/platform";
 import { redactTreeUri } from "@/lib/native/safUtils";
 import { SidPlayerProvider } from "@/hooks/useSidPlayer";
@@ -40,9 +31,16 @@ import { createActionContext, getActiveAction } from '@/lib/tracing/actionTrace'
 import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/tracing/traceSession';
 import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction';
 import { installConsoleDiagnosticsBridge } from '@/lib/diagnostics/logger';
-import { startNativeDiagnosticsBridge, stopNativeDiagnosticsBridge } from '@/lib/native/diagnosticsBridge';
-import { startNativeDebugSnapshotPublisher } from '@/lib/diagnostics/nativeDebugSnapshots';
-import { startWebServerLogBridge } from '@/lib/diagnostics/webServerLogs';
+import { invalidateForRouteChange, invalidateForVisibilityResume } from '@/lib/query/c64QueryInvalidation';
+
+const HomePage = lazy(() => import('./pages/HomePage'));
+const ConfigBrowserPage = lazy(() => import('./pages/ConfigBrowserPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const DocsPage = lazy(() => import('./pages/DocsPage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const PlayFilesPage = lazy(() => import('./pages/PlayFilesPage'));
+const DisksPage = lazy(() => import('./pages/DisksPage'));
+const CoverageProbePage = lazy(() => import('./pages/CoverageProbePage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,13 +55,14 @@ const RouteRefresher = () => {
   const location = useLocation();
   const client = useQueryClient();
   const [isVisible, setIsVisible] = useState(() => !document.hidden);
+  const didInitRouteRefresher = useRef(false);
 
   useEffect(() => {
-    client.invalidateQueries({
-      predicate: (query) =>
-        Array.isArray(query.queryKey) &&
-        query.queryKey[0]?.toString().startsWith("c64"),
-    });
+    if (!didInitRouteRefresher.current) {
+      didInitRouteRefresher.current = true;
+      return;
+    }
+    invalidateForRouteChange(client, location.pathname);
   }, [location.pathname, client]);
 
   useEffect(() => {
@@ -71,16 +70,12 @@ const RouteRefresher = () => {
       const visible = !document.hidden;
       setIsVisible(visible);
       if (visible) {
-        client.invalidateQueries({
-          predicate: (query) =>
-            Array.isArray(query.queryKey) &&
-            query.queryKey[0]?.toString().startsWith("c64"),
-        });
+        invalidateForVisibilityResume(client, location.pathname);
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [client]);
+  }, [client, location.pathname]);
 
   return null;
 };
@@ -93,33 +88,44 @@ const shouldEnableCoverageProbe = () => {
   return false;
 };
 
-const AppRoutes = () => (
-  <BrowserRouter>
-    <GlobalErrorListener />
-    <GlobalButtonInteractionModel />
-    <RouteRefresher />
-    <DebugStartupLogger />
-    <DiagnosticsRuntimeBridge />
-    <TraceContextBridge />
-    <GlobalDiagnosticsOverlay />
-    <ConnectionController />
-    <DemoModeInterstitial />
-    {shouldEnableCoverageProbe() && <TestHeartbeat />}
-    <Routes>
-      {shouldEnableCoverageProbe() ? (
-        <Route path="/__coverage__" element={<CoverageProbePage />} />
-      ) : null}
-      <Route path="/" element={<HomePage />} />
-      <Route path="/config" element={<ConfigBrowserPage />} />
-      <Route path="/play" element={<PlayFilesPage />} />
-      <Route path="/disks" element={<DisksPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
-      <Route path="/docs" element={<DocsPage />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-    <TabBar />
-  </BrowserRouter>
+const RouteLoadingFallback = () => (
+  <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
+    Loading screen...
+  </div>
 );
+
+const AppRoutes = () => {
+  const coverageProbeEnabled = shouldEnableCoverageProbe();
+  return (
+    <BrowserRouter>
+      <GlobalErrorListener />
+      <GlobalButtonInteractionModel />
+      <RouteRefresher />
+      <DebugStartupLogger />
+      <DiagnosticsRuntimeBridge />
+      <TraceContextBridge />
+      <GlobalDiagnosticsOverlay />
+      <ConnectionController />
+      <DemoModeInterstitial />
+      {coverageProbeEnabled && <TestHeartbeat />}
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          {coverageProbeEnabled ? (
+            <Route path="/__coverage__" element={<CoverageProbePage />} />
+          ) : null}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/config" element={<ConfigBrowserPage />} />
+          <Route path="/play" element={<PlayFilesPage />} />
+          <Route path="/disks" element={<DisksPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/docs" element={<DocsPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
+      <TabBar />
+    </BrowserRouter>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -204,14 +210,47 @@ const GlobalButtonInteractionModel = () => {
 const DiagnosticsRuntimeBridge = () => {
   useEffect(() => {
     const uninstallConsoleBridge = installConsoleDiagnosticsBridge();
-    const stopDebugSnapshotPublisher = startNativeDebugSnapshotPublisher();
-    const stopWebServerLogBridge = startWebServerLogBridge();
-    void startNativeDiagnosticsBridge();
+    let disposed = false;
+    let started = false;
+    let stopNativeDiagnosticsBridge: (() => Promise<void>) | null = null;
+    let stopDebugSnapshotPublisher: (() => void) | null = null;
+    let stopWebServerLogBridge: (() => void) | null = null;
+
+    const startDeferredBridges = async () => {
+      if (started || disposed) return;
+      started = true;
+      const [
+        diagnosticsBridgeModule,
+        nativeDebugSnapshotsModule,
+        webServerLogsModule,
+      ] = await Promise.all([
+        import('@/lib/native/diagnosticsBridge'),
+        import('@/lib/diagnostics/nativeDebugSnapshots'),
+        import('@/lib/diagnostics/webServerLogs'),
+      ]);
+      if (disposed) return;
+      stopNativeDiagnosticsBridge = diagnosticsBridgeModule.stopNativeDiagnosticsBridge;
+      stopDebugSnapshotPublisher = nativeDebugSnapshotsModule.startNativeDebugSnapshotPublisher();
+      stopWebServerLogBridge = webServerLogsModule.startWebServerLogBridge();
+      await diagnosticsBridgeModule.startNativeDiagnosticsBridge();
+    };
+
+    const handleStartupMilestone = (event: Event) => {
+      const detail = (event as CustomEvent<{ name?: string }>).detail;
+      if (detail?.name !== 'first-meaningful-interaction') return;
+      void startDeferredBridges();
+    };
+
+    window.addEventListener('c64u-startup-milestone', handleStartupMilestone);
     return () => {
+      disposed = true;
+      window.removeEventListener('c64u-startup-milestone', handleStartupMilestone);
       uninstallConsoleBridge();
-      stopDebugSnapshotPublisher();
-      stopWebServerLogBridge();
-      void stopNativeDiagnosticsBridge();
+      stopDebugSnapshotPublisher?.();
+      stopWebServerLogBridge?.();
+      if (stopNativeDiagnosticsBridge) {
+        void stopNativeDiagnosticsBridge();
+      }
     };
   }, []);
   return null;
@@ -256,7 +295,8 @@ const DebugStartupLogger = () => {
   useEffect(() => {
     if (getPlatform() !== 'android') return;
     if (!loadDebugLoggingEnabled()) return;
-    FolderPicker.getPersistedUris()
+    void import('@/lib/native/folderPicker')
+      .then(({ FolderPicker }) => FolderPicker.getPersistedUris())
       .then((result) => {
         const uris = result?.uris ?? [];
         addLog('debug', 'SAF persisted URIs on startup', {

@@ -38,6 +38,9 @@ const NETWORK_RETRY_DELAY_MS = 180;
 const SID_UPLOAD_MAX_ATTEMPTS = 3;
 const SID_UPLOAD_RETRYABLE_HTTP_STATUS = new Set([502, 503, 504]);
 const RETRYABLE_IDLE_RECOVERY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const DEDUPEABLE_READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const READ_REQUEST_BUDGET_WINDOW_MS = 500;
+const READ_REQUEST_BUDGET_MAX_ENTRIES = 256;
 
 const isDnsFailure = (message: string) => /unknown host|enotfound|ename_not_found|dns/i.test(message);
 const isNetworkFailureMessage = (message: string) =>
@@ -114,6 +117,55 @@ const waitWithAbortSignal = async (ms: number, signal?: AbortSignal) => {
 
     signal.addEventListener('abort', onAbort, { once: true });
   });
+};
+
+const awaitPromiseWithAbortSignal = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    return Promise.reject(createAbortError());
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      signal.removeEventListener('abort', onAbort);
+      reject(createAbortError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then((value) => {
+      signal.removeEventListener('abort', onAbort);
+      resolve(value);
+    }).catch((error) => {
+      signal.removeEventListener('abort', onAbort);
+      reject(error);
+    });
+  });
+};
+
+const buildReadRequestDedupeKey = (
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  body: RequestInit['body'],
+) => {
+  if (!DEDUPEABLE_READ_METHODS.has(method)) return null;
+  if (body !== undefined && body !== null) return null;
+  const headerKey = Object.entries(headers)
+    .map(([name, value]) => [name.toLowerCase(), String(value)] as const)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => `${name}:${value}`)
+    .join('|');
+  return `${method} ${url} ${headerKey}`;
+};
+
+const cloneBudgetValue = <T>(value: T): T => {
+  if (typeof structuredClone !== 'function') return value;
+  try {
+    return structuredClone(value);
+  } catch (error) {
+    addLog('warn', 'Failed to clone request budget value', {
+      error: (error as Error).message,
+    });
+    return value;
+  }
 };
 
 const getIdleContext = () => {
@@ -435,6 +487,8 @@ export class C64API {
   private password?: string;
   private deviceHost: string;
   private apiBaseUrl: string;
+  private readonly inFlightReadRequests = new Map<string, Promise<unknown>>();
+  private readonly readRequestBudget = new Map<string, { recordedAtMs: number; value: unknown }>();
 
   constructor(
     baseUrl: string = DEFAULT_BASE_URL,
@@ -454,10 +508,12 @@ export class C64API {
       this.deviceHost = normalizeDeviceHost(getDeviceHostFromBaseUrl(url));
     }
     this.apiBaseUrl = resolvePlatformApiBaseUrl(this.deviceHost, url);
+    this.resetRequestReadState();
   }
 
   setPassword(password?: string) {
     this.password = password;
+    this.resetRequestReadState();
   }
 
   setDeviceHost(deviceHost?: string) {
@@ -466,6 +522,7 @@ export class C64API {
       this.deviceHost,
       buildBaseUrlFromDeviceHost(this.deviceHost),
     );
+    this.resetRequestReadState();
   }
 
   getBaseUrl() {
@@ -556,6 +613,44 @@ export class C64API {
     });
   }
 
+  private resetRequestReadState() {
+    this.inFlightReadRequests.clear();
+    this.readRequestBudget.clear();
+  }
+
+  private getReadRequestBudgetValue<T>(key: string, nowMs: number): T | null {
+    this.pruneReadRequestBudget(nowMs);
+    const cached = this.readRequestBudget.get(key);
+    if (!cached) return null;
+    if ((nowMs - cached.recordedAtMs) > READ_REQUEST_BUDGET_WINDOW_MS) {
+      this.readRequestBudget.delete(key);
+      return null;
+    }
+    return cloneBudgetValue(cached.value as T);
+  }
+
+  private saveReadRequestBudgetValue(key: string, value: unknown) {
+    const nowMs = Date.now();
+    this.pruneReadRequestBudget(nowMs);
+    this.readRequestBudget.set(key, {
+      recordedAtMs: nowMs,
+      value: cloneBudgetValue(value),
+    });
+    while (this.readRequestBudget.size > READ_REQUEST_BUDGET_MAX_ENTRIES) {
+      const oldestKey = this.readRequestBudget.keys().next().value;
+      if (typeof oldestKey !== 'string') break;
+      this.readRequestBudget.delete(oldestKey);
+    }
+  }
+
+  private pruneReadRequestBudget(nowMs: number) {
+    this.readRequestBudget.forEach((entry, key) => {
+      if ((nowMs - entry.recordedAtMs) > READ_REQUEST_BUDGET_WINDOW_MS) {
+        this.readRequestBudget.delete(key);
+      }
+    });
+  }
+
   private async request<T>(
     path: string,
     options: (RequestInit & {
@@ -600,7 +695,35 @@ export class C64API {
     delete (requestOptions as { __c64uBypassBackoff?: boolean }).__c64uBypassBackoff;
     delete (requestOptions as { timeoutMs?: number }).timeoutMs;
 
-    return runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => withRestInteraction({
+    const readRequestKey = buildReadRequestDedupeKey(method, url, headers, requestOptions.body);
+    const allowInFlightDedupe = Boolean(readRequestKey) && !bypassCache;
+    const allowBudgetReplay = allowInFlightDedupe && !bypassCooldown;
+
+    if (allowBudgetReplay && readRequestKey) {
+      const cachedValue = this.getReadRequestBudgetValue<T>(readRequestKey, Date.now());
+      if (cachedValue !== null) {
+        addLog('debug', 'C64 API request budget replay hit', {
+          method,
+          path,
+          readRequestKey,
+        });
+        return awaitPromiseWithAbortSignal(Promise.resolve(cachedValue), requestOptions.signal);
+      }
+    }
+
+    if (allowInFlightDedupe && readRequestKey) {
+      const inFlight = this.inFlightReadRequests.get(readRequestKey);
+      if (inFlight) {
+        addLog('debug', 'C64 API in-flight dedupe hit', {
+          method,
+          path,
+          readRequestKey,
+        });
+        return awaitPromiseWithAbortSignal(inFlight as Promise<T>, requestOptions.signal);
+      }
+    }
+
+    const executeRequest = () => runWithImplicitAction(`rest.${method.toLowerCase()}`, async (action) => withRestInteraction({
       action,
       method,
       path,
@@ -617,6 +740,7 @@ export class C64API {
       const canRetryAfterIdle = RETRYABLE_IDLE_RECOVERY_METHODS.has(method);
       const maxAttempts = canRetryAfterIdle && idleContext.wasIdle ? 2 : 1;
       const bodyPayload = extractRequestBody(requestOptions.body);
+      const requestSignal = requestOptions.signal;
       let lastError: unknown = null;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -659,8 +783,8 @@ export class C64API {
             console.info('C64U_HTTP', JSON.stringify({ method, path, url, requestId, attempt }));
           }
 
-          // Use web fetch for all requests - CapacitorHttp patches it on native platforms
-          const outerSignal = requestOptions.signal;
+          // Keep C64U REST calls stateless and avoid cookie bridge churn on native startup.
+          const outerSignal = requestSignal;
           const controller = timeoutMs ? new AbortController() : null;
           const abortFromOuter = () => controller?.abort();
           if (outerSignal && controller) {
@@ -675,6 +799,7 @@ export class C64API {
           const responsePromise = fetch(url, {
             ...requestOptions,
             headers,
+            credentials: requestOptions.credentials ?? 'omit',
             ...(signal ? { signal } : {}),
           });
           let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
@@ -711,6 +836,10 @@ export class C64API {
           const parsedBody = await this.parseResponseJson<T>(response, path);
           recordRestResponse(action, { status: response.status, body: parsedBody, durationMs, error: null });
           responseRecorded = true;
+
+          if (!DEDUPEABLE_READ_METHODS.has(method)) {
+            this.resetRequestReadState();
+          }
 
           return parsedBody;
         } catch (error) {
@@ -756,7 +885,7 @@ export class C64API {
             }));
           }
 
-          const callerAborted = requestOptions.signal?.aborted === true;
+          const callerAborted = requestSignal?.aborted === true;
           const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
           if (shouldRetry) {
             const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
@@ -778,7 +907,7 @@ export class C64API {
               maxAttempts,
               retryDelayMs,
             }));
-            await waitWithAbortSignal(retryDelayMs, requestOptions.signal);
+            await waitWithAbortSignal(retryDelayMs, requestSignal);
             continue;
           }
 
@@ -797,6 +926,23 @@ export class C64API {
 
       throw lastError as Error;
     }));
+
+    if (!allowInFlightDedupe || !readRequestKey) {
+      return executeRequest();
+    }
+
+    const sharedPromise = executeRequest()
+      .then((result) => {
+        if (allowBudgetReplay) {
+          this.saveReadRequestBudgetValue(readRequestKey, result);
+        }
+        return result;
+      })
+      .finally(() => {
+        this.inFlightReadRequests.delete(readRequestKey);
+      });
+    this.inFlightReadRequests.set(readRequestKey, sharedPromise as Promise<unknown>);
+    return awaitPromiseWithAbortSignal(sharedPromise, requestOptions.signal);
   }
 
   private async fetchWithTimeout(
@@ -843,14 +989,14 @@ export class C64API {
         console.info('C64U_HTTP', JSON.stringify({ method, url }));
       }
 
-      // Use web fetch for all requests - CapacitorHttp patches it on native platforms
-      // to handle FormData, Blob, ArrayBuffer, and other complex types natively
+      // Keep upload/control calls stateless to avoid cookie bridge lookups.
       const controller = timeoutMs ? new AbortController() : null;
       const timeoutId = timeoutMs ? setTimeout(() => controller?.abort(), timeoutMs) : null;
       let timeoutPromiseId: ReturnType<typeof setTimeout> | null = null;
       try {
         const responsePromise = fetch(url, {
           ...options,
+          credentials: options.credentials ?? 'omit',
           ...(controller ? { signal: controller.signal } : {}),
         });
         const timeoutPromise = timeoutMs
@@ -939,21 +1085,54 @@ export class C64API {
   }
 
   async getConfigItems(category: string, items: string[]): Promise<ConfigResponse> {
-    const responses = await Promise.allSettled(
-      items.map((item) => this.getConfigItem(category, item)),
-    );
+    const uniqueItems = Array.from(new Set(items));
+    if (!uniqueItems.length) {
+      return {
+        [category]: {
+          items: {},
+        },
+        errors: [],
+      } as ConfigResponse;
+    }
+
     const mergedItems: Record<string, unknown> = {};
-    responses.forEach((result) => {
-      if (result.status !== 'fulfilled') return;
-      const payload = result.value as Record<string, any>;
+    try {
+      const categoryPayload = await this.getCategory(category);
+      const payload = categoryPayload as Record<string, any>;
       const categoryBlock = payload?.[category] ?? payload;
       const itemsBlock = categoryBlock?.items ?? categoryBlock;
-      if (!itemsBlock || typeof itemsBlock !== 'object') return;
-      Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
-        if (name === 'errors') return;
-        mergedItems[name] = config;
+      if (itemsBlock && typeof itemsBlock === 'object') {
+        uniqueItems.forEach((item) => {
+          if (Object.prototype.hasOwnProperty.call(itemsBlock, item)) {
+            mergedItems[item] = (itemsBlock as Record<string, unknown>)[item];
+          }
+        });
+      }
+    } catch (error) {
+      addLog('warn', 'Category config fetch failed; falling back to item fetches', {
+        category,
+        error: (error as Error).message,
       });
-    });
+    }
+
+    const missingItems = uniqueItems.filter((item) => !Object.prototype.hasOwnProperty.call(mergedItems, item));
+    if (missingItems.length > 0) {
+      const responses = await Promise.allSettled(
+        missingItems.map((item) => this.getConfigItem(category, item)),
+      );
+      responses.forEach((result) => {
+        if (result.status !== 'fulfilled') return;
+        const payload = result.value as Record<string, any>;
+        const categoryBlock = payload?.[category] ?? payload;
+        const itemsBlock = categoryBlock?.items ?? categoryBlock;
+        if (!itemsBlock || typeof itemsBlock !== 'object') return;
+        Object.entries(itemsBlock as Record<string, unknown>).forEach(([name, config]) => {
+          if (name === 'errors') return;
+          mergedItems[name] = config;
+        });
+      });
+    }
+
     return {
       [category]: {
         items: mergedItems,

@@ -7,6 +7,7 @@
  */
 
 import { createActionContext, runWithActionTrace } from '@/lib/tracing/actionTrace';
+import { markFirstMeaningfulInteraction } from '@/lib/startup/startupMilestones';
 
 const INSTALL_FLAG = '__c64uUserInteractionCaptureInstalled';
 const COMPONENT_NAME = 'GlobalInteraction';
@@ -89,6 +90,11 @@ const isFallbackInteractive = (element: Element) => {
 const hasDiagnosticsOpenTrigger = (element: Element) =>
   typeof element.closest === 'function' && element.closest('[data-diagnostics-open-trigger]');
 
+const eventHasDiagnosticsOpenTrigger = (event: Event) => {
+  const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+  return path.some((candidate) => isElement(candidate) && hasDiagnosticsOpenTrigger(candidate));
+};
+
 const isDiagnosticsOpenTrigger = (element: Element, event?: Event) => {
   if (hasDiagnosticsOpenTrigger(element)) return true;
   if (!event) return false;
@@ -124,6 +130,7 @@ const traceInteraction = async (action: string, element: Element, event: Event) 
   const label = getMeaningfulLabel(element);
   const name = `${action} ${label}`;
   const context = createActionContext(name, 'user', COMPONENT_NAME);
+  markFirstMeaningfulInteraction(action, label);
 
   // Set up the context BEFORE the actual handler runs.
   // We use a setTimeout(0) to keep the context active until AFTER the handler's
@@ -143,6 +150,7 @@ export const registerUserInteractionCapture = () => {
   (window as any)[INSTALL_FLAG] = true;
 
   const onClick = (event: Event) => {
+    if (eventHasDiagnosticsOpenTrigger(event)) return;
     const element = findInteractiveTarget(event);
     if (!element) return;
     void traceInteraction('click', element, event);
@@ -150,6 +158,7 @@ export const registerUserInteractionCapture = () => {
 
   // Use change (not input) to avoid tracing every keystroke.
   const onChange = (event: Event) => {
+    if (eventHasDiagnosticsOpenTrigger(event)) return;
     const element = findInteractiveTarget(event);
     if (!element) return;
     void traceInteraction('change', element, event);
@@ -157,6 +166,7 @@ export const registerUserInteractionCapture = () => {
 
   // Sliders (Radix) often don't emit native change events.
   const onPointerUp = (event: Event) => {
+    if (eventHasDiagnosticsOpenTrigger(event)) return;
     const element = findInteractiveTarget(event);
     if (!element) return;
     const role = element.getAttribute('role');

@@ -216,13 +216,13 @@ test.describe('Playback file browser', () => {
 
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/info')));
     await waitForRequests(() =>
-      server.requests.filter((req) => req.url.startsWith('/v1/configs/Audio%20Mixer')).length >= 4
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/Audio%20Mixer')).length >= 1
     );
     await waitForRequests(() =>
-      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration')).length >= 2
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration')).length >= 1
     );
     await waitForRequests(() =>
-      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Addressing')).length >= 2
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Addressing')).length >= 1
     );
 
     await clearTraces(page);
@@ -308,14 +308,9 @@ test.describe('Playback file browser', () => {
     await seedUiMocks(page, server.baseUrl);
 
     const initialResponses = [
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%201')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%202')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%201')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%202')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%201%20Address')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%202%20Address')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing')),
     ];
     await page.goto('/play');
     await Promise.all(initialResponses);
