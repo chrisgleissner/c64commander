@@ -59,7 +59,9 @@ import {
     emitDownloadProgress,
     ensureNotCancelledWith,
     downloadArchive,
+    readArchiveBuffer,
 } from '@/lib/hvsc/hvscDownload';
+import { Filesystem } from '@capacitor/filesystem';
 
 import { addLog } from '@/lib/logging';
 
@@ -368,6 +370,17 @@ describe('hvscDownload', () => {
 
     // ── downloadArchive ──
 
+    describe('readArchiveBuffer', () => {
+        it('decodes archive base64 payload through guarded chunked decode', async () => {
+            vi.mocked(Filesystem.stat).mockResolvedValue({ size: 4 } as any);
+            vi.mocked(Filesystem.readFile).mockResolvedValue({ data: 'AQIDBA==' } as any);
+
+            const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+
+            expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
+        });
+    });
+
     describe('downloadArchive', () => {
         const makeOptions = (overrides: Partial<Parameters<typeof downloadArchive>[0]> = {}) => ({
             plan: { type: 'baseline' as const, version: 84 },
@@ -404,12 +417,26 @@ describe('hvscDownload', () => {
             });
 
             const options = makeOptions();
-            await downloadArchive(options);
+            const inMemory = await downloadArchive(options);
 
             const { writeCachedArchive } = await import('@/lib/hvsc/hvscFilesystem');
             expect(writeCachedArchive).toHaveBeenCalledWith('hvsc-baseline-84.7z', expect.any(Uint8Array));
             const progressStages = (options.emitProgress as any).mock.calls.map((call: any[]) => call[0]?.stage);
             expect(progressStages).toContain('download');
+            expect(inMemory).toBeNull();
+        });
+
+        it('retains in-memory buffer when requested', async () => {
+            (globalThis.fetch as any).mockResolvedValue({
+                ok: true,
+                headers: { get: () => '2' },
+                body: null,
+                arrayBuffer: async () => new Uint8Array([7, 8]).buffer,
+            });
+
+            const buffer = await downloadArchive(makeOptions({ retainInMemoryBuffer: true }));
+
+            expect(buffer).toEqual(new Uint8Array([7, 8]));
         });
 
         it('throws on content-length mismatch (streaming)', async () => {

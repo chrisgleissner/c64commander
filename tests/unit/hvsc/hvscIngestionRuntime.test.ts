@@ -25,8 +25,26 @@ import { fetchLatestHvscVersions } from '@/lib/hvsc/hvscReleaseService';
 import { getHvscDurationByMd5, getHvscSongByVirtualPath, listHvscFolder } from '@/lib/hvsc/hvscFilesystem';
 import { deleteLibraryFile, resetLibraryRoot, resetSonglengthsCache, writeLibraryFile, readCachedArchiveMarker } from '@/lib/hvsc/hvscFilesystem';
 import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
-import { addLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { getHvscSonglengthsStats, reloadHvscSonglengthsOnConfigChange } from '@/lib/hvsc/hvscSongLengthService';
+
+const nativeProgressListenerRemove = vi.hoisted(() => vi.fn(async () => undefined));
+const nativeHvscPlugin = vi.hoisted(() => ({
+  ingestHvsc: vi.fn(async () => ({
+    totalEntries: 1,
+    songsIngested: 1,
+    songsDeleted: 0,
+    failedSongs: 0,
+    failedPaths: [],
+    songlengthFilesWritten: 0,
+    metadataRows: 1,
+    metadataUpserts: 1,
+    metadataDeletes: 0,
+    archiveBytes: 10,
+  })),
+  cancelIngestion: vi.fn(async () => undefined),
+  addListener: vi.fn(async () => ({ remove: nativeProgressListenerRemove })),
+}));
 
 const browseIndexMutable = vi.hoisted(() => ({
   upsertSong: vi.fn(),
@@ -49,11 +67,7 @@ vi.mock('@capacitor/filesystem', () => ({
 }));
 
 vi.mock('@capacitor/core', () => ({
-  registerPlugin: vi.fn(() => ({
-    ingestHvsc: vi.fn(),
-    cancelIngestion: vi.fn(async () => undefined),
-    addListener: vi.fn(async () => ({ remove: vi.fn(async () => undefined) })),
-  })),
+  registerPlugin: vi.fn(() => nativeHvscPlugin),
   Capacitor: {
     isNativePlatform: vi.fn(),
     isPluginAvailable: vi.fn(() => false),
@@ -127,6 +141,7 @@ vi.mock('@/lib/sid/sidUtils', () => ({
 
 vi.mock('@/lib/hvsc/hvscBrowseIndexStore', () => ({
   createHvscBrowseIndexMutable: vi.fn(async () => browseIndexMutable),
+  clearHvscBrowseIndexSnapshot: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/logging', () => ({
@@ -156,6 +171,7 @@ describe('hvscIngestionRuntime', () => {
     } as any);
     vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 5, type: 'baseline' } as any);
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    vi.mocked(deleteLibraryFile).mockResolvedValue(undefined as any);
     if (!globalThis.crypto) {
       (globalThis as typeof globalThis & { crypto?: Crypto }).crypto = {
         randomUUID: () => 'uuid',
@@ -380,6 +396,67 @@ describe('hvscIngestionRuntime', () => {
     vi.mocked(reloadHvscSonglengthsOnConfigChange).mockRejectedValueOnce(new Error('reload failed'));
 
     await expect(installOrUpdateHvsc('token-reload-fail')).rejects.toThrow('reload failed');
+  });
+
+  it('records full deletion failure manifest and throws summarized error', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    const deletionList = Array.from({ length: 11 }, (_, index) => `demo-${index + 1}.sid`).join('\n');
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/DELETE.TXT', new TextEncoder().encode(deletionList));
+    });
+    vi.mocked(deleteLibraryFile).mockRejectedValue(new Error('cannot delete'));
+
+    await expect(installOrUpdateHvsc('token-deletion-fail')).rejects.toThrow(/cleanup failed/i);
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      'HVSC deletion manifest',
+      expect.objectContaining({
+        failureCount: 11,
+        failedPaths: expect.arrayContaining(['/demo-1.sid', '/demo-11.sid']),
+      }),
+    );
+  });
+
+  it('escalates repeated cached archive stat failures to diagnostics', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    vi.mocked(Capacitor.isPluginAvailable).mockReturnValue(true);
+    vi.mocked(Filesystem.readdir).mockResolvedValue({ files: ['hvsc-baseline-5.complete.json'] } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 5, type: 'baseline' } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    let statCall = 0;
+    vi.mocked(Filesystem.stat).mockImplementation(async () => {
+      statCall += 1;
+      if (statCall % 2 === 0) {
+        throw new Error('cache stat failed');
+      }
+      return { size: 123, type: 'file' } as any;
+    });
+
+    await ingestCachedHvsc('token-cache-a');
+    await ingestCachedHvsc('token-cache-b');
+
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      'HVSC cache health degraded',
+      expect.objectContaining({
+        archiveName: 'hvsc-baseline-5',
+        failureCount: 2,
+      }),
+    );
+    expect(nativeProgressListenerRemove).toHaveBeenCalled();
   });
 
   it('downloads archives via fetch when cache is missing', async () => {
