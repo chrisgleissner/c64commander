@@ -677,7 +677,7 @@ test.describe('Fuzz Test', () => {
     );
     const defaultSessionTimeoutMs = infraMode
       ? 30_000
-      : Math.max(60_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) * 0.9));
+      : Math.min(300_000, Math.max(60_000, Math.floor((timeBudgetMs ?? defaultTimeBudgetMs) * 0.9)));
     const sessionTimeoutMs = Math.max(60_000, toNumber(process.env.FUZZ_SESSION_TIMEOUT_MS) ?? defaultSessionTimeoutMs);
     const timeoutGraceMs = infraMode
       ? 30_000
@@ -1949,16 +1949,33 @@ test.describe('Fuzz Test', () => {
 
           if (!usedStructuredRecovery) {
             recoveryLadderAttempts += 1;
-            const recoveryResult = await runRecoveryStep(recoveryLadderAttempts);
-            logInteraction(`s=${totalSteps}\ta=recovery\t${recoveryResult.log}`);
-            if (recoveryResult.terminal) {
-              logInteraction(`s=${totalSteps}\ta=session\trecovery-terminate`);
-              recordStuckSessionIssue(
-                'recovery-exhausted',
-                'Structured recovery and deterministic recovery ladder exhausted all steps.',
-              );
-              terminationReason = 'recovery-exhausted';
-              break;
+            try {
+              const recoveryResult = await runRecoveryStep(recoveryLadderAttempts);
+              logInteraction(`s=${totalSteps}\ta=recovery\t${recoveryResult.log}`);
+              if (recoveryResult.terminal) {
+                logInteraction(`s=${totalSteps}\ta=session\trecovery-terminate`);
+                recordStuckSessionIssue(
+                  'recovery-exhausted',
+                  'Structured recovery and deterministic recovery ladder exhausted all steps.',
+                );
+                terminationReason = 'recovery-exhausted';
+                break;
+              }
+            } catch (error) {
+              if (isClosedTargetError(error)) {
+                logInteraction(`s=${totalSteps}\ta=recovery\tladder page-closed`);
+                recordIssueOnce({
+                  severity: 'crash',
+                  message: (error as Error)?.message || 'Page/context closed during recovery ladder.',
+                  source: 'session.page.closed',
+                  stack: (error as Error)?.stack,
+                  interactionIndex: totalSteps,
+                  lastInteractions: interactions.slice(-lastInteractionCount),
+                });
+                terminationReason = 'issue';
+                break;
+              }
+              throw error;
             }
           }
           actionLogged = true;

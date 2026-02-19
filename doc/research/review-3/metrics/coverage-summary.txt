@@ -1,0 +1,10 @@
+Global coverage summary (from doc/research/review-3/logs/npm-run-test-coverage.log)
+- All files: 88.15% statements, 82.05% branches, 84.99% functions, 88.15% lines.
+- Branch threshold status: pass, but with low headroom over the 82% gate (+0.05 pts).
+- Notable weak area: web/server/src/index.ts at 58.10% branch coverage.
+
+Execution profile
+- Command: npm run test:coverage
+- Duration: 1m06s
+- Max RSS: 506,740 kB
+- Exit: 0

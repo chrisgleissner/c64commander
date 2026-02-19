@@ -15,10 +15,13 @@ import type { Page, TestInfo } from '@playwright/test';
 export const validateViewport = async (page: Page, testInfo: TestInfo) => {
   const viewport = page.viewportSize();
   const devicePixelRatio = await page.evaluate(() => window.devicePixelRatio);
-  
+  const projectName = testInfo.project.name.toLowerCase();
+  const isDesktopWebProject = projectName === 'web';
+
   // Viewport width must be reasonable (CSS pixels)
-  // Allow tablet viewport (800px) but reject physical-pixel viewports (>1000px)
-  if (viewport && viewport.width > 1000) {
+  // Allow tablet viewport (800px) for mobile/tablet projects.
+  // Desktop web project intentionally runs at wider viewport sizes.
+  if (!isDesktopWebProject && viewport && viewport.width > 1000) {
     throw new Error(
       `Invalid viewport configuration detected!\n` +
       `  Viewport: ${viewport.width}×${viewport.height}\n` +
@@ -29,7 +32,7 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
       `Screenshot dimensions would be ${viewport.width * devicePixelRatio}×${viewport.height * devicePixelRatio}\n`
     );
   }
-  
+
   // Log viewport info for debugging
   testInfo.annotations.push({
     type: 'viewport-info',
@@ -39,12 +42,12 @@ export const validateViewport = async (page: Page, testInfo: TestInfo) => {
 
 /**
  * Comprehensive visual boundary enforcement.
- * 
+ *
  * Strategy:
  * 1. DOM-level checks: Verify no elements extend beyond viewport
  * 2. Overflow checks: Detect horizontal scroll or clipping
  * 3. Handles all cases: light/dark backgrounds, popups, overlays
- * 
+ *
  * This runs BEFORE screenshot capture to fail fast.
  */
 export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) => {
@@ -62,18 +65,18 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           '[data-sonner-toast], [data-sonner-toaster], .toaster, .toast, [role="status"], [data-state="open"].destructive'
         )
       );
-    
+
     // Check all visible elements
     const elements = document.querySelectorAll('body *');
     elements.forEach((element) => {
       if (isToastElement(element)) return;
       const rect = element.getBoundingClientRect();
       const style = window.getComputedStyle(element);
-      
+
       // Skip if element is not visible
       if (rect.width === 0 || rect.height === 0) return;
       if (style.display === 'none' || style.visibility === 'hidden') return;
-      
+
       // Check if element extends beyond viewport
       const SUBPIXEL_TOLERANCE = 3; // Allow tolerance for subpixel rendering and rounding
       if (rect.width > maxWidth + SUBPIXEL_TOLERANCE) {
@@ -83,7 +86,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
           : '';
         const selector = `${tag}${id}${classes}`.slice(0, 150);
-        
+
         results.push({
           selector,
           width: rect.width,
@@ -98,7 +101,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
           ? `.${element.className.split(/\s+/).filter(Boolean).join('.')}`
           : '';
         const selector = `${tag}${id}${classes}`.slice(0, 150);
-        
+
         results.push({
           selector,
           width: rect.width,
@@ -107,18 +110,18 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
         });
       }
     });
-    
+
     return results;
   }, viewport.width);
 
   if (violations.length > 0) {
     const details = violations
       .slice(0, 5) // Show first 5 violations
-      .map((v: { selector: string; width: number; right: number; reason: string }, i: number) => 
+      .map((v: { selector: string; width: number; right: number; reason: string }, i: number) =>
         `  ${i + 1}. ${v.selector}\n     ${v.reason}`
       )
       .join('\n');
-    
+
     throw new Error(
       `Visual boundary violations detected (${violations.length} total):\n\n${details}\n\n` +
       `Device: ${testInfo.project.name}\n` +
@@ -137,7 +140,7 @@ export const enforceVisualBoundaries = async (page: Page, testInfo: TestInfo) =>
       clientWidth: document.documentElement.clientWidth,
       overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     }));
-    
+
     throw new Error(
       `Horizontal scroll detected:\n` +
       `  Scroll width: ${scrollInfo.scrollWidth}px\n` +

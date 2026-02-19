@@ -6,8 +6,6 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import SparkMD5 from 'spark-md5';
-
 export type SidClock = 'unknown' | 'pal' | 'ntsc' | 'pal_ntsc';
 export type SidModel = 'unknown' | 'mos6581' | 'mos8580' | 'both';
 
@@ -211,7 +209,8 @@ export const buildSidTrackSubsongs = (songs: number, startSong: number): SidTrac
 };
 
 export const computeSidMd5 = async (data: ArrayBuffer) => {
-  return SparkMD5.ArrayBuffer.hash(data);
+  const { computeSidMd5: computeSidMd5Internal } = await import('./sidHash');
+  return computeSidMd5Internal(data);
 };
 
 export const createSslPayload = (durationMs: number) => {

@@ -1,0 +1,3 @@
+== loop 1 ==
+Starting: Intent { cmp=uk.gleissner.c64commander/.MainActivity }
+

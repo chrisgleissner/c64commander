@@ -1,95 +1,112 @@
-# PLAN: Productionization Review Audit
+# PLANS: End-to-End Production Readiness Research Audit
 
-## Objective
-Produce an evidence-backed productionization review for cross-platform release readiness in `doc/research/productionization-review.md`.
+## Scope
+Deep research-only audit of C64 Commander for performance, reliability, memory, rendering, network efficiency, playback robustness, HVSC ingest resilience, test/CI coverage, and architecture/concurrency risk. No production code edits are permitted.
 
-## Inspection Map
+## Evidence Rules
+- Primary runtime evidence must come from Android device `SM_N9005` on serial `2113b87f`.
+- User-requested serial `2113B87f` is case-variant; adb resolves only lowercase serial in this environment.
+- All adb/logcat/install/instrumentation commands must explicitly include `-s 2113b87f`.
+- No evidence from Samsung S21 FE (`R5CRC3ZY9XH`) or emulator is admissible for runtime findings.
 
-### Subsystems
-- HVSC pipeline: `src/lib/hvsc/`, native ingestion bridge (`android/app/src/main/java/uk/gleissner/c64commander/HvscIngestionPlugin.kt`), extraction/download helpers, state/status stores, and HVSC tests.
-- Device I/O layers: REST in `src/lib/c64api.ts`, FTP client layers (`src/lib/ftp/`, `src/lib/native/ftpClient*.ts`), and native FTP plugins on Android/iOS.
-- UX interactions:
-  - CTA press/highlight model in `src/lib/ui/buttonInteraction.ts` and button-like components.
-  - Slider + mute flow in `src/components/ui/slider.tsx` and `src/pages/playFiles/hooks/useVolumeOverride.ts`.
-  - Modal/dialog composition in `src/components/ui/dialog.tsx`, `src/components/ui/alert-dialog.tsx`, and page/dialog consumers.
-- RAM save/load flows: `src/lib/machine/ramOperations.ts`, `src/lib/machine/ramDumpStorage.ts`, `src/pages/home/hooks/useHomeActions.ts`.
-- Persistence/security/observability: `src/lib/logging.ts`, `src/lib/tracing/*`, secure storage bridges, local persistence repositories.
-- Test/CI infrastructure: Vitest/Playwright/Maestro specs, Android JVM tests, telemetry scripts, and `.github/workflows/android.yaml` + `.github/workflows/ios.yaml`.
+## Deliverables
+1. `PLANS.md` (this file): authoritative execution state.
+2. `doc/research/review-4/PRODUCTION_RESEARCH_AUDIT.md`: full final report with 100+ uniquely identified issues (`C64C-001`+).
+3. Supporting raw artifacts under `doc/research/review-4/`:
+   - `artifacts/`
+   - `logs/`
+   - `metrics/`
+   - `tables/`
+   - `screenshots/`
 
-### Required Documents Inspected
-- `README.md`
-- `doc/ux-guidelines.md`
-- `doc/testing/maestro.md`
-- `.github/workflows/android.yaml`
-- `.github/workflows/ios.yaml`
-- `doc/architecture.md`
+## Phase Plan
 
-## Phases and Checklist
+### Phase 1 - Build and Deployment Validation
+Status: `completed`
+- Build latest codebase and Android debug APK.
+- Install on `2113b87f`.
+- Verify installed version/build identity.
+- Determine whether dynamic animation-reduction exists and capture evidence.
+- Measure cold start and warm start with timestamps/logcat markers.
 
-### Phase 1: Baseline Mapping
-- [x] Confirm mandatory workflow docs and constraints.
-- [x] Build subsystem file inventory and key execution paths.
-- [x] Identify platform divergence points (Android/iOS/Web).
+### Phase 2 - Startup Performance Profiling
+Status: `completed`
+- Measure time to first meaningful interaction.
+- Measure time to home page interactive.
+- Capture startup logcat.
+- Identify synchronous startup blockers and bridge initialization weight.
+- Detect redundant startup REST traffic.
 
-### Phase 2: Deep Reliability/Performance/UX Inspection
-- [x] HVSC download/ingest reliability and memory behavior.
-- [x] REST/FTP resilience (timeouts, retries, idempotency, partial failures).
-- [x] Crash surfaces (uncaught promises, lifecycle/plugin exception handling).
-- [x] Performance hot paths and resource cleanup.
-- [x] CTA press-state consistency.
-- [x] Slider/mute state synchronization.
-- [x] Modal/dialog consistency and small-screen behavior.
-- [x] RAM save/load data integrity and failure handling.
-- [x] Security/privacy and logging redaction/storage risk.
+### Phase 3 - High-Value Interactive Exploration
+Status: `completed_with_blocker`
+- Derive interaction routes from Playwright + Maestro coverage.
+- Execute scripted tap/swipe/navigation loops on device.
+- Stress Home/Play/Disks/Config/Settings/Docs.
+- Exercise expand/collapse, sliders, repeated tab switching, config/disks ping-pong.
+- Observe lag, frame pacing symptoms, pressed-state persistence, delayed overlays, REST bursts.
 
-### Phase 3: Test and CI Audit
-- [x] Inventory existing unit/integration/e2e coverage across critical flows.
-- [x] Evaluate crash detection reliability and artifact coverage.
-- [x] Evaluate device realism gaps and mitigations.
-- [x] Map each validated finding to test gaps or existing test coverage.
+### Phase 4 - Network and REST Behaviour Analysis
+Status: `completed`
+- Quantify requests on Config entry, panel expand/collapse, Disks<->Config switching.
+- Detect duplicate/idempotent bursts and call rates.
+- Evaluate lazy-loading and cache usage effectiveness.
 
-### Phase 4: Reporting
-- [x] Draft `doc/research/productionization-review.md` with required section structure.
-- [x] Populate prioritized backlog table with evidence, reproduction steps, and test recommendations.
-- [x] Add “Going Well” evidence-backed notes.
-- [x] Finalize ship recommendation and release gating criteria.
-- [x] Cross-check report for traceable evidence anchors.
+### Phase 5 - Animation and Rendering Analysis
+Status: `completed_with_blocker`
+- Evaluate collapsible animation lag, slider latency, page transition smoothness.
+- Validate dynamic animation reduction behavior (if implemented).
+- Record frame pacing indicators and main-thread stall evidence.
 
-## Candidate Findings (Working Set)
-- HVSC non-native memory amplification during download/extraction.
-- REST response parsing defaults can mask malformed/non-JSON success responses.
-- FTP timeout/retry behavior is inconsistent across web/Android/iOS bridges.
-- CI telemetry gates do not fail on process disappearance signal (`exit 3`).
-- Coverage gate enforces line-only threshold (80%) and does not gate branch coverage.
-- Playlist persistence still writes full JSON blobs to localStorage.
-- Slider/mute core hook has no dedicated hook-level tests.
-- Android native HVSC ingestion plugin has no direct JVM behavior tests.
-- Several localStorage parse failures use `console.warn`, bypassing app diagnostics log store.
+### Phase 6 - Music Playback Reliability
+Status: `completed_with_blocker`
+- Validate autoplay progression behavior.
+- Lock/unlock and background reliability checks.
+- Assess audio focus, media session, foreground service/wakelock handling.
 
-## Validated Findings (Evidence-backed)
-- `F-01` (P1): Non-native HVSC ingestion path still performs full-buffer archive handling and high-memory extraction patterns.
-- `F-02` (P1): CI telemetry gates downgrade monitored process disappearance to warning; jobs can pass despite restart/crash signal.
-- `F-03` (P1): REST parser returns synthetic `{ errors: [] }` for non-JSON or parse-failed 200 responses, masking malformed payloads.
-- `F-04` (P2): FTP timeout/retry policy is inconsistent and weak in web/native bridges (hard-coded timeout, no explicit retry at bridge level).
-- `F-05` (P2): Playlist persistence still stores full JSON playlist blobs in localStorage despite architecture constraints.
-- `F-06` (P2): Volume/mute state machine has complex race-handling logic but no dedicated hook-level unit tests.
-- `F-07` (P2): Android native `HvscIngestionPlugin` behavior lacks dedicated JVM tests (cancel/error/progress semantics).
-- `F-08` (P3): Some storage parse failures log only to `console.warn` and bypass diagnostics log ingestion.
+### Phase 7 - HVSC Download and Ingest Robustness
+Status: `completed_with_blocker`
+- Observe download/ingest memory pressure.
+- Inspect partial download, resume, and concurrency/backpressure behavior.
+- Capture OOM/ANR/error patterns where present.
 
-## Going-Well Notes (Evidence-backed)
-- Native Android HVSC ingestion is streaming/chunked with cancellation checks and batched DB updates.
-- Device interaction manager includes backoff, circuit breaker, cooldown, and request coalescing for REST/FTP.
-- RAM save/load flow validates full image size, guards liveness, retries deterministically, and has focused unit/UI tests.
-- CTA highlight behavior is centralized, short-lived, and verified by unit + Playwright tests.
-- Playwright evidence pipeline validates screenshots/video/signatures and compares golden traces.
-- Trace/log systems apply retention and size bounds plus header/payload redaction.
+### Phase 8 - Memory and Resource Profiling
+Status: `completed_with_blocker`
+- Collect heap/native memory, CPU sampling, GC activity across idle and stress scenarios.
+- Compare startup/navigation/playback/HVSC ingest footprints.
+- Identify leak indicators and repeated listener/subscription buildup.
 
-## Scope Adjustments / Dead Ends
-- Initial suspicion of missing Android JVM coverage was corrected: JVM tests exist, but not for `HvscIngestionPlugin` behavior itself.
+### Phase 9 - Test Coverage and CI Gaps
+Status: `completed`
+- Audit unit/integration/E2E/Maestro/native coverage.
+- Identify missing real-device lifecycle and stress scenarios.
+- Run coverage and map blind spots to production risks.
 
-## Acceptance Criteria for “Review Complete”
-- `doc/research/productionization-review.md` exists and includes all required headings.
-- Every finding includes evidence anchors (file + line or unique snippet), reproduction steps, and a test recommendation.
-- Priorities use required P0–P3 rubric and include impact/likelihood/detectability/fix effort.
-- Report includes explicit positives (“Going Well”) backed by code/test evidence.
-- `PLANS.md` reflects completed phases, validated findings, and scope adjustments.
+### Phase 10 - Architecture and Concurrency Audit
+Status: `completed`
+- Review event/state architecture, lifecycle boundaries, bridge call frequency, render cascades, debounce/throttle correctness.
+- Classify systemic risks and coupling hotspots.
+
+### Phase 11 - Consolidation and Prioritization
+Status: `completed`
+- Produce `PRODUCTION_RESEARCH_AUDIT.md` with:
+  - Executive summary, methodology, tooling, environment
+  - Phase findings
+  - 100+ issues with required fields and evidence
+  - Severity/effort matrix, risk heatmap, top-20 remediation candidates
+  - Anti-patterns, systemic architecture risks
+  - Test expansion and instrumentation recommendations
+
+## Progress Log
+- 2026-02-19: Plan initialized for full audit execution.
+- 2026-02-19: User requirement updated: place all research findings under `doc/research/review-4/`.
+- 2026-02-19: Phase 1 completed. Built `0.1.0` debug APK (`versionCode=1772`), installed to device serial `2113b87f`, captured cold/warm startup timing and animation-feature evidence.
+- 2026-02-19: Phase 2 completed. Captured startup logcat-derived metrics and warning/error summaries, including frame skips and filesystem plugin failures.
+- 2026-02-19: Phase 3 completed with blocker. Derived route inventory from Playwright/Maestro and attempted scripted interaction, but real-device PIN keyguard blocked app-surface interaction (`isKeyguardShowing=true`, `keyguard_pin_view` present).
+- 2026-02-19: Phase 4 completed. Produced golden-trace REST duplication analysis (`5221` requests, `4078` duplicate within `500ms`, `78.11%` duplicate rate).
+- 2026-02-19: Phase 5 completed with blocker. Captured gfx/frame pacing artifacts; meaningful in-app frame sampling blocked by keyguard focus on NotificationShade.
+- 2026-02-19: Phase 6 completed with blocker. Completed cross-platform background/playback bridge audit (Android service + iOS no-op plugin); end-to-end lock/unlock playback progression validation blocked by PIN lock.
+- 2026-02-19: Phase 7 completed with blocker. Completed HVSC pipeline code-path and native test audit; Android HVSC unit tests fail in environment with `NoClassDefFoundError`/`ClassReader` errors.
+- 2026-02-19: Phase 8 completed with blocker. Captured memory/CPU samples and lifecycle churn logs; sustained interactive memory profile under unlocked usage blocked by keyguard.
+- 2026-02-19: Phase 9 completed. Captured coverage run and hotspot map (`82.06%` global branch coverage).
+- 2026-02-19: Phase 10 completed. Completed architecture, cache/invalidation, concurrency, timer, listener, and logging signal audit.
+- 2026-02-19: Phase 11 completed. Finalized `doc/research/review-4/PRODUCTION_RESEARCH_AUDIT.md` with 110 classified issues, complete evidence fields, risk matrix, top-20 priorities, and recommendations.

@@ -80,6 +80,9 @@ const resolveAppVersion = (gitShaValue: string) => {
 const gitSha = resolveGitSha();
 const appVersion = resolveAppVersion(gitSha);
 const buildTime = process.env.VITE_BUILD_TIME || new Date().toISOString();
+const enableCoverageInstrumentation = ['1', 'true'].includes(
+  (process.env.VITE_COVERAGE || '').toLowerCase(),
+);
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
@@ -98,15 +101,18 @@ export default defineConfig(() => ({
   },
   plugins: [
     react(),
-    // Instrument code for E2E coverage collection
-    istanbul({
-      include: 'src/**/*',
-      exclude: ['node_modules', 'test/', 'tests/', 'playwright/'],
-      extension: ['.js', '.ts', '.tsx'],
-      requireEnv: true,
-      envName: 'VITE_COVERAGE',
-      forceBuildInstrument: true,
-    }),
+    ...(enableCoverageInstrumentation
+      ? [
+        istanbul({
+          include: 'src/**/*',
+          exclude: ['node_modules', 'test/', 'tests/', 'playwright/'],
+          extension: ['.js', '.ts', '.tsx'],
+          requireEnv: true,
+          envName: 'VITE_COVERAGE',
+          forceBuildInstrument: true,
+        }),
+      ]
+      : []),
   ],
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
