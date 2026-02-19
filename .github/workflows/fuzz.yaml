@@ -59,7 +59,14 @@ jobs:
           TELEMETRY_PLATFORM: fuzz-deterministic
         run: |
           mkdir -p "$TELEMETRY_OUTPUT_DIR"
-          ( status=0; bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 || status=$?; echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ) &
+          (
+            status=0
+            bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > "$TELEMETRY_OUTPUT_DIR/monitor.child.pid"
+            wait "$monitor_child_pid" || status=$?
+            echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+          ) &
           echo $! > "$TELEMETRY_OUTPUT_DIR/monitor.pid"
           sleep 2
           if ! kill -0 "$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")" 2>/dev/null; then
@@ -80,13 +87,28 @@ jobs:
         env:
           TELEMETRY_OUTPUT_DIR: ci-artifacts/telemetry/fuzz-deterministic
         run: |
+          child_pid=""
+          if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.child.pid" ]]; then
+            child_pid="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.child.pid")"
+          fi
           if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.pid" ]]; then
-            MONITOR_PID="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")"
-            if kill -0 "$MONITOR_PID" 2>/dev/null; then
-              kill "$MONITOR_PID" || true
-              for i in $(seq 1 20); do kill -0 "$MONITOR_PID" 2>/dev/null || break; sleep 1; done
-              if kill -0 "$MONITOR_PID" 2>/dev/null; then kill -9 "$MONITOR_PID" || true; fi
-              wait "$MONITOR_PID" 2>/dev/null || true
+            pid="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")"
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
+            for i in $(seq 1 20); do
+              if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
             fi
           fi
 
@@ -198,7 +220,14 @@ jobs:
           TELEMETRY_PLATFORM: fuzz
         run: |
           mkdir -p "$TELEMETRY_OUTPUT_DIR"
-          ( status=0; bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 || status=$?; echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ) &
+          (
+            status=0
+            bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 &
+            monitor_child_pid=$!
+            echo "$monitor_child_pid" > "$TELEMETRY_OUTPUT_DIR/monitor.child.pid"
+            wait "$monitor_child_pid" || status=$?
+            echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+          ) &
           echo $! > "$TELEMETRY_OUTPUT_DIR/monitor.pid"
           sleep 2
           if ! kill -0 "$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")" 2>/dev/null; then
@@ -225,13 +254,28 @@ jobs:
         env:
           TELEMETRY_OUTPUT_DIR: ci-artifacts/telemetry/fuzz
         run: |
+          child_pid=""
+          if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.child.pid" ]]; then
+            child_pid="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.child.pid")"
+          fi
           if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.pid" ]]; then
-            MONITOR_PID="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")"
-            if kill -0 "$MONITOR_PID" 2>/dev/null; then
-              kill "$MONITOR_PID" || true
-              for i in $(seq 1 20); do kill -0 "$MONITOR_PID" 2>/dev/null || break; sleep 1; done
-              if kill -0 "$MONITOR_PID" 2>/dev/null; then kill -9 "$MONITOR_PID" || true; fi
-              wait "$MONITOR_PID" 2>/dev/null || true
+            pid="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.pid")"
+            if [[ -n "$child_pid" ]]; then
+              kill -TERM "$child_pid" 2>/dev/null || true
+            else
+              kill -TERM "$pid" 2>/dev/null || true
+            fi
+            for i in $(seq 1 20); do
+              if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ]]; then
+                break
+              fi
+              sleep 1
+            done
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              kill -KILL "$child_pid" 2>/dev/null || true
+            fi
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -KILL "$pid" 2>/dev/null || true
             fi
           fi
 
