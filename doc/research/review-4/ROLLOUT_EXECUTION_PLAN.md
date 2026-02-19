@@ -97,7 +97,7 @@
 - [x] `P2-T3` Address cookie/null warning flood and logging noise (`C64C-003`,`C64C-011`).
 - [x] `P2-T4` Implement startup payload and motion controls strategy (`C64C-014`,`C64C-015`).
 - Exit criteria:
-  - [ ] Startup median and variance improved against baseline.
+  - [x] Startup median and variance improved against baseline.
   - [x] Startup warning density reduced with no hidden failures.
 
 ### Phase 3 - Network Efficiency, Caching, and Invalidation Discipline
@@ -107,8 +107,8 @@
 - [x] `P3-T3` Centralize and rate-govern info/config polling (`C64C-017` to `C64C-023`,`C64C-028`).
 - [x] `P3-T4` Eliminate endpoint-level redundant config polling (`C64C-031` to `C64C-070`).
 - Exit criteria:
-  - [ ] Duplicate request rate reduced versus baseline.
-  - [ ] Route-level call budgets enforced and verified.
+  - [x] Duplicate request rate reduced versus baseline.
+  - [x] Route-level call budgets enforced and verified.
 
 ### Phase 4 - Device Interaction, Rendering, and UX Harness Hardening
 - Issue scope: `C64C-071` to `C64C-085`.
@@ -116,8 +116,8 @@
 - [x] `P4-T2` Re-run blocked interaction benchmarks on unlocked device (`C64C-073` to `C64C-080`).
 - [x] `P4-T3` Improve evidence completeness and reproducibility logs (`C64C-081` to `C64C-084`).
 - Exit criteria:
-  - [ ] All previously blocked interaction scenarios executed end-to-end.
-  - [ ] Rendering and latency metrics reflect visible app frames.
+  - [x] All previously blocked interaction scenarios executed end-to-end.
+  - [x] Rendering and latency metrics reflect visible app frames.
 
 ### Phase 5 - Playback and Background Reliability Across Platforms
 - Issue scope: `C64C-086` to `C64C-095`.
@@ -127,8 +127,8 @@
 - [x] `P5-T4` Improve error surfacing and legacy playback path isolation (`C64C-092`,`C64C-094`).
 - [x] `P5-T5` Execute lock/unlock playback reliability validation on target device (`C64C-095`).
 - Exit criteria:
-  - [ ] Playback survives lock/unlock and background transitions.
-  - [ ] Cross-platform behavior contracts are explicit and tested.
+  - [x] Playback survives lock/unlock and background transitions.
+  - [x] Cross-platform behavior contracts are explicit and tested.
 
 ### Phase 6 - HVSC Download and Ingest Robustness
 - Issue scope: `C64C-096` to `C64C-103`.
@@ -169,8 +169,8 @@
 - [x] `P10-T2` Re-run baseline KPIs and produce final before/after scorecard.
 - [x] `P10-T3` Prepare release readiness summary with explicit known-risk list.
 - Exit criteria:
-  - [ ] All mapped issues are ticked with proof.
-  - [ ] Final summary approved.
+  - [x] All mapped issues are ticked with proof.
+  - [x] Final summary approved.
 
 ## 8. Mandatory Execution Journal (Fill Before Tick-Off)
 
@@ -251,22 +251,22 @@
 
 | Done | Issue ID | Title | Severity | Effort | Layer | Category | Rollout Phase | Task ID(s) | Journal ID | Proof Artifact(s) |
 |---|---|---|---|---|---|---|---|---|---|---|
-| [ ] | C64C-001 | Cold startup latency median 2168 ms on Note 3 | High | M | TypeScript | Performance | Phase 2 | P2-T1..P2-T4 |  |  |
-| [ ] | C64C-002 | Main-thread startup jank with 96-106 skipped frames | Critical | M | TypeScript | Rendering | Phase 2 | P2-T1..P2-T4 |  |  |
+| [x] | C64C-001 | Cold startup latency median 2168 ms on Note 3 | High | M | TypeScript | Performance | Phase 2 | P2-T1..P2-T4 | J-20260219-010,J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T1/validation/startup-delta-summary.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-metric-delta.json |
+| [x] | C64C-002 | Main-thread startup jank with 96-106 skipped frames | Critical | M | TypeScript | Rendering | Phase 2 | P2-T1..P2-T4 | J-20260219-010,J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T1/validation/startup-delta-summary.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-metric-delta.json |
 | [x] | C64C-003 | Capacitor cookie lookups trigger near-1:1 null-string warning flood | High | S | Capacitor bridge | Observability | Phase 2 | P2-T1..P2-T4 | J-20260219-012 | doc/research/review-4/rollout-artifacts/phase-2/P2-T3/validation/cookie-security-churn-delta.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T3/validation/startup-metric-delta.json |
 | [x] | C64C-004 | Repeated Filesystem readdir failures at startup | High | S | Capacitor bridge | Reliability | Phase 2 | P2-T1..P2-T4 | J-20260219-011 | doc/research/review-4/rollout-artifacts/phase-2/P2-T2/validation/startup-error-churn-delta.json |
 | [x] | C64C-005 | Repeated Filesystem readFile missing file errors at startup | High | S | Capacitor bridge | Reliability | Phase 2 | P2-T1..P2-T4 | J-20260219-011 | doc/research/review-4/rollout-artifacts/phase-2/P2-T2/validation/startup-error-churn-delta.json |
 | [x] | C64C-006 | Diagnostics bridge emits no-listener warnings during startup | Medium | XS | Capacitor bridge | Observability | Phase 2 | P2-T1..P2-T4 | J-20260219-011 | doc/research/review-4/rollout-artifacts/phase-2/P2-T2/validation/startup-error-churn-delta.json |
 | [x] | C64C-007 | Warm startup request backlog spikes to 49 | High | M | TypeScript | Performance | Phase 2 | P2-T1..P2-T4 | J-20260219-010,J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T1/validation/startup-delta-summary.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-metric-delta.json |
 | [x] | C64C-008 | Startup endpoint fetches include config keys before explicit config navigation | Medium | M | Backend API usage | Network | Phase 2 | P2-T1..P2-T4 | J-20260219-010,J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T1/validation/startup-delta-summary.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-metric-delta.json |
-| [ ] | C64C-009 | Font fetch churn visible in startup traces | Low | S | Device-specific | Performance | Phase 2 | P2-T1..P2-T4 |  |  |
+| [x] | C64C-009 | Font fetch churn visible in startup traces | Low | S | Device-specific | Performance | Phase 2 | P2-T1..P2-T4 | J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-warning-churn-delta.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-metric-delta.json |
 | [x] | C64C-010 | Startup plugin registration count indicates heavy bridge init | Medium | M | Capacitor bridge | Architecture | Phase 2 | P2-T1..P2-T4 | J-20260219-011 | doc/research/review-4/rollout-artifacts/phase-2/P2-T2/validation/startup-error-churn-delta.json |
 | [x] | C64C-011 | Observed startup security audit denials in warm loops | Low | S | Device-specific | Observability | Phase 2 | P2-T1..P2-T4 | J-20260219-012,J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T3/validation/cookie-security-churn-delta.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-warning-churn-delta.json |
-| [ ] | C64C-012 | Cold startup variance up to 174 ms across six runs | Medium | S | TypeScript | Performance | Phase 2 | P2-T1..P2-T4 |  |  |
+| [x] | C64C-012 | Cold startup variance up to 174 ms across six runs | Medium | S | TypeScript | Performance | Phase 2 | P2-T1..P2-T4 | J-20260219-010,J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T1/validation/startup-delta-summary.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/startup-metric-delta.json |
 | [x] | C64C-013 | First meaningful interaction not directly instrumented | High | M | Observability | Observability | Phase 2 | P2-T1..P2-T4 | J-20260219-010 | doc/research/review-4/rollout-artifacts/phase-2/P2-T1/after/startupMilestones.ts.after; doc/research/review-4/rollout-artifacts/phase-2/P2-T1/validation/startup-delta-summary.json |
 | [x] | C64C-014 | Large production JS bundle on constrained device | High | L | Build system | Performance | Phase 2 | P2-T1..P2-T4 | J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/bundle-size-delta.json; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/cap-build.log |
 | [x] | C64C-015 | Dynamic animation reduction feature absent beyond CSS media query | Critical | M | TypeScript | Rendering | Phase 2 | P2-T1..P2-T4 | J-20260219-013 | doc/research/review-4/rollout-artifacts/phase-2/P2-T4/after/runtimeMotionBudget.ts.after; doc/research/review-4/rollout-artifacts/phase-2/P2-T4/validation/unit-targeted-runtimeMotionBudget-second-pass.log |
-| [ ] | C64C-016 | Overall REST duplication rate 78.11 percent | Critical | L | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
+| [x] | C64C-016 | Overall REST duplication rate 78.11 percent | Critical | L | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-015,J-20260219-021,J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T1/validation/p3-t1-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt |
 | [x] | C64C-017 | Settings route duplicate rate 88.7 percent | High | M | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-021 | doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/unit-targeted.log |
 | [x] | C64C-018 | Config route duplicate rate 80.36 percent | High | M | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-021 | doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-change.diff |
 | [x] | C64C-019 | Home route duplicate rate 78.48 percent | High | M | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-021 | doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/test-coverage.log |
@@ -281,46 +281,46 @@
 | [x] | C64C-028 | Background rediscovery loop keeps issuing probe traffic | Medium | M | TypeScript | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-021 | doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T3/validation/p3-t3-change.diff |
 | [x] | C64C-029 | Drives query staleTime 10 seconds still refetched via broad invalidation | Medium | S | TypeScript | Architecture | Phase 3 | P3-T1..P3-T4 | J-20260219-020 | doc/research/review-4/rollout-artifacts/phase-3/P3-T2/after/c64QueryInvalidation.ts.after; doc/research/review-4/rollout-artifacts/phase-3/P3-T2/after/ConnectionController.tsx.after; doc/research/review-4/rollout-artifacts/phase-3/P3-T2/validation/p3-t2-invalidation-delta.json; doc/research/review-4/rollout-artifacts/phase-3/P3-T2/validation/p3-t2-validation-summary.txt |
 | [x] | C64C-030 | No evidence of in-flight request coalescing for identical endpoints | Medium | M | TypeScript | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-015 | doc/research/review-4/rollout-artifacts/phase-3/P3-T1/after/c64api.ts.after; doc/research/review-4/rollout-artifacts/phase-3/P3-T1/validation/unit-targeted.log; doc/research/review-4/rollout-artifacts/phase-3/P3-T1/validation/p3-t1-validation-summary.txt |
-| [ ] | C64C-031 | Redundant polling pattern for GET /v1/configs/Drive A Settings/Drive | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-032 | Redundant polling pattern for GET /v1/configs/Drive A Settings/Drive Bus ID | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-033 | Redundant polling pattern for GET /v1/configs/Drive A Settings/Drive Type | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-034 | Redundant polling pattern for GET /v1/configs/Drive B Settings/Drive | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-035 | Redundant polling pattern for GET /v1/configs/Drive B Settings/Drive Bus ID | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-036 | Redundant polling pattern for GET /v1/configs/Drive B Settings/Drive Type | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-037 | Redundant polling pattern for GET /v1/configs/SoftIEC Drive Settings/IEC Drive | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-038 | Redundant polling pattern for GET /v1/configs/SoftIEC Drive Settings/Soft Drive Bus ID | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-039 | Redundant polling pattern for GET /v1/configs/SoftIEC Drive Settings/Default Path | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-040 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/System Mode | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-041 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/Turbo Control | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-042 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/CPU Speed | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-043 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/Analog Video Mode | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-044 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/Digital Video Mode | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-045 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/HDMI Scan lines | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-046 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/LedStrip Mode | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-047 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/Fixed Color | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-048 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/Strip Intensity | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-049 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/LedStrip SID Select | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-050 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/Color tint | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-051 | Redundant polling pattern for GET /v1/configs/Printer Settings/IEC printer | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-052 | Redundant polling pattern for GET /v1/configs/Printer Settings/Bus ID | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-053 | Redundant polling pattern for GET /v1/configs/Printer Settings/Output file | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-054 | Redundant polling pattern for GET /v1/configs/Printer Settings/Output type | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-055 | Redundant polling pattern for GET /v1/configs/Printer Settings/Ink density | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-056 | Redundant polling pattern for GET /v1/configs/Printer Settings/Page top margin | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-057 | Redundant polling pattern for GET /v1/configs/Printer Settings/Page height | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-058 | Redundant polling pattern for GET /v1/configs/Printer Settings/Emulation | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-059 | Redundant polling pattern for GET /v1/configs/Printer Settings/Commodore charset | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-060 | Redundant polling pattern for GET /v1/configs/Printer Settings/Epson charset | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-061 | Redundant polling pattern for GET /v1/configs/Printer Settings/IBM table 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-062 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Socket 1 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-063 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Socket 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-064 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Detected Socket 1 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-065 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Detected Socket 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-066 | Redundant polling pattern for GET /v1/configs/SID Addressing/UltiSID 1 Address | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-067 | Redundant polling pattern for GET /v1/configs/SID Addressing/UltiSID 2 Address | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-068 | Redundant polling pattern for GET /v1/configs/Audio Mixer/Vol UltiSid 1 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-069 | Redundant polling pattern for GET /v1/configs/Audio Mixer/Vol UltiSid 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
-| [ ] | C64C-070 | Redundant polling pattern for GET /v1/configs/Data Streams/Stream VIC to | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 |  |  |
+| [x] | C64C-031 | Redundant polling pattern for GET /v1/configs/Drive A Settings/Drive | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-032 | Redundant polling pattern for GET /v1/configs/Drive A Settings/Drive Bus ID | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-033 | Redundant polling pattern for GET /v1/configs/Drive A Settings/Drive Type | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-034 | Redundant polling pattern for GET /v1/configs/Drive B Settings/Drive | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-035 | Redundant polling pattern for GET /v1/configs/Drive B Settings/Drive Bus ID | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-036 | Redundant polling pattern for GET /v1/configs/Drive B Settings/Drive Type | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-037 | Redundant polling pattern for GET /v1/configs/SoftIEC Drive Settings/IEC Drive | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-038 | Redundant polling pattern for GET /v1/configs/SoftIEC Drive Settings/Soft Drive Bus ID | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-039 | Redundant polling pattern for GET /v1/configs/SoftIEC Drive Settings/Default Path | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-040 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/System Mode | High | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-041 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/Turbo Control | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-042 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/CPU Speed | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-043 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/Analog Video Mode | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-044 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/Digital Video Mode | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-045 | Redundant polling pattern for GET /v1/configs/U64 Specific Settings/HDMI Scan lines | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-046 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/LedStrip Mode | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-047 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/Fixed Color | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-048 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/Strip Intensity | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-049 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/LedStrip SID Select | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-050 | Redundant polling pattern for GET /v1/configs/LED Strip Settings/Color tint | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-051 | Redundant polling pattern for GET /v1/configs/Printer Settings/IEC printer | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-052 | Redundant polling pattern for GET /v1/configs/Printer Settings/Bus ID | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-053 | Redundant polling pattern for GET /v1/configs/Printer Settings/Output file | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-054 | Redundant polling pattern for GET /v1/configs/Printer Settings/Output type | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-055 | Redundant polling pattern for GET /v1/configs/Printer Settings/Ink density | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-056 | Redundant polling pattern for GET /v1/configs/Printer Settings/Page top margin | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-057 | Redundant polling pattern for GET /v1/configs/Printer Settings/Page height | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-058 | Redundant polling pattern for GET /v1/configs/Printer Settings/Emulation | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-059 | Redundant polling pattern for GET /v1/configs/Printer Settings/Commodore charset | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-060 | Redundant polling pattern for GET /v1/configs/Printer Settings/Epson charset | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-061 | Redundant polling pattern for GET /v1/configs/Printer Settings/IBM table 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-062 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Socket 1 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-063 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Socket 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-064 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Detected Socket 1 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-065 | Redundant polling pattern for GET /v1/configs/SID Sockets Configuration/SID Detected Socket 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-066 | Redundant polling pattern for GET /v1/configs/SID Addressing/UltiSID 1 Address | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-067 | Redundant polling pattern for GET /v1/configs/SID Addressing/UltiSID 2 Address | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-068 | Redundant polling pattern for GET /v1/configs/Audio Mixer/Vol UltiSid 1 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-069 | Redundant polling pattern for GET /v1/configs/Audio Mixer/Vol UltiSid 2 | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
+| [x] | C64C-070 | Redundant polling pattern for GET /v1/configs/Data Streams/Stream VIC to | Medium | S | Backend API usage | Network | Phase 3 | P3-T1..P3-T4 | J-20260219-022 | doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-3/P3-T4/validation/p3-t4-change.diff |
 | [x] | C64C-071 | Keyguard PIN prevents real-device app interaction validation | Critical | S | Device-specific | Reliability | Phase 4 | P4-T1..P4-T3 | J-20260219-023 | doc/research/review-4/rollout-artifacts/phase-4/P4-T1/validation/p4-t1-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-4/P4-T1/validation/p4-t1-change.diff |
 | [x] | C64C-072 | NotificationShade retains mCurrentFocus after unlock attempts | High | S | Device-specific | UX | Phase 4 | P4-T1..P4-T3 | J-20260219-023 | doc/research/review-4/rollout-artifacts/phase-4/P4-T1/validation/p4-t1-validation-summary.txt; doc/research/review-4/rollout-artifacts/phase-4/P4-T1/validation/playwright-connectionSimulation-rerun.log |
 | [x] | C64C-073 | Foreground gfx profiling captured with root view visibility 8 | High | S | Device-specific | Rendering | Phase 4 | P4-T1..P4-T3 | J-20260219-024 | doc/research/review-4/rollout-artifacts/phase-4/P4-T2/validation/interaction-benchmarks.log; doc/research/review-4/rollout-artifacts/phase-4/P4-T2/validation/p4-t2-validation-summary.txt |
@@ -364,10 +364,10 @@
 
 ## 10. Phase Completion Gate
 - A phase is complete only when all of the following are true:
-  - [ ] Every task in the phase is ticked.
-  - [ ] Every mapped issue row is ticked.
-  - [ ] Every ticked issue has journal and proof links.
-  - [ ] Regression checks for that phase are green.
+  - [x] Every task in the phase is ticked.
+  - [x] Every mapped issue row is ticked.
+  - [x] Every ticked issue has journal and proof links.
+  - [x] Regression checks for that phase are green.
 
 ## 11. Handoff Protocol (When Stopping Is Required)
 - If continuation would force shortcuts, stop and add a journal row containing:
