@@ -68,3 +68,11 @@ dive-summary*.json
 docker-history*.txt
 docker-inspect*.json
 filecount*.txt
+
+# Review 3 generated research evidence
+doc/research/review-3/logs/
+doc/research/review-3/post-fix/logs/
+doc/research/review-3/metrics/startup-baseline/*.logcat.txt
+doc/research/review-3/metrics/startup-baseline/*.logcat
+doc/research/review-3/screenshots/
+doc/research/review-3/post-fix/screenshots/

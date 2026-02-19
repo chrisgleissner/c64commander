@@ -1,0 +1,7 @@
+StartupRequestCount p95: 0 <= 25
+StartupConfigCalls p95: 0 <= 12
+DuplicateStartupConfigKeyRequests p95: 0 <= 0
+TTFSC p50: 1520 <= 5000
+TTFSC p95: 2484 <= 8000
+StartupBacklogDepth p95: 0 <= 40
+UserTriggeredCommandLatencyMs p95: 0 <= 900
