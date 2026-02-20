@@ -43,6 +43,7 @@ class BackgroundExecutionService : Service() {
         private const val CHANNEL_ID = "c64_background_execution"
         private const val NOTIFICATION_ID = 1
         private const val WAKELOCK_TAG = "c64commander:background_execution"
+        private const val WAKELOCK_TIMEOUT_MS = 30L * 60L * 1000L
 
         const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
@@ -180,9 +181,9 @@ class BackgroundExecutionService : Service() {
         if (wakeLock != null) return
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-            acquire()
+            acquire(WAKELOCK_TIMEOUT_MS)
         }
-        AppLogger.debug(this, TAG, "WakeLock acquired (until explicit stop)", "BackgroundExecutionService")
+        AppLogger.debug(this, TAG, "WakeLock acquired (timeoutMs=$WAKELOCK_TIMEOUT_MS)", "BackgroundExecutionService")
     }
 
     private fun releaseWakeLock() {
@@ -314,7 +315,8 @@ class BackgroundExecutionService : Service() {
             val nowElapsedRealtime = SystemClock.elapsedRealtime()
             if (nowElapsedRealtime < currentDueElapsed) {
                 val remaining = currentDueElapsed - nowElapsedRealtime
-                handler.postDelayed(this.dueRunnable ?: return@Runnable, remaining)
+                val nextRunnable = this.dueRunnable ?: return@Runnable
+                handler.postDelayed(nextRunnable, remaining)
                 AppLogger.debug(this, TAG, "Due watchdog not ready yet; rescheduled using monotonic clock (remainingMs=$remaining)", "BackgroundExecutionService")
                 return@Runnable
             }

@@ -58,6 +58,7 @@ class MainActivity : BridgeActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     ensureCapacitorPluginAssetPath()
     registerPlugin(BackgroundExecutionPlugin::class.java)
+    registerPlugin(DiagnosticsBridgePlugin::class.java)
     registerPlugin(FolderPickerPlugin::class.java)
     registerPlugin(MockC64UPlugin::class.java)
     registerPlugin(FeatureFlagsPlugin::class.java)
