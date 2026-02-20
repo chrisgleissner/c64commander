@@ -143,6 +143,12 @@ const loadRawConfig = async (): Promise<RawConfig> => {
       }
       return (loaded as RawConfig) ?? {};
     }
+    if (typeof window !== 'undefined') {
+      const bundled = await loadBundledConfigYaml();
+      if (bundled) {
+        return (yaml.load(bundled) as RawConfig) ?? {};
+      }
+    }
     const yamlText = await loadYamlFromAssets();
     return (yaml.load(yamlText) as RawConfig) ?? {};
   } catch (error) {
