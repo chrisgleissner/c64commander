@@ -13,7 +13,7 @@ Before fix:
 
 Non-404 request failures observed but unrelated to this regression:
 - `http://demo.invalid/v1/info` (`net::ERR_NAME_NOT_RESOLVED`)
-- `https://fonts.googleapis.com/...` (`net::ERR_NAME_NOT_RESOLVED`)
+- `https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap` (`net::ERR_NAME_NOT_RESOLVED`)
 
 ## Current vs main behavioral diff
 - The failing behavior is runtime/path behavior: app attempted to fetch `doc/c64/c64u-config.yaml` from web root assets during browser startup/demo config loading.
