@@ -1,15 +1,15 @@
 {
-  "name": "C64 Commander",
-  "short_name": "C64 Commander",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#6C7EB7",
-  "theme_color": "#6C7EB7",
-  "icons": [
-    {
-      "src": "/c64commander.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+    "name": "C64 Commander",
+    "short_name": "C64 Commander",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#6C7EB7",
+    "theme_color": "#6C7EB7",
+    "icons": [
+        {
+            "src": "/c64commander.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
 }
