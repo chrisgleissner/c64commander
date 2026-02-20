@@ -1,46 +1,59 @@
 # PLANS
 
 ## Problem summary
-Playwright tests fail on this branch with repeated 404-related console errors, while main passes. Goal: isolate the branch-vs-main regression and apply the smallest fix that restores Playwright without regressing Web or iOS builds.
+Playwright failures on this branch were reported as repeated `404` console errors across many tests, while `main` was green. The goal is to identify the branch-vs-main regression and apply the smallest fix without degrading Web or iOS builds.
 
 ## Hypotheses from branch-vs-main diff
-- [ ] A changed base path, route, or static asset URL causes missing resources in Playwright runtime.
-- [ ] Vite/build config drift changed output paths referenced by HTML/test harness.
-- [ ] Playwright config or web server startup changed and now serves from wrong root.
-- [ ] A required asset/file was renamed/removed in this branch but still referenced.
+- [x] A changed static asset URL in HTML entry points causes missing resources under some serving contexts.
+- [ ] Playwright config drift causes wrong server root.
+- [ ] Vite/build config drift causes missing build outputs.
+- [ ] Test config drift causes incorrect routing/base path.
 
 ## Concrete investigation steps
-- [ ] Reproduce Playwright failure locally (or collect exact CI failure evidence if local is unreliable).
-- [ ] Capture exact failing 404 URLs and request initiators.
-- [ ] Compare this branch to `main` for HTML entry points, static asset references, Vite/build config, Playwright config, routing/base-path code.
-- [ ] Identify single concrete causative change and validate reasoning.
-- [ ] Implement minimal patch to correct resource path/serving behavior.
-- [ ] Run targeted Playwright validation, then full Playwright suite.
-- [ ] Run Web build and iOS build validation commands.
-- [ ] Confirm no new unexpected console errors.
+- [x] Attempt local Playwright reproduction and collect context.
+- [x] Investigate CI failures via GitHub Actions logs/artifacts (run `22214394010`).
+- [x] Compare branch vs `main` in key files (HTML entry points, static assets, build/test config).
+- [x] Isolate likely causative diff and apply minimal corrective patch.
+- [x] Re-run local verification (build + Playwright + Capacitor sync).
+
+## CI/infra pivot note
+Local full Playwright suite is green after browser install, so exact CI-only 404 URL could not be deterministically reproduced locally. I pivoted to CI diagnostics using GitHub Actions logs/artifacts as required.
+
+## Root cause analysis
+CI logs for Android workflow run `22214394010` show repeated failures from Playwright’s console guard:
+`Unexpected warnings/errors during test: console error: Failed to load resource: the server responded with a status of 404 (Not Found)`.
+
+The branch-vs-main entrypoint diff adds new PWA links in `index.html` and a new `public/manifest.webmanifest`. Those links were hard-coded as root-absolute paths (`/manifest.webmanifest`, `/c64commander.png`) and the manifest also used root-absolute fields (`start_url: "/"`, `icons[].src: "/c64commander.png"`). This is the only static-asset entrypoint delta in the failing branch and is the most probable source of repeated 404s under non-root/base-path serving contexts.
+
+## Minimal fix implemented
+- Updated `index.html`:
+  - `apple-touch-icon` now uses `%BASE_URL%c64commander.png`
+  - `manifest` link now uses `%BASE_URL%manifest.webmanifest`
+- Updated `public/manifest.webmanifest`:
+  - `start_url` from `"/"` to `"."`
+  - icon `src` from `"/c64commander.png"` to `"c64commander.png"`
+
+These are surgical path corrections only; no test guard weakening, no unrelated refactor.
 
 ## Risk assessment
-- Main risk is over-fixing by changing unrelated routing/build behavior; mitigate via surgical diff and focused verification.
-- Secondary risk is environment instability for local Playwright/iOS tooling; if encountered, pivot to CI logs/artifacts and document pivot.
-- Regression risk for Web/iOS if base path handling changes globally; mitigate via explicit build checks.
+- Low risk: changes only affect static asset URL resolution for manifest/icon metadata.
+- Benefit: avoids root-path assumptions and aligns with Vite base-path semantics.
 
-## Verification steps
-- [ ] `npm run lint`
-- [ ] `npm run test`
-- [ ] `npm run build`
-- [ ] `npm run test:e2e` (full Playwright suite) when feasible
-- [ ] iOS build validation command used by repo (`npm run cap:build` and/or CI confirmation)
-- [ ] CI checks: Playwright, Web, iOS green and no regressions
+## Verification steps and status
+- [x] `npm run lint`
+- [x] `npm run build`
+- [x] `npm run test:e2e` (full suite; local) — `337 passed`
+- [x] `npm run cap:build` (web build + Android/iOS sync path)
+- [ ] CI Playwright/Web/iOS green confirmation (pending fresh CI run on this branch)
+- [ ] `npm run test` and `npm run test:coverage` fully green in this sandbox
+  - Blocked by external DNS/network for HVSC fixture host (`hvsc.brona.dk`), unrelated to this change.
 
 ## Acceptance criteria checklist
-- [ ] Root cause documented clearly in this file.
-- [ ] Minimal corrective code change implemented.
-- [ ] Playwright tests pass in CI.
-- [ ] No unexpected console errors during Playwright tests.
-- [ ] Web build succeeds in CI.
-- [ ] iOS build succeeds in CI.
-- [ ] No previously-green CI job regresses.
-- [ ] This plan file reflects completed tasks and final verification status.
-
-## Progress log
-- [x] Replaced stale plan content with issue-specific execution plan and checklist.
+- [x] Root cause documented in this file.
+- [x] Minimal corrective change implemented.
+- [ ] Playwright tests pass in CI (pending CI rerun).
+- [ ] No unexpected console errors in CI Playwright (pending CI rerun).
+- [ ] Web build succeeds in CI (pending CI rerun).
+- [ ] iOS build succeeds in CI (pending CI rerun).
+- [ ] No previously-green CI job regresses (pending CI rerun).
+- [x] `PLANS.md` updated with execution trace and current verification state.
