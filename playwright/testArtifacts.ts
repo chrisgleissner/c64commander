@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { Page, TestInfo } from '@playwright/test';
+import type { Page, Request, Response, TestInfo } from '@playwright/test';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { validateViewport, enforceVisualBoundaries } from './viewportValidation';
@@ -430,11 +430,7 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     });
   };
 
-  const recordResponse = (response: {
-    status: () => number;
-    url: () => string;
-    request: () => { method: () => string; resourceType: () => string };
-  }) => {
+  const recordResponse = (response: Response) => {
     if (response.status() !== 404) return;
     const request = response.request();
     tracker.network404s.push({
@@ -444,17 +440,13 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     });
   };
 
-  const recordRequestFailed = (request: {
-    method: () => string;
-    url: () => string;
-    failure: () => { errorText?: string } | null;
-  }) => {
+  const recordRequestFailed = (request: Request) => {
     const failure = request.failure();
     if (!failure) return;
     tracker.requestFailures.push({
       method: request.method(),
       url: request.url(),
-      errorText: failure.errorText ?? 'unknown',
+      errorText: failure.errorText ?? 'error details not provided',
     });
   };
 
