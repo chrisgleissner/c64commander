@@ -57,6 +57,8 @@ type StrictUiTracker = {
   consoleErrors: string[];
   consoleWarnings: string[];
   pageErrors: string[];
+  network404s: Array<{ method: string; url: string; resourceType: string }>;
+  requestFailures: Array<{ method: string; url: string; errorText: string }>;
   toastIssues: string[];
   horizontalOverflows: string[];
   requestLog: Array<{ method: string; url: string; resourceType: string }>
@@ -394,6 +396,8 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     consoleErrors: [],
     consoleWarnings: [],
     pageErrors: [],
+    network404s: [],
+    requestFailures: [],
     toastIssues: [],
     horizontalOverflows: [],
     requestLog: [],
@@ -426,7 +430,37 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     });
   };
 
+  const recordResponse = (response: {
+    status: () => number;
+    url: () => string;
+    request: () => { method: () => string; resourceType: () => string };
+  }) => {
+    if (response.status() !== 404) return;
+    const request = response.request();
+    tracker.network404s.push({
+      method: request.method(),
+      url: response.url(),
+      resourceType: request.resourceType(),
+    });
+  };
+
+  const recordRequestFailed = (request: {
+    method: () => string;
+    url: () => string;
+    failure: () => { errorText?: string } | null;
+  }) => {
+    const failure = request.failure();
+    if (!failure) return;
+    tracker.requestFailures.push({
+      method: request.method(),
+      url: request.url(),
+      errorText: failure.errorText ?? 'unknown',
+    });
+  };
+
   page.on('request', recordRequest);
+  page.on('response', recordResponse);
+  page.on('requestfailed', recordRequestFailed);
 
   page.on('framenavigated', (frame) => {
     if (frame !== page.mainFrame()) return;
@@ -524,6 +558,8 @@ export const startStrictUiMonitoring = async (page: Page, testInfo: TestInfo) =>
     page.off('console', onConsole);
     page.off('pageerror', onPageError);
     page.off('request', recordRequest);
+    page.off('response', recordResponse);
+    page.off('requestfailed', recordRequestFailed);
   };
 
   setTracker(testInfo, tracker);
@@ -626,6 +662,16 @@ export const assertNoUiIssues = async (page: Page, testInfo: TestInfo) => {
   tracker.detach();
 
   if (issues.length) {
-    throw new Error(`Unexpected warnings/errors during test:\n${issues.join('\n')}`);
+    const diagnostics = [
+      ...tracker.network404s.map(
+        ({ method, url, resourceType }) => `diagnostic network 404: ${method} ${url} [resourceType=${resourceType}]`
+      ),
+      ...tracker.requestFailures.map(
+        ({ method, url, errorText }) => `diagnostic request failed: ${method} ${url} [error=${errorText}]`
+      ),
+    ];
+    throw new Error(
+      `Unexpected warnings/errors during test:\n${[...issues, ...diagnostics].join('\n')}`
+    );
   }
 };
