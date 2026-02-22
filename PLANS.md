@@ -1,66 +1,49 @@
-# PLANS
+# PLANS.md
 
-## Root Cause (Confirmed, Phase 2)
+## Coverage Execution Plan (active)
 
-### Primary: Artifact download path mismatch
-`upload-artifact@v4` strips the source directory prefix when uploading `path: dist`. The artifact stores files as `index.html`, `assets/*.js` etc. (without `dist/` prefix). But both download steps used `path: .`, which extracted files to workspace root (`./index.html`, `./assets/*.js`) instead of `./dist/`.
+### Baseline (source of truth)
+- **Source preference check**: GitHub Actions latest runs for branch `copilot/improve-test-coverage` are still in progress/queued, so no completed coverage artifact is available yet.
+- **Baseline command**: `npm run test:coverage`
+- **Baseline output file**: `coverage/lcov.info` and `/tmp/copilot-tool-output-1771763734642-fegg1g.txt`
+- **Baseline overall line coverage**: **88.53%** (All files)
+- **Gap to 92.00%**: **3.47 points**
 
-Result: `dist/index.html` was never found by the "Ensure build" check, triggering unnecessary rebuilds that used different `__BUILD_TIME__` values — producing inconsistent hash names. Worse, Vite's `build.emptyOutDir` deleted the original `dist/`, then the rebuilt `dist/` had different chunk hashes than what the main bundle referenced. This caused 404s for ALL lazy-loaded JS chunks.
+### Prioritized below-92 targets (highest uncovered-line impact first)
+1. `src/components/disks/HomeDiskManager.tsx` — 82.18% (275 uncovered)
+2. `src/lib/c64api.ts` — 86.99% (200 uncovered)
+3. `web/server/src/index.ts` — 72.46% (193 uncovered)
+4. `src/pages/SettingsPage.tsx` — 87.15% (173 uncovered)
+5. `src/pages/HomePage.tsx` — 77.93% (156 uncovered)
+6. `src/lib/hvsc/hvscIngestionRuntime.ts` — 86.99% (119 uncovered)
+7. `src/pages/home/hooks/useStreamData.ts` — 57.21% (92 uncovered)
+8. `src/lib/connection/connectionManager.ts` — 82.95% (90 uncovered)
+9. `src/lib/hvsc/hvscBrowseIndexStore.ts` — 77.17% (87 uncovered)
+10. `src/lib/hvsc/hvscDownload.ts` — 82.43% (84 uncovered)
 
-**Proof**: Downloaded the `web-dist-coverage` artifact (ID 5602803186) and confirmed paths are `index.html`, `assets/AppBar-RD3JqkOA.js` etc. (no `dist/` prefix). With old `path: .`, `dist/index.html` was always absent, always triggering a rebuild.
+### Initial concrete test plan
+- **Target A: `src/pages/home/hooks/useStreamData.ts`**
+  - Behaviors/branches: validation failures (host/port/endpoint), successful commit path, start/stop happy-path and error-path, edit open/cancel, draft synchronization effect.
+  - Approach: add focused hook unit tests with mocked `getC64API`, `useC64ConfigItems`, `toast`, and `reportUserError`.
+  - Expected impact: raise this file substantially from 57% by covering currently untested control-flow branches.
 
-### Secondary: SIGPIPE bug in coverage check (Ensure coverage build exists)
-The `Ensure coverage build exists` step used:
-```
-grep -R "__coverage__" dist/assets 2>/dev/null | head -1 | grep -q "__coverage__"
-```
-With bash `pipefail` (enabled by default in GitHub Actions), when `head -1` exits after one line it sends SIGPIPE to `grep -R`, causing `grep -R` to exit with status 141. With `pipefail`, the pipeline exit code is 141 (non-zero), so `if ! [pipeline]` = true, triggering a spurious second rebuild even when coverage IS present.
+- **Target B: `web/server/src/index.ts`**
+  - Behaviors/branches: auth logout/status branches, secure-storage GET/DELETE branches, static serving edge cases (directory index, invalid path traversal), diagnostics method rejection, REST proxy upstream failure, FTP read/list errors and host-override denial.
+  - Approach: extend existing `tests/unit/web/webServer.test.ts` with integration-style HTTP assertions.
+  - Expected impact: meaningful rise in server branch and line coverage.
 
-## Fix Applied (Phase 2)
+- **Target C: `src/lib/c64api.ts`**
+  - Behaviors/branches: abort-aware helpers, fallback/parse warnings, error wrappers, and untested API helper methods.
+  - Approach: extend `tests/unit/c64api.test.ts` with behavior-focused cases hitting uncovered lines/ranges.
+  - Expected impact: improve one of the largest denominator contributors.
 
-### Fix 1: Correct artifact download path (`android.yaml`)
-Both download steps changed from `path: .` to `path: dist`:
-- `web-screenshots` job
-- `web-e2e` job
+- **Target D: additional high-impact UI module tests (`HomeDiskManager.tsx` / `HomePage.tsx` / `SettingsPage.tsx`) as needed**
+  - Behaviors/branches: currently uncovered error, toggle, and edge interaction paths.
+  - Approach: extend existing page/component suites only after re-measuring post A-C.
+  - Expected impact: close remaining gap to >=92%.
 
-This ensures the artifact extracts to `./dist/index.html` and `./dist/assets/*.js` as expected by the "Ensure build" checks and `vite preview`.
-
-### Fix 2: SIGPIPE-safe coverage check (`android.yaml`)
-Changed from:
-```bash
-grep -R "__coverage__" dist/assets 2>/dev/null | head -1 | grep -q "__coverage__"
-```
-To:
-```bash
-grep -qr "__coverage__" dist/assets 2>/dev/null
-```
-`grep -qr` exits immediately on first match without piping, completely avoiding SIGPIPE.
-
-## Verified (Phase 2)
-
-- Local simulation: with `path: dist`, dist/index.html found → no rebuild → assets served as 200 ✓
-- Local simulation: `grep -qr` passes without spurious rebuild when coverage exists ✓
-- Unit tests: 1828 passed, 3 pre-existing failures (network access blocked in sandbox) ✓
-
-## Observed CI failures (Phase 1, resolved by Phase 2 fix)
-
-Failing specs reported in CI (all due to JS chunk 404s):
-- `playwright/fuzz/chaosRunner.fuzz.ts`
-- `playwright/featureFlags.spec.ts`
-- `playwright/homeConfigManagement.spec.ts` (multiple @layout tests)
-- `Web | Screenshots`
-- `Web | E2E (sharded)` (11 of 12 shards, shard 4 only passed because it ran `@allow-warnings` tests)
-
-## Previous fix (Phase 1, already merged)
-
-Root-cause fix in `src/lib/mock/mockConfig.ts`:
-- `loadBundledConfigYaml()` dynamically imports `doc/c64/c64u-config.yaml?raw` (Vite inline asset).
-- `loadRawConfig()` calls `loadBundledConfigYaml()` first; only falls back to network fetch if the bundled
-  content is empty.
-- Vite produces `dist/assets/c64u-config-*.js` containing the YAML as a string literal - no HTTP request.
-
-Additional hardening in `playwright/testArtifacts.ts`:
-- `network404s` array records every HTTP 404 response with method, URL, and resourceType.
-- `requestFailures` array records every failed request with method, URL, and errorText.
-- When `assertNoUiIssues` throws, both arrays are appended as `diagnostic ...` lines so CI logs show the
-  exact offending URL without requiring a trace viewer.
+### Verification plan
+1. Run targeted tests immediately after each file change.
+2. Run `npm run test:coverage` after each batch and compare per-file deltas.
+3. If overall is still below 92%, select next highest uncovered-line target and iterate.
+4. Final proof: capture `All files` coverage line from coverage output showing **>=92.00%**.
