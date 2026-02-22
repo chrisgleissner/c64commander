@@ -116,7 +116,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-dist-coverage
-          path: .
+          path: dist
 
       - name: Ensure build output exists
         run: |
@@ -233,7 +233,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: web-dist-coverage
-          path: .
+          path: dist
 
       - name: Ensure coverage build exists
         run: |
@@ -241,7 +241,7 @@ jobs:
             echo "dist/index.html missing; rebuilding with coverage instrumentation"
             VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           fi
-          if ! grep -R "__coverage__" dist/assets 2>/dev/null | head -1 | grep -q "__coverage__"; then
+          if ! grep -qr "__coverage__" dist/assets 2>/dev/null; then
             echo "coverage instrumentation missing; rebuilding with coverage instrumentation"
             VITE_COVERAGE=true VITE_ENABLE_TEST_PROBES=1 npm run build
           fi
