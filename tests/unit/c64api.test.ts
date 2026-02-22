@@ -17,7 +17,10 @@ import {
   C64_DEFAULTS,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
-import { clearPassword as clearStoredPassword, setPassword as storePassword } from '@/lib/secureStorage';
+import {
+  clearPassword as clearStoredPassword,
+  setPassword as storePassword,
+} from '@/lib/secureStorage';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
@@ -1004,6 +1007,28 @@ describe('c64api', () => {
     const urls = fetchMock.mock.calls.map((call) => call[0]);
     expect(urls).toContain('http://c64u/v1/runners:sidplay?file=%2Fmusic%2Ftest.sid&songnr=7');
     expect(urls).toContain('http://c64u/v1/runners:run_crt?file=%2Fcartridges%2Ftest.crt');
+  });
+
+  it('logs and throws for upload failures across mod/prg/crt helpers', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockResolvedValueOnce(new Response('mod fail', { status: 500, statusText: 'Server Error' }))
+      .mockResolvedValueOnce(new Response('run prg fail', { status: 500, statusText: 'Server Error' }))
+      .mockResolvedValueOnce(new Response('load prg fail', { status: 500, statusText: 'Server Error' }))
+      .mockResolvedValueOnce(new Response('crt fail', { status: 500, statusText: 'Server Error' }));
+
+    const api = new C64API('http://c64u');
+    await expect(api.playModUpload(new Blob(['MOD']))).rejects.toThrow('HTTP 500');
+    await expect(api.runPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
+    await expect(api.loadPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
+    await expect(api.runCartridgeUpload(new Blob(['CRT']))).rejects.toThrow('HTTP 500');
+
+    expect(addErrorLogMock.mock.calls.map(([message]) => message)).toEqual([
+      'MOD upload failed',
+      'PRG upload failed',
+      'PRG upload failed',
+      'CRT upload failed',
+    ]);
   });
 
   it('reuses singleton C64 API instance', () => {
