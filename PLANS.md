@@ -3,7 +3,7 @@
 ## Coverage Execution Plan (active)
 
 ### Baseline (source of truth)
-- **Source preference check**: GitHub Actions latest runs for branch `copilot/improve-test-coverage` are still in progress/queued, so no completed coverage artifact is available yet.
+- **Coverage evidence source for this execution**: local `npm run test:coverage` output (no completed branch coverage artifact was available at execution time).
 - **Baseline command**: `npm run test:coverage`
 - **Baseline output file**: `coverage/lcov.info` and `/tmp/copilot-tool-output-1771763734642-fegg1g.txt`
 - **Baseline overall line coverage**: **88.53%** (All files)
@@ -59,11 +59,10 @@
   - Added tests for secure-storage GET/DELETE + logout lifecycle, diagnostics route method handling, static directory and path traversal cases, REST proxy upstream failure, and FTP host override denial.
 - `src/lib/c64api.ts`: **86.99% -> 88.35%**
   - Added upload failure-path tests for MOD/PRG/CRT helpers to validate error logging and exception behavior.
-- `src/pages/home/hooks/useStreamData.ts`: unchanged at **57.20%** (attempted new tests were removed due local runner hang during focused execution; will revisit with a safer approach if needed).
+- `src/pages/home/hooks/useStreamData.ts`: unchanged at **57.20%** (attempted new tests were removed due to local runner hang during focused execution; will revisit with a safer approach if needed).
 
 ### Next priority candidates
 1. `src/components/disks/HomeDiskManager.tsx` (82.17%, 275 uncovered)
 2. `src/pages/SettingsPage.tsx` (87.15%, 173 uncovered)
 3. `src/pages/HomePage.tsx` (77.93%, 156 uncovered)
 4. Additional `web/server/src/index.ts` branches (still below 92%)
-

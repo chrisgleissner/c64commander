@@ -407,8 +407,8 @@ describe('web server platform runtime', () => {
         expect(deletePassword.status).toBe(200);
 
         const statusAfterDelete = await fetch(`${server.baseUrl}/auth/status`);
-        const payload = await statusAfterDelete.json() as { requiresLogin: boolean };
-        expect(payload.requiresLogin).toBe(false);
+        const authStatusPayload = await statusAfterDelete.json() as { requiresLogin: boolean };
+        expect(authStatusPayload.requiresLogin).toBe(false);
 
         const logout = await fetch(`${server.baseUrl}/auth/logout`, {
             method: 'POST',
@@ -446,7 +446,7 @@ describe('web server platform runtime', () => {
 
         const directoryIndex = await fetch(`${server.baseUrl}/docs`);
         expect(directoryIndex.status).toBe(200);
-        expect(await directoryIndex.text()).toContain('docs');
+        expect(await directoryIndex.text()).toContain('<body>docs</body>');
 
         const traversal = await fetch(`${server.baseUrl}/..%2F..%2Fetc/passwd`);
         expect(traversal.status).toBe(403);
@@ -481,7 +481,7 @@ describe('web server platform runtime', () => {
                 Cookie: cookie,
             },
             body: JSON.stringify({
-                host: '192.168.10.20',
+                host: '192.0.2.1',
                 port: 21,
                 username: 'anonymous',
                 path: '/MUSIC/test.sid',

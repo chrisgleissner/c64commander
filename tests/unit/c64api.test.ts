@@ -20,9 +20,6 @@ import {
 import {
   clearPassword as clearStoredPassword,
   setPassword as storePassword,
-  hasStoredPasswordFlag,
-  getCachedPassword,
-  getPassword,
 } from '@/lib/secureStorage';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
@@ -166,9 +163,6 @@ const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof
 const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
 const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
-const hasStoredPasswordFlagMock = hasStoredPasswordFlag as unknown as ReturnType<typeof vi.fn>;
-const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof vi.fn>;
-const getPasswordMock = getPassword as unknown as ReturnType<typeof vi.fn>;
 const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
 
 describe('c64api', () => {
@@ -202,12 +196,6 @@ describe('c64api', () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
     storePasswordMock.mockReset();
     clearPasswordMock.mockReset();
-    hasStoredPasswordFlagMock.mockReset();
-    getCachedPasswordMock.mockReset();
-    getPasswordMock.mockReset();
-    hasStoredPasswordFlagMock.mockReturnValue(false);
-    getCachedPasswordMock.mockReturnValue(null);
-    getPasswordMock.mockResolvedValue(null);
   });
 
   afterAll(() => {
@@ -1035,9 +1023,12 @@ describe('c64api', () => {
     await expect(api.loadPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
     await expect(api.runCartridgeUpload(new Blob(['CRT']))).rejects.toThrow('HTTP 500');
 
-    expect(addErrorLogMock).toHaveBeenCalledWith('MOD upload failed', expect.any(Object));
-    expect(addErrorLogMock).toHaveBeenCalledWith('PRG upload failed', expect.any(Object));
-    expect(addErrorLogMock).toHaveBeenCalledWith('CRT upload failed', expect.any(Object));
+    expect(addErrorLogMock.mock.calls.map(([message]) => message)).toEqual([
+      'MOD upload failed',
+      'PRG upload failed',
+      'PRG upload failed',
+      'CRT upload failed',
+    ]);
   });
 
   it('reuses singleton C64 API instance', () => {
