@@ -216,6 +216,8 @@ All common development tasks use `./build`:
 ./build --test-contract --c64u-target mock --contract-mode safe --contract-auth off  # Contract test harness
 ```
 
+Screenshot runs now prune pixel-identical PNG changes automatically (metadata-only churn), including files accidentally staged during local runs.
+
 ### Android
 
 ```bash

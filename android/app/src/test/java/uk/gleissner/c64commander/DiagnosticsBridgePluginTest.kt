@@ -25,10 +25,10 @@ import org.robolectric.Shadows
 
 /** Test-only subclass that captures notifyListeners calls for verification. */
 private open class TestableDiagnosticsBridgePlugin : DiagnosticsBridgePlugin() {
-    val notifyListenersCalls = mutableListOf<Pair<String?, JSObject?>>()
+    val notifyListenersCalls = mutableListOf<Triple<String?, JSObject?, Boolean>>()
 
-    public override fun notifyListeners(eventName: String?, data: JSObject?) {
-        notifyListenersCalls.add(Pair(eventName, data))
+    public override fun notifyListeners(eventName: String?, data: JSObject?, retainUntilConsumed: Boolean) {
+        notifyListenersCalls.add(Triple(eventName, data, retainUntilConsumed))
     }
 }
 
@@ -148,6 +148,7 @@ class DiagnosticsBridgePluginTest {
         val payload = calls[0].second!!
         assertEquals("warn", payload.getString("level"))
         assertEquals("native warning", payload.getString("message"))
+        assertTrue("diagnostics logs should be retained until consumed", calls[0].third)
         val details = payload.getJSObject("details")
         assertNotNull(details)
         assertEquals("Bridge", details?.getString("component"))

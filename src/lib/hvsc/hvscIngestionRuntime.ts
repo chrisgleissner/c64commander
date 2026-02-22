@@ -48,11 +48,114 @@ import { HvscIngestion } from '@/lib/native/hvscIngestion';
 
 // ── Module state ─────────────────────────────────────────────────
 
-const cancelTokens = new Map<string, { cancelled: boolean }>();
-let activeIngestionRunning = false;
+type HvscProgressListenerHandle = {
+  remove: () => Promise<void>;
+};
+
+type HvscIngestionRuntimeState = {
+  cancelTokens: Map<string, { cancelled: boolean }>;
+  activeIngestionRunning: boolean;
+  nativeListenersByToken: Map<string, Set<HvscProgressListenerHandle>>;
+  cacheStatFailures: Map<string, number>;
+};
+
+const runtimeState: HvscIngestionRuntimeState = {
+  cancelTokens: new Map<string, { cancelled: boolean }>(),
+  activeIngestionRunning: false,
+  nativeListenersByToken: new Map<string, Set<HvscProgressListenerHandle>>(),
+  cacheStatFailures: new Map<string, number>(),
+};
+
+const CACHE_STAT_FAILURE_ESCALATION_THRESHOLD = 2;
+
+const registerNativeProgressListener = (token: string, listener: HvscProgressListenerHandle) => {
+  const listeners = runtimeState.nativeListenersByToken.get(token) ?? new Set<HvscProgressListenerHandle>();
+  listeners.add(listener);
+  runtimeState.nativeListenersByToken.set(token, listeners);
+};
+
+const removeNativeProgressListener = async (token: string, listener: HvscProgressListenerHandle) => {
+  const listeners = runtimeState.nativeListenersByToken.get(token);
+  try {
+    await listener.remove();
+  } catch (error) {
+    addLog('warn', 'Failed to remove HVSC native progress listener', {
+      token,
+      error: (error as Error).message,
+    });
+  } finally {
+    if (!listeners) {
+      runtimeState.nativeListenersByToken.delete(token);
+    } else {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        runtimeState.nativeListenersByToken.delete(token);
+      }
+    }
+  }
+};
+
+const drainNativeProgressListeners = async (token?: string) => {
+  const tokens = token ? [token] : Array.from(runtimeState.nativeListenersByToken.keys());
+  for (const itemToken of tokens) {
+    const listeners = runtimeState.nativeListenersByToken.get(itemToken);
+    if (!listeners?.size) {
+      runtimeState.nativeListenersByToken.delete(itemToken);
+      continue;
+    }
+    const removals = Array.from(listeners);
+    for (const listener of removals) {
+      await removeNativeProgressListener(itemToken, listener);
+    }
+  }
+};
+
+const resetCacheStatFailure = (archiveName: string) => {
+  runtimeState.cacheStatFailures.delete(archiveName);
+};
+
+const reportCacheStatFailure = (
+  archiveName: string,
+  error: unknown,
+  emitProgress?: (event: Omit<HvscProgressEvent, 'ingestionId' | 'elapsedTimeMs'>) => void,
+) => {
+  const failures = (runtimeState.cacheStatFailures.get(archiveName) ?? 0) + 1;
+  runtimeState.cacheStatFailures.set(archiveName, failures);
+  const errorMessage = (error as Error).message;
+  addLog('warn', 'HVSC cached archive stat failed', {
+    archiveName,
+    error: errorMessage,
+    failureCount: failures,
+  });
+  if (failures >= CACHE_STAT_FAILURE_ESCALATION_THRESHOLD) {
+    addErrorLog('HVSC cache health degraded', {
+      archiveName,
+      failureCount: failures,
+      remediation: 'Re-download the archive from settings and retry ingestion.',
+      error: {
+        name: (error as Error).name,
+        message: errorMessage,
+        stack: (error as Error).stack,
+      },
+    });
+    emitProgress?.({
+      stage: 'warning',
+      message: `Cache metadata check failed for ${archiveName}; re-download archive recommended`,
+      archiveName,
+      errorCause: errorMessage,
+    });
+  }
+};
+
+const formatPathListPreview = (paths: string[]) => {
+  if (!paths.length) return 'none';
+  const previewLimit = 10;
+  const preview = paths.slice(0, previewLimit).join(', ');
+  return paths.length > previewLimit ? `${preview} (+${paths.length - previewLimit} more)` : preview;
+};
 
 /** True while an ingestion task (install/update or cached ingest) is executing. */
-export const isIngestionRuntimeActive = () => activeIngestionRunning;
+export const isIngestionRuntimeActive = () => runtimeState.activeIngestionRunning;
 
 // ── Cold-start recovery ──────────────────────────────────────────
 
@@ -64,7 +167,7 @@ export const isIngestionRuntimeActive = () => activeIngestionRunning;
  * Returns true if recovery was performed.
  */
 export const recoverStaleIngestionState = (): boolean => {
-  if (activeIngestionRunning) return false;
+  if (runtimeState.activeIngestionRunning) return false;
   const state = loadHvscState();
   if (state.ingestionState !== 'installing' && state.ingestionState !== 'updating') return false;
   addLog('warn', 'HVSC cold-start recovery: resetting stale ingestion state', {
@@ -89,7 +192,7 @@ export const recoverStaleIngestionState = (): boolean => {
 };
 
 const ensureNotCancelled = (token?: string) => {
-  ensureNotCancelledWith(cancelTokens, token, (patch) => updateHvscState(patch as any));
+  ensureNotCancelledWith(runtimeState.cancelTokens, token, (patch) => updateHvscState(patch as any));
 };
 
 const canUseNativeHvscIngestion = () => {
@@ -116,14 +219,17 @@ const canUseNonNativeHvscIngestion = () => {
   return import.meta.env.VITE_ENABLE_NON_NATIVE_HVSC_INGESTION === '1';
 };
 
-const assertNonNativeHvscIngestionAllowed = () => {
+const resolveHvscIngestionMode = () => {
   if (canUseNativeHvscIngestion()) {
-    return;
+    return 'native' as const;
   }
-  if (canUseNonNativeHvscIngestion()) {
-    return;
+  if (!canUseNonNativeHvscIngestion()) {
+    addLog('warn', 'HVSC native ingestion plugin unavailable; falling back to non-native ingestion path', {
+      nativeAvailable: false,
+      overrideEnabled: false,
+    });
   }
-  throw new Error('HVSC ingestion requires the native ingestion plugin on this platform. Set VITE_ENABLE_NON_NATIVE_HVSC_INGESTION=1 to override.');
+  return 'non-native' as const;
 };
 
 // ── Listener management ──────────────────────────────────────────
@@ -347,7 +453,13 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
     }
   }
   if (deletionFailures.length > 0) {
-    throw new Error(`HVSC ingestion cleanup failed for ${deletionFailures.length} file(s): ${deletionFailures.slice(0, 10).join(', ')}`);
+    addErrorLog('HVSC deletion manifest', {
+      archiveName,
+      failureCount: deletionFailures.length,
+      failedPaths: deletionFailures,
+      failedPathPreview: formatPathListPreview(deletionFailures),
+    });
+    throw new Error(`HVSC ingestion cleanup failed for ${deletionFailures.length} file(s): ${formatPathListPreview(deletionFailures)}. See diagnostics for full failure manifest.`);
   }
 
   resetSonglengthsCache();
@@ -456,6 +568,7 @@ const ingestArchivePathNative = async (options: {
       songsDeleted: nativeEvent.songsDeleted,
     });
   });
+  registerNativeProgressListener(cancelToken, progressListener);
 
   try {
     ensureNotCancelled(cancelToken);
@@ -528,25 +641,25 @@ const ingestArchivePathNative = async (options: {
     });
     return { baselineInstalled };
   } finally {
-    await progressListener.remove();
+    await removeNativeProgressListener(cancelToken, progressListener);
   }
 };
 
 // ── Install / update (from network) ─────────────────────────────
 
 export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStatus> => {
-  if (activeIngestionRunning) {
+  if (runtimeState.activeIngestionRunning) {
     const error = new Error('HVSC ingestion already running');
     addErrorLog('HVSC install/update blocked', { error: error.message });
     throw error;
   }
   resetHvscProgressSummaryStage();
-  activeIngestionRunning = true;
+  runtimeState.activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createProgressEmitter(ingestionId);
   emitProgress({ stage: 'start', message: 'HVSC install/update started' });
   await ensureHvscDirs();
-  cancelTokens.set(cancelToken, { cancelled: false });
+  runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
 
   let currentArchive: string | null = null;
   let currentArchiveType: 'baseline' | 'update' | null = null;
@@ -615,7 +728,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
 
       const cached = await resolveCachedArchive(prefix, plan.version);
       const archivePath = cached ?? archiveName;
-      assertNonNativeHvscIngestionAllowed();
+      const ingestionMode = resolveHvscIngestionMode();
       updateHvscState({
         ingestionState: plan.type === 'baseline' ? 'installing' : 'updating',
         ingestionError: null,
@@ -632,8 +745,9 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           archivePath,
           downloadUrl,
           cancelToken,
-          cancelTokens,
+          cancelTokens: runtimeState.cancelTokens,
           emitProgress,
+          retainInMemoryBuffer: ingestionMode === 'non-native',
         });
         currentArchiveComplete = true;
         pipeline.transition('DOWNLOADED', { cached: false });
@@ -646,7 +760,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           archiveName,
         });
 
-        const result = canUseNativeHvscIngestion()
+        const result = ingestionMode === 'native'
           ? await ingestArchivePathNative({
             plan,
             archivePath,
@@ -661,7 +775,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
             archiveName: archivePath,
             archiveBuffer: downloadedBuffer ?? await readArchiveBuffer(archivePath),
             cancelToken,
-            cancelTokens,
+            cancelTokens: runtimeState.cancelTokens,
             emitProgress,
             pipeline,
             baselineInstalled,
@@ -674,6 +788,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         try {
           const cacheDir = (await import('./hvscFilesystem')).getHvscCacheDir();
           const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${archivePath}` });
+          resetCacheStatFailure(cached);
           emitProgress({
             stage: 'download',
             message: `Using cached ${archiveName}`,
@@ -683,13 +798,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
             percent: 100,
           });
         } catch (error) {
-          const failure = classifyError(error);
-          addLog('warn', 'HVSC cached archive stat failed', {
-            archiveName: cached,
-            error: (error as Error).message,
-            errorCategory: failure.category,
-            errorExpected: failure.isExpected,
-          });
+          reportCacheStatFailure(cached, error, emitProgress);
           emitProgress({
             stage: 'download',
             message: `Using cached ${archiveName}`,
@@ -708,7 +817,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
         archiveName,
       });
 
-      const result = canUseNativeHvscIngestion()
+      const result = ingestionMode === 'native'
         ? await ingestArchivePathNative({
           plan,
           archivePath,
@@ -723,7 +832,7 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
           archiveName: archivePath,
           archiveBuffer: await readArchiveBuffer(archivePath),
           cancelToken,
-          cancelTokens,
+          cancelTokens: runtimeState.cancelTokens,
           emitProgress,
           pipeline,
           baselineInstalled,
@@ -765,25 +874,26 @@ export const installOrUpdateHvsc = async (cancelToken: string): Promise<HvscStat
     });
     throw error;
   } finally {
-    activeIngestionRunning = false;
-    cancelTokens.delete(cancelToken);
+    await drainNativeProgressListeners(cancelToken);
+    runtimeState.activeIngestionRunning = false;
+    runtimeState.cancelTokens.delete(cancelToken);
   }
 };
 
 // ── Ingest cached (from previously downloaded archives) ──────────
 
 export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus> => {
-  if (activeIngestionRunning) {
+  if (runtimeState.activeIngestionRunning) {
     const error = new Error('HVSC ingestion already running');
     addErrorLog('HVSC cached ingestion blocked', { error: error.message });
     throw error;
   }
-  activeIngestionRunning = true;
+  runtimeState.activeIngestionRunning = true;
   const ingestionId = crypto.randomUUID();
   const emitProgress = createProgressEmitter(ingestionId);
   emitProgress({ stage: 'start', message: 'HVSC cached ingestion started' });
   await ensureHvscDirs();
-  cancelTokens.set(cancelToken, { cancelled: false });
+  runtimeState.cancelTokens.set(cancelToken, { cancelled: false });
 
   let currentArchive: string | null = null;
   let currentArchiveType: 'baseline' | 'update' | null = null;
@@ -843,7 +953,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       if (!cached) {
         throw new Error('No cached HVSC archives available.');
       }
-      assertNonNativeHvscIngestionAllowed();
+      const ingestionMode = resolveHvscIngestionMode();
       currentArchive = cached;
       currentArchiveType = plan.type;
       currentArchiveVersion = plan.version;
@@ -861,6 +971,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
       try {
         const cacheDir = (await import('./hvscFilesystem')).getHvscCacheDir();
         const stat = await Filesystem.stat({ directory: Directory.Data, path: `${cacheDir}/${cached}` });
+        resetCacheStatFailure(cached);
         emitProgress({
           stage: 'download',
           message: `Using cached ${cached}`,
@@ -870,13 +981,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
           percent: 100,
         });
       } catch (error) {
-        const failure = classifyError(error);
-        addLog('warn', 'HVSC cached archive stat failed', {
-          archiveName: cached,
-          error: (error as Error).message,
-          errorCategory: failure.category,
-          errorExpected: failure.isExpected,
-        });
+        reportCacheStatFailure(cached, error, emitProgress);
         emitProgress({ stage: 'download', message: `Using cached ${cached}`, archiveName: cached, percent: 100 });
       }
       pipeline.transition('DOWNLOADED', { cached: true });
@@ -888,7 +993,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
         updateHvscState({ ingestionState: 'updating', ingestionError: null });
       }
 
-      const result = canUseNativeHvscIngestion()
+      const result = ingestionMode === 'native'
         ? await ingestArchivePathNative({
           plan,
           archivePath: cached,
@@ -903,7 +1008,7 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
           archiveName: cached,
           archiveBuffer: await readArchiveBuffer(cached),
           cancelToken,
-          cancelTokens,
+          cancelTokens: runtimeState.cancelTokens,
           emitProgress,
           pipeline,
           baselineInstalled,
@@ -936,19 +1041,21 @@ export const ingestCachedHvsc = async (cancelToken: string): Promise<HvscStatus>
     emitProgress({ stage: 'error', message: (error as Error).message, archiveName: currentArchive ?? undefined, errorCause: (error as Error).message });
     throw error;
   } finally {
-    activeIngestionRunning = false;
-    cancelTokens.delete(cancelToken);
+    await drainNativeProgressListeners(cancelToken);
+    runtimeState.activeIngestionRunning = false;
+    runtimeState.cancelTokens.delete(cancelToken);
   }
 };
 
 // ── Cancel ───────────────────────────────────────────────────────
 
 export const cancelHvscInstall = async (cancelToken: string): Promise<void> => {
-  if (!cancelTokens.has(cancelToken)) {
-    cancelTokens.set(cancelToken, { cancelled: true });
+  if (!runtimeState.cancelTokens.has(cancelToken)) {
+    runtimeState.cancelTokens.set(cancelToken, { cancelled: true });
   } else {
-    cancelTokens.get(cancelToken)!.cancelled = true;
+    runtimeState.cancelTokens.get(cancelToken)!.cancelled = true;
   }
+  await drainNativeProgressListeners(cancelToken);
   if (canUseNativeHvscIngestion()) {
     try {
       await HvscIngestion.cancelIngestion();

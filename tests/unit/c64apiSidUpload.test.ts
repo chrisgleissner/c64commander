@@ -53,6 +53,7 @@ describe('C64API playSidUpload', () => {
     const [url, options] = fetchSpy.mock.calls[0];
     expect(String(url)).toContain('/v1/runners:sidplay');
     expect((options as RequestInit)?.method).toBe('POST');
+    expect((options as RequestInit)?.credentials).toBe('omit');
   });
 
   it('retries transient network failures up to success', async () => {

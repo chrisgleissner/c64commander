@@ -22,7 +22,7 @@ const mockUseC64Category = vi.fn();
 const mockUseC64SetConfig = vi.fn();
 const mockUseC64UpdateConfigBatch = vi.fn();
 const mockSetConfigExpanded = vi.fn();
-const mockMarkChanged = vi.fn();
+const mockUpdateHasChanges = vi.fn();
 
 vi.mock('@/components/ThemeProvider', () => ({
   useThemeContext: () => ({
@@ -43,13 +43,6 @@ vi.mock('@/hooks/useC64Connection', () => ({
   useC64Category: (...args: [string, boolean]) => mockUseC64Category(...args),
   useC64SetConfig: () => mockUseC64SetConfig(),
   useC64UpdateConfigBatch: () => mockUseC64UpdateConfigBatch(),
-}));
-
-vi.mock('@/hooks/useAppConfigState', () => ({
-  useAppConfigState: () => ({
-    isApplying: false,
-    markChanged: mockMarkChanged,
-  }),
 }));
 
 vi.mock('@/hooks/useRefreshControl', () => ({
@@ -105,14 +98,18 @@ vi.mock('@/lib/config/audioMixer', () => ({
   isAudioMixerValueEqual: (left: string | number, right: string | number) => left === right,
 }));
 
+vi.mock('@/lib/config/appConfigStore', () => ({
+  updateHasChanges: (...args: [string, boolean]) => mockUpdateHasChanges(...args),
+}));
+
 const setupDefaultMocks = () => {
-  mockUseC64Connection.mockReturnValue({ status: { isConnected: true } });
+  mockUseC64Connection.mockReturnValue({ status: { isConnected: true }, runtimeBaseUrl: 'http://c64u' });
   mockUseC64Categories.mockReturnValue({ data: { categories: [] }, isLoading: false });
   mockUseC64Category.mockReturnValue({ data: {}, isLoading: false, refetch: vi.fn() });
   mockUseC64SetConfig.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   mockUseC64UpdateConfigBatch.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   mockSetConfigExpanded.mockReset();
-  mockMarkChanged.mockReset();
+  mockUpdateHasChanges.mockReset();
 };
 
 afterEach(() => {
@@ -122,7 +119,7 @@ afterEach(() => {
 describe('ConfigBrowserPage', () => {
   it('renders connection warning when offline', () => {
     setupDefaultMocks();
-    mockUseC64Connection.mockReturnValue({ status: { isConnected: false } });
+    mockUseC64Connection.mockReturnValue({ status: { isConnected: false }, runtimeBaseUrl: 'http://c64u' });
 
     renderConfigBrowserPage();
 
@@ -307,7 +304,7 @@ describe('ConfigBrowserPage', () => {
 
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalled();
-      expect(mockMarkChanged).toHaveBeenCalled();
+      expect(mockUpdateHasChanges).toHaveBeenCalledWith('http://c64u', true);
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Clock synced' }));
     });
   });
@@ -373,7 +370,7 @@ describe('ConfigBrowserPage', () => {
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ category: 'Audio Mixer' }));
       expect(refetch).toHaveBeenCalled();
-      expect(mockMarkChanged).toHaveBeenCalled();
+      expect(mockUpdateHasChanges).toHaveBeenCalledWith('http://c64u', true);
     });
   });
 

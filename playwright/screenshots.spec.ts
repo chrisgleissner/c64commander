@@ -11,6 +11,7 @@ import type { Page, TestInfo } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import sharp from 'sharp';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 // Load full YAML config for tests
 import '../tests/mocks/setupMockConfigForTests';
@@ -43,6 +44,40 @@ const ensureScreenshotDir = async (filePath: string) => {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
 };
 
+const decodePngToRgba = async (source: string | Buffer) => {
+  const { data, info } = await sharp(source, { limitInputPixels: false })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  return {
+    data,
+    width: info.width,
+    height: info.height,
+  };
+};
+
+const hasPixelDiffAgainstExisting = async (filePath: string, screenshotBuffer: Buffer) => {
+  try {
+    await fs.access(filePath);
+  } catch {
+    return true;
+  }
+
+  try {
+    const [existing, next] = await Promise.all([
+      decodePngToRgba(filePath),
+      decodePngToRgba(screenshotBuffer),
+    ]);
+    if (existing.width !== next.width || existing.height !== next.height) {
+      return true;
+    }
+    return !existing.data.equals(next.data);
+  } catch (error) {
+    console.warn(`Failed to compare screenshot pixels for ${filePath}.`, error);
+    return true;
+  }
+};
+
 const waitForStableRender = async (page: Page) => {
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle');
@@ -62,7 +97,10 @@ const captureScreenshot = async (page: Page, testInfo: TestInfo, relativePath: s
   await ensureScreenshotDir(filePath);
   await waitForStableRender(page);
   await waitForOverlaysToClear(page);
-  await page.screenshot({ path: filePath, animations: 'disabled', caret: 'hide' });
+  const screenshotBuffer = await page.screenshot({ animations: 'disabled', caret: 'hide' });
+  if (await hasPixelDiffAgainstExisting(filePath, screenshotBuffer)) {
+    await fs.writeFile(filePath, screenshotBuffer);
+  }
   await attachStepScreenshot(page, testInfo, screenshotLabel(relativePath));
 };
 

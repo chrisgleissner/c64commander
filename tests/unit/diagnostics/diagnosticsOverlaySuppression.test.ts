@@ -7,7 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createActionContext, runWithActionTrace } from '@/lib/tracing/actionTrace';
+import { createActionContext, runWithActionTrace, runWithImplicitAction } from '@/lib/tracing/actionTrace';
 import { clearTraceEvents, getTraceEvents, resetTraceSession } from '@/lib/tracing/traceSession';
 import {
     resetDiagnosticsOverlayState,
@@ -52,6 +52,29 @@ describe('diagnostics overlay suppression', () => {
                 throw new Error('boom');
             }),
         ).rejects.toThrow('boom');
+
+        const events = getTraceEvents();
+        expect(events.some((event) => event.type === 'action-start')).toBe(true);
+        expect(events.some((event) => event.type === 'action-end')).toBe(true);
+        expect(events.some((event) => event.type === 'error')).toBe(true);
+    });
+
+    it('suppresses implicit action traces while overlay is active', async () => {
+        setDiagnosticsOverlayActive(true);
+
+        await runWithImplicitAction('rest.get', async () => undefined);
+
+        expect(getTraceEvents()).toHaveLength(0);
+    });
+
+    it('records implicit action errors while overlay is active', async () => {
+        setDiagnosticsOverlayActive(true);
+
+        await expect(
+            runWithImplicitAction('rest.get', async () => {
+                throw new Error('implicit boom');
+            }),
+        ).rejects.toThrow('implicit boom');
 
         const events = getTraceEvents();
         expect(events.some((event) => event.type === 'action-start')).toBe(true);

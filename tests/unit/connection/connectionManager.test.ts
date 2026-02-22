@@ -518,6 +518,102 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
   });
 
+  it('ignores stale manual discovery outcomes when a newer manual run finishes first', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchStub = vi.mocked(fetch);
+    fetchStub
+      .mockImplementationOnce(() =>
+        new Promise<Response>((_, reject) => {
+          setTimeout(() => reject(new TypeError('first manual probe failed')), 150);
+        }))
+      .mockImplementationOnce(() =>
+        new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }));
+          }, 20);
+        }));
+
+    await initializeConnectionManager();
+
+    const firstManual = discoverConnection('manual');
+    await vi.advanceTimersByTimeAsync(10);
+    const secondManual = discoverConnection('manual');
+
+    await vi.advanceTimersByTimeAsync(250);
+    await Promise.all([firstManual, secondManual]);
+
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
+  it('preserves transition invariants under mixed trigger stress', async () => {
+    const {
+      discoverConnection,
+      getConnectionSnapshot,
+      initializeConnectionManager,
+      isRealDeviceStickyLockEnabled,
+    } = await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(120);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchStub = vi.mocked(fetch);
+    let probeCount = 0;
+    fetchStub.mockImplementation(() => {
+      probeCount += 1;
+      const shouldSucceed = probeCount % 3 === 0;
+      return Promise.resolve(
+        new Response(JSON.stringify(shouldSucceed
+          ? { product: 'C64 Ultimate', errors: [] }
+          : { errors: ['offline'] }), {
+          status: shouldSucceed ? 200 : 503,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+
+    await initializeConnectionManager();
+
+    const triggers: Array<'startup' | 'manual' | 'settings' | 'background'> = [
+      'startup',
+      'background',
+      'manual',
+      'settings',
+      'background',
+      'manual',
+      'settings',
+      'background',
+      'manual',
+      'startup',
+    ];
+
+    for (const trigger of triggers) {
+      await discoverConnection(trigger);
+      await vi.advanceTimersByTimeAsync(250);
+      const current = getConnectionSnapshot();
+
+      if (current.demoInterstitialVisible) {
+        expect(current.state).toBe('DEMO_ACTIVE');
+      }
+
+      if (current.state === 'REAL_CONNECTED') {
+        expect(current.demoInterstitialVisible).toBe(false);
+      }
+
+      if (isRealDeviceStickyLockEnabled()) {
+        expect(current.state).not.toBe('DEMO_ACTIVE');
+      }
+    }
+  });
+
   it('does not auto-enable demo when automatic demo mode is disabled', async () => {
     const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
       await import('../../../src/lib/connection/connectionManager');

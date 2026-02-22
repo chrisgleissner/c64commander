@@ -11,7 +11,6 @@ import { Capacitor } from '@capacitor/core';
 import type { HvscProgressEvent } from './hvscTypes';
 import { getHvscCacheDir, writeCachedArchive, deleteCachedArchive, writeCachedArchiveMarker, readCachedArchiveMarker, MAX_BRIDGE_READ_BYTES } from './hvscFilesystem';
 import { addErrorLog, addLog } from '@/lib/logging';
-import { base64ToUint8 } from '@/lib/sid/sidUtils';
 
 // ── Utility helpers ──────────────────────────────────────────────
 
@@ -101,6 +100,80 @@ const readHeapUsageBytes = () => {
         return process.memoryUsage().heapUsed;
     }
     return null;
+};
+
+const decodeBase64ToUint8Chunked = (base64: string) => {
+    const normalized = base64.replace(/\s+/g, '');
+    if (!normalized) {
+        return new Uint8Array();
+    }
+    const stripped = normalized.replace(/=+$/, '');
+    const outputLength = Math.floor((stripped.length * 3) / 4);
+    const output = new Uint8Array(outputLength);
+    const encodedChunkLength = 16384;
+    const safeChunkLength = encodedChunkLength - (encodedChunkLength % 4);
+
+    let offset = 0;
+    for (let index = 0; index < normalized.length; index += safeChunkLength) {
+        const chunk = normalized.slice(index, index + safeChunkLength);
+        if (!chunk) continue;
+        const binary = atob(chunk);
+        for (let i = 0; i < binary.length; i += 1) {
+            if (offset >= output.length) break;
+            output[offset] = binary.charCodeAt(i);
+            offset += 1;
+        }
+    }
+    return output;
+};
+
+const streamToBuffer = async (
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    totalBytes: number | null,
+    ensureNotCancelled: () => void,
+    onProgress: (downloadedBytes: number) => void,
+) => {
+    let loaded = 0;
+
+    if (totalBytes && totalBytes > 0) {
+        const boundedBuffer = new Uint8Array(totalBytes);
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!value) continue;
+            boundedBuffer.set(value, loaded);
+            loaded += value.length;
+            onProgress(loaded);
+            ensureNotCancelled();
+        }
+        if (loaded !== totalBytes) {
+            throw new Error(`Download size mismatch: expected ${totalBytes}, got ${loaded}`);
+        }
+        return boundedBuffer;
+    }
+
+    let capacity = 64 * 1024;
+    let dynamicBuffer = new Uint8Array(capacity);
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        const required = loaded + value.length;
+        if (required > capacity) {
+            while (capacity < required) {
+                capacity *= 2;
+            }
+            const expanded = new Uint8Array(capacity);
+            expanded.set(dynamicBuffer.subarray(0, loaded), 0);
+            dynamicBuffer = expanded;
+        }
+        dynamicBuffer.set(value, loaded);
+        loaded += value.length;
+        onProgress(loaded);
+        ensureNotCancelled();
+    }
+
+    return dynamicBuffer.subarray(0, loaded);
 };
 
 // ── Path normalization helpers ───────────────────────────────────
@@ -271,7 +344,7 @@ export const readArchiveBuffer = async (archivePath: string) => {
         directory: Directory.Data,
         path: `${cacheDir}/${archivePath}`,
     });
-    const decoded = base64ToUint8(archiveData.data);
+    const decoded = decodeBase64ToUint8Chunked(archiveData.data);
     const heapAfter = readHeapUsageBytes();
     addLog('info', 'HVSC archive read memory profile', {
         archivePath,
@@ -293,6 +366,7 @@ export type DownloadArchiveOptions = {
     cancelToken: string;
     cancelTokens: Map<string, { cancelled: boolean }>;
     emitProgress: (event: Omit<HvscProgressEvent, 'ingestionId' | 'elapsedTimeMs'>) => void;
+    retainInMemoryBuffer?: boolean;
 };
 
 export const ensureNotCancelledWith = (
@@ -309,6 +383,7 @@ export const ensureNotCancelledWith = (
 
 export const downloadArchive = async (options: DownloadArchiveOptions): Promise<Uint8Array | null> => {
     const { plan, archiveName, archivePath, downloadUrl, cancelToken, cancelTokens, emitProgress } = options;
+    const retainInMemoryBuffer = options.retainInMemoryBuffer ?? false;
     const ensureNotCancelled = () => ensureNotCancelledWith(cancelTokens, cancelToken);
     let inMemoryBuffer: Uint8Array | null = null;
 
@@ -370,7 +445,7 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
             const buffer = new Uint8Array(await response.arrayBuffer());
             await writeCachedArchive(archivePath, buffer);
             emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
-            inMemoryBuffer = buffer;
+            inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
         } finally {
             if (pollingTimer) clearInterval(pollingTimer);
         }
@@ -388,22 +463,17 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
             }
             await writeCachedArchive(archivePath, buffer);
             emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, buffer.byteLength);
-            inMemoryBuffer = buffer;
+            inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
         } else {
             const reader = response.body.getReader();
-            const chunks: Uint8Array[] = [];
-            let loaded = 0;
+            let buffer: Uint8Array;
             try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    if (value) {
-                        chunks.push(value);
-                        loaded += value.length;
-                        emitDownloadProgress(emitProgress, archiveName, loaded, totalBytes ?? null);
-                    }
-                    ensureNotCancelled();
-                }
+                buffer = await streamToBuffer(
+                    reader,
+                    totalBytes,
+                    ensureNotCancelled,
+                    (loadedBytes) => emitDownloadProgress(emitProgress, archiveName, loadedBytes, totalBytes ?? null),
+                );
             } catch (error) {
                 try {
                     await reader.cancel();
@@ -424,13 +494,9 @@ export const downloadArchive = async (options: DownloadArchiveOptions): Promise<
                     });
                 }
             }
-            if (totalBytes && loaded !== totalBytes) {
-                throw new Error(`Download size mismatch: expected ${totalBytes}, got ${loaded}`);
-            }
-            const buffer = concatChunks(chunks, totalBytes ?? undefined);
             await writeCachedArchive(archivePath, buffer);
             emitDownloadProgress(emitProgress, archiveName, buffer.byteLength, totalBytes ?? buffer.byteLength);
-            inMemoryBuffer = buffer;
+            inMemoryBuffer = retainInMemoryBuffer ? buffer : null;
         }
     }
 

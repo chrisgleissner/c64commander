@@ -19,7 +19,6 @@ import { Capacitor } from '@capacitor/core';
 import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { createHvscMediaIndex } from './hvscMediaIndex';
 import { loadHvscRoot } from './hvscRootLocator';
-import { ensureHvscSonglengthsReadyOnColdStart } from './hvscSongLengthService';
 import type { SongLengthResolveQuery, SongLengthResolution } from '@/lib/songlengths';
 import { addErrorLog } from '@/lib/logging';
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from './hvscBrowseIndexStore';
@@ -64,7 +63,6 @@ const hasRuntimeBridge = () => {
 };
 
 const hvscIndex = createHvscMediaIndex();
-void ensureHvscSonglengthsReadyOnColdStart();
 
 const LEGACY_MEDIA_INDEX_STORAGE_KEY = 'c64u_media_index:v1';
 

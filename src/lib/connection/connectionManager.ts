@@ -206,6 +206,7 @@ let demoInterstitialShownThisSession = false;
 let demoServerStartedThisSession = false;
 const DEMO_INTERSTITIAL_SESSION_KEY = 'c64u_demo_interstitial_shown';
 let stickyRealDeviceLock = false;
+let discoveryRunToken = 0;
 
 const emit = () => {
   listeners.forEach((listener) => listener());
@@ -214,6 +215,13 @@ const emit = () => {
 const setSnapshot = (patch: Partial<ConnectionSnapshot>) => {
   snapshot = Object.freeze({ ...snapshot, ...patch });
   emit();
+};
+
+const beginDiscoveryRun = (trigger: DiscoveryTrigger) => {
+  const token = trigger === 'background' ? discoveryRunToken : ++discoveryRunToken;
+  return {
+    isCurrent: () => token === discoveryRunToken,
+  };
 };
 
 export function getConnectionSnapshot(): ConnectionSnapshot {
@@ -412,6 +420,36 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
   }
 };
 
+const handleProbeOutcome = async (
+  trigger: DiscoveryTrigger,
+  ok: boolean,
+  autoDemoEnabled: boolean,
+  isCurrentRun: () => boolean,
+) => {
+  if (!isCurrentRun()) return;
+
+  if (ok) {
+    setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
+    addLog('info', 'Discovery probe succeeded', { trigger });
+    if (isSmokeModeEnabled()) {
+      console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
+    }
+    await transitionToRealConnected(trigger);
+    return;
+  }
+
+  setSnapshot({ lastProbeFailedAtMs: Date.now() });
+  addLog('debug', 'Discovery probe failed', { trigger });
+  if (isSmokeModeEnabled()) {
+    console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
+  }
+  if (autoDemoEnabled) {
+    await transitionToDemoActive(trigger);
+  } else {
+    await transitionToOfflineNoDemo(trigger);
+  }
+};
+
 /**
  * Centralized discovery entry point used for:
  * - App startup
@@ -420,6 +458,8 @@ const transitionToSmokeMockConnected = async (trigger: DiscoveryTrigger) => {
  * - Settings-triggered rediscovery
  */
 export async function discoverConnection(trigger: DiscoveryTrigger): Promise<void> {
+  const discoveryRun = beginDiscoveryRun(trigger);
+
   if (trigger === 'background') {
     if (activeDiscovery) {
       addLog('debug', 'Background discovery skipped because a probe is already active');
@@ -437,11 +477,13 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     }
   }
   if (smokeConfig?.target === 'mock') {
+    if (!discoveryRun.isCurrent()) return;
     await transitionToSmokeMockConnected(trigger);
     return;
   }
 
   if (isFuzzModeEnabled()) {
+    if (!discoveryRun.isCurrent()) return;
     await transitionToDemoActive(trigger);
     return;
   }
@@ -457,25 +499,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         setTimeout(() => resolve(false), manualProbeTimeoutMs);
       }),
     ]);
-    if (ok) {
-      setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
-      addLog('info', 'Discovery probe succeeded', { trigger });
-      if (isSmokeModeEnabled()) {
-        console.info('C64U_PROBE_OK', JSON.stringify({ trigger }));
-      }
-      await transitionToRealConnected(trigger);
-    } else {
-      setSnapshot({ lastProbeFailedAtMs: Date.now() });
-      addLog('debug', 'Discovery probe failed', { trigger });
-      if (isSmokeModeEnabled()) {
-        console.warn('C64U_PROBE_FAILED', JSON.stringify({ trigger }));
-      }
-      if (autoDemoEnabled) {
-        await transitionToDemoActive(trigger);
-      } else {
-        await transitionToOfflineNoDemo(trigger);
-      }
-    }
+    await handleProbeOutcome(trigger, ok, autoDemoEnabled, discoveryRun.isCurrent);
     return;
   }
 
@@ -488,6 +512,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       const ok = await probeOnce({ signal: abort.signal });
       setSnapshot({ lastProbeAtMs: Date.now() });
       if (ok) {
+        if (!discoveryRun.isCurrent()) return;
         setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
         addLog('info', 'Discovery probe succeeded', { trigger });
         if (isSmokeModeEnabled()) {
@@ -498,6 +523,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
         }
         await transitionToRealConnected(trigger);
       } else {
+        if (!discoveryRun.isCurrent()) return;
         setSnapshot({ lastProbeFailedAtMs: Date.now() });
         addLog('debug', 'Discovery probe failed', { trigger });
         if (isSmokeModeEnabled()) {
@@ -548,6 +574,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
     probeInFlight = false;
     if (cancelled) return;
     if (ok) {
+      if (!discoveryRun.isCurrent()) return;
       setSnapshot({ lastProbeSucceededAtMs: Date.now(), lastProbeError: null });
       addLog('info', 'Discovery probe succeeded', { trigger });
       if (isSmokeModeEnabled()) {
@@ -558,6 +585,7 @@ export async function discoverConnection(trigger: DiscoveryTrigger): Promise<voi
       globalThis.clearInterval(probeTimer);
       await transitionToRealConnected(trigger);
     } else {
+      if (!discoveryRun.isCurrent()) return;
       if (windowExpired) {
         await handleWindowExpiry();
         return;

@@ -28,6 +28,16 @@ Or via the local build helper:
 ./build --test-smoke --c64u-target real --c64u-host C64U
 ```
 
+## Device preflight
+
+Before each smoke test app launch, the runner now performs a deterministic Android preflight:
+
+- wakes the device and attempts keyguard dismissal,
+- starts the configured app activity,
+- verifies keyguard is no longer active and the app window is focused.
+
+If focus/keyguard preflight cannot be satisfied within the timeout window, the test fails fast with a preflight error.
+
 ## Evidence layout
 
 Each test case writes evidence to:

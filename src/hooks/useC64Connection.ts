@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getC64API,
@@ -23,6 +23,8 @@ import {
 import { getPassword as loadStoredPassword, hasStoredPasswordFlag } from '@/lib/secureStorage';
 import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from '@/lib/config/appConfigStore';
 import { useConnectionState } from '@/hooks/useConnectionState';
+import { invalidateForConnectionSettingsChange } from '@/lib/query/c64QueryInvalidation';
+import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from '@/lib/query/c64PollingGovernance';
 
 export interface ConnectionStatus {
   state: 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
@@ -45,6 +47,20 @@ export function useC64Connection() {
     return resolveDeviceHostFromStorage();
   });
   const queryClient = useQueryClient();
+  const lastInfoRefreshAtRef = useRef<number | null>(null);
+  const settingsRef = useRef({
+    baseUrl,
+    password,
+    deviceHost,
+  });
+
+  useEffect(() => {
+    settingsRef.current = {
+      baseUrl,
+      password,
+      deviceHost,
+    };
+  }, [baseUrl, password, deviceHost]);
 
   const { data: deviceInfo, error, isLoading, refetch } = useQuery({
     queryKey: ['c64-info', baseUrl],
@@ -57,6 +73,15 @@ export function useC64Connection() {
     retryDelay: 1000,
     staleTime: 30000,
   });
+
+  const rateLimitedInfoRefetch = useCallback(() => {
+    const nowMs = Date.now();
+    if (!shouldRunRateLimited(lastInfoRefreshAtRef.current, getInfoRefreshMinIntervalMs(), nowMs)) {
+      return;
+    }
+    lastInfoRefreshAtRef.current = nowMs;
+    void refetch();
+  }, [refetch]);
 
   useEffect(() => {
     let isMounted = true;
@@ -74,15 +99,23 @@ export function useC64Connection() {
         deviceHost?: string;
       } | undefined;
       if (!detail) return;
-      if (detail.baseUrl) setBaseUrl(detail.baseUrl);
-      if (typeof detail.password === 'string') setPassword(detail.password);
-      if (detail.deviceHost) setDeviceHost(detail.deviceHost);
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey[0]?.toString().startsWith('c64'),
-      });
-      refetch();
+      const current = settingsRef.current;
+      const next = {
+        baseUrl: typeof detail.baseUrl === 'string' ? detail.baseUrl : current.baseUrl,
+        password: typeof detail.password === 'string' ? detail.password : current.password,
+        deviceHost: typeof detail.deviceHost === 'string' ? detail.deviceHost : current.deviceHost,
+      };
+      const baseUrlChanged = next.baseUrl !== current.baseUrl;
+      const passwordChanged = next.password !== current.password;
+      const hostChanged = next.deviceHost !== current.deviceHost;
+      if (!baseUrlChanged && !passwordChanged && !hostChanged) return;
+
+      if (baseUrlChanged) setBaseUrl(next.baseUrl);
+      if (passwordChanged) setPassword(next.password);
+      if (hostChanged) setDeviceHost(next.deviceHost);
+      settingsRef.current = next;
+      invalidateForConnectionSettingsChange(queryClient);
+      rateLimitedInfoRefetch();
     };
 
     window.addEventListener('c64u-connection-change', handler as EventListener);
@@ -90,22 +123,32 @@ export function useC64Connection() {
       isMounted = false;
       window.removeEventListener('c64u-connection-change', handler as EventListener);
     };
-  }, [queryClient, refetch]);
+  }, [queryClient, rateLimitedInfoRefetch]);
 
   const updateConfig = useCallback((newDeviceHost: string, newPassword?: string) => {
     const resolvedDeviceHost = normalizeDeviceHost(newDeviceHost);
     const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
+    const resolvedPassword = newPassword || '';
+    const current = settingsRef.current;
+    const baseUrlChanged = current.baseUrl !== resolvedBaseUrl;
+    const passwordChanged = current.password !== resolvedPassword;
+    const hostChanged = current.deviceHost !== resolvedDeviceHost;
+    if (!baseUrlChanged && !passwordChanged && !hostChanged) {
+      return;
+    }
+
     setBaseUrl(resolvedBaseUrl);
-    setPassword(newPassword || '');
+    setPassword(resolvedPassword);
     setDeviceHost(resolvedDeviceHost);
+    settingsRef.current = {
+      baseUrl: resolvedBaseUrl,
+      password: resolvedPassword,
+      deviceHost: resolvedDeviceHost,
+    };
     updateC64APIConfig(resolvedBaseUrl, newPassword, resolvedDeviceHost);
-    queryClient.invalidateQueries({
-      predicate: (query) =>
-        Array.isArray(query.queryKey) &&
-        query.queryKey[0]?.toString().startsWith('c64'),
-    });
-    refetch();
-  }, [queryClient, refetch]);
+    invalidateForConnectionSettingsChange(queryClient);
+    rateLimitedInfoRefetch();
+  }, [queryClient, rateLimitedInfoRefetch]);
 
   const status: ConnectionStatus = {
     state: connection.state,

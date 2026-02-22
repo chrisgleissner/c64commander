@@ -242,6 +242,7 @@ describe('c64api', () => {
     const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
     expect(headers['X-Password']).toBe('secret');
     expect(headers['X-C64U-Host']).toBeUndefined();
+    expect(fetchMock.mock.calls[0][1]?.credentials).toBe('omit');
   });
 
   it('fails on non-json 200 responses', async () => {
@@ -574,6 +575,171 @@ describe('c64api', () => {
     }
   });
 
+  it('dedupes concurrent identical read requests while one request is in flight', async () => {
+    let resolveFetch: ((value: Response) => void) | null = null;
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    const api = new C64API('http://c64u');
+    const first = api.getInfo();
+    const second = api.getInfo();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(resolveFetch).not.toBeNull();
+    resolveFetch?.(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(first).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    await expect(second).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    expect(addLogMock).toHaveBeenCalledWith(
+      'debug',
+      'C64 API in-flight dedupe hit',
+      expect.objectContaining({ method: 'GET', path: '/v1/info' }),
+    );
+  });
+
+  it('replays recent identical read responses within the request budget window', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ errors: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const api = new C64API('http://c64u');
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(addLogMock).toHaveBeenCalledWith(
+        'debug',
+        'C64 API request budget replay hit',
+        expect.objectContaining({ method: 'GET', path: '/v1/info' }),
+      );
+
+      await vi.advanceTimersByTimeAsync(501);
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retain oversized read responses in the request budget replay cache', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({
+          errors: [],
+          payload: 'x'.repeat(70 * 1024),
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const api = new C64API('http://c64u');
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(addLogMock).toHaveBeenCalledWith(
+        'debug',
+        'Skipping oversized C64 API request budget value',
+        expect.objectContaining({
+          maxBytes: 64 * 1024,
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bypasses read dedupe and budget replay when bypassCache is true', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    await expect(api.getInfo({ __c64uBypassCache: true })).resolves.toEqual(expect.objectContaining({ errors: [] }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears read budget replay after successful mutation', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ errors: [] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        );
+
+      const api = new C64API('http://c64u');
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.setConfigValue('Audio Mixer', 'Vol UltiSid 1', '+6 dB')).resolves.toEqual(expect.objectContaining({ errors: [] }));
+      await expect(api.getInfo()).resolves.toEqual(expect.objectContaining({ errors: [] }));
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not dedupe concurrent mutating requests', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          setTimeout(() => {
+            resolve(
+              new Response(JSON.stringify({ errors: [] }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              }),
+            );
+          }, 0);
+        }),
+    );
+
+    const api = new C64API('http://c64u');
+    const first = api.machineReset();
+    const second = api.machineReset();
+    await Promise.all([first, second]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('builds request urls for config writes and machine actions', async () => {
     const fetchMock = getFetchMock();
     const okResponse = () =>
@@ -714,6 +880,105 @@ describe('c64api', () => {
       'http://c64u/v1/drives/a:mount',
       expect.objectContaining({ method: 'POST' }),
     );
+  });
+
+  it('fetches config items from category payload before per-item fallback', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/v1/configs/Audio%20Mixer')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              'Audio Mixer': {
+                items: {
+                  'Vol UltiSid 1': { selected: '+6 dB' },
+                  'Vol Socket 1': { selected: '-3 dB' },
+                },
+              },
+              errors: [],
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ errors: ['unexpected'] }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+
+    const api = new C64API('http://c64u');
+    const response = await api.getConfigItems('Audio Mixer', ['Vol UltiSid 1', 'Vol Socket 1']);
+
+    expect(response['Audio Mixer']?.items?.['Vol UltiSid 1']).toBeDefined();
+    expect(response['Audio Mixer']?.items?.['Vol Socket 1']).toBeDefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://c64u/v1/configs/Audio%20Mixer');
+  });
+
+  it('falls back to item endpoint when category payload misses requested keys', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/v1/configs/Audio%20Mixer')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              'Audio Mixer': {
+                items: {
+                  'Vol UltiSid 1': { selected: '+6 dB' },
+                },
+              },
+              errors: [],
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        );
+      }
+      if (url.endsWith('/v1/configs/Audio%20Mixer/Vol%20Socket%201')) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              'Audio Mixer': {
+                items: {
+                  'Vol Socket 1': { selected: '-3 dB' },
+                },
+              },
+              errors: [],
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ errors: ['unexpected'] }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    });
+
+    const api = new C64API('http://c64u');
+    const response = await api.getConfigItems('Audio Mixer', ['Vol UltiSid 1', 'Vol Socket 1']);
+
+    expect(response['Audio Mixer']?.items?.['Vol UltiSid 1']).toBeDefined();
+    expect(response['Audio Mixer']?.items?.['Vol Socket 1']).toBeDefined();
+    expect(fetchMock.mock.calls.map((call) => call[0])).toEqual([
+      'http://c64u/v1/configs/Audio%20Mixer',
+      'http://c64u/v1/configs/Audio%20Mixer/Vol%20Socket%201',
+    ]);
   });
 
   it('covers runner and drive request helpers', async () => {

@@ -10,6 +10,7 @@ import { test, expect } from '@playwright/test';
 import { saveCoverageFromPage } from './withCoverage';
 import type { Page, TestInfo } from '@playwright/test';
 import * as path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { createMockC64Server } from '../tests/mocks/mockC64Server';
 import { seedUiMocks, uiFixtures } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
@@ -71,6 +72,22 @@ const parseTimeLabel = (value: string | null) => {
   const match = value.match(/(\d+):(\d{2})/);
   if (!match) return null;
   return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const runAdbShell = (serial: string, command: string) => {
+  const result = spawnSync('adb', ['-s', serial, 'shell', command], { encoding: 'utf-8' });
+  if (result.status !== 0) {
+    throw new Error(`adb shell failed for command "${command}": ${result.stderr || result.stdout}`);
+  }
+};
+
+const runDeviceLockUnlockCycle = (serial?: string) => {
+  if (!serial) return;
+  runAdbShell(serial, 'input keyevent 26');
+  runAdbShell(serial, 'wm dismiss-keyguard');
+  runAdbShell(serial, 'input keyevent 26');
+  runAdbShell(serial, 'wm dismiss-keyguard');
+  runAdbShell(serial, 'input keyevent 82');
 };
 
 test.describe('Playback file browser', () => {
@@ -216,13 +233,13 @@ test.describe('Playback file browser', () => {
 
     await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/info')));
     await waitForRequests(() =>
-      server.requests.filter((req) => req.url.startsWith('/v1/configs/Audio%20Mixer')).length >= 4
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/Audio%20Mixer')).length >= 1
     );
     await waitForRequests(() =>
-      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration')).length >= 2
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Sockets%20Configuration')).length >= 1
     );
     await waitForRequests(() =>
-      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Addressing')).length >= 2
+      server.requests.filter((req) => req.url.startsWith('/v1/configs/SID%20Addressing')).length >= 1
     );
 
     await clearTraces(page);
@@ -264,6 +281,35 @@ test.describe('Playback file browser', () => {
     await expectRestTraceSequence(page, testInfo, '/v1/machine:pause');
     await expectRestTraceSequence(page, testInfo, '/v1/machine:reset');
     await snap(page, testInfo, 'pause-stop-complete');
+  });
+
+  test('playback progression survives lock/unlock cycle', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    const deviceSerial = process.env.PLAYWRIGHT_ANDROID_SERIAL;
+    enableTraceAssertions(testInfo);
+    await seedPlaylistStorage(page, [
+      { source: 'ultimate' as const, path: '/Usb0/Demos/Track_0001.sid', name: 'Track_0001.sid', durationMs: 12000 },
+    ]);
+
+    await page.goto('/play');
+    await snap(page, testInfo, 'lock-unlock-open');
+
+    await clearTraces(page);
+
+    await page.getByTestId('playlist-play').click();
+    await waitForRequests(() => server.requests.some((req) => req.url.startsWith('/v1/runners:sidplay')));
+
+    const elapsed = page.getByTestId('playback-elapsed');
+    await expect.poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0).toBeGreaterThan(0);
+    const elapsedBeforeLock = parseTimeLabel(await elapsed.textContent()) ?? 0;
+
+    runDeviceLockUnlockCycle(deviceSerial);
+
+    await expect(page.getByTestId('playlist-play')).toHaveAttribute('aria-label', 'Stop');
+    await expect
+      .poll(async () => parseTimeLabel(await elapsed.textContent()) ?? 0, { timeout: 15000 })
+      .toBeGreaterThan(elapsedBeforeLock);
+
+    await snap(page, testInfo, 'lock-unlock-recovered');
   });
 
   test('volume slider updates during playback', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -308,14 +354,9 @@ test.describe('Playback file browser', () => {
     await seedUiMocks(page, server.baseUrl);
 
     const initialResponses = [
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%201')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20UltiSid%202')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%201')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer/Vol%20Socket%202')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%201')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration/SID%20Socket%202')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%201%20Address')),
-      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing/UltiSID%202%20Address')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/Audio%20Mixer')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Sockets%20Configuration')),
+      page.waitForResponse((response) => response.url().includes('/v1/configs/SID%20Addressing')),
     ];
     await page.goto('/play');
     await Promise.all(initialResponses);

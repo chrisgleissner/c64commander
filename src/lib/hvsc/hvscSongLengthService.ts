@@ -63,9 +63,73 @@ const decodeBase64Text = (raw: string) => {
   }
 };
 
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+      return (error as { message: string }).message;
+    }
+    if ('error' in error) {
+      const nested = (error as { error?: unknown }).error;
+      if (typeof nested === 'string') return nested;
+      if (nested && typeof nested === 'object' && 'message' in nested && typeof (nested as { message?: unknown }).message === 'string') {
+        return (nested as { message: string }).message;
+      }
+    }
+  }
+  return String(error ?? '');
+};
+
+const isMissingPathError = (error: unknown) =>
+  /does not exist|not exist|no such file|not found/i.test(getErrorMessage(error));
+
+const ensureSonglengthDirectory = async (path: string) => {
+  try {
+    await Filesystem.mkdir({ directory: Directory.Data, path, recursive: true });
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      addLog('debug', 'HVSC songlengths directory missing during bootstrap', {
+        service: 'hvsc-songlengths',
+        path,
+        error: getErrorMessage(error),
+      });
+      return;
+    }
+    addErrorLog('HVSC songlengths directory bootstrap failed', {
+      service: 'hvsc-songlengths',
+      path,
+      error: {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+      },
+    });
+  }
+};
+
+const isReadableFile = async (path: string) => {
+  try {
+    const stat = await Filesystem.stat({ directory: Directory.Data, path });
+    return stat.type === 'file';
+  } catch (error) {
+    if (isMissingPathError(error)) return false;
+    addErrorLog('HVSC songlengths stat failed', {
+      service: 'hvsc-songlengths',
+      path,
+      error: {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+      },
+    });
+    return false;
+  }
+};
+
 const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
   const roots = [HVSC_LIBRARY_DIR, `${HVSC_LIBRARY_DIR}/DOCUMENTS`];
   const discovered: string[] = [];
+  await Promise.all(roots.map((rootPath) => ensureSonglengthDirectory(rootPath)));
   await Promise.all(
     roots.map(async (rootPath) => {
       try {
@@ -95,6 +159,14 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
 
   const files: SongLengthSourceFile[] = [];
   for (const path of sortedPaths) {
+    const isReadable = await isReadableFile(path);
+    if (!isReadable) {
+      addLog('debug', 'HVSC songlengths file missing; skipping read', {
+        service: 'hvsc-songlengths',
+        path,
+      });
+      continue;
+    }
     try {
       const file = await Filesystem.readFile({ directory: Directory.Data, path });
       files.push({
@@ -102,6 +174,14 @@ const discoverSonglengthFiles = async (): Promise<SongLengthSourceFile[]> => {
         content: decodeBase64Text(file.data),
       });
     } catch (error) {
+      if (isMissingPathError(error)) {
+        addLog('debug', 'HVSC songlengths file disappeared before read', {
+          service: 'hvsc-songlengths',
+          path,
+          error: getErrorMessage(error),
+        });
+        continue;
+      }
       addErrorLog('HVSC songlengths file read failed', {
         service: 'hvsc-songlengths',
         path,
@@ -169,4 +249,7 @@ export const resetHvscSonglengths = (reason = 'manual-reset') => {
 export const __test__ = {
   decodeBase64Text,
   discoverSonglengthFiles,
+  ensureSonglengthDirectory,
+  isReadableFile,
+  isMissingPathError,
 };

@@ -49,7 +49,8 @@ open class DiagnosticsBridgePlugin : Plugin() {
       }
 
       payload.put("details", details)
-      notifyListeners("diagnosticsLog", payload)
+      // Keep early diagnostics events until JS listeners are attached.
+      notifyListeners("diagnosticsLog", payload, true)
     }
   }
 

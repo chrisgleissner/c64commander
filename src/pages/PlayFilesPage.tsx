@@ -336,6 +336,14 @@ export default function PlayFilesPage() {
         source: 'playback-controller',
         reason: 'play',
         context: { trackInstanceId },
+      }).catch((error) => {
+        reportUserError({
+          operation: 'startBackgroundExecution',
+          title: 'Background playback unavailable',
+          description: 'Foreground playback continues, but background auto-advance may be interrupted.',
+          error,
+          context: { trackInstanceId },
+        });
       });
       void BackgroundExecution.setDueAtMs({ dueAtMs: autoAdvanceDueAtMs });
       return;
@@ -346,6 +354,14 @@ export default function PlayFilesPage() {
       source: 'playback-controller',
       reason: isPaused ? 'pause' : 'stop',
       context: { trackInstanceId },
+    }).catch((error) => {
+      reportUserError({
+        operation: 'stopBackgroundExecution',
+        title: 'Background playback cleanup failed',
+        description: 'Background playback guard could not be fully stopped.',
+        error,
+        context: { trackInstanceId, reason: isPaused ? 'pause' : 'stop' },
+      });
     });
     void BackgroundExecution.setDueAtMs({ dueAtMs: null });
   }, [autoAdvanceDueAtMs, isPaused, isPlaying, trackInstanceId]);
@@ -357,6 +373,14 @@ export default function PlayFilesPage() {
       source: 'playback-controller',
       reason: 'cleanup',
       context: { trackInstanceId },
+    }).catch((error) => {
+      reportUserError({
+        operation: 'stopBackgroundExecution',
+        title: 'Background playback cleanup failed',
+        description: 'Background playback guard could not be fully stopped.',
+        error,
+        context: { trackInstanceId, reason: 'cleanup' },
+      });
     });
     void BackgroundExecution.setDueAtMs({ dueAtMs: null });
   }, [trackInstanceId]);

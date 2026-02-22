@@ -347,4 +347,46 @@ describe('compareTracesEssential', () => {
     const result = compareTracesEssential(expected, actual);
     expect(result.errors).toEqual([]);
   });
+
+  it('reports ordering violations when action end occurs before downstream system events', () => {
+    const expected = [
+      makeEvent({ id: 'EVT-0500', type: 'action-start', correlationId: 'COR-0500', relativeMs: 0, data: { name: 'rest.post' } }),
+      makeEvent({ id: 'EVT-0501', type: 'rest-request', correlationId: 'COR-0500', relativeMs: 1, data: { method: 'POST', url: '/v1/custom' } }),
+      makeEvent({ id: 'EVT-0502', type: 'action-end', correlationId: 'COR-0500', relativeMs: 2, data: { status: 'success' } }),
+    ];
+    const actual = [
+      makeEvent({ id: 'EVT-0503', type: 'action-start', correlationId: 'COR-0500', relativeMs: 0, data: { name: 'rest.post' }, origin: 'system' }),
+      makeEvent({ id: 'EVT-0504', type: 'action-end', correlationId: 'COR-0500', relativeMs: 1, data: { status: 'success' }, origin: 'system' }),
+      makeEvent({ id: 'EVT-0505', type: 'rest-request', correlationId: 'COR-0500', relativeMs: 2, data: { method: 'POST', url: '/v1/custom' }, origin: 'system' }),
+    ];
+
+    const result = compareTracesEssential(expected, actual);
+    expect(result.errors.some((error) => error.includes('Ordering violation'))).toBe(true);
+    expect(result.diff.orderingViolations.length).toBeGreaterThan(0);
+  });
+
+  it('captures unexpected actions in diff payload', () => {
+    const expected = buildRestTrace({
+      ids: ['EVT-0600', 'EVT-0601', 'EVT-0602', 'EVT-0603'],
+      correlationId: 'COR-0600',
+      actionName: 'rest.get',
+      method: 'GET',
+      url: 'http://127.0.0.1:5555/v1/version',
+      status: 200,
+    });
+    const actual = [
+      ...expected,
+      ...buildRestTrace({
+        ids: ['EVT-0604', 'EVT-0605', 'EVT-0606', 'EVT-0607'],
+        correlationId: 'COR-0601',
+        actionName: 'rest.post',
+        method: 'POST',
+        url: 'http://127.0.0.1:5555/v1/custom-action',
+        status: 200,
+      }),
+    ];
+
+    const result = compareTracesEssential(expected, actual);
+    expect(result.diff.unexpectedActions.length).toBeGreaterThan(0);
+  });
 });

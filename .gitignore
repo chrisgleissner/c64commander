@@ -72,9 +72,11 @@ filecount*.txt
 # Review 3 generated research evidence
 doc/research/**/artifacts/
 doc/research/**/logs/
+doc/research/**/*logcat*
 doc/research/**/*meminfo*/
 doc/research/**/metrics/
 doc/research/**/post-fix/logs/
-doc/research/**/*logcat*
-doc/research/**/screenshots/
 doc/research/**/post-fix/screenshots/
+doc/research/**/rollout-artifacts/
+doc/research/**/rollout-artifacts/**
+doc/research/**/screenshots/

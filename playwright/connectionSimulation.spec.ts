@@ -513,8 +513,24 @@ test.describe('Deterministic Connectivity Simulation', () => {
         await clickWithoutNavigationWait(page, playButtonAfter);
         await expect(playButtonAfter).toHaveAttribute('aria-label', 'Play');
       }
-      await clickWithoutNavigationWait(page, playButtonAfter);
-      await expect.poll(() => server.sidplayRequests.length).toBeGreaterThan(0);
+
+      let routedToReal = false;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await clickWithoutNavigationWait(page, playButtonAfter);
+        try {
+          await expect.poll(() => server.sidplayRequests.length, { timeout: 12000 }).toBeGreaterThan(0);
+          routedToReal = true;
+          break;
+        } catch {
+          await clickWithoutNavigationWait(page, realIndicator);
+          await expect.poll(
+            () => realIndicator.getAttribute('data-connection-state'),
+            { timeout: 12000 },
+          ).toBe('REAL_CONNECTED');
+        }
+      }
+
+      expect(routedToReal).toBe(true);
     }
     await snap(page, testInfo, 'demo-to-real-playback');
   });

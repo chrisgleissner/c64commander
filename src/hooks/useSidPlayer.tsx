@@ -8,7 +8,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getC64API } from '@/lib/c64api';
-import { startBackgroundExecution, stopBackgroundExecution } from '@/lib/native/backgroundExecutionManager';
 import { createSslPayload } from '@/lib/sid/sidUtils';
 
 export type SidTrack = {
@@ -90,11 +89,6 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     await api.playSidUpload(blob, track.songNr, sslBlob);
     startedAtRef.current = Date.now();
     setIsPlaying(true);
-    void startBackgroundExecution({
-      source: 'sid-player',
-      reason: 'start',
-      context: { trackId: track.id },
-    });
   }, []);
 
   const playTrack = useCallback(async (track: SidTrack) => {
@@ -136,6 +130,7 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
   }, [queue, currentIndex, playTrackInternal]);
 
   useEffect(() => {
+    if (!isPlaying) return;
     const timer = window.setInterval(() => {
       if (!isPlaying || startedAtRef.current === null) return;
       const now = Date.now();
@@ -151,12 +146,6 @@ export function SidPlayerProvider({ children }: { children: React.ReactNode }) {
     if (elapsedMs < durationMs) return;
     void next();
   }, [elapsedMs, durationMs, isPlaying, next]);
-
-  useEffect(() => {
-    return () => {
-      void stopBackgroundExecution({ source: 'sid-player', reason: 'cleanup' });
-    };
-  }, []);
 
   const value: SidPlayerContextValue = {
     queue,

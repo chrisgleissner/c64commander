@@ -70,6 +70,7 @@ config:
 
     const payload = await getMockConfigPayload();
 
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(payload.general.deviceType).toBe('Ultimate 64 Elite');
     expect(Object.keys(payload.categories).length).toBeGreaterThan(0);
     fetchSpy.mockRestore();

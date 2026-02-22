@@ -13,10 +13,16 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import android.os.PowerManager
 import android.os.Handler
 import android.os.Looper
@@ -37,11 +43,7 @@ class BackgroundExecutionService : Service() {
         private const val CHANNEL_ID = "c64_background_execution"
         private const val NOTIFICATION_ID = 1
         private const val WAKELOCK_TAG = "c64commander:background_execution"
-
-        /** Maximum WakeLock hold time before automatic release (10 minutes). */
-        internal const val WAKELOCK_TIMEOUT_MS = 10L * 60 * 1000
-        /** Idle timeout: service stops if no dueAtMs is set within this window (60 seconds). */
-        internal const val IDLE_TIMEOUT_MS = 60L * 1000
+        private const val WAKELOCK_TIMEOUT_MS = 30L * 60L * 1000L
 
         const val ACTION_UPDATE_DUE_AT = "uk.gleissner.c64commander.action.UPDATE_DUE_AT"
         const val ACTION_AUTO_SKIP_DUE = "uk.gleissner.c64commander.action.AUTO_SKIP_DUE"
@@ -88,11 +90,18 @@ class BackgroundExecutionService : Service() {
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var mediaSession: MediaSession? = null
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        AppLogger.debug(this, TAG, "Audio focus changed ($focusChange)", "BackgroundExecutionService")
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private var dueAtMs: Long? = null
+    private var dueAtElapsedMs: Long? = null
     private var dueRunnable: Runnable? = null
-    private var idleRunnable: Runnable? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -106,6 +115,8 @@ class BackgroundExecutionService : Service() {
             AppLogger.info(this, TAG, "Service starting", "BackgroundExecutionService")
             startForeground(NOTIFICATION_ID, buildNotification())
             acquireWakeLock()
+            initializeMediaSession()
+            requestAudioFocusIfNeeded()
             isRunning = true
         }
 
@@ -119,16 +130,14 @@ class BackgroundExecutionService : Service() {
             return START_STICKY
         }
 
-        // Schedule idle timeout: if no dueAtMs has been set, stop the service
-        scheduleIdleTimeout()
-
         return START_STICKY
     }
 
     override fun onDestroy() {
         AppLogger.info(this, TAG, "Service stopping", "BackgroundExecutionService")
-        cancelIdleTimeout()
         updateDueAtInternal(null)
+        abandonAudioFocusIfNeeded()
+        releaseMediaSession()
         releaseWakeLock()
         isRunning = false
         super.onDestroy()
@@ -174,19 +183,7 @@ class BackgroundExecutionService : Service() {
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
             acquire(WAKELOCK_TIMEOUT_MS)
         }
-        AppLogger.debug(this, TAG, "WakeLock acquired (timeout=${WAKELOCK_TIMEOUT_MS}ms)", "BackgroundExecutionService")
-    }
-
-    /** Re-acquires the WakeLock with a fresh timeout, extending the hold window. */
-    private fun renewWakeLock() {
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-            acquire(WAKELOCK_TIMEOUT_MS)
-        }
-        AppLogger.debug(this, TAG, "WakeLock renewed (timeout=${WAKELOCK_TIMEOUT_MS}ms)", "BackgroundExecutionService")
+        AppLogger.debug(this, TAG, "WakeLock acquired (timeoutMs=$WAKELOCK_TIMEOUT_MS)", "BackgroundExecutionService")
     }
 
     private fun releaseWakeLock() {
@@ -199,8 +196,103 @@ class BackgroundExecutionService : Service() {
         wakeLock = null
     }
 
+    private fun initializeMediaSession() {
+        if (mediaSession != null) return
+        try {
+            val session = MediaSession(this, "C64CommanderBackgroundExecution")
+            session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS)
+            val playbackState = PlaybackState.Builder()
+                .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+                .setActions(
+                    PlaybackState.ACTION_PLAY or
+                        PlaybackState.ACTION_PAUSE or
+                        PlaybackState.ACTION_PLAY_PAUSE or
+                        PlaybackState.ACTION_STOP,
+                )
+                .build()
+            session.setPlaybackState(playbackState)
+            session.isActive = true
+            mediaSession = session
+            AppLogger.debug(this, TAG, "MediaSession initialized", "BackgroundExecutionService")
+        } catch (e: Exception) {
+            AppLogger.warn(this, TAG, "Failed to initialize MediaSession", "BackgroundExecutionService", e)
+        }
+    }
+
+    private fun releaseMediaSession() {
+        mediaSession?.let { session ->
+            try {
+                session.isActive = false
+                session.release()
+                AppLogger.debug(this, TAG, "MediaSession released", "BackgroundExecutionService")
+            } catch (e: Exception) {
+                AppLogger.warn(this, TAG, "Failed to release MediaSession", "BackgroundExecutionService", e)
+            }
+        }
+        mediaSession = null
+    }
+
+    private fun requestAudioFocusIfNeeded() {
+        if (audioManager == null) {
+            audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        }
+        val manager = audioManager
+        if (manager == null) {
+            AppLogger.warn(this, TAG, "AudioManager unavailable; audio focus not requested", "BackgroundExecutionService")
+            return
+        }
+
+        try {
+            val focusResult = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val request = audioFocusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                            .build(),
+                    )
+                    .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                    .build()
+                    .also { audioFocusRequest = it }
+                manager.requestAudioFocus(request)
+            } else {
+                manager.requestAudioFocus(
+                    audioFocusChangeListener,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN,
+                )
+            }
+
+            if (focusResult == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                AppLogger.debug(this, TAG, "Audio focus granted", "BackgroundExecutionService")
+            } else {
+                AppLogger.warn(this, TAG, "Audio focus request not granted (result=$focusResult)", "BackgroundExecutionService")
+            }
+        } catch (e: Exception) {
+            AppLogger.warn(this, TAG, "Failed to request audio focus", "BackgroundExecutionService", e)
+        }
+    }
+
+    private fun abandonAudioFocusIfNeeded() {
+        val manager = audioManager ?: return
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { manager.abandonAudioFocusRequest(it) }
+            } else {
+                manager.abandonAudioFocus(audioFocusChangeListener)
+            }
+            AppLogger.debug(this, TAG, "Audio focus abandoned", "BackgroundExecutionService")
+        } catch (e: Exception) {
+            AppLogger.warn(this, TAG, "Failed to abandon audio focus", "BackgroundExecutionService", e)
+        } finally {
+            audioFocusRequest = null
+            audioManager = null
+        }
+    }
+
     private fun updateDueAtInternal(nextDueAtMs: Long?) {
         dueAtMs = nextDueAtMs
+        dueAtElapsedMs = null
         dueRunnable?.let { handler.removeCallbacks(it) }
         dueRunnable = null
 
@@ -209,48 +301,38 @@ class BackgroundExecutionService : Service() {
             return
         }
 
-        // Renew wake lock whenever a due-time is scheduled, and cancel idle timeout
-        renewWakeLock()
-        cancelIdleTimeout()
-
-        val delay = maxOf(0L, nextDueAtMs - System.currentTimeMillis())
+        val nowWall = System.currentTimeMillis()
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val delay = maxOf(0L, nextDueAtMs - nowWall)
+        val scheduledElapsed = nowElapsed + delay
+        dueAtElapsedMs = scheduledElapsed
         val runnable = Runnable {
             val currentDue = dueAtMs
+            val currentDueElapsed = dueAtElapsedMs
             if (currentDue == null) return@Runnable
-            val now = System.currentTimeMillis()
-            if (now < currentDue) {
-                // Re-schedule in case the clock changed.
-                updateDueAtInternal(currentDue)
+            if (currentDueElapsed == null) return@Runnable
+
+            val nowElapsedRealtime = SystemClock.elapsedRealtime()
+            if (nowElapsedRealtime < currentDueElapsed) {
+                val remaining = currentDueElapsed - nowElapsedRealtime
+                val nextRunnable = this.dueRunnable ?: return@Runnable
+                handler.postDelayed(nextRunnable, remaining)
+                AppLogger.debug(this, TAG, "Due watchdog not ready yet; rescheduled using monotonic clock (remainingMs=$remaining)", "BackgroundExecutionService")
                 return@Runnable
             }
+
+            val now = System.currentTimeMillis()
             val broadcast = Intent(ACTION_AUTO_SKIP_DUE)
             broadcast.putExtra(EXTRA_DUE_AT_MS, currentDue)
             broadcast.putExtra(EXTRA_FIRED_AT_MS, now)
             sendBroadcast(broadcast)
             AppLogger.info(this, TAG, "Auto-skip watchdog fired (dueAtMs=$currentDue, now=$now)", "BackgroundExecutionService")
             dueAtMs = null
+            dueAtElapsedMs = null
             dueRunnable = null
         }
         dueRunnable = runnable
         handler.postDelayed(runnable, delay)
-        AppLogger.debug(this, TAG, "Scheduled dueAtMs watchdog (dueAtMs=$nextDueAtMs, delayMs=$delay)", "BackgroundExecutionService")
-    }
-
-    private fun scheduleIdleTimeout() {
-        cancelIdleTimeout()
-        if (dueAtMs != null) return // Already active — no idle timeout needed
-        val runnable = Runnable {
-            if (dueAtMs != null) return@Runnable
-            AppLogger.info(this, TAG, "Idle timeout reached — stopping service", "BackgroundExecutionService")
-            stopSelf()
-        }
-        idleRunnable = runnable
-        handler.postDelayed(runnable, IDLE_TIMEOUT_MS)
-        AppLogger.debug(this, TAG, "Scheduled idle timeout (${IDLE_TIMEOUT_MS}ms)", "BackgroundExecutionService")
-    }
-
-    private fun cancelIdleTimeout() {
-        idleRunnable?.let { handler.removeCallbacks(it) }
-        idleRunnable = null
+        AppLogger.debug(this, TAG, "Scheduled dueAtMs watchdog (dueAtMs=$nextDueAtMs, delayMs=$delay, dueAtElapsedMs=$scheduledElapsed)", "BackgroundExecutionService")
     }
 }

@@ -27,6 +27,10 @@ export type SmokeConfig = {
 
 let cachedSmokeConfig: SmokeConfig | null = null;
 
+type SmokeBootstrapWindow = Window & {
+  __c64uReadSmokeConfigFromFilesystem?: boolean;
+};
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
@@ -38,6 +42,36 @@ const parseSmokeConfig = (raw: unknown): SmokeConfig | null => {
   const readOnly = typeof raw.readOnly === 'boolean' ? raw.readOnly : true;
   const debugLogging = typeof raw.debugLogging === 'boolean' ? raw.debugLogging : true;
   return { target, host, readOnly, debugLogging };
+};
+
+const getErrorMessage = (error: unknown) => {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    if ('message' in error && typeof (error as { message?: unknown }).message === 'string') {
+      return (error as { message: string }).message;
+    }
+    if ('error' in error) {
+      const nested = (error as { error?: unknown }).error;
+      if (typeof nested === 'string') return nested;
+      if (nested && typeof nested === 'object' && 'message' in nested && typeof (nested as { message?: unknown }).message === 'string') {
+        return (nested as { message: string }).message;
+      }
+    }
+  }
+  return String(error ?? '');
+};
+
+const isMissingFileError = (error: unknown) =>
+  /does not exist|not exist|no such file|not found/i.test(getErrorMessage(error));
+
+const shouldReadSmokeConfigFromFilesystem = () => {
+  if (!Capacitor.isNativePlatform()) return false;
+  if (import.meta.env.VITE_ENABLE_TEST_PROBES === '1') return true;
+  if (typeof window !== 'undefined' && (window as SmokeBootstrapWindow).__c64uReadSmokeConfigFromFilesystem === true) {
+    return true;
+  }
+  if (typeof localStorage === 'undefined') return false;
+  return localStorage.getItem(SMOKE_MODE_STORAGE_KEY) === '1';
 };
 
 const readSmokeConfigFromStorage = (): SmokeConfig | null => {
@@ -71,7 +105,7 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
 
   let config = readSmokeConfigFromStorage();
 
-  if (!config && Capacitor.isNativePlatform()) {
+  if (!config && shouldReadSmokeConfigFromFilesystem()) {
     try {
       const result = await Filesystem.readFile({
         path: SMOKE_CONFIG_FILENAME,
@@ -80,9 +114,15 @@ export const initializeSmokeMode = async (): Promise<SmokeConfig | null> => {
       });
       config = parseSmokeConfig(JSON.parse(result.data));
     } catch (error) {
-      addLog('warn', 'Failed to read smoke config from filesystem', {
-        error: (error as Error).message,
-      });
+      if (isMissingFileError(error)) {
+        addLog('debug', 'Smoke config file not found; skipping native bootstrap', {
+          path: SMOKE_CONFIG_FILENAME,
+        });
+      } else {
+        addLog('warn', 'Failed to read smoke config from filesystem', {
+          error: (error as Error).message,
+        });
+      }
       config = null;
     }
   }

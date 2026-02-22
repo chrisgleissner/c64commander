@@ -151,7 +151,8 @@ describe('useC64Connection', () => {
   });
 
   it('responds to connection change events', async () => {
-    const { wrapper } = createWrapper();
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
@@ -165,6 +166,32 @@ describe('useC64Connection', () => {
     });
 
     await waitFor(() => expect(result.current.baseUrl).toBe('http://event'));
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-info'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-drives'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-categories'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-category'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-config-item'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-config-items'] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64-all-config'] });
+    expect(invalidateSpy.mock.calls.some(([arg]) => 'predicate' in arg)).toBe(false);
+  });
+
+  it('ignores connection change events without effective settings delta', async () => {
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('c64u-connection-change', {
+          detail: { baseUrl: 'http://c64u', password: '', deviceHost: 'c64u' },
+        }),
+      );
+    });
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
   });
 
   it('fetches categories', async () => {
@@ -191,7 +218,7 @@ describe('useC64Connection', () => {
       }
       return { [category]: { items: {} }, errors: [] };
     });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
     await waitFor(() => expect(result.current.data?.Audio).toBeDefined());
