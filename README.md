@@ -359,7 +359,7 @@ Optional GitHub API token (helps with rate limits):
 export GITHUB_TOKEN=<your-token>
 ```
 
-## � Acknowledgments
+## 🙏 Acknowledgments
 
 This project would not be possible without the following:
 
