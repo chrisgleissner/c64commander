@@ -379,4 +379,117 @@ describe('web server platform runtime', () => {
         await server.close();
     });
 
+    it('supports logout and secure storage get/delete lifecycle', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>secure</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+            C64U_NETWORK_PASSWORD: 'secret',
+        });
+
+        const cookie = await loginAndGetCookie(server.baseUrl, 'secret');
+
+        const readPassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+            headers: { Cookie: cookie },
+        });
+        expect(readPassword.status).toBe(200);
+        expect(await readPassword.json()).toEqual({ value: 'secret' });
+
+        const deletePassword = await fetch(`${server.baseUrl}/api/secure-storage/password`, {
+            method: 'DELETE',
+            headers: { Cookie: cookie },
+        });
+        expect(deletePassword.status).toBe(200);
+
+        const statusAfterDelete = await fetch(`${server.baseUrl}/auth/status`);
+        const payload = await statusAfterDelete.json() as { requiresLogin: boolean };
+        expect(payload.requiresLogin).toBe(false);
+
+        const logout = await fetch(`${server.baseUrl}/auth/logout`, {
+            method: 'POST',
+            headers: { Cookie: cookie },
+        });
+        expect(logout.status).toBe(200);
+
+        const unauthRoot = await fetch(`${server.baseUrl}/`);
+        expect(unauthRoot.status).toBe(200);
+
+        await server.close();
+    });
+
+    it('handles diagnostics and static path edge cases', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await mkdir(path.join(distDir, 'docs'));
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>root</body></html>', 'utf8');
+        await writeFile(path.join(distDir, 'docs', 'index.html'), '<html><body>docs</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+        });
+
+        const diagnosticsMethod = await fetch(`${server.baseUrl}/api/diagnostics/server-logs`, { method: 'POST' });
+        expect(diagnosticsMethod.status).toBe(405);
+
+        const diagnostics = await fetch(`${server.baseUrl}/api/diagnostics/server-logs`);
+        expect(diagnostics.status).toBe(200);
+        const diagnosticsPayload = await diagnostics.json() as { logs: Array<{ message: string }> };
+        expect(Array.isArray(diagnosticsPayload.logs)).toBe(true);
+
+        const directoryIndex = await fetch(`${server.baseUrl}/docs`);
+        expect(directoryIndex.status).toBe(200);
+        expect(await directoryIndex.text()).toContain('docs');
+
+        const traversal = await fetch(`${server.baseUrl}/..%2F..%2Fetc/passwd`);
+        expect(traversal.status).toBe(403);
+
+        await server.close();
+    });
+
+    it('returns proxy and ftp host-override errors for denied targets', async () => {
+        const distDir = await makeTempDir('c64-web-dist-');
+        const configDir = await makeTempDir('c64-web-config-');
+        await writeFile(path.join(distDir, 'index.html'), '<html><body>proxy</body></html>', 'utf8');
+
+        const server = await startWebServer({
+            HOST: '127.0.0.1',
+            PORT: '0',
+            WEB_DIST_DIR: distDir,
+            WEB_CONFIG_DIR: configDir,
+            C64U_NETWORK_PASSWORD: 'secret',
+            C64U_DEVICE_HOST: '127.0.0.1:1',
+        });
+
+        const cookie = await loginAndGetCookie(server.baseUrl, 'secret');
+        const proxyFailure = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+            headers: { Cookie: cookie },
+        });
+        expect(proxyFailure.status).toBe(502);
+
+        const ftpDenied = await fetch(`${server.baseUrl}/api/ftp/read`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Cookie: cookie,
+            },
+            body: JSON.stringify({
+                host: '192.168.10.20',
+                port: 21,
+                username: 'anonymous',
+                path: '/MUSIC/test.sid',
+            }),
+        });
+        expect(ftpDenied.status).toBe(403);
+
+        await server.close();
+    });
+
 });

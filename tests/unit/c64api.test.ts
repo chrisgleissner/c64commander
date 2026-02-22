@@ -17,7 +17,13 @@ import {
   C64_DEFAULTS,
   resolveDeviceHostFromStorage,
 } from '@/lib/c64api';
-import { clearPassword as clearStoredPassword, setPassword as storePassword } from '@/lib/secureStorage';
+import {
+  clearPassword as clearStoredPassword,
+  setPassword as storePassword,
+  hasStoredPasswordFlag,
+  getCachedPassword,
+  getPassword,
+} from '@/lib/secureStorage';
 import { addErrorLog, addLog } from '@/lib/logging';
 import { resetConfigWriteThrottle } from '@/lib/config/configWriteThrottle';
 import { saveConfigWriteIntervalMs } from '@/lib/config/appSettings';
@@ -160,6 +166,9 @@ const smokeReadOnlyMock = isSmokeReadOnlyEnabled as unknown as ReturnType<typeof
 const deviceStateSnapshotMock = getDeviceStateSnapshot as unknown as ReturnType<typeof vi.fn>;
 const storePasswordMock = storePassword as unknown as ReturnType<typeof vi.fn>;
 const clearPasswordMock = clearStoredPassword as unknown as ReturnType<typeof vi.fn>;
+const hasStoredPasswordFlagMock = hasStoredPasswordFlag as unknown as ReturnType<typeof vi.fn>;
+const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof vi.fn>;
+const getPasswordMock = getPassword as unknown as ReturnType<typeof vi.fn>;
 const capacitorHttpMock = CapacitorHttp.request as unknown as ReturnType<typeof vi.fn>;
 
 describe('c64api', () => {
@@ -193,6 +202,12 @@ describe('c64api', () => {
     (globalThis as { __C64U_NATIVE_OVERRIDE__?: boolean }).__C64U_NATIVE_OVERRIDE__ = false;
     storePasswordMock.mockReset();
     clearPasswordMock.mockReset();
+    hasStoredPasswordFlagMock.mockReset();
+    getCachedPasswordMock.mockReset();
+    getPasswordMock.mockReset();
+    hasStoredPasswordFlagMock.mockReturnValue(false);
+    getCachedPasswordMock.mockReturnValue(null);
+    getPasswordMock.mockResolvedValue(null);
   });
 
   afterAll(() => {
@@ -1004,6 +1019,25 @@ describe('c64api', () => {
     const urls = fetchMock.mock.calls.map((call) => call[0]);
     expect(urls).toContain('http://c64u/v1/runners:sidplay?file=%2Fmusic%2Ftest.sid&songnr=7');
     expect(urls).toContain('http://c64u/v1/runners:run_crt?file=%2Fcartridges%2Ftest.crt');
+  });
+
+  it('logs and throws for upload failures across mod/prg/crt helpers', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock
+      .mockResolvedValueOnce(new Response('mod fail', { status: 500, statusText: 'Server Error' }))
+      .mockResolvedValueOnce(new Response('run prg fail', { status: 500, statusText: 'Server Error' }))
+      .mockResolvedValueOnce(new Response('load prg fail', { status: 500, statusText: 'Server Error' }))
+      .mockResolvedValueOnce(new Response('crt fail', { status: 500, statusText: 'Server Error' }));
+
+    const api = new C64API('http://c64u');
+    await expect(api.playModUpload(new Blob(['MOD']))).rejects.toThrow('HTTP 500');
+    await expect(api.runPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
+    await expect(api.loadPrgUpload(new Blob(['PRG']))).rejects.toThrow('HTTP 500');
+    await expect(api.runCartridgeUpload(new Blob(['CRT']))).rejects.toThrow('HTTP 500');
+
+    expect(addErrorLogMock).toHaveBeenCalledWith('MOD upload failed', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith('PRG upload failed', expect.any(Object));
+    expect(addErrorLogMock).toHaveBeenCalledWith('CRT upload failed', expect.any(Object));
   });
 
   it('reuses singleton C64 API instance', () => {
