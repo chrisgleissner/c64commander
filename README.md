@@ -47,7 +47,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
       - [Web logging](#web-logging)
       - [Update to a newer version](#update-to-a-newer-version)
       - [Linux auto-update](#linux-auto-update)
-  - [� Acknowledgments](#-acknowledgments)
+  - [🙏 Acknowledgments](#-acknowledgments)
     - [High Voltage SID Collection (HVSC)](#high-voltage-sid-collection-hvsc)
     - [Commodore and the C64 Ultimate](#commodore-and-the-c64-ultimate)
     - [Third-Party Libraries](#third-party-libraries)
