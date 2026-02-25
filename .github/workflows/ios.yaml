@@ -279,11 +279,29 @@ jobs:
               sys.exit(1)
 
           if bootstatus.returncode != 0:
-              print("simctl bootstatus failed (first attempt), retrying once...", file=sys.stderr)
+              print("simctl bootstatus failed on first attempt, attempting shutdown and retry...", file=sys.stderr)
               print(bootstatus.stdout, file=sys.stderr)
               print(bootstatus.stderr, file=sys.stderr)
-              subprocess.run(["xcrun", "simctl", "shutdown", udid], check=False)
-              subprocess.run(["xcrun", "simctl", "boot", udid], check=False)
+              shutdown_retry = subprocess.run(
+                  ["xcrun", "simctl", "shutdown", udid],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              if shutdown_retry.returncode != 0:
+                  print("simctl shutdown before retry failed (non-zero exit), continuing with boot retry...", file=sys.stderr)
+                  print(shutdown_retry.stdout, file=sys.stderr)
+                  print(shutdown_retry.stderr, file=sys.stderr)
+              boot_retry = subprocess.run(
+                  ["xcrun", "simctl", "boot", udid],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              if boot_retry.returncode != 0:
+                  print("simctl boot retry failed (non-zero exit), attempting bootstatus check...", file=sys.stderr)
+                  print(boot_retry.stdout, file=sys.stderr)
+                  print(boot_retry.stderr, file=sys.stderr)
               bootstatus_retry = subprocess.run(
                   ["xcrun", "simctl", "bootstatus", udid, "-b"],
                   capture_output=True,
@@ -478,8 +496,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/ios/_infra/simulator
+          simulator_log_lookback="${IOS_SIMULATOR_LOG_LOOKBACK:-15m}"
           if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
-            xcrun simctl spawn "${{ steps.simulator.outputs.udid }}" log show --last 15m --style compact > artifacts/ios/_infra/simulator/device.log 2>&1 || true
+            # Keep lookback bounded while covering a full grouped Maestro run in typical CI timing.
+            xcrun simctl spawn "${{ steps.simulator.outputs.udid }}" log show --last "$simulator_log_lookback" --style compact > artifacts/ios/_infra/simulator/device.log 2>&1 || true
             xcrun simctl diagnose "${{ steps.simulator.outputs.udid }}" > artifacts/ios/_infra/simulator/diagnose.log 2>&1 || true
           fi
           xcrun simctl list devices > artifacts/ios/_infra/simulator/devices.txt 2>&1 || true
