@@ -69,5 +69,27 @@
 - Flake evidence: Run `22412765615`, shard job `64890551298` failed at `playwright/ui.spec.ts:146:3` with missing `System Mode select` locator.
 
 ### After
-- Pending implementation + validation.
-
+- Workflow implementation:
+  - `web-e2e` now runs in `mcr.microsoft.com/playwright:v1.57.0-noble` (`.github/workflows/android.yaml`).
+  - Removed shard-level `Fix broken apt repos`, Playwright browser cache, and `npx playwright install --with-deps` steps from `web-e2e`.
+- CI validation:
+  - Android workflow run `22414438881` (PR branch) finished `success`.
+  - `Web | E2E (sharded)` jobs passed with sharding preserved (`12/12` shards).
+- Timing evidence:
+  - **Before (run 22412765615, shard job 64890551298):**
+    - `npx playwright install --with-deps` executed and entered `Installing dependencies...` with apt package installation.
+    - Start timestamp in logs: `19:38:35Z`; e2e execution started at `19:39:22Z` (setup path included Playwright dep install work on host).
+  - **After (run 22414438881, updated workflow):**
+    - No shard-level Playwright install step exists in `web-e2e`; no Playwright apt dependency install path remains in that job.
+    - Shard setup is reduced to checkout + node + npm + artifact download before test execution.
+- Flake/stability evidence:
+  - Local CI-equivalent repeated run:
+    - `TRACE_ASSERTIONS_DEFAULT=1 npx playwright test playwright/ui.spec.ts --grep "config widgets read/write and refresh" --project=android-phone --workers=1 --repeat-each=20`
+    - Result: `20 passed`.
+  - Targeted regression run:
+    - `TRACE_ASSERTIONS_DEFAULT=1 npx playwright test playwright/ui.spec.ts --project=android-phone --workers=1`
+    - Result: `11 passed`.
+  - Repository validation:
+    - `npm run lint` ✅
+    - `npm run test:coverage` ✅ (`All files % Branch = 82.24`, meets >=82 requirement)
+    - `npm run build` ✅
