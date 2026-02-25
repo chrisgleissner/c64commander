@@ -83,15 +83,15 @@ test.describe('Config visibility across modes', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
-    await expect(indicator).toHaveAttribute('aria-label', /C64U Disconnected|C64U Connected/);
+    await expect(indicator).toHaveAttribute('aria-label', /C64U Demo|C64U Connected/);
 
-    await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
-    await expect(page.getByText('Configure connection in Settings')).toBeVisible();
-    await expect(page.locator('[data-testid^="config-category-"]')).toHaveCount(0);
+    await expect(page.getByText('Not connected', { exact: true })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'U64 Specific Settings' })).toBeVisible();
+    await expect(page.locator('[data-testid^="config-category-"]').first()).toBeVisible();
 
     await clearTraces(page);
-    await page.getByRole('button', { name: /Save & Connect|Save connection/i }).first().isVisible().catch(() => false);
-    await snap(page, testInfo, 'demo-disconnected-config');
+    await snap(page, testInfo, 'demo-connected-config');
   });
 
   test('config remains visible after switching demo → real', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -143,7 +143,8 @@ test.describe('Config visibility across modes', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
-    await expect(page.getByText('Not connected', { exact: true })).toBeVisible();
+    await expect(page.getByText('Not connected', { exact: true })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();
 
     server.setReachable(true);
     await page.goto('/settings', { waitUntil: 'domcontentloaded' });

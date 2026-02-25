@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { dismissDemoInterstitial, discoverConnection } from '@/lib/connection/connectionManager';
-import { buildBaseUrlFromDeviceHost, resolveDeviceHostFromStorage, updateC64APIConfig } from '@/lib/c64api';
+import { buildBaseUrlFromDeviceHost, getC64APIConfigSnapshot, resolveDeviceHostFromStorage, updateC64APIConfig } from '@/lib/c64api';
 
 export function DemoModeInterstitial() {
   const { demoInterstitialVisible } = useConnectionState();
@@ -31,7 +31,8 @@ export function DemoModeInterstitial() {
 
   const handleSaveAndRetry = () => {
     const host = deviceHostInput.trim() || attemptedHost;
-    updateC64APIConfig(buildBaseUrlFromDeviceHost(host), undefined, host);
+    const currentPassword = getC64APIConfigSnapshot().password;
+    updateC64APIConfig(buildBaseUrlFromDeviceHost(host), currentPassword, host);
     dismissDemoInterstitial();
     void discoverConnection('settings');
   };
