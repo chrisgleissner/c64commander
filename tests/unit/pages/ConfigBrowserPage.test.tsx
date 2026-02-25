@@ -126,6 +126,21 @@ describe('ConfigBrowserPage', () => {
     expect(screen.getByText(/not connected/i)).toBeInTheDocument();
   });
 
+  it('renders categories in demo mode without showing not-connected message', () => {
+    setupDefaultMocks();
+    mockUseC64Connection.mockReturnValue({ status: { isConnected: true, isDemo: true, deviceType: 'demo' }, runtimeBaseUrl: 'http://c64u' });
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ['Audio Mixer', 'Clock Settings'] },
+      isLoading: false,
+    });
+
+    renderConfigBrowserPage();
+
+    expect(screen.queryByText(/not connected/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /audio mixer/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clock settings/i })).toBeInTheDocument();
+  });
+
   it('filters categories by search query', () => {
     setupDefaultMocks();
     mockUseC64Categories.mockReturnValue({

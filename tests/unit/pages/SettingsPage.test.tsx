@@ -450,7 +450,7 @@ describe('SettingsPage', () => {
   it('shows demo probe messaging when demo is active', () => {
     connectionPayloadRef.current = {
       ...connectionPayloadRef.current,
-      status: { state: 'DEMO_ACTIVE', isConnected: false, isConnecting: false, error: null, deviceInfo: null },
+      status: { state: 'DEMO_ACTIVE', isConnected: true, isConnecting: false, error: null, deviceInfo: null },
     };
     connectionStateRef.current = {
       lastProbeSucceededAtMs: Date.now(),

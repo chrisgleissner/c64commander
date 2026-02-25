@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { Loader2, Monitor } from 'lucide-react';
+import { FlaskConical, Loader2, Monitor } from 'lucide-react';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
 import { cn } from '@/lib/utils';
@@ -24,11 +24,13 @@ export function ConnectivityIndicator({ className }: Props) {
   };
 
   const isReal = state === 'REAL_CONNECTED';
+  const isDemo = state === 'DEMO_ACTIVE';
+  const isOperational = isReal || isDemo;
   const isDiscovering = state === 'DISCOVERING';
 
   const label =
     state === 'DEMO_ACTIVE'
-      ? 'C64U Disconnected'
+      ? 'C64U Demo'
       : state === 'REAL_CONNECTED'
         ? 'C64U Connected'
         : state === 'DISCOVERING'
@@ -52,6 +54,12 @@ export function ConnectivityIndicator({ className }: Props) {
     >
       {isDiscovering ? (
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
+      ) : isDemo ? (
+        <FlaskConical
+          className="h-5 w-5 text-success"
+          aria-hidden="true"
+          data-testid="demo-icon"
+        />
       ) : (
         <Monitor
           className={cn('h-5 w-5', isReal ? 'text-success' : 'text-muted-foreground')}
@@ -63,7 +71,7 @@ export function ConnectivityIndicator({ className }: Props) {
       <span
         className={cn(
           'text-xs font-semibold uppercase tracking-wide',
-          isReal ? 'text-success' : 'text-muted-foreground',
+          isOperational ? 'text-success' : 'text-muted-foreground',
         )}
         data-testid="connection-status-label"
       >

@@ -134,7 +134,7 @@ function HomePageContent() {
   const api = getC64API();
   const queryClient = useQueryClient();
   const { status } = useC64Connection();
-  const isActive = status.isConnected || status.isDemo;
+  const isActive = status.isConnected;
   const { driveSummaryItems } = useDriveData(isActive || status.isConnecting);
 
   const { data: u64SettingsCategory } = useC64ConfigItems(

@@ -284,4 +284,23 @@ describe('useC64Connection', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64'] });
     vi.useRealTimers();
   });
+
+  it('calls /v1/info in demo mode and reports isConnected as true', async () => {
+    connectionSnapshot.state = 'DEMO_ACTIVE' as const;
+    mockApi.getInfo.mockClear();
+
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isDemo).toBe(true));
+    // isConnected must be true in demo mode
+    expect(result.current.status.isConnected).toBe(true);
+    // deviceType must be 'demo'
+    expect(result.current.status.deviceType).toBe('demo');
+    // /v1/info must still be called in demo mode
+    await waitFor(() => expect(mockApi.getInfo).toHaveBeenCalled());
+
+    // Restore for other tests
+    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+  });
 });

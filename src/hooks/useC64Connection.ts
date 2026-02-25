@@ -28,9 +28,10 @@ import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from '@/lib/query/c
 
 export interface ConnectionStatus {
   state: 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
-  connectionState: 'connected' | 'disconnected' | 'demo';
+  connectionState: 'connected' | 'disconnected';
   isConnected: boolean;
   isDemo: boolean;
+  deviceType: 'real' | 'demo' | null;
   isConnecting: boolean;
   error: string | null;
   deviceInfo: DeviceInfo | null;
@@ -153,13 +154,17 @@ export function useC64Connection() {
   const status: ConnectionStatus = {
     state: connection.state,
     connectionState:
-      connection.state === 'REAL_CONNECTED'
+      connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE'
         ? 'connected'
+        : 'disconnected',
+    isConnected: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
+    isDemo: connection.state === 'DEMO_ACTIVE',
+    deviceType:
+      connection.state === 'REAL_CONNECTED'
+        ? 'real'
         : connection.state === 'DEMO_ACTIVE'
           ? 'demo'
-          : 'disconnected',
-    isConnected: connection.state === 'REAL_CONNECTED',
-    isDemo: connection.state === 'DEMO_ACTIVE',
+          : null,
     isConnecting: connection.state === 'DISCOVERING',
     error: error ? (error as Error).message : null,
     deviceInfo: deviceInfo || null,

@@ -787,5 +787,102 @@ describe('connectionManager', () => {
       getDeviceHostFromBaseUrl('http://127.0.0.1:7777'),
     );
   });
+
+  it('interstitial carries attempted hostname from persisted storage', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+    const { resolveDeviceHostFromStorage } = await import('../../../src/lib/c64api');
+
+    localStorage.setItem('c64u_device_host', '192.168.1.42');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(true);
+    // The persisted hostname must still reflect the device that was attempted
+    expect(resolveDeviceHostFromStorage()).toBe('192.168.1.42');
+  });
+
+  it('reconnection controller invariant: background discovery inactive in REAL_CONNECTED state', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+
+    // Background probe must not change the state when already real-connected
+    await discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
+  it('demo mode entered only when automatic demo is enabled; retry exhaustion falls to offline otherwise', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(300);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(getConnectionSnapshot().state).toBe('OFFLINE_NO_DEMO');
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+  });
+
+  it('automatic switch from demo to real when device becomes reachable during background rediscovery', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const fetchMock = vi.mocked(fetch);
+    // First startup probes fail → demo
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    // Device becomes reachable
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(50);
+
+    // Must atomically switch to real backend; demo interstitial must be dismissed
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+  });
 });
 
