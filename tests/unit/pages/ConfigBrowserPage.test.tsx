@@ -119,11 +119,26 @@ afterEach(() => {
 describe('ConfigBrowserPage', () => {
   it('renders connection warning when offline', () => {
     setupDefaultMocks();
-    mockUseC64Connection.mockReturnValue({ status: { isConnected: false }, runtimeBaseUrl: 'http://c64u' });
+    mockUseC64Connection.mockReturnValue({ status: { isConnected: false, isDemo: false }, runtimeBaseUrl: 'http://c64u' });
 
     renderConfigBrowserPage();
 
     expect(screen.getByText(/not connected/i)).toBeInTheDocument();
+  });
+
+  it('renders categories in demo mode without showing not-connected message', () => {
+    setupDefaultMocks();
+    mockUseC64Connection.mockReturnValue({ status: { isConnected: false, isDemo: true }, runtimeBaseUrl: 'http://c64u' });
+    mockUseC64Categories.mockReturnValue({
+      data: { categories: ['Audio Mixer', 'Clock Settings'] },
+      isLoading: false,
+    });
+
+    renderConfigBrowserPage();
+
+    expect(screen.queryByText(/not connected/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /audio mixer/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clock settings/i })).toBeInTheDocument();
   });
 
   it('filters categories by search query', () => {

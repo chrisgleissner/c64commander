@@ -284,4 +284,20 @@ describe('useC64Connection', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['c64'] });
     vi.useRealTimers();
   });
+
+  it('does not call /v1/info when in demo mode', async () => {
+    const { wrapper } = createWrapper();
+    connectionSnapshot.state = 'DEMO_ACTIVE' as const;
+
+    mockApi.getInfo.mockClear();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    // In demo mode the query is disabled; getInfo must never be invoked
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(result.current.status.isDemo).toBe(true);
+    expect(mockApi.getInfo).not.toHaveBeenCalled();
+
+    // Restore for other tests
+    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+  });
 });

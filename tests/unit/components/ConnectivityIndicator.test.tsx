@@ -37,21 +37,44 @@ describe('ConnectivityIndicator', () => {
     expect(discoverConnection).toHaveBeenCalledWith('manual');
   });
 
-  it('renders demo state as disconnected', () => {
+  it('renders demo state with demo label and success styling', () => {
     connectionState = 'DEMO_ACTIVE';
 
     const { getByTestId } = render(<ConnectivityIndicator />);
     const button = getByTestId('connectivity-indicator');
 
-    expect(button).toHaveAttribute('aria-label', 'C64U Disconnected');
+    expect(button).toHaveAttribute('aria-label', 'C64U Demo');
+    expect(button).not.toHaveAttribute('aria-label', 'C64U Disconnected');
+
+    // Demo mode must show the flask icon, not the monitor icon
+    expect(getByTestId('demo-icon')).toBeTruthy();
+
+    // Label must use success (green) styling, not muted (grey)
+    const label = getByTestId('connection-status-label');
+    expect(label.className).toContain('text-success');
+    expect(label.className).not.toContain('text-muted-foreground');
   });
 
-  it('renders offline state label', () => {
+  it('renders offline state label with muted styling', () => {
     connectionState = 'OFFLINE_NO_DEMO';
 
     const { getByTestId } = render(<ConnectivityIndicator />);
     const button = getByTestId('connectivity-indicator');
 
     expect(button).toHaveAttribute('aria-label', 'C64U Offline');
+
+    const label = getByTestId('connection-status-label');
+    expect(label.className).toContain('text-muted-foreground');
+    expect(label.className).not.toContain('text-success');
+  });
+
+  it('renders real-connected state with success styling', () => {
+    connectionState = 'REAL_CONNECTED';
+
+    const { getByTestId } = render(<ConnectivityIndicator />);
+
+    const label = getByTestId('connection-status-label');
+    expect(label.className).toContain('text-success');
+    expect(label.className).not.toContain('text-muted-foreground');
   });
 });

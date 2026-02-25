@@ -68,7 +68,7 @@ export function useC64Connection() {
       const api = getC64API();
       return api.getInfo({ timeoutMs: 3000, signal, __c64uIntent: 'background' });
     },
-    enabled: connection.state === 'REAL_CONNECTED' || connection.state === 'DEMO_ACTIVE',
+    enabled: connection.state === 'REAL_CONNECTED',
     retry: 1,
     retryDelay: 1000,
     staleTime: 30000,
