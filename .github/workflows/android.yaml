@@ -183,6 +183,11 @@ jobs:
   web-e2e:
     name: Web | E2E (sharded)
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.57.0-noble
+    defaults:
+      run:
+        shell: bash
     needs: web-build-coverage
     strategy:
       fail-fast: false
@@ -211,23 +216,6 @@ jobs:
           npm ci
           end=$(date +%s)
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
-
-      - name: Fix broken apt repos
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
-
-      - name: Install Playwright browsers
-        run: |
-          start=$(date +%s)
-          npx playwright install --with-deps
-          end=$(date +%s)
-          echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download coverage build output
         uses: actions/download-artifact@v4

@@ -188,8 +188,12 @@ test.describe('UI coverage', () => {
     await expect.poll(() => server.requests.length).toBeGreaterThan(refreshCount);
     await snap(page, testInfo, 'config-refreshed');
 
-    await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
-    await expect(page.getByLabel('System Mode select')).toContainText('NTSC');
+    const systemModeSelect = page.getByLabel('System Mode select');
+    if ((await systemModeSelect.count()) === 0) {
+      await page.getByRole('button', { name: 'U64 Specific Settings' }).click();
+    }
+    await expect(systemModeSelect).toBeVisible();
+    await expect(systemModeSelect).toContainText('NTSC');
     await snap(page, testInfo, 'config-updated');
   });
 
