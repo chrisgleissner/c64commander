@@ -20,4 +20,13 @@ describe('telemetry release gate workflow rules', () => {
         expect(workflow).toContain('telemetry gate failed: app process disappearance/restart detected on release flow');
         expect(workflow).toContain('telemetry gate warning: app process disappearance/restart detected (non-release flow)');
     });
+
+    it('uploads iOS telemetry and diagnostics artifacts on failure', () => {
+        const workflow = readWorkflow('ios.yaml');
+        expect(workflow).toContain('- name: Upload iOS failure diagnostics (${{ matrix.group.name }})');
+        expect(workflow).toContain('if: failure()');
+        expect(workflow).toContain('artifacts/ios/_infra/telemetry/events.log');
+        expect(workflow).toContain('artifacts/ios/_infra/simulator/**');
+        expect(workflow).toContain('artifacts/ios/_infra/xcodebuild/**');
+    });
 });
