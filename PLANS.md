@@ -64,6 +64,31 @@
 
 ## Measurement & Evidence
 
+## Shell Regression Follow-up (container migration)
+
+### Root cause (run `22415295134`, attempt 2)
+- In `Web | E2E (sharded)`, run steps executed with `shell: sh -e {0}` inside the Playwright container.
+- Bash-only syntax in the job then failed under `sh`:
+  - `if [[ ... ]]` produced `[[: not found`
+  - `mapfile -t SHARD_FILES < shard-files.txt` produced `mapfile: not found`
+- Because the Playwright shard command failed before test execution, no `.nyc_output/*.json` files were produced, and `Verify nyc output` failed.
+
+### Shell environment confirmation
+- Failed shard logs explicitly show `shell: sh -e {0}` for `web-e2e` run steps after container migration.
+- Local shell check (`sh -c 'echo "SHELL=$SHELL"; readlink -f /bin/sh'`) resolves `/bin/sh` to `/usr/bin/dash`, matching the observed `sh` behavior.
+
+### Fix implemented
+- Enforced bash for all `run` steps in `web-e2e`:
+  - Added:
+    - `defaults:`
+    - `  run:`
+    - `    shell: bash`
+- This keeps the Playwright container migration in place and restores compatibility for existing bash features (`[[ ... ]]`, `mapfile`, arrays).
+
+### Hardening review
+- Workflow search confirmed bash-only usage in `web-e2e` (`[[ ... ]]`, `mapfile`, `"${SHARD_FILES[@]}"`) and in other non-container jobs.
+- Applying `defaults.run.shell: bash` at `web-e2e` job scope ensures all bash-dependent shard steps execute with compatible shell semantics.
+
 ### Before
 - Install behavior: Sharded job executes `npx playwright install --with-deps` and apt dependency install (`Installing dependencies...` present in logs).
 - Flake evidence: Run `22412765615`, shard job `64890551298` failed at `playwright/ui.spec.ts:146:3` with missing `System Mode select` locator.
@@ -93,3 +118,7 @@
     - `npm run lint` ✅
     - `npm run test:coverage` ✅ (`All files % Branch = 82.24`, meets >=82 requirement)
     - `npm run build` ✅
+  - Regression fix validation (pending fresh CI run on updated commit):
+    - Expect no `shell: sh -e {0}` for `web-e2e` run steps.
+    - Expect no `[[: not found` or `mapfile: not found`.
+    - Expect shard tests to execute and `.nyc_output` files to be generated.

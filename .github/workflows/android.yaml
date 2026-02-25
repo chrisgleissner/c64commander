@@ -185,6 +185,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: mcr.microsoft.com/playwright:v1.57.0-noble
+    defaults:
+      run:
+        shell: bash
     needs: web-build-coverage
     strategy:
       fail-fast: false
