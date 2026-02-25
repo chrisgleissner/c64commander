@@ -285,17 +285,20 @@ describe('useC64Connection', () => {
     vi.useRealTimers();
   });
 
-  it('does not call /v1/info when in demo mode', async () => {
-    const { wrapper } = createWrapper();
+  it('calls /v1/info in demo mode and reports isConnected as true', async () => {
     connectionSnapshot.state = 'DEMO_ACTIVE' as const;
-
     mockApi.getInfo.mockClear();
+
+    const { wrapper } = createWrapper();
     const { result } = renderHook(() => useC64Connection(), { wrapper });
 
-    // In demo mode the query is disabled; getInfo must never be invoked
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(result.current.status.isDemo).toBe(true);
-    expect(mockApi.getInfo).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.status.isDemo).toBe(true));
+    // isConnected must be true in demo mode
+    expect(result.current.status.isConnected).toBe(true);
+    // deviceType must be 'demo'
+    expect(result.current.status.deviceType).toBe('demo');
+    // /v1/info must still be called in demo mode
+    await waitFor(() => expect(mockApi.getInfo).toHaveBeenCalled());
 
     // Restore for other tests
     connectionSnapshot.state = 'REAL_CONNECTED' as const;

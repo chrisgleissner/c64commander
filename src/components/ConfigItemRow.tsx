@@ -485,7 +485,12 @@ export function ConfigItemRow({
                 const nextValue = resolveSliderOption(nextIndex);
                 setInputValue(String(nextValue));
               }}
-              onValueChangeAsync={undefined}
+              asyncThrottleMs={250}
+              onValueChangeAsync={(nextIndex) => {
+                if (isReadOnly) return;
+                const nextValue = resolveSliderOption(nextIndex);
+                onValueChange(nextValue);
+              }}
               onValueCommitAsync={(nextIndex) => {
                 if (isReadOnly) return;
                 const nextValue = resolveSliderOption(nextIndex);

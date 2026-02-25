@@ -119,7 +119,7 @@ afterEach(() => {
 describe('ConfigBrowserPage', () => {
   it('renders connection warning when offline', () => {
     setupDefaultMocks();
-    mockUseC64Connection.mockReturnValue({ status: { isConnected: false, isDemo: false }, runtimeBaseUrl: 'http://c64u' });
+    mockUseC64Connection.mockReturnValue({ status: { isConnected: false }, runtimeBaseUrl: 'http://c64u' });
 
     renderConfigBrowserPage();
 
@@ -128,7 +128,7 @@ describe('ConfigBrowserPage', () => {
 
   it('renders categories in demo mode without showing not-connected message', () => {
     setupDefaultMocks();
-    mockUseC64Connection.mockReturnValue({ status: { isConnected: false, isDemo: true }, runtimeBaseUrl: 'http://c64u' });
+    mockUseC64Connection.mockReturnValue({ status: { isConnected: true, isDemo: true, deviceType: 'demo' }, runtimeBaseUrl: 'http://c64u' });
     mockUseC64Categories.mockReturnValue({
       data: { categories: ['Audio Mixer', 'Clock Settings'] },
       isLoading: false,
