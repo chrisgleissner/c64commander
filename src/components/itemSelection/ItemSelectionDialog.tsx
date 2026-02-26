@@ -257,7 +257,7 @@ export const ItemSelectionDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showClose={false} className={cn(
+      <DialogContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className={cn(
         "w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl",
         source
           ? "max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]"
