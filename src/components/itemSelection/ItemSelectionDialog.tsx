@@ -7,9 +7,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus, X } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ModalCloseButton } from '@/components/ui/modal-close-button';
 import { Input } from '@/components/ui/input';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
@@ -256,7 +257,7 @@ export const ItemSelectionDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showClose={false} className={cn(
+      <DialogContent showClose={false} onOpenAutoFocus={(e) => e.preventDefault()} className={cn(
         "w-[calc(100%-2rem)] p-0 overflow-hidden shadow-2xl sm:rounded-2xl",
         source
           ? "max-w-3xl h-[min(80vh,calc(100dvh-6rem))] max-h-[calc(100dvh-6rem)]"
@@ -272,9 +273,9 @@ export const ItemSelectionDialog = ({
                 </DialogDescription>
               </div>
               <DialogClose asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Close">
-                  <X className="h-4 w-4" />
-                </Button>
+                {/* `static` overrides ModalCloseButton's default absolute positioning because this
+                    close button sits inside a flex header row (in-flow layout), not over the content. */}
+                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
               </DialogClose>
             </div>
           </DialogHeader>

@@ -9,7 +9,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
@@ -66,139 +66,133 @@ export function ConnectivityIndicator({ className }: Props) {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          onClick={wrapUserEvent(handleClick, 'click', 'ConnectivityIndicator', { title: label }, 'ConnectivityIndicator')}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        onClick={wrapUserEvent(handleClick, 'click', 'ConnectivityIndicator', { title: label }, 'ConnectivityIndicator')}
+        className={cn(
+          'rounded-lg border border-border px-3 py-2 touch-none text-right',
+          'hover:border-primary/60 transition-colors',
+          className,
+        )}
+        aria-label={label}
+        data-testid="connectivity-indicator"
+        data-connection-state={snapshot.state}
+      >
+        <span
           className={cn(
-            'rounded-lg border border-border px-3 py-2 touch-none text-right',
-            'hover:border-primary/60 transition-colors',
-            className,
+            'block text-xs font-semibold uppercase tracking-wide',
+            isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
           )}
-          aria-label={label}
-          data-testid="connectivity-indicator"
-          data-connection-state={snapshot.state}
+          data-testid="connection-status-label"
         >
-          <span
-            className={cn(
-              'block text-xs font-semibold uppercase tracking-wide',
-              isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
-            )}
-            data-testid="connection-status-label"
-          >
-            C64U
-          </span>
-          {isDemoMode ? (
-            <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">Demo</span>
-          ) : null}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-4" data-testid="connection-status-popover">
-        <div className="space-y-3">
-          <p
-            className={cn(
-              'text-base font-semibold',
-              isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
-            )}
-          >
-            C64U
-          </p>
-          {isDemoMode ? <p className="text-base font-semibold text-amber-500 indicator-demo">Demo</p> : null}
-          <div className="space-y-2 text-sm">
-          <p><span className="font-medium">Status:</span> {status}</p>
-            {editingHost ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={hostInput}
-                  onChange={(event) => setHostInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return;
-                    event.preventDefault();
-                    saveHostAndRetry();
-                  }}
-                  aria-label="C64U Hostname / IP"
-                  className="h-8 text-xs"
-                />
-                <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
-              </div>
-            ) : (
-              <div className="flex items-start justify-between gap-2">
-                <p className="break-all">
-                  <span className="font-medium">Host:</span> {configuredHost}
-                </p>
-                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingHost(true)}>
-                  Change
-                </Button>
-              </div>
-            )}
-            <p><span className="font-medium">Last request:</span> {lastRequest}</p>
-          </div>
-        </div>
-        <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
-          <p className="font-medium">Diagnostics</p>
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-rest"
-            label="REST"
-            total={diagnosticsSummary.rest.total}
-            issueCount={diagnosticsSummary.rest.failed}
-            totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
-            issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
-            relationLabel="of"
-            severity={diagnosticsSummary.rest.severity}
-            onClick={() => openDiagnosticsTab('actions')}
-          />
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-ftp"
-            label="FTP"
-            total={diagnosticsSummary.ftp.total}
-            issueCount={diagnosticsSummary.ftp.failed}
-            totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
-            issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
-            relationLabel="of"
-            severity={diagnosticsSummary.ftp.severity}
-            onClick={() => openDiagnosticsTab('actions')}
-          />
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-log-issues"
-            label="Logs"
-            total={diagnosticsSummary.logIssues.total}
-            issueCount={diagnosticsSummary.logIssues.issues}
-            totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
-            issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
-            relationLabel="in"
-            severity={diagnosticsSummary.logIssues.severity}
-            onClick={() => openDiagnosticsTab('error-logs')}
-          />
-        </div>
-        {showRetryNow ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setOpen(false);
-              void discoverConnection('manual');
-            }}
-          >
-            Retry Now
-          </Button>
+          C64U
+        </span>
+        {isDemoMode ? (
+          <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">Demo</span>
         ) : null}
-      </PopoverContent>
-    </Popover>
+      </button>
+      <DialogContent
+        className="w-80 p-0"
+        closeTestId="connection-status-close"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="space-y-4 p-6" data-testid="connection-status-popover">
+          <DialogHeader>
+            <DialogTitle>Connection Status</DialogTitle>
+            <DialogDescription
+              className={cn(isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real')}
+            >
+              {isDemoMode ? 'C64U Demo (simulated device)' : 'C64U'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1 text-sm">
+              <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
+              {editingHost ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={hostInput}
+                    onChange={(event) => setHostInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault();
+                      saveHostAndRetry();
+                    }}
+                    aria-label="C64U Hostname / IP"
+                    className="h-8 text-xs"
+                  />
+                  <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
+                </div>
+              ) : (
+                <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
+                  <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
+                  <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5 ring-1 ring-border" onClick={() => setEditingHost(true)}>
+                    Change
+                  </Button>
+                </div>
+              )}
+              <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
+          </div>
+          <div className="space-y-1 text-sm" data-testid="connection-diagnostics-section">
+            <p className="font-medium">Diagnostics</p>
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-rest"
+              label="REST"
+              total={diagnosticsSummary.rest.total}
+              issueCount={diagnosticsSummary.rest.failed}
+              totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
+              issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
+              relationLabel="of"
+              severity={diagnosticsSummary.rest.severity}
+              onClick={() => openDiagnosticsTab('actions')}
+            />
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-ftp"
+              label="FTP"
+              total={diagnosticsSummary.ftp.total}
+              issueCount={diagnosticsSummary.ftp.failed}
+              totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
+              issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
+              relationLabel="of"
+              severity={diagnosticsSummary.ftp.severity}
+              onClick={() => openDiagnosticsTab('actions')}
+            />
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-log-issues"
+              label="Logs"
+              total={diagnosticsSummary.logIssues.total}
+              issueCount={diagnosticsSummary.logIssues.issues}
+              totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
+              issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
+              relationLabel="in"
+              severity={diagnosticsSummary.logIssues.severity}
+              onClick={() => openDiagnosticsTab('error-logs')}
+            />
+          </div>
+          {showRetryNow ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                void discoverConnection('manual');
+              }}
+            >
+              Retry Now
+            </Button>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-const formatRelative = (timestampMs: number | null) => {
-  if (timestampMs === null) return 'unknown';
-  const elapsedSeconds = Math.max(0, Math.round((Date.now() - timestampMs) / 1000));
-  if (elapsedSeconds < 10) return 'just now';
+const formatRelative = (timestampMs: number) => {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
   if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
-  const elapsedMinutes = Math.round(elapsedSeconds / 60);
-  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
-  const elapsedHours = Math.round(elapsedMinutes / 60);
-  if (elapsedHours < 24) return `${elapsedHours}h ago`;
-  const elapsedDays = Math.round(elapsedHours / 24);
-  return `${elapsedDays}d ago`;
+  const m = Math.floor(elapsedSeconds / 60);
+  const s = elapsedSeconds % 60;
+  return `${m}m ${s}s ago`;
 };
 
 const deriveLastAttemptSucceeded = (
@@ -239,7 +233,7 @@ const DiagnosticsRow = ({
   return (
     <button
       type="button"
-      className="w-full py-1.5 text-left text-sm hover:underline"
+      className="w-full py-0 text-left text-sm hover:underline"
       onClick={onClick}
       aria-label={`${label}: ${issueCount} ${issueLabel} of ${total} ${totalLabel} (${severity} severity)`}
       data-testid={testId}

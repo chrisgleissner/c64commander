@@ -4,10 +4,12 @@
 
 :root {
   --c64-motion-duration-scale: 1;
+  --modal-backdrop-duration: 150ms;
 }
 
 :root[data-c64-motion-mode='reduced'] {
   --c64-motion-duration-scale: 0;
+  --modal-backdrop-duration: 0ms;
 }
 
 :root.c64-motion-reduced * {
