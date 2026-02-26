@@ -196,8 +196,7 @@ export function ConnectivityIndicator({ className }: Props) {
   );
 }
 
-const formatRelative = (timestampMs: number | null) => {
-  if (timestampMs === null) return 'unknown';
+const formatRelative = (timestampMs: number) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
   if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
   const m = Math.floor(elapsedSeconds / 60);

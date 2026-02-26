@@ -192,37 +192,55 @@ describe('ConnectivityIndicator', () => {
   });
 
   it('formats last request as strict numeric Xs ago under 60 seconds', () => {
-    connectionState = 'REAL_CONNECTED';
-    lastProbeAtMs = Date.now() - 3_000;
-    lastProbeSucceededAtMs = lastProbeAtMs;
-    lastProbeFailedAtMs = null;
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+      connectionState = 'REAL_CONNECTED';
+      lastProbeAtMs = Date.now() - 3_000;
+      lastProbeSucceededAtMs = lastProbeAtMs;
+      lastProbeFailedAtMs = null;
 
-    const { getByTestId } = render(<ConnectivityIndicator />);
-    fireEvent.click(getByTestId('connectivity-indicator'));
-    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+3s ago/);
+      const { getByTestId } = render(<ConnectivityIndicator />);
+      fireEvent.click(getByTestId('connectivity-indicator'));
+      expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+3s ago/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('formats last request as Xm Ys ago for 123 seconds', () => {
-    connectionState = 'REAL_CONNECTED';
-    lastProbeAtMs = Date.now() - 123_000;
-    lastProbeSucceededAtMs = lastProbeAtMs;
-    lastProbeFailedAtMs = null;
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+      connectionState = 'REAL_CONNECTED';
+      lastProbeAtMs = Date.now() - 123_000;
+      lastProbeSucceededAtMs = lastProbeAtMs;
+      lastProbeFailedAtMs = null;
 
-    const { getByTestId } = render(<ConnectivityIndicator />);
-    fireEvent.click(getByTestId('connectivity-indicator'));
-    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+2m 3s ago/);
+      const { getByTestId } = render(<ConnectivityIndicator />);
+      fireEvent.click(getByTestId('connectivity-indicator'));
+      expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+2m 3s ago/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('never renders "just now" in last request', () => {
-    connectionState = 'REAL_CONNECTED';
-    lastProbeAtMs = Date.now() - 500;
-    lastProbeSucceededAtMs = lastProbeAtMs;
-    lastProbeFailedAtMs = null;
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2024-01-01T00:00:00Z'));
+      connectionState = 'REAL_CONNECTED';
+      lastProbeAtMs = Date.now() - 500;
+      lastProbeSucceededAtMs = lastProbeAtMs;
+      lastProbeFailedAtMs = null;
 
-    const { getByTestId } = render(<ConnectivityIndicator />);
-    fireEvent.click(getByTestId('connectivity-indicator'));
-    expect(getByTestId('connection-status-popover').textContent).not.toContain('just now');
-    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+0s ago/);
+      const { getByTestId } = render(<ConnectivityIndicator />);
+      fireEvent.click(getByTestId('connectivity-indicator'));
+      expect(getByTestId('connection-status-popover').textContent).not.toContain('just now');
+      expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+0s ago/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('has a close button in the popover', () => {
