@@ -1,3 +1,29 @@
+# Modal / Overlay Unification Plan
+
+## Inventory
+
+| Component | File | Primitive | Backdrop | Close X | Focus trap | Scroll lock | Migration status |
+|---|---|---|---|---|---|---|---|
+| Diagnostics | `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+| Demo Mode Interstitial | `src/components/DemoModeInterstitial.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+| Item Selection | `src/components/itemSelection/ItemSelectionDialog.tsx` | Dialog | ✅ | ⚠️ Custom ghost Button wrapping DialogClose | ✅ | ✅ | **Step 2**: Replace with ModalCloseButton |
+| Connection Status | `src/components/ConnectivityIndicator.tsx` | Popover | ❌ | ⚠️ Custom PopoverPrimitive.Close | ⚠️ | ❌ | **Step 6**: Migrate to Dialog |
+| Load Config | `src/pages/home/dialogs/LoadConfigDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+| Manage Config | `src/pages/home/dialogs/ManageConfigDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+| Power Off | `src/pages/home/dialogs/PowerOffDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+| Save Config | `src/pages/home/dialogs/SaveConfigDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+
+## Steps
+
+1. ✅ Extract shared `ModalCloseButton` in `src/components/ui/modal-close-button.tsx`
+2. ✅ Update `dialog.tsx` to use `ModalCloseButton`
+3. ✅ Update `ItemSelectionDialog.tsx` to use `ModalCloseButton`
+4. ✅ Migrate `ConnectivityIndicator.tsx` from Popover → Dialog with `ModalCloseButton`
+5. ✅ Add `--modal-backdrop-duration` CSS variable respecting `c64-motion-reduced`
+6. ✅ Add `playwright/modalConsistency.spec.ts`
+
+---
+
 # Connection Status Pop-up Layout Correction Plan
 
 ## Layout contracts

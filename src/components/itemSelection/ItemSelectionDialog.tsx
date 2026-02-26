@@ -7,9 +7,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FolderPlus, X } from 'lucide-react';
+import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ModalCloseButton } from '@/components/ui/modal-close-button';
 import { Input } from '@/components/ui/input';
 import { FileOriginIcon } from '@/components/FileOriginIcon';
 import { toast } from '@/hooks/use-toast';
@@ -272,9 +273,7 @@ export const ItemSelectionDialog = ({
                 </DialogDescription>
               </div>
               <DialogClose asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Close">
-                  <X className="h-4 w-4" />
-                </Button>
+                <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
               </DialogClose>
             </div>
           </DialogHeader>

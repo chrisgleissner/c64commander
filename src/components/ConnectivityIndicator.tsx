@@ -7,11 +7,10 @@
  */
 
 import { useMemo, useState } from 'react';
-import * as PopoverPrimitive from '@radix-ui/react-popover';
-import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { ModalCloseButton } from '@/components/ui/modal-close-button';
 import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
@@ -68,131 +67,128 @@ export function ConnectivityIndicator({ className }: Props) {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          onClick={wrapUserEvent(handleClick, 'click', 'ConnectivityIndicator', { title: label }, 'ConnectivityIndicator')}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        onClick={wrapUserEvent(handleClick, 'click', 'ConnectivityIndicator', { title: label }, 'ConnectivityIndicator')}
+        className={cn(
+          'rounded-lg border border-border px-3 py-2 touch-none text-right',
+          'hover:border-primary/60 transition-colors',
+          className,
+        )}
+        aria-label={label}
+        data-testid="connectivity-indicator"
+        data-connection-state={snapshot.state}
+      >
+        <span
           className={cn(
-            'rounded-lg border border-border px-3 py-2 touch-none text-right',
-            'hover:border-primary/60 transition-colors',
-            className,
+            'block text-xs font-semibold uppercase tracking-wide',
+            isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
           )}
-          aria-label={label}
-          data-testid="connectivity-indicator"
-          data-connection-state={snapshot.state}
+          data-testid="connection-status-label"
         >
-          <span
-            className={cn(
-              'block text-xs font-semibold uppercase tracking-wide',
-              isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
-            )}
-            data-testid="connection-status-label"
-          >
-            C64U
-          </span>
-          {isDemoMode ? (
-            <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">Demo</span>
-          ) : null}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="relative w-80 space-y-4" data-testid="connection-status-popover">
-        <PopoverPrimitive.Close
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-          aria-label="Close"
-          data-testid="connection-status-close"
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </PopoverPrimitive.Close>
-        <div className="space-y-3">
-          <p
-            className={cn(
-              'text-base font-semibold',
-              isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
-            )}
-          >
-            C64U
-          </p>
-          {isDemoMode ? <p className="text-base font-semibold text-amber-500 indicator-demo">Demo</p> : null}
-          <div className="space-y-2 text-sm">
-            <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
-            {editingHost ? (
-              <div className="flex items-center gap-2">
-                <Input
-                  value={hostInput}
-                  onChange={(event) => setHostInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return;
-                    event.preventDefault();
-                    saveHostAndRetry();
-                  }}
-                  aria-label="C64U Hostname / IP"
-                  className="h-8 text-xs"
-                />
-                <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
-              </div>
-            ) : (
-              <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
-                <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
-                <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5" onClick={() => setEditingHost(true)}>
-                  Change
-                </Button>
-              </div>
-            )}
-            <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
-          </div>
-        </div>
-        <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
-          <p className="font-medium">Diagnostics</p>
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-rest"
-            label="REST"
-            total={diagnosticsSummary.rest.total}
-            issueCount={diagnosticsSummary.rest.failed}
-            totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
-            issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
-            relationLabel="of"
-            severity={diagnosticsSummary.rest.severity}
-            onClick={() => openDiagnosticsTab('actions')}
-          />
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-ftp"
-            label="FTP"
-            total={diagnosticsSummary.ftp.total}
-            issueCount={diagnosticsSummary.ftp.failed}
-            totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
-            issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
-            relationLabel="of"
-            severity={diagnosticsSummary.ftp.severity}
-            onClick={() => openDiagnosticsTab('actions')}
-          />
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-log-issues"
-            label="Logs"
-            total={diagnosticsSummary.logIssues.total}
-            issueCount={diagnosticsSummary.logIssues.issues}
-            totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
-            issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
-            relationLabel="in"
-            severity={diagnosticsSummary.logIssues.severity}
-            onClick={() => openDiagnosticsTab('error-logs')}
-          />
-        </div>
-        {showRetryNow ? (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setOpen(false);
-              void discoverConnection('manual');
-            }}
-          >
-            Retry Now
-          </Button>
+          C64U
+        </span>
+        {isDemoMode ? (
+          <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">Demo</span>
         ) : null}
-      </PopoverContent>
-    </Popover>
+      </button>
+      <DialogContent showClose={false} className="w-80 p-0">
+        <div className="relative space-y-4 p-6" data-testid="connection-status-popover">
+          <DialogTitle className="sr-only">Connection Status</DialogTitle>
+          <DialogDescription className="sr-only">C64U connection status and diagnostics</DialogDescription>
+          <DialogClose asChild>
+            <ModalCloseButton data-testid="connection-status-close" aria-label="Close" />
+          </DialogClose>
+          <div className="space-y-3">
+            <p
+              className={cn(
+                'text-base font-semibold',
+                isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
+              )}
+            >
+              C64U
+            </p>
+            {isDemoMode ? <p className="text-base font-semibold text-amber-500 indicator-demo">Demo</p> : null}
+            <div className="space-y-2 text-sm">
+              <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
+              {editingHost ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={hostInput}
+                    onChange={(event) => setHostInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') return;
+                      event.preventDefault();
+                      saveHostAndRetry();
+                    }}
+                    aria-label="C64U Hostname / IP"
+                    className="h-8 text-xs"
+                  />
+                  <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
+                </div>
+              ) : (
+                <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
+                  <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
+                  <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5" onClick={() => setEditingHost(true)}>
+                    Change
+                  </Button>
+                </div>
+              )}
+              <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
+            </div>
+          </div>
+          <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
+            <p className="font-medium">Diagnostics</p>
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-rest"
+              label="REST"
+              total={diagnosticsSummary.rest.total}
+              issueCount={diagnosticsSummary.rest.failed}
+              totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
+              issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
+              relationLabel="of"
+              severity={diagnosticsSummary.rest.severity}
+              onClick={() => openDiagnosticsTab('actions')}
+            />
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-ftp"
+              label="FTP"
+              total={diagnosticsSummary.ftp.total}
+              issueCount={diagnosticsSummary.ftp.failed}
+              totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
+              issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
+              relationLabel="of"
+              severity={diagnosticsSummary.ftp.severity}
+              onClick={() => openDiagnosticsTab('actions')}
+            />
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-log-issues"
+              label="Logs"
+              total={diagnosticsSummary.logIssues.total}
+              issueCount={diagnosticsSummary.logIssues.issues}
+              totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
+              issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
+              relationLabel="in"
+              severity={diagnosticsSummary.logIssues.severity}
+              onClick={() => openDiagnosticsTab('error-logs')}
+            />
+          </div>
+          {showRetryNow ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                void discoverConnection('manual');
+              }}
+            >
+              Retry Now
+            </Button>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
