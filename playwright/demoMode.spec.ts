@@ -197,7 +197,7 @@ test.describe('Automatic Demo Mode', () => {
     const ftpRow = popover.getByTestId('connection-diagnostics-row-ftp');
     const logIssuesRow = popover.getByTestId('connection-diagnostics-row-log-issues');
 
-    await expect(popover).toContainText(/Last request:\s+(just now|\d+[smhd] ago|none yet)/i);
+    await expect(popover).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
     await expect(popover.getByRole('button', { name: 'Change' })).toBeVisible();
     await expect(restRow).toContainText(/REST:\s+\d+\s+of\s+\d+\s+requests\s+failed/i);
     await expect(ftpRow).toContainText(/FTP:\s+\d+\s+of\s+\d+\s+operations\s+failed/i);

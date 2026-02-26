@@ -7,6 +7,8 @@
  */
 
 import { useMemo, useState } from 'react';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
+import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -94,7 +96,15 @@ export function ConnectivityIndicator({ className }: Props) {
           ) : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-4" data-testid="connection-status-popover">
+      <PopoverContent align="end" className="relative w-80 space-y-4" data-testid="connection-status-popover">
+        <PopoverPrimitive.Close
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          aria-label="Close"
+          data-testid="connection-status-close"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </PopoverPrimitive.Close>
         <div className="space-y-3">
           <p
             className={cn(
@@ -106,7 +116,7 @@ export function ConnectivityIndicator({ className }: Props) {
           </p>
           {isDemoMode ? <p className="text-base font-semibold text-amber-500 indicator-demo">Demo</p> : null}
           <div className="space-y-2 text-sm">
-          <p><span className="font-medium">Status:</span> {status}</p>
+            <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
             {editingHost ? (
               <div className="flex items-center gap-2">
                 <Input
@@ -123,16 +133,14 @@ export function ConnectivityIndicator({ className }: Props) {
                 <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
               </div>
             ) : (
-              <div className="flex items-start justify-between gap-2">
-                <p className="break-all">
-                  <span className="font-medium">Host:</span> {configuredHost}
-                </p>
-                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingHost(true)}>
+              <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
+                <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
+                <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5" onClick={() => setEditingHost(true)}>
                   Change
                 </Button>
               </div>
             )}
-            <p><span className="font-medium">Last request:</span> {lastRequest}</p>
+            <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
           </div>
         </div>
         <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
@@ -190,15 +198,11 @@ export function ConnectivityIndicator({ className }: Props) {
 
 const formatRelative = (timestampMs: number | null) => {
   if (timestampMs === null) return 'unknown';
-  const elapsedSeconds = Math.max(0, Math.round((Date.now() - timestampMs) / 1000));
-  if (elapsedSeconds < 10) return 'just now';
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestampMs) / 1000));
   if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
-  const elapsedMinutes = Math.round(elapsedSeconds / 60);
-  if (elapsedMinutes < 60) return `${elapsedMinutes}m ago`;
-  const elapsedHours = Math.round(elapsedMinutes / 60);
-  if (elapsedHours < 24) return `${elapsedHours}h ago`;
-  const elapsedDays = Math.round(elapsedHours / 24);
-  return `${elapsedDays}d ago`;
+  const m = Math.floor(elapsedSeconds / 60);
+  const s = elapsedSeconds % 60;
+  return `${m}m ${s}s ago`;
 };
 
 const deriveLastAttemptSucceeded = (

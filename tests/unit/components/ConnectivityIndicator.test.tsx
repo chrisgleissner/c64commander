@@ -85,7 +85,7 @@ describe('ConnectivityIndicator', () => {
 
     fireEvent.click(button);
     expect(getByTestId('connection-status-popover')).toBeTruthy();
-    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+(just now|\d+[smhd] ago|none yet)/);
+    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/);
     expect(discoverConnection).not.toHaveBeenCalled();
   });
 
@@ -185,9 +185,57 @@ describe('ConnectivityIndicator', () => {
 
     const popover = getByTestId('connection-status-popover');
     expect(popover.className).toContain('space-y-4');
-    expect(popover.firstElementChild?.className).toContain('space-y-3');
+    expect(popover.querySelector('.space-y-3')).toBeTruthy();
     expect(getByTestId('connection-diagnostics-section').className).toContain('space-y-1.5');
     expect(popover.textContent).toContain('Last request:');
     expect(popover.textContent).not.toContain('Communication:');
+  });
+
+  it('formats last request as strict numeric Xs ago under 60 seconds', () => {
+    connectionState = 'REAL_CONNECTED';
+    lastProbeAtMs = Date.now() - 3_000;
+    lastProbeSucceededAtMs = lastProbeAtMs;
+    lastProbeFailedAtMs = null;
+
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+3s ago/);
+  });
+
+  it('formats last request as Xm Ys ago for 123 seconds', () => {
+    connectionState = 'REAL_CONNECTED';
+    lastProbeAtMs = Date.now() - 123_000;
+    lastProbeSucceededAtMs = lastProbeAtMs;
+    lastProbeFailedAtMs = null;
+
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+2m 3s ago/);
+  });
+
+  it('never renders "just now" in last request', () => {
+    connectionState = 'REAL_CONNECTED';
+    lastProbeAtMs = Date.now() - 500;
+    lastProbeSucceededAtMs = lastProbeAtMs;
+    lastProbeFailedAtMs = null;
+
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+    expect(getByTestId('connection-status-popover').textContent).not.toContain('just now');
+    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+0s ago/);
+  });
+
+  it('has a close button in the popover', () => {
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+    expect(getByTestId('connection-status-close')).toBeTruthy();
+  });
+
+  it('provides data-testid on status, host, and last-request rows', () => {
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+    expect(getByTestId('connection-status-row-status').textContent).toContain('Status:');
+    expect(getByTestId('connection-status-row-host').textContent).toContain('Host:');
+    expect(getByTestId('connection-status-row-last-request').textContent).toContain('Last request:');
   });
 });

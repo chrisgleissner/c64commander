@@ -278,7 +278,12 @@ test.describe('App screenshots', () => {
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'home/00-overview-light.png');
     await page.getByTestId('connectivity-indicator').click();
-    await expect(page.getByTestId('connection-status-popover')).toBeVisible();
+    const connectionPopover = page.getByTestId('connection-status-popover');
+    await expect(connectionPopover).toBeVisible();
+    await expect(connectionPopover).toContainText('Last request:');
+    await expect(connectionPopover).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago)/i);
+    await expect(connectionPopover).not.toContainText('just now');
+    await expect(connectionPopover).not.toContainText('Communication');
     await captureScreenshot(page, testInfo, 'home/02-connection-status-popover.png');
     await page.keyboard.press('Escape');
     await captureLabeledSections(page, testInfo, 'home');
