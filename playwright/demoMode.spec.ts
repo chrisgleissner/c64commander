@@ -108,10 +108,57 @@ test.describe('Automatic Demo Mode', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toBeVisible();
     await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED');
-
-    const icon = indicator.locator('svg').first();
-    await expect(icon).toHaveClass(/text-success/);
+    await expect(indicator.locator('.indicator-real')).toHaveText('C64U');
     await snap(page, testInfo, 'real-connected-indicator');
+  });
+
+  test('connection status surface covers checking, not yet connected, online, and offline states', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+    server = await createMockC64Server({});
+
+    await page.addInitScript(() => {
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://127.0.0.1:1';
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '0');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '2500');
+      localStorage.setItem('c64u_discovery_probe_timeout_ms', '2000');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+    });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'DISCOVERING');
+    await indicator.click();
+    const popover = page.getByTestId('connection-status-popover');
+    await expect(popover).toContainText('Status: Checking…');
+
+    await page.keyboard.press('Escape');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'OFFLINE_NO_DEMO', { timeout: 10000 });
+    await indicator.click();
+    await expect(popover).toContainText('Status: Not yet connected');
+    await expect(popover.getByRole('button', { name: 'Retry Now' })).toBeVisible();
+
+    await popover.getByRole('button', { name: 'Change' }).click();
+    await popover.getByLabel('C64U Hostname / IP').fill(new URL(server.baseUrl).host);
+    await popover.getByRole('button', { name: 'Save' }).click();
+
+    await expect(indicator).toHaveAttribute('data-connection-state', 'REAL_CONNECTED', { timeout: 10000 });
+    await indicator.click();
+    await expect(popover).toContainText('Status: Online');
+    await expect(popover.getByRole('button', { name: 'Retry Now' })).toBeHidden();
+
+    await popover.getByRole('button', { name: 'Change' }).click();
+    await popover.getByLabel('C64U Hostname / IP').fill('127.0.0.1:1');
+    await popover.getByRole('button', { name: 'Save' }).click();
+
+    await expect(indicator).toHaveAttribute('data-connection-state', 'OFFLINE_NO_DEMO', { timeout: 10000 });
+    await indicator.click();
+    await expect(popover).toContainText('Status: Offline');
+    await expect(popover.getByRole('button', { name: 'Retry Now' })).toBeVisible();
+    await snap(page, testInfo, 'connection-status-surface-states');
   });
 
   test('legacy base URL migrates to device host on startup', async ({ page }: { page: Page }, testInfo: TestInfo) => {
@@ -178,11 +225,12 @@ test.describe('Automatic Demo Mode', () => {
     await expect(dialog).toBeHidden();
 
     await expect(indicator).toHaveAttribute('data-connection-state', 'DEMO_ACTIVE');
-    await expect(indicator).toHaveAttribute('aria-label', /C64U (Disconnected|Connected|Demo)/);
+    await expect(indicator).toHaveAttribute('aria-label', /C64U( Demo)?/);
     await snap(page, testInfo, 'demo-indicator');
 
     // Manual retry: should not show interstitial again in this session.
     await clickWithoutNavigationWait(page, indicator);
+    await clickWithoutNavigationWait(page, page.getByRole('button', { name: 'Retry Now' }));
     await expect(indicator).toHaveAttribute('data-connection-state', /DISCOVERING|DEMO_ACTIVE/);
     await expect(dialog).toBeHidden();
     await snap(page, testInfo, 'no-repeat-interstitial');

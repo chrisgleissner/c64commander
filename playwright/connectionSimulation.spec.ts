@@ -567,6 +567,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
       }
 
       await clickWithoutNavigationWait(page, indicator);
+      const retryNow = page.getByRole('button', { name: 'Retry Now' });
+      if (await retryNow.isVisible().catch(() => false)) {
+        await clickWithoutNavigationWait(page, retryNow);
+      }
       const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
       const dialogVisible = await dialog.isVisible().catch(() => false);
       if (dialogVisible) {
@@ -593,6 +597,17 @@ test.describe('Deterministic Connectivity Simulation', () => {
 
     server.setReachable(false);
     await clickWithoutNavigationWait(page, indicator);
+    {
+      const retryNow = page.getByRole('button', { name: 'Retry Now' });
+      if (await retryNow.isVisible().catch(() => false)) {
+        await clickWithoutNavigationWait(page, retryNow);
+      } else {
+        const popover = page.getByTestId('connection-status-popover');
+        await clickWithoutNavigationWait(page, popover.getByRole('button', { name: 'Change' }));
+        await popover.getByLabel('C64U Hostname / IP').fill(host);
+        await clickWithoutNavigationWait(page, popover.getByRole('button', { name: 'Save' }));
+      }
+    }
     const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
     await dialog.waitFor({ state: 'visible', timeout: 5000 }).catch(() => { });
     const dialogVisible = await dialog.isVisible().catch(() => false);
@@ -639,6 +654,10 @@ test.describe('Deterministic Connectivity Simulation', () => {
         await clickWithoutNavigationWait(page, refreshConnection);
       }
       await clickWithoutNavigationWait(page, indicator);
+      const retryNow = page.getByRole('button', { name: 'Retry Now' });
+      if (await retryNow.isVisible().catch(() => false)) {
+        await clickWithoutNavigationWait(page, retryNow);
+      }
       await page.waitForTimeout(500);
 
       const state = await indicator.getAttribute('data-connection-state');
