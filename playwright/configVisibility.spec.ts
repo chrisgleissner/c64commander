@@ -83,7 +83,7 @@ test.describe('Config visibility across modes', () => {
     const indicator = page.getByTestId('connectivity-indicator');
     await expect(indicator).toBeVisible({ timeout: 15000 });
     await expect(indicator).toHaveAttribute('data-connection-state', /DEMO_ACTIVE|REAL_CONNECTED/, { timeout: 10000 });
-    await expect(indicator).toHaveAttribute('aria-label', /C64U Demo|C64U Connected/);
+    await expect(indicator).toHaveAttribute('aria-label', /C64U( Demo)?/);
 
     await expect(page.getByText('Not connected', { exact: true })).toBeHidden();
     await expect(page.getByRole('button', { name: 'Audio Mixer' })).toBeVisible();

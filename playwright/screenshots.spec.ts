@@ -272,10 +272,15 @@ test.describe('App screenshots', () => {
 
   test('capture home screenshots', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await page.goto('/');
+    await waitForConnected(page);
     await expect(page.getByRole('button', { name: 'Disks', exact: true })).toBeVisible();
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await captureScreenshot(page, testInfo, 'home/00-overview-light.png');
+    await page.getByTestId('connectivity-indicator').click();
+    await expect(page.getByTestId('connection-status-popover')).toBeVisible();
+    await captureScreenshot(page, testInfo, 'home/02-connection-status-popover.png');
+    await page.keyboard.press('Escape');
     await captureLabeledSections(page, testInfo, 'home');
 
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
