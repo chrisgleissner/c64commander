@@ -126,6 +126,7 @@ jobs:
       - name: Build app for simulator
         run: |
           set -euo pipefail
+          mkdir -p artifacts/ios/_infra/xcodebuild
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
@@ -133,7 +134,17 @@ jobs:
             -sdk iphonesimulator \
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath ios/build \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee artifacts/ios/_infra/xcodebuild/build-simulator.log
+
+      - name: Upload simulator build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-simulator-failure
+          path: |
+            artifacts/ios/_infra/xcodebuild/**
+          if-no-files-found: warn
 
       - name: Upload simulator app artifact
         uses: actions/upload-artifact@v4
@@ -268,10 +279,48 @@ jobs:
               sys.exit(1)
 
           if bootstatus.returncode != 0:
-              print("simctl bootstatus failed", file=sys.stderr)
+              print("simctl bootstatus failed on first attempt, attempting shutdown and retry...", file=sys.stderr)
               print(bootstatus.stdout, file=sys.stderr)
               print(bootstatus.stderr, file=sys.stderr)
-              sys.exit(bootstatus.returncode)
+              shutdown_retry = subprocess.run(
+                  ["xcrun", "simctl", "shutdown", udid],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              if shutdown_retry.returncode != 0:
+                  print("simctl shutdown before retry failed (non-zero exit), continuing with boot retry...", file=sys.stderr)
+                  print(shutdown_retry.stdout, file=sys.stderr)
+                  print(shutdown_retry.stderr, file=sys.stderr)
+              boot_retry = subprocess.run(
+                  ["xcrun", "simctl", "boot", udid],
+                  capture_output=True,
+                  text=True,
+                  check=False,
+              )
+              if boot_retry.returncode != 0:
+                  print("simctl boot retry failed (non-zero exit), attempting bootstatus check...", file=sys.stderr)
+                  print(boot_retry.stdout, file=sys.stderr)
+                  print(boot_retry.stderr, file=sys.stderr)
+              try:
+                  bootstatus_retry = subprocess.run(
+                      ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                      capture_output=True,
+                      text=True,
+                      timeout=300,
+                  )
+              except subprocess.TimeoutExpired as exc:
+                  print("simctl bootstatus failed after retry (timeout)", file=sys.stderr)
+                  # exc.stdout and exc.stderr may be None; default to empty strings
+                  print(getattr(exc, "stdout", "") or "", file=sys.stderr)
+                  print(getattr(exc, "stderr", "") or "", file=sys.stderr)
+                  sys.exit(1)
+              else:
+                  if bootstatus_retry.returncode != 0:
+                      print("simctl bootstatus failed after retry", file=sys.stderr)
+                      print(bootstatus_retry.stdout, file=sys.stderr)
+                      print(bootstatus_retry.stderr, file=sys.stderr)
+                      sys.exit(bootstatus_retry.returncode)
 
           boot_end_ms = int(time.time() * 1000)
           boot_seconds = (boot_end_ms - boot_start_ms) // 1000
@@ -449,6 +498,33 @@ jobs:
             echo "telemetry gate failed: monitor exited with code $code"
             exit 1
           fi
+
+      - name: Collect simulator diagnostics on failure (${{ matrix.group.name }})
+        if: failure()
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/ios/_infra/simulator
+          simulator_log_lookback="${IOS_SIMULATOR_LOG_LOOKBACK:-15m}"
+          if [[ -n "${{ steps.simulator.outputs.udid }}" ]]; then
+            # Keep lookback bounded while covering a full grouped Maestro run in typical CI timing.
+            xcrun simctl spawn "${{ steps.simulator.outputs.udid }}" log show --last "$simulator_log_lookback" --style compact > artifacts/ios/_infra/simulator/device.log 2>&1 || true
+            xcrun simctl diagnose "${{ steps.simulator.outputs.udid }}" > artifacts/ios/_infra/simulator/diagnose.log 2>&1 || true
+          fi
+          xcrun simctl list devices > artifacts/ios/_infra/simulator/devices.txt 2>&1 || true
+          xcrun simctl list runtimes > artifacts/ios/_infra/simulator/runtimes.txt 2>&1 || true
+
+      - name: Upload iOS failure diagnostics (${{ matrix.group.name }})
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-maestro-failure-${{ matrix.group.name }}
+          path: |
+            artifacts/ios/_infra/telemetry/events.log
+            artifacts/ios/_infra/telemetry/monitor-run.log
+            artifacts/ios/_infra/telemetry/monitor.exitcode
+            artifacts/ios/_infra/simulator/**
+            artifacts/ios/_infra/xcodebuild/**
+          if-no-files-found: warn
 
       - name: Shutdown and delete simulator
         if: always()
@@ -713,6 +789,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ios/build
+          mkdir -p artifacts/ios/_infra/xcodebuild
           xcodebuild \
             -workspace ios/App/App.xcworkspace \
             -scheme App \
@@ -721,7 +798,8 @@ jobs:
             -derivedDataPath ios/build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
+            CODE_SIGN_IDENTITY="" \
+            2>&1 | tee artifacts/ios/_infra/xcodebuild/build-device-release.log
 
       - name: Package iOS IPA
         run: |
@@ -744,6 +822,15 @@ jobs:
             ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
             ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
           if-no-files-found: error
+
+      - name: Upload iOS package diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-package-failure
+          path: |
+            artifacts/ios/_infra/xcodebuild/**
+          if-no-files-found: warn
 
       - name: Ensure GitHub release exists
         if: startsWith(github.ref, 'refs/tags/')
