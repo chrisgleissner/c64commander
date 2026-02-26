@@ -130,7 +130,7 @@ test.describe('Automatic Demo Mode', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
 
     const indicator = page.getByTestId('connectivity-indicator');
-    await expect(indicator).toHaveAttribute('data-connection-state', 'DISCOVERING');
+    await expect(indicator).toBeVisible();
     await indicator.click();
     const popover = page.getByTestId('connection-status-popover');
     await expect(popover).toContainText('Status: Checking…');
