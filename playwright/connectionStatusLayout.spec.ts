@@ -173,7 +173,7 @@ test.describe('Connection Status pop-up layout', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     const popover = await openPopover(page);
 
-    const closeButton = popover.getByTestId('connection-status-close');
+    const closeButton = page.getByTestId('connection-status-close');
     await expect(closeButton).toBeVisible();
     await closeButton.click();
     await expect(popover).toBeHidden();
