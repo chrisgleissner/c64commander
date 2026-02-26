@@ -19,6 +19,7 @@ import { seedUiMocks } from './uiMocks';
 import { seedFtpConfig, startFtpTestServers } from './ftpTestUtils';
 import {
   allowVisualOverflow,
+  allowWarnings,
   assertNoUiIssues,
   attachStepScreenshot,
   finalizeEvidence,
@@ -472,6 +473,28 @@ test.describe('App screenshots', () => {
     await captureDocsSections(page, testInfo);
 
     await scrollAndCapture(page, testInfo, page.getByText('External Resources', { exact: true }), 'docs/external/01-external-resources.png');
+  });
+
+  test('capture demo mode interstitial screenshot', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+
+    await page.addInitScript(() => {
+      localStorage.setItem('c64u_startup_discovery_window_ms', '600');
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
+      localStorage.setItem('c64u_background_rediscovery_interval_ms', '5000');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+      sessionStorage.removeItem('c64u_demo_interstitial_shown');
+      delete (window as Window & { __c64uSecureStorageOverride?: unknown }).__c64uSecureStorageOverride;
+    });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const dialog = page.getByRole('dialog', { name: 'Demo Mode' });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
+    await captureScreenshot(page, testInfo, 'home/03-demo-mode-interstitial.png');
+    await dialog.getByRole('button', { name: 'Continue in Demo Mode' }).click();
+    await expect(dialog).toBeHidden();
   });
 
   test('capture demo mode play screenshot', { tag: '@screenshots' }, async ({ page }: { page: Page }, testInfo: TestInfo) => {

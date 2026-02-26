@@ -148,6 +148,7 @@ Your everyday dashboard: quick access to the controls you touch most often.
   </tr>
   <tr>
     <td><img src="doc/img/app/home/02-connection-status-popover.png" alt="Connection Status pop-up" width="360"/></td>
+    <td><img src="doc/img/app/home/03-demo-mode-interstitial.png" alt="Demo Mode interstitial" width="360"/></td>
   </tr>
 </table>
 
