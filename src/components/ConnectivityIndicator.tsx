@@ -93,13 +93,14 @@ export function ConnectivityIndicator({ className }: Props) {
           <span className="block text-xs font-semibold tracking-wide text-amber-500 indicator-demo">Demo</span>
         ) : null}
       </button>
-      <DialogContent showClose={false} className="w-80 p-0">
+      <DialogContent
+        showClose={false}
+        className="w-80 p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <div className="relative space-y-4 p-6" data-testid="connection-status-popover">
           <DialogTitle className="sr-only">Connection Status</DialogTitle>
           <DialogDescription className="sr-only">C64U connection status and diagnostics</DialogDescription>
-          <DialogClose asChild>
-            <ModalCloseButton data-testid="connection-status-close" aria-label="Close" />
-          </DialogClose>
           <div className="space-y-3">
             <p
               className={cn(
@@ -186,6 +187,10 @@ export function ConnectivityIndicator({ className }: Props) {
               Retry Now
             </Button>
           ) : null}
+          {/* Close button placed last so Radix's focus trap focuses content first, not the close icon. */}
+          <DialogClose asChild>
+            <ModalCloseButton data-testid="connection-status-close" aria-label="Close" />
+          </DialogClose>
         </div>
       </DialogContent>
     </Dialog>

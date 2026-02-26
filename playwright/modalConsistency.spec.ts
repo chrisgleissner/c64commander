@@ -60,6 +60,8 @@ test.describe('Modal close-button consistency', () => {
 
     const dialog = page.getByTestId('connection-status-popover');
     await expect(dialog).toBeVisible();
+    // Ensures the time is shown in numeric format (e.g. "5s ago", "2m 3s ago") rather than
+    // text like "just now" that was removed in a previous fix.
     await expect(dialog).toContainText(/Last request:\s+(\d+s ago|\d+m \d+s ago|none yet|unknown)/i);
     await expect(dialog).not.toContainText('just now');
     await expect(dialog).not.toContainText('Communication');

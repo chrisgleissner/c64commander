@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 /**
  * Shared visual close button for all modal surfaces (Dialog, Popover-as-Dialog, etc.).
  * Defaults to `position: absolute; right: 1rem; top: 1rem` — pass `className` to override.
- * Pair with the relevant Radix `*.Close asChild` wrapper to wire up dismiss behaviour.
+ * Pair with the relevant Radix `*.Close asChild` wrapper to wire up dismiss behavior.
  */
 export const ModalCloseButton = React.forwardRef<
   HTMLButtonElement,

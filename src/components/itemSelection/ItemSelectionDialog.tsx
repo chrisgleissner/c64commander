@@ -273,6 +273,8 @@ export const ItemSelectionDialog = ({
                 </DialogDescription>
               </div>
               <DialogClose asChild>
+                {/* `static` overrides ModalCloseButton's default absolute positioning because this
+                    close button sits inside a flex header row (in-flow layout), not over the content. */}
                 <ModalCloseButton className="static h-8 w-8 shrink-0" aria-label="Close" />
               </DialogClose>
             </div>

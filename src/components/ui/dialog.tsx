@@ -56,7 +56,7 @@ const DialogContent = React.forwardRef<
       {children}
       {showClose ? (
         <DialogPrimitive.Close asChild>
-          <ModalCloseButton className="data-[state=open]:bg-accent data-[state=open]:text-muted-foreground" />
+          <ModalCloseButton />
         </DialogPrimitive.Close>
       ) : null}
     </DialogPrimitive.Content>
