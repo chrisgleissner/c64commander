@@ -152,7 +152,7 @@ describe('ConnectivityIndicator', () => {
     expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith('192.168.0.12', '192.168.0.11', { trigger: 'settings' });
   });
 
-  it('renders diagnostics rows with one indicator each and opens diagnostics tabs', () => {
+  it('renders diagnostics rows with deterministic grammar and opens diagnostics tabs', () => {
     const { getByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId('connectivity-indicator'));
 
@@ -161,13 +161,9 @@ describe('ConnectivityIndicator', () => {
     const restRow = getByTestId('connection-diagnostics-row-rest');
     const ftpRow = getByTestId('connection-diagnostics-row-ftp');
     const logIssuesRow = getByTestId('connection-diagnostics-row-log-issues');
-    expect(getByTestId('connection-diagnostics-row-rest-indicator')).toBeTruthy();
-    expect(getByTestId('connection-diagnostics-row-ftp-indicator')).toBeTruthy();
-    expect(getByTestId('connection-diagnostics-row-log-issues-indicator')).toBeTruthy();
-    expect(restRow.textContent).toContain('REST');
-    expect(restRow.textContent).toContain('2');
-    expect(ftpRow.textContent).toContain('FTP');
-    expect(logIssuesRow.textContent).toContain('Log issues');
+    expect(restRow.textContent).toContain('REST: 2 of 10 requests failed');
+    expect(ftpRow.textContent).toContain('FTP: 1 of 4 operations failed');
+    expect(logIssuesRow.textContent).toContain('Logs: 3 issues in 8 logs');
 
     fireEvent.click(restRow);
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith('actions');

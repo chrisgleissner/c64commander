@@ -161,7 +161,7 @@ test.describe('Automatic Demo Mode', () => {
     await snap(page, testInfo, 'connection-status-surface-states');
   });
 
-  test('connection pop-up diagnostics rows use subtle indicators and open deterministic diagnostics tabs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+  test('connection pop-up diagnostics rows are text-only and open deterministic diagnostics tabs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
     await page.addInitScript(() => {
@@ -197,9 +197,9 @@ test.describe('Automatic Demo Mode', () => {
     const ftpRow = popover.getByTestId('connection-diagnostics-row-ftp');
     const logIssuesRow = popover.getByTestId('connection-diagnostics-row-log-issues');
 
-    await expect(restRow.getByTestId('connection-diagnostics-row-rest-indicator')).toHaveCount(1);
-    await expect(ftpRow.getByTestId('connection-diagnostics-row-ftp-indicator')).toHaveCount(1);
-    await expect(logIssuesRow.getByTestId('connection-diagnostics-row-log-issues-indicator')).toHaveCount(1);
+    await expect(restRow).toContainText(/REST:\s+\d+\s+of\s+\d+\s+requests\s+failed/i);
+    await expect(ftpRow).toContainText(/FTP:\s+\d+\s+of\s+\d+\s+operations\s+failed/i);
+    await expect(logIssuesRow).toContainText(/Logs:\s+\d+\s+issues\s+in\s+\d+\s+logs/i);
 
     await restRow.click();
     await expect(page.getByRole('tab', { name: 'Actions' })).toHaveAttribute('aria-selected', 'true');

@@ -52,12 +52,7 @@ export function ConnectivityIndicator({ className }: Props) {
       : lastAttemptSucceeded === false && lastSuccessAt !== null
         ? 'Offline'
         : 'Not yet connected';
-  const hasSuccessTimestamp = status === 'Online' || status === 'Offline';
-  const communication = hasSuccessTimestamp
-    ? `Last success ${formatRelative(lastSuccessAt)}`
-    : lastAttemptAt !== null
-      ? `Last attempt ${formatRelative(lastAttemptAt)}`
-      : 'No attempts yet';
+  const lastRequest = lastAttemptAt !== null ? formatRelative(lastAttemptAt) : 'none yet';
 
   const label = isDemoMode ? 'C64U Demo' : 'C64U';
   const showRetryNow = status === 'Offline' || status === 'Not yet connected';
@@ -138,37 +133,40 @@ export function ConnectivityIndicator({ className }: Props) {
               </Button>
             )}
           </div>
-          <p><span className="font-medium">Communication:</span> {communication}</p>
+          <p><span className="font-medium">Communication:</span> Last request: {lastRequest}</p>
         </div>
         <div className="space-y-2 text-sm" data-testid="connection-diagnostics-section">
           <p className="font-medium">Diagnostics</p>
-          <DiagnosticsRow
-            testId="connection-diagnostics-row-rest"
-            label="REST"
-            total={diagnosticsSummary.rest.total}
-            issueCount={diagnosticsSummary.rest.failed}
-            totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
-            issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
-            severity={diagnosticsSummary.rest.severity}
-            onClick={() => openDiagnosticsTab('actions')}
-          />
+            <DiagnosticsRow
+              testId="connection-diagnostics-row-rest"
+              label="REST"
+              total={diagnosticsSummary.rest.total}
+              issueCount={diagnosticsSummary.rest.failed}
+              totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
+              issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
+              relationLabel="of"
+              severity={diagnosticsSummary.rest.severity}
+              onClick={() => openDiagnosticsTab('actions')}
+            />
           <DiagnosticsRow
             testId="connection-diagnostics-row-ftp"
             label="FTP"
-            total={diagnosticsSummary.ftp.total}
-            issueCount={diagnosticsSummary.ftp.failed}
-            totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
-            issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
-            severity={diagnosticsSummary.ftp.severity}
-            onClick={() => openDiagnosticsTab('actions')}
-          />
+              total={diagnosticsSummary.ftp.total}
+              issueCount={diagnosticsSummary.ftp.failed}
+              totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
+              issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
+              relationLabel="of"
+              severity={diagnosticsSummary.ftp.severity}
+              onClick={() => openDiagnosticsTab('actions')}
+            />
           <DiagnosticsRow
             testId="connection-diagnostics-row-log-issues"
-            label="Log issues"
+            label="Logs"
             total={diagnosticsSummary.logIssues.total}
             issueCount={diagnosticsSummary.logIssues.issues}
             totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
             issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
+            relationLabel="in"
             severity={diagnosticsSummary.logIssues.severity}
             onClick={() => openDiagnosticsTab('error-logs')}
           />
@@ -221,6 +219,7 @@ type DiagnosticsRowProps = {
   issueCount: number;
   totalLabel: string;
   issueLabel: string;
+  relationLabel: 'of' | 'in';
   severity: DiagnosticsSeverity;
   onClick: () => void;
 };
@@ -232,10 +231,10 @@ const DiagnosticsRow = ({
   issueCount,
   totalLabel,
   issueLabel,
+  relationLabel,
   severity,
   onClick,
 }: DiagnosticsRowProps) => {
-  const circleClass = resolveSeverityCircleClass(severity);
   const issueCountClass = resolveSeverityCountClass(severity);
   return (
     <button
@@ -246,23 +245,25 @@ const DiagnosticsRow = ({
       data-testid={testId}
       data-severity={severity}
     >
-      <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', circleClass)} aria-hidden="true" data-testid={`${testId}-indicator`} />
       <span className="text-foreground">
-        {label}{' '}
-        <span className={issueCountClass}>{issueCount}</span> {issueLabel} of {total} {totalLabel}
+        {label}: <span className={issueCountClass}>{issueCount}</span>{' '}
+        {formatDiagnosticsDetail(relationLabel, total, totalLabel, issueLabel)}
       </span>
     </button>
   );
 };
 
-const pluralize = (count: number, singular: string, plural: string) => (count === 1 ? singular : plural);
-
-const resolveSeverityCircleClass = (severity: DiagnosticsSeverity) => {
-  if (severity === 'high') return 'bg-diagnostics-error';
-  if (severity === 'medium') return 'bg-amber-500';
-  if (severity === 'low') return 'bg-success';
-  return 'bg-muted-foreground/40';
+const formatDiagnosticsDetail = (
+  relationLabel: 'of' | 'in',
+  total: number,
+  totalLabel: string,
+  issueLabel: string,
+) => {
+  if (relationLabel === 'in') return `${issueLabel} in ${total} ${totalLabel}`;
+  return `of ${total} ${totalLabel} ${issueLabel}`;
 };
+
+const pluralize = (count: number, singular: string, plural: string) => (count === 1 ? singular : plural);
 
 const resolveSeverityCountClass = (severity: DiagnosticsSeverity) => {
   if (severity === 'high') return 'text-diagnostics-error font-semibold';
