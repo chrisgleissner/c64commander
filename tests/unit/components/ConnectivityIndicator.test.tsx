@@ -185,7 +185,7 @@ describe('ConnectivityIndicator', () => {
 
     const popover = getByTestId('connection-status-popover');
     expect(popover.className).toContain('space-y-4');
-    expect(popover.querySelector('.space-y-3')).toBeTruthy();
+    expect(popover.querySelector('.space-y-2')).toBeTruthy();
     expect(getByTestId('connection-diagnostics-section').className).toContain('space-y-1.5');
     expect(popover.textContent).toContain('Last request:');
     expect(popover.textContent).not.toContain('Communication:');

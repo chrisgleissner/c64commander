@@ -9,7 +9,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
@@ -97,20 +97,16 @@ export function ConnectivityIndicator({ className }: Props) {
         closeTestId="connection-status-close"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div className="relative space-y-4 p-6" data-testid="connection-status-popover">
-          <DialogTitle className="sr-only">Connection Status</DialogTitle>
-          <DialogDescription className="sr-only">C64U connection status and diagnostics</DialogDescription>
-          <div className="space-y-3">
-            <p
-              className={cn(
-                'text-base font-semibold',
-                isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
-              )}
+        <div className="space-y-4 p-6" data-testid="connection-status-popover">
+          <DialogHeader>
+            <DialogTitle>Connection Status</DialogTitle>
+            <DialogDescription
+              className={cn(isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real')}
             >
-              C64U
-            </p>
-            {isDemoMode ? <p className="text-base font-semibold text-amber-500 indicator-demo">Demo</p> : null}
-            <div className="space-y-2 text-sm">
+              {isDemoMode ? 'C64U Demo (simulated device)' : 'C64U'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
               <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
               {editingHost ? (
                 <div className="flex items-center gap-2">
@@ -136,7 +132,6 @@ export function ConnectivityIndicator({ className }: Props) {
                 </div>
               )}
               <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
-            </div>
           </div>
           <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
             <p className="font-medium">Diagnostics</p>
