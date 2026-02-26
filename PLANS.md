@@ -16,6 +16,7 @@
 - `elapsed < 60 s` → `{s}s ago` (e.g. `0s ago`, `3s ago`, `59s ago`).
 - `elapsed ≥ 60 s` → `{m}m {s}s ago` (e.g. `1m 0s ago`, `2m 3s ago`).
 - `null` timestamp → `"unknown"`.
+- Negative elapsed (future timestamp) → clamped to 0 via `Math.max(0, …)` → `"0s ago"`.
 
 ### Group separation rules
 - Two groups separated by increased spacing (`space-y-4` vs `space-y-2`).

@@ -112,6 +112,8 @@ test.describe('Connection Status pop-up layout', () => {
     // Host row height must not exceed Status row height by more than 1px.
     const statusBox = await popover.getByTestId('connection-status-row-status').boundingBox();
     const hostBox = await popover.getByTestId('connection-status-row-host').boundingBox();
+    expect(statusBox).not.toBeNull();
+    expect(hostBox).not.toBeNull();
     expect(Math.abs(hostBox!.height - statusBox!.height)).toBeLessThanOrEqual(1);
   });
 
@@ -130,6 +132,11 @@ test.describe('Connection Status pop-up layout', () => {
     const hostBox = await popover.getByTestId('connection-status-row-host').boundingBox();
     const lastRequestBox = await popover.getByTestId('connection-status-row-last-request').boundingBox();
     const restBox = await popover.getByTestId('connection-diagnostics-row-rest').boundingBox();
+
+    expect(statusBox).not.toBeNull();
+    expect(hostBox).not.toBeNull();
+    expect(lastRequestBox).not.toBeNull();
+    expect(restBox).not.toBeNull();
 
     // All rows must share the same left offset within 1px.
     expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(1);
@@ -219,6 +226,11 @@ test.describe('Connection Status pop-up layout', () => {
     const hostBox = await popover.getByTestId('connection-status-row-host').boundingBox();
     const lastRequestBox = await popover.getByTestId('connection-status-row-last-request').boundingBox();
     const diagnosticsSectionBox = await popover.getByTestId('connection-diagnostics-section').boundingBox();
+
+    expect(statusBox).not.toBeNull();
+    expect(hostBox).not.toBeNull();
+    expect(lastRequestBox).not.toBeNull();
+    expect(diagnosticsSectionBox).not.toBeNull();
 
     const intraGroupGap = hostBox!.y - (statusBox!.y + statusBox!.height);
     const interGroupGap = diagnosticsSectionBox!.y - (lastRequestBox!.y + lastRequestBox!.height);
