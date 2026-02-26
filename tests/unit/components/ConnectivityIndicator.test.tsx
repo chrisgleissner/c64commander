@@ -69,7 +69,7 @@ describe('ConnectivityIndicator', () => {
     requestDiagnosticsOpen.mockReset();
   });
 
-  it('renders real mode indicator and opens status pop-up on click', () => {
+  it('renders real mode indicator and opens status pop-up with last-request line', () => {
     connectionState = 'REAL_CONNECTED';
     lastProbeAtMs = Date.now() - 2_000;
     lastProbeSucceededAtMs = Date.now() - 2_000;
@@ -85,6 +85,7 @@ describe('ConnectivityIndicator', () => {
 
     fireEvent.click(button);
     expect(getByTestId('connection-status-popover')).toBeTruthy();
+    expect(getByTestId('connection-status-popover').textContent).toMatch(/Last request:\s+(just now|\d+[smhd] ago|none yet)/);
     expect(discoverConnection).not.toHaveBeenCalled();
   });
 
@@ -167,5 +168,26 @@ describe('ConnectivityIndicator', () => {
 
     fireEvent.click(restRow);
     expect(requestDiagnosticsOpen).toHaveBeenCalledWith('actions');
+  });
+
+  it('renders host and change action on one row before edit mode', () => {
+    const { getByTestId, getByRole } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+
+    const popover = getByTestId('connection-status-popover');
+    expect(popover.textContent).toContain(`Host: ${configuredHost}`);
+    expect(getByRole('button', { name: 'Change' })).toBeTruthy();
+  });
+
+  it('uses a two-group popover structure with direct last request line', () => {
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+
+    const popover = getByTestId('connection-status-popover');
+    expect(popover.className).toContain('space-y-4');
+    expect(popover.firstElementChild?.className).toContain('space-y-3');
+    expect(getByTestId('connection-diagnostics-section').className).toContain('space-y-1.5');
+    expect(popover.textContent).toContain('Last request:');
+    expect(popover.textContent).not.toContain('Communication:');
   });
 });

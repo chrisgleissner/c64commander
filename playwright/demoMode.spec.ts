@@ -197,13 +197,19 @@ test.describe('Automatic Demo Mode', () => {
     const ftpRow = popover.getByTestId('connection-diagnostics-row-ftp');
     const logIssuesRow = popover.getByTestId('connection-diagnostics-row-log-issues');
 
+    await expect(popover).toContainText(/Last request:\s+(just now|\d+[smhd] ago|none yet)/i);
+    await expect(popover.getByRole('button', { name: 'Change' })).toBeVisible();
     await expect(restRow).toContainText(/REST:\s+\d+\s+of\s+\d+\s+requests\s+failed/i);
     await expect(ftpRow).toContainText(/FTP:\s+\d+\s+of\s+\d+\s+operations\s+failed/i);
     await expect(logIssuesRow).toContainText(/Logs:\s+\d+\s+issues\s+in\s+\d+\s+logs/i);
 
+    const popoverLocator = page.getByTestId('connection-status-popover');
     await restRow.click();
+    await expect(page.getByRole('dialog', { name: 'Diagnostics' })).toBeVisible();
+    await expect(popoverLocator).toHaveCount(0);
     await expect(page.getByRole('tab', { name: 'Actions' })).toHaveAttribute('aria-selected', 'true');
     await closeDiagnosticsDialog();
+    await expect(popoverLocator).toHaveCount(0);
 
     const popoverAfterRest = await openPopover();
     await popoverAfterRest.getByTestId('connection-diagnostics-row-ftp').click();

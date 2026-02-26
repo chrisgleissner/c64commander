@@ -94,24 +94,19 @@ export function ConnectivityIndicator({ className }: Props) {
           ) : null}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 space-y-3" data-testid="connection-status-popover">
-        <div className="space-y-1">
+      <PopoverContent align="end" className="w-80 space-y-4" data-testid="connection-status-popover">
+        <div className="space-y-3">
           <p
             className={cn(
-              'text-sm font-semibold',
+              'text-base font-semibold',
               isDemoMode ? 'text-amber-500 indicator-demo' : 'text-success indicator-real',
             )}
           >
             C64U
           </p>
-          {isDemoMode ? <p className="text-sm font-semibold text-amber-500 indicator-demo">Demo</p> : null}
-        </div>
-        <div className="space-y-2 text-sm">
+          {isDemoMode ? <p className="text-base font-semibold text-amber-500 indicator-demo">Demo</p> : null}
+          <div className="space-y-2 text-sm">
           <p><span className="font-medium">Status:</span> {status}</p>
-          <div className="space-y-2">
-            <p className="break-all">
-              <span className="font-medium">Host:</span> {configuredHost}
-            </p>
             {editingHost ? (
               <div className="flex items-center gap-2">
                 <Input
@@ -128,37 +123,42 @@ export function ConnectivityIndicator({ className }: Props) {
                 <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
               </div>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => setEditingHost(true)}>
-                Change
-              </Button>
+              <div className="flex items-start justify-between gap-2">
+                <p className="break-all">
+                  <span className="font-medium">Host:</span> {configuredHost}
+                </p>
+                <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => setEditingHost(true)}>
+                  Change
+                </Button>
+              </div>
             )}
+            <p><span className="font-medium">Last request:</span> {lastRequest}</p>
           </div>
-          <p><span className="font-medium">Communication:</span> Last request: {lastRequest}</p>
         </div>
-        <div className="space-y-2 text-sm" data-testid="connection-diagnostics-section">
+        <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
           <p className="font-medium">Diagnostics</p>
-            <DiagnosticsRow
-              testId="connection-diagnostics-row-rest"
-              label="REST"
-              total={diagnosticsSummary.rest.total}
-              issueCount={diagnosticsSummary.rest.failed}
-              totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
-              issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
-              relationLabel="of"
-              severity={diagnosticsSummary.rest.severity}
-              onClick={() => openDiagnosticsTab('actions')}
-            />
+          <DiagnosticsRow
+            testId="connection-diagnostics-row-rest"
+            label="REST"
+            total={diagnosticsSummary.rest.total}
+            issueCount={diagnosticsSummary.rest.failed}
+            totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
+            issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
+            relationLabel="of"
+            severity={diagnosticsSummary.rest.severity}
+            onClick={() => openDiagnosticsTab('actions')}
+          />
           <DiagnosticsRow
             testId="connection-diagnostics-row-ftp"
             label="FTP"
-              total={diagnosticsSummary.ftp.total}
-              issueCount={diagnosticsSummary.ftp.failed}
-              totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
-              issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
-              relationLabel="of"
-              severity={diagnosticsSummary.ftp.severity}
-              onClick={() => openDiagnosticsTab('actions')}
-            />
+            total={diagnosticsSummary.ftp.total}
+            issueCount={diagnosticsSummary.ftp.failed}
+            totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
+            issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
+            relationLabel="of"
+            severity={diagnosticsSummary.ftp.severity}
+            onClick={() => openDiagnosticsTab('actions')}
+          />
           <DiagnosticsRow
             testId="connection-diagnostics-row-log-issues"
             label="Logs"
@@ -239,7 +239,7 @@ const DiagnosticsRow = ({
   return (
     <button
       type="button"
-      className="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-left text-sm hover:bg-muted/60"
+      className="w-full py-1.5 text-left text-sm hover:underline"
       onClick={onClick}
       aria-label={`${label}: ${issueCount} ${issueLabel} of ${total} ${totalLabel} (${severity} severity)`}
       data-testid={testId}
