@@ -302,17 +302,25 @@ jobs:
                   print("simctl boot retry failed (non-zero exit), attempting bootstatus check...", file=sys.stderr)
                   print(boot_retry.stdout, file=sys.stderr)
                   print(boot_retry.stderr, file=sys.stderr)
-              bootstatus_retry = subprocess.run(
-                  ["xcrun", "simctl", "bootstatus", udid, "-b"],
-                  capture_output=True,
-                  text=True,
-                  timeout=300,
-              )
-              if bootstatus_retry.returncode != 0:
-                  print("simctl bootstatus failed after retry", file=sys.stderr)
-                  print(bootstatus_retry.stdout, file=sys.stderr)
-                  print(bootstatus_retry.stderr, file=sys.stderr)
-                  sys.exit(bootstatus_retry.returncode)
+              try:
+                  bootstatus_retry = subprocess.run(
+                      ["xcrun", "simctl", "bootstatus", udid, "-b"],
+                      capture_output=True,
+                      text=True,
+                      timeout=300,
+                  )
+              except subprocess.TimeoutExpired as exc:
+                  print("simctl bootstatus failed after retry (timeout)", file=sys.stderr)
+                  # exc.stdout and exc.stderr may be None; default to empty strings
+                  print(getattr(exc, "stdout", "") or "", file=sys.stderr)
+                  print(getattr(exc, "stderr", "") or "", file=sys.stderr)
+                  sys.exit(1)
+              else:
+                  if bootstatus_retry.returncode != 0:
+                      print("simctl bootstatus failed after retry", file=sys.stderr)
+                      print(bootstatus_retry.stdout, file=sys.stderr)
+                      print(bootstatus_retry.stderr, file=sys.stderr)
+                      sys.exit(bootstatus_retry.returncode)
 
           boot_end_ms = int(time.time() * 1000)
           boot_seconds = (boot_end_ms - boot_start_ms) // 1000
