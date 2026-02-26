@@ -37,13 +37,10 @@ export function ConnectivityIndicator({ className }: Props) {
   const lastAttemptAt = snapshot.lastProbeAtMs;
   const lastSuccessAt = snapshot.lastProbeSucceededAtMs;
   const attemptInFlight = snapshot.state === 'DISCOVERING';
-  const lastAttemptSucceeded = useMemo(() => {
-    const lastFailureAt = snapshot.lastProbeFailedAtMs;
-    if (lastAttemptAt === null) return null;
-    if (lastSuccessAt !== null && (lastFailureAt === null || lastSuccessAt >= lastFailureAt)) return true;
-    if (lastFailureAt !== null && (lastSuccessAt === null || lastFailureAt > lastSuccessAt)) return false;
-    return null;
-  }, [lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs]);
+  const lastAttemptSucceeded = useMemo(
+    () => deriveLastAttemptSucceeded(lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs),
+    [lastAttemptAt, lastSuccessAt, snapshot.lastProbeFailedAtMs],
+  );
   const isDemoMode = lastAttemptSucceeded === false;
   const status = attemptInFlight
     ? 'Checking…'
@@ -52,13 +49,12 @@ export function ConnectivityIndicator({ className }: Props) {
       : lastAttemptSucceeded === false && lastSuccessAt !== null
         ? 'Offline'
         : 'Not yet connected';
-  const communication = status === 'Online'
+  const hasSuccessTimestamp = status === 'Online' || status === 'Offline';
+  const communication = hasSuccessTimestamp
     ? `Last success ${formatRelative(lastSuccessAt)}`
-    : status === 'Offline'
-      ? `Last success ${formatRelative(lastSuccessAt)}`
-      : lastAttemptAt !== null
-        ? `Last attempt ${formatRelative(lastAttemptAt)}`
-        : 'No attempts yet';
+    : lastAttemptAt !== null
+      ? `Last attempt ${formatRelative(lastAttemptAt)}`
+      : 'No attempts yet';
 
   const label = isDemoMode ? 'C64U Demo' : 'C64U';
   const showRetryNow = status === 'Offline' || status === 'Not yet connected';
@@ -150,7 +146,7 @@ export function ConnectivityIndicator({ className }: Props) {
 }
 
 const formatRelative = (timestampMs: number | null) => {
-  if (timestampMs === null) return 'just now';
+  if (timestampMs === null) return 'unknown';
   const elapsedSeconds = Math.max(0, Math.round((Date.now() - timestampMs) / 1000));
   if (elapsedSeconds < 10) return 'just now';
   if (elapsedSeconds < 60) return `${elapsedSeconds}s ago`;
@@ -160,4 +156,15 @@ const formatRelative = (timestampMs: number | null) => {
   if (elapsedHours < 24) return `${elapsedHours}h ago`;
   const elapsedDays = Math.round(elapsedHours / 24);
   return `${elapsedDays}d ago`;
+};
+
+const deriveLastAttemptSucceeded = (
+  lastAttemptAt: number | null,
+  lastSuccessAt: number | null,
+  lastFailureAt: number | null,
+) => {
+  if (lastAttemptAt === null) return null;
+  if (lastSuccessAt !== null && (lastFailureAt === null || lastSuccessAt >= lastFailureAt)) return true;
+  if (lastFailureAt !== null && (lastSuccessAt === null || lastFailureAt > lastSuccessAt)) return false;
+  return null;
 };

@@ -110,12 +110,13 @@ describe('ConnectivityIndicator', () => {
     lastProbeFailedAtMs = Date.now() - 5_000;
     configuredHost = '192.168.0.10';
 
-    const { getByTestId, getByRole, getByLabelText } = render(<ConnectivityIndicator />);
+    const { getByTestId, getByRole, getByLabelText, queryByTestId } = render(<ConnectivityIndicator />);
     fireEvent.click(getByTestId('connectivity-indicator'));
     fireEvent.click(getByRole('button', { name: 'Change' }));
     fireEvent.change(getByLabelText('C64U Hostname / IP'), { target: { value: '192.168.0.20' } });
     fireEvent.click(getByRole('button', { name: 'Save' }));
 
     expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith('192.168.0.20', '192.168.0.10', { trigger: 'settings' });
+    expect(queryByTestId('connection-status-popover')).toBeNull();
   });
 });

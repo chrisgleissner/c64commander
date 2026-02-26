@@ -21,8 +21,10 @@ export const getConfiguredHost = () => {
   try {
     return localStorage.getItem('c64u_device_host') || 'c64u';
   } catch (error) {
+    const resolvedError = error instanceof Error ? error : new Error(String(error));
     addLog('warn', 'Failed to read configured host from storage', {
-      error: (error as Error).message,
+      error: resolvedError.message,
+      stack: resolvedError.stack,
     });
     return 'c64u';
   }
