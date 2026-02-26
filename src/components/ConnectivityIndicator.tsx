@@ -9,8 +9,7 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { ModalCloseButton } from '@/components/ui/modal-close-button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
@@ -94,8 +93,8 @@ export function ConnectivityIndicator({ className }: Props) {
         ) : null}
       </button>
       <DialogContent
-        showClose={false}
         className="w-80 p-0"
+        closeTestId="connection-status-close"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="relative space-y-4 p-6" data-testid="connection-status-popover">
@@ -187,10 +186,6 @@ export function ConnectivityIndicator({ className }: Props) {
               Retry Now
             </Button>
           ) : null}
-          {/* Close button placed last so Radix's focus trap focuses content first, not the close icon. */}
-          <DialogClose asChild>
-            <ModalCloseButton data-testid="connection-status-close" aria-label="Close" />
-          </DialogClose>
         </div>
       </DialogContent>
     </Dialog>
