@@ -14,9 +14,15 @@ let lastProbeAtMs: number | null = null;
 let lastProbeSucceededAtMs: number | null = null;
 let lastProbeFailedAtMs: number | null = null;
 let configuredHost = '192.168.0.64';
+let diagnosticsSummary = {
+  rest: { total: 10, failed: 2, severity: 'medium' },
+  ftp: { total: 4, failed: 1, severity: 'low' },
+  logIssues: { total: 8, issues: 3, severity: 'high' },
+};
 
 const discoverConnection = vi.fn();
 const saveConfiguredHostAndRetry = vi.fn();
+const requestDiagnosticsOpen = vi.fn();
 
 vi.mock('@/hooks/useConnectionState', () => ({
   useConnectionState: () => ({
@@ -29,6 +35,14 @@ vi.mock('@/hooks/useConnectionState', () => ({
 
 vi.mock('@/lib/connection/connectionManager', () => ({
   discoverConnection: (...args: unknown[]) => discoverConnection(...args),
+}));
+
+vi.mock('@/hooks/useConnectionDiagnosticsSummary', () => ({
+  useConnectionDiagnosticsSummary: () => diagnosticsSummary,
+}));
+
+vi.mock('@/lib/diagnostics/diagnosticsOverlay', () => ({
+  requestDiagnosticsOpen: (...args: unknown[]) => requestDiagnosticsOpen(...args),
 }));
 
 vi.mock('@/lib/connection/hostEdit', () => ({
@@ -44,9 +58,15 @@ describe('ConnectivityIndicator', () => {
     saveConfiguredHostAndRetry.mockReset();
     connectionState = 'UNKNOWN';
     configuredHost = '192.168.0.64';
+    diagnosticsSummary = {
+      rest: { total: 10, failed: 2, severity: 'medium' },
+      ftp: { total: 4, failed: 1, severity: 'low' },
+      logIssues: { total: 8, issues: 3, severity: 'high' },
+    };
     lastProbeAtMs = null;
     lastProbeSucceededAtMs = null;
     lastProbeFailedAtMs = null;
+    requestDiagnosticsOpen.mockReset();
   });
 
   it('renders real mode indicator and opens status pop-up on click', () => {
@@ -118,5 +138,38 @@ describe('ConnectivityIndicator', () => {
 
     expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith('192.168.0.20', '192.168.0.10', { trigger: 'settings' });
     expect(queryByTestId('connection-status-popover')).toBeNull();
+  });
+
+  it('saves host when Enter is pressed', () => {
+    connectionState = 'OFFLINE_NO_DEMO';
+    configuredHost = '192.168.0.11';
+    const { getByTestId, getByRole, getByLabelText } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+    fireEvent.click(getByRole('button', { name: 'Change' }));
+    const input = getByLabelText('C64U Hostname / IP');
+    fireEvent.change(input, { target: { value: '192.168.0.12' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(saveConfiguredHostAndRetry).toHaveBeenCalledWith('192.168.0.12', '192.168.0.11', { trigger: 'settings' });
+  });
+
+  it('renders diagnostics rows with one indicator each and opens diagnostics tabs', () => {
+    const { getByTestId } = render(<ConnectivityIndicator />);
+    fireEvent.click(getByTestId('connectivity-indicator'));
+
+    const section = getByTestId('connection-diagnostics-section');
+    expect(section).toBeTruthy();
+    const restRow = getByTestId('connection-diagnostics-row-rest');
+    const ftpRow = getByTestId('connection-diagnostics-row-ftp');
+    const logIssuesRow = getByTestId('connection-diagnostics-row-log-issues');
+    expect(getByTestId('connection-diagnostics-row-rest-indicator')).toBeTruthy();
+    expect(getByTestId('connection-diagnostics-row-ftp-indicator')).toBeTruthy();
+    expect(getByTestId('connection-diagnostics-row-log-issues-indicator')).toBeTruthy();
+    expect(restRow.textContent).toContain('REST');
+    expect(restRow.textContent).toContain('2');
+    expect(ftpRow.textContent).toContain('FTP');
+    expect(logIssuesRow.textContent).toContain('Log issues');
+
+    fireEvent.click(restRow);
+    expect(requestDiagnosticsOpen).toHaveBeenCalledWith('actions');
   });
 });

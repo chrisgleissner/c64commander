@@ -10,8 +10,11 @@ import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useConnectionDiagnosticsSummary } from '@/hooks/useConnectionDiagnosticsSummary';
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { discoverConnection } from '@/lib/connection/connectionManager';
+import { requestDiagnosticsOpen, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
+import type { DiagnosticsSeverity } from '@/lib/diagnostics/connectionStatusDiagnostics';
 import { getConfiguredHost, saveConfiguredHostAndRetry } from '@/lib/connection/hostEdit';
 import { cn } from '@/lib/utils';
 import { wrapUserEvent } from '@/lib/tracing/userTrace';
@@ -22,18 +25,18 @@ type Props = {
 
 export function ConnectivityIndicator({ className }: Props) {
   const snapshot = useConnectionState();
+  const diagnosticsSummary = useConnectionDiagnosticsSummary();
   const [open, setOpen] = useState(false);
   const [editingHost, setEditingHost] = useState(false);
   const [hostInput, setHostInput] = useState('');
+  const configuredHost = getConfiguredHost();
 
   const handleClick = () => {
-    const configuredHost = getConfiguredHost();
     setHostInput(configuredHost);
     setEditingHost(false);
     setOpen(true);
   };
 
-  const configuredHost = getConfiguredHost();
   const lastAttemptAt = snapshot.lastProbeAtMs;
   const lastSuccessAt = snapshot.lastProbeSucceededAtMs;
   const attemptInFlight = snapshot.state === 'DISCOVERING';
@@ -61,6 +64,10 @@ export function ConnectivityIndicator({ className }: Props) {
   const saveHostAndRetry = () => {
     saveConfiguredHostAndRetry(hostInput, configuredHost, { trigger: 'settings' });
     setOpen(false);
+  };
+  const openDiagnosticsTab = (tab: DiagnosticsTabKey) => {
+    setOpen(false);
+    requestDiagnosticsOpen(tab);
   };
 
   return (
@@ -115,6 +122,11 @@ export function ConnectivityIndicator({ className }: Props) {
                 <Input
                   value={hostInput}
                   onChange={(event) => setHostInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    saveHostAndRetry();
+                  }}
                   aria-label="C64U Hostname / IP"
                   className="h-8 text-xs"
                 />
@@ -127,6 +139,39 @@ export function ConnectivityIndicator({ className }: Props) {
             )}
           </div>
           <p><span className="font-medium">Communication:</span> {communication}</p>
+        </div>
+        <div className="space-y-2 text-sm" data-testid="connection-diagnostics-section">
+          <p className="font-medium">Diagnostics</p>
+          <DiagnosticsRow
+            testId="connection-diagnostics-row-rest"
+            label="REST"
+            total={diagnosticsSummary.rest.total}
+            issueCount={diagnosticsSummary.rest.failed}
+            totalLabel={pluralize(diagnosticsSummary.rest.total, 'request', 'requests')}
+            issueLabel={pluralize(diagnosticsSummary.rest.failed, 'failed', 'failed')}
+            severity={diagnosticsSummary.rest.severity}
+            onClick={() => openDiagnosticsTab('actions')}
+          />
+          <DiagnosticsRow
+            testId="connection-diagnostics-row-ftp"
+            label="FTP"
+            total={diagnosticsSummary.ftp.total}
+            issueCount={diagnosticsSummary.ftp.failed}
+            totalLabel={pluralize(diagnosticsSummary.ftp.total, 'operation', 'operations')}
+            issueLabel={pluralize(diagnosticsSummary.ftp.failed, 'failed', 'failed')}
+            severity={diagnosticsSummary.ftp.severity}
+            onClick={() => openDiagnosticsTab('actions')}
+          />
+          <DiagnosticsRow
+            testId="connection-diagnostics-row-log-issues"
+            label="Log issues"
+            total={diagnosticsSummary.logIssues.total}
+            issueCount={diagnosticsSummary.logIssues.issues}
+            totalLabel={pluralize(diagnosticsSummary.logIssues.total, 'log', 'logs')}
+            issueLabel={pluralize(diagnosticsSummary.logIssues.issues, 'issue', 'issues')}
+            severity={diagnosticsSummary.logIssues.severity}
+            onClick={() => openDiagnosticsTab('error-logs')}
+          />
         </div>
         {showRetryNow ? (
           <Button
@@ -167,4 +212,61 @@ const deriveLastAttemptSucceeded = (
   if (lastSuccessAt !== null && (lastFailureAt === null || lastSuccessAt >= lastFailureAt)) return true;
   if (lastFailureAt !== null && (lastSuccessAt === null || lastFailureAt > lastSuccessAt)) return false;
   return null;
+};
+
+type DiagnosticsRowProps = {
+  testId: string;
+  label: string;
+  total: number;
+  issueCount: number;
+  totalLabel: string;
+  issueLabel: string;
+  severity: DiagnosticsSeverity;
+  onClick: () => void;
+};
+
+const DiagnosticsRow = ({
+  testId,
+  label,
+  total,
+  issueCount,
+  totalLabel,
+  issueLabel,
+  severity,
+  onClick,
+}: DiagnosticsRowProps) => {
+  const circleClass = resolveSeverityCircleClass(severity);
+  const issueCountClass = resolveSeverityCountClass(severity);
+  return (
+    <button
+      type="button"
+      className="flex w-full items-center gap-2 rounded-sm px-1 py-1 text-left text-sm hover:bg-muted/60"
+      onClick={onClick}
+      aria-label={`${label}: ${issueCount} ${issueLabel} of ${total} ${totalLabel} (${severity} severity)`}
+      data-testid={testId}
+      data-severity={severity}
+    >
+      <span className={cn('h-2.5 w-2.5 rounded-full shrink-0', circleClass)} aria-hidden="true" data-testid={`${testId}-indicator`} />
+      <span className="text-foreground">
+        {label}{' '}
+        <span className={issueCountClass}>{issueCount}</span> {issueLabel} of {total} {totalLabel}
+      </span>
+    </button>
+  );
+};
+
+const pluralize = (count: number, singular: string, plural: string) => (count === 1 ? singular : plural);
+
+const resolveSeverityCircleClass = (severity: DiagnosticsSeverity) => {
+  if (severity === 'high') return 'bg-diagnostics-error';
+  if (severity === 'medium') return 'bg-amber-500';
+  if (severity === 'low') return 'bg-success';
+  return 'bg-muted-foreground/40';
+};
+
+const resolveSeverityCountClass = (severity: DiagnosticsSeverity) => {
+  if (severity === 'high') return 'text-diagnostics-error font-semibold';
+  if (severity === 'medium') return 'text-amber-500 font-semibold';
+  if (severity === 'low') return 'text-success font-semibold';
+  return 'text-foreground';
 };

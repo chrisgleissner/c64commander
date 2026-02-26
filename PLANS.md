@@ -28,15 +28,14 @@ Status derivation rules:
 4. `lastSuccessAt == null && lastAttemptAt != null` -> `Not yet connected`
 5. no attempts -> `Not yet connected`
 
-## Execution checklist
-- [ ] Add shared host-edit action helper and reuse it from demo interstitial and connection status surface.
-- [ ] Refactor indicator to text-only (`C64U` real / `C64U` + `Demo` demo), add `.indicator-real` and `.indicator-demo`, remove icon rendering.
-- [ ] Make indicator click open a pop-up only (no direct retry).
-- [ ] Implement minimal pop-up with:
-  - Status line
-  - Host line + Change control
-  - Minimal communication line
-  - Context-sensitive actions (`Retry Now` only offline / not yet connected)
-- [ ] Update unit tests for indicator and pop-up semantics.
-- [ ] Add deterministic Playwright coverage for pop-up states and actions.
-- [ ] Run targeted tests, then required full checks (`npm run test:coverage`, `npm run lint`, `npm run build`).
+## Execution checklist (follow-up diagnostics extension)
+- [ ] Keep existing indicator, status logic, host section, retry logic, and overall layout unchanged outside the new diagnostics block.
+- [ ] Add a `Diagnostics` section in the existing connection pop-up with exactly three rows: REST, FTP, Log issues.
+- [ ] Implement ratio-based severity (failed/total) for REST and FTP, and issues/total logs for Log issues.
+- [ ] Render exactly one subtle left circle per row (no bullets, no duplicate badges), color-coded by severity.
+- [ ] Keep row text neutral; color only the failure/issue number and the left circle.
+- [ ] Add deterministic click navigation from each row to the correct Diagnostics tab.
+- [ ] Address prior reviewer comments: remove redundant configured-host reads and support Enter key save in host edit input.
+- [ ] Add dedicated unit tests for `src/lib/connection/hostEdit.ts` and update connectivity-indicator tests for diagnostics rows.
+- [ ] Add deterministic Playwright coverage for diagnostics rows and row-click tab navigation.
+- [ ] Run targeted tests first, then full validation (`npm run lint`, `npm run test:e2e`, `npm run test:coverage`, `npm run build`).

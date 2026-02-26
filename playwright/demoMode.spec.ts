@@ -161,6 +161,61 @@ test.describe('Automatic Demo Mode', () => {
     await snap(page, testInfo, 'connection-status-surface-states');
   });
 
+  test('connection pop-up diagnostics rows use subtle indicators and open deterministic diagnostics tabs', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await startStrictUiMonitoring(page, testInfo);
+    allowWarnings(testInfo, 'Expected probe failures during offline discovery.');
+    await page.addInitScript(() => {
+      (window as Window & { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl = 'http://127.0.0.1:1';
+      localStorage.setItem('c64u_automatic_demo_mode_enabled', '0');
+      localStorage.setItem('c64u_startup_discovery_window_ms', '1000');
+      localStorage.setItem('c64u_discovery_probe_timeout_ms', '600');
+      localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+      localStorage.removeItem('c64u_password');
+      localStorage.removeItem('c64u_has_password');
+    });
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const indicator = page.getByTestId('connectivity-indicator');
+    await expect(indicator).toHaveAttribute('data-connection-state', 'OFFLINE_NO_DEMO', { timeout: 10000 });
+
+    const openPopover = async () => {
+      await indicator.click();
+      const popover = page.getByTestId('connection-status-popover');
+      await expect(popover.getByText('Diagnostics', { exact: true })).toBeVisible();
+      return popover;
+    };
+
+    const closeDiagnosticsDialog = async () => {
+      const dialog = page.getByRole('dialog', { name: 'Diagnostics' });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Close' }).click();
+      await expect(dialog).toBeHidden();
+    };
+
+    const popover = await openPopover();
+    const restRow = popover.getByTestId('connection-diagnostics-row-rest');
+    const ftpRow = popover.getByTestId('connection-diagnostics-row-ftp');
+    const logIssuesRow = popover.getByTestId('connection-diagnostics-row-log-issues');
+
+    await expect(restRow.getByTestId('connection-diagnostics-row-rest-indicator')).toHaveCount(1);
+    await expect(ftpRow.getByTestId('connection-diagnostics-row-ftp-indicator')).toHaveCount(1);
+    await expect(logIssuesRow.getByTestId('connection-diagnostics-row-log-issues-indicator')).toHaveCount(1);
+
+    await restRow.click();
+    await expect(page.getByRole('tab', { name: 'Actions' })).toHaveAttribute('aria-selected', 'true');
+    await closeDiagnosticsDialog();
+
+    const popoverAfterRest = await openPopover();
+    await popoverAfterRest.getByTestId('connection-diagnostics-row-ftp').click();
+    await expect(page.getByRole('tab', { name: 'Actions' })).toHaveAttribute('aria-selected', 'true');
+    await closeDiagnosticsDialog();
+
+    const popoverAfterFtp = await openPopover();
+    await popoverAfterFtp.getByTestId('connection-diagnostics-row-log-issues').click();
+    await expect(page.getByRole('tab', { name: 'Errors' })).toHaveAttribute('aria-selected', 'true');
+    await snap(page, testInfo, 'connection-popover-diagnostics-navigation');
+  });
+
   test('legacy base URL migrates to device host on startup', async ({ page }: { page: Page }, testInfo: TestInfo) => {
     await startStrictUiMonitoring(page, testInfo);
     server = await createMockC64Server({});
