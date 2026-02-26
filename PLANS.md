@@ -32,8 +32,8 @@
 - Status, Host, and Last request rows share `min-h-5` (1.25 rem = 20 px).
 - Host row uses `flex items-center` so the Change button does not alter row height.
 - Change button uses `h-auto py-0 leading-5` to keep its height within the 20 px row height.
-- Intra-group spacing: `space-y-2` (0.5 rem) between Status / Host / Last request.
-- Inter-group spacing: `space-y-4` between group 1 and the Diagnostics section.
+- Intra-group spacing: `space-y-1` (0.25 rem = 4 px) within each group (Group 1: Status / Host / Last request; Group 2: Diagnostics rows). DiagnosticsRow buttons use `py-0` so their height matches the 20 px Group 1 row height.
+- Inter-group spacing: `space-y-4` (1 rem = 16 px) between group 1 and the Diagnostics section.
 
 ### Time formatting contract
 - Formatter: `formatRelative(timestampMs: number | null)`.
@@ -45,7 +45,7 @@
 - Negative elapsed (future timestamp) → clamped to 0 via `Math.max(0, …)` → `"0s ago"`.
 
 ### Group separation rules
-- Two groups separated by increased spacing (`space-y-4` vs `space-y-2`).
+- Two groups separated by increased spacing (`space-y-4` vs `space-y-1`).
 - No indentation, no nested background surfaces, no divider lines.
 - All rows flush-left aligned.
 

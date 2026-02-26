@@ -106,7 +106,7 @@ export function ConnectivityIndicator({ className }: Props) {
               {isDemoMode ? 'C64U Demo (simulated device)' : 'C64U'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 text-sm">
+          <div className="space-y-1 text-sm">
               <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
               {editingHost ? (
                 <div className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export function ConnectivityIndicator({ className }: Props) {
               )}
               <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
           </div>
-          <div className="space-y-1.5 text-sm" data-testid="connection-diagnostics-section">
+          <div className="space-y-1 text-sm" data-testid="connection-diagnostics-section">
             <p className="font-medium">Diagnostics</p>
             <DiagnosticsRow
               testId="connection-diagnostics-row-rest"
@@ -233,7 +233,7 @@ const DiagnosticsRow = ({
   return (
     <button
       type="button"
-      className="w-full py-1.5 text-left text-sm hover:underline"
+      className="w-full py-0 text-left text-sm hover:underline"
       onClick={onClick}
       aria-label={`${label}: ${issueCount} ${issueLabel} of ${total} ${totalLabel} (${severity} severity)`}
       data-testid={testId}
