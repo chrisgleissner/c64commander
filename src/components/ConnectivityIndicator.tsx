@@ -126,7 +126,7 @@ export function ConnectivityIndicator({ className }: Props) {
               ) : (
                 <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
                   <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
-                  <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5" onClick={() => setEditingHost(true)}>
+                  <Button variant="outline" className="h-auto shrink-0 py-0 px-2 text-xs leading-5" onClick={() => setEditingHost(true)}>
                     Change
                   </Button>
                 </div>
