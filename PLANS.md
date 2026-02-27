@@ -1,3 +1,33 @@
+# GPL v2.0 → v3.0 License Header Migration Plan
+
+## Inventory Phase
+
+- **Pattern searched**: `GNU General Public License v2.0 or later.`
+- **File types**: `.ts`, `.tsx`, `.kt`, `.kts`, `.swift`
+- **Excluded dirs**: `node_modules`, `dist`, `build`, `Pods`, `.gradle`
+- **Total files**: 605
+
+## Safety Definition
+
+- Match anchored to the exact string within the header block (first 8 lines).
+- Only the version number `v2.0` is replaced with `v3.0` in the GPL license sentence.
+- No changes to formatting, indentation, or any other content.
+
+## Migration Execution
+
+- `sed -i` replacement of `GNU General Public License v2.0 or later.` → `GNU General Public License v3.0 or later.` across all 605 files.
+
+## Verification
+
+- Re-scan for `v2.0 or later` in first-party source → expect 0 matches.
+- Run `npm run lint`, `npm run test`, `npm run build`.
+
+## Diff Audit
+
+- Each modified file has exactly one changed line (the license version string).
+
+---
+
 # Modal / Overlay Unification Plan
 
 ## Inventory
