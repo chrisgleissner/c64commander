@@ -22,7 +22,7 @@ Can the Diagnostics UI safely hide raw Traces and expose only Action Summaries t
 
 ### Risk Level
 
-**Low-to-moderate**, contingent on preserving trace export integrity and not introducing heuristics into Action Summary derivation.
+**Low-to-moderate**: manageable with documented safeguards, no production-breaking potential. The primary risk is heuristic creep in Action Summaries if progressive disclosure is not implemented correctly. This risk is mitigated by inline trace expansion and the action-summary-spec's prohibition on heuristic grouping (§4.2). Contingent on preserving trace export integrity and not introducing heuristics into Action Summary derivation.
 
 ---
 
@@ -101,7 +101,7 @@ No. `action-scope-start` and `action-scope-end` events (tracing-spec §9) are no
 
 **backend-decision events**: Not surfaced in Action Summaries. The `selectedTarget` and `reason` fields (`reachable`, `fallback`, `demo-mode`, `test-mode`) are only visible in raw traces. Action Summaries include the `target` on each REST/FTP effect, but the *reason* for target selection is lost.
 
-**Fallback reasoning**: Completely invisible in Action Summaries. When the system falls back from a real device to a mock, the `reason: "fallback"` event is only in traces.
+**Fallback reasoning**: Completely invisible in Action Summaries. When the system falls back from a real device to a mock, the `reason: "fallback"` event is only in traces. This is high-severity because fallback behavior is a primary diagnostic concern when users report connectivity issues – knowing *why* a target was selected (not just *which* target) is essential for root-cause analysis.
 
 **Target selection visibility**: Partially preserved. The `target` field on each effect shows the *result* of target selection, but the *decision process* (why that target was chosen) requires traces.
 
@@ -442,7 +442,7 @@ Remove the standalone Traces tab. Make each Action Summary expandable to reveal 
 
 **Default visibility state**: Action Summaries collapsed. No raw trace events visible.
 
-**Expansion trigger**: A "Show trace events" or disclosure chevron control within each Action Summary's expanded detail panel.
+**Expansion trigger**: A disclosure chevron control within each Action Summary's expanded detail panel (preferred over a text button for consistency with collapsible patterns elsewhere in the app). The specific control style is an open UX decision to be finalized during implementation.
 
 **Expanded state**: Below the existing Action Summary detail (correlation, origin, outcome, effects), a new section labeled "Raw Trace Events" renders the `TraceEvent[]` for that `correlationId` as collapsible JSON nodes, consistent with the current Traces tab rendering.
 
