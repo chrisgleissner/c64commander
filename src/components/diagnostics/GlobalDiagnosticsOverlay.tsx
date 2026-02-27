@@ -37,7 +37,7 @@ import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
-import { buildActionSummaries, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
+import { buildActionSummaries, type ActionTrigger, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
 import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
@@ -48,6 +48,12 @@ import { resolveActionSeverity, resolveLogSeverity, resolveTraceSeverity } from 
 
 const diagnosticsTabTriggerClass =
   'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
+
+const formatTriggerDisplay = (trigger: ActionTrigger): string => {
+  const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : '';
+  const interval = trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : '';
+  return `${trigger.kind}${suffix}${interval}`;
+};
 
 export const GlobalDiagnosticsOverlay = () => {
   const location = useLocation();
@@ -499,6 +505,14 @@ export const GlobalDiagnosticsOverlay = () => {
                               {summary.originalOrigin ? `${summary.originalOrigin} -> ${summary.origin}` : summary.origin}
                             </p>
                           </div>
+                          {summary.trigger ? (
+                            <div>
+                              <p className="text-muted-foreground">Trigger</p>
+                              <p data-testid={`action-trigger-${summary.correlationId}`}>
+                                {formatTriggerDisplay(summary.trigger)}
+                              </p>
+                            </div>
+                          ) : null}
                           <div>
                             <p className="text-muted-foreground">Outcome</p>
                             <p>{summary.outcome}</p>
@@ -534,7 +548,7 @@ export const GlobalDiagnosticsOverlay = () => {
                               >
                                 <p className="font-medium">{effect.method} {effect.path}</p>
                                 <p className="text-muted-foreground">
-                                  target: {effect.target ?? 'unknown'} · status: {effect.status ?? 'unknown'}
+                                  target: {effect.target ?? 'unknown'} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'NO_RESPONSE'}
                                   {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
                                 </p>
                                 {effect.error ? (

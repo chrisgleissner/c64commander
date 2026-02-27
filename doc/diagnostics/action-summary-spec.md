@@ -187,6 +187,7 @@ ActionSummary {
   actionName
   origin               // user | system
   originalOrigin       // optional: user | automatic | system (only if different from origin)
+  trigger              // optional: ActionTrigger from action-start.data.trigger (pure projection)
 
   startTimestamp
   endTimestamp
@@ -207,7 +208,7 @@ ActionSummary {
 ```text
 Effect {
   type                 // rest | ftp
-  label
+  label                // deterministic display string: "{METHOD} {normalizedUrl}" for REST, "{operation} {path}" for FTP
   target
   durationMs           // optional
   status               // protocol-specific

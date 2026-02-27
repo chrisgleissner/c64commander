@@ -337,4 +337,37 @@ describe('traceSession', () => {
       globalThis.TextEncoder = origTE;
     }
   });
+
+  it('includes trigger in action-start data when provided', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    const trigger = { kind: 'timer' as const, name: 'connectivity.probe', intervalMs: 5000, details: null };
+    const actionWithTrigger = { ...action, trigger };
+    recordActionStart(actionWithTrigger);
+    const events = getTraceEvents();
+    const start = events.find((e) => e.type === 'action-start');
+    expect((start?.data as Record<string, unknown>)?.trigger).toEqual(trigger);
+  });
+
+  it('omits trigger from action-start data when not provided', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordActionStart(action);
+    const events = getTraceEvents();
+    const start = events.find((e) => e.type === 'action-start');
+    expect((start?.data as Record<string, unknown>)?.trigger).toBeUndefined();
+  });
+
+  it('records rest-response with null status for no-response case', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
+    recordRestResponse(action, {
+      status: null,
+      body: null,
+      durationMs: 30,
+      error: new Error('network error'),
+      errorMessage: 'network error',
+    });
+    const events = getTraceEvents();
+    const resp = events.find((e) => e.type === 'rest-response');
+    expect((resp?.data as Record<string, unknown>)?.status).toBeNull();
+    expect((resp?.data as Record<string, unknown>)?.error).toBe('network error');
+  });
 });

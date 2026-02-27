@@ -46,13 +46,30 @@ export type TraceEvent<T = Record<string, unknown>> = {
 
 export type BackendTarget = 'internal-mock' | 'external-mock' | 'real-device';
 
-export type BackendDecisionReason = 'reachable' | 'fallback' | 'demo-mode' | 'test-mode';
+export type BackendDecisionReason = 'reachable' | 'fallback' | 'demo-mode' | 'test-mode' | 'probe' | 'auto-reconnect';
+
+export type ActionTriggerKind =
+  | 'user'
+  | 'timer'
+  | 'auto-reconnect'
+  | 'route-enter'
+  | 'lifecycle'
+  | 'network-change'
+  | 'unknown';
+
+export type ActionTrigger = {
+  kind: ActionTriggerKind;
+  name: string;
+  intervalMs: number | null;
+  details: Record<string, unknown> | null;
+};
 
 export type TraceActionContext = {
   correlationId: string;
   origin: TraceOrigin;
   name: string;
   componentName?: string | null;
+  trigger?: ActionTrigger | null;
 };
 
 export type TraceUiContext = {

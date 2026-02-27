@@ -235,4 +235,58 @@ describe('buildActionSummaries', () => {
     expect(restEffect && 'error' in restEffect ? restEffect.error : undefined).toBe('timeout');
     expect(restEffect && 'durationMs' in restEffect ? restEffect.durationMs : undefined).toBeNull();
   });
+
+  it('includes deterministic label on REST effects', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-request', correlationId: 'C1', relativeMs: 10, data: { method: 'GET', normalizedUrl: '/v1/info', target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'rest-response', correlationId: 'C1', relativeMs: 50, data: { status: 200, durationMs: 40, error: null } }),
+      buildTrace({ id: 'E4', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const restEffect = summary.effects?.find((e) => e.type === 'REST');
+    expect(restEffect?.label).toBe('GET /v1/info');
+  });
+
+  it('includes deterministic label on FTP effects', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'ftp-operation', correlationId: 'C1', relativeMs: 20, data: { operation: 'list', path: '/SIDS', result: 'success', error: null, target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const ftpEffect = summary.effects?.find((e) => e.type === 'FTP');
+    expect(ftpEffect?.label).toBe('list /SIDS');
+  });
+
+  it('preserves null status (no-response) in REST effect', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-request', correlationId: 'C1', relativeMs: 10, data: { method: 'GET', normalizedUrl: '/v1/info', target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'rest-response', correlationId: 'C1', relativeMs: 50, data: { status: null, durationMs: 30, error: 'network error' } }),
+      buildTrace({ id: 'E4', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'error' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const restEffect = summary.effects?.find((e) => e.type === 'REST');
+    expect(restEffect && 'status' in restEffect ? restEffect.status : 'missing').toBeNull();
+  });
+
+  it('surfaces trigger from action-start.data into ActionSummary', () => {
+    const trigger = { kind: 'timer', name: 'connectivity.probe', intervalMs: 5000, details: null };
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'probe', trigger } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.trigger).toEqual(trigger);
+  });
+
+  it('omits trigger when action-start has no trigger field', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'success' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    expect(summary.trigger).toBeUndefined();
+  });
 });

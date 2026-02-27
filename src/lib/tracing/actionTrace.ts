@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { TraceActionContext, TraceOrigin } from '@/lib/tracing/types';
+import type { TraceActionContext, TraceOrigin, ActionTrigger } from '@/lib/tracing/types';
 import {
   recordActionEnd,
   recordActionScopeEnd,
@@ -128,17 +128,20 @@ const runWithDetachedActionTrace = async <T>(context: TraceActionContext, fn: ()
  *
  * @param name - The action name
  * @param fn - The function to execute, receives the action context
+ * @param trigger - Optional trigger describing why this action was initiated
  * @returns The result of fn
  */
 export const runWithImplicitAction = async <T>(
   name: string,
   fn: (context: TraceActionContext) => Promise<T> | T,
+  trigger?: ActionTrigger | null,
 ): Promise<T> => {
   const context: TraceActionContext = {
     correlationId: nextCorrelationId(),
     origin: 'system',
     name,
     componentName: null,
+    trigger: trigger ?? null,
   };
   return runWithDetachedActionTrace(context, () => fn(context));
 };
