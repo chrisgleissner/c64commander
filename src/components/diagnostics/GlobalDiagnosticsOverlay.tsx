@@ -51,7 +51,7 @@ const diagnosticsTabTriggerClass =
 
 const formatTriggerDisplay = (trigger: ActionTrigger): string => {
   const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : '';
-  const interval = trigger.intervalMs ? ` · ${trigger.intervalMs}ms` : '';
+  const interval = trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : '';
   return `${trigger.kind}${suffix}${interval}`;
 };
 
