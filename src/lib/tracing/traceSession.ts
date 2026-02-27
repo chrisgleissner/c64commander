@@ -251,6 +251,7 @@ export const recordActionStart = (action: TraceActionContext) => {
     name: action.name,
     component: action.componentName ?? null,
     context: redactPayload(context),
+    ...(action.trigger ? { trigger: action.trigger } : {}),
   });
 };
 

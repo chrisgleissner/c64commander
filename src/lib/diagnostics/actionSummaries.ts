@@ -6,13 +6,14 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { BackendTarget, TraceEvent, TraceOrigin } from '@/lib/tracing/types';
+import type { ActionTrigger, BackendTarget, TraceEvent, TraceOrigin } from '@/lib/tracing/types';
 
 export type ActionSummaryOrigin = 'user' | 'system';
 export type ActionSummaryOutcome = 'success' | 'error' | 'blocked' | 'timeout' | 'incomplete';
 
 export type RestEffect = {
   type: 'REST';
+  label: string;
   method: string;
   path: string;
   target: BackendTarget | null;
@@ -23,6 +24,7 @@ export type RestEffect = {
 
 export type FtpEffect = {
   type: 'FTP';
+  label: string;
   operation: string;
   path: string;
   target: BackendTarget | null;
@@ -37,6 +39,7 @@ export type ActionSummary = {
   actionName: string;
   origin: ActionSummaryOrigin;
   originalOrigin?: TraceOrigin;
+  trigger?: ActionTrigger | null;
   startTimestamp: string | null;
   endTimestamp: string | null;
   durationMs: number | null;
@@ -136,12 +139,19 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       const requestData = request.data as Record<string, unknown>;
       const responseData = event.data as Record<string, unknown>;
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
+      const method = readString(requestData.method) ?? 'UNKNOWN';
+      const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
+      const hasResponseStatus = 'status' in responseData;
+      const responseStatus = hasResponseStatus
+        ? (responseData.status === null ? null : (readNumber(responseData.status) ?? null))
+        : (endStatus ?? null);
       restEffects.push({
         type: 'REST',
-        method: readString(requestData.method) ?? 'UNKNOWN',
-        path: readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown',
+        label: `${method} ${path}`,
+        method,
+        path,
         target: (readString(requestData.target) as BackendTarget | null) ?? null,
-        status: readNumber(responseData.status) ?? (endStatus ?? null),
+        status: responseStatus,
         durationMs: readNumber(responseData.durationMs),
         ...(error !== null ? { error } : {}),
       });
@@ -150,10 +160,13 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
 
   pendingRequests.forEach((request) => {
     const requestData = request.data as Record<string, unknown>;
+    const method = readString(requestData.method) ?? 'UNKNOWN';
+    const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
     restEffects.push({
       type: 'REST',
-      method: readString(requestData.method) ?? 'UNKNOWN',
-      path: readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown',
+      label: `${method} ${path}`,
+      method,
+      path,
       target: (readString(requestData.target) as BackendTarget | null) ?? null,
       status: endStatus ?? null,
       durationMs: null,
@@ -170,10 +183,13 @@ const resolveFtpEffects = (events: TraceEvent[]): FtpEffect[] => {
     .map((event) => {
       const data = event.data as Record<string, unknown>;
       const error = readString(data.error);
+      const operation = readString(data.operation) ?? 'unknown';
+      const path = readString(data.path) ?? 'unknown';
       return {
         type: 'FTP',
-        operation: readString(data.operation) ?? 'unknown',
-        path: readString(data.path) ?? 'unknown',
+        label: `${operation} ${path}`,
+        operation,
+        path,
         target: (readString(data.target) as BackendTarget | null) ?? null,
         result: readString(data.result),
         ...(error !== null ? { error } : {}),
@@ -225,11 +241,15 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
       endRelativeMs,
     );
 
+    const startData = actionStart?.data as Record<string, unknown> | undefined;
+    const trigger = (startData?.trigger as ActionTrigger | null | undefined) ?? undefined;
+
     summaries.push({
       correlationId,
       actionName: resolveActionName(actionStart, correlationId),
       origin,
       ...(originalOrigin && originalOrigin !== origin ? { originalOrigin } : {}),
+      ...(trigger ? { trigger } : {}),
       startTimestamp,
       endTimestamp,
       durationMs,

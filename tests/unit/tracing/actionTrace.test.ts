@@ -82,4 +82,24 @@ describe('actionTrace', () => {
     const result = await runActionScope('scope', async () => 'plain');
     expect(result).toBe('plain');
   });
+
+  it('propagates trigger into implicit action context', async () => {
+    const trigger = { kind: 'timer' as const, name: 'connectivity.probe', intervalMs: 5000, details: null };
+    let capturedContext: Parameters<typeof recordActionStart>[0] | null = null;
+    recordActionStart.mockImplementation((ctx: Parameters<typeof recordActionStart>[0]) => { capturedContext = ctx; });
+
+    await runWithImplicitAction('probe', async () => 'ok', trigger);
+
+    expect(capturedContext).not.toBeNull();
+    expect(capturedContext?.trigger).toEqual(trigger);
+  });
+
+  it('implicit action has null trigger when none provided', async () => {
+    let capturedContext: Parameters<typeof recordActionStart>[0] | null = null;
+    recordActionStart.mockImplementation((ctx: Parameters<typeof recordActionStart>[0]) => { capturedContext = ctx; });
+
+    await runWithImplicitAction('no-trigger', async () => 'ok');
+
+    expect(capturedContext?.trigger).toBeNull();
+  });
 });

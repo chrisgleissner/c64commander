@@ -292,6 +292,35 @@ Origin is descriptive only and does not alter causality.
 
 ---
 
+### 7.5 Action Trigger (Additive)
+
+`action-start.data.trigger` captures the reason an action was initiated when known.
+
+Schema:
+
+```json
+{
+  "trigger": {
+    "kind": "user | timer | auto-reconnect | route-enter | lifecycle | network-change | unknown",
+    "name": "stable-string",
+    "intervalMs": null,
+    "details": null
+  }
+}
+```
+
+Rules:
+
+- `trigger` is optional and additive; existing traces without it remain valid.
+- `kind` is one of the enumerated values above.
+- `name` is a stable, code-level identifier for the trigger source (e.g., `"connectivity.probe"`, `"route.enter"`).
+- `intervalMs` is the polling interval in milliseconds for timer-based triggers; `null` otherwise.
+- `details` is an optional structured object for additional context; `null` when not applicable.
+- `trigger` is redaction-safe and MUST NOT contain sensitive data.
+- Action Summaries surface the trigger as a pure projection from `action-start.data.trigger`.
+
+---
+
 ## 8. Automatic Context Enrichment
 
 Each Action Trace automatically captures:
@@ -376,7 +405,7 @@ IP address and port are informational only.
   "type": "backend-decision",
   "data": {
     "selectedTarget": "internal-mock | external-mock | real-device",
-    "reason": "reachable | fallback | demo-mode | test-mode"
+    "reason": "reachable | fallback | demo-mode | test-mode | probe | auto-reconnect"
   }
 }
 ```
@@ -385,6 +414,15 @@ Rules:
 
 - Exactly one per correlation
 - Must precede any REST or FTP operation
+
+Reason values:
+
+- `reachable`: device is reachable via the configured URL
+- `fallback`: device is offline; falling back to offline mode
+- `demo-mode`: internal mock is active (demo mode)
+- `test-mode`: external mock is active (test mode)
+- `probe`: background connectivity probe
+- `auto-reconnect`: automatic reconnection attempt
 
 ---
 
@@ -432,6 +470,7 @@ Rules:
 - Network passwords are redacted
 - `rest-response.data.durationMs` is request latency, measured as `round(max(0, endTime - startTime))` around the REST call.
 - `rest-response.data.durationMs` is unrelated to playback `elapsedMs`/`durationMs` in action context snapshots.
+- `rest-response.data.status` is the HTTP status code when an HTTP response is received. When no HTTP response was received (e.g., network failure, timeout, abort), `status` is `null`. The UI renders `null` status as `NO_RESPONSE`.
 
 REST calls outside an Action Trace create implicit root Action Traces.
 
