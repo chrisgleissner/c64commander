@@ -211,7 +211,7 @@ Action Summaries are designed to filter this noise. Progressive disclosure prese
 
 Trace assertions (`assertRestTraceSequence`, `assertFtpTraceSequence`, `assertTraceOrder`) operate on **raw trace events** retrieved via `getTraces(page)`. These assertions are entirely independent of the UI tab structure. Hiding the Traces tab has **no effect** on trace assertion infrastructure.
 
-Reference: tracing-spec §18.5 lists all assertion helpers. They call `getTraceEvents()` from `traceSession.ts`, not from the UI.
+Reference: tracing-spec §18.5 lists all assertion helpers. They obtain trace data via `getTraces(page)` (which calls `window.__c64uTracing.getTraces()`; see `playwright/traceUtils.ts`), not directly from the Diagnostics UI tabs.
 
 ### Golden Trace Recording
 
