@@ -303,6 +303,7 @@ cat > "$META_PATH" <<EOF
   "commit_sha": "${CI_SHA}",
   "sampling_interval_sec": ${SAMPLING_INTERVAL_SEC},
   "sample_rows": ${sample_rows},
+  "telemetry_samples_present": $([[ "$sample_rows" -gt 0 ]] && echo true || echo false),
   "start_timestamp": ${run_start_ts},
   "end_timestamp": ${run_end_ts},
   "main_seen_once": ${main_seen_once},

@@ -294,7 +294,7 @@ def main() -> None:
                     line_count = sum(1 for _ in handle)
                 print(f"telemetry summary debug: {csv_path} lines={line_count}")
             except OSError as error:
-                print(f"telemetry summary debug: failed to read {csv_path}: {error}")
+                print(f"telemetry summary debug: failed to count lines in {csv_path}: {error}")
         raise SystemExit("telemetry summary: no telemetry samples in inputs")
 
     min_ts = min(record.timestamp for record in records)

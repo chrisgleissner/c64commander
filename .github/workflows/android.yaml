@@ -835,6 +835,8 @@ jobs:
           set -euo pipefail
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
+          package_name="${ANDROID_PACKAGE_NAME:-uk.gleissner.c64commander}"
+          telemetry_preflight_timeout_sec="${TELEMETRY_PREFLIGHT_TIMEOUT_SEC:-45}"
           SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
           if [[ -z "$SERIAL" ]]; then
             echo "telemetry preflight failed: no emulator serial found"
@@ -843,9 +845,9 @@ jobs:
             exit 1
           fi
           # Prime telemetry sampling before Maestro to avoid header-only telemetry output.
-          adb -s "$SERIAL" shell am start -n uk.gleissner.c64commander/.MainActivity >/dev/null 2>&1 || true
+          adb -s "$SERIAL" shell am start -n "${package_name}/.MainActivity" >/dev/null 2>&1 || true
           csv="ci-artifacts/telemetry/android/metrics.csv"
-          if ! timeout 45 bash -c "until [[ -f '$csv' ]] && [[ \$(wc -l < '$csv') -gt 1 ]]; do sleep 1; done"; then
+          if ! timeout "$telemetry_preflight_timeout_sec" bash -c "until [[ -f '$csv' ]] && lines=\$(wc -l < '$csv' 2>/dev/null || echo 0) && [[ \"\$lines\" -gt 1 ]]; do sleep 1; done"; then
             echo "telemetry preflight failed: monitor did not capture app telemetry rows within timeout"
             ls -la ci-artifacts/telemetry/android || true
             cat ci-artifacts/telemetry/android/monitor-run.log || true
@@ -968,6 +970,7 @@ jobs:
         run: |
           set -euo pipefail
           expected_header="timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb"
+          debug_tail_lines="${TELEMETRY_GATE_DEBUG_TAIL_LINES:-80}"
           csv="ci-artifacts/telemetry/android/metrics.csv"
           if [[ ! -f "$csv" ]]; then
             echo "telemetry gate failed: missing $csv"
@@ -984,9 +987,9 @@ jobs:
           data_rows=$((line_count - 1))
           if [[ "$data_rows" -lt 2 ]]; then
             echo "telemetry gate failed: expected multiple data rows, found ${data_rows}"
-            echo "telemetry gate debug: csv=${csv} line_count=${line_count}"
-            tail -n 80 ci-artifacts/telemetry/android/monitor-run.log || true
-            tail -n 80 ci-artifacts/telemetry/android/events.log || true
+            echo "telemetry gate debug: csv=${csv} line_count=${line_count} data_rows=${data_rows}"
+            tail -n "$debug_tail_lines" ci-artifacts/telemetry/android/monitor-run.log || true
+            tail -n "$debug_tail_lines" ci-artifacts/telemetry/android/events.log || true
             if [[ -f ci-artifacts/telemetry/android/metadata.json ]]; then
               echo "telemetry gate debug: metadata.json"
               cat ci-artifacts/telemetry/android/metadata.json || true
