@@ -290,5 +290,109 @@ describe('hvscService', () => {
             const result = await resolveHvscSonglength({ virtualPath: '/test.sid' });
             expect(result.durationSeconds).toBe(42);
         });
+
+        it('dispatches to mock bridge when present', async () => {
+            const mockResolve = vi.fn().mockResolvedValue({ durationSeconds: 99, durations: [99], subsongCount: 1 });
+            (window as any).__hvscMock__ = { resolveHvscSonglengthDuration: mockResolve };
+
+            const result = await resolveHvscSonglength({ virtualPath: '/test.sid' });
+            expect(result.durationSeconds).toBe(99);
+        });
+    });
+
+    describe('mock bridge: getHvscDurationByMd5Seconds', () => {
+        it('uses mock bridge when present', async () => {
+            const mockDuration = vi.fn().mockResolvedValue({ durationSeconds: 77 });
+            (window as any).__hvscMock__ = { getHvscDurationByMd5: mockDuration };
+
+            const result = await getHvscDurationByMd5Seconds('md5hash');
+            expect(result).toBe(77);
+        });
+
+        it('returns null when mock bridge returns null durationSeconds', async () => {
+            const mockDuration = vi.fn().mockResolvedValue({ durationSeconds: null });
+            (window as any).__hvscMock__ = { getHvscDurationByMd5: mockDuration };
+
+            const result = await getHvscDurationByMd5Seconds('md5hash');
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('mock bridge: getHvscCacheStatus', () => {
+        it('dispatches to mock bridge when present', async () => {
+            const mockStatus = vi.fn().mockResolvedValue({ baselineVersion: 99 });
+            (window as any).__hvscMock__ = { getHvscCacheStatus: mockStatus };
+
+            const status = await getHvscCacheStatus();
+            expect(status.baselineVersion).toBe(99);
+        });
+    });
+
+    describe('mock bridge: checkForHvscUpdates', () => {
+        it('dispatches to mock bridge when present', async () => {
+            const mockUpdates = vi.fn().mockResolvedValue({ latestVersion: 100 });
+            (window as any).__hvscMock__ = { checkForHvscUpdates: mockUpdates };
+
+            const updates = await checkForHvscUpdates();
+            expect(updates.latestVersion).toBe(100);
+        });
+    });
+
+    describe('mock bridge: installOrUpdateHvsc', () => {
+        it('dispatches to mock bridge when present', async () => {
+            const mockInstall = vi.fn().mockResolvedValue({ installedVersion: 100 });
+            (window as any).__hvscMock__ = { installOrUpdateHvsc: mockInstall };
+
+            const status = await installOrUpdateHvsc('t1');
+            expect(status.installedVersion).toBe(100);
+        });
+    });
+
+    describe('mock bridge: ingestCachedHvsc', () => {
+        it('dispatches to mock bridge when present', async () => {
+            const mockIngest = vi.fn().mockResolvedValue({ installedVersion: 100 });
+            (window as any).__hvscMock__ = { ingestCachedHvsc: mockIngest };
+
+            const status = await ingestCachedHvsc('t1');
+            expect(status.installedVersion).toBe(100);
+        });
+    });
+
+    describe('mock bridge: cancelHvscInstall', () => {
+        it('dispatches to mock bridge when present', async () => {
+            const mockCancel = vi.fn().mockResolvedValue(undefined);
+            (window as any).__hvscMock__ = { cancelHvscInstall: mockCancel };
+
+            await cancelHvscInstall('t1');
+            expect(mockCancel).toHaveBeenCalledWith({ cancelToken: 't1' });
+        });
+    });
+
+    describe('mock bridge: addHvscProgressListener', () => {
+        it('dispatches to mock bridge when present', async () => {
+            const mockListen = vi.fn().mockResolvedValue({ remove: vi.fn() });
+            (window as any).__hvscMock__ = { addListener: mockListen };
+
+            const listener = vi.fn();
+            await addHvscProgressListener(listener);
+            expect(mockListen).toHaveBeenCalledWith('progress', listener);
+        });
+    });
+
+    describe('hasRuntimeBridge', () => {
+        it('returns true on native platform', () => {
+            vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+            expect(isHvscBridgeAvailable()).toBe(true);
+        });
+
+        it('handles runtime bridge probe error gracefully', () => {
+            vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+                throw new Error('plugin error');
+            });
+            vi.mocked(Capacitor.isPluginAvailable).mockImplementation(() => {
+                throw new Error('plugin error');
+            });
+            expect(isHvscBridgeAvailable()).toBe(false);
+        });
     });
 });
