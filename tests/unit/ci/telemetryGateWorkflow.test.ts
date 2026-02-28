@@ -40,4 +40,12 @@ describe('telemetry release gate workflow rules', () => {
         expect(workflow).toContain('rm -f artifacts/ios/_infra/telemetry/flow-active.flag');
         expect(workflow).toContain('touch artifacts/ios/_infra/telemetry/flow-complete.flag');
     });
+
+    it('hardens fuzz monitor lifecycle to always persist exit codes', () => {
+        const workflow = readWorkflow('fuzz.yaml');
+        const trapMatches = workflow.match(/trap 'write_code_file "\$status"' EXIT/g) ?? [];
+        const fallbackMatches = workflow.match(/synthesized monitor\.exitcode=1 because wrapper exited before writing status/g) ?? [];
+        expect(trapMatches.length).toBeGreaterThanOrEqual(2);
+        expect(fallbackMatches.length).toBeGreaterThanOrEqual(2);
+    });
 });

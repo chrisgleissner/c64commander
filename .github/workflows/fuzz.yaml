@@ -61,11 +61,20 @@ jobs:
           mkdir -p "$TELEMETRY_OUTPUT_DIR"
           (
             status=0
+            code_file="$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+            wrote_code=0
+            write_code_file() {
+              if [[ "$wrote_code" == "0" ]]; then
+                echo "$1" > "$code_file"
+                wrote_code=1
+              fi
+            }
+            trap 'write_code_file "$status"' EXIT
             bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 &
             monitor_child_pid=$!
             echo "$monitor_child_pid" > "$TELEMETRY_OUTPUT_DIR/monitor.child.pid"
             wait "$monitor_child_pid" || status=$?
-            echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+            write_code_file "$status"
           ) &
           echo $! > "$TELEMETRY_OUTPUT_DIR/monitor.pid"
           sleep 2
@@ -87,6 +96,8 @@ jobs:
         env:
           TELEMETRY_OUTPUT_DIR: ci-artifacts/telemetry/fuzz-deterministic
         run: |
+          set -euo pipefail
+          pid=""
           child_pid=""
           if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.child.pid" ]]; then
             child_pid="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.child.pid")"
@@ -109,6 +120,22 @@ jobs:
             fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
+            fi
+            for i in $(seq 1 10); do
+              if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ]]; then
+                break
+              fi
+              sleep 1
+            done
+          fi
+          if [[ ! -f "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ]]; then
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              :
+            elif [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+              :
+            else
+              echo "1" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+              echo "telemetry(fuzz-deterministic): synthesized monitor.exitcode=1 because wrapper exited before writing status" >&2
             fi
           fi
 
@@ -220,11 +247,20 @@ jobs:
           mkdir -p "$TELEMETRY_OUTPUT_DIR"
           (
             status=0
+            code_file="$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+            wrote_code=0
+            write_code_file() {
+              if [[ "$wrote_code" == "0" ]]; then
+                echo "$1" > "$code_file"
+                wrote_code=1
+              fi
+            }
+            trap 'write_code_file "$status"' EXIT
             bash ci/telemetry/linux/monitor_linux.sh >"$TELEMETRY_OUTPUT_DIR/monitor.log" 2>&1 &
             monitor_child_pid=$!
             echo "$monitor_child_pid" > "$TELEMETRY_OUTPUT_DIR/monitor.child.pid"
             wait "$monitor_child_pid" || status=$?
-            echo "$status" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+            write_code_file "$status"
           ) &
           echo $! > "$TELEMETRY_OUTPUT_DIR/monitor.pid"
           sleep 2
@@ -252,6 +288,8 @@ jobs:
         env:
           TELEMETRY_OUTPUT_DIR: ci-artifacts/telemetry/fuzz
         run: |
+          set -euo pipefail
+          pid=""
           child_pid=""
           if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.child.pid" ]]; then
             child_pid="$(cat "$TELEMETRY_OUTPUT_DIR/monitor.child.pid")"
@@ -274,6 +312,22 @@ jobs:
             fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
+            fi
+            for i in $(seq 1 10); do
+              if [[ -f "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ]]; then
+                break
+              fi
+              sleep 1
+            done
+          fi
+          if [[ ! -f "$TELEMETRY_OUTPUT_DIR/monitor.exitcode" ]]; then
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              :
+            elif [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+              :
+            else
+              echo "1" > "$TELEMETRY_OUTPUT_DIR/monitor.exitcode"
+              echo "telemetry(fuzz): synthesized monitor.exitcode=1 because wrapper exited before writing status" >&2
             fi
           fi
 
