@@ -70,6 +70,7 @@ export default defineConfig({
     ],
     coverage: {
       provider: "v8",
+      clean: false,
       all: false,
       reporter: ["text", "lcov", "html", "json"],
       exclude: [

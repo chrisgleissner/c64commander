@@ -19,7 +19,7 @@ type Props = {
   severity: DiagnosticsSeverity;
   title: string;
   timestamp: string | number | Date | null;
-  origin?: 'user' | 'system' | null;
+  origin?: 'user' | 'system' | 'unknown' | null;
   secondaryLeft?: ReactNode;
   secondaryRight?: ReactNode;
   children?: ReactNode;
@@ -37,15 +37,16 @@ export const DiagnosticsListItem = ({
   children,
   testId,
 }: Props) => {
-  const showOrigin = mode === 'action' && origin;
+  const showOrigin = mode === 'action';
   const originClass =
     origin === 'user'
       ? 'bg-diagnostics-user'
       : origin === 'system'
         ? 'bg-diagnostics-system'
-        : undefined;
+        : 'bg-muted-foreground';
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
+  const isActionMode = mode === 'action';
 
   return (
     <details className="group rounded-lg border border-border" data-testid={testId}>
@@ -67,39 +68,59 @@ export const DiagnosticsListItem = ({
             </span>
           </div>
           <div className="flex items-center gap-2 min-w-0 text-sm font-medium">
-            {showOrigin ? (
-              <span
-                className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
-                aria-label={origin ?? undefined}
-              />
-            ) : null}
+             {showOrigin ? (
+                <span
+                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
+                  role="img"
+                  aria-label={`origin: ${origin ?? 'unknown'}`}
+                />
+             ) : null}
             <span className="min-w-0 truncate" data-testid="diagnostics-entry-title">{title}</span>
           </div>
           <DiagnosticsTimestamp className="text-muted-foreground text-right shrink-0" value={timestamp} />
         </div>
       </summary>
       <div className="px-2 pb-3 pt-2 text-xs">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-          <span
-            className={cn('inline-flex w-4 items-center justify-center', severityMeta.colorClass)}
-            aria-hidden="true"
+        {isActionMode ? (
+          <div
+            data-testid="diagnostics-action-expanded-header"
+            className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs font-semibold uppercase tracking-wide"
           >
-            {severityMeta.glyph}
-          </span>
-          <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
-            {severityMeta.label}
-          </span>
-        </div>
-        {hasSecondary ? (
-          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs">
             <div className="min-w-0 flex flex-wrap items-center gap-2">
+              <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
+                {severityMeta.label}
+              </span>
               {secondaryLeft}
             </div>
-            <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
+            <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0 normal-case">
               {secondaryRight}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+              <span
+                className={cn('inline-flex w-4 items-center justify-center', severityMeta.colorClass)}
+                aria-hidden="true"
+              >
+                {severityMeta.glyph}
+              </span>
+              <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
+                {severityMeta.label}
+              </span>
+            </div>
+            {hasSecondary ? (
+              <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs">
+                <div className="min-w-0 flex flex-wrap items-center gap-2">
+                  {secondaryLeft}
+                </div>
+                <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
+                  {secondaryRight}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
         {children ? <div className={cn('text-xs mt-2')}>{children}</div> : null}
       </div>
     </details>

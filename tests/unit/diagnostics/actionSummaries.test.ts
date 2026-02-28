@@ -179,6 +179,23 @@ describe('buildActionSummaries', () => {
     expect(summary.errorMessage).toBe('bad');
   });
 
+  it('includes action-end error effect when distinct from error events', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'error', correlationId: 'C1', relativeMs: 50, data: { message: 'network timeout' } }),
+      buildTrace({ id: 'E3', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'error', error: 'request failed' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === 'ERROR');
+    expect(errorEffects).toHaveLength(2);
+    expect(errorEffects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'error', message: 'network timeout' }),
+      expect.objectContaining({ label: 'action-end error', message: 'request failed' }),
+    ]));
+    expect(summary.errorCount).toBe(2);
+    expect(summary.errorMessage).toBe('request failed');
+  });
+
   it('handles REST response without matching request', () => {
     const traces: TraceEvent[] = [
       buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
@@ -279,6 +296,31 @@ describe('buildActionSummaries', () => {
     ];
     const [summary] = buildActionSummaries(traces);
     expect(summary.trigger).toEqual(trigger);
+  });
+
+  it('scopes effects to action boundaries and keeps counts aligned with visible effects', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E0', type: 'rest-request', correlationId: 'C1', relativeMs: -10, data: { method: 'GET', normalizedUrl: '/pre', target: 'real-device' } }),
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-request', correlationId: 'C1', relativeMs: 10, data: { method: 'GET', normalizedUrl: '/inside', target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'rest-response', correlationId: 'C1', relativeMs: 20, data: { status: 200, durationMs: 10, error: null } }),
+      buildTrace({ id: 'E4', type: 'ftp-operation', correlationId: 'C1', relativeMs: 30, data: { operation: 'list', path: '/inside', result: 'success', target: 'real-device' } }),
+      buildTrace({ id: 'E5', type: 'error', correlationId: 'C1', relativeMs: 35, data: { message: 'inside error' } }),
+      buildTrace({ id: 'E6', type: 'action-end', correlationId: 'C1', relativeMs: 40, data: { status: 'error', error: 'inside error' } }),
+      buildTrace({ id: 'E7', type: 'ftp-operation', correlationId: 'C1', relativeMs: 50, data: { operation: 'list', path: '/post', result: 'failure', target: 'real-device' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const effects = summary.effects ?? [];
+    const restEffects = effects.filter((effect) => effect.type === 'REST');
+    const ftpEffects = effects.filter((effect) => effect.type === 'FTP');
+    const errorEffects = effects.filter((effect) => effect.type === 'ERROR');
+
+    expect(restEffects).toHaveLength(1);
+    expect(ftpEffects).toHaveLength(1);
+    expect(errorEffects).toHaveLength(1);
+    expect(summary.restCount).toBe(restEffects.length);
+    expect(summary.ftpCount).toBe(ftpEffects.length);
+    expect(summary.errorCount).toBe(errorEffects.length);
   });
 
   it('omits trigger when action-start has no trigger field', () => {

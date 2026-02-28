@@ -44,7 +44,7 @@ The following are retained for determinism:
 - `restCount` (only when > 0)
 - `ftpCount` (only when > 0)
 - `errorCount` (only when > 0)
-- Effect details (method, path, operation, target, status, result, error)
+- Effect details (method, path, operation, target, status, result, error, and error-event messages)
 
 ## Adding New Fixtures
 

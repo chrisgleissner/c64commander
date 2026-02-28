@@ -59,6 +59,10 @@
         "target": "real-device",
         "status": 500,
         "error": "Mount failed"
+      },
+      {
+        "type": "ERROR",
+        "message": "Failed to mount disk: Mount failed"
       }
     ]
   },
@@ -79,6 +83,10 @@
         "target": "real-device",
         "result": "failure",
         "error": "Permission denied"
+      },
+      {
+        "type": "ERROR",
+        "message": "FTP list failed: Permission denied"
       }
     ]
   },
@@ -90,6 +98,7 @@
     "outcome": "timeout",
     "errorMessage": "Request timeout",
     "restCount": 1,
+    "errorCount": 1,
     "effects": [
       {
         "type": "REST",
@@ -98,6 +107,10 @@
         "target": "internal-mock",
         "status": 408,
         "error": "Request timeout"
+      },
+      {
+        "type": "ERROR",
+        "message": "Request timeout"
       }
     ]
   },

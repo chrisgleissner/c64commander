@@ -8,7 +8,7 @@
 
 import type { ActionTrigger, BackendTarget, TraceEvent, TraceOrigin } from '@/lib/tracing/types';
 
-export type ActionSummaryOrigin = 'user' | 'system';
+export type ActionSummaryOrigin = 'user' | 'system' | 'unknown';
 export type ActionSummaryOutcome = 'success' | 'error' | 'blocked' | 'timeout' | 'incomplete';
 
 export type RestEffect = {
@@ -17,6 +17,7 @@ export type RestEffect = {
   method: string;
   path: string;
   target: BackendTarget | null;
+  product?: string;
   status: number | string | null;
   durationMs: number | null;
   error?: string;
@@ -32,7 +33,13 @@ export type FtpEffect = {
   error?: string;
 };
 
-export type ActionSummaryEffect = RestEffect | FtpEffect;
+export type ErrorEffect = {
+  type: 'ERROR';
+  label: string;
+  message: string;
+};
+
+export type ActionSummaryEffect = RestEffect | FtpEffect | ErrorEffect;
 
 export type ActionSummary = {
   correlationId: string;
@@ -56,7 +63,12 @@ export type ActionSummary = {
 const readString = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 const readNumber = (value: unknown): number | null => (typeof value === 'number' ? value : null);
 
-const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => (origin === 'user' ? 'user' : 'system');
+const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => {
+  if (origin === 'user') return 'user';
+  if (origin === 'automatic' || origin === 'system') return 'system';
+  // Fallback for malformed/legacy traces where origin is missing or unrecognized.
+  return 'unknown';
+};
 
 const resolveOutcome = (status: string | null, isComplete: boolean): ActionSummaryOutcome => {
   if (!isComplete) return 'incomplete';
@@ -122,6 +134,38 @@ const resolveActionError = (actionEnd: TraceEvent | undefined, errorEvents: Trac
   return errorMessage ?? null;
 };
 
+const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | undefined): ErrorEffect[] => {
+  const effects: ErrorEffect[] = [];
+  const seenMessages = new Set<string>();
+
+  errorEvents.forEach((event) => {
+    const message = readString(event.data?.message) ?? 'unknown error';
+    if (!seenMessages.has(message)) {
+      effects.push({
+        type: 'ERROR',
+        label: 'error',
+        message,
+      });
+      seenMessages.add(message);
+    }
+  });
+
+  const endError = readString(actionEnd?.data?.error);
+  if (endError) {
+    if (!seenMessages.has(endError)) {
+      effects.push({ type: 'ERROR', label: 'action-end error', message: endError });
+    }
+    return effects;
+  }
+  if (effects.length === 0) {
+    const status = readString(actionEnd?.data?.status);
+    if (status === 'error') {
+      effects.push({ type: 'ERROR', label: 'action-end error', message: 'action ended with error' });
+    }
+  }
+  return effects;
+};
+
 const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefined): RestEffect[] => {
   const restEffects: RestEffect[] = [];
   const pendingRequests: TraceEvent[] = [];
@@ -141,6 +185,11 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
       const method = readString(requestData.method) ?? 'UNKNOWN';
       const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
+      const responseBody =
+        (responseData.body && typeof responseData.body === 'object' && !Array.isArray(responseData.body))
+          ? (responseData.body as Record<string, unknown>)
+          : null;
+      const product = readString(responseBody?.product);
       const hasResponseStatus = 'status' in responseData;
       const responseStatus = hasResponseStatus
         ? (responseData.status === null ? null : (readNumber(responseData.status) ?? null))
@@ -151,6 +200,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         method,
         path,
         target: (readString(requestData.target) as BackendTarget | null) ?? null,
+        ...(product ? { product } : {}),
         status: responseStatus,
         durationMs: readNumber(responseData.durationMs),
         ...(error !== null ? { error } : {}),
@@ -212,9 +262,14 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const ordered = [...events].sort((a, b) => a.relativeMs - b.relativeMs);
     const actionStart = ordered.find((event) => event.type === 'action-start');
     const actionEnd = ordered.find((event) => event.type === 'action-end');
-    const errorEvents = ordered.filter((event) => event.type === 'error');
-    const restRequests = ordered.filter((event) => event.type === 'rest-request');
-    const ftpOperations = ordered.filter((event) => event.type === 'ftp-operation');
+    const startRelativeBoundary = actionStart?.relativeMs ?? null;
+    const endRelativeBoundary = actionEnd?.relativeMs ?? null;
+    const scoped = ordered.filter((event) => {
+      if (startRelativeBoundary !== null && event.relativeMs < startRelativeBoundary) return false;
+      if (endRelativeBoundary !== null && event.relativeMs > endRelativeBoundary) return false;
+      return true;
+    });
+    const errorEvents = scoped.filter((event) => event.type === 'error');
     const startRelativeMs = actionStart?.relativeMs ?? ordered[0]?.relativeMs ?? 0;
     const endRelativeMs = actionEnd?.relativeMs ?? ordered[ordered.length - 1]?.relativeMs ?? startRelativeMs;
     const isComplete = Boolean(actionStart && actionEnd);
@@ -222,14 +277,14 @@ export const buildActionSummaries = (traceEvents: TraceEvent[]): ActionSummary[]
     const outcome = resolveOutcome(status, isComplete);
     const originalOrigin = actionStart?.origin ?? actionEnd?.origin ?? ordered[0]?.origin ?? null;
     const origin = resolveSummaryOrigin(originalOrigin);
-    const errorCount = errorEvents.length > 0 ? errorEvents.length : status === 'error' ? 1 : 0;
-
-    const restEffects = resolveRestEffects(ordered, actionEnd);
-    const ftpEffects = resolveFtpEffects(ordered);
-    const effects = [...restEffects, ...ftpEffects];
+    const restEffects = resolveRestEffects(scoped, actionEnd);
+    const ftpEffects = resolveFtpEffects(scoped);
+    const errorEffects = resolveErrorEffects(errorEvents, actionEnd);
+    const effects = [...restEffects, ...ftpEffects, ...errorEffects];
     const errorMessage = resolveActionError(actionEnd, errorEvents);
-    const restCount = restRequests.length;
-    const ftpCount = ftpOperations.length;
+    const restCount = restEffects.length;
+    const ftpCount = ftpEffects.length;
+    const errorCount = errorEffects.length;
 
     const startTimestamp = actionStart?.timestamp ?? ordered[0]?.timestamp ?? null;
     const endTimestamp = actionEnd?.timestamp ?? ordered[ordered.length - 1]?.timestamp ?? null;

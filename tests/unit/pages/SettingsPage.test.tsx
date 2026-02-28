@@ -683,7 +683,7 @@ describe('SettingsPage', () => {
         type: 'rest-response',
         origin: 'user',
         correlationId: 'COR-0001',
-        data: { status: 200, durationMs: 15, error: null },
+        data: { status: 200, durationMs: 15, error: null, body: { product: 'c64u' } },
       },
       {
         id: 'evt-4',
@@ -728,11 +728,12 @@ describe('SettingsPage', () => {
     });
 
     const summary = await within(dialog).findByTestId('action-summary-COR-0001');
-    expect(within(summary).getByLabelText('user')).toHaveClass('bg-diagnostics-user');
+    expect(within(summary).getByLabelText('origin: user')).toHaveClass('bg-diagnostics-user');
     expect(within(summary).getByTestId('action-rest-count-COR-0001')).toHaveClass('text-diagnostics-rest');
     expect(within(summary).getByTestId('action-ftp-count-COR-0001')).toHaveClass('text-diagnostics-ftp');
     expect(within(summary).getByTestId('action-error-count-COR-0001')).toHaveClass('text-diagnostics-error');
-    expect(within(summary).getByText(/\d+\sms/, { selector: 'div' })).toBeInTheDocument();
+    expect(within(summary).getByText(/\d+ms/, { selector: 'div' })).toBeInTheDocument();
+    expect(within(summary).getAllByText(/target:\s*c64u/i)).toHaveLength(2);
   });
 
   it('uses shared renderer for traces and actions', async () => {
@@ -754,7 +755,12 @@ describe('SettingsPage', () => {
         type: 'action-start',
         origin: 'user',
         correlationId: 'COR-0100',
-        data: { name: 'Inspect', component: 'Test', context: {} },
+        data: {
+          name: 'Inspect',
+          component: 'Test',
+          context: {},
+          trigger: { kind: 'timer', name: 'connectivity.probe', intervalMs: 5000, details: null },
+        },
       },
       {
         id: 'trace-3',
@@ -791,6 +797,7 @@ describe('SettingsPage', () => {
 
     const actionItem = await within(dialog).findByTestId('action-summary-COR-0100');
     expect(actionItem.querySelector('[data-testid="diagnostics-summary-grid"]')).toBeTruthy();
+    expect(within(actionItem).getByTestId('action-trigger-COR-0100')).toHaveTextContent('trigger: timer (connectivity.probe) · 5000ms');
   });
 
   it('exports active diagnostics tab and reports failures', async () => {

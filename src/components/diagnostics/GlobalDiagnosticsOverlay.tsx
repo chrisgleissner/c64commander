@@ -37,23 +37,17 @@ import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
-import { buildActionSummaries, type ActionTrigger, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
+import { buildActionSummaries } from '@/lib/diagnostics/actionSummaries';
 import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
-import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
+import { ActionSummaryListItem } from '@/components/diagnostics/ActionSummaryListItem';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
 import { setDiagnosticsOverlayActive, withDiagnosticsTraceOverride } from '@/lib/diagnostics/diagnosticsOverlayState';
-import { resolveActionSeverity, resolveLogSeverity, resolveTraceSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
+import { resolveLogSeverity, resolveTraceSeverity } from '@/lib/diagnostics/diagnosticsSeverity';
 
 const diagnosticsTabTriggerClass =
   'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
-
-const formatTriggerDisplay = (trigger: ActionTrigger): string => {
-  const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : '';
-  const interval = trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : '';
-  return `${trigger.kind}${suffix}${interval}`;
-};
 
 export const GlobalDiagnosticsOverlay = () => {
   const location = useLocation();
@@ -442,149 +436,9 @@ export const GlobalDiagnosticsOverlay = () => {
               filteredActions
                 .slice(-100)
                 .reverse()
-                .map((summary) => {
-                  const effects = summary.effects ?? [];
-                  const restEffects = effects.filter((effect): effect is RestEffect => effect.type === 'REST');
-                  const ftpEffects = effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
-                  const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
-                  const hasEffects = Boolean(summary.restCount || summary.ftpCount || summary.errorCount);
-                  return (
-                    <DiagnosticsListItem
-                      key={summary.correlationId}
-                      testId={`action-summary-${summary.correlationId}`}
-                      mode="action"
-                      severity={resolveActionSeverity(summary.outcome)}
-                      title={summary.actionName}
-                      timestamp={summary.startTimestamp}
-                      origin={summary.origin}
-                      secondaryLeft={
-                        hasEffects ? (
-                          <>
-                            {summary.restCount ? (
-                              <span
-                                data-testid={`action-rest-count-${summary.correlationId}`}
-                                className="text-diagnostics-rest text-xs font-medium"
-                              >
-                                REST×{summary.restCount}
-                              </span>
-                            ) : null}
-                            {summary.ftpCount ? (
-                              <span
-                                data-testid={`action-ftp-count-${summary.correlationId}`}
-                                className="text-diagnostics-ftp text-xs font-medium"
-                              >
-                                FTP×{summary.ftpCount}
-                              </span>
-                            ) : null}
-                            {summary.errorCount ? (
-                              <span
-                                data-testid={`action-error-count-${summary.correlationId}`}
-                                className="text-diagnostics-error text-xs font-medium"
-                              >
-                                ERR×{summary.errorCount}
-                              </span>
-                            ) : null}
-                          </>
-                        ) : null
-                      }
-                      secondaryRight={durationLabel}
-                    >
-                      <div className="space-y-3 text-xs">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div>
-                            <p className="text-muted-foreground">Correlation</p>
-                            <p className="font-semibold break-words">{summary.correlationId}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Action</p>
-                            <p>{summary.actionName}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Origin</p>
-                            <p>
-                              {summary.originalOrigin ? `${summary.originalOrigin} -> ${summary.origin}` : summary.origin}
-                            </p>
-                          </div>
-                          {summary.trigger ? (
-                            <div>
-                              <p className="text-muted-foreground">Trigger</p>
-                              <p data-testid={`action-trigger-${summary.correlationId}`}>
-                                {formatTriggerDisplay(summary.trigger)}
-                              </p>
-                            </div>
-                          ) : null}
-                          <div>
-                            <p className="text-muted-foreground">Outcome</p>
-                            <p>{summary.outcome}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Start</p>
-                            <DiagnosticsTimestamp value={summary.startTimestamp} className="text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">End</p>
-                            <DiagnosticsTimestamp value={summary.endTimestamp} className="text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Duration</p>
-                            <p>{summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown'}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Error</p>
-                            <p className={summary.errorMessage ? 'text-diagnostics-error' : ''}>{summary.errorMessage ?? 'None'}</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold">REST Effects</p>
-                          {restEffects.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No REST effects.</p>
-                          ) : (
-                            restEffects.map((effect, index) => (
-                              <div
-                                key={`${summary.correlationId}-rest-${index}`}
-                                data-testid={`action-rest-effect-${summary.correlationId}-${index}`}
-                                className="rounded-md border border-border/70 p-2"
-                              >
-                                <p className="font-medium">{effect.method} {effect.path}</p>
-                                <p className="text-muted-foreground">
-                                  target: {effect.target ?? 'unknown'} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'NO_RESPONSE'}
-                                  {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
-                                </p>
-                                {effect.error ? (
-                                  <p className="text-diagnostics-error">error: {effect.error}</p>
-                                ) : null}
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold">FTP Effects</p>
-                          {ftpEffects.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No FTP effects.</p>
-                          ) : (
-                            ftpEffects.map((effect, index) => (
-                              <div
-                                key={`${summary.correlationId}-ftp-${index}`}
-                                data-testid={`action-ftp-effect-${summary.correlationId}-${index}`}
-                                className="rounded-md border border-border/70 p-2"
-                              >
-                                <p className="font-medium">{effect.operation} {effect.path}</p>
-                                <p className="text-muted-foreground">
-                                  target: {effect.target ?? 'unknown'} · result: {effect.result ?? 'unknown'}
-                                </p>
-                                {effect.error ? (
-                                  <p className="text-diagnostics-error">error: {effect.error}</p>
-                                ) : null}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </DiagnosticsListItem>
-                  );
-                })
+                .map((summary) => (
+                  <ActionSummaryListItem key={summary.correlationId} summary={summary} />
+                ))
             )}
           </TabsContent>
         </Tabs>

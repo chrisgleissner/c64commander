@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { emitUiTraceMarker } from '@/lib/tracing/userTrace';
 import { useC64ConfigItem } from '@/hooks/useC64Connection';
 import { getCheckboxMapping, inferControlKind } from '@/lib/config/controlType';
 import { cn } from '@/lib/utils';
@@ -110,8 +111,8 @@ export function ConfigItemRow({
   formatOptionLabel,
 }: ConfigItemRowProps) {
   const [inputValue, setInputValue] = useState(() => String(value));
+  const [isTextEditing, setIsTextEditing] = useState(false);
   const lastCommittedRef = useRef<string>(String(value));
-  const debounceTimerRef = useRef<number | undefined>(undefined);
 
   const extractConfigFromResponse = (data: unknown) => {
     if (!data || typeof data !== 'object') return undefined;
@@ -177,9 +178,10 @@ export function ConfigItemRow({
   }, [value, fetchedConfig]);
 
   useEffect(() => {
+    if (isTextEditing) return;
     setInputValue(String(mergedValue));
     lastCommittedRef.current = String(mergedValue);
-  }, [mergedValue]);
+  }, [isTextEditing, mergedValue]);
 
   const optionList = useMemo(() => {
     const combined = [
@@ -486,11 +488,6 @@ export function ConfigItemRow({
                 setInputValue(String(nextValue));
               }}
               asyncThrottleMs={250}
-              onValueChangeAsync={(nextIndex) => {
-                if (isReadOnly) return;
-                const nextValue = resolveSliderOption(nextIndex);
-                onValueChange(nextValue);
-              }}
               onValueCommitAsync={(nextIndex) => {
                 if (isReadOnly) return;
                 const nextValue = resolveSliderOption(nextIndex);
@@ -510,6 +507,17 @@ export function ConfigItemRow({
   }
 
   const inputType = controlKind === 'password' ? 'password' : 'text';
+  const commitTextValue = () => {
+    if (isReadOnly) return;
+    const nextValue = inputValue;
+    if (nextValue === lastCommittedRef.current) return;
+    lastCommittedRef.current = nextValue;
+    onValueChange(nextValue);
+    emitUiTraceMarker('ConfigFieldEditCommitted', {
+      category: category ?? null,
+      item: name,
+    });
+  };
 
   return (
     <div
@@ -528,42 +536,29 @@ export function ConfigItemRow({
           type={inputType}
           value={inputValue}
           aria-label={`${displayLabel} ${controlKind === 'password' ? 'password' : 'text'} input`}
-          disabled={isLoading || isItemLoading || isReadOnly}
+          disabled={((isLoading || isItemLoading) && !isTextEditing) || isReadOnly}
+          onFocus={() => {
+            if (isReadOnly || isTextEditing) return;
+            setIsTextEditing(true);
+            emitUiTraceMarker('ConfigFieldEditStarted', {
+              category: category ?? null,
+              item: name,
+            });
+          }}
           onChange={(e) => {
             if (isReadOnly) return;
             const nextValue = e.target.value;
             setInputValue(nextValue);
-            if (debounceTimerRef.current !== undefined) {
-              window.clearTimeout(debounceTimerRef.current);
-            }
-            debounceTimerRef.current = window.setTimeout(() => {
-              if (nextValue === lastCommittedRef.current) return;
-              lastCommittedRef.current = nextValue;
-              onValueChange(nextValue);
-            }, 300);
           }}
           onKeyDown={(e) => {
             if (e.key !== 'Enter') return;
             if (isReadOnly) return;
-            const nextValue = inputValue;
-            if (nextValue === lastCommittedRef.current) return;
-            if (debounceTimerRef.current !== undefined) {
-              window.clearTimeout(debounceTimerRef.current);
-              debounceTimerRef.current = undefined;
-            }
-            lastCommittedRef.current = nextValue;
-            onValueChange(nextValue);
+            commitTextValue();
+            (e.currentTarget as HTMLInputElement).blur();
           }}
           onBlur={() => {
-            if (isReadOnly) return;
-            const nextValue = inputValue;
-            if (nextValue === lastCommittedRef.current) return;
-            if (debounceTimerRef.current !== undefined) {
-              window.clearTimeout(debounceTimerRef.current);
-              debounceTimerRef.current = undefined;
-            }
-            lastCommittedRef.current = nextValue;
-            onValueChange(nextValue);
+            commitTextValue();
+            setIsTextEditing(false);
           }}
           className="font-sans"
         />

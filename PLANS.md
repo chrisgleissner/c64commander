@@ -1,94 +1,175 @@
-# Android Maestro Telemetry Gate Recovery Plan
+# Config Page Regression Fix Plan (Authoritative)
 
-## 1) Scope
+## 1. Objective
 
-In scope:
-- `.github/workflows/android.yaml` Android Maestro job telemetry lifecycle.
-- `ci/telemetry/android/monitor_android.sh` telemetry production.
-- `ci/telemetry/summarize_metrics.py` telemetry summary diagnostics behavior.
-- Android Maestro telemetry gate step and pre-gate validation in CI.
+Fix two regressions in Config page while preserving existing contracts and diagnostics behavior:
 
-Explicitly out of scope:
-- iOS telemetry workflow and monitor.
-- Web workflow, fuzz workflow, release packaging logic unrelated to Android Maestro telemetry.
-- Unrelated test coverage work.
+1. Slider value popup closes almost instantly in edge conditions.
+2. Text inputs lose focus per character and dispatch updates prematurely.
 
-## 2) Current Failure Analysis
+## 2. Root Cause Findings
 
-### Observed CI evidence (run #22520419499)
-- `main_seen_once=0` — monitor never detected the app process
-- `sample_rows: 0` — zero telemetry data rows collected
-- Monitor ran for 48 seconds (timestamps 1772280813→1772280861)
-- Events log: only `monitor_started` and `monitor_stopped` — no process detection events
+### A) Slider popup auto-close
 
-### Root cause
-The telemetry preflight (added in commit 919d357) attempts `am start` on the
-app package **before** the APK is installed on the emulator. The workflow
-sequence was:
+Observed in `src/components/ui/slider.tsx`:
 
-1. Build APK (file exists on disk but not installed on emulator)
-2. Start telemetry monitor (background)
-3. **Preflight `am start`** → fails silently because package is not installed
-4. Wait 45s for CSV data rows → times out
-5. `exit 1` kills the step **before `run-maestro-gating.sh` runs**
-6. Maestro never executes; app never launches on emulator
-7. Monitor produces 0 samples
+- `valueVisible` is toggled directly by pointer events and commit handlers.
+- `handlePointerUp`, `handlePointerCancel`, and `handleValueCommit` force immediate hide.
+- This creates non-deterministic close timing when pointer/commit/device events race.
 
-The `run-maestro-gating.sh` script (called at step 5 in the intended flow)
-handles APK installation, app configuration, and Maestro execution — but
-the premature `exit 1` prevents it from ever running.
+Confirmed triggers:
 
-### Contributing factor: PID resolution robustness
-The monitor uses `pidof` as primary PID resolution and `/proc` cmdline scan
-as fallback. Neither `ps -A` grep nor `dumpsys` is tried. On some emulator
-images, `pidof` may return empty even when the process is running.
+- Explicit close on pointer-up/commit (primary cause).
+- No minimum visible duration invariant.
+- No explicit lifecycle state machine; visibility is tied to event sequence order.
 
-## 3) Design Constraints
+Not root causes:
 
-- Deterministic telemetry paths under `ci-artifacts/telemetry/android`.
-- No implicit working-directory assumptions.
-- No silent fallback when telemetry is truly missing.
-- Fail fast on genuine missing telemetry with actionable diagnostics.
-- Preflight must be non-fatal: if priming fails, Maestro must still run.
-- APK must be installed before any `am start` attempt.
+- No direct forced close from REST/FTP response handlers.
+- No dependency on diagnostics action aggregation for close behavior.
 
-## 4) Implementation Plan
+### B) Input focus loss + per-character dispatch
 
-- **Workflow fix** (`android.yaml`):
-  - Split preflight into a separate "Install APK and prime telemetry" step
-  - Install APK on emulator *before* attempting app launch
-  - Use `am start -W` for synchronous launch confirmation
-  - Make telemetry priming non-fatal (warning, not error) so Maestro always runs
-  - Keep Maestro step clean (no preflight logic)
+Observed in `src/components/ConfigItemRow.tsx` and `src/pages/ConfigBrowserPage.tsx`:
 
-- **Monitor hardening** (`monitor_android.sh`):
-  - Add `ps -A` grep as intermediate PID resolution fallback
-  - Preserve existing `pidof` + `/proc` cmdline scan fallbacks
+- `Input` `onChange` starts 300ms debounce and then calls `onValueChange` while typing.
+- `onValueChange` performs device mutation (`setConfig.mutateAsync`).
+- `CategorySection` passes `isLoading={setConfig.isPending}` to all rows; pending disables input.
+- Disable/re-enable during typing causes focus loss and interrupts cursor flow.
 
-- **Diagnostics** (preserved from prior commit):
-  - Dedicated telemetry input diagnostics step
-  - Explicit `TELEMETRY_INPUT_CSVS` for deterministic summary input
-  - Rich gate failure output with metadata.json dump
+Confirmed triggers:
 
-## 5) Test Strategy
+- Two-way binding sends value before commit.
+- Pending mutation state propagates into row disabled state.
+- Component sync effect overwrites local input state from remote value updates.
 
-- Validate workflow YAML correctness via grep-based workflow test
-- Validate monitor shell syntax with `bash -n`
-- Run existing telemetryGateWorkflow.test.ts
-- Verify lint, build, and test suite pass
+## 3. Design
 
-## 6) Risk Register
+### A) Deterministic slider popup lifecycle
 
-- Emulator startup timing: mitigated by dedicated boot-wait step (existing)
-- APK install race: mitigated by explicit install-and-verify before priming
-- PID resolution: mitigated by three-method fallback chain (pidof → ps -A → /proc)
-- Preflight app crash: mitigated by non-fatal priming (warning, not exit)
-- Maestro force-stop/clear: expected; monitor captures both primed and Maestro sessions
+Implement explicit state machine in slider UI layer.
 
-## 7) Completion Criteria
+States:
 
-- [ ] android-maestro workflow passes in CI
-- [ ] metrics.csv contains >= 2 data rows
-- [ ] metadata.json shows `main_seen_once: 1` and `sample_rows >= 2`
-- [ ] Telemetry gate passes
-- [ ] All Android jobs green
+- `Hidden`
+- `VisibleActive`
+- `VisibleIdle`
+- `Closing`
+
+Timing constants:
+
+- `minVisibleMs = 500`
+- `idleCloseMs = 800`
+
+Transitions:
+
+- `Hidden` -> `VisibleActive` on first interaction.
+- `VisibleActive` -> `VisibleIdle` when interaction ends.
+- `Visible*` -> `VisibleActive` on any new slider movement.
+- `VisibleIdle` -> `Closing` only after idle timeout and minimum-visible gate satisfied.
+- `Closing` -> `Hidden` (single explicit terminal transition).
+- Any route unmount -> `Hidden` immediately.
+
+Rules:
+
+- Reset idle timer on each value change.
+- Never close due to config/device updates.
+- No frame-time hacks; only explicit timers and state transitions.
+
+### B) Buffered input edit model (two-phase commit)
+
+Phase 1 (local edit):
+
+- Keep local buffer in row state while focused.
+- Keystrokes update local buffer only.
+- No device mutation during typing.
+
+Phase 2 (commit):
+
+- Commit only on blur or Enter.
+- Validate/normalize at commit point.
+- Dispatch single device update per edit session.
+
+Rules:
+
+- Do not disable active text input due to global mutation pending.
+- Keep focus node stable (no key churn / remounting).
+- Preserve cursor and allow intermediate invalid text locally.
+
+## 4. Invariants
+
+1. Slider popup stays visible for at least `minVisibleMs` after open.
+2. Slider popup closes only by idle timeout, explicit dismiss/cancel, or unmount.
+3. Text input device write count per focused edit session <= 1.
+4. No per-character REST/FTP dispatch for text fields.
+5. Config serialization and endpoint contracts unchanged.
+6. Correlation IDs remain generated by existing tracing/action infrastructure.
+
+## 5. Telemetry Markers
+
+Add trace markers (as lightweight action events/scopes) for:
+
+- `SliderPopupOpened`
+- `SliderPopupClosed`
+- `ConfigFieldEditStarted`
+- `ConfigFieldEditCommitted`
+
+Noise control:
+
+- Emit open/start once per interaction session.
+- Emit closed/committed once per session.
+
+## 6. Test Matrix
+
+### Unit
+
+1. Slider state machine transitions (`Hidden/VisibleActive/VisibleIdle/Closing`).
+2. Slider minimum visible duration honored despite immediate pointer-up/commit.
+3. Input buffer keeps local value during typing.
+4. Input commit occurs on blur/Enter only.
+
+### Integration (React Testing Library)
+
+1. Rapid slider changes keep popup visible until idle timeout.
+2. Immediate simulated device response after slider movement does not close popup.
+3. Typing `2026` keeps focus and does not call `onValueChange` until blur.
+
+### Playwright
+
+1. Config slider popup remains visible for >= minimum duration.
+2. Field edit session emits one config update after blur and no intermediate update.
+3. Diagnostics traces/actions reflect one update for the full text edit session.
+
+### Maestro
+
+- Update/add flow only if existing Config interaction flows rely on per-keystroke updates.
+
+## 7. Risk Register
+
+1. Risk: popup lingers too long and feels sticky.
+   - Mitigation: bounded idle timeout with deterministic constants and tests.
+2. Risk: commit-on-blur changes behavior for fields relying on live updates.
+   - Mitigation: keep slider semantics independent; scope buffered model to text inputs.
+3. Risk: tracing marker noise.
+   - Mitigation: session-gated marker emission.
+4. Risk: flaky timing tests.
+   - Mitigation: fake timers for unit/integration; tolerant bounds for E2E.
+
+## 8. Rollback Strategy
+
+If regressions appear:
+
+1. Revert slider state machine wiring while keeping test harness additions.
+2. Revert buffered text commit logic in `ConfigItemRow` only.
+3. Keep telemetry additions behind helper calls so they can be disabled with minimal diff.
+4. Re-run `npm run test:coverage`, `npm run lint`, `npm run test`, `npm run build`, and `./build` to validate rollback.
+
+## 9. Execution Checklist
+
+- [x] Implement slider popup state machine with deterministic timers.
+- [x] Refactor text input to buffered edit + blur/Enter commit.
+- [x] Add trace markers for popup/edit sessions.
+- [x] Add/adjust unit + integration tests.
+- [x] Add Playwright regression coverage for popup duration and single dispatch.
+- [x] Update docs if behavior contract text requires it.
+- [x] Run `npm run test:coverage` (>=82% branch), `npm run lint`, `npm run test`, `npm run build`, and `./build`.

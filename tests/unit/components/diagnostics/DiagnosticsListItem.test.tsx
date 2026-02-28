@@ -53,10 +53,26 @@ describe('DiagnosticsListItem', () => {
         const summary = entry.querySelector('summary');
         expect(summary).toBeTruthy();
         const summaryEl = summary as HTMLElement;
-        expect(screen.getByLabelText('user')).toHaveClass('bg-diagnostics-user');
+        expect(screen.getByLabelText('origin: user')).toHaveClass('bg-diagnostics-user');
         expect(within(summaryEl).queryByText('REST×1')).toBeNull();
         expect(within(entry).getByText('REST×1')).toBeInTheDocument();
         expect(within(entry).getByText('25 ms')).toBeInTheDocument();
         expect(within(entry).getByTestId('diagnostics-severity-label')).toHaveTextContent('WARN');
+        const actionHeaderRow = within(entry).getByTestId('diagnostics-action-expanded-header');
+        expect(actionHeaderRow).toHaveTextContent('WARN');
+        expect(actionHeaderRow).toHaveTextContent('REST×1');
+        expect(actionHeaderRow).toHaveTextContent('25 ms');
+    });
+
+    it('renders unknown origin marker for action entries without origin', () => {
+        render(
+            <DiagnosticsListItem
+                mode="action"
+                severity="info"
+                title="Action without origin"
+                timestamp={new Date('2024-01-01T00:00:00.000Z')}
+            />,
+        );
+        expect(screen.getByLabelText('origin: unknown')).toBeInTheDocument();
     });
 });

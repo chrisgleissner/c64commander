@@ -7,11 +7,14 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import React from 'react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Slider } from './slider';
+import { SLIDER_POPUP_IDLE_CLOSE_MS, SLIDER_POPUP_MIN_VISIBLE_MS } from '@/lib/ui/sliderPopupStateMachine';
 
 describe('Slider value display', () => {
-    it('shows value on pointer down and hides on release', () => {
+    it('shows value on pointer down and keeps it visible for minimum duration', () => {
+        vi.useFakeTimers();
         render(
             <Slider
                 value={[50]}
@@ -28,10 +31,20 @@ describe('Slider value display', () => {
         expect(screen.getByTestId('slider-value-display')).toBeTruthy();
 
         fireEvent.pointerUp(root);
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_MIN_VISIBLE_MS - 50);
+        });
+        expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS + 100);
+        });
         expect(screen.queryByTestId('slider-value-display')).toBeNull();
+        vi.useRealTimers();
     });
 
-    it('hides value on pointer cancel', () => {
+    it('hides value after idle timeout on pointer cancel', () => {
+        vi.useFakeTimers();
         render(
             <Slider
                 value={[50]}
@@ -47,7 +60,11 @@ describe('Slider value display', () => {
         expect(screen.getByTestId('slider-value-display')).toBeTruthy();
 
         fireEvent.pointerCancel(root);
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS + 50);
+        });
         expect(screen.queryByTestId('slider-value-display')).toBeNull();
+        vi.useRealTimers();
     });
 
     it('does not show value when showValueOnDrag is false', () => {
@@ -65,6 +82,72 @@ describe('Slider value display', () => {
         const root = screen.getByTestId('test-slider');
         fireEvent.pointerDown(root);
         expect(screen.queryByTestId('slider-value-display')).toBeNull();
+    });
+
+    it('resets idle close timer on repeated interactions', () => {
+        vi.useFakeTimers();
+        render(
+            <Slider
+                value={[50]}
+                min={0}
+                max={100}
+                step={1}
+                data-testid="test-slider"
+            />,
+        );
+
+        const root = screen.getByTestId('test-slider');
+        fireEvent.pointerDown(root);
+        fireEvent.pointerUp(root);
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS - 100);
+        });
+        fireEvent.pointerDown(root);
+        fireEvent.pointerUp(root);
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS - 100);
+        });
+        expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+
+        act(() => {
+            vi.advanceTimersByTime(200);
+        });
+        expect(screen.queryByTestId('slider-value-display')).toBeNull();
+        vi.useRealTimers();
+    });
+
+    it('does not close popup early when controlled value updates immediately', () => {
+        vi.useFakeTimers();
+
+        const Controlled = () => {
+            const [value, setValue] = React.useState(50);
+            return (
+                <Slider
+                    value={[value]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onValueCommit={(values) => setValue(values[0] ?? 50)}
+                    data-testid="test-slider"
+                />
+            );
+        };
+
+        render(<Controlled />);
+        const root = screen.getByTestId('test-slider');
+        fireEvent.pointerDown(root);
+        fireEvent.pointerUp(root);
+
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_MIN_VISIBLE_MS - 50);
+        });
+        expect(screen.getByTestId('slider-value-display')).toBeTruthy();
+
+        act(() => {
+            vi.advanceTimersByTime(SLIDER_POPUP_IDLE_CLOSE_MS + 100);
+        });
+        expect(screen.queryByTestId('slider-value-display')).toBeNull();
+        vi.useRealTimers();
     });
 });
 
