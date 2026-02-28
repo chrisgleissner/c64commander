@@ -148,17 +148,19 @@ describe('hvscBrowseIndexStore', () => {
       { path: '/test.sid', name: 'test.sid', type: 'sid' },
     ]);
 
-    // Filesystem write succeeds, write stores to filesystem
-    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
+
+    // Force localStorage fallback on save
+    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error('disk full') as any);
     vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
     await saveHvscBrowseIndexSnapshot(snapshot);
 
     // Filesystem read fails, should fall back to localStorage
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('missing'));
     const loaded = await loadHvscBrowseIndexSnapshot();
-    // Even if null from filesystem, it tries localStorage
-    // Just verify it doesn't throw
-    expect(loaded === null || loaded !== null).toBe(true);
+    expect(loaded).toEqual(snapshot);
   });
 
   it('clears browse index from storage', async () => {

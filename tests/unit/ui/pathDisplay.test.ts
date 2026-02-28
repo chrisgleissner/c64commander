@@ -47,7 +47,7 @@ describe('pathDisplay', () => {
             expect(fitPathToWidth('/very/long/directory/path/c.sid', 10, charMeasure, 'filename-fallback')).toBe('c.sid');
         });
 
-        it('returns empty for zero width', () => {
+        it('returns path unchanged for zero width', () => {
             expect(fitPathToWidth('/a/b.sid', 0, charMeasure, 'filename-fallback')).toBe('/a/b.sid');
         });
 

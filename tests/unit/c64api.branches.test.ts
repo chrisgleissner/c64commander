@@ -7,7 +7,7 @@
  */
 
 // @vitest-environment node
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   C64API,
   getC64API,
@@ -96,13 +96,11 @@ ensureLocalStorage();
 // promise chains inside c64api.ts. These are not bugs — they occur because the
 // request dedupe path stores a shared promise that cannot attach a secondary
 // .catch() handler before the abort fires.
-if (typeof process !== 'undefined') {
-  process.on('unhandledRejection', (reason: unknown) => {
-    if ((reason as { name?: string })?.name === 'AbortError') {
-      // swallow — expected from abort test paths
-    }
-  });
-}
+const abortUnhandledRejectionHandler = (reason: unknown) => {
+  if ((reason as { name?: string })?.name === 'AbortError') {
+    // swallow — expected from abort test paths
+  }
+};
 
 const fetchMock = vi.fn();
 Object.defineProperty(globalThis, 'fetch', {
@@ -202,6 +200,12 @@ const getCachedPasswordMock = getCachedPassword as unknown as ReturnType<typeof 
 const loadStoredPasswordMock = loadStoredPassword as unknown as ReturnType<typeof vi.fn>;
 
 describe('c64api branches', () => {
+  beforeAll(() => {
+    if (typeof process !== 'undefined') {
+      process.on('unhandledRejection', abortUnhandledRejectionHandler);
+    }
+  });
+
   beforeEach(() => {
     localStorage.clear();
     addErrorLogMock.mockReset();
@@ -246,6 +250,13 @@ describe('c64api branches', () => {
   });
 
   afterAll(() => {
+    if (typeof process !== 'undefined') {
+      if (typeof process.off === 'function') {
+        process.off('unhandledRejection', abortUnhandledRejectionHandler);
+      } else {
+        process.removeListener?.('unhandledRejection', abortUnhandledRejectionHandler);
+      }
+    }
     const handles = (process as { _getActiveHandles?: () => any[] })._getActiveHandles?.() ?? [];
     handles.forEach((handle) => {
       if (handle?.constructor?.name === 'Timeout') {
