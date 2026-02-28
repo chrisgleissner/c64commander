@@ -137,14 +137,16 @@ const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | 
   const effects: ErrorEffect[] = [];
   const seenMessages = new Set<string>();
 
-  errorEvents.forEach((event, index) => {
+  errorEvents.forEach((event) => {
     const message = readString(event.data?.message) ?? 'unknown error';
-    effects.push({
-      type: 'ERROR',
-      label: `error ${index + 1}`,
-      message,
-    });
-    seenMessages.add(message);
+    if (!seenMessages.has(message)) {
+      effects.push({
+        type: 'ERROR',
+        label: 'error',
+        message,
+      });
+      seenMessages.add(message);
+    }
   });
 
   const endError = readString(actionEnd?.data?.error);

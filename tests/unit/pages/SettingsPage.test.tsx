@@ -714,7 +714,7 @@ describe('SettingsPage', () => {
     expect(within(summary).getByTestId('action-rest-count-COR-0001')).toHaveClass('text-diagnostics-rest');
     expect(within(summary).getByTestId('action-ftp-count-COR-0001')).toHaveClass('text-diagnostics-ftp');
     expect(within(summary).getByTestId('action-error-count-COR-0001')).toHaveClass('text-diagnostics-error');
-    expect(within(summary).getByText(/\d+\sms/, { selector: 'div' })).toBeInTheDocument();
+    expect(within(summary).getByText(/\d+ms/, { selector: 'div' })).toBeInTheDocument();
   });
 
   it('uses shared renderer for traces and actions', async () => {

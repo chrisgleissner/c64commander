@@ -189,7 +189,7 @@ describe('buildActionSummaries', () => {
     const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === 'ERROR');
     expect(errorEffects).toHaveLength(2);
     expect(errorEffects).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'error 1', message: 'network timeout' }),
+      expect.objectContaining({ label: 'error', message: 'network timeout' }),
       expect.objectContaining({ label: 'action-end error', message: 'request failed' }),
     ]));
     expect(summary.errorCount).toBe(2);
