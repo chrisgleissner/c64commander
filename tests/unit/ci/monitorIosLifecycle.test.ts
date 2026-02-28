@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 
 const monitorScript = readFileSync(path.resolve(process.cwd(), 'ci/telemetry/ios/monitor_ios.sh'), 'utf8');
@@ -9,6 +10,10 @@ describe('iOS monitor lifecycle state machine', () => {
         expect(monitorScript).toContain('FLOW_LIFECYCLE_DIR="${TELEMETRY_FLOW_LIFECYCLE_DIR:-$OUT_DIR}"');
         expect(monitorScript).toContain('FLOW_ACTIVE_FLAG="$FLOW_LIFECYCLE_DIR/flow-active.flag"');
         expect(monitorScript).toContain('FLOW_COMPLETE_FLAG="$FLOW_LIFECYCLE_DIR/flow-complete.flag"');
+    });
+
+    it('ensures FLOW_LIFECYCLE_DIR is created', () => {
+        expect(monitorScript).toContain('mkdir -p "$FLOW_LIFECYCLE_DIR"');
     });
 
     it('tracks main_disappeared_during_flow separately from main_disappeared', () => {
@@ -42,5 +47,11 @@ describe('iOS monitor lifecycle state machine', () => {
 
     it('preserves main_disappeared field in metadata.json for backwards compatibility', () => {
         expect(monitorScript).toContain('"main_disappeared": ${main_disappeared}');
+    });
+
+    it('passes shell lifecycle harness (flag-based state transitions)', () => {
+        const harnessPath = path.resolve(process.cwd(), 'tests/unit/ci/monitor_ios_lifecycle.test.sh');
+        const result = execSync(`bash "${harnessPath}"`, { encoding: 'utf8' });
+        expect(result).toContain('passed, 0 failed');
     });
 });

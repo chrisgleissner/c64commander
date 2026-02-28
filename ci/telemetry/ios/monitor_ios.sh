@@ -33,6 +33,7 @@ FLOW_ACTIVE_FLAG="$FLOW_LIFECYCLE_DIR/flow-active.flag"
 FLOW_COMPLETE_FLAG="$FLOW_LIFECYCLE_DIR/flow-complete.flag"
 
 mkdir -p "$OUT_DIR"
+mkdir -p "$FLOW_LIFECYCLE_DIR"
 
 echo "timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb" > "$CSV_PATH"
 printf 'timestamp,platform,device,process_name,pid,physical_footprint_kb\n' > "$SLOW_METRICS_PATH"
