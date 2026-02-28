@@ -166,10 +166,10 @@ If regressions appear:
 
 ## 9. Execution Checklist
 
-- [ ] Implement slider popup state machine with deterministic timers.
-- [ ] Refactor text input to buffered edit + blur/Enter commit.
-- [ ] Add trace markers for popup/edit sessions.
-- [ ] Add/adjust unit + integration tests.
-- [ ] Add Playwright regression coverage for popup duration and single dispatch.
-- [ ] Update docs if behavior contract text requires it.
-- [ ] Run `npm run test:coverage` (>=82% branch), `npm run lint`, `npm run test`, `npm run build`, and `./build`.
+- [x] Implement slider popup state machine with deterministic timers.
+- [x] Refactor text input to buffered edit + blur/Enter commit.
+- [x] Add trace markers for popup/edit sessions.
+- [x] Add/adjust unit + integration tests.
+- [x] Add Playwright regression coverage for popup duration and single dispatch.
+- [x] Update docs if behavior contract text requires it.
+- [x] Run `npm run test:coverage` (>=82% branch), `npm run lint`, `npm run test`, `npm run build`, and `./build`.

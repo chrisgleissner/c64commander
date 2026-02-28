@@ -28,10 +28,10 @@ function getMeaningfulName(props: any, defaultName: string): string {
 
   // Common pattern: Button > span > text
   if (React.isValidElement(props.children)) {
-     const child = props.children as React.ReactElement<any>;
-     if (typeof child.props?.children === 'string') {
-        return child.props.children.slice(0, 30);
-     }
+    const child = props.children as React.ReactElement<any>;
+    if (typeof child.props?.children === 'string') {
+      return child.props.children.slice(0, 30);
+    }
   }
 
   return defaultName;
@@ -74,14 +74,14 @@ export const wrapValueChange = <T, R>(
     const label = getMeaningfulName(props, defaultLabel);
     let valueStr = '';
     try {
-        if (typeof value === 'object') {
-            valueStr = JSON.stringify(value).slice(0, 20);
-        } else {
-            valueStr = String(value);
-        }
+      if (typeof value === 'object') {
+        valueStr = JSON.stringify(value).slice(0, 20);
+      } else {
+        valueStr = String(value);
+      }
     } catch (error) {
       console.warn('Failed to stringify traced value', { error });
-        valueStr = '[complex]';
+      valueStr = '[complex]';
     }
     const actionName = `${actionType} ${label} [${valueStr}]`;
 
