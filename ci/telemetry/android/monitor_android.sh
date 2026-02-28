@@ -152,6 +152,14 @@ resolve_process_pid() {
     return 0
   fi
 
+  # Fallback: ps -A grep (works on all Android versions)
+  pid="$(adb_shell "ps -A 2>/dev/null | grep -F '$process_name' | awk '{print \$2; exit}'" || true)"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$pid"
+    return 0
+  fi
+
+  # Fallback: /proc cmdline scan
   pid="$(adb_shell "for f in /proc/[0-9]*/cmdline; do p=\${f#/proc/}; p=\${p%/cmdline}; c=\$(tr '\000' '\n' < \"\$f\" 2>/dev/null | awk 'NR==1{print; exit}'); if [ \"\$c\" = \"$process_name\" ]; then echo \"\$p\"; break; fi; done" | awk 'NF{print $1; exit}' || true)"
   if [[ "$pid" =~ ^[0-9]+$ ]]; then
     printf '%s' "$pid"
