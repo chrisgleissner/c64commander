@@ -33,7 +33,7 @@ describe('iOS monitor lifecycle state machine', () => {
     it('exits 3 only when main_disappeared_during_flow is set', () => {
         expect(monitorScript).toContain('main_disappeared_during_flow" == "1"');
         expect(monitorScript).toContain('app process disappeared during active flow');
-        expect(monitorScript).not.toMatch(/main_disappeared" == "1"\s*\]\];\s*then\s*\n\s*echo.*unexpectedly/);
+        expect(monitorScript).not.toContain('app process disappeared unexpectedly');
     });
 
     it('includes main_disappeared_during_flow in metadata.json', () => {

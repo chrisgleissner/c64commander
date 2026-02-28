@@ -10,7 +10,7 @@ FAIL=0
 TEST_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEST_DIR"' EXIT
 
-# Extracted decision logic matching monitor_ios.sh lines 297-311.
+# Extracted decision logic matching monitor_ios.sh exit-code block.
 # Returns the exit code the monitor would emit.
 decide_exit_code() {
   local expect_main_pid="$1"
@@ -23,7 +23,7 @@ decide_exit_code() {
   return 0
 }
 
-# Extracted disappearance classification matching monitor_ios.sh lines 198-203.
+# Extracted disappearance classification matching monitor_ios.sh flag-check logic.
 # Sets RESULT_DURING_FLOW=1 or 0.
 classify_disappearance() {
   local flow_active_flag="$1"
