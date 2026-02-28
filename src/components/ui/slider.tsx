@@ -10,7 +10,7 @@ import * as React from "react";
 import * as SliderPrimitive from "@radix-ui/react-slider";
 
 import { cn } from "@/lib/utils";
-import { wrapValueChange } from "@/lib/tracing/userTrace";
+import { emitUiTraceMarker, wrapValueChange } from "@/lib/tracing/userTrace";
 import {
   clampSliderValue,
   createSliderAsyncQueue,
@@ -19,6 +19,12 @@ import {
   shouldTriggerMidpointHaptic,
   type SliderAsyncQueue,
 } from "@/lib/ui/sliderBehavior";
+import {
+  reduceSliderPopupState,
+  resolveSliderPopupCloseDelayMs,
+  type SliderPopupEvent,
+  type SliderPopupState,
+} from "@/lib/ui/sliderPopupStateMachine";
 import { triggerSliderHaptic } from "@/lib/ui/sliderHaptics";
 
 type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> & {
@@ -74,10 +80,87 @@ const Slider = React.forwardRef<
     const max = props.max ?? 100;
     const step = props.step;
     const [dragValue, setDragValue] = React.useState<number | null>(null);
-    const [valueVisible, setValueVisible] = React.useState(false);
+    const [popupState, setPopupState] = React.useState<SliderPopupState>('Hidden');
+    const popupStateRef = React.useRef<SliderPopupState>('Hidden');
+    const popupOpenAtRef = React.useRef<number | null>(null);
+    const popupLastInteractionAtRef = React.useRef<number | null>(null);
+    const popupCloseTimerRef = React.useRef<number | null>(null);
+    const popupSessionOpenRef = React.useRef(false);
     const lastValueRef = React.useRef<number | null>(null);
     const lastHapticAtRef = React.useRef<number | null>(null);
     const asyncQueueRef = React.useRef<SliderAsyncQueue | null>(null);
+
+    const clearPopupCloseTimer = React.useCallback(() => {
+      if (popupCloseTimerRef.current === null) return;
+      window.clearTimeout(popupCloseTimerRef.current);
+      popupCloseTimerRef.current = null;
+    }, []);
+
+    const setPopupHidden = React.useCallback(() => {
+      clearPopupCloseTimer();
+      if (popupStateRef.current === 'Hidden') return;
+      popupStateRef.current = 'Hidden';
+      setPopupState('Hidden');
+      popupOpenAtRef.current = null;
+      popupLastInteractionAtRef.current = null;
+      if (popupSessionOpenRef.current) {
+        emitUiTraceMarker('SliderPopupClosed');
+        popupSessionOpenRef.current = false;
+      }
+    }, [clearPopupCloseTimer]);
+
+    const applyPopupEvent = React.useCallback((event: SliderPopupEvent) => {
+      const previousState = popupStateRef.current;
+      const nextState = reduceSliderPopupState(previousState, event);
+      if (nextState === previousState) return;
+      popupStateRef.current = nextState;
+      setPopupState(nextState);
+      if (previousState === 'Hidden' && nextState !== 'Hidden' && !popupSessionOpenRef.current) {
+        popupSessionOpenRef.current = true;
+        emitUiTraceMarker('SliderPopupOpened');
+      }
+    }, []);
+
+    const schedulePopupClose = React.useCallback(() => {
+      if (!showValueOnDrag) return;
+      if (popupOpenAtRef.current === null || popupLastInteractionAtRef.current === null) return;
+      clearPopupCloseTimer();
+      const delay = resolveSliderPopupCloseDelayMs(
+        popupOpenAtRef.current,
+        popupLastInteractionAtRef.current,
+        Date.now(),
+      );
+      popupCloseTimerRef.current = window.setTimeout(() => {
+        applyPopupEvent('idle-timeout');
+        setPopupHidden();
+      }, delay);
+    }, [applyPopupEvent, clearPopupCloseTimer, setPopupHidden, showValueOnDrag]);
+
+    const registerPopupInteraction = React.useCallback((event: SliderPopupEvent) => {
+      if (!showValueOnDrag) return;
+      const now = Date.now();
+      if (popupOpenAtRef.current === null) {
+        popupOpenAtRef.current = now;
+      }
+      popupLastInteractionAtRef.current = now;
+      applyPopupEvent(event);
+      schedulePopupClose();
+    }, [applyPopupEvent, schedulePopupClose, showValueOnDrag]);
+
+    React.useEffect(() => {
+      if (showValueOnDrag) return;
+      setPopupHidden();
+    }, [setPopupHidden, showValueOnDrag]);
+
+    React.useEffect(() => {
+      return () => {
+        clearPopupCloseTimer();
+        if (popupSessionOpenRef.current) {
+          emitUiTraceMarker('SliderPopupClosed');
+          popupSessionOpenRef.current = false;
+        }
+      };
+    }, [clearPopupCloseTimer]);
 
     React.useEffect(() => {
       if (!onValueChangeAsync && !onValueCommitAsync) {
@@ -110,25 +193,25 @@ const Slider = React.forwardRef<
     }, [max, min, midpoint, step]);
 
     const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-      if (showValueOnDrag) setValueVisible(true);
+      registerPopupInteraction('interaction-start');
       onPointerDown?.(event);
-    }, [onPointerDown, showValueOnDrag]);
+    }, [onPointerDown, registerPopupInteraction]);
 
     const handlePointerUp = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-      if (showValueOnDrag) setValueVisible(false);
+      registerPopupInteraction('interaction-end');
       onPointerUp?.(event);
-    }, [onPointerUp, showValueOnDrag]);
+    }, [onPointerUp, registerPopupInteraction]);
 
     const handlePointerCancel = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-      if (showValueOnDrag) setValueVisible(false);
+      registerPopupInteraction('interaction-end');
       onPointerCancel?.(event);
-    }, [onPointerCancel, showValueOnDrag]);
+    }, [onPointerCancel, registerPopupInteraction]);
 
     const handleValueChange = React.useCallback((values: number[]) => {
       const rawValue = values[0] ?? min;
       const nextValue = resolveValue(rawValue);
       setDragValue(nextValue);
-      if (showValueOnDrag) setValueVisible(true);
+      registerPopupInteraction('interaction-update');
       if (midpoint?.haptics !== false && midpoint) {
         const now = Date.now();
         if (shouldTriggerMidpointHaptic({
@@ -145,17 +228,17 @@ const Slider = React.forwardRef<
       lastValueRef.current = nextValue;
       onValueChange?.([nextValue]);
       asyncQueueRef.current?.schedule(nextValue);
-    }, [midpoint, min, onValueChange, resolveValue, showValueOnDrag]);
+    }, [midpoint, min, onValueChange, registerPopupInteraction, resolveValue]);
 
     const handleValueCommit = React.useCallback((values: number[]) => {
       const rawValue = values[0] ?? min;
       const nextValue = resolveValue(rawValue);
       setDragValue(null);
-      if (showValueOnDrag) setValueVisible(false);
+      registerPopupInteraction('interaction-end');
       lastValueRef.current = nextValue;
       onValueCommit?.([nextValue]);
       asyncQueueRef.current?.commit(nextValue);
-    }, [min, onValueCommit, resolveValue, showValueOnDrag]);
+    }, [min, onValueCommit, registerPopupInteraction, resolveValue]);
 
     const tracedChange = React.useMemo(
       () => wrapValueChange(handleValueChange, 'slide', 'Slider', props, 'Slider'),
@@ -169,7 +252,7 @@ const Slider = React.forwardRef<
     const currentValue = (props.value?.[0] ?? dragValue ?? props.defaultValue?.[0] ?? min);
     const displayValue = dragValue ?? currentValue;
     const formattedValue = valueFormatter ? valueFormatter(displayValue) : `${displayValue}`;
-    const showValue = showValueOnDrag && valueVisible;
+    const showValue = showValueOnDrag && popupState !== 'Hidden';
     const midpointPercent = midpoint ? resolveMidpointPercent(midpoint.value, min, max) : null;
 
     return (

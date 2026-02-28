@@ -1,60 +1,175 @@
-# Diagnostics Target Rendering Plan
+# Config Page Regression Fix Plan (Authoritative)
 
-## 1. Scope
+## 1. Objective
 
-- Refine user-facing diagnostics target labels only.
-- Remove the word `mock` from diagnostics target rendering.
-- Keep transport/event payload values unchanged (`internal-mock`, `external-mock`, `real-device`).
-- Keep rendering concise, lowercase, deterministic, and screenshot-safe.
+Fix two regressions in Config page while preserving existing contracts and diagnostics behavior:
 
-## 2. Non-Goals
+1. Slider value popup closes almost instantly in edge conditions.
+2. Text inputs lose focus per character and dispatch updates prematurely.
 
-- No changes to networking, REST/FTP routing, or connection selection logic.
-- No changes to trace serialization/deserialization semantics.
-- No changes to test harness target emission values.
-- No migration of existing logs/traces.
+## 2. Root Cause Findings
 
-## 3. Mapping Specification
+### A) Slider popup auto-close
 
-- `internal-mock` → `demo`
-- `external-mock` → `sandbox`
-- `real-device` + known product (`c64u`, `u64`, `u64e`, `u64e2`) → normalized product token
-- `real-device` + missing/unknown product → `device`
-- Legacy `mock` input (display-only compatibility) → `demo`
-- Legacy direct known product target values pass through normalized lowercase.
+Observed in `src/components/ui/slider.tsx`:
 
-## 4. Refactoring Strategy
+- `valueVisible` is toggled directly by pointer events and commit handlers.
+- `handlePointerUp`, `handlePointerCancel`, and `handleValueCommit` force immediate hide.
+- This creates non-deterministic close timing when pointer/commit/device events race.
 
-- Introduce a dedicated mapper module: `src/lib/diagnostics/targetDisplayMapper.ts`.
-- Route `formatActionEffectTarget` through this mapper.
-- Remove legacy display fallback values `mock` and `c64`.
-- Keep behavior localized to rendering functions and UI consumers.
+Confirmed triggers:
 
-## 5. Test Strategy
+- Explicit close on pointer-up/commit (primary cause).
+- No minimum visible duration invariant.
+- No explicit lifecycle state machine; visibility is tied to event sequence order.
 
-- Update unit tests for `formatActionEffectTarget` to match new labels.
-- Add dedicated mapper unit tests covering all required mapping branches.
-- Add regressions:
-	- rendered output never equals `mock`
-	- unknown real-device product maps to `device`
-- Add/adjust Playwright diagnostics assertions for `demo`/`sandbox`/`device` text in expanded effects.
+Not root causes:
 
-## 6. Risk Analysis
+- No direct forced close from REST/FTP response handlers.
+- No dependency on diagnostics action aggregation for close behavior.
 
-- Risk: legacy traces carrying `mock` could leak old wording.
-	- Mitigation: explicit legacy mapping `mock` → `demo`.
-- Risk: product alias normalization could regress known hardware labels.
-	- Mitigation: table-driven mapper tests for canonical + alias inputs.
-- Risk: screenshot drift.
-	- Mitigation: constrain assertions to target text and keep all other rendering unchanged.
+### B) Input focus loss + per-character dispatch
 
-## 7. Completion Checklist
+Observed in `src/components/ConfigItemRow.tsx` and `src/pages/ConfigBrowserPage.tsx`:
 
-- [ ] `mock` removed from diagnostics target display output.
-- [ ] `internal-mock` renders `demo`.
-- [ ] `external-mock` renders `sandbox`.
-- [ ] Known products render `c64u`/`u64`/`u64e`/`u64e2`.
-- [ ] Unknown/missing product for `real-device` renders `device`.
-- [ ] Unit tests updated and passing.
-- [ ] Playwright coverage updated and passing.
-- [ ] Lint/build/test/coverage/build helper checks run and passing.
+- `Input` `onChange` starts 300ms debounce and then calls `onValueChange` while typing.
+- `onValueChange` performs device mutation (`setConfig.mutateAsync`).
+- `CategorySection` passes `isLoading={setConfig.isPending}` to all rows; pending disables input.
+- Disable/re-enable during typing causes focus loss and interrupts cursor flow.
+
+Confirmed triggers:
+
+- Two-way binding sends value before commit.
+- Pending mutation state propagates into row disabled state.
+- Component sync effect overwrites local input state from remote value updates.
+
+## 3. Design
+
+### A) Deterministic slider popup lifecycle
+
+Implement explicit state machine in slider UI layer.
+
+States:
+
+- `Hidden`
+- `VisibleActive`
+- `VisibleIdle`
+- `Closing`
+
+Timing constants:
+
+- `minVisibleMs = 500`
+- `idleCloseMs = 800`
+
+Transitions:
+
+- `Hidden` -> `VisibleActive` on first interaction.
+- `VisibleActive` -> `VisibleIdle` when interaction ends.
+- `Visible*` -> `VisibleActive` on any new slider movement.
+- `VisibleIdle` -> `Closing` only after idle timeout and minimum-visible gate satisfied.
+- `Closing` -> `Hidden` (single explicit terminal transition).
+- Any route unmount -> `Hidden` immediately.
+
+Rules:
+
+- Reset idle timer on each value change.
+- Never close due to config/device updates.
+- No frame-time hacks; only explicit timers and state transitions.
+
+### B) Buffered input edit model (two-phase commit)
+
+Phase 1 (local edit):
+
+- Keep local buffer in row state while focused.
+- Keystrokes update local buffer only.
+- No device mutation during typing.
+
+Phase 2 (commit):
+
+- Commit only on blur or Enter.
+- Validate/normalize at commit point.
+- Dispatch single device update per edit session.
+
+Rules:
+
+- Do not disable active text input due to global mutation pending.
+- Keep focus node stable (no key churn / remounting).
+- Preserve cursor and allow intermediate invalid text locally.
+
+## 4. Invariants
+
+1. Slider popup stays visible for at least `minVisibleMs` after open.
+2. Slider popup closes only by idle timeout, explicit dismiss/cancel, or unmount.
+3. Text input device write count per focused edit session <= 1.
+4. No per-character REST/FTP dispatch for text fields.
+5. Config serialization and endpoint contracts unchanged.
+6. Correlation IDs remain generated by existing tracing/action infrastructure.
+
+## 5. Telemetry Markers
+
+Add trace markers (as lightweight action events/scopes) for:
+
+- `SliderPopupOpened`
+- `SliderPopupClosed`
+- `ConfigFieldEditStarted`
+- `ConfigFieldEditCommitted`
+
+Noise control:
+
+- Emit open/start once per interaction session.
+- Emit closed/committed once per session.
+
+## 6. Test Matrix
+
+### Unit
+
+1. Slider state machine transitions (`Hidden/VisibleActive/VisibleIdle/Closing`).
+2. Slider minimum visible duration honored despite immediate pointer-up/commit.
+3. Input buffer keeps local value during typing.
+4. Input commit occurs on blur/Enter only.
+
+### Integration (React Testing Library)
+
+1. Rapid slider changes keep popup visible until idle timeout.
+2. Immediate simulated device response after slider movement does not close popup.
+3. Typing `2026` keeps focus and does not call `onValueChange` until blur.
+
+### Playwright
+
+1. Config slider popup remains visible for >= minimum duration.
+2. Field edit session emits one config update after blur and no intermediate update.
+3. Diagnostics traces/actions reflect one update for the full text edit session.
+
+### Maestro
+
+- Update/add flow only if existing Config interaction flows rely on per-keystroke updates.
+
+## 7. Risk Register
+
+1. Risk: popup lingers too long and feels sticky.
+   - Mitigation: bounded idle timeout with deterministic constants and tests.
+2. Risk: commit-on-blur changes behavior for fields relying on live updates.
+   - Mitigation: keep slider semantics independent; scope buffered model to text inputs.
+3. Risk: tracing marker noise.
+   - Mitigation: session-gated marker emission.
+4. Risk: flaky timing tests.
+   - Mitigation: fake timers for unit/integration; tolerant bounds for E2E.
+
+## 8. Rollback Strategy
+
+If regressions appear:
+
+1. Revert slider state machine wiring while keeping test harness additions.
+2. Revert buffered text commit logic in `ConfigItemRow` only.
+3. Keep telemetry additions behind helper calls so they can be disabled with minimal diff.
+4. Re-run `npm run test:coverage`, `npm run lint`, `npm run test`, `npm run build`, and `./build` to validate rollback.
+
+## 9. Execution Checklist
+
+- [ ] Implement slider popup state machine with deterministic timers.
+- [ ] Refactor text input to buffered edit + blur/Enter commit.
+- [ ] Add trace markers for popup/edit sessions.
+- [ ] Add/adjust unit + integration tests.
+- [ ] Add Playwright regression coverage for popup duration and single dispatch.
+- [ ] Update docs if behavior contract text requires it.
+- [ ] Run `npm run test:coverage` (>=82% branch), `npm run lint`, `npm run test`, `npm run build`, and `./build`.

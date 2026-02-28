@@ -6,7 +6,8 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { createActionContext, runWithActionTrace } from '@/lib/tracing/actionTrace';
+import { createActionContext, runWithActionTrace, runWithImplicitAction } from '@/lib/tracing/actionTrace';
+import { addErrorLog, buildErrorLogDetails } from '@/lib/logging';
 import React from 'react';
 
 function getMeaningfulName(props: any, defaultName: string): string {
@@ -92,4 +93,17 @@ export const wrapValueChange = <T, R>(
       }
     });
   };
+};
+
+export const emitUiTraceMarker = (name: string, details?: Record<string, unknown>) => {
+  void runWithImplicitAction(name, () => undefined).catch((error) => {
+    const resolvedError = error instanceof Error ? error : new Error(String(error));
+    addErrorLog(
+      'UI trace marker emission failed',
+      buildErrorLogDetails(resolvedError, {
+        marker: name,
+        details: details ?? null,
+      }),
+    );
+  });
 };
