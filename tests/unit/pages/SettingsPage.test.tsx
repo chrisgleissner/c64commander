@@ -14,7 +14,7 @@ import { reportUserError } from '@/lib/uiErrors';
 import { FolderPicker } from '@/lib/native/folderPicker';
 import { discoverConnection } from '@/lib/connection/connectionManager';
 import { toast } from '@/hooks/use-toast';
-import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
+import { addErrorLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import {
@@ -25,6 +25,15 @@ import {
 } from '@/lib/config/appSettings';
 import * as deviceSafetySettings from '@/lib/config/deviceSafetySettings';
 import { exportSettingsJson, importSettingsJson } from '@/lib/config/settingsTransfer';
+import { setHvscBaseUrlOverride } from '@/lib/hvsc/hvscReleaseService';
+import {
+  loadConfigWriteIntervalMs,
+  loadAutomaticDemoModeEnabled,
+  loadStartupDiscoveryWindowMs,
+  loadBackgroundRediscoveryIntervalMs,
+  loadDiscoveryProbeTimeoutMs,
+  loadDiskAutostartMode,
+} from '@/lib/config/appSettings';
 
 vi.mock('framer-motion', () => ({
   motion: {
@@ -57,6 +66,7 @@ const {
   mockSetListPreviewLimit,
   connectionPayloadRef,
   connectionStateRef,
+  developerModeEnabledRef,
 } = vi.hoisted(() => ({
   mockUpdateConfig: vi.fn(),
   mockRefetch: vi.fn(),
@@ -79,6 +89,7 @@ const {
       lastProbeFailedAtMs: null as number | null,
     },
   },
+  developerModeEnabledRef: { current: false },
 }));
 
 vi.mock('@/hooks/useC64Connection', () => ({
@@ -108,7 +119,7 @@ vi.mock('@/components/DiagnosticsActivityIndicator', () => ({
 
 vi.mock('@/hooks/useDeveloperMode', () => ({
   useDeveloperMode: () => ({
-    isDeveloperModeEnabled: false,
+    isDeveloperModeEnabled: developerModeEnabledRef.current,
     enableDeveloperMode: mockEnableDeveloperMode,
   }),
 }));
@@ -233,6 +244,12 @@ vi.mock('@/lib/config/appSettings', () => ({
   saveDiskAutostartMode: vi.fn(),
 }));
 
+vi.mock('@/lib/hvsc/hvscReleaseService', () => ({
+  getHvscBaseUrl: vi.fn(() => 'https://hvsc.example.com'),
+  getHvscBaseUrlOverride: vi.fn(() => null),
+  setHvscBaseUrlOverride: vi.fn(),
+}));
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -249,6 +266,7 @@ beforeEach(() => {
     lastProbeSucceededAtMs: null,
     lastProbeFailedAtMs: null,
   };
+  developerModeEnabledRef.current = false;
   vi.mocked(getLogs).mockReturnValue([]);
   vi.mocked(getErrorLogs).mockReturnValue([]);
   vi.mocked(getTraceEvents).mockReturnValue([]);
@@ -902,4 +920,166 @@ describe('SettingsPage', () => {
 
     expect(saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
   });
+
+  it('responds to c64u-app-settings-updated events for all tracked keys', async () => {
+    renderSettingsPage();
+
+    // Reset call counts after initial render
+    vi.mocked(loadConfigWriteIntervalMs).mockClear();
+    vi.mocked(loadAutomaticDemoModeEnabled).mockClear();
+    vi.mocked(loadStartupDiscoveryWindowMs).mockClear();
+    vi.mocked(loadBackgroundRediscoveryIntervalMs).mockClear();
+    vi.mocked(loadDiscoveryProbeTimeoutMs).mockClear();
+    vi.mocked(loadDiskAutostartMode).mockClear();
+
+    const keys = [
+      // debug_logging uses a direct state setter (no load function)
+      'c64u_debug_logging_enabled',
+      'c64u_config_write_min_interval_ms',
+      'c64u_automatic_demo_mode_enabled',
+      'c64u_startup_discovery_window_ms',
+      'c64u_background_rediscovery_interval_ms',
+      'c64u_discovery_probe_timeout_ms',
+      'c64u_disk_autostart_mode',
+    ];
+
+    for (const key of keys) {
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('c64u-app-settings-updated', { detail: { key, value: true } }));
+      });
+    }
+
+    expect(vi.mocked(loadConfigWriteIntervalMs)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadAutomaticDemoModeEnabled)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadStartupDiscoveryWindowMs)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadBackgroundRediscoveryIntervalMs)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadDiscoveryProbeTimeoutMs)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(loadDiskAutostartMode)).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores c64u-app-settings-updated events with no key', async () => {
+    renderSettingsPage();
+
+    const callsBefore = vi.mocked(loadConfigWriteIntervalMs).mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('c64u-app-settings-updated', { detail: {} }));
+    });
+
+    expect(vi.mocked(loadConfigWriteIntervalMs).mock.calls.length).toBe(callsBefore);
+  });
+
+  it('handles HVSC base URL commit on blur', () => {
+    developerModeEnabledRef.current = true;
+
+    renderSettingsPage();
+
+    const input = screen.getByTestId('hvsc-base-url');
+    fireEvent.change(input, { target: { value: 'https://custom.hvsc.example.com' } });
+    fireEvent.blur(input);
+
+    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith('https://custom.hvsc.example.com');
+  });
+
+  it('handles HVSC base URL commit with empty value', () => {
+    developerModeEnabledRef.current = true;
+
+    renderSettingsPage();
+
+    const input = screen.getByTestId('hvsc-base-url');
+    fireEvent.change(input, { target: { value: '  ' } });
+    fireEvent.blur(input);
+
+    expect(setHvscBaseUrlOverride).toHaveBeenCalledWith(null);
+  });
+
+  it('responds to c64u-device-safety-updated event', async () => {
+    const loadSpy = vi.spyOn(deviceSafetySettings, 'loadDeviceSafetyConfig');
+
+    renderSettingsPage();
+
+    const callsBefore = loadSpy.mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new Event('c64u-device-safety-updated'));
+    });
+
+    expect(loadSpy.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+
+  it('handles diagnostics open request event with tab detail', async () => {
+    renderSettingsPage();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('c64u-diagnostics-open-request', { detail: { tab: 'traces' } }));
+    });
+
+    const dialog = await screen.findByRole('dialog');
+    const tracesTab = within(dialog).getByRole('tab', { name: /traces/i });
+    await waitFor(() => expect(tracesTab).toHaveAttribute('aria-selected', 'true'));
+  });
+
+  it('ignores diagnostics open request event without tab', async () => {
+    renderSettingsPage();
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('c64u-diagnostics-open-request', { detail: {} }));
+    });
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('handles HVSC feature flag toggle storage error', () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError');
+    });
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByTestId('hvsc-toggle'));
+
+    expect(mockSetFeatureFlag).toHaveBeenCalledWith(true);
+    expect(addErrorLog).toHaveBeenCalledWith('Feature flag storage failed', {
+      error: 'Storage quota exceeded',
+    });
+
+    setItemSpy.mockRestore();
+  });
+
+  it('handles SAF getPersistedUris error path', async () => {
+    vi.mocked(FolderPicker.getPersistedUris).mockRejectedValue(new Error('Permission denied'));
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
+
+    await waitFor(() => {
+      expect(addErrorLog).toHaveBeenCalledWith('SAF persisted URI lookup failed', {
+        error: 'Permission denied',
+      });
+    });
+  }, 15000);
+
+  it('handles SAF enumeration error path', async () => {
+    vi.mocked(FolderPicker.getPersistedUris).mockResolvedValue({
+      uris: [{ uri: 'content://example' }],
+    });
+    vi.mocked(FolderPicker.listChildren).mockRejectedValue(new Error('IO error'));
+
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /list persisted uris/i }));
+
+    await waitFor(() => {
+      expect(FolderPicker.getPersistedUris).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enumerate first root/i }));
+
+    await waitFor(() => {
+      expect(addErrorLog).toHaveBeenCalledWith('SAF enumeration failed', {
+        error: 'IO error',
+      });
+    });
+  }, 15000);
 });
