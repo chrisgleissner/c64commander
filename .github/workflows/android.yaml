@@ -1183,12 +1183,6 @@ jobs:
           mv android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}.apk \
              android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk
 
-      - name: Generate APK SHA256 checksum
-        if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
-        run: |
-          cd android/app/build/outputs/apk/release
-          sha256sum c64commander-${{ env.APP_VERSION }}-android.apk > c64commander-${{ env.APP_VERSION }}-android.apk.sha256
-
       - name: Upload APK artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
         uses: actions/upload-artifact@v4
@@ -1196,7 +1190,6 @@ jobs:
           name: c64commander-release-apk
           path: |
             android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk
-            android/app/build/outputs/apk/release/c64commander-${{ env.APP_VERSION }}-android.apk.sha256
 
       - name: Rename AAB for publishing
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
@@ -1264,7 +1257,6 @@ jobs:
         run: |
           set -euo pipefail
           test -f "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk"
-          test -f "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk.sha256"
           test -f "artifacts/release-aab/c64commander-${APP_VERSION}-android-play.aab"
           ! find artifacts -type f | grep -Ei '(debug|unsigned|altstore|app-release\.aab)'
 
@@ -1293,7 +1285,6 @@ jobs:
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" \
             "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk" \
-            "artifacts/release-apk/c64commander-${APP_VERSION}-android.apk.sha256" \
             "artifacts/release-aab/c64commander-${APP_VERSION}-android-play.aab" \
             --clobber
 
@@ -1308,7 +1299,6 @@ jobs:
           echo "$assets_json"
 
           grep -Fx "c64commander-${APP_VERSION}-android.apk" <<<"$assets_json" >/dev/null
-          grep -Fx "c64commander-${APP_VERSION}-android.apk.sha256" <<<"$assets_json" >/dev/null
           grep -Fx "c64commander-${APP_VERSION}-android-play.aab" <<<"$assets_json" >/dev/null
 
       - name: Upload AAB to Google Play (internal)

@@ -812,7 +812,6 @@ jobs:
             cd ios/build
             zip -qry "${IPA_BASENAME}.ipa" Payload
           )
-          sha256sum "ios/build/${IPA_BASENAME}.ipa" > "ios/build/${IPA_BASENAME}.ipa.sha256"
 
       - name: Upload iOS IPA artifact
         uses: actions/upload-artifact@v4
@@ -820,7 +819,6 @@ jobs:
           name: ios-ipa
           path: |
             ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
-            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
           if-no-files-found: error
 
       - name: Upload iOS package diagnostics on failure
@@ -857,7 +855,6 @@ jobs:
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" \
             "ios/build/c64commander-${APP_VERSION}-ios.ipa" \
-            "ios/build/c64commander-${APP_VERSION}-ios.ipa.sha256" \
             --clobber
 
   ios-package-paid:
