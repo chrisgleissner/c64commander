@@ -376,6 +376,8 @@ jobs:
             exit 1
           fi
 
+          touch artifacts/ios/_infra/telemetry/flow-active.flag
+
           mock_port_args=()
           if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
             mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
@@ -391,7 +393,13 @@ jobs:
           if [[ ${#mock_port_args[@]} -gt 0 ]]; then
             maestro_cmd+=("${mock_port_args[@]}")
           fi
-          "${maestro_cmd[@]}"
+          maestro_status=0
+          "${maestro_cmd[@]}" || maestro_status=$?
+          rm -f artifacts/ios/_infra/telemetry/flow-active.flag
+          touch artifacts/ios/_infra/telemetry/flow-complete.flag
+          if [[ "$maestro_status" -ne 0 ]]; then
+            exit "$maestro_status"
+          fi
 
       - name: Validate connectivity (${{ matrix.group.name }})
         if: always()

@@ -103,4 +103,21 @@ Telemetry artifacts are uploaded with `if: always()` so failed test runs still p
 
 - Monitor startup failure: fail the job.
 - Empty telemetry CSV: fail the job.
-- Unexpected main app PID disappearance: log event immediately and fail at end-of-job (after artifact upload).
+- App PID disappearance during active flow (`flow-active.flag` present,
+  `flow-complete.flag` absent): exit code 3 and fail at end-of-job (after
+  artifact upload).
+- App PID disappearance after flow completion (`flow-complete.flag` present):
+  exit code 0, treated as expected teardown.
+
+## Lifecycle signaling
+
+The CI workflow signals flow lifecycle to the monitor via flag files in the
+telemetry output directory:
+
+- `flow-active.flag` — created before Maestro execution begins.
+- `flow-complete.flag` — created after Maestro execution finishes (regardless
+  of pass/fail). `flow-active.flag` is removed at the same time.
+
+The monitor checks these flags at the moment a process disappearance is detected
+to classify it as a crash (during active flow) or expected teardown (after flow
+completion).
