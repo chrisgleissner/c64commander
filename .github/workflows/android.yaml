@@ -841,12 +841,17 @@ jobs:
 
           # Install APK so the app can be launched for telemetry priming.
           # run-maestro-gating.sh will reinstall with -r (harmless).
-          apk_path="android/app/build/outputs/apk/debug/app-debug.apk"
+          debug_apk_dir="android/app/build/outputs/apk/debug"
+          apk_path="$debug_apk_dir/app-debug.apk"
           if [[ ! -f "$apk_path" ]]; then
-            echo "::error::APK not found at $apk_path"
-            ls -la android/app/build/outputs/apk/debug/ || true
+            apk_path="$(ls -1 "$debug_apk_dir"/*.apk 2>/dev/null | sort | head -n 1 || true)"
+          fi
+          if [[ -z "$apk_path" || ! -f "$apk_path" ]]; then
+            echo "::error::APK not found under $debug_apk_dir"
+            ls -la "$debug_apk_dir"/ || true
             exit 1
           fi
+          echo "Using APK: $apk_path"
           adb -s "$SERIAL" install -r -t -d "$apk_path" || {
             echo "APK install failed; trying uninstall + reinstall"
             adb -s "$SERIAL" uninstall "$package_name" 2>/dev/null || true
