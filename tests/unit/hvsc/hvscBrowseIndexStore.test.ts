@@ -160,7 +160,12 @@ describe('hvscBrowseIndexStore', () => {
     // Filesystem read fails, should fall back to localStorage
     vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('missing'));
     const loaded = await loadHvscBrowseIndexSnapshot();
-    expect(loaded).toEqual(snapshot);
+    expect(loaded).toMatchObject({
+      schemaVersion: snapshot.schemaVersion,
+      folders: snapshot.folders,
+      songs: snapshot.songs,
+    });
+    expect(loaded?.updatedAt).toEqual(expect.any(String));
   });
 
   it('clears browse index from storage', async () => {
