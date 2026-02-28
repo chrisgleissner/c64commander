@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import type { ActionSummary, FtpEffect, RestEffect } from '@/lib/diagnostics/actionSummaries';
+import type { ActionSummary, ErrorEffect, FtpEffect, RestEffect } from '@/lib/diagnostics/actionSummaries';
 import {
   formatActionEffectTarget,
   formatActionSummaryOrigin,
@@ -21,6 +21,7 @@ export const ActionExpandedContent = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
   const restEffects = effects.filter((e): e is RestEffect => e.type === 'REST');
   const ftpEffects = effects.filter((e): e is FtpEffect => e.type === 'FTP');
+  const errorEffects = effects.filter((e): e is ErrorEffect => e.type === 'ERROR');
   const inferredProduct = restEffects.find((effect) => effect.product)?.product ?? null;
 
   return (
@@ -77,6 +78,21 @@ export const ActionExpandedContent = ({ summary }: Props) => {
               {effect.error ? (
                 <p className="text-diagnostics-error">error: {effect.error}</p>
               ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {errorEffects.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold">Errors</p>
+          {errorEffects.map((effect, index) => (
+            <div
+              key={`${summary.correlationId}-error-${index}`}
+              data-testid={`action-error-effect-${summary.correlationId}-${index}`}
+              className="rounded-md border border-border/70 p-2"
+            >
+              <p className="text-diagnostics-error">{effect.message}</p>
             </div>
           ))}
         </div>

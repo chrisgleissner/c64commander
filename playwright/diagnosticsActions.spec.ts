@@ -175,4 +175,157 @@ test.describe('Diagnostics Actions tab', () => {
     await expect(page.getByText('No FTP effects.')).toHaveCount(0);
     await snap(page, testInfo, 'actions-expanded');
   });
+
+  test('renders target labels as demo and sandbox without mock wording', async ({ page }: { page: Page }, testInfo: TestInfo) => {
+    await page.goto('/settings', { waitUntil: 'domcontentloaded' });
+    await snap(page, testInfo, 'settings-open-target-labels');
+
+    await page.evaluate(() => {
+      const tracing = (window as Window & {
+        __c64uTracing?: { resetTraceSession?: (eventIdStart?: number, correlationIdStart?: number) => void };
+      }).__c64uTracing;
+      tracing?.resetTraceSession?.(700, 700);
+    });
+
+    const events = (await page.evaluate(() => {
+      const now = Date.now();
+      return [
+        {
+          id: 'EVT-0700',
+          timestamp: new Date(now).toISOString(),
+          relativeMs: 0,
+          type: 'action-start',
+          origin: 'user',
+          correlationId: 'COR-0700',
+          data: { name: 'internal.mock.action' },
+        },
+        {
+          id: 'EVT-0701',
+          timestamp: new Date(now + 10).toISOString(),
+          relativeMs: 10,
+          type: 'rest-request',
+          origin: 'user',
+          correlationId: 'COR-0700',
+          data: { method: 'GET', url: 'http://demo/v1/info', normalizedUrl: '/v1/info', target: 'internal-mock' },
+        },
+        {
+          id: 'EVT-0702',
+          timestamp: new Date(now + 30).toISOString(),
+          relativeMs: 30,
+          type: 'rest-response',
+          origin: 'user',
+          correlationId: 'COR-0700',
+          data: { status: 200, body: {}, durationMs: 20, error: null },
+        },
+        {
+          id: 'EVT-0703',
+          timestamp: new Date(now + 40).toISOString(),
+          relativeMs: 40,
+          type: 'action-end',
+          origin: 'user',
+          correlationId: 'COR-0700',
+          data: { status: 'success', error: null },
+        },
+        {
+          id: 'EVT-0710',
+          timestamp: new Date(now + 100).toISOString(),
+          relativeMs: 100,
+          type: 'action-start',
+          origin: 'user',
+          correlationId: 'COR-0710',
+          data: { name: 'external.mock.action' },
+        },
+        {
+          id: 'EVT-0711',
+          timestamp: new Date(now + 110).toISOString(),
+          relativeMs: 110,
+          type: 'rest-request',
+          origin: 'user',
+          correlationId: 'COR-0710',
+          data: { method: 'GET', url: 'http://sandbox/v1/info', normalizedUrl: '/v1/info', target: 'external-mock' },
+        },
+        {
+          id: 'EVT-0712',
+          timestamp: new Date(now + 130).toISOString(),
+          relativeMs: 130,
+          type: 'rest-response',
+          origin: 'user',
+          correlationId: 'COR-0710',
+          data: { status: 200, body: {}, durationMs: 20, error: null },
+        },
+        {
+          id: 'EVT-0713',
+          timestamp: new Date(now + 140).toISOString(),
+          relativeMs: 140,
+          type: 'action-end',
+          origin: 'user',
+          correlationId: 'COR-0710',
+          data: { status: 'success', error: null },
+        },
+        {
+          id: 'EVT-0720',
+          timestamp: new Date(now + 200).toISOString(),
+          relativeMs: 200,
+          type: 'action-start',
+          origin: 'user',
+          correlationId: 'COR-0720',
+          data: { name: 'unknown.product.action' },
+        },
+        {
+          id: 'EVT-0721',
+          timestamp: new Date(now + 210).toISOString(),
+          relativeMs: 210,
+          type: 'rest-request',
+          origin: 'user',
+          correlationId: 'COR-0720',
+          data: { method: 'GET', url: 'http://device/v1/info', normalizedUrl: '/v1/info', target: 'real-device' },
+        },
+        {
+          id: 'EVT-0722',
+          timestamp: new Date(now + 230).toISOString(),
+          relativeMs: 230,
+          type: 'rest-response',
+          origin: 'user',
+          correlationId: 'COR-0720',
+          data: { status: 200, body: { product: 'unknown-model' }, durationMs: 20, error: null },
+        },
+        {
+          id: 'EVT-0723',
+          timestamp: new Date(now + 240).toISOString(),
+          relativeMs: 240,
+          type: 'action-end',
+          origin: 'user',
+          correlationId: 'COR-0720',
+          data: { status: 'success', error: null },
+        },
+      ];
+    })) as TraceEvent[];
+
+    await waitForTracing(page);
+    await page.evaluate((seedEvents: TraceEvent[]) => {
+      return new Promise<void>((resolve) => {
+        const handler = () => {
+          window.removeEventListener('c64u-traces-updated', handler);
+          setTimeout(resolve, 50);
+        };
+        window.addEventListener('c64u-traces-updated', handler);
+        const tracing = (window as Window & { __c64uTracing?: { seedTraces?: (events: TraceEvent[]) => void } }).__c64uTracing;
+        tracing?.seedTraces?.(seedEvents);
+      });
+    }, events);
+
+    await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Diagnostics' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Actions' }).click();
+
+    await page.getByTestId('action-summary-COR-0700').locator('summary').click();
+    await page.getByTestId('action-summary-COR-0710').locator('summary').click();
+    await page.getByTestId('action-summary-COR-0720').locator('summary').click();
+
+    await expect(page.getByTestId('action-rest-effect-COR-0700-0')).toContainText('target: demo');
+    await expect(page.getByTestId('action-rest-effect-COR-0710-0')).toContainText('target: sandbox');
+    await expect(page.getByTestId('action-rest-effect-COR-0720-0')).toContainText('target: device');
+    await expect(page.getByText(/target:\s*mock\b/i)).toHaveCount(0);
+    await snap(page, testInfo, 'actions-target-labels');
+  });
 });

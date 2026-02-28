@@ -6,30 +6,16 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
+import { mapTargetDisplayLabel } from '@/lib/diagnostics/targetDisplayMapper';
+
 export const formatActionSummaryOrigin = (origin?: string | null, originalOrigin?: string | null): string => {
   const normalizedOrigin = origin ?? 'unknown';
   if (!originalOrigin) return normalizedOrigin;
   return `${originalOrigin} → ${normalizedOrigin}`;
 };
 
-const normalizeRealDeviceProduct = (product?: string | null): 'c64u' | 'u64' | 'u64e' | 'u64e2' | 'c64' => {
-  const raw = (product ?? '').trim().toLowerCase();
-  if (!raw) return 'c64';
-  if (raw === 'c64u' || raw === 'c64 ultimate' || raw === 'c64ultimate') return 'c64u';
-  if (raw === 'u64e2' || raw.includes('u64e2')) return 'u64e2';
-  if (raw === 'u64e' || raw.includes('u64e')) return 'u64e';
-  if (raw === 'u64' || raw.includes('ultimate64')) return 'u64';
-  if (raw === 'c64') return 'c64';
-  return 'c64';
-};
-
 export const formatActionEffectTarget = (target?: string | null, product?: string | null): string => {
-  const raw = (target ?? 'unknown').toLowerCase();
-  if (raw === 'internal-mock' || raw === 'external-mock' || raw === 'mock') return 'mock';
-  if (raw === 'real-device') return normalizeRealDeviceProduct(product);
-  // Defensive pass-through when traces already provide transformed product-like targets.
-  if (raw === 'c64u' || raw === 'u64' || raw === 'u64e' || raw === 'u64e2' || raw === 'c64') return raw;
-  return raw;
+  return mapTargetDisplayLabel(target, product);
 };
 
 /**
