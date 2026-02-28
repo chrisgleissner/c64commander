@@ -141,4 +141,70 @@ describe('hvscBrowseIndexStore', () => {
     const result = listFolderFromBrowseIndex(snapshot, '/DEMOS/A/', '', 0, 50);
     expect(result.totalSongs).toBe(1);
   });
+
+  it('loads snapshot from localStorage when filesystem fails', async () => {
+    const { loadHvscBrowseIndexSnapshot, saveHvscBrowseIndexSnapshot, buildHvscBrowseIndexFromEntries: build } = await import('@/lib/hvsc/hvscBrowseIndexStore');
+    const snapshot = build([
+      { path: '/test.sid', name: 'test.sid', type: 'sid' },
+    ]);
+
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
+
+    // Force localStorage fallback on save
+    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error('disk full') as any);
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+    await saveHvscBrowseIndexSnapshot(snapshot);
+
+    // Filesystem read fails, should fall back to localStorage
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('missing'));
+    const loaded = await loadHvscBrowseIndexSnapshot();
+    expect(loaded).toMatchObject({
+      schemaVersion: snapshot.schemaVersion,
+      folders: snapshot.folders,
+      songs: snapshot.songs,
+    });
+    expect(loaded?.updatedAt).toEqual(expect.any(String));
+  });
+
+  it('clears browse index from storage', async () => {
+    const { clearHvscBrowseIndexSnapshot } = await import('@/lib/hvsc/hvscBrowseIndexStore');
+    vi.mocked(Filesystem.deleteFile ?? vi.fn()).mockResolvedValue(undefined as any);
+    const deleteFileFn = (Filesystem as any).deleteFile;
+    if (!deleteFileFn) {
+      (Filesystem as any).deleteFile = vi.fn(async () => undefined);
+    }
+    await clearHvscBrowseIndexSnapshot();
+  });
+
+  it('creates empty snapshot with correct schema', async () => {
+    const { createEmptyHvscBrowseIndexSnapshot } = await import('@/lib/hvsc/hvscBrowseIndexStore');
+    const empty = createEmptyHvscBrowseIndexSnapshot();
+    expect(empty.schemaVersion).toBe(1);
+    expect(empty.folders['/']).toBeDefined();
+    expect(Object.keys(empty.songs)).toHaveLength(0);
+  });
+
+  it('creates mutable browse index for baseline', async () => {
+    const { createHvscBrowseIndexMutable } = await import('@/lib/hvsc/hvscBrowseIndexStore');
+    vi.mocked(Filesystem.writeFile).mockResolvedValue(undefined as any);
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as any);
+
+    const mutable = await createHvscBrowseIndexMutable('baseline');
+    mutable.upsertSong({
+      virtualPath: '/DEMOS/test.sid',
+      fileName: 'test.sid',
+      durationSeconds: 42,
+    });
+    mutable.deleteSong('/nonexistent.sid');
+    await mutable.finalize();
+  });
+
+  it('verifies integrity of empty snapshot', async () => {
+    const { createEmptyHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity: verify } = await import('@/lib/hvsc/hvscBrowseIndexStore');
+    const empty = createEmptyHvscBrowseIndexSnapshot();
+    const result = await verify(empty);
+    expect(result.isValid).toBe(true);
+  });
 });

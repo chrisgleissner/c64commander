@@ -323,4 +323,240 @@ describe('usePlaybackPersistence', () => {
       expect(nullCalls.length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  it('skips session restore when playlistKey does not match', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/demo.sid',
+          name: 'demo.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    // Session stored with a DIFFERENT playlist key
+    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
+      playlistKey: 'c64u_playlist:other-device',
+      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/demo.sid',
+      currentIndex: 0,
+      isPlaying: true,
+      isPaused: false,
+      elapsedMs: 5000,
+      playedMs: 5000,
+      durationMs: 60000,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // Session restore should be skipped due to key mismatch, so no setAutoAdvanceDueAtMs with numeric value
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === 'number');
+      expect(numericCalls.length).toBe(0);
+    });
+  });
+
+  it('skips session restore when item index is out of range', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/demo.sid',
+          name: 'demo.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    // Session refers to an item ID that doesn't exist in the restored playlist
+    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
+      playlistKey: playlistStorageKey,
+      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/nonexistent.sid',
+      currentIndex: 99,
+      isPlaying: true,
+      isPaused: false,
+      elapsedMs: 5000,
+      playedMs: 5000,
+      durationMs: 60000,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // Session restore should be skipped due to out-of-range index
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const numericCalls = calls.filter(([v]: [unknown]) => typeof v === 'number');
+      expect(numericCalls.length).toBe(0);
+    });
+  });
+
+  it('restores from default key when device-specific key is empty', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-2');
+    const defaultKey = buildPlaylistStorageKey('default');
+
+    // Only the default key has data
+    localStorage.setItem(defaultKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/fallback.sid',
+          name: 'fallback.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].label).toBe('fallback.sid');
+    });
+  });
+
+  it('restores paused session without starting auto-advance timer', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/paused.sid',
+          name: 'paused.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+          durationMs: 60000,
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    // Session stored with isPaused = true
+    sessionStorage.setItem('c64u_playback_session:v1', JSON.stringify({
+      playlistKey: playlistStorageKey,
+      currentItemId: 'hvsc:hvsc-library:/MUSICIANS/Test/paused.sid',
+      currentIndex: 0,
+      isPlaying: false,
+      isPaused: true,
+      elapsedMs: 10000,
+      playedMs: 10000,
+      durationMs: 60000,
+      updatedAt: new Date().toISOString(),
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+
+    // For paused sessions, setAutoAdvanceDueAtMs should be called with null
+    await waitFor(() => {
+      const calls = result.current.setAutoAdvanceDueAtMs.mock.calls;
+      const nullCalls = calls.filter(([v]: [unknown]) => v === null);
+      expect(nullCalls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it('restores playlist from local source with tree URI fallback', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'local',
+          path: '/Music/tree-demo.sid',
+          name: 'tree-demo.sid',
+          sourceId: 'tree-source',
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    // No entry in localEntriesBySourceId, but provide a tree URI
+    const localSourceTreeUris = new Map<string, string | null>([
+      ['tree-source', 'content://tree-uri'],
+    ]);
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris,
+    }));
+
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+      expect(result.current.playlist[0].label).toBe('tree-demo.sid');
+    });
+  });
+
+  it('handles corrupt JSON in sessionStorage gracefully', async () => {
+    const playlistStorageKey = buildPlaylistStorageKey('device-1');
+
+    // Corrupt session data
+    sessionStorage.setItem('c64u_playback_session:v1', 'NOT_VALID_JSON');
+
+    localStorage.setItem(playlistStorageKey, JSON.stringify({
+      items: [
+        {
+          source: 'hvsc',
+          path: '/MUSICIANS/Test/demo.sid',
+          name: 'demo.sid',
+          sourceId: 'hvsc-library',
+          addedAt: new Date().toISOString(),
+        },
+      ],
+      currentIndex: 0,
+    }));
+
+    const { result } = renderHook(() => usePlaybackPersistenceHarness({
+      playlistStorageKey,
+      localEntriesBySourceId: new Map(),
+      localSourceTreeUris: new Map(),
+    }));
+
+    // Should still load the playlist despite corrupt session
+    await waitFor(() => {
+      expect(result.current.playlist).toHaveLength(1);
+    });
+  });
 });

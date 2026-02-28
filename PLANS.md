@@ -1,97 +1,94 @@
-# GPL v2.0 → v3.0 License Header Migration Plan
+# Android Maestro Telemetry Gate Recovery Plan
 
-## Inventory Phase
+## 1) Scope
 
-- **Pattern searched**: `GNU General Public License v2.0 or later.`
-- **File types**: `.ts`, `.tsx`, `.kt`, `.kts`, `.swift`
-- **Excluded dirs**: `node_modules`, `dist`, `build`, `Pods`, `.gradle`
-- **Total files**: 605
+In scope:
+- `.github/workflows/android.yaml` Android Maestro job telemetry lifecycle.
+- `ci/telemetry/android/monitor_android.sh` telemetry production.
+- `ci/telemetry/summarize_metrics.py` telemetry summary diagnostics behavior.
+- Android Maestro telemetry gate step and pre-gate validation in CI.
 
-## Safety Definition
+Explicitly out of scope:
+- iOS telemetry workflow and monitor.
+- Web workflow, fuzz workflow, release packaging logic unrelated to Android Maestro telemetry.
+- Unrelated test coverage work.
 
-- Match anchored to the exact string within the header block (first 8 lines).
-- Only the version number `v2.0` is replaced with `v3.0` in the GPL license sentence.
-- No changes to formatting, indentation, or any other content.
+## 2) Current Failure Analysis
 
-## Migration Execution
+### Observed CI evidence (run #22520419499)
+- `main_seen_once=0` — monitor never detected the app process
+- `sample_rows: 0` — zero telemetry data rows collected
+- Monitor ran for 48 seconds (timestamps 1772280813→1772280861)
+- Events log: only `monitor_started` and `monitor_stopped` — no process detection events
 
-- `sed -i` replacement of `GNU General Public License v2.0 or later.` → `GNU General Public License v3.0 or later.` across all 605 files.
+### Root cause
+The telemetry preflight (added in commit 919d357) attempts `am start` on the
+app package **before** the APK is installed on the emulator. The workflow
+sequence was:
 
-## Verification
+1. Build APK (file exists on disk but not installed on emulator)
+2. Start telemetry monitor (background)
+3. **Preflight `am start`** → fails silently because package is not installed
+4. Wait 45s for CSV data rows → times out
+5. `exit 1` kills the step **before `run-maestro-gating.sh` runs**
+6. Maestro never executes; app never launches on emulator
+7. Monitor produces 0 samples
 
-- Re-scan for `v2.0 or later` in first-party source → expect 0 matches.
-- Run `npm run lint`, `npm run test`, `npm run build`.
+The `run-maestro-gating.sh` script (called at step 5 in the intended flow)
+handles APK installation, app configuration, and Maestro execution — but
+the premature `exit 1` prevents it from ever running.
 
-## Diff Audit
+### Contributing factor: PID resolution robustness
+The monitor uses `pidof` as primary PID resolution and `/proc` cmdline scan
+as fallback. Neither `ps -A` grep nor `dumpsys` is tried. On some emulator
+images, `pidof` may return empty even when the process is running.
 
-- Each modified file has exactly one changed line (the license version string).
+## 3) Design Constraints
 
----
+- Deterministic telemetry paths under `ci-artifacts/telemetry/android`.
+- No implicit working-directory assumptions.
+- No silent fallback when telemetry is truly missing.
+- Fail fast on genuine missing telemetry with actionable diagnostics.
+- Preflight must be non-fatal: if priming fails, Maestro must still run.
+- APK must be installed before any `am start` attempt.
 
-# Modal / Overlay Unification Plan
+## 4) Implementation Plan
 
-## Inventory
+- **Workflow fix** (`android.yaml`):
+  - Split preflight into a separate "Install APK and prime telemetry" step
+  - Install APK on emulator *before* attempting app launch
+  - Use `am start -W` for synchronous launch confirmation
+  - Make telemetry priming non-fatal (warning, not error) so Maestro always runs
+  - Keep Maestro step clean (no preflight logic)
 
-| Component | File | Primitive | Backdrop | Close X | Focus trap | Scroll lock | Migration status |
-|---|---|---|---|---|---|---|---|
-| Diagnostics | `src/components/diagnostics/GlobalDiagnosticsOverlay.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
-| Demo Mode Interstitial | `src/components/DemoModeInterstitial.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
-| Item Selection | `src/components/itemSelection/ItemSelectionDialog.tsx` | Dialog | ✅ | ⚠️ Custom ghost Button wrapping DialogClose | ✅ | ✅ | **Step 2**: Replace with ModalCloseButton |
-| Connection Status | `src/components/ConnectivityIndicator.tsx` | Popover | ❌ | ⚠️ Custom PopoverPrimitive.Close | ⚠️ | ❌ | **Step 6**: Migrate to Dialog |
-| Load Config | `src/pages/home/dialogs/LoadConfigDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
-| Manage Config | `src/pages/home/dialogs/ManageConfigDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
-| Power Off | `src/pages/home/dialogs/PowerOffDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
-| Save Config | `src/pages/home/dialogs/SaveConfigDialog.tsx` | Dialog | ✅ | ✅ (default from DialogContent) | ✅ | ✅ | Already unified |
+- **Monitor hardening** (`monitor_android.sh`):
+  - Add `ps -A` grep as intermediate PID resolution fallback
+  - Preserve existing `pidof` + `/proc` cmdline scan fallbacks
 
-## Steps
+- **Diagnostics** (preserved from prior commit):
+  - Dedicated telemetry input diagnostics step
+  - Explicit `TELEMETRY_INPUT_CSVS` for deterministic summary input
+  - Rich gate failure output with metadata.json dump
 
-1. ✅ Extract shared `ModalCloseButton` in `src/components/ui/modal-close-button.tsx`
-2. ✅ Update `dialog.tsx` to use `ModalCloseButton`
-3. ✅ Update `ItemSelectionDialog.tsx` to use `ModalCloseButton`
-4. ✅ Migrate `ConnectivityIndicator.tsx` from Popover → Dialog with `ModalCloseButton`
-5. ✅ Add `--modal-backdrop-duration` CSS variable respecting `c64-motion-reduced`
-6. ✅ Add `playwright/modalConsistency.spec.ts`
+## 5) Test Strategy
 
----
+- Validate workflow YAML correctness via grep-based workflow test
+- Validate monitor shell syntax with `bash -n`
+- Run existing telemetryGateWorkflow.test.ts
+- Verify lint, build, and test suite pass
 
-# Connection Status Pop-up Layout Correction Plan
+## 6) Risk Register
 
-## Layout contracts
+- Emulator startup timing: mitigated by dedicated boot-wait step (existing)
+- APK install race: mitigated by explicit install-and-verify before priming
+- PID resolution: mitigated by three-method fallback chain (pidof → ps -A → /proc)
+- Preflight app crash: mitigated by non-fatal priming (warning, not exit)
+- Maestro force-stop/clear: expected; monitor captures both primed and Maestro sessions
 
-### Row rhythm contract
-- Status, Host, and Last request rows share `min-h-5` (1.25 rem = 20 px).
-- Host row uses `flex items-center` so the Change button does not alter row height.
-- Change button uses `h-auto py-0 leading-5 variant="outline"` to keep its height within the 20 px row height while appearing as a button.
-- Intra-group spacing: `space-y-1` (0.25 rem = 4 px) within each group (Group 1: Status / Host / Last request; Group 2: Diagnostics rows). DiagnosticsRow buttons use `py-0` so their height matches the 20 px Group 1 row height.
-- Inter-group spacing: `space-y-4` (1 rem = 16 px) between group 1 and the Diagnostics section.
+## 7) Completion Criteria
 
-### Time formatting contract
-- Formatter: `formatRelative(timestampMs: number | null)`.
-- Uses `Math.floor` exclusively (no rounding).
-- No "just now" branch.
-- `elapsed < 60 s` → `{s}s ago` (e.g. `0s ago`, `3s ago`, `59s ago`).
-- `elapsed ≥ 60 s` → `{m}m {s}s ago` (e.g. `1m 0s ago`, `2m 3s ago`).
-- `null` timestamp → `"unknown"`.
-- Negative elapsed (future timestamp) → clamped to 0 via `Math.max(0, …)` → `"0s ago"`.
-
-### Group separation rules
-- Two groups separated by increased spacing (`space-y-4` vs `space-y-1`).
-- No indentation, no nested background surfaces, no divider lines.
-- All rows flush-left aligned.
-
-### Close behavior contract
-- `PopoverPrimitive.Close` button (top-right, `X` icon, `data-testid="connection-status-close"`).
-- Escape key closes (Radix Popover default).
-- Clicking outside closes (Radix Popover default).
-
-## Implementation checklist
-- [x] Fix `formatRelative` – remove "just now", floor math, `Xs ago` / `Xm Ys ago`.
-- [x] Fix Host row layout – `min-h-5`, `items-center`, button `h-auto py-0 leading-5`.
-- [x] Add `data-testid` to Status, Host, Last request rows.
-- [x] Add close icon to PopoverContent (matching Diagnostics Dialog).
-- [x] Update unit tests for new time format and new data-testids.
-- [x] Add Playwright layout tests (row heights, vertical gaps, close behavior, time format, flush-left alignment, group spacing).
-- [x] Update screenshot test with format assertions.
-- [x] Run `npm run test:coverage` – global branch coverage 82.4% ≥ 82%.
-- [x] Run `npm run lint` and `npm run build` – green.
-- [ ] Run `code_review` then `codeql_checker` and address findings.
+- [ ] android-maestro workflow passes in CI
+- [ ] metrics.csv contains >= 2 data rows
+- [ ] metadata.json shows `main_seen_once: 1` and `sample_rows >= 2`
+- [ ] Telemetry gate passes
+- [ ] All Android jobs green

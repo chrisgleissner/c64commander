@@ -152,6 +152,14 @@ resolve_process_pid() {
     return 0
   fi
 
+  # Fallback: ps -A grep (works on all Android versions)
+  pid="$(adb_shell "ps -A 2>/dev/null | grep -F '$process_name' | awk '{print \$2; exit}'" || true)"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    printf '%s' "$pid"
+    return 0
+  fi
+
+  # Fallback: /proc cmdline scan
   pid="$(adb_shell "for f in /proc/[0-9]*/cmdline; do p=\${f#/proc/}; p=\${p%/cmdline}; c=\$(tr '\000' '\n' < \"\$f\" 2>/dev/null | awk 'NR==1{print; exit}'); if [ \"\$c\" = \"$process_name\" ]; then echo \"\$p\"; break; fi; done" | awk 'NF{print $1; exit}' || true)"
   if [[ "$pid" =~ ^[0-9]+$ ]]; then
     printf '%s' "$pid"
@@ -165,6 +173,7 @@ main_seen_once=0
 main_disappeared=0
 running=1
 run_start_ts="$(date -u +%s)"
+sample_rows=0
 
 trap 'running=0' INT TERM
 
@@ -273,6 +282,7 @@ while (( running == 1 )); do
       "${dalvik_pss_kb:-}" \
       "${native_pss_kb:-}" \
       "${total_pss_kb:-}" >> "$CSV_PATH"
+    sample_rows=$((sample_rows + 1))
 
     prev_proc_jiffies[$role]="$proc_jiffies"
   done
@@ -300,6 +310,8 @@ cat > "$META_PATH" <<EOF
   "run_id": "${CI_RUN_ID}",
   "commit_sha": "${CI_SHA}",
   "sampling_interval_sec": ${SAMPLING_INTERVAL_SEC},
+  "sample_rows": ${sample_rows},
+  "telemetry_samples_present": $([[ "$sample_rows" -gt 0 ]] && echo true || echo false),
   "start_timestamp": ${run_start_ts},
   "end_timestamp": ${run_end_ts},
   "main_seen_once": ${main_seen_once},
