@@ -844,11 +844,11 @@ jobs:
           debug_apk_dir="android/app/build/outputs/apk/debug"
           apk_path="$debug_apk_dir/app-debug.apk"
           if [[ ! -f "$apk_path" ]]; then
-            apk_path="$(ls -1 "$debug_apk_dir"/*.apk 2>/dev/null | sort | head -n 1 || true)"
+            apk_path="$(find "$debug_apk_dir" -maxdepth 1 -type f -name '*.apk' | sort | head -n 1 || true)"
           fi
           if [[ -z "$apk_path" || ! -f "$apk_path" ]]; then
             echo "::error::APK not found under $debug_apk_dir"
-            ls -la "$debug_apk_dir"/ || true
+            ls -la "$debug_apk_dir" || true
             exit 1
           fi
           echo "Using APK: $apk_path"
