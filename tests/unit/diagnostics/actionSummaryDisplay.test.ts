@@ -35,9 +35,24 @@ describe('formatActionEffectTarget', () => {
     expect(formatActionEffectTarget('EMULATOR')).toBe('emulator');
   });
 
-  it('normalizes "real-device" to "device"', () => {
-    expect(formatActionEffectTarget('real-device')).toBe('device');
-    expect(formatActionEffectTarget('Real-Device')).toBe('device');
+  it('maps real-device to c64 fallback when product is unavailable', () => {
+    expect(formatActionEffectTarget('real-device')).toBe('c64');
+    expect(formatActionEffectTarget('Real-Device')).toBe('c64');
+  });
+
+  it('maps real-device using transformed /v1/info product values', () => {
+    expect(formatActionEffectTarget('real-device', 'c64u')).toBe('c64u');
+    expect(formatActionEffectTarget('real-device', 'u64')).toBe('u64');
+    expect(formatActionEffectTarget('real-device', 'u64e')).toBe('u64e');
+    expect(formatActionEffectTarget('real-device', 'u64e2')).toBe('u64e2');
+    expect(formatActionEffectTarget('real-device', 'C64 Ultimate')).toBe('c64u');
+    expect(formatActionEffectTarget('real-device', 'unknown-model')).toBe('c64');
+  });
+
+  it('maps internal and external mocks to mock', () => {
+    expect(formatActionEffectTarget('internal-mock')).toBe('mock');
+    expect(formatActionEffectTarget('external-mock')).toBe('mock');
+    expect(formatActionEffectTarget('mock')).toBe('mock');
   });
 
   it('returns "unknown" for null/undefined', () => {

@@ -17,6 +17,7 @@ export type RestEffect = {
   method: string;
   path: string;
   target: BackendTarget | null;
+  product?: string;
   status: number | string | null;
   durationMs: number | null;
   error?: string;
@@ -184,6 +185,8 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
       const method = readString(requestData.method) ?? 'UNKNOWN';
       const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
+      const responseBody = (responseData.body && typeof responseData.body === 'object') ? (responseData.body as Record<string, unknown>) : null;
+      const product = readString(responseBody?.product);
       const hasResponseStatus = 'status' in responseData;
       const responseStatus = hasResponseStatus
         ? (responseData.status === null ? null : (readNumber(responseData.status) ?? null))
@@ -194,6 +197,7 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
         method,
         path,
         target: (readString(requestData.target) as BackendTarget | null) ?? null,
+        ...(product ? { product } : {}),
         status: responseStatus,
         durationMs: readNumber(responseData.durationMs),
         ...(error !== null ? { error } : {}),

@@ -21,6 +21,7 @@ export const ActionExpandedContent = ({ summary }: Props) => {
   const effects = summary.effects ?? [];
   const restEffects = effects.filter((e): e is RestEffect => e.type === 'REST');
   const ftpEffects = effects.filter((e): e is FtpEffect => e.type === 'FTP');
+  const inferredProduct = restEffects.find((effect) => effect.product)?.product ?? null;
 
   return (
     <div className="space-y-3 text-xs">
@@ -49,7 +50,7 @@ export const ActionExpandedContent = ({ summary }: Props) => {
             >
               <p className="font-medium">{effect.method} {effect.path}</p>
               <p className="text-muted-foreground">
-                target: {formatActionEffectTarget(effect.target)} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'unknown'}
+                target: {formatActionEffectTarget(effect.target, effect.product ?? inferredProduct)} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'unknown'}
                 {effect.durationMs !== null ? ` · ${effect.durationMs}ms` : ''}
               </p>
               {effect.error ? (
@@ -71,7 +72,7 @@ export const ActionExpandedContent = ({ summary }: Props) => {
             >
               <p className="font-medium">{effect.operation} {effect.path}</p>
               <p className="text-muted-foreground">
-                target: {formatActionEffectTarget(effect.target)} · result: {effect.result ?? 'unknown'}
+                target: {formatActionEffectTarget(effect.target, inferredProduct)} · result: {effect.result ?? 'unknown'}
               </p>
               {effect.error ? (
                 <p className="text-diagnostics-error">error: {effect.error}</p>

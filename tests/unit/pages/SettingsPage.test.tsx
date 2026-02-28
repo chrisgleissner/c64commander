@@ -665,7 +665,7 @@ describe('SettingsPage', () => {
         type: 'rest-response',
         origin: 'user',
         correlationId: 'COR-0001',
-        data: { status: 200, durationMs: 15, error: null },
+        data: { status: 200, durationMs: 15, error: null, body: { product: 'c64u' } },
       },
       {
         id: 'evt-4',
@@ -715,6 +715,7 @@ describe('SettingsPage', () => {
     expect(within(summary).getByTestId('action-ftp-count-COR-0001')).toHaveClass('text-diagnostics-ftp');
     expect(within(summary).getByTestId('action-error-count-COR-0001')).toHaveClass('text-diagnostics-error');
     expect(within(summary).getByText(/\d+ms/, { selector: 'div' })).toBeInTheDocument();
+    expect(within(summary).getAllByText(/target:\s*c64u/i)).toHaveLength(2);
   });
 
   it('uses shared renderer for traces and actions', async () => {
