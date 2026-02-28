@@ -81,6 +81,10 @@ type NormalizedEffect =
       target: string | null;
       result: string | null;
       error?: string;
+    }
+  | {
+      type: 'ERROR';
+      message: string;
     };
 
 const normalizeEffect = (effect: ActionSummaryEffect): NormalizedEffect => {
@@ -92,6 +96,12 @@ const normalizeEffect = (effect: ActionSummaryEffect): NormalizedEffect => {
       target: effect.target,
       status: effect.status,
       ...(effect.error !== undefined ? { error: effect.error } : {}),
+    };
+  }
+  if (effect.type === 'ERROR') {
+    return {
+      type: 'ERROR',
+      message: effect.message,
     };
   }
   return {

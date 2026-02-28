@@ -19,7 +19,7 @@ type Props = {
   severity: DiagnosticsSeverity;
   title: string;
   timestamp: string | number | Date | null;
-  origin?: 'user' | 'system' | null;
+  origin?: 'user' | 'system' | 'unknown' | null;
   secondaryLeft?: ReactNode;
   secondaryRight?: ReactNode;
   children?: ReactNode;
@@ -37,13 +37,13 @@ export const DiagnosticsListItem = ({
   children,
   testId,
 }: Props) => {
-  const showOrigin = mode === 'action' && origin;
+  const showOrigin = mode === 'action';
   const originClass =
     origin === 'user'
       ? 'bg-diagnostics-user'
       : origin === 'system'
         ? 'bg-diagnostics-system'
-        : undefined;
+        : 'bg-muted-foreground';
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
 
@@ -68,10 +68,10 @@ export const DiagnosticsListItem = ({
           </div>
           <div className="flex items-center gap-2 min-w-0 text-sm font-medium">
             {showOrigin ? (
-              <span
-                className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
-                aria-label={origin ?? undefined}
-              />
+                <span
+                  className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
+                  aria-label={origin ?? 'unknown'}
+                />
             ) : null}
             <span className="min-w-0 truncate" data-testid="diagnostics-entry-title">{title}</span>
           </div>

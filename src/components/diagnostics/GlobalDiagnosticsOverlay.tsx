@@ -37,9 +37,8 @@ import { clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
-import { buildActionSummaries, type ActionTrigger, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
+import { buildActionSummaries, type ActionTrigger, type ErrorEffect, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
-import { DiagnosticsTimestamp } from '@/components/diagnostics/DiagnosticsTimestamp';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
 import { consumeDiagnosticsOpenRequest, type DiagnosticsTabKey } from '@/lib/diagnostics/diagnosticsOverlay';
@@ -446,8 +445,12 @@ export const GlobalDiagnosticsOverlay = () => {
                   const effects = summary.effects ?? [];
                   const restEffects = effects.filter((effect): effect is RestEffect => effect.type === 'REST');
                   const ftpEffects = effects.filter((effect): effect is FtpEffect => effect.type === 'FTP');
+                  const errorEffects = effects.filter((effect): effect is ErrorEffect => effect.type === 'ERROR');
+                  const restCount = restEffects.length;
+                  const ftpCount = ftpEffects.length;
+                  const errorCount = errorEffects.length;
                   const durationLabel = summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown';
-                  const hasEffects = Boolean(summary.restCount || summary.ftpCount || summary.errorCount);
+                  const hasEffects = Boolean(restCount || ftpCount || errorCount);
                   return (
                     <DiagnosticsListItem
                       key={summary.correlationId}
@@ -460,28 +463,28 @@ export const GlobalDiagnosticsOverlay = () => {
                       secondaryLeft={
                         hasEffects ? (
                           <>
-                            {summary.restCount ? (
+                            {restCount ? (
                               <span
                                 data-testid={`action-rest-count-${summary.correlationId}`}
                                 className="text-diagnostics-rest text-xs font-medium"
                               >
-                                REST×{summary.restCount}
+                                REST×{restCount}
                               </span>
                             ) : null}
-                            {summary.ftpCount ? (
+                            {ftpCount ? (
                               <span
                                 data-testid={`action-ftp-count-${summary.correlationId}`}
                                 className="text-diagnostics-ftp text-xs font-medium"
                               >
-                                FTP×{summary.ftpCount}
+                                FTP×{ftpCount}
                               </span>
                             ) : null}
-                            {summary.errorCount ? (
+                            {errorCount ? (
                               <span
                                 data-testid={`action-error-count-${summary.correlationId}`}
                                 className="text-diagnostics-error text-xs font-medium"
                               >
-                                ERR×{summary.errorCount}
+                                ERR×{errorCount}
                               </span>
                             ) : null}
                           </>
@@ -490,57 +493,24 @@ export const GlobalDiagnosticsOverlay = () => {
                       secondaryRight={durationLabel}
                     >
                       <div className="space-y-3 text-xs">
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div>
-                            <p className="text-muted-foreground">Correlation</p>
-                            <p className="font-semibold break-words">{summary.correlationId}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Action</p>
-                            <p>{summary.actionName}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Origin</p>
-                            <p>
-                              {summary.originalOrigin ? `${summary.originalOrigin} -> ${summary.origin}` : summary.origin}
-                            </p>
-                          </div>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          <span>origin: {summary.originalOrigin ? `${summary.originalOrigin} -> ${summary.origin}` : (summary.origin ?? 'unknown')}</span>
+                          <span>outcome: {summary.outcome}</span>
+                          <span className="break-all">correlation: {summary.correlationId}</span>
                           {summary.trigger ? (
-                            <div>
-                              <p className="text-muted-foreground">Trigger</p>
-                              <p data-testid={`action-trigger-${summary.correlationId}`}>
-                                {formatTriggerDisplay(summary.trigger)}
-                              </p>
-                            </div>
+                            <span data-testid={`action-trigger-${summary.correlationId}`}>
+                              trigger: {formatTriggerDisplay(summary.trigger)}
+                            </span>
                           ) : null}
-                          <div>
-                            <p className="text-muted-foreground">Outcome</p>
-                            <p>{summary.outcome}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Start</p>
-                            <DiagnosticsTimestamp value={summary.startTimestamp} className="text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">End</p>
-                            <DiagnosticsTimestamp value={summary.endTimestamp} className="text-muted-foreground" />
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Duration</p>
-                            <p>{summary.durationMs !== null ? `${summary.durationMs} ms` : 'Unknown'}</p>
-                          </div>
-                          <div>
-                            <p className="text-muted-foreground">Error</p>
-                            <p className={summary.errorMessage ? 'text-diagnostics-error' : ''}>{summary.errorMessage ?? 'None'}</p>
-                          </div>
+                          {summary.errorMessage ? (
+                            <span className="text-diagnostics-error break-words">error: {summary.errorMessage}</span>
+                          ) : null}
                         </div>
 
-                        <div className="space-y-2">
+                        {restEffects.length > 0 ? (
+                          <div className="space-y-2">
                           <p className="text-xs font-semibold">REST Effects</p>
-                          {restEffects.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No REST effects.</p>
-                          ) : (
-                            restEffects.map((effect, index) => (
+                            {restEffects.map((effect, index) => (
                               <div
                                 key={`${summary.correlationId}-rest-${index}`}
                                 data-testid={`action-rest-effect-${summary.correlationId}-${index}`}
@@ -548,23 +518,21 @@ export const GlobalDiagnosticsOverlay = () => {
                               >
                                 <p className="font-medium">{effect.method} {effect.path}</p>
                                 <p className="text-muted-foreground">
-                                  target: {effect.target ?? 'unknown'} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'NO_RESPONSE'}
+                                  target: {(effect.target ?? 'unknown').toLowerCase()} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'unknown'}
                                   {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
                                 </p>
                                 {effect.error ? (
                                   <p className="text-diagnostics-error">error: {effect.error}</p>
                                 ) : null}
                               </div>
-                            ))
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        ) : null}
 
-                        <div className="space-y-2">
+                        {ftpEffects.length > 0 ? (
+                          <div className="space-y-2">
                           <p className="text-xs font-semibold">FTP Effects</p>
-                          {ftpEffects.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">No FTP effects.</p>
-                          ) : (
-                            ftpEffects.map((effect, index) => (
+                            {ftpEffects.map((effect, index) => (
                               <div
                                 key={`${summary.correlationId}-ftp-${index}`}
                                 data-testid={`action-ftp-effect-${summary.correlationId}-${index}`}
@@ -572,15 +540,31 @@ export const GlobalDiagnosticsOverlay = () => {
                               >
                                 <p className="font-medium">{effect.operation} {effect.path}</p>
                                 <p className="text-muted-foreground">
-                                  target: {effect.target ?? 'unknown'} · result: {effect.result ?? 'unknown'}
+                                  target: {(effect.target ?? 'unknown').toLowerCase()} · result: {effect.result ?? 'unknown'}
                                 </p>
                                 {effect.error ? (
                                   <p className="text-diagnostics-error">error: {effect.error}</p>
                                 ) : null}
                               </div>
-                            ))
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {errorEffects.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold">Error Events</p>
+                            {errorEffects.map((effect, index) => (
+                              <div
+                                key={`${summary.correlationId}-error-${index}`}
+                                data-testid={`action-error-effect-${summary.correlationId}-${index}`}
+                                className="rounded-md border border-border/70 p-2"
+                              >
+                                <p className="font-medium text-diagnostics-error">{effect.label}</p>
+                                <p className="text-diagnostics-error">error: {effect.message}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </DiagnosticsListItem>
                   );

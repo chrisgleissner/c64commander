@@ -281,6 +281,31 @@ describe('buildActionSummaries', () => {
     expect(summary.trigger).toEqual(trigger);
   });
 
+  it('scopes effects to action boundaries and keeps counts aligned with visible effects', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E0', type: 'rest-request', correlationId: 'C1', relativeMs: -10, data: { method: 'GET', normalizedUrl: '/pre', target: 'real-device' } }),
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'rest-request', correlationId: 'C1', relativeMs: 10, data: { method: 'GET', normalizedUrl: '/inside', target: 'real-device' } }),
+      buildTrace({ id: 'E3', type: 'rest-response', correlationId: 'C1', relativeMs: 20, data: { status: 200, durationMs: 10, error: null } }),
+      buildTrace({ id: 'E4', type: 'ftp-operation', correlationId: 'C1', relativeMs: 30, data: { operation: 'list', path: '/inside', result: 'success', target: 'real-device' } }),
+      buildTrace({ id: 'E5', type: 'error', correlationId: 'C1', relativeMs: 35, data: { message: 'inside error' } }),
+      buildTrace({ id: 'E6', type: 'action-end', correlationId: 'C1', relativeMs: 40, data: { status: 'error', error: 'inside error' } }),
+      buildTrace({ id: 'E7', type: 'ftp-operation', correlationId: 'C1', relativeMs: 50, data: { operation: 'list', path: '/post', result: 'failure', target: 'real-device' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const effects = summary.effects ?? [];
+    const restEffects = effects.filter((effect) => effect.type === 'REST');
+    const ftpEffects = effects.filter((effect) => effect.type === 'FTP');
+    const errorEffects = effects.filter((effect) => effect.type === 'ERROR');
+
+    expect(restEffects).toHaveLength(1);
+    expect(ftpEffects).toHaveLength(1);
+    expect(errorEffects).toHaveLength(1);
+    expect(summary.restCount).toBe(restEffects.length);
+    expect(summary.ftpCount).toBe(ftpEffects.length);
+    expect(summary.errorCount).toBe(errorEffects.length);
+  });
+
   it('omits trigger when action-start has no trigger field', () => {
     const traces: TraceEvent[] = [
       buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),

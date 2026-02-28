@@ -186,6 +186,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -206,6 +214,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -226,6 +242,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -246,6 +270,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -266,6 +298,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -286,6 +326,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -306,6 +354,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },
@@ -326,6 +382,14 @@
         "target": "external-mock",
         "status": null,
         "error": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "signal is aborted without reason"
+      },
+      {
+        "type": "ERROR",
+        "message": "Host unreachable"
       }
     ]
   },

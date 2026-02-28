@@ -59,4 +59,16 @@ describe('DiagnosticsListItem', () => {
         expect(within(entry).getByText('25 ms')).toBeInTheDocument();
         expect(within(entry).getByTestId('diagnostics-severity-label')).toHaveTextContent('WARN');
     });
+
+    it('renders unknown origin marker for action entries without origin', () => {
+        render(
+            <DiagnosticsListItem
+                mode="action"
+                severity="info"
+                title="Action without origin"
+                timestamp={new Date('2024-01-01T00:00:00.000Z')}
+            />,
+        );
+        expect(screen.getByLabelText('unknown')).toBeInTheDocument();
+    });
 });

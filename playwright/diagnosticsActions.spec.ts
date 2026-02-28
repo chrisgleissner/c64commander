@@ -120,6 +120,15 @@ test.describe('Diagnostics Actions tab', () => {
           correlationId: 'COR-0900',
           data: { status: 'error', error: 'FTP failed' },
         },
+        {
+          id: 'EVT-0906',
+          timestamp: new Date(now + 400).toISOString(),
+          relativeMs: 400,
+          type: 'ftp-operation',
+          origin: 'user',
+          correlationId: 'COR-0900',
+          data: { operation: 'list', path: '/LATE', result: 'failure', error: 'late event', target: 'real-device' },
+        },
       ];
     })) as TraceEvent[];
 
@@ -159,6 +168,11 @@ test.describe('Diagnostics Actions tab', () => {
     await page.getByTestId('action-summary-COR-0900').locator('summary').click();
     await expect(page.getByTestId('action-rest-effect-COR-0900-0')).toBeVisible();
     await expect(page.getByTestId('action-ftp-effect-COR-0900-0')).toBeVisible();
+    await expect(page.getByTestId('action-error-effect-COR-0900-0')).toBeVisible();
+    await expect(page.getByTestId('action-rest-effect-COR-0900-1')).toHaveCount(0);
+    await expect(page.getByTestId('action-ftp-effect-COR-0900-1')).toHaveCount(0);
+    await expect(page.getByText('No REST effects.')).toHaveCount(0);
+    await expect(page.getByText('No FTP effects.')).toHaveCount(0);
     await snap(page, testInfo, 'actions-expanded');
   });
 });
