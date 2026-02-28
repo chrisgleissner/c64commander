@@ -303,4 +303,120 @@ describe('useC64Connection', () => {
     // Restore for other tests
     connectionSnapshot.state = 'REAL_CONNECTED' as const;
   });
+
+  it('reports disconnected status in DISCOVERING state', async () => {
+    connectionSnapshot.state = 'DISCOVERING' as const;
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    expect(result.current.status.isConnected).toBe(false);
+    expect(result.current.status.isConnecting).toBe(true);
+    expect(result.current.status.connectionState).toBe('disconnected');
+    expect(result.current.status.deviceType).toBeNull();
+
+    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+  });
+
+  it('reports disconnected status in OFFLINE_NO_DEMO state', async () => {
+    connectionSnapshot.state = 'OFFLINE_NO_DEMO' as const;
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    expect(result.current.status.isConnected).toBe(false);
+    expect(result.current.status.isConnecting).toBe(false);
+    expect(result.current.status.connectionState).toBe('disconnected');
+    expect(result.current.status.deviceType).toBeNull();
+    expect(result.current.status.isDemo).toBe(false);
+
+    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+  });
+
+  it('reports disconnected status in UNKNOWN state', async () => {
+    connectionSnapshot.state = 'UNKNOWN' as const;
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    expect(result.current.status.isConnected).toBe(false);
+    expect(result.current.status.connectionState).toBe('disconnected');
+    expect(result.current.status.deviceType).toBeNull();
+
+    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+  });
+
+  it('updateConfig is a no-op when values have not changed', async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    act(() => {
+      // Same host and password
+      result.current.updateConfig('c64u', '');
+    });
+
+    // Should not have called updateC64APIConfig since nothing changed
+    expect(updateC64APIConfigMock).not.toHaveBeenCalled();
+  });
+
+  it('ignores connection change events with null detail', async () => {
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('c64u-connection-change', { detail: null }),
+      );
+    });
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it('handles connection change events with partial detail (only baseUrl)', async () => {
+    const { wrapper, client } = createWrapper();
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('c64u-connection-change', {
+          detail: { baseUrl: 'http://new-host' },
+        }),
+      );
+    });
+
+    await waitFor(() => expect(result.current.baseUrl).toBe('http://new-host'));
+    expect(invalidateSpy).toHaveBeenCalled();
+  });
+
+  it('reports error as null when no query error exists', async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+    expect(result.current.status.error).toBeNull();
+  });
+
+  it('returns null deviceInfo before data loads', async () => {
+    connectionSnapshot.state = 'OFFLINE_NO_DEMO' as const;
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    // Query is disabled in OFFLINE_NO_DEMO so deviceInfo remains null
+    expect(result.current.status.deviceInfo).toBeNull();
+
+    connectionSnapshot.state = 'REAL_CONNECTED' as const;
+  });
+
+  it('returns runtimeBaseUrl from config snapshot', async () => {
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useC64Connection(), { wrapper });
+
+    await waitFor(() => expect(result.current.status.isConnected).toBe(true));
+    expect(result.current.runtimeBaseUrl).toBe('http://default');
+  });
 });

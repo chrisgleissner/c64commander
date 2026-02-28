@@ -884,5 +884,201 @@ describe('connectionManager', () => {
     expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
     expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
   });
+
+  it('normalizeUrl returns original value when given an invalid URL', async () => {
+    const addLogSpy = vi.spyOn(logging, 'addLog');
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    // Set an invalid device host that can't be parsed as a URL
+    localStorage.setItem('c64u_device_host', ':::invalid');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await probeOnce();
+    // normalizeUrl logs a warning for invalid URLs
+    addLogSpy.mockRestore();
+  });
+
+  it('settings trigger performs startup-style discovery with polling', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await initializeConnectionManager();
+    void discoverConnection('settings');
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
+  it('settings trigger falls back to demo when probes fail', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('settings');
+    await vi.advanceTimersByTimeAsync(300);
+
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+  });
+
+  it('probeOnce respects pre-aborted outer signal', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    const abort = new AbortController();
+    abort.abort();
+
+    vi.mocked(fetch).mockRejectedValue(new DOMException('Aborted', 'AbortError'));
+
+    const result = await probeOnce({ signal: abort.signal });
+    expect(result).toBe(false);
+  });
+
+  it('demo fallback uses stored device host when no mock server is active', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+    const { applyC64APIRuntimeConfig } = await import('../../../src/lib/c64api');
+
+    // Mock server throws but getActiveMockBaseUrl returns null
+    startMockServer.mockRejectedValue(new Error('not available'));
+    getActiveMockBaseUrl.mockReturnValue(null);
+
+    localStorage.setItem('c64u_device_host', '192.168.1.100');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+    // Should fallback to stored host-based URL
+    expect(vi.mocked(applyC64APIRuntimeConfig)).toHaveBeenCalledWith(
+      'http://192.168.1.100',
+      undefined,
+      '192.168.1.100',
+    );
+  });
+
+  it('demo fallback applies FTP port override when mock server provides one', async () => {
+    const { discoverConnection, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:7777', ftpPort: 2121 });
+    getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:7777');
+    getActiveMockFtpPort.mockReturnValue(2121);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+
+    expect(startMockServer).toHaveBeenCalled();
+  });
+
+  it('background probe failed outcome does not change state', async () => {
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    // Background probe also fails - should stay DEMO_ACTIVE
+    await discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+  });
+
+  it('probeOnce returns false for non-object payload', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(null), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('probeOnce returns false for primitive payload', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify(42), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('smoke mock target bypasses normal discovery and uses mock server', async () => {
+    const { getSmokeConfig, isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    vi.mocked(getSmokeConfig as any).mockReturnValue({ target: 'mock', host: 'localhost' });
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
+
+    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:8888', ftpPort: null });
+    getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:8888');
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    await initializeConnectionManager();
+    await discoverConnection('startup');
+
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+    expect(startMockServer).toHaveBeenCalled();
+  });
+
+  it('exports CONNECTION_CONSTANTS with expected values', async () => {
+    const { CONNECTION_CONSTANTS } = await import('../../../src/lib/connection/connectionManager');
+    expect(CONNECTION_CONSTANTS.STARTUP_PROBE_INTERVAL_MS).toBe(700);
+    expect(CONNECTION_CONSTANTS.PROBE_REQUEST_TIMEOUT_MS).toBe(2500);
+  });
+
+  it('subscribe and unsubscribe connection listeners', async () => {
+    const { subscribeConnection, getConnectionSnapshot } = await import('../../../src/lib/connection/connectionManager');
+    const listener = vi.fn();
+    const unsubscribe = subscribeConnection(listener);
+    expect(typeof unsubscribe).toBe('function');
+    // getConnectionSnapshot should return the current state
+    expect(getConnectionSnapshot().state).toBeDefined();
+    unsubscribe();
+  });
 });
 

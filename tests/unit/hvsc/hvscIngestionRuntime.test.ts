@@ -748,4 +748,201 @@ describe('hvscIngestionRuntime', () => {
       expect.objectContaining({ token: 'token-cancel-fail' }),
     );
   });
+
+  it('reports isIngestionRuntimeActive as false when idle', async () => {
+    const { isIngestionRuntimeActive } = await import('@/lib/hvsc/hvscIngestionRuntime');
+    expect(isIngestionRuntimeActive()).toBe(false);
+  });
+
+  it('getHvscStatus returns current state', async () => {
+    const { getHvscStatus } = await import('@/lib/hvsc/hvscIngestionRuntime');
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'ready',
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    const status = await getHvscStatus();
+    expect(status.ingestionState).toBe('ready');
+  });
+
+  it('rejects concurrent installOrUpdateHvsc calls', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
+    });
+
+    const first = installOrUpdateHvsc('token-concurrent-1');
+    await expect(installOrUpdateHvsc('token-concurrent-2')).rejects.toThrow('already running');
+    await first;
+  });
+
+  it('rejects concurrent ingestCachedHvsc calls', async () => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ['hvsc-baseline-5.complete.json'],
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
+    });
+
+    const first = ingestCachedHvsc('token-cached-concurrent-1');
+    await expect(ingestCachedHvsc('token-cached-concurrent-2')).rejects.toThrow('already running');
+    await first;
+  });
+
+  it('checkForHvscUpdates returns empty updates when already up to date', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+
+    const result = await checkForHvscUpdates();
+    expect(result.requiredUpdates).toEqual([]);
+    expect(result.latestVersion).toBe(5);
+  });
+
+  it('checkForHvscUpdates returns baseline + update range for fresh install', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 84,
+      updateVersion: 87,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+
+    const result = await checkForHvscUpdates();
+    expect(result.requiredUpdates).toEqual([85, 86, 87]);
+    expect(result.baselineVersion).toBe(84);
+  });
+
+  it('marks update as failed when installOrUpdateHvsc error occurs during update phase', async () => {
+    const { markUpdateApplied } = await import('@/lib/hvsc/hvscStateStore');
+    vi.mocked(isUpdateApplied).mockReturnValue(false);
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 6,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 6, type: 'update' } as any);
+    vi.mocked(extractArchiveEntries).mockRejectedValue(new Error('extraction exploded'));
+
+    await expect(installOrUpdateHvsc('token-update-fail')).rejects.toThrow('extraction exploded');
+    expect(markUpdateApplied).toHaveBeenCalledWith(6, 'failed', 'extraction exploded');
+  });
+
+  it('resolves cached ingest when baseline newer than installed and updates available', async () => {
+    vi.mocked(isUpdateApplied).mockReturnValue(false);
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: ['hvsc-baseline-84.complete.json', 'hvsc-update-85.complete.json'],
+    } as any);
+    vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 85, type: 'update' } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 84,
+      installedBaselineVersion: 84,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
+    });
+
+    await ingestCachedHvsc('token-update-cached');
+    expect(writeLibraryFile).toHaveBeenCalled();
+  });
+
+  it('handles canUseNativeHvscIngestion when Capacitor throws', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockImplementation(() => {
+      throw new Error('Capacitor not ready');
+    });
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
+    });
+
+    await installOrUpdateHvsc('token-capacitor-error');
+
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      'Failed to probe HvscIngestion native plugin',
+      expect.objectContaining({ error: 'Capacitor not ready' }),
+    );
+  });
+
+  it('cacheStatus handles mixed file name formats in readdir', async () => {
+    vi.mocked(Filesystem.readdir).mockResolvedValue({
+      files: [
+        'hvsc-baseline-84.complete.json',
+        { name: 'hvsc-update-85.complete.json' },
+        'random-file.txt',
+        { name: 'another-random' },
+      ],
+    } as any);
+
+    const status = await getHvscCacheStatus();
+    expect(status.baselineVersion).toBe(84);
+    expect(status.updateVersions).toEqual([85]);
+  });
+
+  it('recovers stale ingestion state with updating status', async () => {
+    const { loadHvscStatusSummary, saveHvscStatusSummary } = await import('@/lib/hvsc/hvscStatusStore');
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'updating',
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(loadHvscStatusSummary as any).mockReturnValue({
+      download: { status: 'completed' },
+      extraction: { status: 'in-progress' },
+      lastUpdatedAt: new Date(0).toISOString(),
+    });
+
+    const recovered = recoverStaleIngestionState();
+
+    expect(recovered).toBe(true);
+    expect(updateHvscState).toHaveBeenCalledWith(
+      expect.objectContaining({ ingestionState: 'error' }),
+    );
+    expect(vi.mocked(saveHvscStatusSummary as any)).toHaveBeenCalled();
+  });
 });
