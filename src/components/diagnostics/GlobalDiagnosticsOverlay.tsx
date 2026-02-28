@@ -38,6 +38,7 @@ import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
 import { buildActionSummaries, type ActionTrigger, type ErrorEffect, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
+import { formatActionEffectTarget, formatActionSummaryOrigin } from '@/lib/diagnostics/actionSummaryDisplay';
 import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
 import { shareDiagnosticsZip } from '@/lib/diagnostics/diagnosticsExport';
 import { resetDiagnosticsActivity } from '@/lib/diagnostics/diagnosticsActivity';
@@ -494,7 +495,7 @@ export const GlobalDiagnosticsOverlay = () => {
                     >
                       <div className="space-y-3 text-xs">
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span>origin: {summary.originalOrigin ? `${summary.originalOrigin} -> ${summary.origin}` : (summary.origin ?? 'unknown')}</span>
+                          <span>origin: {formatActionSummaryOrigin(summary.origin, summary.originalOrigin)}</span>
                           <span>outcome: {summary.outcome}</span>
                           <span className="break-all">correlation: {summary.correlationId}</span>
                           {summary.trigger ? (
@@ -518,7 +519,7 @@ export const GlobalDiagnosticsOverlay = () => {
                               >
                                 <p className="font-medium">{effect.method} {effect.path}</p>
                                 <p className="text-muted-foreground">
-                                  target: {(effect.target ?? 'unknown').toLowerCase()} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'unknown'}
+                                  target: {formatActionEffectTarget(effect.target)} · status: {effect.status !== null && effect.status !== undefined ? effect.status : 'unknown'}
                                   {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
                                 </p>
                                 {effect.error ? (
@@ -540,7 +541,7 @@ export const GlobalDiagnosticsOverlay = () => {
                               >
                                 <p className="font-medium">{effect.operation} {effect.path}</p>
                                 <p className="text-muted-foreground">
-                                  target: {(effect.target ?? 'unknown').toLowerCase()} · result: {effect.result ?? 'unknown'}
+                                  target: {formatActionEffectTarget(effect.target)} · result: {effect.result ?? 'unknown'}
                                 </p>
                                 {effect.error ? (
                                   <p className="text-diagnostics-error">error: {effect.error}</p>

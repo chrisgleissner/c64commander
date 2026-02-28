@@ -64,6 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
 import { buildActionSummaries, type ErrorEffect, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
+import { formatActionEffectTarget, formatActionSummaryOrigin } from '@/lib/diagnostics/actionSummaryDisplay';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
 import { DiagnosticsListItem } from '@/components/diagnostics/DiagnosticsListItem';
@@ -1806,7 +1807,7 @@ export default function SettingsPage() {
                       >
                         <div className="space-y-3 text-xs">
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span>origin: {summary.originalOrigin ? `${summary.originalOrigin} → ${summary.origin}` : (summary.origin ?? 'unknown')}</span>
+                            <span>origin: {formatActionSummaryOrigin(summary.origin, summary.originalOrigin)}</span>
                             <span>outcome: {summary.outcome}</span>
                             <span className="break-all">correlation: {summary.correlationId}</span>
                             {summary.errorMessage ? (
@@ -1825,7 +1826,7 @@ export default function SettingsPage() {
                                 >
                                   <p className="font-medium">{effect.method} {effect.path}</p>
                                   <p className="text-muted-foreground">
-                                    target: {(effect.target ?? 'unknown').toLowerCase()} · status: {effect.status ?? 'unknown'}
+                                    target: {formatActionEffectTarget(effect.target)} · status: {effect.status ?? 'unknown'}
                                     {effect.durationMs !== null ? ` · ${effect.durationMs} ms` : ''}
                                   </p>
                                   {effect.error ? (
@@ -1847,7 +1848,7 @@ export default function SettingsPage() {
                                 >
                                   <p className="font-medium">{effect.operation} {effect.path}</p>
                                   <p className="text-muted-foreground">
-                                    target: {(effect.target ?? 'unknown').toLowerCase()} · result: {effect.result ?? 'unknown'}
+                                    target: {formatActionEffectTarget(effect.target)} · result: {effect.result ?? 'unknown'}
                                   </p>
                                   {effect.error ? (
                                     <p className="text-diagnostics-error">error: {effect.error}</p>

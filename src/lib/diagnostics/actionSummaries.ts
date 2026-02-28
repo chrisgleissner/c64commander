@@ -65,6 +65,7 @@ const readNumber = (value: unknown): number | null => (typeof value === 'number'
 const resolveSummaryOrigin = (origin: TraceOrigin | null): ActionSummaryOrigin => {
   if (origin === 'user') return 'user';
   if (origin === 'automatic' || origin === 'system') return 'system';
+  // Fallback for malformed/legacy traces where origin is missing or unrecognized.
   return 'unknown';
 };
 

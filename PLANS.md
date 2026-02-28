@@ -8,4 +8,4 @@
 - [x] Remove empty/placeholder sections in expanded action details.
 - [x] Add/update unit tests for aggregation boundaries and count consistency.
 - [x] Add/update Playwright coverage for expanded action view behavior.
-- [ ] Run required validation (`npm run test`, `npm run lint`, `npm run build`, `./build`, `npm run test:coverage`) and fix only issues related to this scope.
+- [x] Run required validation (`npm run test`, `npm run lint`, `npm run build`, `./build`, `npm run test:coverage`) and fix only issues related to this scope.
