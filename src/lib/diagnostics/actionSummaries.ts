@@ -134,25 +134,33 @@ const resolveActionError = (actionEnd: TraceEvent | undefined, errorEvents: Trac
 };
 
 const resolveErrorEffects = (errorEvents: TraceEvent[], actionEnd: TraceEvent | undefined): ErrorEffect[] => {
-  if (errorEvents.length > 0) {
-    return errorEvents.map((event, index) => {
-      const message = readString(event.data?.message) ?? 'unknown error';
-      return {
-        type: 'ERROR',
-        label: `error ${index + 1}`,
-        message,
-      };
+  const effects: ErrorEffect[] = [];
+  const seenMessages = new Set<string>();
+
+  errorEvents.forEach((event, index) => {
+    const message = readString(event.data?.message) ?? 'unknown error';
+    effects.push({
+      type: 'ERROR',
+      label: `error ${index + 1}`,
+      message,
     });
-  }
+    seenMessages.add(message);
+  });
+
   const endError = readString(actionEnd?.data?.error);
   if (endError) {
-    return [{ type: 'ERROR', label: 'action-end error', message: endError }];
+    if (!seenMessages.has(endError)) {
+      effects.push({ type: 'ERROR', label: 'action-end error', message: endError });
+    }
+    return effects;
   }
-  const status = readString(actionEnd?.data?.status);
-  if (status === 'error') {
-    return [{ type: 'ERROR', label: 'action-end error', message: 'action ended with error' }];
+  if (effects.length === 0) {
+    const status = readString(actionEnd?.data?.status);
+    if (status === 'error') {
+      effects.push({ type: 'ERROR', label: 'action-end error', message: 'action ended with error' });
+    }
   }
-  return [];
+  return effects;
 };
 
 const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefined): RestEffect[] => {

@@ -53,7 +53,7 @@ describe('DiagnosticsListItem', () => {
         const summary = entry.querySelector('summary');
         expect(summary).toBeTruthy();
         const summaryEl = summary as HTMLElement;
-        expect(screen.getByLabelText('user')).toHaveClass('bg-diagnostics-user');
+        expect(screen.getByLabelText('origin: user')).toHaveClass('bg-diagnostics-user');
         expect(within(summaryEl).queryByText('REST×1')).toBeNull();
         expect(within(entry).getByText('REST×1')).toBeInTheDocument();
         expect(within(entry).getByText('25 ms')).toBeInTheDocument();
@@ -73,6 +73,6 @@ describe('DiagnosticsListItem', () => {
                 timestamp={new Date('2024-01-01T00:00:00.000Z')}
             />,
         );
-        expect(screen.getByLabelText('unknown')).toBeInTheDocument();
+        expect(screen.getByLabelText('origin: unknown')).toBeInTheDocument();
     });
 });

@@ -63,7 +63,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { addErrorLog, addLog, clearLogs, getErrorLogs, getLogs } from '@/lib/logging';
 import { formatDiagnosticsTimestamp } from '@/lib/diagnostics/timeFormat';
-import { buildActionSummaries, type ErrorEffect, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
+import { buildActionSummaries, type ActionTrigger, type ErrorEffect, type FtpEffect, type RestEffect } from '@/lib/diagnostics/actionSummaries';
 import { formatActionEffectTarget, formatActionSummaryOrigin } from '@/lib/diagnostics/actionSummaryDisplay';
 import { clearTraceEvents, getTraceEvents } from '@/lib/tracing/traceSession';
 import { getTraceTitle } from '@/lib/tracing/traceFormatter';
@@ -131,6 +131,12 @@ import { useConnectionState } from '@/hooks/useConnectionState';
 
 const diagnosticsTabTriggerClass =
   'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
+
+const formatTriggerDisplay = (trigger: ActionTrigger): string => {
+  const suffix = trigger.name !== trigger.kind ? ` (${trigger.name})` : '';
+  const interval = trigger.intervalMs != null ? ` · ${trigger.intervalMs}ms` : '';
+  return `${trigger.kind}${suffix}${interval}`;
+};
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -1810,6 +1816,11 @@ export default function SettingsPage() {
                             <span>origin: {formatActionSummaryOrigin(summary.origin, summary.originalOrigin)}</span>
                             <span>outcome: {summary.outcome}</span>
                             <span className="break-all">correlation: {summary.correlationId}</span>
+                            {summary.trigger ? (
+                              <span data-testid={`action-trigger-${summary.correlationId}`}>
+                                trigger: {formatTriggerDisplay(summary.trigger)}
+                              </span>
+                            ) : null}
                             {summary.errorMessage ? (
                               <span className="text-diagnostics-error break-words">error: {summary.errorMessage}</span>
                             ) : null}

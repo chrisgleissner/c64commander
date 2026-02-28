@@ -68,12 +68,13 @@ export const DiagnosticsListItem = ({
             </span>
           </div>
           <div className="flex items-center gap-2 min-w-0 text-sm font-medium">
-            {showOrigin ? (
+             {showOrigin ? (
                 <span
                   className={cn('h-2.5 w-2.5 rounded-full shrink-0', originClass)}
-                  aria-label={origin ?? 'unknown'}
+                  role="img"
+                  aria-label={`origin: ${origin ?? 'unknown'}`}
                 />
-            ) : null}
+             ) : null}
             <span className="min-w-0 truncate" data-testid="diagnostics-entry-title">{title}</span>
           </div>
           <DiagnosticsTimestamp className="text-muted-foreground text-right shrink-0" value={timestamp} />

@@ -179,6 +179,23 @@ describe('buildActionSummaries', () => {
     expect(summary.errorMessage).toBe('bad');
   });
 
+  it('includes action-end error effect when distinct from error events', () => {
+    const traces: TraceEvent[] = [
+      buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
+      buildTrace({ id: 'E2', type: 'error', correlationId: 'C1', relativeMs: 50, data: { message: 'network timeout' } }),
+      buildTrace({ id: 'E3', type: 'action-end', correlationId: 'C1', relativeMs: 100, data: { status: 'error', error: 'request failed' } }),
+    ];
+    const [summary] = buildActionSummaries(traces);
+    const errorEffects = (summary.effects ?? []).filter((effect) => effect.type === 'ERROR');
+    expect(errorEffects).toHaveLength(2);
+    expect(errorEffects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'error 1', message: 'network timeout' }),
+      expect.objectContaining({ label: 'action-end error', message: 'request failed' }),
+    ]));
+    expect(summary.errorCount).toBe(2);
+    expect(summary.errorMessage).toBe('request failed');
+  });
+
   it('handles REST response without matching request', () => {
     const traces: TraceEvent[] = [
       buildTrace({ id: 'E1', type: 'action-start', correlationId: 'C1', relativeMs: 0, data: { name: 'test' } }),
