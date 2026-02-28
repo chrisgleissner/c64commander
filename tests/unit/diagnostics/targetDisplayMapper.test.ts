@@ -18,6 +18,13 @@ describe('mapTargetDisplayLabel', () => {
         expect(mapTargetDisplayLabel('external-mock')).toBe('sandbox');
     });
 
+    it('maps mock target aliases to demo/sandbox', () => {
+        expect(mapTargetDisplayLabel('internal_mock')).toBe('demo');
+        expect(mapTargetDisplayLabel('Internal Mock')).toBe('demo');
+        expect(mapTargetDisplayLabel('external_mock')).toBe('sandbox');
+        expect(mapTargetDisplayLabel('External Mock')).toBe('sandbox');
+    });
+
     it('maps real-device to known products', () => {
         expect(mapTargetDisplayLabel('real-device', 'c64u')).toBe('c64u');
         expect(mapTargetDisplayLabel('real-device', 'u64')).toBe('u64');
@@ -29,6 +36,13 @@ describe('mapTargetDisplayLabel', () => {
         expect(mapTargetDisplayLabel('real-device')).toBe('device');
         expect(mapTargetDisplayLabel('real-device', null)).toBe('device');
         expect(mapTargetDisplayLabel('real-device', 'unknown-model')).toBe('device');
+    });
+
+    it('keeps mock mapping even when product leaks mock labels under real-device', () => {
+        expect(mapTargetDisplayLabel('real-device', 'internal-mock')).toBe('demo');
+        expect(mapTargetDisplayLabel('real-device', 'external-mock')).toBe('sandbox');
+        expect(mapTargetDisplayLabel('real-device', 'sandbox')).toBe('sandbox');
+        expect(mapTargetDisplayLabel('real-device', 'demo')).toBe('demo');
     });
 
     it('normalizes known aliases for products', () => {
