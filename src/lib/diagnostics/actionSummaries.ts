@@ -185,7 +185,10 @@ const resolveRestEffects = (events: TraceEvent[], actionEnd: TraceEvent | undefi
       const error = readString(responseData.error) ?? (responseData.error ? String(responseData.error) : null);
       const method = readString(requestData.method) ?? 'UNKNOWN';
       const path = readString(requestData.normalizedUrl) ?? readString(requestData.url) ?? 'unknown';
-      const responseBody = (responseData.body && typeof responseData.body === 'object') ? (responseData.body as Record<string, unknown>) : null;
+      const responseBody =
+        (responseData.body && typeof responseData.body === 'object' && !Array.isArray(responseData.body))
+          ? (responseData.body as Record<string, unknown>)
+          : null;
       const product = readString(responseBody?.product);
       const hasResponseStatus = 'status' in responseData;
       const responseStatus = hasResponseStatus

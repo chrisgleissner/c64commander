@@ -42,9 +42,13 @@ describe('formatActionEffectTarget', () => {
 
   it('maps real-device using transformed /v1/info product values', () => {
     expect(formatActionEffectTarget('real-device', 'c64u')).toBe('c64u');
+    expect(formatActionEffectTarget('real-device', 'C64U')).toBe('c64u');
     expect(formatActionEffectTarget('real-device', 'u64')).toBe('u64');
+    expect(formatActionEffectTarget('real-device', 'U64')).toBe('u64');
     expect(formatActionEffectTarget('real-device', 'u64e')).toBe('u64e');
+    expect(formatActionEffectTarget('real-device', 'U64E')).toBe('u64e');
     expect(formatActionEffectTarget('real-device', 'u64e2')).toBe('u64e2');
+    expect(formatActionEffectTarget('real-device', 'U64E2')).toBe('u64e2');
     expect(formatActionEffectTarget('real-device', 'C64 Ultimate')).toBe('c64u');
     expect(formatActionEffectTarget('real-device', 'unknown-model')).toBe('c64');
   });

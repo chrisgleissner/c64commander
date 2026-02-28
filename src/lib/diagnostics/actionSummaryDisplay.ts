@@ -27,6 +27,7 @@ export const formatActionEffectTarget = (target?: string | null, product?: strin
   const raw = (target ?? 'unknown').toLowerCase();
   if (raw === 'internal-mock' || raw === 'external-mock' || raw === 'mock') return 'mock';
   if (raw === 'real-device') return normalizeRealDeviceProduct(product);
+  // Defensive pass-through when traces already provide transformed product-like targets.
   if (raw === 'c64u' || raw === 'u64' || raw === 'u64e' || raw === 'u64e2' || raw === 'c64') return raw;
   return raw;
 };
