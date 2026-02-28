@@ -180,4 +180,58 @@ this is not valid
     expect(stats.backendStats.estimatedMemoryBytes).toBeLessThan(80 * 1024 * 1024);
     expect(elapsedMs).toBeLessThan(10_000);
   }, 15000);
+
+  it('returns unavailable when no source files provided', async () => {
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-empty' });
+    const stats = await service.loadOnColdStart(
+      null,
+      async () => [],
+      'unit-test',
+    );
+    expect(stats.status).toBe('unavailable');
+    expect(stats.unavailableReason).toContain('unavailable');
+  });
+
+  it('handles load error gracefully', async () => {
+    const backend = new InMemoryTextBackend();
+    vi.spyOn(backend, 'load').mockRejectedValueOnce(new Error('load failure'));
+    const service = new SongLengthServiceFacade(backend, { serviceId: 'test-error' });
+    const stats = await service.loadOnColdStart(
+      '/Songlengths.md5',
+      async () => [{ path: '/Songlengths.md5', content: 'bad content' }],
+      'unit-test',
+    );
+    expect(stats.status).toBe('unavailable');
+  });
+
+  it('returns unavailable resolution when not loaded', () => {
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-unloaded' });
+    const resolution = service.resolveDurationSeconds({ fileName: 'test.sid', songNr: 1 });
+    expect(resolution.durationSeconds).toBeNull();
+    expect(resolution.strategy).toBe('unavailable');
+  });
+
+  it('reset clears state', async () => {
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-reset' });
+    await loadWithContent(service, `
+; /MUSICIANS/A/solo.sid
+11111111111111111111111111111111=0:30
+`);
+    expect(service.stats().status).toBe('ready');
+    service.reset('test');
+    expect(service.stats().status).toBe('unavailable');
+  });
+
+  it('reloadOnConfigChange works same as loadOnColdStart', async () => {
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-reload' });
+    const stats = await service.reloadOnConfigChange(
+      '/Songlengths.md5',
+      async () => [{ path: '/Songlengths.md5', content: `
+; /MUSICIANS/A/solo.sid
+11111111111111111111111111111111=0:30
+` }],
+      'unit-test',
+    );
+    expect(stats.status).toBe('ready');
+  });
 });

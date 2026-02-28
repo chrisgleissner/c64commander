@@ -376,6 +376,8 @@ jobs:
             exit 1
           fi
 
+          touch artifacts/ios/_infra/telemetry/flow-active.flag
+
           mock_port_args=()
           if [[ -n "${IOS_MAESTRO_MOCK_PORT:-}" ]]; then
             mock_port_args=(--mock-port "${IOS_MAESTRO_MOCK_PORT}")
@@ -391,7 +393,13 @@ jobs:
           if [[ ${#mock_port_args[@]} -gt 0 ]]; then
             maestro_cmd+=("${mock_port_args[@]}")
           fi
-          "${maestro_cmd[@]}"
+          maestro_status=0
+          "${maestro_cmd[@]}" || maestro_status=$?
+          rm -f artifacts/ios/_infra/telemetry/flow-active.flag
+          touch artifacts/ios/_infra/telemetry/flow-complete.flag
+          if [[ "$maestro_status" -ne 0 ]]; then
+            exit "$maestro_status"
+          fi
 
       - name: Validate connectivity (${{ matrix.group.name }})
         if: always()
@@ -812,7 +820,6 @@ jobs:
             cd ios/build
             zip -qry "${IPA_BASENAME}.ipa" Payload
           )
-          sha256sum "ios/build/${IPA_BASENAME}.ipa" > "ios/build/${IPA_BASENAME}.ipa.sha256"
 
       - name: Upload iOS IPA artifact
         uses: actions/upload-artifact@v4
@@ -820,7 +827,6 @@ jobs:
           name: ios-ipa
           path: |
             ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa
-            ios/build/c64commander-${{ env.APP_VERSION }}-ios.ipa.sha256
           if-no-files-found: error
 
       - name: Upload iOS package diagnostics on failure
@@ -857,7 +863,6 @@ jobs:
           set -euo pipefail
           gh release upload "${GITHUB_REF_NAME}" \
             "ios/build/c64commander-${APP_VERSION}-ios.ipa" \
-            "ios/build/c64commander-${APP_VERSION}-ios.ipa.sha256" \
             --clobber
 
   ios-package-paid:

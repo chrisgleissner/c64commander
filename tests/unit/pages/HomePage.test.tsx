@@ -22,6 +22,8 @@ const {
   streamPayloadRef,
   driveASettingsPayloadRef,
   driveBSettingsPayloadRef,
+  u64SettingsPayloadRef,
+  ledStripPayloadRef,
   statusPayloadRef,
   drivesPayloadRef,
   machineControlPayloadRef,
@@ -48,6 +50,8 @@ const {
   streamPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   driveASettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   driveBSettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  u64SettingsPayloadRef: { current: undefined as Record<string, unknown> | undefined },
+  ledStripPayloadRef: { current: undefined as Record<string, unknown> | undefined },
   statusPayloadRef: {
     current: {
       isConnected: true,
@@ -163,6 +167,12 @@ vi.mock('@/hooks/useC64Connection', () => ({
     if (category === 'Drive B Settings') {
       return { data: driveBSettingsPayloadRef.current };
     }
+    if (category === 'U64 Specific Settings') {
+      return { data: u64SettingsPayloadRef.current };
+    }
+    if (category === 'LED Strip Settings') {
+      return { data: ledStripPayloadRef.current };
+    }
     return { data: null };
   },
   useC64MachineControl: () => machineControlPayloadRef.current,
@@ -231,6 +241,8 @@ beforeEach(() => {
   streamPayloadRef.current = undefined;
   driveASettingsPayloadRef.current = undefined;
   driveBSettingsPayloadRef.current = undefined;
+  u64SettingsPayloadRef.current = undefined;
+  ledStripPayloadRef.current = undefined;
   c64ApiMockRef.current = {
     setConfigValue: vi.fn().mockResolvedValue({}),
     resetDrive: vi.fn().mockResolvedValue({}),
@@ -729,5 +741,108 @@ describe('HomePage SID status', () => {
     const [deleteButton] = within(manageDialog).getAllByRole('button', { name: /delete/i });
     fireEvent.click(deleteButton);
     expect(appConfigStatePayloadRef.current.deleteAppConfig).toHaveBeenCalledWith('config-a');
+  }, 30000);
+
+  it('renders Quick Config section with config data and handles CPU speed change', async () => {
+    u64SettingsPayloadRef.current = {
+      'U64 Specific Settings': {
+        items: {
+          'CPU Speed': { selected: '1', options: ['1', '2', '4'] },
+          'System Mode': { selected: 'PAL', options: ['PAL', 'NTSC'] },
+          'Turbo Control': { selected: 'Off', options: ['Off', 'Manual'] },
+          'HDMI Scan lines': { selected: 'Disabled', options: ['Disabled', 'Enabled'] },
+          'Joystick Swapper': { selected: 'Normal', options: ['Normal', 'Swapped'] },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    const quickConfig = screen.getByTestId('home-quick-config');
+    expect(within(quickConfig).getByTestId('home-cpu-speed-value').textContent).toBe('1');
+
+    const slider = screen.getByTestId('home-cpu-speed-slider');
+    const thumb = slider.querySelector('[role="slider"]');
+    expect(thumb).toBeTruthy();
+    fireEvent.keyDown(thumb!, { key: 'ArrowRight' });
+
+    await waitFor(() => expect(c64ApiMockRef.current.setConfigValue).toHaveBeenCalledWith(
+      'U64 Specific Settings',
+      'CPU Speed',
+      '2',
+    ));
+  });
+
+  it('renders LED settings when LED config data is populated and handles mode change', async () => {
+    ledStripPayloadRef.current = {
+      'LED Strip Settings': {
+        items: {
+          'LedStrip Mode': { selected: 'Fixed Color', options: ['Off', 'Fixed Color', 'Rainbow'] },
+          'Fixed Color': { selected: 'Red', options: ['Red', 'Green', 'Blue'] },
+          'Strip Intensity': { selected: '15', min: 0, max: 31 },
+          'LedStrip SID Select': { selected: 'SID 1', options: ['SID 1', 'SID 2'] },
+          'Color tint': { selected: 'Pure', options: ['Pure', 'Warm'] },
+        },
+      },
+    };
+
+    renderHomePage();
+
+    const ledSection = screen.getByTestId('home-led-summary');
+    expect(within(ledSection).getByText('LED')).toBeTruthy();
+    expect(screen.getByTestId('home-led-mode')).toBeTruthy();
+    expect(screen.getByTestId('home-led-color')).toBeTruthy();
+    expect(screen.getByTestId('home-led-intensity-slider')).toBeTruthy();
+    expect(screen.getByTestId('home-led-intensity-value')).toBeTruthy();
+
+    const ledModeSelect = screen.getByTestId('home-led-mode');
+    fireEvent.click(ledModeSelect);
+    await waitFor(() => expect(document.body.getAttribute('data-scroll-locked')).toBe('1'));
+    fireEvent.keyDown(document.activeElement ?? ledModeSelect, { key: 'Escape' });
+  });
+
+  it('handles save-to-app error path', async () => {
+    const savedAt = new Date('2024-01-01T00:00:00.000Z').toISOString();
+    appConfigStatePayloadRef.current = {
+      ...appConfigStatePayloadRef.current,
+      appConfigs: [
+        { id: 'config-a', name: 'Config A', savedAt },
+      ],
+      hasChanges: true,
+      saveCurrentConfig: vi.fn().mockRejectedValue(new Error('save boom')),
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole('button', { name: /save to app/i }));
+    const saveDialog = screen.getByRole('dialog');
+    fireEvent.change(within(saveDialog).getByPlaceholderText(/config name/i), { target: { value: 'New Config' } });
+    fireEvent.click(within(saveDialog).getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'APP_CONFIG_SAVE',
+    })));
+  }, 30000);
+
+  it('handles load-from-app error path', async () => {
+    const savedAt = new Date('2024-01-01T00:00:00.000Z').toISOString();
+    appConfigStatePayloadRef.current = {
+      ...appConfigStatePayloadRef.current,
+      appConfigs: [
+        { id: 'config-a', name: 'Config A', savedAt },
+        { id: 'config-b', name: 'Config B', savedAt },
+      ],
+      loadAppConfig: vi.fn().mockRejectedValue(new Error('load boom')),
+    };
+
+    renderHomePage();
+
+    fireEvent.click(screen.getByRole('button', { name: /load from app/i }));
+    const loadDialog = screen.getByRole('dialog');
+    fireEvent.click(within(loadDialog).getByRole('button', { name: /config a/i }));
+
+    await waitFor(() => expect(reportUserErrorSpy).toHaveBeenCalledWith(expect.objectContaining({
+      operation: 'APP_CONFIG_LOAD',
+    })));
   }, 30000);
 });

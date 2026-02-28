@@ -28,8 +28,12 @@ EXPECT_MAIN_PID="${TELEMETRY_EXPECT_MAIN_PID:-1}"
 CI_JOB_NAME="${GITHUB_JOB:-unknown-job}"
 CI_RUN_ID="${GITHUB_RUN_ID:-local}"
 CI_SHA="${GITHUB_SHA:-unknown}"
+FLOW_LIFECYCLE_DIR="${TELEMETRY_FLOW_LIFECYCLE_DIR:-$OUT_DIR}"
+FLOW_ACTIVE_FLAG="$FLOW_LIFECYCLE_DIR/flow-active.flag"
+FLOW_COMPLETE_FLAG="$FLOW_LIFECYCLE_DIR/flow-complete.flag"
 
 mkdir -p "$OUT_DIR"
+mkdir -p "$FLOW_LIFECYCLE_DIR"
 
 echo "timestamp,platform,device,process_name,pid,cpu_percent,rss_kb,threads,pss_kb,dalvik_pss_kb,native_pss_kb,total_pss_kb" > "$CSV_PATH"
 printf 'timestamp,platform,device,process_name,pid,physical_footprint_kb\n' > "$SLOW_METRICS_PATH"
@@ -155,6 +159,7 @@ read_ps_metrics() {
 running=1
 main_seen_once=0
 main_disappeared=0
+main_disappeared_during_flow=0
 last_app_pid=""
 last_vmmap_ts=0
 run_start_ts="$(date -u +%s)"
@@ -191,6 +196,12 @@ while (( running == 1 )); do
     if [[ -n "$last_app_pid" ]]; then
       log_event "process_disappeared" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "app process no longer visible"
       main_disappeared=1
+      if [[ -f "$FLOW_ACTIVE_FLAG" && ! -f "$FLOW_COMPLETE_FLAG" ]]; then
+        main_disappeared_during_flow=1
+        log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "crash during active flow"
+      else
+        log_event "process_disappeared_after_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "expected teardown"
+      fi
       last_app_pid=""
     fi
   else
@@ -290,12 +301,13 @@ cat > "$META_PATH" <<EOF
   "start_timestamp": ${run_start_ts},
   "end_timestamp": ${run_end_ts},
   "main_seen_once": ${main_seen_once},
-  "main_disappeared": ${main_disappeared}
+  "main_disappeared": ${main_disappeared},
+  "main_disappeared_during_flow": ${main_disappeared_during_flow}
 }
 EOF
 
-if [[ "$EXPECT_MAIN_PID" == "1" && "$main_seen_once" == "1" && "$main_disappeared" == "1" ]]; then
-  echo "telemetry(ios): app process disappeared unexpectedly" >&2
+if [[ "$EXPECT_MAIN_PID" == "1" && "$main_seen_once" == "1" && "$main_disappeared_during_flow" == "1" ]]; then
+  echo "telemetry(ios): app process disappeared during active flow" >&2
   exit 3
 fi
 

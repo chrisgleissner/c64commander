@@ -114,4 +114,120 @@ describe('smokeMode', () => {
       encoding: Encoding.UTF8,
     });
   });
+
+  it('returns null for invalid config target', async () => {
+    localStorage.setItem('c64u_smoke_config', JSON.stringify({
+      target: 'invalid-target',
+    }));
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    expect(isSmokeModeEnabled()).toBe(false);
+  });
+
+  it('returns null for non-object config', async () => {
+    localStorage.setItem('c64u_smoke_config', '"not an object"');
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+  });
+
+  it('handles malformed JSON in storage gracefully', async () => {
+    localStorage.setItem('c64u_smoke_config', '{broken json');
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('parse'), expect.any(Object));
+  });
+
+  it('skips host persistence when host is absent', async () => {
+    localStorage.setItem('c64u_smoke_config', JSON.stringify({
+      target: 'mock',
+    }));
+
+    const config = await initializeSmokeMode();
+    expect(config?.host).toBeUndefined();
+    expect(localStorage.getItem('c64u_device_host')).toBeNull();
+  });
+
+  it('defaults readOnly to true when not specified', async () => {
+    localStorage.setItem('c64u_smoke_config', JSON.stringify({
+      target: 'mock',
+    }));
+
+    const config = await initializeSmokeMode();
+    expect(config?.readOnly).toBe(true);
+    expect(isSmokeReadOnlyEnabled()).toBe(true);
+  });
+
+  it('skips recordSmokeStatus when config not initialized', async () => {
+    await recordSmokeStatus({ state: 'DEMO_ACTIVE' });
+    expect(Filesystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('skips recordSmokeStatus on non-native platform', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
+    localStorage.setItem('c64u_smoke_config', JSON.stringify({
+      target: 'mock',
+    }));
+    await initializeSmokeMode();
+    await recordSmokeStatus({ state: 'DEMO_ACTIVE' });
+    expect(Filesystem.writeFile).not.toHaveBeenCalled();
+  });
+
+  it('logs warning when recordSmokeStatus write fails', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem('c64u_smoke_config', JSON.stringify({
+      target: 'mock',
+    }));
+    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error('write error'));
+
+    await initializeSmokeMode();
+    await recordSmokeStatus({ state: 'DEMO_ACTIVE' });
+    expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('smoke status'), expect.any(Object));
+  });
+
+  it('handles filesystem read error for missing file', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem('c64u_smoke_mode_enabled', '1');
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('File does not exist'));
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+  });
+
+  it('handles filesystem read error for generic error', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem('c64u_smoke_mode_enabled', '1');
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('Permission denied'));
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('read smoke'), expect.any(Object));
+  });
+
+  it('reads from filesystem via VITE_ENABLE_TEST_PROBES', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    const originalEnv = import.meta.env.VITE_ENABLE_TEST_PROBES;
+    import.meta.env.VITE_ENABLE_TEST_PROBES = '1';
+    vi.mocked(Filesystem.readFile).mockResolvedValue({
+      data: JSON.stringify({ target: 'mock' }),
+    });
+
+    const config = await initializeSmokeMode();
+    expect(config?.target).toBe('mock');
+
+    import.meta.env.VITE_ENABLE_TEST_PROBES = originalEnv;
+  });
+
+  it('normalizes host with empty string to undefined', async () => {
+    localStorage.setItem('c64u_smoke_config', JSON.stringify({
+      target: 'real',
+      host: '  ',
+    }));
+
+    const config = await initializeSmokeMode();
+    expect(config?.host).toBeUndefined();
+  });
 });
