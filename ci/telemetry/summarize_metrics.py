@@ -288,6 +288,13 @@ def main() -> None:
 
     records, warnings = load_records(csv_paths)
     if not records:
+        for csv_path in csv_paths:
+            try:
+                with open(csv_path, "r", encoding="utf-8") as handle:
+                    line_count = sum(1 for _ in handle)
+                print(f"telemetry summary debug: {csv_path} lines={line_count}")
+            except OSError as error:
+                print(f"telemetry summary debug: failed to read {csv_path}: {error}")
         raise SystemExit("telemetry summary: no telemetry samples in inputs")
 
     min_ts = min(record.timestamp for record in records)

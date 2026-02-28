@@ -833,9 +833,26 @@ jobs:
           MAESTRO_CLI_LOG_LEVEL: "debug"
         run: |
           set -euo pipefail
-          start=$(date +%s)
           export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
           export PATH="$ANDROID_SDK_ROOT/platform-tools:$HOME/.maestro/bin:$PATH"
+          SERIAL=$(adb devices | awk '/emulator-/ {print $1; exit}')
+          if [[ -z "$SERIAL" ]]; then
+            echo "telemetry preflight failed: no emulator serial found"
+            adb devices -l || true
+            cat ci-artifacts/telemetry/android/monitor-run.log || true
+            exit 1
+          fi
+          # Prime telemetry sampling before Maestro to avoid header-only telemetry output.
+          adb -s "$SERIAL" shell am start -n uk.gleissner.c64commander/.MainActivity >/dev/null 2>&1 || true
+          csv="ci-artifacts/telemetry/android/metrics.csv"
+          if ! timeout 45 bash -c "until [[ -f '$csv' ]] && [[ \$(wc -l < '$csv') -gt 1 ]]; do sleep 1; done"; then
+            echo "telemetry preflight failed: monitor did not capture app telemetry rows within timeout"
+            ls -la ci-artifacts/telemetry/android || true
+            cat ci-artifacts/telemetry/android/monitor-run.log || true
+            tail -n 50 ci-artifacts/telemetry/android/events.log || true
+            exit 1
+          fi
+          start=$(date +%s)
           # Verify emulator is still available
           adb devices -l
           maestro_status=0
@@ -898,11 +915,34 @@ jobs:
           fi
           cat ci-artifacts/telemetry/android/monitor-run.log || true
 
+      - name: Diagnose Android telemetry inputs
+        if: always()
+        run: |
+          set -euo pipefail
+          telemetry_dir="ci-artifacts/telemetry/android"
+          echo "=== telemetry dir tree ==="
+          ls -la "$telemetry_dir" || true
+          csv="$telemetry_dir/metrics.csv"
+          if [[ -f "$csv" ]]; then
+            echo "=== metrics.csv lines ==="
+            wc -l "$csv" || true
+            echo "=== metrics.csv head ==="
+            head -n 5 "$csv" || true
+            echo "=== metrics.csv tail ==="
+            tail -n 5 "$csv" || true
+          fi
+          echo "=== monitor-run.log tail ==="
+          tail -n 80 "$telemetry_dir/monitor-run.log" || true
+          echo "=== events.log tail ==="
+          tail -n 80 "$telemetry_dir/events.log" || true
+
       - name: Summarize telemetry
         if: always()
         run: |
           set -euo pipefail
-          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/summarize_metrics.py
+          TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry \
+          TELEMETRY_INPUT_CSVS=ci-artifacts/telemetry/android/metrics.csv \
+          python3 ci/telemetry/summarize_metrics.py
 
       - name: Render telemetry charts
         if: always()
@@ -941,8 +981,16 @@ jobs:
             exit 1
           fi
           line_count=$(wc -l < "$csv")
-          if [[ "$line_count" -le 2 ]]; then
-            echo "telemetry gate failed: expected multiple data rows, found $((line_count-1))"
+          data_rows=$((line_count - 1))
+          if [[ "$data_rows" -lt 2 ]]; then
+            echo "telemetry gate failed: expected multiple data rows, found ${data_rows}"
+            echo "telemetry gate debug: csv=${csv} line_count=${line_count}"
+            tail -n 80 ci-artifacts/telemetry/android/monitor-run.log || true
+            tail -n 80 ci-artifacts/telemetry/android/events.log || true
+            if [[ -f ci-artifacts/telemetry/android/metadata.json ]]; then
+              echo "telemetry gate debug: metadata.json"
+              cat ci-artifacts/telemetry/android/metadata.json || true
+            fi
             exit 1
           fi
           code_file="ci-artifacts/telemetry/android/monitor.exitcode"

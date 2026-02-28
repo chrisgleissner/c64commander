@@ -165,6 +165,7 @@ main_seen_once=0
 main_disappeared=0
 running=1
 run_start_ts="$(date -u +%s)"
+sample_rows=0
 
 trap 'running=0' INT TERM
 
@@ -273,6 +274,7 @@ while (( running == 1 )); do
       "${dalvik_pss_kb:-}" \
       "${native_pss_kb:-}" \
       "${total_pss_kb:-}" >> "$CSV_PATH"
+    sample_rows=$((sample_rows + 1))
 
     prev_proc_jiffies[$role]="$proc_jiffies"
   done
@@ -300,6 +302,7 @@ cat > "$META_PATH" <<EOF
   "run_id": "${CI_RUN_ID}",
   "commit_sha": "${CI_SHA}",
   "sampling_interval_sec": ${SAMPLING_INTERVAL_SEC},
+  "sample_rows": ${sample_rows},
   "start_timestamp": ${run_start_ts},
   "end_timestamp": ${run_end_ts},
   "main_seen_once": ${main_seen_once},
