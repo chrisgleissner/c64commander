@@ -29,4 +29,15 @@ describe('telemetry release gate workflow rules', () => {
         expect(workflow).toContain('artifacts/ios/_infra/simulator/**');
         expect(workflow).toContain('artifacts/ios/_infra/xcodebuild/**');
     });
+
+    it('creates flow-active.flag before Maestro execution in iOS workflow', () => {
+        const workflow = readWorkflow('ios.yaml');
+        expect(workflow).toContain('touch artifacts/ios/_infra/telemetry/flow-active.flag');
+    });
+
+    it('transitions lifecycle flags after Maestro execution in iOS workflow', () => {
+        const workflow = readWorkflow('ios.yaml');
+        expect(workflow).toContain('rm -f artifacts/ios/_infra/telemetry/flow-active.flag');
+        expect(workflow).toContain('touch artifacts/ios/_infra/telemetry/flow-complete.flag');
+    });
 });
