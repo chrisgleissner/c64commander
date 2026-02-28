@@ -46,6 +46,7 @@ export const DiagnosticsListItem = ({
         : 'bg-muted-foreground';
   const severityMeta = getDiagnosticsSeverityMeta(severity);
   const hasSecondary = Boolean(secondaryLeft || secondaryRight);
+  const isActionMode = mode === 'action';
 
   return (
     <details className="group rounded-lg border border-border" data-testid={testId}>
@@ -79,27 +80,46 @@ export const DiagnosticsListItem = ({
         </div>
       </summary>
       <div className="px-2 pb-3 pt-2 text-xs">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
-          <span
-            className={cn('inline-flex w-4 items-center justify-center', severityMeta.colorClass)}
-            aria-hidden="true"
+        {isActionMode ? (
+          <div
+            data-testid="diagnostics-action-expanded-header"
+            className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs font-semibold uppercase tracking-wide"
           >
-            {severityMeta.glyph}
-          </span>
-          <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
-            {severityMeta.label}
-          </span>
-        </div>
-        {hasSecondary ? (
-          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs">
             <div className="min-w-0 flex flex-wrap items-center gap-2">
+              <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
+                {severityMeta.label}
+              </span>
               {secondaryLeft}
             </div>
-            <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
+            <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0 normal-case">
               {secondaryRight}
             </div>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+              <span
+                className={cn('inline-flex w-4 items-center justify-center', severityMeta.colorClass)}
+                aria-hidden="true"
+              >
+                {severityMeta.glyph}
+              </span>
+              <span data-testid="diagnostics-severity-label" className={cn(severityMeta.colorClass)}>
+                {severityMeta.label}
+              </span>
+            </div>
+            {hasSecondary ? (
+              <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs">
+                <div className="min-w-0 flex flex-wrap items-center gap-2">
+                  {secondaryLeft}
+                </div>
+                <div className="text-muted-foreground font-semibold tabular-nums text-right shrink-0">
+                  {secondaryRight}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
         {children ? <div className={cn('text-xs mt-2')}>{children}</div> : null}
       </div>
     </details>

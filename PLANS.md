@@ -9,3 +9,4 @@
 - [x] Add/update unit tests for aggregation boundaries and count consistency.
 - [x] Add/update Playwright coverage for expanded action view behavior.
 - [x] Run required validation (`npm run test`, `npm run lint`, `npm run build`, `./build`, `npm run test:coverage`) and fix only issues related to this scope.
+- [x] Apply steering update: expanded Action header uses single row `LEVEL [ERR/REST/FTP counts] ... duration` with no action-expanded glyph prefix.

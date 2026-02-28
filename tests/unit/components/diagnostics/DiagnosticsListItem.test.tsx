@@ -58,6 +58,10 @@ describe('DiagnosticsListItem', () => {
         expect(within(entry).getByText('REST×1')).toBeInTheDocument();
         expect(within(entry).getByText('25 ms')).toBeInTheDocument();
         expect(within(entry).getByTestId('diagnostics-severity-label')).toHaveTextContent('WARN');
+        const actionHeaderRow = within(entry).getByTestId('diagnostics-action-expanded-header');
+        expect(actionHeaderRow).toHaveTextContent('WARN');
+        expect(actionHeaderRow).toHaveTextContent('REST×1');
+        expect(actionHeaderRow).toHaveTextContent('25 ms');
     });
 
     it('renders unknown origin marker for action entries without origin', () => {
