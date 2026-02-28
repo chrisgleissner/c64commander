@@ -357,6 +357,15 @@ jobs:
           mkdir -p artifacts/ios/_infra/telemetry
           (
             status=0
+            code_file="artifacts/ios/_infra/telemetry/monitor.exitcode"
+            wrote_code=0
+            write_code_file() {
+              if [[ "$wrote_code" == "0" ]]; then
+                echo "$1" > "$code_file"
+                wrote_code=1
+              fi
+            }
+            trap 'write_code_file "$status"' EXIT
             TELEMETRY_INTERVAL_SEC=1 \
             TELEMETRY_OUTPUT_DIR=artifacts/ios/_infra/telemetry \
             SIMULATOR_UDID="${{ steps.simulator.outputs.udid }}" \
@@ -366,7 +375,7 @@ jobs:
             monitor_child_pid=$!
             echo "$monitor_child_pid" > artifacts/ios/_infra/telemetry/monitor.child.pid
             wait "$monitor_child_pid" || status=$?
-            echo "$status" > artifacts/ios/_infra/telemetry/monitor.exitcode
+            write_code_file "$status"
           ) > artifacts/ios/_infra/telemetry/monitor-run.log 2>&1 &
           echo $! > artifacts/ios/_infra/telemetry/monitor.pid
           sleep 2
@@ -414,6 +423,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          pid=""
           child_pid=""
           if [[ -f artifacts/ios/_infra/telemetry/monitor.child.pid ]]; then
             child_pid="$(cat artifacts/ios/_infra/telemetry/monitor.child.pid)"
@@ -436,6 +446,22 @@ jobs:
             fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
+            fi
+            for _ in $(seq 1 10); do
+              if [[ -f artifacts/ios/_infra/telemetry/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+          fi
+          if [[ ! -f artifacts/ios/_infra/telemetry/monitor.exitcode ]]; then
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              :
+            elif [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+              :
+            else
+              echo "1" > artifacts/ios/_infra/telemetry/monitor.exitcode
+              echo "telemetry(ios): synthesized monitor.exitcode=1 because wrapper exited before writing status" >&2
             fi
           fi
           cat artifacts/ios/_infra/telemetry/monitor-run.log || true

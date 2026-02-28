@@ -81,6 +81,15 @@ jobs:
           mkdir -p ci-artifacts/telemetry/docker
           (
             status=0
+            code_file="ci-artifacts/telemetry/docker/monitor.exitcode"
+            wrote_code=0
+            write_code_file() {
+              if [[ "$wrote_code" == "0" ]]; then
+                echo "$1" > "$code_file"
+                wrote_code=1
+              fi
+            }
+            trap 'write_code_file "$status"' EXIT
             TELEMETRY_INTERVAL_SEC=1 \
             TELEMETRY_OUTPUT_DIR=ci-artifacts/telemetry/docker \
             TELEMETRY_DOCKER_CONTAINER_NAME=c64commander-smoke \
@@ -90,7 +99,7 @@ jobs:
             monitor_child_pid=$!
             echo "$monitor_child_pid" > ci-artifacts/telemetry/docker/monitor.child.pid
             wait "$monitor_child_pid" || status=$?
-            echo "$status" > ci-artifacts/telemetry/docker/monitor.exitcode
+            write_code_file "$status"
           ) > ci-artifacts/telemetry/docker/monitor-run.log 2>&1 &
           echo $! > ci-artifacts/telemetry/docker/monitor.pid
           sleep 2
@@ -140,6 +149,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          pid=""
           child_pid=""
           if [[ -f ci-artifacts/telemetry/docker/monitor.child.pid ]]; then
             child_pid="$(cat ci-artifacts/telemetry/docker/monitor.child.pid)"
@@ -162,6 +172,22 @@ jobs:
             fi
             if kill -0 "$pid" 2>/dev/null; then
               kill -KILL "$pid" 2>/dev/null || true
+            fi
+            for _ in $(seq 1 10); do
+              if [[ -f ci-artifacts/telemetry/docker/monitor.exitcode ]]; then
+                break
+              fi
+              sleep 1
+            done
+          fi
+          if [[ ! -f ci-artifacts/telemetry/docker/monitor.exitcode ]]; then
+            if [[ -n "$child_pid" ]] && kill -0 "$child_pid" 2>/dev/null; then
+              :
+            elif [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+              :
+            else
+              echo "1" > ci-artifacts/telemetry/docker/monitor.exitcode
+              echo "telemetry(web): synthesized monitor.exitcode=1 because wrapper exited before writing status" >&2
             fi
           fi
           cat ci-artifacts/telemetry/docker/monitor-run.log || true

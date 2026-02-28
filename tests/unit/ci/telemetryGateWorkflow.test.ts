@@ -48,4 +48,16 @@ describe('telemetry release gate workflow rules', () => {
         expect(trapMatches.length).toBeGreaterThanOrEqual(2);
         expect(fallbackMatches.length).toBeGreaterThanOrEqual(2);
     });
+
+    it('hardens iOS monitor lifecycle to always persist exit codes', () => {
+        const workflow = readWorkflow('ios.yaml');
+        expect(workflow).toContain("trap 'write_code_file \"$status\"' EXIT");
+        expect(workflow).toContain('telemetry(ios): synthesized monitor.exitcode=1 because wrapper exited before writing status');
+    });
+
+    it('hardens web monitor lifecycle to always persist exit codes', () => {
+        const workflow = readWorkflow('web.yaml');
+        expect(workflow).toContain("trap 'write_code_file \"$status\"' EXIT");
+        expect(workflow).toContain('telemetry(web): synthesized monitor.exitcode=1 because wrapper exited before writing status');
+    });
 });
