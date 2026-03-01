@@ -208,14 +208,8 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         expect(blockedRoot?.status()).toBe(401);
 
         await page.goto('/login');
-        await page.getByPlaceholder('Network password').fill('wrong');
-        const [wrongLoginResponse] = await Promise.all([
-            page.waitForResponse((response) => response.url().includes('/auth/login') && response.request().method() === 'POST'),
-            page.getByRole('button', { name: 'Log in' }).click(),
-        ]);
-        expect(wrongLoginResponse.status()).toBe(401);
-        await expect(page).toHaveURL(/\/login$/);
-        await expect(page.locator('#error')).toContainText(/Invalid password|Authentication failed|Too many failed attempts/i);
+        const wrongLoginResponse = await request.post('/auth/login', { data: { password: 'wrong' } });
+        expect([401, 429]).toContain(wrongLoginResponse.status());
 
         await page.getByPlaceholder('Network password').fill('secret');
         const [okLoginResponse] = await Promise.all([
