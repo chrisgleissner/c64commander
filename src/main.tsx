@@ -15,6 +15,7 @@ import { registerTraceBridge } from "./lib/tracing/traceBridge";
 import { markStartupBootstrapComplete } from "./lib/startup/startupMilestones";
 import { initializeRuntimeMotionMode } from "./lib/startup/runtimeMotionBudget";
 import { addErrorLog } from "./lib/logging";
+import { initializeSentry } from "./lib/observability/sentry";
 import "./index.css";
 
 const loadFonts = () => {
@@ -92,6 +93,7 @@ const registerServiceWorker = () => {
 };
 
 initializeRuntimeMotionMode();
+initializeSentry();
 registerServiceWorker();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

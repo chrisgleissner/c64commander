@@ -270,14 +270,14 @@ git push origin main
 
 ## Notes
 
-- Coverage thresholds are intentionally set to current baseline (10% lines) to avoid breaking builds
-- Thresholds should be gradually increased as coverage improves
-- All new code should aim for >80% coverage
+- Coverage thresholds are enforced at 90% for both line and branch coverage in pipeline gates
+- Thresholds should remain at or above 90% for all production gates
+- All new code should aim for >90% coverage
 - E2E tests provide high-level confidence even without high unit test coverage
 - Focus on testing critical paths and user-facing features first
 
 ---
 
-**Implementation Date**: January 21, 2026  
-**Status**: ✅ Local validation complete, ready for CI verification  
+**Implementation Date**: January 21, 2026
+**Status**: ✅ Local validation complete, ready for CI verification
 **Next Action**: Configure CODECOV_TOKEN and trigger first CI build

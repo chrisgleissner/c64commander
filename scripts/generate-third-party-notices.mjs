@@ -283,21 +283,26 @@ const readSwiftPm = async () => {
     .sort((a, b) => a.name.localeCompare(b.name));
 };
 
-const renderNotices = (entries) => entries.map((entry) => {
-  const licenseUrl = resolveLicenseUrl(entry.license);
-  const linkedLicense = licenseUrl === '-'
-    ? entry.license
-    : `[${entry.license}](${licenseUrl})`;
-  const source = entry.source || '-';
-  const linkedSource = source === '-'
-    ? '-'
-    : `[${source}](${source})`;
+const escapeTableCell = (value) => value.replaceAll('|', '\\|');
 
-  return [
-    `- ${entry.ecosystem} ${entry.name} ${entry.version} ${linkedLicense}`,
-    `  Source: ${linkedSource}`,
-  ].join('\n');
-}).join('\n\n');
+const renderNotices = (entries) => {
+  const header = '| Ecosystem | Package | Version | License | Source URL |';
+  const separator = '| --- | --- | --- | --- | --- |';
+  const rows = entries.map((entry) => {
+    const licenseUrl = resolveLicenseUrl(entry.license);
+    const linkedLicense = licenseUrl === '-'
+      ? entry.license
+      : `[${entry.license}](${licenseUrl})`;
+    const source = entry.source || '-';
+    const linkedSource = source === '-'
+      ? '-'
+      : `[${source}](${source})`;
+
+    return `| ${escapeTableCell(entry.ecosystem)} | ${escapeTableCell(entry.name)} | ${escapeTableCell(entry.version)} | ${escapeTableCell(linkedLicense)} | ${escapeTableCell(linkedSource)} |`;
+  });
+
+  return [header, separator, ...rows].join('\n');
+};
 
 const parseArgs = () => {
   const args = process.argv.slice(2);

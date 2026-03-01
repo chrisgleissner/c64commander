@@ -1,0 +1,4 @@
+# Security-sensitive paths require maintainer review
+.github/workflows/ @chrisgleissner
+android/keystore/ @chrisgleissner
+scripts/print_keystore_secrets.sh @chrisgleissner

@@ -74,6 +74,11 @@ export default defineConfig({
       all: false,
       reporter: ["text", "lcov", "html", "json"],
       exclude: [
+        "tests/**",
+        "playwright/**",
+        "scripts/**",
+        "coverage/**",
+        "dist/**",
         "src/**/*.test.{ts,tsx}",
         "src/**/*.spec.{ts,tsx}",
         "src/vite-env.d.ts",

@@ -32,6 +32,19 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
   const blocks: MarkdownBlock[] = [];
   let index = 0;
 
+  const splitTableRow = (line: string) => line
+    .trim()
+    .replace(/^\|\s*/, '')
+    .replace(/\s*\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+
+  const isTableSeparator = (line: string) => {
+    const cells = splitTableRow(line);
+    if (cells.length === 0) return false;
+    return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+  };
+
   while (index < lines.length) {
     const line = lines[index].trim();
 
@@ -48,6 +61,46 @@ const parseMarkdownBlocks = (source: string): MarkdownBlock[] => {
         text: headingMatch[2].trim(),
       });
       index += 1;
+      continue;
+    }
+
+    if (line.startsWith('|') && index + 1 < lines.length && isTableSeparator(lines[index + 1])) {
+      const headerCells = splitTableRow(lines[index]).map((cell) => cell.toLowerCase());
+      index += 2;
+
+      const items: string[] = [];
+      while (index < lines.length) {
+        const tableLine = lines[index].trim();
+        if (!tableLine.startsWith('|')) break;
+        if (isTableSeparator(tableLine)) {
+          index += 1;
+          continue;
+        }
+
+        const rowCells = splitTableRow(tableLine);
+        const rowByHeader = new Map<string, string>();
+        for (let i = 0; i < headerCells.length; i += 1) {
+          rowByHeader.set(headerCells[i], rowCells[i] ?? '-');
+        }
+
+        const ecosystem = rowByHeader.get('ecosystem') ?? '-';
+        const packageName = rowByHeader.get('package') ?? '-';
+        const version = rowByHeader.get('version') ?? '-';
+        const license = rowByHeader.get('license') ?? '-';
+        const source = rowByHeader.get('source') ?? rowByHeader.get('source url') ?? '-';
+
+        const firstLine = [ecosystem, packageName, version, license]
+          .filter((part) => part && part !== '-')
+          .join(' ');
+        const secondLine = `Source: ${source || '-'}`;
+        items.push(`${firstLine}\n${secondLine}`);
+
+        index += 1;
+      }
+
+      if (items.length > 0) {
+        blocks.push({ type: 'list', items });
+      }
       continue;
     }
 

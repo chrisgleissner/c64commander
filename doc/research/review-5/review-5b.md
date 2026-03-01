@@ -183,7 +183,7 @@ Single feature flag (`hvsc_enabled`) with a full architecture: definition → ma
 
 - Debug APK on every PR/push; release APK/AAB on git tags only
 - Coverage merged from unit + screenshot + E2E via `lcov-result-merger`
-- Codecov uploaded with 80% project/patch targets
+- Codecov uploaded with 90% project/patch targets
 - Google Play internal track upload via `r0adkll/upload-google-play@v1`
 - GitHub Release created with APK + AAB on tags
 
@@ -987,7 +987,7 @@ No CSS orientation media queries. No `screen.orientation` API usage. No manifest
 - **Files:** 232 test files
 - **Tests:** 2204 (all passing)
 - **Coverage:** 91.6% statements, 84.32% branches, 88.17% functions
-- **Threshold:** 80% enforced via Codecov (project and patch)
+- **Threshold:** 90% enforced via Codecov (project and patch)
 - **Skipped tests:** None (0 disabled/skipped tests found)
 
 ## E2E Tests

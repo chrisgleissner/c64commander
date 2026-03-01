@@ -394,6 +394,8 @@ The [High Voltage SID Collection](https://hvsc.c64.org) is an amazing archive of
 
 Heartfelt thanks to [Commodore](https://commodore.net) for creating the Commodore 64, a machine that defined a generation of computing and gaming. Special recognition goes to the creators of the C64 Ultimate (Ultimate 64) for breathing new life into this classic platform with modern hardware that maintains the authentic C64 experience while adding powerful new capabilities.
 
+Commodore and Commodore 64 are trademarks of their respective owners. C64 Commander is an independent project and is not affiliated with, endorsed by, or sponsored by Commodore or C64 Ultimate rights holders.
+
 ### Third-Party Libraries
 
 C64 Commander builds on many excellent open-source projects. Notices are generated via `scripts/generate-third-party-notices.mjs` and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

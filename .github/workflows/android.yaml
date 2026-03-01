@@ -372,7 +372,7 @@ jobs:
       - name: Enforce coverage threshold
         env:
           COVERAGE_MIN: "90"
-          COVERAGE_FILE: "coverage/lcov.info"
+          COVERAGE_FILE: "coverage/lcov-merged.info"
         run: node scripts/check-coverage-threshold.mjs
 
       - name: Enforce coverage paths
