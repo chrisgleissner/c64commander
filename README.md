@@ -23,8 +23,8 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
     - [Install for Web Access](#install-for-web-access)
-      - [Docker installation](#install-docker)
-      - [Run the container](#run-the-container)
+      - [Install Docker](#install-docker)
+      - [Run the Container](#run-the-container)
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
@@ -251,7 +251,7 @@ C64 Commander includes configurable **Device Safety** controls under **Settings 
 
 ### iOS specifics
 
-- **App expired**: Free Apple ID sideloads in AltStore usually need refresh roughly every 7 days.
+- **App expired**: Apps installed via SideStore need a refresh every 7 days which should happen automatically.
 - **Account/App ID limits**: Remove unused sideloaded apps and retry.
 - **Install/signing errors**: Re-download the IPA and checksum, then verify again.
 - **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17`; iOS 17 and 18 are baseline support targets.
