@@ -121,7 +121,7 @@ jobs:
         run: npm ci
 
       - name: Download prepared iOS workspace
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ios-prepared-workspace
           path: .
@@ -206,7 +206,7 @@ jobs:
           ref: ${{ env.CI_SHA }}
 
       - name: Download simulator app
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ios-simulator-app
           path: App.app
@@ -618,7 +618,7 @@ jobs:
           ref: ${{ env.CI_SHA }}
 
       - name: Download all per-group artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: ios-maestro-*
           path: downloaded-artifacts
@@ -848,7 +848,7 @@ jobs:
           echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
 
       - name: Download prepared iOS workspace
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ios-prepared-workspace
           path: .
@@ -952,7 +952,7 @@ jobs:
           ref: ${{ env.CI_SHA }}
 
       - name: Download prepared iOS workspace
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ios-prepared-workspace
           path: .

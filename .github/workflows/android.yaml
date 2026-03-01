@@ -160,7 +160,7 @@ jobs:
           echo "- playwright install: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download coverage build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-dist-coverage
           path: dist
@@ -265,7 +265,7 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download coverage build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: web-dist-coverage
           path: dist
@@ -356,20 +356,20 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Download unit coverage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: coverage-unit
           path: coverage
 
       - name: Download e2e nyc outputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: e2e-nyc-output-*
           path: artifacts/nyc
           merge-multiple: true
 
       - name: Download Playwright evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: playwright-evidence-*
           path: test-results/evidence
@@ -1323,14 +1323,14 @@ jobs:
 
       - name: Download release APK artifact
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: c64commander-release-apk
           path: artifacts/release-apk
 
       - name: Download release AAB artifact
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: c64commander-release-aab
           path: artifacts/release-aab
