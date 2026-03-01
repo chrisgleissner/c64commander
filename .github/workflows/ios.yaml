@@ -49,7 +49,7 @@ jobs:
           ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -113,7 +113,7 @@ jobs:
           ref: ${{ env.CI_SHA }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
 
@@ -823,7 +823,7 @@ jobs:
           fetch-depth: 50
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "24"
 
