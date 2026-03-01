@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { assertTrustedLanDeviceHost, isTrustedLanDeviceHost } from '@/lib/network/trustedLanHost';
+import { isTrustedLanDeviceHost } from '@/lib/network/trustedLanHost';
 
 describe('trustedLanHost', () => {
     it('accepts private IPv4 targets', () => {
@@ -19,6 +19,7 @@ describe('trustedLanHost', () => {
     it('accepts local hostnames', () => {
         expect(isTrustedLanDeviceHost('c64u')).toBe(true);
         expect(isTrustedLanDeviceHost('my-c64.local')).toBe(true);
+        expect(isTrustedLanDeviceHost('localhost')).toBe(true);
         expect(isTrustedLanDeviceHost('nas-box')).toBe(true);
     });
 
@@ -32,9 +33,5 @@ describe('trustedLanHost', () => {
         expect(isTrustedLanDeviceHost('8.8.8.8')).toBe(false);
         expect(isTrustedLanDeviceHost('example.com')).toBe(false);
         expect(isTrustedLanDeviceHost('2606:4700:4700::1111')).toBe(false);
-    });
-
-    it('throws for non-LAN host assertions', () => {
-        expect(() => assertTrustedLanDeviceHost('8.8.8.8')).toThrow('Host must be a private LAN target');
     });
 });

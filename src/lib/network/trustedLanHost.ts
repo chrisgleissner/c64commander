@@ -62,6 +62,12 @@ const isPrivateIpv6Host = (host: string) => {
     return false;
 };
 
+const isSingleLabelHostname = (host: string) => {
+    if (host.includes('.')) return false;
+    if (host.includes(':')) return false;
+    return /^[a-z0-9-]+$/i.test(host);
+};
+
 export const isTrustedLanDeviceHost = (hostInput: string) => {
     const normalized = normalizeHostInput(hostInput).toLowerCase();
     const host = splitHostAndPort(normalized);
@@ -75,7 +81,7 @@ export const isTrustedLanDeviceHost = (hostInput: string) => {
         return true;
     }
 
-    if (!host.includes('.') && !host.includes(':')) {
+    if (isSingleLabelHostname(host)) {
         return true;
     }
 
@@ -84,12 +90,4 @@ export const isTrustedLanDeviceHost = (hostInput: string) => {
     }
 
     return false;
-};
-
-export const assertTrustedLanDeviceHost = (hostInput: string) => {
-    const normalized = normalizeHostInput(hostInput);
-    if (!isTrustedLanDeviceHost(normalized)) {
-        throw new Error('Host must be a private LAN target (private IP, .local hostname, or local hostname). Public/WAN targets are blocked.');
-    }
-    return normalized;
 };

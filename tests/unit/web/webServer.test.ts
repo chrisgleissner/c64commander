@@ -87,6 +87,9 @@ describe('web server platform runtime', () => {
         const root = await fetch(`${server.baseUrl}/`);
         expect(root.status).toBe(200);
         expect(await root.text()).toContain('ok');
+        expect(root.headers.get('x-frame-options')).toBe('DENY');
+        expect(root.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(root.headers.get('content-security-policy')).toContain("script-src 'self'");
 
         await server.close();
     });
@@ -473,6 +476,14 @@ describe('web server platform runtime', () => {
             headers: { Cookie: cookie },
         });
         expect(proxyFailure.status).toBe(502);
+
+        const restDenied = await fetch(`${server.baseUrl}/api/rest/v1/version`, {
+            headers: {
+                Cookie: cookie,
+                'X-C64U-Host': 'example.com',
+            },
+        });
+        expect(restDenied.status).toBe(403);
 
         const ftpDenied = await fetch(`${server.baseUrl}/api/ftp/read`, {
             method: 'POST',

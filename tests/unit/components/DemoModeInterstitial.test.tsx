@@ -15,8 +15,8 @@ const dismissDemoInterstitial = vi.fn();
 const discoverConnection = vi.fn();
 const updateC64APIConfig = vi.fn();
 const buildBaseUrlFromDeviceHost = vi.fn((host: string) => `http://${host}`);
-const resolveDeviceHostFromStorage = vi.fn(() => 'mydevice');
-const getC64APIConfigSnapshot = vi.fn(() => ({ baseUrl: 'http://mydevice', password: 'saved-pass', deviceHost: 'mydevice' }));
+const resolveDeviceHostFromStorage = vi.fn(() => 'mydevice.local');
+const getC64APIConfigSnapshot = vi.fn(() => ({ baseUrl: 'http://mydevice.local', password: 'saved-pass', deviceHost: 'mydevice.local' }));
 
 vi.mock('@/hooks/useConnectionState', () => ({
   useConnectionState: () => ({ demoInterstitialVisible }),
@@ -44,8 +44,8 @@ import { DemoModeInterstitial } from '@/components/DemoModeInterstitial';
 describe('DemoModeInterstitial', () => {
   beforeEach(() => {
     demoInterstitialVisible = true;
-    resolveDeviceHostFromStorage.mockReturnValue('mydevice');
-    getC64APIConfigSnapshot.mockReturnValue({ baseUrl: 'http://mydevice', password: 'saved-pass', deviceHost: 'mydevice' });
+    resolveDeviceHostFromStorage.mockReturnValue('mydevice.local');
+    getC64APIConfigSnapshot.mockReturnValue({ baseUrl: 'http://mydevice.local', password: 'saved-pass', deviceHost: 'mydevice.local' });
     dismissDemoInterstitial.mockReset();
     discoverConnection.mockReset();
     updateC64APIConfig.mockReset();
@@ -54,13 +54,13 @@ describe('DemoModeInterstitial', () => {
 
   it('shows the attempted hostname in the description', () => {
     render(<DemoModeInterstitial />);
-    expect(screen.getByTestId('demo-interstitial-hostname')).toHaveTextContent('mydevice');
+    expect(screen.getByTestId('demo-interstitial-hostname')).toHaveTextContent('mydevice.local');
   });
 
   it('pre-fills the hostname input with the stored device host', () => {
     render(<DemoModeInterstitial />);
     const input = screen.getByTestId('demo-interstitial-host-input') as HTMLInputElement;
-    expect(input.value).toBe('mydevice');
+    expect(input.value).toBe('mydevice.local');
   });
 
   it('Save & Retry persists the edited hostname and triggers settings discovery', () => {
@@ -76,7 +76,7 @@ describe('DemoModeInterstitial', () => {
   it('Save & Retry with unchanged input uses stored hostname and preserves password', () => {
     render(<DemoModeInterstitial />);
     fireEvent.click(screen.getByRole('button', { name: /Save & Retry/i }));
-    expect(updateC64APIConfig).toHaveBeenCalledWith('http://mydevice', 'saved-pass', 'mydevice');
+    expect(updateC64APIConfig).toHaveBeenCalledWith('http://mydevice.local', 'saved-pass', 'mydevice.local');
     expect(discoverConnection).toHaveBeenCalledWith('settings');
   });
 

@@ -37,7 +37,7 @@ export function DemoModeInterstitial() {
       saveConfiguredHostAndRetry(deviceHostInput, attemptedHost, { dismissInterstitial: true, trigger: 'settings' });
       setHostError(null);
     } catch (error) {
-      setHostError((error as Error).message);
+      setHostError(error instanceof Error ? error.message : String(error));
     }
   };
 

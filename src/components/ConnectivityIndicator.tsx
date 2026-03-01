@@ -64,7 +64,7 @@ export function ConnectivityIndicator({ className }: Props) {
       setHostError(null);
       setOpen(false);
     } catch (error) {
-      setHostError((error as Error).message);
+      setHostError(error instanceof Error ? error.message : String(error));
     }
   };
   const openDiagnosticsTab = (tab: DiagnosticsTabKey) => {

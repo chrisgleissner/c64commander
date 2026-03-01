@@ -25,7 +25,6 @@ import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from '@/lib/c
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { invalidateForConnectionSettingsChange } from '@/lib/query/c64QueryInvalidation';
 import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from '@/lib/query/c64PollingGovernance';
-import { assertTrustedLanDeviceHost } from '@/lib/network/trustedLanHost';
 
 export interface ConnectionStatus {
   state: 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
@@ -128,7 +127,7 @@ export function useC64Connection() {
   }, [queryClient, rateLimitedInfoRefetch]);
 
   const updateConfig = useCallback((newDeviceHost: string, newPassword?: string) => {
-    const resolvedDeviceHost = assertTrustedLanDeviceHost(normalizeDeviceHost(newDeviceHost));
+    const resolvedDeviceHost = normalizeDeviceHost(newDeviceHost);
     const resolvedBaseUrl = buildBaseUrlFromDeviceHost(resolvedDeviceHost);
     const resolvedPassword = newPassword || '';
     const current = settingsRef.current;

@@ -97,24 +97,40 @@ const isPrivateIpv4 = (hostname: string) => {
     return false;
 };
 
+const isPrivateIpv6 = (hostname: string) => {
+    const value = hostname.trim().toLowerCase();
+    if (!value.includes(':')) return false;
+    if (value === '::1') return true;
+
+    const firstSegment = value.split(':')[0];
+    if (!firstSegment) return false;
+    const firstHextet = Number.parseInt(firstSegment, 16);
+    if (Number.isNaN(firstHextet)) return false;
+
+    if ((firstHextet & 0xffc0) === 0xfe80) return true;
+    if ((firstHextet & 0xfe00) === 0xfc00) return true;
+    return false;
+};
+
 const isTrustedInsecureHost = (hostValue: string) => {
     const lower = hostValue.trim().toLowerCase();
     if (!lower) return false;
     if (lower === 'c64u' || lower === 'localhost') return true;
+    if (lower === '127.0.0.1') return true;
     if (lower.endsWith('.local')) return true;
 
     if (lower.startsWith('[')) {
         const closingBracketIndex = lower.indexOf(']');
         if (closingBracketIndex > 0) {
             const ipv6Host = lower.slice(1, closingBracketIndex);
-            return ipv6Host === '::1';
+            return isPrivateIpv6(ipv6Host);
         }
     }
 
     const hostWithoutPort = lower.includes(':') && lower.indexOf(':') === lower.lastIndexOf(':')
         ? lower.split(':')[0]
         : lower;
-    return isPrivateIpv4(hostWithoutPort);
+    return isPrivateIpv4(hostWithoutPort) || isPrivateIpv6(hostWithoutPort);
 };
 
 const appendServerLog = (entry: ServerLogEntry) => {
@@ -232,7 +248,7 @@ const applySecurityHeaders = (req: IncomingMessage, res: ServerResponse) => {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:");
+    res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:");
 
     const forwardedProto = req.headers['x-forwarded-proto'];
     const isForwardedHttps = typeof forwardedProto === 'string' && forwardedProto.split(',')[0].trim().toLowerCase() === 'https';

@@ -82,12 +82,11 @@ describe('hostEdit', () => {
     expect(discoverConnection).toHaveBeenCalledWith('manual');
   });
 
-  it('rejects public hosts', () => {
-    expect(() => saveConfiguredHostAndRetry('8.8.8.8', 'c64u')).toThrow(
-      'Host must be a private LAN target',
-    );
-    expect(updateC64APIConfig).not.toHaveBeenCalled();
-    expect(discoverConnection).not.toHaveBeenCalled();
+  it('allows any normalized host and retries', () => {
+    const host = saveConfiguredHostAndRetry('8.8.8.8', 'c64u');
+    expect(host).toBe('8.8.8.8');
+    expect(updateC64APIConfig).toHaveBeenCalledWith('http://8.8.8.8', 'pw', '8.8.8.8');
+    expect(discoverConnection).toHaveBeenCalledWith('settings');
   });
 
   it('accepts mDNS local hosts', () => {

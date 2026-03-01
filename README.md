@@ -271,14 +271,14 @@ If you want to build, test, or contribute:
 The C64 Ultimate firmware currently exposes REST over HTTP and file operations over plain FTP. C64 Commander follows that firmware model and does not add protocol-level encryption.
 
 - Password authentication remains supported and enabled.
-- C64 Commander accepts only private LAN device targets (private IP ranges, `.local` hostnames, and local hostnames) and blocks public/WAN targets.
+- Device host configuration supports practical LAN usage patterns, including private IPs and local hostnames used in home/lab networks.
 - Diagnostics and traces redact sensitive values (including network password headers) before export/display.
 
 Optional hardening you can apply in your environment:
 
 1. Run C64 Commander Web behind an HTTPS reverse proxy (for example, on a Raspberry Pi with Caddy or Nginx).
 2. Keep C64 Ultimate and client devices on an isolated VLAN or a dedicated trusted LAN segment.
-3. Do not expose C64 Commander or C64 Ultimate directly to the public internet.
+3. Avoid exposing C64 Commander or C64 Ultimate directly to the public internet.
 
 ### Web Server Details
 
