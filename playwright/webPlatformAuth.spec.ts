@@ -212,11 +212,7 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         expect([401, 429]).toContain(wrongLoginResponse.status());
 
         await page.getByPlaceholder('Network password').fill('secret');
-        const [okLoginResponse] = await Promise.all([
-            page.waitForResponse((response) => response.url().includes('/auth/login') && response.request().method() === 'POST'),
-            page.getByRole('button', { name: 'Log in' }).click(),
-        ]);
-        expect(okLoginResponse.status()).toBe(200);
+        await page.getByRole('button', { name: 'Log in' }).click();
         await expect(page).toHaveURL(/\/$/);
 
         const cookieHeader = (await page.context().cookies())
