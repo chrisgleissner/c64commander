@@ -37,6 +37,7 @@ import { t } from '@/lib/i18n';
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ConfigBrowserPage = lazy(() => import('./pages/ConfigBrowserPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const OpenSourceLicensesPage = lazy(() => import('./pages/OpenSourceLicensesPage'));
 const DocsPage = lazy(() => import('./pages/DocsPage'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const PlayFilesPage = lazy(() => import('./pages/PlayFilesPage'));
@@ -108,6 +109,7 @@ const AppRoutes = () => {
           <Route path="/play" element={<PlayFilesPage />} />
           <Route path="/disks" element={<DisksPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/open-source-licenses" element={<OpenSourceLicensesPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

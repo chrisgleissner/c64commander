@@ -1,0 +1,65 @@
+name: oss-compliance
+
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+    tags: ["*"]
+  workflow_dispatch:
+
+concurrency:
+  group: oss-compliance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  ort:
+    name: ORT | Analyze + scan + evaluate + notices
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate ORT notices
+        run: npm run ort:notices
+
+      - name: Verify notice drift
+        run: npm run ort:check-drift
+
+      - name: Ensure compliance artifacts are committed
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- \
+            THIRD_PARTY_NOTICES.md \
+            THIRD_PARTY_NOTICES.txt \
+            public/THIRD_PARTY_NOTICES.md \
+            public/THIRD_PARTY_NOTICES.txt \
+            android/app/src/main/assets/public/THIRD_PARTY_NOTICES.md \
+            android/app/src/main/assets/public/THIRD_PARTY_NOTICES.txt \
+            ios/App/App/public/THIRD_PARTY_NOTICES.md \
+            ios/App/App/public/THIRD_PARTY_NOTICES.txt
+
+      - name: Upload ORT artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ort-results
+          path: .tmp/ort/**
+          if-no-files-found: warn

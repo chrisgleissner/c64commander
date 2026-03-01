@@ -128,6 +128,7 @@ import { getPlatform } from '@/lib/native/platform';
 import { redactTreeUri } from '@/lib/native/safUtils';
 import { discoverConnection } from '@/lib/connection/connectionManager';
 import { useConnectionState } from '@/hooks/useConnectionState';
+import { useNavigate } from 'react-router-dom';
 
 const diagnosticsTabTriggerClass =
   'border border-transparent data-[state=active]:border-border data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm';
@@ -135,6 +136,7 @@ const diagnosticsTabTriggerClass =
 type Theme = 'light' | 'dark' | 'system';
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { status, baseUrl, runtimeBaseUrl, password, deviceHost, updateConfig, refetch } = useC64Connection();
   const connectionSnapshot = useConnectionState();
   const { theme, setTheme } = useThemeContext();
@@ -1530,6 +1532,15 @@ export default function SettingsPage() {
             <ExternalLink className="h-4 w-4" />
             Ultimate REST API Documentation
           </a>
+
+          <button
+            type="button"
+            className="flex items-center gap-2 text-sm text-primary hover:underline"
+            onClick={() => navigate('/settings/open-source-licenses')}
+          >
+            <FileText className="h-4 w-4" />
+            Open Source Licenses
+          </button>
         </motion.div>
       </main>
 
