@@ -492,7 +492,7 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -676,7 +676,7 @@ jobs:
           cache: npm
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -1183,7 +1183,7 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
