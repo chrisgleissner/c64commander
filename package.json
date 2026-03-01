@@ -75,7 +75,7 @@
     "notices:check": "node scripts/generate-third-party-notices.mjs --check"
   },
   "dependencies": {
-    "@capacitor/filesystem": "^6.0.4",
+    "@capacitor/filesystem": "^8.1.2",
     "@capacitor/share": "^6.0.4",
     "@sentry/react": "^9.20.0",
     "@hookform/resolvers": "^3.10.0",
