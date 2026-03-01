@@ -209,11 +209,20 @@ test.describe('Web platform auth + proxy @web-platform', () => {
 
         await page.goto('/login');
         await page.getByPlaceholder('Network password').fill('wrong');
-        await page.getByRole('button', { name: 'Log in' }).click();
-        await expect(page.getByText('Invalid password')).toBeVisible();
+        const [wrongLoginResponse] = await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/auth/login') && response.request().method() === 'POST'),
+            page.getByRole('button', { name: 'Log in' }).click(),
+        ]);
+        expect(wrongLoginResponse.status()).toBe(401);
+        await expect(page).toHaveURL(/\/login$/);
+        await expect(page.locator('#error')).toContainText(/Invalid password|Authentication failed|Too many failed attempts/i);
 
         await page.getByPlaceholder('Network password').fill('secret');
-        await page.getByRole('button', { name: 'Log in' }).click();
+        const [okLoginResponse] = await Promise.all([
+            page.waitForResponse((response) => response.url().includes('/auth/login') && response.request().method() === 'POST'),
+            page.getByRole('button', { name: 'Log in' }).click(),
+        ]);
+        expect(okLoginResponse.status()).toBe(200);
         await expect(page).toHaveURL(/\/$/);
 
         const cookieHeader = (await page.context().cookies())
