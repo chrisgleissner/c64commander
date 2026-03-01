@@ -10,6 +10,7 @@ COPY vite.config.ts ./
 COPY tailwind.config.ts ./
 COPY postcss.config.js ./
 COPY components.json ./
+COPY scripts ./scripts
 COPY src ./src
 COPY public ./public
 COPY doc/c64 ./doc/c64

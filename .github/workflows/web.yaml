@@ -218,7 +218,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Enforce Docker telemetry gates
-        if: always()
+        if: success()
         run: |
           set -euo pipefail
           csv="ci-artifacts/telemetry/docker/metrics.csv"

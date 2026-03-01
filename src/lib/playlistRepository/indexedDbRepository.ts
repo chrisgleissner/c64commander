@@ -97,6 +97,9 @@ const loadState = async (): Promise<PersistedState> => {
     if (!state) {
       return defaultState();
     }
+    if (state.version == null) {
+      return defaultState();
+    }
     if (state.version !== 1) {
       console.warn('Incompatible playlist repository schema in IndexedDB. Resetting repository state.', {
         expectedVersion: 1,
