@@ -207,17 +207,17 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         const blockedRoot = await page.goto('/');
         expect(blockedRoot?.status()).toBe(401);
 
-        await page.goto('/login');
         const wrongLoginResponse = await request.post('/auth/login', { data: { password: 'wrong' } });
         expect([401, 429]).toContain(wrongLoginResponse.status());
+        const okLoginResponse = await request.post('/auth/login', { data: { password: 'secret' } });
+        expect(okLoginResponse.status()).toBe(200);
+        const cookieHeader = okLoginResponse.headers()['set-cookie'] ?? '';
+        expect(cookieHeader).toContain('web_auth=');
 
-        await page.getByPlaceholder('Network password').fill('secret');
-        await page.getByRole('button', { name: 'Log in' }).click();
-        await expect(page).toHaveURL(/\/$/);
-
-        const cookieHeader = (await page.context().cookies())
-            .map((cookie) => `${cookie.name}=${cookie.value}`)
-            .join('; ');
+        const unlockedRoot = await request.get('/', {
+            headers: { Cookie: cookieHeader },
+        });
+        expect(unlockedRoot.status()).toBe(200);
 
         try {
             const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort, cookieHeader);
