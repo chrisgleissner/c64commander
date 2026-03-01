@@ -185,8 +185,8 @@ Codecov automatically:
 
 ### Long-term (6+ Months)
 
-- TypeScript: 80% lines, 85% branches
-- Kotlin: 80% lines, 85% branches
+- TypeScript: 90% lines, 90% branches
+- Kotlin: 90% lines, 90% branches
 - Full E2E coverage of all user-facing features
 
 ## Best Practices

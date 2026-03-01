@@ -1,28 +1,20 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import net from 'node:net';
 import path from 'node:path';
 import { URL } from 'node:url';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { Client as FtpClient } from 'basic-ftp';
+import { normalizePassword, safeCompare, sanitizeHost, isTrustedInsecureHost } from './hostValidation.js';
+import { applySecurityHeaders, getClientIp } from './securityHeaders.js';
+import { readBody, readJsonBody, writeJson, writeText } from './httpIO.js';
+import { createStaticAssetServer } from './staticAssets.js';
+import { createAuthState } from './authState.js';
 
 type AppConfig = {
     networkPassword: string | null;
     defaultDeviceHost: string;
-};
-
-type SessionRecord = {
-    token: string;
-    createdAtMs: number;
-    expiresAtMs: number;
-};
-
-type LoginAttemptRecord = {
-    failures: number;
-    firstFailureAtMs: number;
-    blockedUntilMs: number;
 };
 
 type ServerLogLevel = 'info' | 'warn' | 'error';
@@ -63,8 +55,6 @@ const hopByHopHeaders = new Set([
     'content-length',
 ]);
 
-const sessions = new Map<string, SessionRecord>();
-const loginAttempts = new Map<string, LoginAttemptRecord>();
 const serverLogs: ServerLogEntry[] = [];
 
 const isSecureCookieEnabled = (() => {
@@ -78,6 +68,12 @@ const allowRemoteFtpHosts = (() => {
     const value = (process.env.WEB_ALLOW_REMOTE_FTP_HOSTS ?? '').trim().toLowerCase();
     return value === 'true' || value === '1';
 })();
+
+const allowRemoteRestHosts = (() => {
+    const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? '').trim().toLowerCase();
+    return value === 'true' || value === '1';
+})();
+
 
 const appendServerLog = (entry: ServerLogEntry) => {
     serverLogs.unshift(entry);
@@ -124,225 +120,28 @@ const errorDetails = (error: unknown) => {
     return { errorMessage: String(error) };
 };
 
-const normalizePassword = (value: unknown): string | null => {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-};
+const { loginHtml, serveStatic } = createStaticAssetServer({
+    distDir,
+    logError: (message, details) => log('error', message, details),
+    errorDetails,
+});
 
-const sanitizeHost = (value: unknown): string | null => {
-    if (typeof value !== 'string') return null;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    if (/^https?:\/\//i.test(trimmed)) return null;
-    if (/[\s/\\?#@]/.test(trimmed)) return null;
-
-    if (net.isIP(trimmed)) return trimmed;
-
-    const isValidHostname = (hostname: string) => {
-        if (hostname.length > 253) return false;
-        const labels = hostname.split('.');
-        return labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label));
-    };
-
-    const parsePort = (portValue: string) => {
-        const port = Number(portValue);
-        if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
-        return port;
-    };
-
-    if (trimmed.startsWith('[')) {
-        const closingBracketIndex = trimmed.indexOf(']');
-        if (closingBracketIndex <= 1) return null;
-        const hostPart = trimmed.slice(1, closingBracketIndex);
-        if (net.isIP(hostPart) !== 6) return null;
-        const remainder = trimmed.slice(closingBracketIndex + 1);
-        if (!remainder) return `[${hostPart}]`;
-        const portMatch = /^:(\d{1,5})$/.exec(remainder);
-        if (!portMatch) return null;
-        const port = parsePort(portMatch[1]);
-        if (port === null) return null;
-        return `[${hostPart}]:${port}`;
-    }
-
-    if (trimmed.includes(':')) {
-        if (trimmed.indexOf(':') !== trimmed.lastIndexOf(':')) {
-            return null;
-        }
-        const maybeHostPort = /^([^:]+):(\d{1,5})$/.exec(trimmed);
-        if (!maybeHostPort) return null;
-        const hostPart = maybeHostPort[1];
-        const port = parsePort(maybeHostPort[2]);
-        if (port === null) return null;
-        if (!net.isIP(hostPart) && !isValidHostname(hostPart)) return null;
-        return `${hostPart}:${port}`;
-    }
-
-    if (isValidHostname(trimmed)) return trimmed;
-    return null;
-};
-
-const getClientIp = (req: IncomingMessage) => {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded.trim()) {
-        return forwarded.split(',')[0].trim();
-    }
-    return req.socket.remoteAddress ?? 'unknown';
-};
-
-const isLoginBlocked = (clientIp: string) => {
-    const attempt = loginAttempts.get(clientIp);
-    if (!attempt) return false;
-    if (attempt.blockedUntilMs > Date.now()) return true;
-    if (Date.now() - attempt.firstFailureAtMs > LOGIN_FAILURE_WINDOW_MS) {
-        loginAttempts.delete(clientIp);
-    }
-    return false;
-};
-
-const recordFailedLogin = (clientIp: string) => {
-    const now = Date.now();
-    const existing = loginAttempts.get(clientIp);
-    if (!existing || now - existing.firstFailureAtMs > LOGIN_FAILURE_WINDOW_MS) {
-        loginAttempts.set(clientIp, {
-            failures: 1,
-            firstFailureAtMs: now,
-            blockedUntilMs: 0,
-        });
-        return;
-    }
-    existing.failures += 1;
-    if (existing.failures >= LOGIN_FAILURE_MAX_ATTEMPTS) {
-        existing.blockedUntilMs = now + LOGIN_FAILURE_BLOCK_MS;
-    }
-    loginAttempts.set(clientIp, existing);
-};
-
-const clearFailedLogins = (clientIp: string) => {
-    loginAttempts.delete(clientIp);
-};
-
-const parseCookies = (headerValue: string | undefined): Record<string, string> => {
-    if (!headerValue) return {};
-    return headerValue.split(';').reduce<Record<string, string>>((acc, pair) => {
-        const idx = pair.indexOf('=');
-        if (idx < 0) return acc;
-        const key = pair.slice(0, idx).trim();
-        const value = pair.slice(idx + 1).trim();
-        if (key) acc[key] = decodeURIComponent(value);
-        return acc;
-    }, {});
-};
-
-const readBody = async (req: IncomingMessage): Promise<Buffer> => {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-};
-
-const readJsonBody = async <T>(req: IncomingMessage): Promise<T> => {
-    const body = await readBody(req);
-    if (body.length === 0) {
-        return {} as T;
-    }
-    return JSON.parse(body.toString('utf8')) as T;
-};
-
-const writeJson = (res: ServerResponse, status: number, payload: unknown) => {
-    const body = Buffer.from(JSON.stringify(payload));
-    res.writeHead(status, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Length': String(body.length),
-        'Cache-Control': 'no-store',
-    });
-    res.end(body);
-};
-
-const writeText = (res: ServerResponse, status: number, body: string, contentType = 'text/plain; charset=utf-8') => {
-    const data = Buffer.from(body);
-    res.writeHead(status, {
-        'Content-Type': contentType,
-        'Content-Length': String(data.length),
-        'Cache-Control': 'no-store',
-    });
-    res.end(data);
-};
-
-const writeBuffer = (res: ServerResponse, status: number, data: Buffer, contentType = 'application/octet-stream') => {
-    res.writeHead(status, {
-        'Content-Type': contentType,
-        'Content-Length': String(data.length),
-        'Cache-Control': 'no-store',
-    });
-    res.end(data);
-};
-
-const safeCompare = (left: string, right: string): boolean => {
-    const leftBuf = Buffer.from(left);
-    const rightBuf = Buffer.from(right);
-    if (leftBuf.length !== rightBuf.length) return false;
-    return timingSafeEqual(leftBuf, rightBuf);
-};
-
-const loginHtml = () => `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>C64 Commander Login</title>
-    <style>
-      body { font-family: system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0b0c; color: #fff; }
-      form { width: 320px; background: #17171a; padding: 24px; border-radius: 12px; border: 1px solid #2a2a31; }
-      h1 { margin: 0 0 16px; font-size: 18px; }
-      input, button { width: 100%; box-sizing: border-box; }
-      input { padding: 10px; border-radius: 8px; border: 1px solid #3b3b45; background: #101014; color: #fff; }
-      button { margin-top: 12px; padding: 10px; border-radius: 8px; border: 0; background: #275df6; color: #fff; font-weight: 600; cursor: pointer; }
-      p { margin-top: 10px; min-height: 20px; color: #ff8080; }
-    </style>
-  </head>
-  <body>
-    <form id="login-form">
-      <h1>C64 Commander</h1>
-      <input id="password" type="password" placeholder="Network password" autocomplete="current-password" required />
-      <button type="submit">Log in</button>
-      <p id="error"></p>
-    </form>
-    <script>
-      const form = document.getElementById('login-form');
-      const error = document.getElementById('error');
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        error.textContent = '';
-        const password = document.getElementById('password').value;
-        const response = await fetch('/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password }),
-        });
-        if (!response.ok) {
-          error.textContent = 'Invalid password';
-          return;
-        }
-        window.location.assign('/');
-      });
-    </script>
-  </body>
-</html>`;
-
-const getContentType = (filePath: string) => {
-    if (filePath.endsWith('.html')) return 'text/html; charset=utf-8';
-    if (filePath.endsWith('.js')) return 'application/javascript; charset=utf-8';
-    if (filePath.endsWith('.css')) return 'text/css; charset=utf-8';
-    if (filePath.endsWith('.json')) return 'application/json; charset=utf-8';
-    if (filePath.endsWith('.svg')) return 'image/svg+xml';
-    if (filePath.endsWith('.png')) return 'image/png';
-    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) return 'image/jpeg';
-    if (filePath.endsWith('.webm')) return 'video/webm';
-    if (filePath.endsWith('.woff2')) return 'font/woff2';
-    return 'application/octet-stream';
-};
+const {
+    isLoginBlocked,
+    recordFailedLogin,
+    clearFailedLogins,
+    isAuthenticated,
+    issueSessionCookie,
+    clearSessionCookie,
+    cleanupExpiredSessions,
+} = createAuthState({
+    cookieName: COOKIE_NAME,
+    sessionTtlMs: SESSION_TTL_MS,
+    isSecureCookieEnabled,
+    loginFailureWindowMs: LOGIN_FAILURE_WINDOW_MS,
+    loginFailureBlockMs: LOGIN_FAILURE_BLOCK_MS,
+    loginFailureMaxAttempts: LOGIN_FAILURE_MAX_ATTEMPTS,
+});
 
 const buildDefaultConfig = (): AppConfig => ({
     networkPassword: normalizePassword(process.env.C64U_NETWORK_PASSWORD) ?? null,
@@ -436,51 +235,14 @@ const saveConfig = async (config: AppConfig): Promise<void> => {
     }
 };
 
-const isAuthenticated = (req: IncomingMessage): boolean => {
-    const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-    if (!token) return false;
-    const session = sessions.get(token);
-    if (!session) return false;
-    if (session.expiresAtMs < Date.now()) {
-        sessions.delete(token);
-        return false;
-    }
-    return true;
-};
-
-const issueSessionCookie = (res: ServerResponse) => {
-    const token = randomBytes(24).toString('base64url');
-    const createdAtMs = Date.now();
-    const session: SessionRecord = {
-        token,
-        createdAtMs,
-        expiresAtMs: createdAtMs + SESSION_TTL_MS,
-    };
-    sessions.set(token, session);
-    const securePart = isSecureCookieEnabled ? '; Secure' : '';
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}${securePart}`);
-};
-
-const clearSessionCookie = (req: IncomingMessage, res: ServerResponse) => {
-    const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-    if (token) {
-        sessions.delete(token);
-    }
-    const securePart = isSecureCookieEnabled ? '; Secure' : '';
-    res.setHeader('Set-Cookie', `${COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0${securePart}`);
-};
-
-const cleanupExpiredSessions = () => {
-    const now = Date.now();
-    for (const [token, session] of sessions.entries()) {
-        if (session.expiresAtMs < now) sessions.delete(token);
-    }
-};
-
 const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
     const targetHost = sanitizeHost(req.headers['x-c64u-host']) ?? config.defaultDeviceHost;
+    if (!allowRemoteRestHosts && !isTrustedInsecureHost(targetHost)) {
+        writeJson(res, 403, { error: 'REST host override is disabled for non-local targets' });
+        return;
+    }
     const proxiedPath = requestUrl.pathname.replace(/^\/api\/rest/, '') || '/';
     const target = new URL(`http://${targetHost}${proxiedPath}${requestUrl.search}`);
     const body = await readBody(req);
@@ -616,60 +378,6 @@ const handleFtpRead = async (req: IncomingMessage, res: ServerResponse, config: 
     }
 };
 
-const serveStatic = async (res: ServerResponse, requestPath: string) => {
-    let decodedPath = requestPath;
-    try {
-        decodedPath = decodeURIComponent(requestPath);
-    } catch {
-        writeJson(res, 400, { error: 'Invalid path encoding' });
-        return;
-    }
-
-    const normalized = decodedPath === '/' ? 'index.html' : decodedPath.replace(/^\/+/, '');
-    const safePath = path.normalize(normalized);
-    if (safePath.startsWith('..') || path.isAbsolute(safePath)) {
-        writeJson(res, 403, { error: 'Invalid path' });
-        return;
-    }
-    const fullPath = path.resolve(distDir, safePath);
-    if (fullPath !== distDir && !fullPath.startsWith(`${distDir}${path.sep}`)) {
-        writeJson(res, 403, { error: 'Invalid path' });
-        return;
-    }
-
-    try {
-        const stat = await fs.stat(fullPath);
-        if (stat.isDirectory()) {
-            const indexPath = path.join(fullPath, 'index.html');
-            const data = await fs.readFile(indexPath);
-            writeText(res, 200, data.toString('utf8'), 'text/html; charset=utf-8');
-            return;
-        }
-        const data = await fs.readFile(fullPath);
-        writeBuffer(res, 200, data, getContentType(fullPath));
-        return;
-    } catch (error) {
-        const err = error as NodeJS.ErrnoException;
-        if (err.code !== 'ENOENT') {
-            log('error', 'Static file serve failed', {
-                requestPath,
-                errorCode: err.code,
-                ...errorDetails(error),
-            });
-            writeJson(res, 500, { error: 'Failed to serve static asset' });
-            return;
-        }
-    }
-
-    try {
-        const indexHtml = await fs.readFile(path.join(distDir, 'index.html'), 'utf8');
-        writeText(res, 200, indexHtml, 'text/html; charset=utf-8');
-    } catch (error) {
-        log('error', 'Missing index.html in dist output', errorDetails(error));
-        writeJson(res, 500, { error: 'Web bundle missing. Build dist before starting server.' });
-    }
-};
-
 export const startWebServer = async () => {
     let config = await loadConfig();
     cleanupExpiredSessions();
@@ -679,6 +387,7 @@ export const startWebServer = async () => {
 
     const server = http.createServer(async (req, res) => {
         try {
+            applySecurityHeaders(req, res);
             const method = (req.method ?? 'GET').toUpperCase();
             const requestUrl = new URL(req.url ?? '/', 'http://localhost');
             const pathname = requestUrl.pathname;

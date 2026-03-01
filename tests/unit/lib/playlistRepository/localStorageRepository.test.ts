@@ -59,6 +59,12 @@ describe('localStorage playlist repository', () => {
         result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
         expect(result.rows).toEqual([]);
         expect(result.totalMatchCount).toBe(0);
+        expect(addLog).toHaveBeenCalledWith('warn', 'Incompatible localStorage playlist repository schema. Preserving backup and resetting repository state.', expect.objectContaining({
+            storageKey: 'c64u_playlist_repo:v1',
+            backupStorageKey: 'c64u_playlist_repo:v1:backup',
+            version: 999,
+        }));
+        expect(localStorage.getItem('c64u_playlist_repo:v1:backup')).toContain('"version":999');
     });
 
     it('persists tracks and playlist rows and supports deterministic query paging', async () => {

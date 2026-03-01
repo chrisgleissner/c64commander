@@ -2,7 +2,7 @@
 
 [![Build](https://github.com/chrisgleissner/c64commander/actions/workflows/android.yaml/badge.svg?branch=main)](https://github.com/chrisgleissner/c64commander/actions/workflows/android.yaml)
 [![codecov](https://codecov.io/gh/chrisgleissner/c64commander/graph/badge.svg?token=hGEe09SZch)](https://codecov.io/gh/chrisgleissner/c64commander)
-[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-3.0.en.html)
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 [![Platform](https://img.shields.io/badge/platforms-Android%20%7C%20iOS%20%7C%20Web-blue)](https://github.com/chrisgleissner/c64commander/releases)
 
 Your C64 Ultimate command center in your pocket.
@@ -23,8 +23,8 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [Install on Android](#install-on-android)
     - [Install on iOS](#install-on-ios)
     - [Install for Web Access](#install-for-web-access)
-      - [Docker installation](#install-docker)
-      - [Run the container](#run-the-container)
+      - [Install Docker](#install-docker)
+      - [Run the Container](#run-the-container)
     - [First Connection Checklist](#first-connection-checklist)
   - [🧩 What You Can Do](#-what-you-can-do)
     - [Home](#home)
@@ -41,6 +41,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
   - [🔧 Advanced Topics](#-advanced-topics)
+    - [Advanced - Network Security](#advanced---network-security)
     - [Web Server Details](#web-server-details)
       - [Network password model](#network-password-model)
       - [Web security](#web-security)
@@ -250,7 +251,7 @@ C64 Commander includes configurable **Device Safety** controls under **Settings 
 
 ### iOS specifics
 
-- **App expired**: Free Apple ID sideloads in AltStore usually need refresh roughly every 7 days.
+- **App expired**: Apps installed via SideStore need a refresh every 7 days which should happen automatically.
 - **Account/App ID limits**: Remove unused sideloaded apps and retry.
 - **Install/signing errors**: Re-download the IPA and checksum, then verify again.
 - **Compatibility note**: CI runtime selection validates iOS `26 -> 18 -> 17`; iOS 17 and 18 are baseline support targets.
@@ -262,8 +263,26 @@ If you want to build, test, or contribute:
 - Developer guide: [doc/developer.md](doc/developer.md)
 - Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
 - Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
+- OSS compliance / notices (Linux-friendly):
+  - `npm run notices:generate` to regenerate `THIRD_PARTY_NOTICES.md` at repo root from dependency metadata
+  - `npm run notices:check` to enforce deterministic root notice output
+  - `npm run build` automatically refreshes notices and packages `THIRD_PARTY_NOTICES.md` into `dist/` for web / Android / iOS app bundles
 
 ## 🔧 Advanced Topics
+
+### Advanced - Network Security
+
+The C64 Ultimate firmware currently exposes REST over HTTP and file operations over plain FTP. C64 Commander follows that firmware model and does not add protocol-level encryption.
+
+- Password authentication remains supported and enabled.
+- Device host configuration supports practical LAN usage patterns, including private IPs and local hostnames used in home/lab networks.
+- Diagnostics and traces redact sensitive values (including network password headers) before export/display.
+
+Optional hardening you can apply in your environment:
+
+1. Run C64 Commander Web behind an HTTPS reverse proxy (for example, on a Raspberry Pi with Caddy or Nginx).
+2. Keep C64 Ultimate and client devices on an isolated VLAN or a dedicated trusted LAN segment.
+3. Avoid exposing C64 Commander or C64 Ultimate directly to the public internet.
 
 ### Web Server Details
 
@@ -375,9 +394,11 @@ The [High Voltage SID Collection](https://hvsc.c64.org) is an amazing archive of
 
 Heartfelt thanks to [Commodore](https://commodore.net) for creating the Commodore 64, a machine that defined a generation of computing and gaming. Special recognition goes to the creators of the C64 Ultimate (Ultimate 64) for breathing new life into this classic platform with modern hardware that maintains the authentic C64 experience while adding powerful new capabilities.
 
+Commodore and Commodore 64 are trademarks of their respective owners. C64 Commander is an independent project and is not affiliated with, endorsed by, or sponsored by Commodore or C64 Ultimate rights holders.
+
 ### Third-Party Libraries
 
-C64 Commander builds on many excellent open-source projects. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for a detailed list of third-party components and their licenses.
+C64 Commander builds on many excellent open-source projects. Notices are generated via `scripts/generate-third-party-notices.mjs` and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## ⚖️ License
 

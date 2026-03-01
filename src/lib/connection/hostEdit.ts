@@ -9,13 +9,14 @@
 import {
   buildBaseUrlFromDeviceHost,
   getC64APIConfigSnapshot,
+  normalizeDeviceHost,
   updateC64APIConfig,
 } from '@/lib/c64api';
 import type { DiscoveryTrigger } from '@/lib/connection/connectionManager';
 import { discoverConnection, dismissDemoInterstitial } from '@/lib/connection/connectionManager';
 import { addLog } from '@/lib/logging';
 
-export const normalizeConfiguredHost = (input: string, fallbackHost: string) => input.trim() || fallbackHost;
+export const normalizeConfiguredHost = (input: string, fallbackHost: string) => normalizeDeviceHost(input.trim() || fallbackHost);
 export const getConfiguredHost = () => {
   if (typeof window === 'undefined') return 'c64u';
   try {

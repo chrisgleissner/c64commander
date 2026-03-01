@@ -12,12 +12,59 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
+  notices:
+    name: Notices | Generation + drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CI_SHA }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate notices
+        run: npm run notices:generate
+
+      - name: Verify notice drift
+        run: npm run notices:check
+
+      - name: Build packaged app assets
+        run: npm run build
+
+      - name: Verify packaged notice drift
+        run: bash scripts/package-third-party-notice.sh --check
+
+      - name: Ensure compliance artifacts are committed
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- \
+            THIRD_PARTY_NOTICES.md
+
+      - name: Upload notice artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: third-party-notices
+          path: |
+            THIRD_PARTY_NOTICES.md
+            dist/THIRD_PARTY_NOTICES.md
+          if-no-files-found: warn
+
   web-unit:
     name: Web | Unit tests (coverage)
     runs-on: ubuntu-latest
@@ -371,7 +418,7 @@ jobs:
 
       - name: Enforce coverage threshold
         env:
-          COVERAGE_MIN: "80"
+          COVERAGE_MIN: "90"
           COVERAGE_FILE: "coverage/lcov.info"
         run: node scripts/check-coverage-threshold.mjs
 
@@ -518,6 +565,12 @@ jobs:
           npm run cap:build
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify Android assemble path (dry-run)
+        run: |
+          set -e
+          cd android
+          ./gradlew -m :app:assembleDebug
 
       - name: Inspect SevenZ/XZ dependency graph
         run: |
@@ -780,7 +833,19 @@ jobs:
       - name: Install Maestro CLI
         if: steps.maestro-cache.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL https://get.maestro.mobile.dev | bash
+          set -euo pipefail
+          MAESTRO_VERSION="cli-2.2.0"
+          MAESTRO_SHA256="6de501d2e8adf2d60f4b6b3174dc4b5e393f2f2617245d350a659627dccb0922"
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          curl -fsSL "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip" -o "$tmpdir/maestro.zip"
+          echo "${MAESTRO_SHA256}  $tmpdir/maestro.zip" | sha256sum -c -
+          mkdir -p "$HOME/.maestro"
+          mkdir -p "$HOME/.maestro/bin"
+          unzip -q "$tmpdir/maestro.zip" -d "$HOME/.maestro"
+          chmod +x "$HOME/.maestro/maestro/bin/maestro"
+          ln -sf "$HOME/.maestro/maestro/bin/maestro" "$HOME/.maestro/bin/maestro"
+          "$HOME/.maestro/bin/maestro" --version
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
       - name: Export Maestro CLI path

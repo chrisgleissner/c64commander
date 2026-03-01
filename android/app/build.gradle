@@ -5,14 +5,7 @@ apply plugin: 'jacoco'
 import groovy.json.JsonSlurper
 
 def keystoreProps = new Properties()
-def envFile = rootProject.file("../.env")
 def keyPropsFile = rootProject.file("key.properties")
-
-if (envFile.exists()) {
-    envFile.withInputStream { stream ->
-        keystoreProps.load(stream)
-    }
-}
 
 if (keyPropsFile.exists()) {
     keyPropsFile.withInputStream { stream ->
@@ -86,10 +79,10 @@ android {
     signingConfigs {
         release {
             def isReleaseBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
-            def storeFilePathValue = (keystoreProps["storeFile"] ?: keystoreProps["KEYSTORE_STORE_FILE"] ?: "../keystore/release.keystore")?.toString()
-            def storePasswordValue = (keystoreProps["storePassword"] ?: keystoreProps["KEYSTORE_STORE_PASSWORD"] ?: System.getenv("KEYSTORE_STORE_PASSWORD"))?.toString()
-            def keyAliasValue = (keystoreProps["keyAlias"] ?: keystoreProps["KEYSTORE_KEY_ALIAS"] ?: System.getenv("KEYSTORE_KEY_ALIAS") ?: "c64commander")?.toString()
-            def keyPasswordValue = (keystoreProps["keyPassword"] ?: keystoreProps["KEYSTORE_KEY_PASSWORD"] ?: System.getenv("KEYSTORE_KEY_PASSWORD") ?: storePasswordValue)?.toString()
+            def storeFilePathValue = (System.getenv("KEYSTORE_STORE_FILE") ?: keystoreProps["storeFile"] ?: keystoreProps["KEYSTORE_STORE_FILE"] ?: "../keystore/release.keystore")?.toString()
+            def storePasswordValue = (System.getenv("KEYSTORE_STORE_PASSWORD") ?: "")?.toString()
+            def keyAliasValue = (System.getenv("KEYSTORE_KEY_ALIAS") ?: keystoreProps["keyAlias"] ?: keystoreProps["KEYSTORE_KEY_ALIAS"] ?: "c64commander")?.toString()
+            def keyPasswordValue = (System.getenv("KEYSTORE_KEY_PASSWORD") ?: storePasswordValue ?: "")?.toString()
 
             if (isReleaseBuild) {
                 if (!storeFilePathValue) {
@@ -129,7 +122,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
+            ndk {
+                abiFilters "armeabi-v7a", "arm64-v8a"
+            }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }

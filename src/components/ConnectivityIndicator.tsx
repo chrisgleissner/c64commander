@@ -29,11 +29,13 @@ export function ConnectivityIndicator({ className }: Props) {
   const [open, setOpen] = useState(false);
   const [editingHost, setEditingHost] = useState(false);
   const [hostInput, setHostInput] = useState('');
+  const [hostError, setHostError] = useState<string | null>(null);
   const configuredHost = getConfiguredHost();
 
   const handleClick = () => {
     setHostInput(configuredHost);
     setEditingHost(false);
+    setHostError(null);
     setOpen(true);
   };
 
@@ -57,8 +59,13 @@ export function ConnectivityIndicator({ className }: Props) {
   const label = isDemoMode ? 'C64U Demo' : 'C64U';
   const showRetryNow = status === 'Offline' || status === 'Not yet connected';
   const saveHostAndRetry = () => {
-    saveConfiguredHostAndRetry(hostInput, configuredHost, { trigger: 'settings' });
-    setOpen(false);
+    try {
+      saveConfiguredHostAndRetry(hostInput, configuredHost, { trigger: 'settings' });
+      setHostError(null);
+      setOpen(false);
+    } catch (error) {
+      setHostError(error instanceof Error ? error.message : String(error));
+    }
   };
   const openDiagnosticsTab = (tab: DiagnosticsTabKey) => {
     setOpen(false);
@@ -107,31 +114,37 @@ export function ConnectivityIndicator({ className }: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1 text-sm">
-              <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
-              {editingHost ? (
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={hostInput}
-                    onChange={(event) => setHostInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Enter') return;
-                      event.preventDefault();
-                      saveHostAndRetry();
-                    }}
-                    aria-label="C64U Hostname / IP"
-                    className="h-8 text-xs"
-                  />
-                  <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
-                </div>
-              ) : (
-                <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
-                  <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
-                  <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5 ring-1 ring-border" onClick={() => setEditingHost(true)}>
-                    Change
-                  </Button>
-                </div>
-              )}
-              <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
+            <p data-testid="connection-status-row-status" className="min-h-5"><span className="font-medium">Status:</span> {status}</p>
+            {editingHost ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={hostInput}
+                  onChange={(event) => {
+                    setHostInput(event.target.value);
+                    setHostError(null);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    saveHostAndRetry();
+                  }}
+                  aria-label="C64U Hostname / IP"
+                  className="h-8 text-xs"
+                />
+                <Button size="sm" onClick={saveHostAndRetry}>Save</Button>
+              </div>
+            ) : (
+              <div data-testid="connection-status-row-host" className="flex min-h-5 items-center justify-between gap-2">
+                <span className="break-all"><span className="font-medium">Host:</span> {configuredHost}</span>
+                <Button variant="ghost" className="h-auto shrink-0 py-0 px-2 text-xs leading-5 ring-1 ring-border" onClick={() => setEditingHost(true)}>
+                  Change
+                </Button>
+              </div>
+            )}
+            {hostError ? (
+              <p className="text-xs text-destructive" data-testid="connection-status-host-error">{hostError}</p>
+            ) : null}
+            <p data-testid="connection-status-row-last-request" className="min-h-5"><span className="font-medium">Last request:</span> {lastRequest}</p>
           </div>
           <div className="space-y-1 text-sm" data-testid="connection-diagnostics-section">
             <p className="font-medium">Diagnostics</p>

@@ -248,6 +248,22 @@ describe('c64api', () => {
     expect(fetchMock.mock.calls[0][1]?.credentials).toBe('omit');
   });
 
+  it('attaches password header for configured http hosts', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const api = new C64API('http://example.com', 'secret', 'example.com');
+    await api.getInfo();
+
+    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(headers['X-Password']).toBe('secret');
+  });
+
   it('fails on non-json 200 responses', async () => {
     const fetchMock = getFetchMock();
     fetchMock.mockResolvedValue(

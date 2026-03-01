@@ -7,13 +7,13 @@ coverage:
   status:
     project:
       default:
-        target: 0.8
+        target: 0.9
         threshold: 0%
         informational: false
         if_not_found: success
     patch:
       default:
-        target: 0.8
+        target: 0.9
         threshold: 0%
         informational: false
         if_not_found: error

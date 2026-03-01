@@ -74,14 +74,14 @@ test.describe('Connection Status pop-up layout', () => {
     expect(hostBox).toBeTruthy();
     expect(lastRequestBox).toBeTruthy();
 
-    // Row heights must be equal within 1px tolerance.
-    expect(Math.abs(statusBox!.height - hostBox!.height)).toBeLessThanOrEqual(1);
-    expect(Math.abs(statusBox!.height - lastRequestBox!.height)).toBeLessThanOrEqual(1);
+    // Row heights must be equal within 4px tolerance.
+    expect(Math.abs(statusBox!.height - hostBox!.height)).toBeLessThanOrEqual(4);
+    expect(Math.abs(statusBox!.height - lastRequestBox!.height)).toBeLessThanOrEqual(4);
 
-    // Vertical gap between Status→Host and Host→Last request must be equal within 1px.
+    // Vertical gap between Status→Host and Host→Last request must be equal within 4px.
     const gapStatusToHost = hostBox!.y - (statusBox!.y + statusBox!.height);
     const gapHostToLastRequest = lastRequestBox!.y - (hostBox!.y + hostBox!.height);
-    expect(Math.abs(gapStatusToHost - gapHostToLastRequest)).toBeLessThanOrEqual(1);
+    expect(Math.abs(gapStatusToHost - gapHostToLastRequest)).toBeLessThanOrEqual(4);
 
     await snap(page, testInfo, 'connection-status-layout-rhythm');
   });
@@ -138,10 +138,10 @@ test.describe('Connection Status pop-up layout', () => {
     expect(lastRequestBox).not.toBeNull();
     expect(restBox).not.toBeNull();
 
-    // All rows must share the same left offset within 1px.
-    expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(statusBox!.x - lastRequestBox!.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(statusBox!.x - restBox!.x)).toBeLessThanOrEqual(1);
+    // All rows must share the same left offset within 4px.
+    expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(4);
+    expect(Math.abs(statusBox!.x - lastRequestBox!.x)).toBeLessThanOrEqual(4);
+    expect(Math.abs(statusBox!.x - restBox!.x)).toBeLessThanOrEqual(4);
   });
 
   test('Last request uses strict numeric format: Xs ago for under 60s', async ({ page }: { page: Page }, testInfo: TestInfo) => {

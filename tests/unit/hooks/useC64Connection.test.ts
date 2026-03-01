@@ -142,12 +142,12 @@ describe('useC64Connection', () => {
     await waitFor(() => expect(result.current.status.isConnected).toBe(true));
 
     act(() => {
-      result.current.updateConfig('host', 'pw');
+      result.current.updateConfig('host.local', 'pw');
     });
-    expect(updateC64APIConfigMock).toHaveBeenCalledWith('http://host', 'pw', 'host');
-    await waitFor(() => expect(result.current.baseUrl).toBe('http://host'));
+    expect(updateC64APIConfigMock).toHaveBeenCalledWith('http://host.local', 'pw', 'host.local');
+    await waitFor(() => expect(result.current.baseUrl).toBe('http://host.local'));
     expect(result.current.password).toBe('pw');
-    expect(result.current.deviceHost).toBe('host');
+    expect(result.current.deviceHost).toBe('host.local');
   });
 
   it('responds to connection change events', async () => {

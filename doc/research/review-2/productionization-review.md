@@ -155,7 +155,7 @@ What remains risky:
 
 ### Coverage gate quality
 - Vitest branch threshold currently 80 (`vitest.config.ts:84`).
-- CI threshold script enforces line coverage only (`scripts/check-coverage-threshold.mjs:26`, `scripts/check-coverage-threshold.mjs:65`) with `COVERAGE_MIN=80` (`.github/workflows/android.yaml:386`).
+- CI threshold script enforces line coverage only (`scripts/check-coverage-threshold.mjs:26`, `scripts/check-coverage-threshold.mjs:65`) with `COVERAGE_MIN=90` (`.github/workflows/android.yaml:386`).
 - This is weaker than branch-risk gating expected for release-hardening.
 
 ### Device realism

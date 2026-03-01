@@ -180,4 +180,5 @@ TypeScript remains the business-logic source of truth via repository interfaces;
 ## Crash reporting
 
 - **Android production crashes** are surfaced via **Google Play Console** (Android Vitals) once distributed through Play.
+- **Optional remote crash reporting** is available via Sentry when `VITE_SENTRY_DSN` is configured at build/runtime.
 - **In-app diagnostics** are available in Settings, allowing users to share logs via email without sending automatic crash traces to external services.

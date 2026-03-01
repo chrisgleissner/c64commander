@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -70,12 +70,20 @@ jobs:
           if [[ -z "$APP_VERSION" ]]; then
             APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
           fi
+          APP_BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
 
       - name: Print Xcode version
         run: |
           xcodebuild -version
           xcode-select -p
+
+      - name: Run native Swift unit tests
+        run: |
+          set -euo pipefail
+          cd ios/native-tests
+          swift test
 
       - name: Build web assets
         run: npm run build
@@ -118,6 +126,23 @@ jobs:
           name: ios-prepared-workspace
           path: .
 
+      - name: Resolve app version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
+            APP_VERSION="${GITHUB_REF_NAME}"
+          else
+            APP_VERSION="$(git describe --tags --exact-match 2>/dev/null || true)"
+            if [[ -z "$APP_VERSION" ]]; then
+              APP_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || true)"
+            fi
+          fi
+          if [[ -z "$APP_VERSION" ]]; then
+            APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
+          fi
+          APP_BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
+
       - name: Ensure CocoaPods scripts are executable
         run: |
           set -euo pipefail
@@ -134,6 +159,8 @@ jobs:
             -sdk iphonesimulator \
             -destination "generic/platform=iOS Simulator" \
             -derivedDataPath ios/build \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee artifacts/ios/_infra/xcodebuild/build-simulator.log
 
@@ -193,11 +220,21 @@ jobs:
       - name: Install Maestro CLI
         run: |
           set -euo pipefail
-          if [[ -x "$HOME/.maestro/bin/maestro" ]]; then
+          MAESTRO_VERSION="cli-2.2.0"
+          MAESTRO_SHA256="6de501d2e8adf2d60f4b6b3174dc4b5e393f2f2617245d350a659627dccb0922"
+          if [[ -x "$HOME/.maestro/bin/maestro" ]] && "$HOME/.maestro/bin/maestro" --version | grep -q "2.2.0"; then
             echo "Maestro CLI cached"
             "$HOME/.maestro/bin/maestro" --version
           else
-            curl -Ls "https://get.maestro.mobile.dev" | bash
+            tmpdir="$(mktemp -d)"
+            trap 'rm -rf "$tmpdir"' EXIT
+            curl -fsSL "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip" -o "$tmpdir/maestro.zip"
+            echo "${MAESTRO_SHA256}  $tmpdir/maestro.zip" | shasum -a 256 -c -
+            rm -rf "$HOME/.maestro/maestro"
+            mkdir -p "$HOME/.maestro/bin"
+            unzip -q "$tmpdir/maestro.zip" -d "$HOME/.maestro"
+            chmod +x "$HOME/.maestro/maestro/bin/maestro"
+            ln -sf "$HOME/.maestro/maestro/bin/maestro" "$HOME/.maestro/bin/maestro"
             "$HOME/.maestro/bin/maestro" --version
           fi
           echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
@@ -806,7 +843,9 @@ jobs:
           if [[ -z "$APP_VERSION" ]]; then
             APP_VERSION="0.0.${GITHUB_RUN_NUMBER}"
           fi
+          APP_BUILD_NUMBER="${GITHUB_RUN_NUMBER:-1}"
           echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "APP_BUILD_NUMBER=$APP_BUILD_NUMBER" >> $GITHUB_ENV
 
       - name: Download prepared iOS workspace
         uses: actions/download-artifact@v4
@@ -830,6 +869,8 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath ios/build \
+            MARKETING_VERSION="$APP_VERSION" \
+            CURRENT_PROJECT_VERSION="$APP_BUILD_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

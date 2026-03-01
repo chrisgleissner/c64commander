@@ -98,6 +98,23 @@ export default defineConfig(() => ({
     outDir: "dist",
     // Adjust warning threshold to avoid noisy chunk warnings while keeping defaults.
     chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-router-dom/') || id.includes('/scheduler/')) {
+            return 'vendor-react';
+          }
+          if (id.includes('/@radix-ui/') || id.includes('/framer-motion/') || id.includes('/lucide-react/')) {
+            return 'vendor-ui';
+          }
+          if (id.includes('/7z-wasm/') || id.includes('/fflate/')) {
+            return 'vendor-hvsc';
+          }
+          return 'vendor';
+        },
+      },
+    },
   },
   plugins: [
     react(),

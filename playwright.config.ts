@@ -17,11 +17,15 @@ const parsedWorkers =
   explicitWorkers && /^[0-9]+$/.test(explicitWorkers) ? Number(explicitWorkers) : undefined;
 const serverPort = Number(process.env.PLAYWRIGHT_PORT ?? '4173');
 const cpuCount = os.cpus().length;
-const defaultWorkers = Math.min(4, Math.max(1, cpuCount));
+const defaultWorkers = process.env.CI === 'true'
+  ? Math.min(4, Math.max(1, cpuCount))
+  : 1;
 const resolvedWorkers = parsedWorkers ?? defaultWorkers;
+const previewCommand = `${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port ${serverPort}`;
+const buildAndPreviewCommand = `${coverageEnv}${probeEnv}npm run build && ${previewCommand}`;
 const webServerCommand = skipBuild
-  ? `${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port ${serverPort}`
-  : `${coverageEnv}${probeEnv}npm run build && ${coverageEnv}${probeEnv}npm run preview -- --host 127.0.0.1 --port ${serverPort}`;
+  ? `[ -f dist/index.html ] && ${previewCommand} || (${buildAndPreviewCommand})`
+  : buildAndPreviewCommand;
 
 // Device selection logic
 const devicesEnv = process.env.PLAYWRIGHT_DEVICES?.toLowerCase().trim();
@@ -90,7 +94,7 @@ export default defineConfig({
   webServer: {
     command: webServerCommand,
     url: `http://127.0.0.1:${serverPort}`,
-    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1',
+    reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === '1' && process.env.CI === 'true',
     timeout: 120000,
   },
 });

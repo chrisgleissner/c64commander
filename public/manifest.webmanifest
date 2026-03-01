@@ -1,15 +1,29 @@
 {
     "name": "C64 Commander",
     "short_name": "C64 Commander",
+    "description": "Configure and control your Commodore 64 Ultimate over your local network.",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
+    "orientation": "any",
     "background_color": "#6C7EB7",
     "theme_color": "#6C7EB7",
     "icons": [
         {
+            "src": "c64commander-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
             "src": "c64commander.png",
             "sizes": "512x512",
             "type": "image/png"
+        },
+        {
+            "src": "c64commander-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
         }
     ]
 }

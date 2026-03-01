@@ -55,6 +55,7 @@ object AppLogger {
   ) {
     if (context == null) return
     val intent = Intent(ACTION_DIAGNOSTICS_LOG)
+    intent.setPackage(context.packageName)
     intent.putExtra(EXTRA_LEVEL, level)
     intent.putExtra(EXTRA_MESSAGE, message)
     intent.putExtra(EXTRA_COMPONENT, component)

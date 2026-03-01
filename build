@@ -14,6 +14,7 @@ RUN_EMULATOR=false
 RUN_SCREENSHOTS=false
 RUN_TEST_UNIT=false
 RUN_TEST_E2E=false
+RUN_TEST_E2E_NATIVE=false
 RUN_TEST_E2E_CI=false
 RUN_TEST_MAESTRO_CI=false
 RUN_TEST_MAESTRO_ALL=false
@@ -104,6 +105,7 @@ Default (no options):
 Primary actions (exactly one; default build when omitted):
   --test-unit
   --test-e2e
+  --test-e2e-native
   --test-e2e-ci
   --test-maestro-ci
   --test-maestro-all
@@ -191,6 +193,7 @@ Examples:
   ./build --screenshots-only
   ./build --video
   ./build --test-e2e --record-traces --trace-suite playback
+  ./build --test-e2e-native
   ./build --docker-build
   ./build --docker-start
   ./build --test-maestro-docker
@@ -202,6 +205,7 @@ Notes:
   --screenshots-only  Captures screenshots without running tests or Android builds.
   --video             Records a Playwright walkthrough video.
   --test-e2e          Runs Playwright E2E tests excluding @screenshots.
+  --test-e2e-native   Runs native runtime E2E gates via Maestro.
   --test-e2e-ci       Runs the CI mirror (E2E + screenshots + evidence validation).
   --test-maestro-docker  Builds/starts web Docker and runs Maestro CI flows against 10.0.2.2:<docker-port> unless --c64u-host overrides it.
   --test-fuzz         Always targets mock devices; --c64u-target real is rejected.
@@ -232,7 +236,7 @@ set_primary_action() {
 
 is_test_action() {
   case "$PRIMARY_ACTION" in
-    test-unit|test-e2e|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-smoke)
+    test-unit|test-e2e|test-e2e-native|test-e2e-ci|test-maestro-ci|test-maestro-all|test-maestro-tags|test-fuzz|test-contract|test-smoke)
       return 0
       ;;
     test-maestro-docker)
@@ -516,6 +520,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --test-e2e)
       set_primary_action "test-e2e" "$1"
+      shift
+      ;;
+    --test-e2e-native)
+      set_primary_action "test-e2e-native" "$1"
       shift
       ;;
     --test-e2e-ci)
@@ -959,6 +967,7 @@ RUN_SCREENSHOTS_ONLY=false
 RUN_VIDEO=false
 RUN_TEST_UNIT=false
 RUN_TEST_E2E=false
+RUN_TEST_E2E_NATIVE=false
 RUN_TEST_E2E_CI=false
 RUN_TEST_MAESTRO_CI=false
 RUN_TEST_MAESTRO_ALL=false
@@ -990,6 +999,11 @@ case "$PRIMARY_ACTION" in
   test-e2e)
     RUN_TEST=false
     RUN_TEST_E2E=true
+    RUN_APK=false
+    ;;
+  test-e2e-native)
+    RUN_TEST=false
+    RUN_TEST_E2E_NATIVE=true
     RUN_APK=false
     ;;
   test-e2e-ci)
@@ -1118,8 +1132,14 @@ fi
 
 require_cmd npm
 
-if [[ -x /usr/lib/jvm/java-17-openjdk-amd64/bin/jlink ]]; then
+if [[ -n "${JAVA17_HOME:-}" && -x "${JAVA17_HOME}/bin/java" ]]; then
+  export JAVA_HOME="${JAVA17_HOME}"
+  export PATH="$JAVA_HOME/bin:$PATH"
+elif [[ -x /usr/lib/jvm/java-17-openjdk-amd64/bin/java ]]; then
   export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+  export PATH="$JAVA_HOME/bin:$PATH"
+elif [[ -x /usr/lib/jvm/temurin-17-jdk-amd64/bin/java ]]; then
+  export JAVA_HOME="/usr/lib/jvm/temurin-17-jdk-amd64"
   export PATH="$JAVA_HOME/bin:$PATH"
 fi
 
@@ -1218,6 +1238,11 @@ if [[ "$RUN_TEST_E2E" == "true" ]]; then
   (cd "$ROOT_DIR" && PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-4}" npx playwright test --grep-invert @screenshots)
 fi
 
+if [[ "$RUN_TEST_E2E_NATIVE" == "true" ]]; then
+  log "Running native runtime E2E gates"
+  (cd "$ROOT_DIR" && npm run test:e2e:native)
+fi
+
 if [[ "$RUN_TEST_E2E_CI" == "true" ]]; then
   log "Running CI mirror (screenshots + E2E + validation)"
   (cd "$ROOT_DIR" && npx playwright install --check >/dev/null 2>&1 || npx playwright install)
@@ -1233,7 +1258,7 @@ if [[ "$RUN_COVERAGE" == "true" ]]; then
   log "Running coverage (unit + e2e)"
   (cd "$ROOT_DIR" && ./scripts/collect-coverage.sh)
   (cd "$ROOT_DIR" && EXPECT_WEB_COVERAGE=1 node scripts/verify-coverage-artifacts.mjs)
-  (cd "$ROOT_DIR" && COVERAGE_MIN=75 node scripts/check-coverage-threshold.mjs)
+  (cd "$ROOT_DIR" && COVERAGE_MIN=90 node scripts/check-coverage-threshold.mjs)
   if [[ "$RUN_ANDROID_COVERAGE" == "true" ]]; then
     log "Running Android coverage verification"
     (cd "$ROOT_DIR" && ./android/gradlew -p android testDebugUnitTest jacocoTestCoverageVerification)

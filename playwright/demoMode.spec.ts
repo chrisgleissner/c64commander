@@ -136,6 +136,7 @@ test.describe('Automatic Demo Mode', () => {
     await expect(popover).toContainText('Status: Checking…');
 
     await page.keyboard.press('Escape');
+    await expect(popover).toBeHidden({ timeout: 10000 });
     await expect(indicator).toHaveAttribute('data-connection-state', 'OFFLINE_NO_DEMO', { timeout: 10000 });
     await indicator.click();
     await expect(popover).toContainText('Status: Not yet connected');
