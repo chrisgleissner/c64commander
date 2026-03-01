@@ -57,7 +57,7 @@ jobs:
 
       - name: Upload notice artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: third-party-notices
           path: |
@@ -105,7 +105,7 @@ jobs:
 
       - name: Upload unit coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-unit
           path: coverage/lcov.info
@@ -186,7 +186,7 @@ jobs:
 
       - name: Upload screenshot evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-evidence-screenshots
           path: test-results/evidence/**
@@ -222,7 +222,7 @@ jobs:
           echo "- build (coverage): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist-coverage
           path: dist
@@ -317,7 +317,7 @@ jobs:
 
       - name: Upload e2e coverage shard
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-nyc-output-${{ matrix.shard }}
           path: .nyc_output/**
@@ -326,7 +326,7 @@ jobs:
 
       - name: Upload e2e evidence shard
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-evidence-e2e-${{ matrix.shard }}
           path: test-results/evidence/**
@@ -443,7 +443,7 @@ jobs:
 
       - name: Upload Playwright evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-evidence
           path: test-results/evidence/**
@@ -1077,7 +1077,7 @@ jobs:
 
       - name: Upload Maestro evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: maestro-evidence
           path: |
@@ -1268,7 +1268,7 @@ jobs:
 
       - name: Upload APK artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: c64commander-release-apk
           path: |
@@ -1282,7 +1282,7 @@ jobs:
 
       - name: Upload AAB artifact (release)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_KEYSTORE == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: c64commander-release-aab
           path: android/app/build/outputs/bundle/release/c64commander-${{ env.APP_VERSION }}-android-play.aab

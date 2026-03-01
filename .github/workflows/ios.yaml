@@ -92,7 +92,7 @@ jobs:
         run: npx cap sync ios
 
       - name: Upload prepared iOS workspace
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-prepared-workspace
           path: |
@@ -166,7 +166,7 @@ jobs:
 
       - name: Upload simulator build diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-build-simulator-failure
           path: |
@@ -174,7 +174,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload simulator app artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-simulator-app
           path: ios/build/Build/Products/Debug-iphonesimulator/App.app
@@ -517,7 +517,7 @@ jobs:
 
       - name: Upload per-group artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-maestro-${{ matrix.group.name }}
           path: |
@@ -586,7 +586,7 @@ jobs:
 
       - name: Upload iOS failure diagnostics (${{ matrix.group.name }})
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-maestro-failure-${{ matrix.group.name }}
           path: |
@@ -786,7 +786,7 @@ jobs:
 
       - name: Upload combined evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-maestro-evidence
           path: |
@@ -804,7 +804,7 @@ jobs:
 
       - name: Upload evidence archive on tag
         if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-maestro-evidence-zip
           path: ios-maestro-evidence.zip
@@ -889,7 +889,7 @@ jobs:
           )
 
       - name: Upload iOS IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-ipa
           path: |
@@ -898,7 +898,7 @@ jobs:
 
       - name: Upload iOS package diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ios-package-failure
           path: |
