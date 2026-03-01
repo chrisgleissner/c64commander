@@ -181,6 +181,21 @@ const readCocoapods = async () => {
     ['CapacitorFilesystem', 'MIT'],
     ['CapacitorShare', 'MIT'],
   ]);
+  const cocoapodsSourceByName = new Map([
+    ['Capacitor', 'https://github.com/ionic-team/capacitor.git'],
+    ['CapacitorCordova', 'https://github.com/ionic-team/capacitor'],
+    ['CapacitorFilesystem', 'https://github.com/ionic-team/capacitor-plugins.git'],
+    ['CapacitorShare', 'https://github.com/ionic-team/capacitor-plugins.git'],
+  ]);
+
+  const resolveCocoapodsSource = (name, source) => {
+    const normalized = normalizeSource(source);
+    if (normalized === '-') return cocoapodsSourceByName.get(name) ?? normalized;
+    if (/^\.\.\/\.\.\/node_modules\//.test(normalized)) {
+      return cocoapodsSourceByName.get(name) ?? normalized;
+    }
+    return normalized;
+  };
 
   if (await fileExists(podfileLockPath)) {
     const content = await fs.readFile(podfileLockPath, 'utf8');
@@ -210,7 +225,7 @@ const readCocoapods = async () => {
           name,
           version,
           license: cocoapodsLicenseByName.get(name) ?? 'UNKNOWN',
-          source: '-',
+          source: cocoapodsSourceByName.get(name) ?? '-',
         });
         continue;
       }
@@ -234,7 +249,7 @@ const readCocoapods = async () => {
       if (!existing) continue;
       entries.set(name, {
         ...existing,
-        source: normalizeSource(sourcePath),
+        source: resolveCocoapodsSource(name, sourcePath),
       });
     }
   }
@@ -253,7 +268,7 @@ const readCocoapods = async () => {
         name,
         version: podspec.version ?? existing?.version ?? 'UNKNOWN',
         license: normalizeLicense(podspec.license ?? existing?.license),
-        source: normalizeSource(podspec?.source?.git ?? podspec?.homepage ?? existing?.source),
+        source: resolveCocoapodsSource(name, podspec?.source?.git ?? podspec?.homepage ?? existing?.source),
       });
     }
   }
