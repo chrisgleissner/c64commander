@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -780,7 +780,19 @@ jobs:
       - name: Install Maestro CLI
         if: steps.maestro-cache.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL https://get.maestro.mobile.dev | bash
+          set -euo pipefail
+          MAESTRO_VERSION="cli-2.2.0"
+          MAESTRO_SHA256="6de501d2e8adf2d60f4b6b3174dc4b5e393f2f2617245d350a659627dccb0922"
+          tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
+          curl -fsSL "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip" -o "$tmpdir/maestro.zip"
+          echo "${MAESTRO_SHA256}  $tmpdir/maestro.zip" | sha256sum -c -
+          mkdir -p "$HOME/.maestro"
+          mkdir -p "$HOME/.maestro/bin"
+          unzip -q "$tmpdir/maestro.zip" -d "$HOME/.maestro"
+          chmod +x "$HOME/.maestro/maestro/bin/maestro"
+          ln -sf "$HOME/.maestro/maestro/bin/maestro" "$HOME/.maestro/bin/maestro"
+          "$HOME/.maestro/bin/maestro" --version
           echo "$HOME/.maestro/bin" >> $GITHUB_PATH
 
       - name: Export Maestro CLI path

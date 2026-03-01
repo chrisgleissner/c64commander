@@ -19,10 +19,12 @@ import { saveConfiguredHostAndRetry } from '@/lib/connection/hostEdit';
 export function DemoModeInterstitial() {
   const { demoInterstitialVisible } = useConnectionState();
   const [deviceHostInput, setDeviceHostInput] = useState('');
+  const [hostError, setHostError] = useState<string | null>(null);
 
   useEffect(() => {
     if (demoInterstitialVisible) {
       setDeviceHostInput(resolveDeviceHostFromStorage());
+      setHostError(null);
     }
   }, [demoInterstitialVisible]);
 
@@ -31,7 +33,12 @@ export function DemoModeInterstitial() {
   const attemptedHost = resolveDeviceHostFromStorage();
 
   const handleSaveAndRetry = () => {
-    saveConfiguredHostAndRetry(deviceHostInput, attemptedHost, { dismissInterstitial: true, trigger: 'settings' });
+    try {
+      saveConfiguredHostAndRetry(deviceHostInput, attemptedHost, { dismissInterstitial: true, trigger: 'settings' });
+      setHostError(null);
+    } catch (error) {
+      setHostError((error as Error).message);
+    }
   };
 
   return (
@@ -55,9 +62,15 @@ export function DemoModeInterstitial() {
             id="demo-device-host"
             data-testid="demo-interstitial-host-input"
             value={deviceHostInput}
-            onChange={(e) => setDeviceHostInput(e.target.value)}
+            onChange={(e) => {
+              setDeviceHostInput(e.target.value);
+              setHostError(null);
+            }}
             placeholder={attemptedHost}
           />
+          {hostError ? (
+            <p className="text-xs text-destructive" data-testid="demo-interstitial-host-error">{hostError}</p>
+          ) : null}
         </div>
         <DialogFooter>
           <div className="flex flex-col gap-2 w-full sm:flex-row sm:justify-end">

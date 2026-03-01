@@ -1,175 +1,59 @@
-# Config Page Regression Fix Plan (Authoritative)
+# Production Readiness Assessment — Review 6
 
-## 1. Objective
+## Scope
 
-Fix two regressions in Config page while preserving existing contracts and diagnostics behavior:
+Full production readiness assessment of C64 Commander (Capacitor-based Android, iOS, Web).
+Research-only — no code changes. Single output: `research/review-6/production-readiness-assessment.md`.
 
-1. Slider value popup closes almost instantly in edge conditions.
-2. Text inputs lose focus per character and dispatch updates prematurely.
+## Inspection Checklist
 
-## 2. Root Cause Findings
+- [x] System inventory (versions, commit, repo state)
+- [x] CI/CD workflows (android.yaml, web.yaml, ios.yaml, fuzz.yaml)
+- [x] Security posture (network, storage, headers, credentials)
+- [x] Android platform (Gradle, SDK, manifest, signing, ProGuard)
+- [x] iOS platform (Info.plist, ATS, entitlements, deployment target)
+- [x] Web platform (server, Docker, CSP, PWA, auth)
+- [x] Dependencies and supply chain (npm audit, license compatibility)
+- [x] Testing and quality gates (unit, E2E, coverage, Maestro)
+- [x] UX and accessibility (ARIA, touch targets, localization)
+- [x] Stability and error handling (boundaries, retries, cleanup)
+- [x] Performance and observability (startup, bundle, diagnostics)
+- [x] Data storage and migration (localStorage, IndexedDB, HVSC)
+- [x] Licensing and legal (LICENSE, THIRD_PARTY_NOTICES, privacy)
+- [x] Architecture and documentation review
 
-### A) Slider popup auto-close
+## Commands Run
 
-Observed in `src/components/ui/slider.tsx`:
+| Command | Result | Timestamp |
+|---------|--------|-----------|
+| `node -v` | v24.11.0 | 2026-02-28T19:55Z |
+| `npm -v` | 11.6.1 | 2026-02-28T19:55Z |
+| `git rev-parse HEAD` | cf7d0826...49f4e04 | 2026-02-28T19:55Z |
+| `git status --porcelain` | Clean (untracked research dirs only) | 2026-02-28T19:55Z |
+| `npm run lint` | Pass | 2026-02-28T20:08Z |
+| `npm run build` | Pass (5.00s, 5.4MB dist) | 2026-02-28T20:10Z |
+| `npm run test` | Pass (232 files, 2204 tests) | 2026-02-28T20:11Z |
+| `npm run test:coverage` | Pass (91.6% stmts, 84.32% branches) | 2026-02-28T20:12Z |
+| `npm run build:web-server` | Pass | 2026-02-28T20:13Z |
+| `npm audit --omit dev` | 1 critical (basic-ftp CVE) | 2026-02-28T20:14Z |
+| `npm audit` | 6 vulns total | 2026-02-28T20:14Z |
+| `./gradlew assembleDebug` | Pass (32s) | 2026-02-28T20:15Z |
+| `./gradlew test` | FAIL (86/113 — Robolectric+Java 25 incompat) | 2026-02-28T20:16Z |
 
-- `valueVisible` is toggled directly by pointer events and commit handlers.
-- `handlePointerUp`, `handlePointerCancel`, and `handleValueCommit` force immediate hide.
-- This creates non-deterministic close timing when pointer/commit/device events race.
+## Documents Read
 
-Confirmed triggers:
+All files under: doc/diagnostics/, doc/architecture.md, doc/developer.md, doc/ux-guidelines.md,
+doc/ux-interactions.md, doc/db.md, doc/internals/*.md, doc/testing/*.md, docs/privacy-policy.md,
+README.md, AGENTS.md, .github/copilot-instructions.md, all CI workflow YAML files.
 
-- Explicit close on pointer-up/commit (primary cause).
-- No minimum visible duration invariant.
-- No explicit lifecycle state machine; visibility is tied to event sequence order.
+## Output
 
-Not root causes:
+- [x] research/review-6/production-readiness-assessment.md
 
-- No direct forced close from REST/FTP response handlers.
-- No dependency on diagnostics action aggregation for close behavior.
+## Completion Checklist
 
-### B) Input focus loss + per-character dispatch
-
-Observed in `src/components/ConfigItemRow.tsx` and `src/pages/ConfigBrowserPage.tsx`:
-
-- `Input` `onChange` starts 300ms debounce and then calls `onValueChange` while typing.
-- `onValueChange` performs device mutation (`setConfig.mutateAsync`).
-- `CategorySection` passes `isLoading={setConfig.isPending}` to all rows; pending disables input.
-- Disable/re-enable during typing causes focus loss and interrupts cursor flow.
-
-Confirmed triggers:
-
-- Two-way binding sends value before commit.
-- Pending mutation state propagates into row disabled state.
-- Component sync effect overwrites local input state from remote value updates.
-
-## 3. Design
-
-### A) Deterministic slider popup lifecycle
-
-Implement explicit state machine in slider UI layer.
-
-States:
-
-- `Hidden`
-- `VisibleActive`
-- `VisibleIdle`
-- `Closing`
-
-Timing constants:
-
-- `minVisibleMs = 500`
-- `idleCloseMs = 800`
-
-Transitions:
-
-- `Hidden` -> `VisibleActive` on first interaction.
-- `VisibleActive` -> `VisibleIdle` when interaction ends.
-- `Visible*` -> `VisibleActive` on any new slider movement.
-- `VisibleIdle` -> `Closing` only after idle timeout and minimum-visible gate satisfied.
-- `Closing` -> `Hidden` (single explicit terminal transition).
-- Any route unmount -> `Hidden` immediately.
-
-Rules:
-
-- Reset idle timer on each value change.
-- Never close due to config/device updates.
-- No frame-time hacks; only explicit timers and state transitions.
-
-### B) Buffered input edit model (two-phase commit)
-
-Phase 1 (local edit):
-
-- Keep local buffer in row state while focused.
-- Keystrokes update local buffer only.
-- No device mutation during typing.
-
-Phase 2 (commit):
-
-- Commit only on blur or Enter.
-- Validate/normalize at commit point.
-- Dispatch single device update per edit session.
-
-Rules:
-
-- Do not disable active text input due to global mutation pending.
-- Keep focus node stable (no key churn / remounting).
-- Preserve cursor and allow intermediate invalid text locally.
-
-## 4. Invariants
-
-1. Slider popup stays visible for at least `minVisibleMs` after open.
-2. Slider popup closes only by idle timeout, explicit dismiss/cancel, or unmount.
-3. Text input device write count per focused edit session <= 1.
-4. No per-character REST/FTP dispatch for text fields.
-5. Config serialization and endpoint contracts unchanged.
-6. Correlation IDs remain generated by existing tracing/action infrastructure.
-
-## 5. Telemetry Markers
-
-Add trace markers (as lightweight action events/scopes) for:
-
-- `SliderPopupOpened`
-- `SliderPopupClosed`
-- `ConfigFieldEditStarted`
-- `ConfigFieldEditCommitted`
-
-Noise control:
-
-- Emit open/start once per interaction session.
-- Emit closed/committed once per session.
-
-## 6. Test Matrix
-
-### Unit
-
-1. Slider state machine transitions (`Hidden/VisibleActive/VisibleIdle/Closing`).
-2. Slider minimum visible duration honored despite immediate pointer-up/commit.
-3. Input buffer keeps local value during typing.
-4. Input commit occurs on blur/Enter only.
-
-### Integration (React Testing Library)
-
-1. Rapid slider changes keep popup visible until idle timeout.
-2. Immediate simulated device response after slider movement does not close popup.
-3. Typing `2026` keeps focus and does not call `onValueChange` until blur.
-
-### Playwright
-
-1. Config slider popup remains visible for >= minimum duration.
-2. Field edit session emits one config update after blur and no intermediate update.
-3. Diagnostics traces/actions reflect one update for the full text edit session.
-
-### Maestro
-
-- Update/add flow only if existing Config interaction flows rely on per-keystroke updates.
-
-## 7. Risk Register
-
-1. Risk: popup lingers too long and feels sticky.
-   - Mitigation: bounded idle timeout with deterministic constants and tests.
-2. Risk: commit-on-blur changes behavior for fields relying on live updates.
-   - Mitigation: keep slider semantics independent; scope buffered model to text inputs.
-3. Risk: tracing marker noise.
-   - Mitigation: session-gated marker emission.
-4. Risk: flaky timing tests.
-   - Mitigation: fake timers for unit/integration; tolerant bounds for E2E.
-
-## 8. Rollback Strategy
-
-If regressions appear:
-
-1. Revert slider state machine wiring while keeping test harness additions.
-2. Revert buffered text commit logic in `ConfigItemRow` only.
-3. Keep telemetry additions behind helper calls so they can be disabled with minimal diff.
-4. Re-run `npm run test:coverage`, `npm run lint`, `npm run test`, `npm run build`, and `./build` to validate rollback.
-
-## 9. Execution Checklist
-
-- [x] Implement slider popup state machine with deterministic timers.
-- [x] Refactor text input to buffered edit + blur/Enter commit.
-- [x] Add trace markers for popup/edit sessions.
-- [x] Add/adjust unit + integration tests.
-- [x] Add Playwright regression coverage for popup duration and single dispatch.
-- [x] Update docs if behavior contract text requires it.
-- [x] Run `npm run test:coverage` (>=82% branch), `npm run lint`, `npm run test`, `npm run build`, and `./build`.
+- [x] Only research/review-6/ files created
+- [x] No source code modified
+- [x] All PRA-IDs unique and sequential
+- [x] Every issue in risk register
+- [x] Executive summary aligns with risk register

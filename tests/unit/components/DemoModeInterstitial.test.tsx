@@ -29,6 +29,11 @@ vi.mock('@/lib/connection/connectionManager', () => ({
 
 vi.mock('@/lib/c64api', () => ({
   buildBaseUrlFromDeviceHost: (...args: unknown[]) => buildBaseUrlFromDeviceHost(args[0] as string),
+  normalizeDeviceHost: (host?: string) => {
+    const value = (host ?? '').toString().trim();
+    if (!value) return 'c64u';
+    return value.replace(/^https?:\/\//i, '').split('/')[0];
+  },
   resolveDeviceHostFromStorage: () => resolveDeviceHostFromStorage(),
   updateC64APIConfig: (...args: unknown[]) => updateC64APIConfig(...args),
   getC64APIConfigSnapshot: () => getC64APIConfigSnapshot(),

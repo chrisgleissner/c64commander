@@ -1,0 +1,363 @@
+# Rollout Plan — C64 Commander Production Readiness
+
+Source: doc/research/review-5/review-5.md
+Created: 2026-02-28
+
+## Phase 0 — Precondition & Safety Controls
+- [ ] TASK-001: Establish secret scanning guardrails
+  - **Addresses:** ISSUE-001
+  - **Acceptance criteria:**
+    - Secret and pipeline policy checks are defined before remediation starts.
+    - Baseline CI state is recorded for regression comparison.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert policy/configuration commits introducing regressions.
+  - **Implementation notes:**
+- [ ] TASK-002: Run CI dry-run for hardening deltas
+  - **Addresses:** ISSUE-002
+  - **Acceptance criteria:**
+    - Secret and pipeline policy checks are defined before remediation starts.
+    - Baseline CI state is recorded for regression comparison.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert policy/configuration commits introducing regressions.
+  - **Implementation notes:**
+
+## Phase 1 — Critical & Blocker Mitigation
+- [x] TASK-003: Remediate repository-local signing secret pattern
+  - **Addresses:** ISSUE-001
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-001 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Removed `.env` loading from `android/app/build.gradle`; release signing now sources `KEYSTORE_STORE_PASSWORD` and `KEYSTORE_KEY_PASSWORD` from environment variables instead of file-based fallbacks. Verified with `npm run test`, `npm run lint`, and `npm run build`.
+- [x] TASK-004: Remediate critical runtime dependency vulnerability in basic-ftp
+  - **Addresses:** ISSUE-002
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-002 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Upgraded `basic-ftp` to `^5.2.0` in `package.json` and `package-lock.json`. Verified with `npm run test`, `npm run lint`, `npm run build`, and `npm audit --omit dev` (no runtime vulnerabilities reported).
+- [x] TASK-005: Remediate no web server security headers
+  - **Addresses:** ISSUE-003
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-003 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Added centralized response hardening in `web/server/src/index.ts` via `applySecurityHeaders`, including `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, and conditional `Strict-Transport-Security` when `x-forwarded-proto=https`. Verified with `npm run test`, `npm run lint`, and `npm run build`.
+- [x] TASK-006: Remediate ios workflow installs maestro via unpinned remote script
+  - **Addresses:** ISSUE-004
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-004 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Replaced `curl | bash` Maestro installation in `.github/workflows/android.yaml` and `.github/workflows/ios.yaml` with pinned `cli-2.2.0` zip download, SHA-256 verification, and deterministic extraction to `~/.maestro`. Verified with `npm run test`, `npm run lint`, and `npm run build`.
+- [x] TASK-007: Remediate browser zoom is disabled, reducing accessibility
+  - **Addresses:** ISSUE-005
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-005 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Removed `user-scalable=no` from the viewport meta tag in `index.html` to allow browser zoom. Verified with `npm run test`, `npm run lint`, and `npm run build`.
+- [x] TASK-008: Remediate ci token permissions are broader than necessary
+  - **Addresses:** ISSUE-006
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-006 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Reduced workflow-level default token permissions from `contents: write` to `contents: read` in `.github/workflows/android.yaml` and `.github/workflows/ios.yaml` to enforce least privilege by default. Verified with `npm run test`, `npm run lint`, and `npm run build`.
+- [x] TASK-009: Remediate android cleartext traffic globally enabled without domain restriction
+  - **Addresses:** ISSUE-007
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-007 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Updated `android/app/src/main/AndroidManifest.xml` to disable global cleartext (`usesCleartextTraffic="false"`) and bind `android:networkSecurityConfig`. Added scoped allowlist in `android/app/src/main/res/xml/network_security_config.xml` (base cleartext denied; cleartext permitted only for `c64u` and `localhost`). Verified with `npm run test`, `npm run lint`, and `npm run build`.
+- [x] TASK-010: Remediate password propagation over http via x-password header
+  - **Addresses:** ISSUE-008
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-008 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:** Revisited per firmware constraints (HTTP REST + plain FTP remain required by C64U firmware). Added private-LAN target enforcement for configured hosts via `src/lib/network/trustedLanHost.ts`, wired into `src/hooks/useC64Connection.ts` and `src/lib/connection/hostEdit.ts`, and surfaced user-facing validation errors in `src/components/ConnectivityIndicator.tsx` and `src/components/DemoModeInterstitial.tsx`. Kept password auth enabled and retained existing password redaction protections. Added README guidance under “Advanced - Network Security” with optional mitigations (HTTPS reverse proxy, VLAN isolation). Verified with targeted unit tests plus `npm run test`, `npm run lint`, and `npm run build`.
+- [ ] TASK-011: Remediate plain ftp transport across all platform backends
+  - **Addresses:** ISSUE-009
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-009 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:**
+- [ ] TASK-012: Remediate android backups enabled without explicit backup exclusion rules
+  - **Addresses:** ISSUE-010
+  - **Acceptance criteria:**
+    - Risk described by ISSUE-010 is reduced with a concrete repository change or documented blocker.
+    - Targeted verification demonstrates expected behavior after change.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert the commit set for this task and restore previous configuration.
+  - **Implementation notes:**
+
+### Phase 1 Completion Summary
+- Pending execution.
+
+## Phase 2 — Major Risk Reduction
+- [ ] TASK-013: Implement major mitigation for no dependency update automation
+  - **Addresses:** ISSUE-011
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-014: Implement major mitigation for readme license badge says gpl v2, license file is gpl v3
+  - **Addresses:** ISSUE-012
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-015: Implement major mitigation for github actions are pinned to mutable tags, not immutable shas
+  - **Addresses:** ISSUE-013
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-016: Implement major mitigation for no ios audio background mode
+  - **Addresses:** ISSUE-014
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-017: Implement major mitigation for ios deployment and version metadata are inconsistent
+  - **Addresses:** ISSUE-015
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-018: Implement major mitigation for current persistence adapters can silently reset state on parse/version mismatch
+  - **Addresses:** ISSUE-016
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-019: Implement major mitigation for android abi policy includes emulator abis in default packaging path
+  - **Addresses:** ISSUE-017
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-020: Implement major mitigation for android diagnostics broadcast is globally observable
+  - **Addresses:** ISSUE-018
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-021: Implement major mitigation for android release build keeps minification disabled
+  - **Addresses:** ISSUE-019
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-022: Implement major mitigation for web runtime disables asset caching and has no service worker fallback
+  - **Addresses:** ISSUE-020
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-023: Implement major mitigation for no ios native unit tests
+  - **Addresses:** ISSUE-027
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-024: Implement major mitigation for no localization infrastructure
+  - **Addresses:** ISSUE-028
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+- [ ] TASK-025: Implement major mitigation for web bundle size profile is high for first load
+  - **Addresses:** ISSUE-029
+  - **Acceptance criteria:**
+    - Mitigation is implemented and documented.
+    - Verification confirms risk reduction without regressions.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert mitigation change and re-run baseline validation.
+  - **Implementation notes:**
+
+## Phase 3 — Structural Improvements
+- [ ] TASK-026: Apply structural fix for android jvm tests fail on java 25
+  - **Addresses:** ISSUE-021
+  - **Acceptance criteria:**
+    - Maintainability/testing debt is reduced with a scoped change.
+    - Automated checks stay green after the update.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert structural change if instability appears.
+  - **Implementation notes:**
+- [ ] TASK-027: Apply structural fix for android build verification could not complete in this assessment environment
+  - **Addresses:** ISSUE-022
+  - **Acceptance criteria:**
+    - Maintainability/testing debt is reduced with a scoped change.
+    - Automated checks stay green after the update.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert structural change if instability appears.
+  - **Implementation notes:**
+- [ ] TASK-028: Apply structural fix for coverage quality bar mismatch between ci gate and repository guidance
+  - **Addresses:** ISSUE-023
+  - **Acceptance criteria:**
+    - Maintainability/testing debt is reduced with a scoped change.
+    - Automated checks stay green after the update.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert structural change if instability appears.
+  - **Implementation notes:**
+- [ ] TASK-029: Apply structural fix for e2e tests run against vite preview, not native runtime
+  - **Addresses:** ISSUE-034
+  - **Acceptance criteria:**
+    - Maintainability/testing debt is reduced with a scoped change.
+    - Automated checks stay green after the update.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert structural change if instability appears.
+  - **Implementation notes:**
+- [ ] TASK-030: Apply structural fix for nativeplugins.swift exceeds file size guidelines
+  - **Addresses:** ISSUE-037
+  - **Acceptance criteria:**
+    - Maintainability/testing debt is reduced with a scoped change.
+    - Automated checks stay green after the update.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert structural change if instability appears.
+  - **Implementation notes:**
+- [ ] TASK-031: Apply structural fix for web server is a single 843-line file
+  - **Addresses:** ISSUE-041
+  - **Acceptance criteria:**
+    - Maintainability/testing debt is reduced with a scoped change.
+    - Automated checks stay green after the update.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert structural change if instability appears.
+  - **Implementation notes:**
+
+## Phase 4 — Performance & UX Enhancements
+- [ ] TASK-032: Deliver UX/performance improvement for no automated accessibility testing
+  - **Addresses:** ISSUE-024
+  - **Acceptance criteria:**
+    - User-facing metric or accessibility criterion improves measurably.
+    - No regression in build/test/lint validation.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert UX/performance change and restore baseline behavior.
+  - **Implementation notes:**
+- [ ] TASK-033: Deliver UX/performance improvement for touch targets below 44px on default buttons
+  - **Addresses:** ISSUE-025
+  - **Acceptance criteria:**
+    - User-facing metric or accessibility criterion improves measurably.
+    - No regression in build/test/lint validation.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert UX/performance change and restore baseline behavior.
+  - **Implementation notes:**
+
+## Phase 5 — Governance & Long-Term Hardening
+- [ ] TASK-034: Complete governance hardening for ios local build command is not executable on linux assessment host
+  - **Addresses:** ISSUE-026
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-035: Complete governance hardening for gradle and agp significantly outdated
+  - **Addresses:** ISSUE-030
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-036: Complete governance hardening for no remote crash reporting
+  - **Addresses:** ISSUE-031
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-037: Complete governance hardening for no codeowners file
+  - **Addresses:** ISSUE-032
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-038: Complete governance hardening for rollup path traversal vulnerability (dev dependency)
+  - **Addresses:** ISSUE-033
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-039: Complete governance hardening for deprecated mediasession apis in backgroundexecutionservice
+  - **Addresses:** ISSUE-035
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-040: Complete governance hardening for incomplete pwa manifest
+  - **Addresses:** ISSUE-036
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-041: Complete governance hardening for no commodore trademark disclaimer
+  - **Addresses:** ISSUE-038
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-042: Complete governance hardening for no spdx license identifier in package.json
+  - **Addresses:** ISSUE-039
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**
+- [ ] TASK-043: Complete governance hardening for no ios entitlements file
+  - **Addresses:** ISSUE-040
+  - **Acceptance criteria:**
+    - Governance/compliance item is resolved with explicit repository evidence.
+    - Validation confirms no pipeline or runtime regression.
+  - **Validation:** `npm run test && npm run lint && npm run build`
+  - **Rollback:** Revert governance update and restore prior metadata/configuration.
+  - **Implementation notes:**

@@ -41,6 +41,7 @@ C64 Commander lets you control and manage a C64 Ultimate from Android, iOS, or a
     - [iOS specifics](#ios-specifics)
   - [🛠️ For Developers](#️-for-developers)
   - [🔧 Advanced Topics](#-advanced-topics)
+    - [Advanced - Network Security](#advanced---network-security)
     - [Web Server Details](#web-server-details)
       - [Network password model](#network-password-model)
       - [Web security](#web-security)
@@ -264,6 +265,20 @@ If you want to build, test, or contribute:
 - Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
 
 ## 🔧 Advanced Topics
+
+### Advanced - Network Security
+
+The C64 Ultimate firmware currently exposes REST over HTTP and file operations over plain FTP. C64 Commander follows that firmware model and does not add protocol-level encryption.
+
+- Password authentication remains supported and enabled.
+- C64 Commander accepts only private LAN device targets (private IP ranges, `.local` hostnames, and local hostnames) and blocks public/WAN targets.
+- Diagnostics and traces redact sensitive values (including network password headers) before export/display.
+
+Optional hardening you can apply in your environment:
+
+1. Run C64 Commander Web behind an HTTPS reverse proxy (for example, on a Raspberry Pi with Caddy or Nginx).
+2. Keep C64 Ultimate and client devices on an isolated VLAN or a dedicated trusted LAN segment.
+3. Do not expose C64 Commander or C64 Ultimate directly to the public internet.
 
 ### Web Server Details
 

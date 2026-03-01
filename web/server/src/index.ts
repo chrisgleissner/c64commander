@@ -79,6 +79,44 @@ const allowRemoteFtpHosts = (() => {
     return value === 'true' || value === '1';
 })();
 
+const allowRemoteRestHosts = (() => {
+    const value = (process.env.WEB_ALLOW_REMOTE_REST_HOSTS ?? '').trim().toLowerCase();
+    return value === 'true' || value === '1';
+})();
+
+const isPrivateIpv4 = (hostname: string) => {
+    const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+    if (!match) return false;
+    const octets = match.slice(1).map((value) => Number(value));
+    if (octets.some((value) => Number.isNaN(value) || value < 0 || value > 255)) return false;
+    if (octets[0] === 10) return true;
+    if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return true;
+    if (octets[0] === 192 && octets[1] === 168) return true;
+    if (octets[0] === 127) return true;
+    if (octets[0] === 169 && octets[1] === 254) return true;
+    return false;
+};
+
+const isTrustedInsecureHost = (hostValue: string) => {
+    const lower = hostValue.trim().toLowerCase();
+    if (!lower) return false;
+    if (lower === 'c64u' || lower === 'localhost') return true;
+    if (lower.endsWith('.local')) return true;
+
+    if (lower.startsWith('[')) {
+        const closingBracketIndex = lower.indexOf(']');
+        if (closingBracketIndex > 0) {
+            const ipv6Host = lower.slice(1, closingBracketIndex);
+            return ipv6Host === '::1';
+        }
+    }
+
+    const hostWithoutPort = lower.includes(':') && lower.indexOf(':') === lower.lastIndexOf(':')
+        ? lower.split(':')[0]
+        : lower;
+    return isPrivateIpv4(hostWithoutPort);
+};
+
 const appendServerLog = (entry: ServerLogEntry) => {
     serverLogs.unshift(entry);
     if (serverLogs.length > MAX_SERVER_LOGS) {
@@ -188,6 +226,19 @@ const getClientIp = (req: IncomingMessage) => {
         return forwarded.split(',')[0].trim();
     }
     return req.socket.remoteAddress ?? 'unknown';
+};
+
+const applySecurityHeaders = (req: IncomingMessage, res: ServerResponse) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Content-Security-Policy', "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:");
+
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const isForwardedHttps = typeof forwardedProto === 'string' && forwardedProto.split(',')[0].trim().toLowerCase() === 'https';
+    if (isForwardedHttps) {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
 };
 
 const isLoginBlocked = (clientIp: string) => {
@@ -481,6 +532,10 @@ const requiresLogin = (config: AppConfig) => Boolean(config.networkPassword);
 
 const handleRestProxy = async (req: IncomingMessage, res: ServerResponse, config: AppConfig, requestUrl: URL) => {
     const targetHost = sanitizeHost(req.headers['x-c64u-host']) ?? config.defaultDeviceHost;
+    if (!allowRemoteRestHosts && !isTrustedInsecureHost(targetHost)) {
+        writeJson(res, 403, { error: 'REST host override is disabled for non-local targets' });
+        return;
+    }
     const proxiedPath = requestUrl.pathname.replace(/^\/api\/rest/, '') || '/';
     const target = new URL(`http://${targetHost}${proxiedPath}${requestUrl.search}`);
     const body = await readBody(req);
@@ -679,6 +734,7 @@ export const startWebServer = async () => {
 
     const server = http.createServer(async (req, res) => {
         try {
+            applySecurityHeaders(req, res);
             const method = (req.method ?? 'GET').toUpperCase();
             const requestUrl = new URL(req.url ?? '/', 'http://localhost');
             const pathname = requestUrl.pathname;

@@ -18,6 +18,7 @@ const addLog = vi.fn();
 vi.mock('@/lib/c64api', () => ({
   buildBaseUrlFromDeviceHost: (...args: unknown[]) => buildBaseUrlFromDeviceHost(args[0] as string),
   getC64APIConfigSnapshot: () => getC64APIConfigSnapshot(),
+  normalizeDeviceHost: (host?: string) => host?.trim() || 'c64u',
   updateC64APIConfig: (...args: unknown[]) => updateC64APIConfig(...args),
 }));
 
@@ -79,5 +80,19 @@ describe('hostEdit', () => {
     expect(updateC64APIConfig).toHaveBeenCalledWith('http://c64u', 'pw', 'c64u');
     expect(dismissDemoInterstitial).toHaveBeenCalled();
     expect(discoverConnection).toHaveBeenCalledWith('manual');
+  });
+
+  it('rejects public hosts', () => {
+    expect(() => saveConfiguredHostAndRetry('8.8.8.8', 'c64u')).toThrow(
+      'Host must be a private LAN target',
+    );
+    expect(updateC64APIConfig).not.toHaveBeenCalled();
+    expect(discoverConnection).not.toHaveBeenCalled();
+  });
+
+  it('accepts mDNS local hosts', () => {
+    const host = saveConfiguredHostAndRetry('my-c64.local', 'c64u');
+    expect(host).toBe('my-c64.local');
+    expect(updateC64APIConfig).toHaveBeenCalledWith('http://my-c64.local', 'pw', 'my-c64.local');
   });
 });
