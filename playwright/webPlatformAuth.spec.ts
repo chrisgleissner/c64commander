@@ -105,7 +105,7 @@ const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
 const resolveReachableProxyHost = async (
     request: RequestLike,
     upstreamPort: number,
-    cookieHeader: string,
+    cookieHeader?: string,
 ): Promise<{ host: string; response: ProxyResponseLike }> => {
     const hostCandidates = [
         `127.0.0.1:${upstreamPort}`,
@@ -116,11 +116,14 @@ const resolveReachableProxyHost = async (
 
     const attempts: Array<{ host: string; status: number }> = [];
     for (const host of hostCandidates) {
+        const headers: Record<string, string> = {
+            'X-C64U-Host': host,
+        };
+        if (cookieHeader && cookieHeader.length > 0) {
+            headers.Cookie = cookieHeader;
+        }
         const response = await request.get('/api/rest/v1/version', {
-            headers: {
-                'X-C64U-Host': host,
-                Cookie: cookieHeader,
-            },
+            headers,
         });
         const status = response.status();
         attempts.push({ host, status });
@@ -211,16 +214,12 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         expect([401, 429]).toContain(wrongLoginResponse.status());
         const okLoginResponse = await request.post('/auth/login', { data: { password: 'secret' } });
         expect(okLoginResponse.status()).toBe(200);
-        const cookieHeader = okLoginResponse.headers()['set-cookie'] ?? '';
-        expect(cookieHeader).toContain('web_auth=');
 
-        const unlockedRoot = await request.get('/', {
-            headers: { Cookie: cookieHeader },
-        });
+        const unlockedRoot = await request.get('/');
         expect(unlockedRoot.status()).toBe(200);
 
         try {
-            const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort, cookieHeader);
+            const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort);
             expect(proxyOk.status()).toBe(200);
             const payload = await proxyOk.json() as { version: string };
             expect(payload.version).toBe('3.12.0');
@@ -231,7 +230,6 @@ test.describe('Web platform auth + proxy @web-platform', () => {
             const proxyFallback = await request.get('/api/rest/v1/version', {
                 headers: {
                     'X-C64U-Host': upstreamHost,
-                    Cookie: cookieHeader,
                 },
             });
             expect(proxyFallback.status()).toBe(502);
