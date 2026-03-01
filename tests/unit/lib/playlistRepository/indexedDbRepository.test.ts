@@ -264,6 +264,7 @@ describe('indexedDB playlist repository', () => {
             writable: true,
         });
 
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
         const repository = getIndexedDbPlaylistDataRepository({ preferDurableStorage: false });
         const rows = await repository.queryPlaylist({
             playlistId: 'playlist-default',
@@ -274,6 +275,10 @@ describe('indexedDB playlist repository', () => {
         expect(rows.totalMatchCount).toBe(0);
         expect(await repository.getSession('playlist-default')).toBeNull();
         expect(await repository.getPlaylistItems('playlist-default')).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(
+            'Incompatible playlist repository schema in IndexedDB. Resetting repository state.',
+            expect.objectContaining({ expectedVersion: 1, foundVersion: 999 }),
+        );
     });
 
     it('propagates write failures from IndexedDB', async () => {

@@ -107,110 +107,113 @@ Created: 2026-02-28
 - Completed. Phase 1 tasks are executed with compatibility-aware mitigations where firmware limitations prevent protocol replacement (HTTP/FTP). Validation baseline: `npm run test`, `npm run lint`, `npm run build`, and `npx vitest run --coverage --coverage.reporter=text-summary` (Branches 84.15%).
 
 ## Phase 2 — Major Risk Reduction
-- [ ] TASK-013: Implement major mitigation for no dependency update automation
+- [x] TASK-013: Implement major mitigation for no dependency update automation
   - **Addresses:** ISSUE-011
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-014: Implement major mitigation for readme license badge says gpl v2, license file is gpl v3
+  - **Implementation notes:** Added `.github/dependabot.yml` with weekly update automation for `npm`, `github-actions`, and Android `gradle` ecosystems, with scoped commit prefixes and dependency labels.
+- [x] TASK-014: Implement major mitigation for readme license badge says gpl v2, license file is gpl v3
   - **Addresses:** ISSUE-012
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-015: Implement major mitigation for github actions are pinned to mutable tags, not immutable shas
+  - **Implementation notes:** Updated `README.md` license badge/link from GPLv2 to GPLv3 to match `LICENSE` and remove legal ambiguity.
+- [x] TASK-015: Implement major mitigation for github actions are pinned to mutable tags, not immutable shas
   - **Addresses:** ISSUE-013
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-016: Implement major mitigation for no ios audio background mode
+  - **Implementation notes:** Replaced mutable action tags with immutable commit SHAs across `.github/workflows/android.yaml`, `.github/workflows/ios.yaml`, `.github/workflows/web.yaml`, and `.github/workflows/fuzz.yaml`.
+- [x] TASK-016: Implement major mitigation for no ios audio background mode
   - **Addresses:** ISSUE-014
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-017: Implement major mitigation for ios deployment and version metadata are inconsistent
+  - **Implementation notes:** Enabled iOS background audio capability in `ios/App/App/Info.plist` (`UIBackgroundModes: audio`) and configured `AVAudioSession` activation/deactivation in `ios/App/App/NativePlugins.swift` for `BackgroundExecutionPlugin` start/stop lifecycle.
+- [x] TASK-017: Implement major mitigation for ios deployment and version metadata are inconsistent
   - **Addresses:** ISSUE-015
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-018: Implement major mitigation for current persistence adapters can silently reset state on parse/version mismatch
+  - **Implementation notes:** Aligned iOS deployment target to `15.0` in `ios/App/App.xcodeproj/project.pbxproj` and propagated CI-resolved metadata (`APP_VERSION`, `APP_BUILD_NUMBER`) into iOS `xcodebuild` invocations in `.github/workflows/ios.yaml`.
+- [x] TASK-018: Implement major mitigation for current persistence adapters can silently reset state on parse/version mismatch
   - **Addresses:** ISSUE-016
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-019: Implement major mitigation for android abi policy includes emulator abis in default packaging path
+  - **Implementation notes:** Added explicit incompatible-schema handling for playlist persistence adapters: localStorage state backup + warning (`src/lib/playlistRepository/localStorageRepository.ts`) and IndexedDB mismatch warning (`src/lib/playlistRepository/indexedDbRepository.ts`), with updated unit tests.
+- [x] TASK-019: Implement major mitigation for android abi policy includes emulator abis in default packaging path
   - **Addresses:** ISSUE-017
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-020: Implement major mitigation for android diagnostics broadcast is globally observable
+  - **Implementation notes:** Scoped release artifact ABI filters to device ABIs only (`armeabi-v7a`, `arm64-v8a`) in `android/app/build.gradle`, while preserving emulator ABI support in debug paths.
+- [x] TASK-020: Implement major mitigation for android diagnostics broadcast is globally observable
   - **Addresses:** ISSUE-018
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-021: Implement major mitigation for android release build keeps minification disabled
+  - **Implementation notes:** Constrained Android diagnostics broadcast scope to app package by setting `Intent.setPackage(context.packageName)` in `android/app/src/main/java/uk/gleissner/c64commander/AppLogger.kt`.
+- [x] TASK-021: Implement major mitigation for android release build keeps minification disabled
   - **Addresses:** ISSUE-019
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-022: Implement major mitigation for web runtime disables asset caching and has no service worker fallback
+  - **Implementation notes:** Enabled release-code shrinking and obfuscation (`minifyEnabled true`, `shrinkResources true`) in `android/app/build.gradle` with existing ProGuard rules.
+- [x] TASK-022: Implement major mitigation for web runtime disables asset caching and has no service worker fallback
   - **Addresses:** ISSUE-020
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-023: Implement major mitigation for no ios native unit tests
+  - **Implementation notes:** Added web runtime caching/service-worker mitigations: static cache policy by asset type/hash in `web/server/src/index.ts`, production service worker registration in `src/main.tsx`, and `public/sw.js` for offline/static fallback; added corresponding web-server unit coverage for immutable hashed assets.
+- [x] TASK-023: Implement major mitigation for no ios native unit tests
   - **Addresses:** ISSUE-027
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-024: Implement major mitigation for no localization infrastructure
+  - **Implementation notes:** Added lightweight native Swift unit-test lane via SwiftPM package (`ios/native-tests/`) and CI execution (`swift test`) in `.github/workflows/ios.yaml` to establish native test coverage baseline.
+- [x] TASK-024: Implement major mitigation for no localization infrastructure
   - **Addresses:** ISSUE-028
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
-- [ ] TASK-025: Implement major mitigation for web bundle size profile is high for first load
+  - **Implementation notes:** Introduced initial localization infrastructure (`src/lib/i18n/`) and adopted keyed translations for core app-shell strings in `src/App.tsx`, with unit coverage in `tests/unit/lib/i18n.test.ts`.
+- [x] TASK-025: Implement major mitigation for web bundle size profile is high for first load
   - **Addresses:** ISSUE-029
   - **Acceptance criteria:**
     - Mitigation is implemented and documented.
     - Verification confirms risk reduction without regressions.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert mitigation change and re-run baseline validation.
-  - **Implementation notes:**
+  - **Implementation notes:** Added deterministic Rollup manual chunking in `vite.config.ts` to split heavy vendor paths (`vendor-react`, `vendor-ui`, `vendor-hvsc`, `vendor`) and reduce first-load pressure on the primary bundle.
+
+### Phase 2 Completion Summary
+- Completed. Major risk reductions are implemented across supply chain automation, workflow immutability, iOS/Android platform hardening, persistence safety, localization scaffolding, and web runtime caching/performance with no known regressions in local validation gates.
 
 ## Phase 3 — Structural Improvements
 - [ ] TASK-026: Apply structural fix for android jvm tests fail on java 25

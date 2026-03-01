@@ -327,23 +327,44 @@ const writeJson = (res: ServerResponse, status: number, payload: unknown) => {
     res.end(body);
 };
 
-const writeText = (res: ServerResponse, status: number, body: string, contentType = 'text/plain; charset=utf-8') => {
+const writeText = (
+    res: ServerResponse,
+    status: number,
+    body: string,
+    contentType = 'text/plain; charset=utf-8',
+    cacheControl = 'no-store',
+) => {
     const data = Buffer.from(body);
     res.writeHead(status, {
         'Content-Type': contentType,
         'Content-Length': String(data.length),
-        'Cache-Control': 'no-store',
+        'Cache-Control': cacheControl,
     });
     res.end(data);
 };
 
-const writeBuffer = (res: ServerResponse, status: number, data: Buffer, contentType = 'application/octet-stream') => {
+const writeBuffer = (
+    res: ServerResponse,
+    status: number,
+    data: Buffer,
+    contentType = 'application/octet-stream',
+    cacheControl = 'no-store',
+) => {
     res.writeHead(status, {
         'Content-Type': contentType,
         'Content-Length': String(data.length),
-        'Cache-Control': 'no-store',
+        'Cache-Control': cacheControl,
     });
     res.end(data);
+};
+
+const getStaticCacheControl = (safePath: string) => {
+    const normalized = safePath.replace(/\\/g, '/');
+    if (normalized === 'index.html') return 'no-store';
+    if (normalized === 'sw.js' || normalized === 'manifest.webmanifest') return 'no-cache';
+    const isHashedAsset = /^assets\/.+[-_.][a-f0-9]{8,}\.[a-z0-9]+$/i.test(normalized);
+    if (isHashedAsset) return 'public, max-age=31536000, immutable';
+    return 'public, max-age=3600';
 };
 
 const safeCompare = (left: string, right: string): boolean => {
@@ -717,7 +738,7 @@ const serveStatic = async (res: ServerResponse, requestPath: string) => {
             return;
         }
         const data = await fs.readFile(fullPath);
-        writeBuffer(res, 200, data, getContentType(fullPath));
+        writeBuffer(res, 200, data, getContentType(fullPath), getStaticCacheControl(safePath));
         return;
     } catch (error) {
         const err = error as NodeJS.ErrnoException;

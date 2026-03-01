@@ -95,6 +95,10 @@ const loadState = async (): Promise<PersistedState> => {
       request.onerror = () => reject(request.error ?? new Error('IndexedDB read failed'));
     });
     if (!state || state.version !== 1) {
+      console.warn('Incompatible playlist repository schema in IndexedDB. Resetting repository state.', {
+        expectedVersion: 1,
+        foundVersion: state && typeof state === 'object' ? (state as { version?: unknown }).version : null,
+      });
       return defaultState();
     }
     return {

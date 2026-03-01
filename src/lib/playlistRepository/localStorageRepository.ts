@@ -19,6 +19,7 @@ type PersistedState = {
 };
 
 const STORAGE_KEY = 'c64u_playlist_repo:v1';
+const BACKUP_STORAGE_KEY = 'c64u_playlist_repo:v1:backup';
 
 const defaultState = (): PersistedState => ({
   version: 1,
@@ -71,7 +72,17 @@ const safeReadState = (): PersistedState => {
   if (!raw) return defaultState();
   try {
     const parsed = JSON.parse(raw) as PersistedState;
-    if (!parsed || parsed.version !== 1) return defaultState();
+    if (!parsed || parsed.version !== 1) {
+      addLog('warn', 'Incompatible localStorage playlist repository schema. Preserving backup and resetting repository state.', {
+        storageKey: STORAGE_KEY,
+        backupStorageKey: BACKUP_STORAGE_KEY,
+        version: typeof parsed === 'object' && parsed ? (parsed as { version?: unknown }).version : null,
+      });
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(BACKUP_STORAGE_KEY, raw);
+      }
+      return defaultState();
+    }
     return {
       version: 1,
       tracks: parsed.tracks ?? {},

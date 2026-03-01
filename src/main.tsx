@@ -73,6 +73,25 @@ const startDeferredStartupBootstrap = () => {
 		});
 };
 
+const registerServiceWorker = () => {
+	if (typeof window === 'undefined') return;
+	if (!('serviceWorker' in navigator)) return;
+	if (import.meta.env.DEV) return;
+	window.addEventListener('load', () => {
+		void navigator.serviceWorker.register('/sw.js').catch((error) => {
+			const err = error as Error;
+			addErrorLog('Service worker registration failed', {
+				error: {
+					name: err.name,
+					message: err.message,
+					stack: err.stack,
+				},
+			});
+		});
+	});
+};
+
 initializeRuntimeMotionMode();
+registerServiceWorker();
 createRoot(document.getElementById("root")!).render(<App />);
 scheduleAfterFirstPaint(startDeferredStartupBootstrap);

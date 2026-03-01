@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import UIKit
+import AVFoundation
 import Security
 import os.log
 import Network
@@ -906,6 +907,14 @@ public final class BackgroundExecutionPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setActive(true)
+        } catch {
+            IOSDiagnostics.log(.warn, "BackgroundExecution failed to configure AVAudioSession", details: ["origin": "native"], error: error)
+        }
+
         backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "C64CommanderBackgroundExecution") { [weak self] in
             IOSDiagnostics.log(.warn, "BackgroundExecution task expired on iOS", details: ["origin": "native"])
             self?.endBackgroundTaskIfNeeded()
@@ -922,6 +931,11 @@ public final class BackgroundExecutionPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc public func stop(_ call: CAPPluginCall) {
         clearDueTimer()
         endBackgroundTaskIfNeeded()
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        } catch {
+            IOSDiagnostics.log(.warn, "BackgroundExecution failed to deactivate AVAudioSession", details: ["origin": "native"], error: error)
+        }
         IOSDiagnostics.log(.info, "BackgroundExecution task stopped on iOS", details: ["origin": "native"])
         call.resolve()
     }

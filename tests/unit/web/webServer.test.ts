@@ -73,6 +73,8 @@ describe('web server platform runtime', () => {
         const distDir = await makeTempDir('c64-web-dist-');
         const configDir = await makeTempDir('c64-web-config-');
         await writeFile(path.join(distDir, 'index.html'), '<html><body>ok</body></html>', 'utf8');
+        await mkdir(path.join(distDir, 'assets'));
+        await writeFile(path.join(distDir, 'assets', 'index-abcdef1234.js'), 'console.log("ok")', 'utf8');
 
         const server = await startWebServer({
             HOST: '127.0.0.1',
@@ -90,6 +92,10 @@ describe('web server platform runtime', () => {
         expect(root.headers.get('x-frame-options')).toBe('DENY');
         expect(root.headers.get('x-content-type-options')).toBe('nosniff');
         expect(root.headers.get('content-security-policy')).toContain("script-src 'self'");
+
+        const hashedAsset = await fetch(`${server.baseUrl}/assets/index-abcdef1234.js`);
+        expect(hashedAsset.status).toBe(200);
+        expect(hashedAsset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
 
         await server.close();
     });

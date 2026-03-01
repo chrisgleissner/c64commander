@@ -32,6 +32,7 @@ import { recordActionEnd, recordActionStart, recordTraceError } from '@/lib/trac
 import { registerGlobalButtonInteractionModel } from '@/lib/ui/buttonInteraction';
 import { installConsoleDiagnosticsBridge } from '@/lib/diagnostics/logger';
 import { invalidateForVisibilityResume } from '@/lib/query/c64QueryInvalidation';
+import { t } from '@/lib/i18n';
 
 const HomePage = lazy(() => import('./pages/HomePage'));
 const ConfigBrowserPage = lazy(() => import('./pages/ConfigBrowserPage'));
@@ -79,7 +80,7 @@ const shouldEnableCoverageProbe = () => {
 
 const RouteLoadingFallback = () => (
   <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-6 py-10 text-sm text-muted-foreground">
-    Loading screen...
+    {t('app.loadingScreen', 'Loading screen...')}
   </div>
 );
 
@@ -265,12 +266,12 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
       return (
         <div className="flex min-h-screen items-center justify-center bg-background px-6">
           <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-lg">
-            <p className="text-lg font-semibold text-foreground">Something went wrong</p>
+            <p className="text-lg font-semibold text-foreground">{t('app.error.title', 'Something went wrong')}</p>
             <p className="mt-2 text-sm text-muted-foreground">
-              The app hit an unexpected error. Please reopen the page or try again.
+              {t('app.error.description', 'The app hit an unexpected error. Please reopen the page or try again.')}
             </p>
             <Button className="mt-4" onClick={() => window.location.reload()}>
-              Reload
+              {t('app.error.reload', 'Reload')}
             </Button>
           </div>
         </div>
