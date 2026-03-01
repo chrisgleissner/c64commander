@@ -91,7 +91,7 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Cache HVSC Update 84 archive
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.cache/hvsc
           key: hvsc-update-84-${{ runner.os }}
@@ -137,7 +137,7 @@ jobs:
           echo "- deps install (npm): $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
       - name: Cache HVSC Update 84 archive
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ github.workspace }}/.cache/hvsc
           key: hvsc-update-84-${{ runner.os }}
@@ -147,7 +147,7 @@ jobs:
           sudo rm -f /etc/apt/sources.list.d/azure-cli.sources /etc/apt/sources.list.d/azure-cli.list || true
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json', 'bun.lockb') }}
@@ -510,7 +510,7 @@ jobs:
           fi
 
       - name: Cache Android SDK system images
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ${{ env.ANDROID_SDK_ROOT }}/system-images
@@ -687,7 +687,7 @@ jobs:
 
       - name: Cache Maestro CLI
         id: maestro-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.maestro
           key: maestro-cli-${{ runner.os }}-v1
