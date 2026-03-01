@@ -102,6 +102,15 @@ const ensureWebAuthApi = async (request: RequestLike): Promise<boolean> => {
     }
 };
 
+const cookieFromSetCookieHeader = (setCookieHeader: string | undefined): string => {
+    if (!setCookieHeader) {
+        return '';
+    }
+    const firstCookie = setCookieHeader.split(',')[0]?.trim() ?? '';
+    const pair = firstCookie.split(';')[0]?.trim() ?? '';
+    return pair.includes('=') ? pair : '';
+};
+
 const resolveReachableProxyHost = async (
     request: RequestLike,
     upstreamPort: number,
@@ -189,9 +198,11 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         if (setPassword.status() === 401) {
             const login = await request.post('/auth/login', { data: { password: 'secret' } });
             expect(login.status()).toBe(200);
+            const loginCookie = cookieFromSetCookieHeader(login.headers()['set-cookie']);
+            expect(loginCookie).not.toBe('');
             const retry = await request.put('/api/secure-storage/password', {
                 data: { value: 'secret' },
-                headers: { Cookie: login.headers()['set-cookie'] ?? '' },
+                headers: { Cookie: loginCookie },
             });
             expect(retry.status()).toBe(200);
         } else {
@@ -214,12 +225,16 @@ test.describe('Web platform auth + proxy @web-platform', () => {
         expect([401, 429]).toContain(wrongLoginResponse.status());
         const okLoginResponse = await request.post('/auth/login', { data: { password: 'secret' } });
         expect(okLoginResponse.status()).toBe(200);
+        const authCookie = cookieFromSetCookieHeader(okLoginResponse.headers()['set-cookie']);
+        expect(authCookie).not.toBe('');
 
-        const unlockedRoot = await request.get('/');
+        const unlockedRoot = await request.get('/', {
+            headers: { Cookie: authCookie },
+        });
         expect(unlockedRoot.status()).toBe(200);
 
         try {
-            const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort);
+            const { response: proxyOk } = await resolveReachableProxyHost(request, upstreamPort, authCookie);
             expect(proxyOk.status()).toBe(200);
             const payload = await proxyOk.json() as { version: string };
             expect(payload.version).toBe('3.12.0');
@@ -230,6 +245,7 @@ test.describe('Web platform auth + proxy @web-platform', () => {
             const proxyFallback = await request.get('/api/rest/v1/version', {
                 headers: {
                     'X-C64U-Host': upstreamHost,
+                    Cookie: authCookie,
                 },
             });
             expect(proxyFallback.status()).toBe(502);
@@ -252,8 +268,12 @@ test.describe('Web platform auth + proxy @web-platform', () => {
             if (login.status() !== 200) {
                 test.skip(true, 'Unable to reset auth state with known test password');
             }
+            const loginCookie = cookieFromSetCookieHeader(login.headers()['set-cookie']);
+            if (!loginCookie) {
+                test.skip(true, 'Unable to obtain auth cookie for deterministic setup');
+            }
             const retryClear = await request.delete('/api/secure-storage/password', {
-                headers: { Cookie: login.headers()['set-cookie'] ?? '' },
+                headers: { Cookie: loginCookie },
             });
             if (retryClear.status() !== 200) {
                 test.skip(true, 'Unable to clear configured password for deterministic setup');
@@ -283,8 +303,12 @@ test.describe('Web platform auth + proxy @web-platform', () => {
             if (login.status() !== 200) {
                 test.skip(true, 'Unable to reset auth state with known test password');
             }
+            const loginCookie = cookieFromSetCookieHeader(login.headers()['set-cookie']);
+            if (!loginCookie) {
+                test.skip(true, 'Unable to obtain auth cookie for deterministic setup');
+            }
             const retryClear = await request.delete('/api/secure-storage/password', {
-                headers: { Cookie: login.headers()['set-cookie'] ?? '' },
+                headers: { Cookie: loginCookie },
             });
             if (retryClear.status() !== 200) {
                 test.skip(true, 'Unable to clear configured password for deterministic setup');
