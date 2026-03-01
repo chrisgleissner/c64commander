@@ -16,6 +16,8 @@
     "format:check": "npm run format:check:yaml && npm run format:check:eslint",
     "format:check:yaml": "prettier --check \"**/*.{yaml,yml}\"",
     "format:check:eslint": "eslint .",
+    "prebuild": "npm run notices:generate",
+    "postbuild": "bash scripts/package-third-party-notice.sh",
     "build": "vite build",
     "build:web-server": "tsc -p web/server/tsconfig.json",
     "build:web-platform": "npm run build && npm run build:web-server",
@@ -31,6 +33,7 @@
     "test:coverage": "rm -rf coverage && mkdir -p coverage/.tmp && vitest run --coverage",
     "test:coverage:all": "./scripts/collect-coverage.sh",
     "test:e2e": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep-invert \"@screenshots|@web-platform\"",
+    "test:e2e:native": "npm run maestro:gating",
     "screenshots": "node scripts/run-screenshots-with-prune.mjs",
     "screenshots:raw": "TRACE_ASSERTIONS_DEFAULT=1 playwright test --grep @screenshots --workers 1",
     "screenshots:prune-identical": "node scripts/revert-identical-pngs.mjs",
@@ -66,7 +69,9 @@
     "ort:generate-notices": "bash scripts/ort-generate-notices.sh",
     "ort:sync-notices": "bash scripts/ort-sync-notices.sh",
     "ort:notices": "npm run ort:generate-notices && npm run ort:sync-notices",
-    "ort:check-drift": "bash scripts/ort-generate-notices.sh --check && bash scripts/ort-sync-notices.sh --check"
+    "ort:check-drift": "bash scripts/ort-generate-notices.sh --check && bash scripts/ort-sync-notices.sh --check",
+    "notices:generate": "node scripts/generate-third-party-notices.mjs",
+    "notices:check": "node scripts/generate-third-party-notices.mjs --check"
   },
   "dependencies": {
     "@capacitor/filesystem": "^6.0.4",

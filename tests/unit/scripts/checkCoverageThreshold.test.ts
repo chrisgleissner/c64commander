@@ -39,8 +39,8 @@ describe('check-coverage-threshold', () => {
 
             const result = runScript(root, {
                 COVERAGE_FILE: 'coverage/lcov.info',
-                COVERAGE_MIN: '80',
-                COVERAGE_MIN_BRANCH: '82',
+                COVERAGE_MIN: '90',
+                COVERAGE_MIN_BRANCH: '90',
             });
 
             expect(result.status).toBe(0);
@@ -71,8 +71,8 @@ describe('check-coverage-threshold', () => {
 
             const result = runScript(root, {
                 COVERAGE_FILE: 'coverage/lcov.info',
-                COVERAGE_MIN: '80',
-                COVERAGE_MIN_BRANCH: '82',
+                COVERAGE_MIN: '90',
+                COVERAGE_MIN_BRANCH: '90',
             });
 
             expect(result.status).toBe(1);
@@ -102,8 +102,8 @@ describe('check-coverage-threshold', () => {
 
             const result = runScript(root, {
                 COVERAGE_FILE: 'coverage/lcov.info',
-                COVERAGE_MIN: '80',
-                COVERAGE_MIN_BRANCH: '82',
+                COVERAGE_MIN: '90',
+                COVERAGE_MIN_BRANCH: '90',
             });
 
             expect(result.status).toBe(0);

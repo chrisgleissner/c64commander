@@ -733,7 +733,7 @@ Unified recommendation: do not ship broadly until consolidated Blocker/Critical 
 - **Original IDs:** PRA-020 (review-5a)
 - **Source:** review-5a
 - **Category:** Testing
-- **Description:** CI enforces `COVERAGE_MIN=80` while repository guidance states 82% branch safety margin for code-change tasks.
+- **Description:** CI enforces `COVERAGE_MIN=90` while repository guidance states 90% branch safety margin for code-change tasks.
 - **Root Cause:** Regression risk rises when gate is weaker than declared quality policy.
 - **Impact:** Medium
 - **Likelihood:** High

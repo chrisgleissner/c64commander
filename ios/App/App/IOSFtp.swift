@@ -1,4 +1,105 @@
 import Foundation
+import Capacitor
+
+private struct FtpRequestOptions {
+    let host: String
+    let port: Int
+    let username: String
+    let password: String
+    let path: String
+
+    init(call: CAPPluginCall) throws {
+        guard let host = call.getString("host"), !host.isEmpty else {
+            throw NativePluginError.invalidArgument("host is required")
+        }
+        self.host = host
+        self.port = call.getInt("port") ?? 21
+        self.username = call.getString("username") ?? "user"
+        self.password = call.getString("password") ?? ""
+        self.path = call.getString("path") ?? "/"
+    }
+}
+
+@objc(FtpClientPlugin)
+public final class FtpClientPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "FtpClientPlugin"
+    public let jsName = "FtpClient"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "listDirectory", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readFile", returnType: CAPPluginReturnPromise),
+    ]
+
+    private let queue = DispatchQueue(label: "uk.gleissner.c64commander.ftp")
+
+    @objc public func listDirectory(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                let options = try FtpRequestOptions(call: call)
+                let session = FtpSession(host: options.host, port: options.port)
+                defer { session.disconnect() }
+
+                try session.connect()
+                try session.login(username: options.username, password: options.password)
+                let entries = try session.listDirectory(path: options.path)
+
+                let payload = entries.map { entry in
+                    [
+                        "name": entry.name,
+                        "path": entry.path,
+                        "type": entry.type,
+                        "size": entry.size as Any,
+                        "modifiedAt": entry.modifiedAt as Any,
+                    ] as [String: Any]
+                }
+                call.resolve(["entries": payload])
+            } catch {
+                IOSDiagnostics.log(.error, "FTP listDirectory failed", details: ["origin": "native"], error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+
+    @objc public func readFile(_ call: CAPPluginCall) {
+        queue.async {
+            do {
+                var options = try FtpRequestOptions(call: call)
+                guard let explicitPath = call.getString("path"), !explicitPath.isEmpty else {
+                    throw NativePluginError.invalidArgument("path is required")
+                }
+                options = FtpRequestOptions(
+                    host: options.host,
+                    port: options.port,
+                    username: options.username,
+                    password: options.password,
+                    path: explicitPath
+                )
+
+                let session = FtpSession(host: options.host, port: options.port)
+                defer { session.disconnect() }
+                try session.connect()
+                try session.login(username: options.username, password: options.password)
+                let data = try session.readFile(path: options.path)
+                call.resolve([
+                    "data": data.base64EncodedString(),
+                    "sizeBytes": data.count,
+                ])
+            } catch {
+                IOSDiagnostics.log(.error, "FTP readFile failed", details: ["origin": "native"], error: error)
+                call.reject(error.localizedDescription)
+            }
+        }
+    }
+}
+
+private extension FtpRequestOptions {
+    init(host: String, port: Int, username: String, password: String, path: String) {
+        self.host = host
+        self.port = port
+        self.username = username
+        self.password = password
+        self.path = path
+    }
+}
 
 struct FtpEntry {
     let name: String

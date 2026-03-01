@@ -371,7 +371,7 @@ jobs:
 
       - name: Enforce coverage threshold
         env:
-          COVERAGE_MIN: "80"
+          COVERAGE_MIN: "90"
           COVERAGE_FILE: "coverage/lcov.info"
         run: node scripts/check-coverage-threshold.mjs
 
@@ -518,6 +518,12 @@ jobs:
           npm run cap:build
           end=$(date +%s)
           echo "- cap build: $((end-start))s" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify Android assemble path (dry-run)
+        run: |
+          set -e
+          cd android
+          ./gradlew -m :app:assembleDebug
 
       - name: Inspect SevenZ/XZ dependency graph
         run: |

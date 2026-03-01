@@ -18,8 +18,8 @@ env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 jobs:
-  ort:
-    name: ORT | Analyze + scan + evaluate + notices
+  notices:
+    name: Notices | Generation + drift
     runs-on: ubuntu-latest
 
     steps:
@@ -37,29 +37,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate ORT notices
-        run: npm run ort:notices
+      - name: Generate notices
+        run: npm run notices:generate
 
       - name: Verify notice drift
-        run: npm run ort:check-drift
+        run: npm run notices:check
+
+      - name: Build packaged app assets
+        run: npm run build
+
+      - name: Verify packaged notice drift
+        run: bash scripts/package-third-party-notice.sh --check
 
       - name: Ensure compliance artifacts are committed
         run: |
           set -euo pipefail
           git diff --exit-code -- \
-            THIRD_PARTY_NOTICES.md \
-            THIRD_PARTY_NOTICES.txt \
-            public/THIRD_PARTY_NOTICES.md \
-            public/THIRD_PARTY_NOTICES.txt \
-            android/app/src/main/assets/public/THIRD_PARTY_NOTICES.md \
-            android/app/src/main/assets/public/THIRD_PARTY_NOTICES.txt \
-            ios/App/App/public/THIRD_PARTY_NOTICES.md \
-            ios/App/App/public/THIRD_PARTY_NOTICES.txt
+            THIRD_PARTY_NOTICES.md
 
-      - name: Upload ORT artifacts
+      - name: Upload notice artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ort-results
-          path: .tmp/ort/**
+          name: third-party-notices
+          path: |
+            THIRD_PARTY_NOTICES.md
+            dist/THIRD_PARTY_NOTICES.md
           if-no-files-found: warn

@@ -213,57 +213,57 @@ Created: 2026-02-28
   - **Implementation notes:** Added deterministic Rollup manual chunking in `vite.config.ts` to split heavy vendor paths (`vendor-react`, `vendor-ui`, `vendor-hvsc`, `vendor`) and reduce first-load pressure on the primary bundle.
 
 ### Phase 2 Completion Summary
-- Completed. Major risk reductions are implemented across supply chain automation, workflow immutability, iOS/Android platform hardening, persistence safety, localization scaffolding, and web runtime caching/performance with no known regressions in local validation gates.
+- Verified with repository checks. Major risk reductions are present across dependency automation, iOS/Android hardening, persistence safety, localization scaffolding, and web runtime caching/performance. Note: workflow-action SHA pinning (TASK-015 objective) requires a follow-up refresh because current workflow files use mutable major tags.
 
 ## Phase 3 — Structural Improvements
-- [ ] TASK-026: Apply structural fix for android jvm tests fail on java 25
+- [x] TASK-026: Apply structural fix for android jvm tests fail on java 25
   - **Addresses:** ISSUE-021
   - **Acceptance criteria:**
     - Maintainability/testing debt is reduced with a scoped change.
     - Automated checks stay green after the update.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert structural change if instability appears.
-  - **Implementation notes:**
-- [ ] TASK-027: Apply structural fix for android build verification could not complete in this assessment environment
+  - **Implementation notes:** Hardened local Java 17 selection in `build` by preferring `JAVA17_HOME` and known JDK17 paths before Gradle/Android execution, reducing Java-25 local incompatibility risk while preserving existing CI Java 17 usage.
+- [x] TASK-027: Apply structural fix for android build verification could not complete in this assessment environment
   - **Addresses:** ISSUE-022
   - **Acceptance criteria:**
     - Maintainability/testing debt is reduced with a scoped change.
     - Automated checks stay green after the update.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert structural change if instability appears.
-  - **Implementation notes:**
-- [ ] TASK-028: Apply structural fix for coverage quality bar mismatch between ci gate and repository guidance
+  - **Implementation notes:** Added explicit CI dry-run verification step `./gradlew -m :app:assembleDebug` in `.github/workflows/android.yaml` to ensure assemble path viability in a network-enabled CI environment before full assemble.
+- [x] TASK-028: Apply structural fix for coverage quality bar mismatch between ci gate and repository guidance
   - **Addresses:** ISSUE-023
   - **Acceptance criteria:**
     - Maintainability/testing debt is reduced with a scoped change.
     - Automated checks stay green after the update.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert structural change if instability appears.
-  - **Implementation notes:**
-- [ ] TASK-029: Apply structural fix for e2e tests run against vite preview, not native runtime
+  - **Implementation notes:** Aligned repository guidance and execution paths to a 90% branch threshold by updating `AGENTS.md` and local helper enforcement in `build` (`COVERAGE_MIN=90`).
+- [x] TASK-029: Apply structural fix for e2e tests run against vite preview, not native runtime
   - **Addresses:** ISSUE-034
   - **Acceptance criteria:**
     - Maintainability/testing debt is reduced with a scoped change.
     - Automated checks stay green after the update.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert structural change if instability appears.
-  - **Implementation notes:**
-- [ ] TASK-030: Apply structural fix for nativeplugins.swift exceeds file size guidelines
+  - **Implementation notes:** Added explicit native-runtime E2E entrypoint via `package.json` (`test:e2e:native`) and build helper primary action `--test-e2e-native`, separating native-runtime gating from Playwright web-preview-only execution.
+- [x] TASK-030: Apply structural fix for nativeplugins.swift exceeds file size guidelines
   - **Addresses:** ISSUE-037
   - **Acceptance criteria:**
     - Maintainability/testing debt is reduced with a scoped change.
     - Automated checks stay green after the update.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert structural change if instability appears.
-  - **Implementation notes:**
-- [ ] TASK-031: Apply structural fix for web server is a single 843-line file
+  - **Implementation notes:** Refactored iOS plugin composition by moving diagnostics/session bridge and multiple plugin implementations from `ios/App/App/NativePlugins.swift` into `ios/App/App/AppDelegate.swift` and `ios/App/App/IOSFtp.swift`; `NativePlugins.swift` is reduced to 427 lines.
+- [x] TASK-031: Apply structural fix for web server is a single 843-line file
   - **Addresses:** ISSUE-041
   - **Acceptance criteria:**
     - Maintainability/testing debt is reduced with a scoped change.
     - Automated checks stay green after the update.
   - **Validation:** `npm run test && npm run lint && npm run build`
   - **Rollback:** Revert structural change if instability appears.
-  - **Implementation notes:**
+  - **Implementation notes:** Split `web/server/src/index.ts` into focused modules (`hostValidation.ts`, `httpIO.ts`, `securityHeaders.ts`, `staticAssets.ts`, `authState.ts`) and reduced `index.ts` to 552 lines while preserving server behavior and successful web-server TypeScript build.
 
 ## Phase 4 — Performance & UX Enhancements
 - [ ] TASK-032: Deliver UX/performance improvement for no automated accessibility testing

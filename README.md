@@ -263,9 +263,10 @@ If you want to build, test, or contribute:
 - Developer guide: [doc/developer.md](doc/developer.md)
 - Chaos/fuzz testing docs: [doc/testing/chaos-fuzz.md](doc/testing/chaos-fuzz.md)
 - Web server runtime dependency note: `basic-ftp` is in `dependencies` because the web server uses it at runtime inside the Docker image.
-- OSS compliance / notices (ORT):
-  - `npm run ort:notices` to run ORT (`analyze`, `scan`, `evaluate`, `report`) and regenerate notices
-  - `npm run ort:check-drift` to enforce deterministic notice output and synced app assets
+- OSS compliance / notices (Linux-friendly):
+  - `npm run notices:generate` to regenerate `THIRD_PARTY_NOTICES.md` at repo root from dependency metadata
+  - `npm run notices:check` to enforce deterministic root notice output
+  - `npm run build` automatically refreshes notices and packages `THIRD_PARTY_NOTICES.md` into `dist/` for web / Android / iOS app bundles
 
 ## 🔧 Advanced Topics
 
@@ -395,7 +396,7 @@ Heartfelt thanks to [Commodore](https://commodore.net) for creating the Commodor
 
 ### Third-Party Libraries
 
-C64 Commander builds on many excellent open-source projects. Notices are generated via ORT and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) with [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) as the canonical template output.
+C64 Commander builds on many excellent open-source projects. Notices are generated via `scripts/generate-third-party-notices.mjs` and published as [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## ⚖️ License
 

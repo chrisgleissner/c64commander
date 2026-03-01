@@ -606,7 +606,7 @@ Observed compliance state:
 - **ID:** PRA-020
 - **Area:** Testing
 - **Evidence:** `.github/workflows/android.yaml:372-376`; `AGENTS.md:95-99`
-- **Problem:** CI enforces `COVERAGE_MIN=80` while repository guidance states 82% branch safety margin for code-change tasks.
+- **Problem:** CI enforces `COVERAGE_MIN=90` while repository guidance states 90% branch safety margin for code-change tasks.
 - **Risk:** Regression risk rises when gate is weaker than declared quality policy.
 - **Severity:** Minor
 - **Likelihood:** High - mismatch is explicit and persistent.
