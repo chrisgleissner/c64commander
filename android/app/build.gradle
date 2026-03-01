@@ -171,7 +171,7 @@ dependencies {
     implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.datastore:datastore-preferences:$dataStoreVersion"
-    implementation "androidx.documentfile:documentfile:1.0.1"
+    implementation "androidx.documentfile:documentfile:1.1.0"
     implementation "androidx.security:security-crypto:1.1.0-alpha06"
     implementation "commons-net:commons-net:3.9.0"
     implementation "org.apache.commons:commons-compress:1.26.2"
