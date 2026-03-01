@@ -149,6 +149,7 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
+          mkdir -p ci-artifacts/telemetry/docker
           pid=""
           child_pid=""
           if [[ -f ci-artifacts/telemetry/docker/monitor.child.pid ]]; then
@@ -193,13 +194,13 @@ jobs:
           cat ci-artifacts/telemetry/docker/monitor-run.log || true
 
       - name: Summarize Docker telemetry
-        if: always()
+        if: always() && hashFiles('ci-artifacts/telemetry/docker/metrics.csv') != ''
         run: |
           set -euo pipefail
           TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/summarize_metrics.py
 
       - name: Render Docker telemetry charts
-        if: always()
+        if: always() && hashFiles('ci-artifacts/telemetry/docker/metrics.csv') != ''
         run: |
           set -euo pipefail
           TELEMETRY_SUMMARY_DIR=ci-artifacts/telemetry python3 ci/telemetry/render_charts.py

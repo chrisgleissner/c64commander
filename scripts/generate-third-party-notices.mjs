@@ -109,6 +109,10 @@ const collectNpmEntries = async () => {
 
 const readAndroidDeps = async () => {
   const gradlePath = path.join(rootDir, 'android', 'app', 'build.gradle');
+  if (!(await fileExists(gradlePath))) {
+    console.warn(`android dependency metadata missing at ${gradlePath}; skipping Gradle dependency extraction`);
+    return [];
+  }
   const content = await fs.readFile(gradlePath, 'utf8');
   const lines = content.split(/\r?\n/);
   const entries = [];
