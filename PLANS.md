@@ -45,6 +45,7 @@ Restore fully green GitHub Actions CI for Android, iOS, Docker/Web, and required
 - 2026-03-02T08:10:00Z | SHA: pending | Updated `.maestro/subflows/launch-and-wait.yaml` to wait for `Home` (restores Android smoke launch reliability on tag CI).
 - 2026-03-02T08:40:00Z | SHA: pending | Updated `.github/workflows/ios.yaml` telemetry gate to keep stable-tag strictness but treat `-rc` tag monitor code `3` as warning.
 - 2026-03-02T11:00:00Z | SHA: pending | Updated `.github/workflows/android.yaml` and `.github/workflows/ios.yaml` telemetry gates to treat monitor exit code `137` as infra warning.
+- 2026-03-02T11:20:00Z | SHA: pending | Updated `tests/unit/ci/telemetryGateWorkflow.test.ts` assertions for iOS rc-tag gate logic and monitor `137` warning behavior.
 
 ## Validation Matrix (GitHub CI focused)
 
