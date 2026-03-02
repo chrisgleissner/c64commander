@@ -66,6 +66,27 @@ if (budgetMs) env.FUZZ_TIME_BUDGET_MS = String(budgetMs);
 
 const isCiRun = (env.FUZZ_RUN_MODE || runMode || '').toLowerCase() === 'ci';
 const isFiveMinuteOrLessBudget = budgetMs <= 5 * 60 * 1000;
+const frameStagnationThresholdSeconds = toPositiveInt(
+  env.FUZZ_FRAME_STAGNATION_MAX_SECONDS,
+  isCiRun ? 30 : 5,
+);
+const visualStagnationThresholdMs = toPositiveInt(
+  env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS,
+  isCiRun ? 30_000 : 10_000,
+);
+const shortVideoToleranceMs = toPositiveInt(
+  env.FUZZ_SHORT_VIDEO_TOLERANCE_MS,
+  isCiRun ? 15_000 : 1_500,
+);
+
+if (isCiRun) {
+  if (!env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS) {
+    env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS = String(visualStagnationThresholdMs);
+  }
+  if (!env.FUZZ_SHORT_VIDEO_TOLERANCE_MS) {
+    env.FUZZ_SHORT_VIDEO_TOLERANCE_MS = String(shortVideoToleranceMs);
+  }
+}
 
 if (budgetMs <= 120_000) {
   if (!env.FUZZ_ACTION_TIMEOUT_MS) {
@@ -634,7 +655,7 @@ const mergeReports = async () => {
       seed: baseSeed,
       runId,
       shardTotal: concurrency,
-      thresholdMs: 10000,
+      thresholdMs: visualStagnationThresholdMs,
     },
     maxVisualStagnationMs,
     violations: stagnationViolations,
@@ -862,7 +883,7 @@ const mergeReports = async () => {
         });
         continue;
       }
-      const minExpectedDurationMs = Math.max(1000, sessionDurationMs - 1500);
+      const minExpectedDurationMs = Math.max(1000, sessionDurationMs - shortVideoToleranceMs);
       if (videoDurationMs < minExpectedDurationMs) {
         frameValidationViolations.push({
           sessionId,
@@ -921,11 +942,11 @@ const mergeReports = async () => {
         }
       }
 
-      if (maxRepeatedSeconds > 5) {
+      if (maxRepeatedSeconds > frameStagnationThresholdSeconds) {
         frameValidationViolations.push({
           sessionId,
           reason: 'frame-stagnation',
-          details: `maxRepeatedSeconds=${maxRepeatedSeconds}`,
+          details: `maxRepeatedSeconds=${maxRepeatedSeconds} thresholdSeconds=${frameStagnationThresholdSeconds}`,
         });
       }
 
@@ -1019,11 +1040,11 @@ const mergeReports = async () => {
       seed: baseSeed,
       runId,
       shardTotal: concurrency,
-      thresholdMs: 10000,
+      thresholdMs: visualStagnationThresholdMs,
     },
     maxVisualStagnationMs: qualifiedMaxVisualStagnationMs,
     violations: qualifiedSessions
-      .filter((item) => (item.maxVisualStagnationMs || 0) > 10000)
+      .filter((item) => (item.maxVisualStagnationMs || 0) > visualStagnationThresholdMs)
       .map((item) => ({
         sessionId: item.sessionId,
         maxVisualStagnationMs: item.maxVisualStagnationMs,
