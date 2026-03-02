@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { saveCoverageFromPage } from './withCoverage';
+
+test.afterEach(async ({ page }, testInfo) => {
+    await saveCoverageFromPage(page, testInfo.title);
+});
 
 const routes = ['/'];
 

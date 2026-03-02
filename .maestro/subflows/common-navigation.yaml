@@ -29,8 +29,22 @@ tags:
           visible:
             text: "Home"
           timeout: ${TIMEOUT}
-- tapOn:
-    text: "Play"
+- retry:
+    maxRetries: 3
+    commands:
+      - tapOn:
+          id: "tab-play"
+          optional: true
+      - tapOn:
+          text: "Play"
+          optional: true
+      - tapOn:
+          point: "25%,95%"
+          optional: true
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "Playlist"
+          timeout: ${TIMEOUT}
 - extendedWaitUntil:
     visible: "Playlist"
     timeout: ${TIMEOUT}

@@ -4,6 +4,11 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { saveCoverageFromPage } from './withCoverage';
+
+test.afterEach(async ({ page }, testInfo) => {
+    await saveCoverageFromPage(page, testInfo.title);
+});
 
 const waitForHttp = async (url: string, timeoutMs = 15000) => {
     const started = Date.now();
