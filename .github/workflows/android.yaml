@@ -435,6 +435,7 @@ jobs:
           CC_SHA: ${{ env.CI_SHA }}
         with:
           files: ./coverage/lcov-merged.info
+          disable_search: true
           flags: unittests,e2etests
           name: c64-commander-web-coverage
           use_pypi: true
@@ -637,6 +638,7 @@ jobs:
           CC_SHA: ${{ env.CI_SHA }}
         with:
           files: ${{ steps.normalize_android_coverage.outputs.report }}
+          disable_search: true
           flags: android
           name: c64-commander-android-coverage
           use_pypi: true
