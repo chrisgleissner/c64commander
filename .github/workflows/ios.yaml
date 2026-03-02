@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -814,6 +814,8 @@ jobs:
     name: iOS | Package IPA
     runs-on: macos-latest
     needs: ios-prepare
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout

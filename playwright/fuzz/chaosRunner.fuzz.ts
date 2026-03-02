@@ -27,7 +27,10 @@ const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // Maximum session duration (5 minutes
 const HEARTBEAT_INTERVAL_MS = 10_000; // Log heartbeat every 10 seconds during long operations
 const VISUAL_SAMPLE_INTERVAL_MS = 1000;
 const VISUAL_SAMPLE_TIMEOUT_MS = 3000;
-const MAX_VISUAL_STAGNATION_MS = 10_000;
+const MAX_VISUAL_STAGNATION_MS = (() => {
+  const parsed = Number(process.env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS);
+  return Number.isFinite(parsed) ? Math.max(1_000, parsed) : 10_000;
+})();
 const VISUAL_DELTA_THRESHOLD = 0.003;
 const PLACEHOLDER_SCREENSHOT_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO3Zc1cAAAAASUVORK5CYII=',
@@ -2552,6 +2555,9 @@ test.describe('Fuzz Test', () => {
 
     const missingArtifactSessions = requiredArtifactChecks.filter((item) => item.missing.length > 0);
     expect(missingArtifactSessions, `Missing required session artifacts: ${JSON.stringify(missingArtifactSessions)}`).toEqual([]);
-    expect(visualStagnationReport.violations, 'Visual stagnation exceeded 10s threshold.').toEqual([]);
+    expect(
+      visualStagnationReport.violations,
+      `Visual stagnation exceeded ${Math.round(MAX_VISUAL_STAGNATION_MS / 1000)}s threshold.`,
+    ).toEqual([]);
   });
 });

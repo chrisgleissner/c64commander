@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -1291,6 +1291,8 @@ jobs:
     name: Release | Attach APK/AAB
     runs-on: ubuntu-latest
     needs: [web-coverage-merge, android-tests, android-packaging]
+    permissions:
+      contents: write
     env:
       ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
