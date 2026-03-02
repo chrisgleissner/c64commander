@@ -41,7 +41,7 @@ tags:
       - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:
-                        text: "Home"
+            text: "Home"
           timeout: ${LONG_TIMEOUT}
 - tapOn:
     text: "Home"
