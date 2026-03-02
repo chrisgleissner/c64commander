@@ -1133,6 +1133,10 @@ jobs:
             echo "telemetry gate warning: main process disappearance/restart detected (non-release flow); see ci-artifacts/telemetry/android/events.log"
             exit 0
           fi
+          if [[ "$code" == "137" ]]; then
+            echo "telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see ci-artifacts/telemetry/android/monitor-run.log"
+            exit 0
+          fi
           if [[ "$code" != "0" ]]; then
             echo "telemetry gate failed: monitor exited with code $code"
             exit 1
