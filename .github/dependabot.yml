@@ -16,6 +16,13 @@ updates:
       all-dependencies:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     commit-message:
       prefix: deps
     labels:
@@ -31,6 +38,10 @@ updates:
       all-dependencies:
         patterns:
           - "*"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     commit-message:
       prefix: ci
     labels:
@@ -47,6 +58,13 @@ updates:
       all-dependencies:
         patterns:
           - "*"
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
     commit-message:
       prefix: android
     labels:
