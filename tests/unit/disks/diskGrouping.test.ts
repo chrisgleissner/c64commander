@@ -75,4 +75,12 @@ describe('assignDiskGroupsByPrefix', () => {
     ]);
     expect(result.size).toBe(0);
   });
+
+  it('skips names where stripped base is whitespace-only (BRDA:19 !base TRUE)', () => {
+    // '   .d64' → stripExtension='   ' → .trim()='' → !base=true → null
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/   .d64', name: '   .d64' },
+    ]);
+    expect(result.size).toBe(0);
+  });
 });

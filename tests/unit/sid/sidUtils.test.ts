@@ -184,6 +184,12 @@ describe('sidUtils', () => {
     expect(metadata.musPlayer).toBe(false);
   });
 
+  it('decodes pal_ntsc clock when both PAL and NTSC bits are set (BRDA:99 block 19)', () => {
+    // clockBits = (flags >> 2) & 0b11; flags=0b001111 → clockBits=0b11 → 'pal_ntsc'
+    const metadata = parseSidHeaderMetadata(createSidHeader({ flags: 0b001111 }));
+    expect(metadata.clock).toBe('pal_ntsc');
+  });
+
   it('parses version 2 header with null sid2 address', () => {
     const header = createSidHeader({ version: 2 });
     const metadata = parseSidHeaderMetadata(header);

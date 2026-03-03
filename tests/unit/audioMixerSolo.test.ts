@@ -81,6 +81,11 @@ describe('audio mixer solo routing', () => {
     expect(resolveAudioMixerMuteValue(['5', '10'])).toBe('5');
   });
 
+  it('resolveAudioMixerMuteValue finds new minimum when later option is smaller (BRDA:48 TRUE)', () => {
+    // '10' starts as min; '5' is compared and 5<10 is TRUE → entry becomes new min
+    expect(resolveAudioMixerMuteValue(['10', '5'])).toBe('5');
+  });
+
   it('buildSoloRoutingUpdates skips non-SID-volume items (line 69)', () => {
     const updates = buildSoloRoutingUpdates(
       [{ name: 'master', value: '0 dB', options: ['0 dB', '-6 dB'] }],

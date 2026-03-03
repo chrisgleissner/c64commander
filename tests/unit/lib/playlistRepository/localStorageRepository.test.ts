@@ -358,4 +358,13 @@ describe('localStorage playlist repository', () => {
         });
         expect(result.rows.length).toBe(1);
     });
+
+      it('createSession without explicit seed generates a stable hash seed (BRDA:199 FALSE)', async () => {
+          const repository = getLocalStoragePlaylistDataRepository();
+          // No seed provided → typeof seed !== 'number' → stableHash used
+          const session = await repository.createSession('pl-hash', ['x', 'y', 'z']);
+          expect(typeof session.seed).toBe('number');
+          expect(session.order).toHaveLength(3);
+      });
+
 });

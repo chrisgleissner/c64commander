@@ -193,6 +193,25 @@ describe('playFilesUtils', () => {
             expect(extractAudioMixerItems(undefined)).toEqual([]);
             expect(extractAudioMixerItems({})).toEqual([]);
         });
+
+        it('returns empty array when items is a non-object value (BRDA:137 block 63)', () => {
+            // itemsData='42' → !itemsData=false, typeof '42'!=='object'=true → return []
+            const payload = { 'Audio Mixer': { items: '42' } };
+            expect(extractAudioMixerItems(payload as any)).toEqual([]);
+        });
+
+        it('passes presets from normalized.details to mergeAudioMixerOptions (BRDA:145 block 67)', () => {
+            const payload = { 'Audio Mixer': { items: { 'Item 1': { value: 5 } } } };
+            vi.mocked(normalizeConfigItem).mockReturnValue({
+                value: 5,
+                options: ['x'],
+                details: { presets: ['p1', 'p2'] },
+            } as any);
+            vi.mocked(mergeAudioMixerOptions).mockReturnValue(['p1', 'p2']);
+            const result = extractAudioMixerItems(payload);
+            expect(result[0].options).toEqual(['p1', 'p2']);
+            expect(mergeAudioMixerOptions).toHaveBeenCalledWith(['x'], ['p1', 'p2']);
+        });
     });
 
     describe('shuffleArray', () => {

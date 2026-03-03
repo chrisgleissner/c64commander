@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-    deriveRamDumpFolderDisplayPath, 
-    loadRamDumpFolderConfig, 
-    saveRamDumpFolderConfig, 
+import {
+    deriveRamDumpFolderDisplayPath,
+    loadRamDumpFolderConfig,
+    saveRamDumpFolderConfig,
     clearRamDumpFolderConfig,
     type RamDumpFolderConfig
 } from '@/lib/config/ramDumpFolderStore';
@@ -47,13 +47,13 @@ describe('ramDumpFolderStore', () => {
 
         it('handles malformed URIs', () => {
             // "primary%" causes decodeURIComponent to throw
-            expect(deriveRamDumpFolderDisplayPath('primary%')).toBe(null); 
+            expect(deriveRamDumpFolderDisplayPath('primary%')).toBe(null);
             // wait, deriveRamDumpFolderDisplayPath calls match on result of decode
             // if decode fails, it catches and logs, but continues with raw trimmed?
             // "decoded = trimmed" if catch.
             // "primary%" match('tree/...') -> null.
             // returns fallback.
-            
+
             expect(deriveRamDumpFolderDisplayPath('tree/primary%', 'fallback')).toBe('primary%/fallback');
         });
 
@@ -101,14 +101,14 @@ describe('ramDumpFolderStore', () => {
                 selectedAt: '2023-01-01',
             };
             vi.mocked(localStorage.getItem).mockReturnValue(JSON.stringify(valid));
-            
+
             const result = loadRamDumpFolderConfig();
             expect(result).toMatchObject(valid);
             expect(result?.displayPath).toBe('Internal storage/foo');
         });
-        
+
         it('uses stored displayPath if present', () => {
-             const valid = {
+            const valid = {
                 treeUri: 'tree/primary:foo',
                 rootName: 'foo',
                 selectedAt: '2023-01-01',
@@ -121,45 +121,45 @@ describe('ramDumpFolderStore', () => {
 
         it('handles JSON parse error', () => {
             vi.mocked(localStorage.getItem).mockReturnValue('{ invalid json');
-             expect(loadRamDumpFolderConfig()).toBeNull();
+            expect(loadRamDumpFolderConfig()).toBeNull();
         });
     });
 
     describe('saveRamDumpFolderConfig', () => {
         it('saves to localStorage and dispatches event', () => {
-             vi.stubGlobal('localStorage', { setItem: vi.fn() });
-             vi.stubGlobal('window', { 
-                 dispatchEvent: vi.fn(), 
-                 CustomEvent: class { constructor(public type: string, public detail: any) {} } 
-             });
+            vi.stubGlobal('localStorage', { setItem: vi.fn() });
+            vi.stubGlobal('window', {
+                dispatchEvent: vi.fn(),
+                CustomEvent: class { constructor(public type: string, public detail: any) { } }
+            });
 
-             const config: RamDumpFolderConfig = {
-                 treeUri: 'u', rootName: 'r', selectedAt: 's', displayPath: 'd'
-             };
-             
-             saveRamDumpFolderConfig(config);
-             
-             expect(localStorage.setItem).toHaveBeenCalledWith('c64u_ram_dump_folder:v1', JSON.stringify(config));
-             expect(window.dispatchEvent).toHaveBeenCalled();
-             
-             vi.unstubAllGlobals();
+            const config: RamDumpFolderConfig = {
+                treeUri: 'u', rootName: 'r', selectedAt: 's', displayPath: 'd'
+            };
+
+            saveRamDumpFolderConfig(config);
+
+            expect(localStorage.setItem).toHaveBeenCalledWith('c64u_ram_dump_folder:v1', JSON.stringify(config));
+            expect(window.dispatchEvent).toHaveBeenCalled();
+
+            vi.unstubAllGlobals();
         });
     });
-    
+
     describe('clearRamDumpFolderConfig', () => {
         it('removes from localStorage and dispatches event', () => {
-             vi.stubGlobal('localStorage', { removeItem: vi.fn() });
-             vi.stubGlobal('window', { 
-                 dispatchEvent: vi.fn(), 
-                 CustomEvent: class { constructor(public type: string, public detail: any) {} } 
-             });
-             
-             clearRamDumpFolderConfig();
-             
-             expect(localStorage.removeItem).toHaveBeenCalledWith('c64u_ram_dump_folder:v1');
-             expect(window.dispatchEvent).toHaveBeenCalled();
-             
-             vi.unstubAllGlobals();
+            vi.stubGlobal('localStorage', { removeItem: vi.fn() });
+            vi.stubGlobal('window', {
+                dispatchEvent: vi.fn(),
+                CustomEvent: class { constructor(public type: string, public detail: any) { } }
+            });
+
+            clearRamDumpFolderConfig();
+
+            expect(localStorage.removeItem).toHaveBeenCalledWith('c64u_ram_dump_folder:v1');
+            expect(window.dispatchEvent).toHaveBeenCalled();
+
+            vi.unstubAllGlobals();
         });
     });
 });

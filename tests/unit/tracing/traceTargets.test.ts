@@ -127,4 +127,19 @@ describe('traceTargets', () => {
     expect(result.target).toBe('external-mock');
     delete (window as { __c64uTestProbeEnabled?: boolean }).__c64uTestProbeEnabled;
   });
+
+  it('resolves real-device when test probes enabled but no test URL globals set (BRDA:38,17)', () => {
+    stickyLockMock.mockReturnValue(false);
+    vi.stubEnv('VITE_ENABLE_TEST_PROBES', '1');
+    // Neither __c64uExpectedBaseUrl nor __c64uMockServerBaseUrl is set → ?? null evaluated
+    delete (window as { __c64uExpectedBaseUrl?: string }).__c64uExpectedBaseUrl;
+    delete (window as { __c64uMockServerBaseUrl?: string }).__c64uMockServerBaseUrl;
+    connectionSnapshotMock.mockReturnValue({ state: 'REAL_CONNECTED' });
+    apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://device' });
+    activeMockBaseUrlMock.mockReturnValue(null);
+
+    const result = resolveBackendTarget();
+    expect(result.target).toBe('real-device');
+    expect(result.reason).toBe('reachable');
+  });
 });

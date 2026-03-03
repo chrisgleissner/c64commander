@@ -68,6 +68,12 @@ describe('failureTaxonomy', () => {
     expect(result.failureClass).toBe('unknown');
   });
 
+  it('classifies numeric error input (normalizeMessage skips object-branch for non-object, BRDA:47)', () => {
+    // normalizeMessage(42): !42=false, typeof 42!=='string', typeof 42!=='object' → straight to return ''
+    const result = classifyError(42);
+    expect(result.failureClass).toBe('unknown');
+  });
+
   it('classifies LocalSourceListingError with saf- code as permission-denied (lines 85, 135)', () => {
     const err = new LocalSourceListingError('Cannot list', 'saf-listing-unavailable');
     const result = classifyError(err);
