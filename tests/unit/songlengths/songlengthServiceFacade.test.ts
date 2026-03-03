@@ -9,6 +9,7 @@
 /* @vitest-environment node */
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryTextBackend, SongLengthServiceFacade } from '@/lib/songlengths';
+import { addLog, addErrorLog } from '@/lib/logging';
 
 vi.mock('@/lib/logging', () => ({
   addLog: vi.fn(),
@@ -222,11 +223,28 @@ this is not valid
     expect(service.stats().status).toBe('unavailable');
   });
 
+  it('safeAddLog swallows addLog exceptions', async () => {
+    // Make addLog throw to cover the catch-block branch in safeAddLog (line 27)
+    vi.mocked(addLog).mockImplementationOnce(() => { throw new Error('log error'); });
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-safe-log' });
+    await expect(loadWithContent(service, '')).resolves.not.toThrow();
+  });
+
+  it('safeAddErrorLog swallows addErrorLog exceptions', async () => {
+    // Make addErrorLog throw to cover the catch-block branch in safeAddErrorLog (line 43)
+    vi.mocked(addErrorLog).mockImplementationOnce(() => { throw new Error('err log error'); });
+    const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-safe-err-log' });
+    await expect(
+      service.loadOnColdStart('/bad.md5', async () => { throw new Error('load fail'); }, 'unit-test')
+    ).resolves.not.toThrow();
+  });
+
   it('reloadOnConfigChange works same as loadOnColdStart', async () => {
     const service = new SongLengthServiceFacade(new InMemoryTextBackend(), { serviceId: 'test-reload' });
     const stats = await service.reloadOnConfigChange(
       '/Songlengths.md5',
-      async () => [{ path: '/Songlengths.md5', content: `
+      async () => [{
+        path: '/Songlengths.md5', content: `
 ; /MUSICIANS/A/solo.sid
 11111111111111111111111111111111=0:30
 ` }],

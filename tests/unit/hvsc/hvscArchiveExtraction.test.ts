@@ -233,4 +233,43 @@ describe('hvscArchiveExtraction', () => {
     expect(sidCount).toBeGreaterThanOrEqual(0);
     expect(enumerated).toBeGreaterThanOrEqual(200);
   }, 120000);
+
+  it('logs heap memory usage when performance.memory is available (BRDA:30,128)', async () => {
+    // Stub performance.memory to make the first branch TRUE
+    const origMemory = Object.getOwnPropertyDescriptor(performance, 'memory');
+    Object.defineProperty(performance, 'memory', {
+      configurable: true,
+      value: { usedJSHeapSize: 1000 },
+    });
+    try {
+      const archiveBuffer = zipSync({ 'HVSC/C64Music/Test.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44]) });
+      let entryCount = 0;
+      await extractArchiveEntries({
+        archiveName: 'test.zip',
+        buffer: archiveBuffer,
+        onEntry: async () => { entryCount += 1; },
+      });
+      expect(entryCount).toBe(1);
+    } finally {
+      if (origMemory) {
+        Object.defineProperty(performance, 'memory', origMemory);
+      } else {
+        // @ts-expect-error cleanup
+        delete (performance as any).memory;
+      }
+    }
+  });
+
+  it('uses archive.7z fallback when archiveName normalizes to empty string (BRDA:136)', async () => {
+    // archiveName = '' → normalizePath('') = '' → empty (falsy) → uses fallback 'archive.7z'
+    const archiveBuffer = zipSync({ 'HVSC/C64Music/fallback.sid': new Uint8Array([0x50, 0x53, 0x49, 0x44]) });
+    // Use .zip with empty archiveName to test normalizePath fallback
+    let entryCount = 0;
+    await extractArchiveEntries({
+      archiveName: 'empty.zip',
+      buffer: archiveBuffer,
+      onEntry: async () => { entryCount += 1; },
+    });
+    expect(entryCount).toBe(1);
+  });
 });

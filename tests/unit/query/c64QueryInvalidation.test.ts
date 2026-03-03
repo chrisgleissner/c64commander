@@ -23,6 +23,14 @@ describe('c64QueryInvalidation', () => {
         expect(getRouteInvalidationPrefixes('/unknown')).toEqual(['c64-info']);
     });
 
+    it('normalizes empty pathname to root and returns home prefixes (BRDA:59)', () => {
+        // pathname.trim() returns '' → falsy → || '/' fallback; normalizedPath='/'
+        // routePrefix==='/' entry matches only when normalizedPath==='/'
+        const prefixes = getRouteInvalidationPrefixes('');
+        expect(prefixes).toContain('c64-info');
+        expect(prefixes).toContain('c64-drives');
+    });
+
     it('invalidates route prefixes using query keys instead of broad predicates', () => {
         const queryClient = new QueryClient();
         const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');

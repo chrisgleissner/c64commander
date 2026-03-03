@@ -14,6 +14,9 @@ import {
     normalizeLocalPath,
     getLocalFilePath,
     parseDurationInput,
+    tryAcquireSingleFlight,
+    releaseSingleFlight,
+    resolvePlayTargetIndex,
     clampDurationSeconds,
     formatDurationSeconds,
     durationSecondsToSlider,
@@ -114,6 +117,23 @@ describe('playFilesUtils', () => {
             expect(parseDurationInput('1:invalid')).toBeUndefined();
             expect(parseDurationInput('1:100')).toBeUndefined(); // Seconds >= 60 invalid in strict time?
         });
+        it('returns undefined for empty or whitespace input (BRDA:73 TRUE)', () => {
+            expect(parseDurationInput('')).toBeUndefined();
+            expect(parseDurationInput('   ')).toBeUndefined();
+        });
+    });
+
+    describe('tryAcquireSingleFlight (playFilesUtils)', () => {
+        it('acquires flight when ref is false, then rejects when already acquired', () => {
+            // Importing from playFilesUtils to cover BRDA:105/107 in that module
+            const ref = { current: false };
+            expect(tryAcquireSingleFlight(ref)).toBe(true);
+            expect(ref.current).toBe(true);
+            expect(tryAcquireSingleFlight(ref)).toBe(false);
+            releaseSingleFlight(ref);
+            expect(ref.current).toBe(false);
+            expect(tryAcquireSingleFlight(ref)).toBe(true);
+        });
     });
 
     describe('sliders', () => {
@@ -172,6 +192,25 @@ describe('playFilesUtils', () => {
         it('handles empty payload', () => {
             expect(extractAudioMixerItems(undefined)).toEqual([]);
             expect(extractAudioMixerItems({})).toEqual([]);
+        });
+
+        it('returns empty array when items is a non-object value (BRDA:137 block 63)', () => {
+            // itemsData='42' → !itemsData=false, typeof '42'!=='object'=true → return []
+            const payload = { 'Audio Mixer': { items: '42' } };
+            expect(extractAudioMixerItems(payload as any)).toEqual([]);
+        });
+
+        it('passes presets from normalized.details to mergeAudioMixerOptions (BRDA:145 block 67)', () => {
+            const payload = { 'Audio Mixer': { items: { 'Item 1': { value: 5 } } } };
+            vi.mocked(normalizeConfigItem).mockReturnValue({
+                value: 5,
+                options: ['x'],
+                details: { presets: ['p1', 'p2'] },
+            } as any);
+            vi.mocked(mergeAudioMixerOptions).mockReturnValue(['p1', 'p2']);
+            const result = extractAudioMixerItems(payload);
+            expect(result[0].options).toEqual(['p1', 'p2']);
+            expect(mergeAudioMixerOptions).toHaveBeenCalledWith(['x'], ['p1', 'p2']);
         });
     });
 

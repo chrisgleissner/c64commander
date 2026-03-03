@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+
+test.afterEach(async ({ page }, testInfo) => {
+    await saveCoverageFromPage(page, testInfo.title);
+});
 
 test.describe('CTA highlight proof', () => {
     test('connectivity indicator flash clears after transient timeout', async ({ page }, testInfo) => {

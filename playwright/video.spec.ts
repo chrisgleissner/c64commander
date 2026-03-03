@@ -25,6 +25,7 @@ import {
     installStableStorage,
     seedDiagnosticsTraces,
 } from './visualSeeds';
+import { saveCoverageFromPage } from './withCoverage';
 
 const TOP_PAUSE_MS = 3000;
 const SHORT_PAUSE_MS = 800;
@@ -300,6 +301,7 @@ test.describe('App video tour', () => {
         try {
             await assertNoUiIssues(page, testInfo);
         } finally {
+            await saveCoverageFromPage(page, testInfo.title);
             await finalizeEvidence(page, testInfo);
         }
     });

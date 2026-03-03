@@ -120,4 +120,74 @@ describe('FolderPicker overrides', () => {
     );
     expect(override.listChildren).not.toHaveBeenCalled();
   });
+
+  it('uses override for pickFile when provided', async () => {
+    const override = {
+      pickFile: vi.fn(async () => ({ uri: 'content://file.sid', name: 'file.sid', sizeBytes: 0 })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.pickFile({ extensions: ['sid'] });
+    expect(override.pickFile).toHaveBeenCalled();
+    expect(result.uri).toBe('content://file.sid');
+    expect(pickerMocks.pickDirectory).not.toHaveBeenCalled();
+  });
+
+  it('uses override for getPersistedUris when provided', async () => {
+    const override = {
+      getPersistedUris: vi.fn(async () => ({ uris: ['content://uri1'] })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.getPersistedUris({});
+    expect(override.getPersistedUris).toHaveBeenCalled();
+    expect(result.uris).toEqual(['content://uri1']);
+  });
+
+  it('uses override for readFile when provided', async () => {
+    const override = {
+      readFile: vi.fn(async () => ({ data: 'SGVsbG8=' })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.readFile({ uri: 'content://demo.sid' });
+    expect(override.readFile).toHaveBeenCalled();
+    expect(result.data).toBe('SGVsbG8=');
+    expect(pickerMocks.readFile).not.toHaveBeenCalled();
+  });
+
+  it('uses override for readFileFromTree when provided', async () => {
+    const override = {
+      readFileFromTree: vi.fn(async () => ({ data: 'dHJlZQ==' })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.readFileFromTree({ treeUri: 'content://tree', path: 'demo.sid' });
+    expect(override.readFileFromTree).toHaveBeenCalled();
+    expect(result.data).toBe('dHJlZQ==');
+    expect(pickerMocks.readFileFromTree).not.toHaveBeenCalled();
+  });
+
+  it('uses override for listChildren when provided', async () => {
+    const override = {
+      listChildren: vi.fn(async () => ({ entries: [{ type: 'file', name: 'a.sid', path: '/a.sid' }] })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.listChildren({ treeUri: 'content://tree' });
+    expect(override.listChildren).toHaveBeenCalled();
+    expect(result.entries).toHaveLength(1);
+    expect(pickerMocks.listChildren).not.toHaveBeenCalled();
+  });
+
+  it('uses override for writeFileToTree when provided', async () => {
+    const override = {
+      writeFileToTree: vi.fn(async () => ({ uri: 'content://out.bin', sizeBytes: 4 })),
+    };
+    (window as Window & { __c64uFolderPickerOverride?: unknown }).__c64uFolderPickerOverride = override;
+
+    const result = await FolderPicker.writeFileToTree({ treeUri: 'content://tree', path: '/out.bin', data: 'AAAA', mimeType: 'application/octet-stream', overwrite: true });
+    expect(override.writeFileToTree).toHaveBeenCalled();
+    expect(result.uri).toBe('content://out.bin');
+  });
 });

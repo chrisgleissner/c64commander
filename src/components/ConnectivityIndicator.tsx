@@ -102,7 +102,12 @@ export function ConnectivityIndicator({ className }: Props) {
       <DialogContent
         className="w-80 p-0"
         closeTestId="connection-status-close"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          const content = event.currentTarget as HTMLElement;
+          const closeButton = content.querySelector<HTMLElement>('[data-testid="connection-status-close"]');
+          closeButton?.focus();
+        }}
       >
         <div className="space-y-4 p-6" data-testid="connection-status-popover">
           <DialogHeader>
@@ -246,7 +251,7 @@ const DiagnosticsRow = ({
   return (
     <button
       type="button"
-      className="w-full py-0 text-left text-sm hover:underline"
+      className="w-full appearance-none px-0 py-0 text-left text-sm hover:underline"
       onClick={onClick}
       aria-label={`${label}: ${issueCount} ${issueLabel} of ${total} ${totalLabel} (${severity} severity)`}
       data-testid={testId}

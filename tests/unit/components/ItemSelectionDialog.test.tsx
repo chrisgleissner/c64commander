@@ -362,4 +362,163 @@ describe('ItemSelectionDialog source picker', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
+
+  it('reports error in confirmLocalSource catch when onConfirm throws', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const throwingConfirm = vi.fn().mockRejectedValue(new Error('confirm failed'));
+    const sourceGroups: SourceGroup[] = [
+      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+    ];
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={vi.fn().mockResolvedValue('local-1')}
+        onConfirm={throwingConfirm}
+        autoConfirmLocalSource
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('import-option-local'));
+
+    await waitFor(() => {
+      expect(vi.mocked(reportUserError)).toHaveBeenCalledWith(
+        expect.objectContaining({ operation: 'ITEM_SELECTION' }),
+      );
+    });
+  });
+
+  it('renders hvscSource button when hvsc source is provided', () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const sourceGroups: SourceGroup[] = [
+      {
+        label: 'HVSC',
+        sources: [{
+          id: 'hvsc-1',
+          name: 'HVSC Collection',
+          type: 'hvsc' as 'ultimate',  // cast to satisfy buildSource type constraint
+          rootPath: '/',
+          isAvailable: true,
+          listEntries: async () => [],
+          listFilesRecursive: async () => [],
+        }],
+      },
+    ];
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    expect(screen.getByTestId('import-option-hvsc')).toBeInTheDocument();
+  });
+
+  it('fires c64u button onClick guard when no c64u source available', () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    // Render with only local source (no c64u source)
+    const sourceGroups: SourceGroup[] = [
+      { label: 'This device', sources: [buildSource('local-1', 'My Folder', 'local')] },
+    ];
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={sourceGroups}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    // The button is rendered but c64UltimateSource is null → onClick guard fires
+    const c64uButton = screen.getByTestId('import-option-c64u');
+    fireEvent.click(c64uButton);
+    // No crash, no source selected
+    expect(screen.queryByTestId('import-selection-interstitial')).toBeInTheDocument();
+  });
+
+  it('shows progress footer with cancel scan button when scanning', async () => {
+    vi.mocked(useSourceNavigator).mockReturnValue({
+      path: '/',
+      entries: [],
+      isLoading: false,
+      showLoadingIndicator: false,
+      error: null,
+      navigateTo: vi.fn(),
+      navigateUp: vi.fn(),
+      navigateRoot: vi.fn(),
+      refresh: vi.fn(),
+    });
+
+    const onCancelScan = vi.fn();
+
+    render(
+      <ItemSelectionDialog
+        open
+        onOpenChange={vi.fn()}
+        title="Add items"
+        confirmLabel="Add"
+        sourceGroups={[]}
+        onAddLocalSource={vi.fn().mockResolvedValue(null)}
+        onConfirm={vi.fn().mockResolvedValue(true)}
+        showProgressFooter
+        progress={{ status: 'scanning', message: 'Loading…', count: 42, elapsedMs: 5000, total: 100 }}
+        onCancelScan={onCancelScan}
+      />,
+    );
+
+    expect(screen.getByTestId('add-items-progress')).toBeInTheDocument();
+    // Cancel scan button should be present
+    const cancelBtn = screen.getByRole('button', { name: /cancel scan/i });
+    expect(cancelBtn).toBeInTheDocument();
+
+    fireEvent.click(cancelBtn);
+    expect(onCancelScan).toHaveBeenCalled();
+  });
 });

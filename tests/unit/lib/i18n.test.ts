@@ -16,4 +16,16 @@ describe('i18n', () => {
         expect(t('app.error.reload', 'Fallback reload', 'en')).toBe('Reload');
         expect(t('missing.key', 'Fallback text', 'en')).toBe('Fallback text');
     });
+
+    it('returns default locale when navigator is undefined', () => {
+        // Covers the typeof navigator === 'undefined' guard in resolveAppLocale
+        vi.stubGlobal('navigator', undefined);
+        expect(resolveAppLocale()).toBe('en');
+    });
+
+    it('returns default locale when navigator.language is empty string', () => {
+        // Covers the !locale guard in normalizeLocale (empty string is falsy)
+        vi.stubGlobal('navigator', { language: '' });
+        expect(resolveAppLocale()).toBe('en');
+    });
 });

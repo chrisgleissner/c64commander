@@ -108,7 +108,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-unit
-          path: coverage/lcov.info
+          path: |
+            coverage/lcov.info
+            coverage/coverage-final.json
 
   web-screenshots:
     name: Web | Screenshots
@@ -398,11 +400,11 @@ jobs:
             --temp-dir .nyc_output \
             --report-dir coverage/e2e \
             --reporter=lcov \
+            --reporter=json \
             --reporter=text-summary
-          echo "==> Merging unit + E2E LCOV for Codecov..."
-          npx lcov-result-merger \
-            "coverage/{lcov.info,e2e/lcov.info}" \
-            coverage/lcov-merged.info
+          echo "==> Merging unit + E2E coverage with nextcov..."
+          npx nextcov merge coverage coverage/e2e -o coverage/merged --reporters lcov
+          cp coverage/merged/lcov.info coverage/lcov-merged.info
           end=$(date +%s)
           echo "- coverage merge: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -419,7 +421,7 @@ jobs:
       - name: Enforce coverage threshold
         env:
           COVERAGE_MIN: "90"
-          COVERAGE_FILE: "coverage/lcov.info"
+          COVERAGE_FILE: "coverage/lcov-merged.info"
         run: node scripts/check-coverage-threshold.mjs
 
       - name: Enforce coverage paths

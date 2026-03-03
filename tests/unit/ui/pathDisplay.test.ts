@@ -95,5 +95,32 @@ describe('pathDisplay', () => {
             const result = fitPathToWidth('/a/b/c/', 5, charMeasure, 'start-and-filename');
             expect(result.length).toBeLessThanOrEqual(5);
         });
+
+        it('returns empty string when even truncated form exceeds width (line 42 final return)', () => {
+            // 'x.sid' has length 5; maxWidth=3; '...'=3 fits loop but '...d'=4 does not
+            const result = fitPathToWidth('x.sid', 3, charMeasure, 'filename-fallback');
+            expect(result).toBe('');
+        });
+
+        it('covers no-directory path that does not fit (line 59 TRUE)', () => {
+            // '/file.sid' has no directories; path does not fit inside maxWidth=5
+            const result = fitPathToWidth('/file.sid', 5, charMeasure, 'start-and-filename');
+            expect(result).toBe('file.sid');
+        });
+
+        it('handles path with empty filename component (line 72 TRUE)', () => {
+            // '///' parses to empty fileName; triggers trimFromStartToFit fallback
+            const result = fitPathToWidth('///', 2, charMeasure, 'start-and-filename');
+            expect(typeof result).toBe('string');
+        });
+
+        it('returns empty string when ELLIPSIS does not fit maxWidth (BRDA:35 TRUE)', () => {
+            // '...' has length 3; maxWidth=2 → measure('...') = 3 > 2 → trimFromStartToFit returns ''
+            // To enter trimFromStartToFit: path='abc', maxWidth=2
+            //  fitFilenameFallback: measure('/abc')=4>2, fileName='abc', measure('abc')=3>2
+            //  → trimFromStartToFit('abc', 2): non-empty, 3>2 (FALSE), measure('...')=3>2 (TRUE) → ''
+            const result = fitPathToWidth('/abc', 2, charMeasure, 'filename-fallback');
+            expect(result).toBe('');
+        });
     });
 });

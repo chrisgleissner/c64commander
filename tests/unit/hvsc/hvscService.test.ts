@@ -101,6 +101,10 @@ import {
     getHvscFolderListing as getRuntimeFolderListing,
 } from '@/lib/hvsc/hvscIngestionRuntime';
 import { resolveHvscSonglengthDuration } from '@/lib/hvsc/hvscSongLengthService';
+import {
+    loadHvscBrowseIndexSnapshot,
+    verifyHvscBrowseIndexIntegrity,
+} from '@/lib/hvsc/hvscBrowseIndexStore';
 
 describe('hvscService', () => {
     beforeEach(() => {
@@ -393,6 +397,58 @@ describe('hvscService', () => {
                 throw new Error('plugin error');
             });
             expect(isHvscBridgeAvailable()).toBe(false);
+        });
+
+        it('returns false when window is undefined (covers typeof window branches)', () => {
+            vi.stubGlobal('window', undefined);
+            try {
+                expect(isHvscBridgeAvailable()).toBe(false);
+            } finally {
+                vi.unstubAllGlobals();
+            }
+        });
+    });
+
+    describe('ensureHvscIndexReady', () => {
+        it('scans index when browse snapshot is null (line 153)', async () => {
+            vi.mocked(loadHvscBrowseIndexSnapshot).mockResolvedValueOnce(null);
+            const page = await getHvscFolderListingPaged({ path: '/' });
+            expect(page.totalSongs).toBe(0);
+        });
+
+        it('rescans when index integrity is invalid (line 160)', async () => {
+            vi.mocked(verifyHvscBrowseIndexIntegrity).mockResolvedValueOnce({ isValid: false, sampled: 0, missingPaths: [] });
+            const page = await getHvscFolderListingPaged({ path: '/' });
+            expect(page.totalSongs).toBe(0);
+        });
+    });
+
+    describe('getHvscFolderListingPaged option fallbacks', () => {
+        it('uses defaults when called with empty options (lines 203-206)', async () => {
+            const page = await getHvscFolderListingPaged({} as any);
+            expect(page.offset).toBe(0);
+        });
+
+        it('accepts explicit query and offset (lines 205-206)', async () => {
+            const page = await getHvscFolderListingPaged({ path: '/', query: 'Test', offset: 5, limit: 20 });
+            expect(page.limit).toBeGreaterThanOrEqual(1);
+        });
+
+        it('delegates to mock bridge getHvscFolderListing when present (line 220)', async () => {
+            const mockListing = vi.fn().mockResolvedValue({ path: '/', folders: [], songs: [] });
+            (window as any).__hvscMock__ = { getHvscFolderListing: mockListing };
+            const page = await getHvscFolderListingPaged({ path: '/' });
+            expect(mockListing).toHaveBeenCalled();
+            expect(page.totalSongs).toBe(0);
+        });
+    });
+
+    describe('getHvscDurationsByMd5Seconds null durationsSeconds', () => {
+        it('returns null when mock bridge durationsSeconds is undefined (line 281)', async () => {
+            const mockDurations = vi.fn().mockResolvedValue({ durationsSeconds: undefined });
+            (window as any).__hvscMock__ = { getHvscDurationsByMd5: mockDurations };
+            const result = await getHvscDurationsByMd5Seconds('abc');
+            expect(result).toBeNull();
         });
     });
 });

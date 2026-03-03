@@ -24,6 +24,16 @@ describe('playbackGuards', () => {
     expect(resolvePlayTargetIndex(3, 2)).toBe(2);
   });
 
+  it('returns null when playlist is empty (BRDA:105 TRUE)', () => {
+    expect(resolvePlayTargetIndex(0, 0)).toBeNull();
+    expect(resolvePlayTargetIndex(-1, 0)).toBeNull();
+  });
+
+  it('wraps to first item when current index exceeds playlist length (BRDA:107 FALSE)', () => {
+    expect(resolvePlayTargetIndex(3, 5)).toBe(0);
+    expect(resolvePlayTargetIndex(3, 3)).toBe(0);
+  });
+
   it('prevents duplicate single-flight start requests during rapid taps', () => {
     const lock: BooleanRef = { current: false };
     expect(tryAcquireSingleFlight(lock)).toBe(true);

@@ -89,6 +89,12 @@ describe('localFileBrowser', () => {
       expect(results[0].path).toBe('/simple.txt');
     });
 
+    it('normalises empty path to root when listing files', () => {
+      // Covers the path || '/' fallback branch in listLocalFiles
+      const results = listLocalFiles(files, '');
+      expect(results.map((f) => f.name)).toEqual(['Root.txt']);
+    });
+
     it('handles weird paths', () => {
       // Path normalization logic in getLocalPath
       const f = { name: 'foo.txt', webkitRelativePath: 'foo.txt' } as any; // manually mock structure

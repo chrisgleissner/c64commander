@@ -84,4 +84,79 @@ describe('mergeAudioMixerOptions', () => {
     await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe(0);
     await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
   });
+
+  it('merges when options or presets is undefined', () => {
+    expect(mergeAudioMixerOptions(undefined, ['0 dB', '+6 dB'])).toEqual(['0 dB', '+6 dB']);
+    expect(mergeAudioMixerOptions(['0 dB'], undefined)).toEqual(['0 dB']);
+    expect(mergeAudioMixerOptions()).toEqual([]);
+  });
+
+  it('resolves reset value when item block is not an object (null itemRecord)', async () => {
+    // Response where item is a string → itemRecord is null → extractOptions returns []
+    mockApi.getConfigItem.mockResolvedValue({ 'Vol UltiSid 1': 'not-an-object' });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe(0);
+  });
+
+  it('extracts options from values field instead of options field', async () => {
+    mockApi.getConfigItem.mockResolvedValue({
+      items: {
+        'Vol UltiSid 1': {
+          values: ['-6 dB', '0 dB'],
+        },
+      },
+    });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
+  });
+
+  it('extracts options from choices field', async () => {
+    mockApi.getConfigItem.mockResolvedValue({
+      items: {
+        'Vol UltiSid 1': {
+          choices: ['-6 dB', '0 dB'],
+        },
+      },
+    });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
+  });
+
+  it('handles non-array optionsCandidate', async () => {
+    // Options is a single string (non-array) → should treat as empty → falls back to default
+    mockApi.getConfigItem.mockResolvedValue({
+      items: {
+        'Vol UltiSid 1': {
+          options: 'not-an-array',
+        },
+      },
+    });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe(0);
+  });
+
+  it('extracts presets from itemRecord.presets when no details block', async () => {
+    mockApi.getConfigItem.mockResolvedValue({
+      items: {
+        'Pan 1': {
+          presets: ['Left', 'Center', 'Right'],
+        },
+      },
+    });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
+  });
+
+  it('uses top-level payload item as fallback', async () => {
+    mockApi.getConfigItem.mockResolvedValue({
+      item: {
+        options: ['-6 dB', '0 dB'],
+      },
+    });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Vol UltiSid 1')).resolves.toBe('0 dB');
+  });
+
+  it('uses payload value key as fallback', async () => {
+    mockApi.getConfigItem.mockResolvedValue({
+      value: {
+        options: ['Left', 'Center', 'Right'],
+      },
+    });
+    await expect(resolveAudioMixerResetValue('Audio Mixer', 'Pan 1')).resolves.toBe('Center');
+  });
 });

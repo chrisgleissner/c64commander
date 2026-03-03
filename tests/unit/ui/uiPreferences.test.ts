@@ -23,6 +23,12 @@ describe('uiPreferences', () => {
     expect(clampListPreviewLimit(22.9)).toBe(23);
   });
 
+  it('returns default limit for non-finite values (NaN, Infinity)', () => {
+    // Covers the !Number.isFinite(value) guard branch in clampLimit
+    expect(clampListPreviewLimit(NaN)).toBe(DEFAULT_LIST_PREVIEW_LIMIT);
+    expect(clampListPreviewLimit(Infinity)).toBe(DEFAULT_LIST_PREVIEW_LIMIT);
+  });
+
   it('returns defaults when localStorage is unavailable', () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
     Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });
@@ -45,5 +51,17 @@ describe('uiPreferences', () => {
     expect(handler).toHaveBeenCalled();
 
     window.removeEventListener('c64u-ui-preferences-changed', handler);
+  });
+
+  it('setListPreviewLimit is a no-op when localStorage is unavailable', () => {
+    // Covers: if (typeof localStorage === 'undefined') return in setListPreviewLimit (line 28)
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });
+
+    expect(() => setListPreviewLimit(100)).not.toThrow();
+
+    if (original) {
+      Object.defineProperty(globalThis, 'localStorage', original);
+    }
   });
 });

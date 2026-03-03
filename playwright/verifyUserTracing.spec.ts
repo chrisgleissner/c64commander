@@ -7,6 +7,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+
+test.afterEach(async ({ page }, testInfo) => {
+  await saveCoverageFromPage(page, testInfo.title);
+});
 
 test('verify comprehensive user tracing', async ({ page }) => {
   const dismissDialogIfPresent = async (dialog: ReturnType<typeof page.getByRole>) => {

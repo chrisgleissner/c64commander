@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildPlayPlan, executePlayPlan } from '@/lib/playback/playbackRouter';
+import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from '@/lib/playback/playbackRouter';
 import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
@@ -515,6 +515,29 @@ describe('playbackRouter', () => {
     expect(blob.size).toBe(1024);
   });
 
+  it('tryFetchUltimateSidBlob normalizes path without leading slash', async () => {
+    // Covers normalizeUltimatePath FALSE branch: path without leading '/' → prepend '/'
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa('\x00'), sizeBytes: 1 } as any);
+    const result = await tryFetchUltimateSidBlob('MUSIC/DEMO.SID');
+    expect(result).toBeInstanceOf(Blob);
+    expect(vi.mocked(readFtpFile)).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/MUSIC/DEMO.SID' }),
+    );
+  });
+
+  it('tryFetchUltimateSidBlob returns null on FTP failure', async () => {
+    vi.mocked(readFtpFile).mockRejectedValue(new Error('connection refused'));
+    const result = await tryFetchUltimateSidBlob('MUSIC/DEMO.SID');
+    expect(result).toBeNull();
+  });
+
+  it('tryFetchUltimateSidBlob returns null and warns on size mismatch', async () => {
+    // Mock readFtpFile to return base64 of 1 byte but claim sizeBytes=99
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa('\x00'), sizeBytes: 99 } as any);
+    const result = await tryFetchUltimateSidBlob('/MUSIC/DEMO.SID');
+    expect(result).toBeNull();
+  });
+
   it('local file arrayBuffer is stable across repeated reads', async () => {
     const api = createApiMock();
     const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
@@ -532,5 +555,65 @@ describe('playbackRouter', () => {
     const bytes1 = new Uint8Array(await new Response(blob1).arrayBuffer());
     const bytes2 = new Uint8Array(await new Response(blob2).arrayBuffer());
     expect(bytes1).toEqual(bytes2);
+  });
+
+  it('throws disk autostart failed after all retry attempts exhausted (BRDA:157,158)', async () => {
+    vi.useFakeTimers();
+    const api = createApiMock();
+    vi.mocked(injectAutostart).mockRejectedValue(new Error('always fails'));
+    const file = new File(['disk'], 'demo.d64');
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file });
+    const task = executePlayPlan(api as any, plan);
+    // Attach rejection handler before advancing timers to avoid unhandled-rejection warning
+    const assertion = expect(task).rejects.toThrow('Disk autostart failed');
+    await vi.runAllTimersAsync();
+    await assertion;
+    expect(vi.mocked(injectAutostart)).toHaveBeenCalledTimes(4);
+    vi.useRealTimers();
+  });
+
+  it('toBlob rethrows non-network arrayBuffer error (BRDA:173)', async () => {
+    const api = createApiMock();
+    const file = {
+      name: 'demo.d64',
+      arrayBuffer: () => Promise.reject(new Error('some custom error')),
+    };
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file: file as any });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('some custom error');
+  });
+
+  it('toBlob uses generic message for empty arrayBuffer error (BRDA:169)', async () => {
+    const api = createApiMock();
+    const file = {
+      name: 'demo.d64',
+      arrayBuffer: () => Promise.reject(new Error('')),
+    };
+    const plan = buildPlayPlan({ source: 'local', path: '/demo.d64', file: file as any });
+    // Error message is empty, falls back to 'Local file unavailable.' which is not a network error → rethrows original
+    await expect(executePlayPlan(api as any, plan)).rejects.toBeInstanceOf(Error);
+  });
+
+  it('covers null propagationFailure in SID fallback (BRDA:257)', async () => {
+    const api = createApiMock();
+    const sidBytes = new Uint8Array([0x50, 0x53, 0x49, 0x44]);
+    const encoded = Buffer.from(sidBytes).toString('base64');
+    vi.mocked(readFtpFile).mockResolvedValue({ data: encoded, sizeBytes: sidBytes.length });
+    // Throw a non-Error object so propagationFailure?.message is undefined → ?? null branch covered
+    api.playSidUpload.mockRejectedValueOnce({});
+    api.playSid.mockRejectedValueOnce(new Error('fallback also failed'));
+
+    const plan = buildPlayPlan({ source: 'ultimate', path: '/MUSIC/DEMO.SID', durationMs: 120000 });
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('fallback playback failed');
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalled();
+  });
+
+  it('throws for unsupported play category in executePlayPlan (BRDA:374)', async () => {
+    const api = createApiMock();
+    const file = new File(['data'], 'demo.sid');
+    const plan = {
+      ...buildPlayPlan({ source: 'local', path: '/demo.sid', file }),
+      category: 'unknown-category' as any,
+    };
+    await expect(executePlayPlan(api as any, plan)).rejects.toThrow('Unsupported playback type');
   });
 });

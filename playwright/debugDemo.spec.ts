@@ -8,6 +8,11 @@
 
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { saveCoverageFromPage } from './withCoverage';
+
+test.afterEach(async ({ page }, testInfo) => {
+  await saveCoverageFromPage(page, testInfo.title);
+});
 
 test('debug demo dialog timing', async ({ page }: { page: Page }) => {
   test.setTimeout(60000);

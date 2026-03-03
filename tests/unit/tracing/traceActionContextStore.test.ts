@@ -307,5 +307,47 @@ describe('traceActionContextStore', () => {
       installAsyncContextPropagation();
       expect(isAsyncContextInstalled()).toBe(true);
     });
+
+    it('uninstall is a no-op when not already installed', () => {
+      uninstallAsyncContextPropagation();
+      expect(isAsyncContextInstalled()).toBe(false);
+      // Second call should not throw (covers the early-return branch)
+      uninstallAsyncContextPropagation();
+      expect(isAsyncContextInstalled()).toBe(false);
+    });
+  });
+
+  describe('error handling', () => {
+    it('restores previous context when synchronous fn throws', () => {
+      const outer = createTestContext('COR-outer');
+      runWithActionContext(outer, () => {
+        const inner = createTestContext('COR-inner');
+        expect(() =>
+          runWithActionContext(inner, () => {
+            throw new Error('sync boom');
+          })
+        ).toThrow('sync boom');
+        // After the sync throw the outer context must be restored
+        expect(getCurrentActionContext()).toBe(outer);
+      });
+    });
+  });
+
+  describe('null callback branches', () => {
+    beforeEach(() => {
+      installAsyncContextPropagation();
+    });
+
+    it('handles .catch(null) without throwing', async () => {
+      // Exercises the onrejected-falsy branch (line 144)
+      const p = Promise.reject(new Error('handled'));
+      await expect(p.catch(null)).rejects.toThrow('handled');
+    });
+
+    it('handles .finally(null) without throwing', async () => {
+      // Exercises the onfinally-falsy branch (line 154)
+      const result = await Promise.resolve(42).finally(null as unknown as () => void);
+      expect(result).toBe(42);
+    });
   });
 });

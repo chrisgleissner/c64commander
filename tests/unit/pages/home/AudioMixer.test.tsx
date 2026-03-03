@@ -399,4 +399,73 @@ describe('AudioMixer', () => {
             expect(screen.getByTestId('reset-btn')).toBeDisabled();
         });
     });
+
+    describe('UltiSID 2 path', () => {
+        it('handles UltiSID 2 identity change (uses filter curve 2)', () => {
+            mockSidControlEntries.mockReturnValue({
+                sidControlEntries: [baseSidEntry('ultiSid2', 'UltiSID 2')],
+                sidSilenceTargets: [],
+                sidAddressingCategory: undefined,
+                ultiSidCategory: undefined,
+                sidSocketsCategory: undefined,
+            });
+            render(<AudioMixer {...defaultProps} />);
+            fireEvent.click(screen.getByTestId('identity-change'));
+            expect(updateConfigValueSpy).toHaveBeenCalledWith(
+                'UltiSID Configuration',
+                'UltiSID 2 Filter Curve',
+                expect.any(String),
+                'HOME_ULTISID_PROFILE',
+                'UltiSID filter curve updated',
+            );
+        });
+    });
+
+    describe('address with empty EMPTY_SELECT_VALUE', () => {
+        it('falls back to baseAddressLabel when addressSelectValue is empty', () => {
+            const entryWithEmptyAddress = {
+                ...baseSidEntry('socket1', 'SID Socket 1'),
+                address: '__empty__',
+                addressRaw: '__empty__',
+            };
+            mockSidControlEntries.mockReturnValue({
+                sidControlEntries: [entryWithEmptyAddress],
+                sidSilenceTargets: [],
+                sidAddressingCategory: undefined,
+                ultiSidCategory: undefined,
+                sidSocketsCategory: undefined,
+            });
+            render(<AudioMixer {...defaultProps} />);
+            // Component renders; addressSelectValue is '' (falsy) so falls back to baseAddressLabel
+            expect(screen.getByTestId('sid-card-socket1')).toBeTruthy();
+        });
+    });
+
+    describe('empty addressOptions fallback', () => {
+        it('falls back to [entry.address] when addressOptions is empty', async () => {
+            const entryNoAddressOptions = {
+                ...baseSidEntry('ultiSid1', 'UltiSID 1'),
+                addressOptions: [],
+            };
+            mockSidControlEntries.mockReturnValue({
+                sidControlEntries: [entryNoAddressOptions],
+                sidSilenceTargets: [],
+                sidAddressingCategory: undefined,
+                ultiSidCategory: undefined,
+                sidSocketsCategory: undefined,
+            });
+            render(<AudioMixer {...defaultProps} />);
+            fireEvent.click(screen.getByTestId('power-toggle'));
+            // handleSidEnableToggle runs; addressOptions fallback from [] to [entry.address]
+            await vi.waitFor(() => {
+                expect(updateConfigValueSpy).toHaveBeenCalledWith(
+                    'SID Addressing',
+                    'UltiSID 1 Address',
+                    expect.any(String),
+                    'HOME_SID_ADDRESS',
+                    expect.stringContaining('UltiSID 1'),
+                );
+            });
+        });
+    });
 });

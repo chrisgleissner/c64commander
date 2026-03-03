@@ -14,8 +14,10 @@ import {
   getHvscSongByVirtualPath,
   readCachedArchiveMarker,
   listHvscFolder,
+  MAX_BRIDGE_READ_BYTES,
   resetLibraryRoot,
   resetSonglengthsCache,
+  resolveLibraryPath,
   writeCachedArchiveMarker,
   writeCachedArchive,
   writeLibraryFile,
@@ -217,5 +219,70 @@ describe('hvscFilesystem', () => {
 
     const stored = files.get('hvsc/library/DEMOS/0-9/Existing.sid');
     expect(stored?.type).toBe('file');
+  });
+
+  it('getErrorMessage extracts string error (line 55)', async () => {
+    // Throw a raw string error so getErrorMessage takes the typeof=string branch
+    vi.mocked(Filesystem.writeFile).mockRejectedValueOnce('already exists');
+    await expect(writeLibraryFile('/ERR/line55.sid', new Uint8Array([1]))).resolves.toBeUndefined();
+  });
+
+  it('getErrorMessage extracts .error string property (line 58)', async () => {
+    vi.mocked(Filesystem.writeFile).mockRejectedValueOnce({ error: 'already exists' });
+    await expect(writeLibraryFile('/ERR/line58.sid', new Uint8Array([1]))).resolves.toBeUndefined();
+  });
+
+  it('getErrorMessage falls back to String() for unrecognised error shapes (line 65)', async () => {
+    // Throw a number; isExistsError returns false so writeLibraryFile re-throws
+    vi.mocked(Filesystem.writeFile).mockRejectedValueOnce(42);
+    await expect(writeLibraryFile('/ERR/line65.sid', new Uint8Array([1]))).rejects.toBeDefined();
+  });
+
+  it('readFileWithSizeGuard throws for files exceeding MAX_BRIDGE_READ_BYTES (line 99)', async () => {
+    ensureDir('hvsc/library/LARGE');
+    setFile('hvsc/library/LARGE/Big.sid', toBase64Bytes(new Uint8Array([1])));
+    // Override stat to report an oversized file
+    vi.mocked(Filesystem.stat).mockResolvedValueOnce({ type: 'file', size: MAX_BRIDGE_READ_BYTES + 1 } as FilesystemStatResult);
+    await expect(getHvscSongByVirtualPath('/LARGE/Big.sid')).resolves.toBeNull();
+  });
+
+  it('writeFileWithRetry short-circuits on second exists error when file present (line 138)', async () => {
+    // First write: exists error; stat: not found; second write: exists error; stat: file found
+    vi.mocked(Filesystem.writeFile)
+      .mockRejectedValueOnce(new Error('already exists'))
+      .mockRejectedValueOnce(new Error('already exists'));
+    vi.mocked(Filesystem.stat)
+      .mockRejectedValueOnce(new Error('not found'))
+      .mockResolvedValueOnce({ type: 'file', size: 5 } as FilesystemStatResult);
+    await expect(writeLibraryFile('/RETRY/Test.sid', new Uint8Array([1]))).resolves.toBeUndefined();
+  });
+
+  it('resolveLibraryPath returns base dir for root virtual path (line 187)', () => {
+    expect(resolveLibraryPath('/')).toBe('hvsc/library');
+  });
+
+  it('listHvscFolder returns empty listing for root path (line 191)', async () => {
+    const listing = await listHvscFolder('/');
+    expect(listing.path).toBe('/');
+    expect(listing.folders).toEqual([]);
+    expect(listing.songs).toEqual([]);
+  });
+
+  it('listEntries returns empty array when readdir result has no files key (line 199)', async () => {
+    ensureDir('hvsc/library/NFILES');
+    vi.mocked(Filesystem.readdir).mockResolvedValueOnce({} as any);
+    const listing = await listHvscFolder('/NFILES');
+    expect(listing.songs).toEqual([]);
+    expect(listing.folders).toEqual([]);
+  });
+
+  it('getHvscSongByVirtualPath returns null duration when no songlength exists (lines 276, 284)', async () => {
+    ensureDir('hvsc/library/NODUR');
+    setFile('hvsc/library/NODUR/NoLen.sid', toBase64Bytes(new Uint8Array([1, 2])));
+    // No songlengths files → duration strategy is not-found, durations/durationSeconds are null
+    const song = await getHvscSongByVirtualPath('/NODUR/NoLen.sid');
+    expect(song?.fileName).toBe('NoLen.sid');
+    expect(song?.durationSeconds).toBeNull();
+    expect(song?.subsongCount).toBeNull();
   });
 });

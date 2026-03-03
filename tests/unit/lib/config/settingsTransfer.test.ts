@@ -19,7 +19,7 @@ vi.mock('@/lib/config/appSettings', () => ({
     loadBackgroundRediscoveryIntervalMs: vi.fn(),
     loadDiscoveryProbeTimeoutMs: vi.fn(),
     loadDiskAutostartMode: vi.fn(),
-    
+
     saveDebugLoggingEnabled: vi.fn(),
     saveConfigWriteIntervalMs: vi.fn(),
     saveAutomaticDemoModeEnabled: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock('@/lib/config/appSettings', () => ({
 
 vi.mock('@/lib/config/deviceSafetySettings', () => ({
     loadDeviceSafetyConfig: vi.fn(),
-    
+
     saveDeviceSafetyMode: vi.fn(),
     saveRestMaxConcurrency: vi.fn(),
     saveFtpMaxConcurrency: vi.fn(),
@@ -108,7 +108,7 @@ describe('settingsTransfer', () => {
         it('imports valid payload', () => {
             const result = importSettingsJson(JSON.stringify(validPayload));
             expect(result).toEqual({ ok: true });
-            
+
             expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
             expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith('BALANCED');
         });
@@ -128,13 +128,57 @@ describe('settingsTransfer', () => {
         });
 
         it('validates appSettings types', () => {
-             const invalid = { ...validPayload, appSettings: { ...validPayload.appSettings, debugLoggingEnabled: 'true' } };
-             expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'debugLoggingEnabled must be boolean.' });
+            const invalid = { ...validPayload, appSettings: { ...validPayload.appSettings, debugLoggingEnabled: 'true' } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'debugLoggingEnabled must be boolean.' });
         });
-        
+
         it('validates deviceSafety types', () => {
-             const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, mode: 'EXTREME' } };
-             expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'deviceSafety.mode is invalid.' });
+            const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, mode: 'EXTREME' } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'deviceSafety.mode is invalid.' });
+        });
+
+        it('rejects non-object appSettings', () => {
+            expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: null }))).toEqual({ ok: false, error: 'appSettings must be an object.' });
+            expect(importSettingsJson(JSON.stringify({ ...validPayload, appSettings: 'string' }))).toEqual({ ok: false, error: 'appSettings must be an object.' });
+        });
+
+        it('rejects non-object deviceSafety', () => {
+            expect(importSettingsJson(JSON.stringify({ ...validPayload, deviceSafety: null }))).toEqual({ ok: false, error: 'deviceSafety must be an object.' });
+        });
+
+        it('validates each appSettings field individually', () => {
+            const fields: Array<[string, unknown, string]> = [
+                ['configWriteIntervalMs', 'string', 'configWriteIntervalMs must be a number.'],
+                ['automaticDemoModeEnabled', 'x', 'automaticDemoModeEnabled must be boolean.'],
+                ['startupDiscoveryWindowMs', null, 'startupDiscoveryWindowMs must be a number.'],
+                ['backgroundRediscoveryIntervalMs', 'bad', 'backgroundRediscoveryIntervalMs must be a number.'],
+                ['discoveryProbeTimeoutMs', 'notanumber', 'discoveryProbeTimeoutMs must be a number.'],
+                ['diskAutostartMode', 'usb', 'diskAutostartMode must be kernal or dma.'],
+            ];
+            for (const [field, value, expectedError] of fields) {
+                const invalid = { ...validPayload, appSettings: { ...validPayload.appSettings, [field]: value } };
+                expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: expectedError });
+            }
+        });
+
+        it('rejects deviceSafety with non-finite numeric values', () => {
+            const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, restMaxConcurrency: 'bad' } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'deviceSafety numeric values must be numbers.' });
+        });
+
+        it('rejects deviceSafety when allowUserOverrideCircuit is not boolean', () => {
+            const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, allowUserOverrideCircuit: 'yes' } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'allowUserOverrideCircuit must be boolean.' });
+        });
+
+        it('rejects deviceSafety with extra or missing keys', () => {
+            const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, unknownKey: 1 } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'deviceSafety contains unknown or missing keys.' });
+        });
+
+        it('rejects non-object outer payload', () => {
+            expect(importSettingsJson(JSON.stringify(null))).toEqual({ ok: false, error: 'Payload must be a JSON object.' });
+            expect(importSettingsJson(JSON.stringify(42))).toEqual({ ok: false, error: 'Payload must be a JSON object.' });
         });
     });
 });

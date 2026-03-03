@@ -269,5 +269,34 @@ describe('logger', () => {
                 first();
             }
         });
+
+        it('catches JSON.stringify errors for circular objects in console.error', () => {
+            const uninstall = logger.installConsoleDiagnosticsBridge();
+            try {
+                const circular: Record<string, unknown> = {};
+                circular.self = circular; // circular reference
+                console.error(circular);
+                const calls = addLog.mock.calls.filter(c => c[0] === 'error');
+                expect(calls.length).toBeGreaterThan(0);
+                // String(circularObj) = '[object Object]'
+                expect(calls[0][1]).toBe('[object Object]');
+            } finally {
+                uninstall();
+            }
+        });
+
+        it('installConsoleDiagnosticsBridge with enabled:false returns noop without installing', () => {
+            // Reset any prior bridge state by explicitly checking idempotency
+            const noop = logger.installConsoleDiagnosticsBridge({ enabled: false });
+            // Calling the returned function should not throw
+            expect(() => noop()).not.toThrow();
+            // Test that bridge is NOT installed (calling bridge-captured warn does not go through bridge)
+            addLog.mockClear();
+            const spy = vi.spyOn(console, 'warn').mockImplementation(() => { });
+            console.warn('should-not-route-through-bridge');
+            // If bridge were installed, addLog would be called with 'warn'; it should NOT be
+            expect(addLog).not.toHaveBeenCalledWith('warn', 'should-not-route-through-bridge', expect.anything());
+            spy.mockRestore();
+        });
     });
 });

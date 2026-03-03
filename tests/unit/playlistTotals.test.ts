@@ -39,4 +39,12 @@ describe('calculatePlaylistTotals', () => {
     expect(totals.total).toBe(3000);
     expect(totals.remaining).toBe(0);
   });
+
+  it('handles null value cast as undefined via nullish coalescing in reduce', () => {
+    // Covers the value ?? 0 branch: null passes the every(v !== undefined) check
+    // but is treated as 0 in the reduce via ?? 0
+    const totals = calculatePlaylistTotals([null as unknown as undefined], 0);
+    expect(totals.total).toBe(0);
+    expect(totals.remaining).toBe(0);
+  });
 });

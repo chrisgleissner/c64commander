@@ -47,4 +47,40 @@ describe('assignDiskGroupsByPrefix', () => {
     expect(result.get('/Games/foo1.d64')).toBeUndefined();
     expect(result.get('/Other/foo2.d64')).toBeUndefined();
   });
+
+  it('handles names without file extension (line 13 TRUE)', () => {
+    // Names without a dot trigger the idx<=0 branch in stripExtension
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/Alpha1', name: 'Alpha1' },
+      { path: '/Games/Alpha2', name: 'Alpha2' },
+    ]);
+    expect(result.get('/Games/Alpha1')).toBe('Alpha');
+    expect(result.get('/Games/Alpha2')).toBe('Alpha');
+  });
+
+  it('skips names that produce only separator characters (line 21 TRUE)', () => {
+    // '---' has no letter/digit group → inferGroupBase returns null
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/---', name: '---' },
+      { path: '/Games/___', name: '___' },
+    ]);
+    expect(result.size).toBe(0);
+  });
+
+  it('skips names with prefix shorter than 2 chars (line 23 TRUE)', () => {
+    // 'a1', 'a2' - base regex gives prefix '' which is too short
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/a1.d64', name: 'a1.d64' },
+      { path: '/Games/a2.d64', name: 'a2.d64' },
+    ]);
+    expect(result.size).toBe(0);
+  });
+
+  it('skips names where stripped base is whitespace-only (BRDA:19 !base TRUE)', () => {
+    // '   .d64' → stripExtension='   ' → .trim()='' → !base=true → null
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/   .d64', name: '   .d64' },
+    ]);
+    expect(result.size).toBe(0);
+  });
 });

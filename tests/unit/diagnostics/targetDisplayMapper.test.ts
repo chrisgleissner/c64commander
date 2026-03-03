@@ -63,4 +63,13 @@ describe('mapTargetDisplayLabel', () => {
         expect(mapTargetDisplayLabel('real-device', 'c64')).toBe('device');
         expect(mapTargetDisplayLabel('c64')).toBe('device');
     });
+
+    it('passes known product tokens as-is when used as targetType directly (BRDA:52)', () => {
+        // KNOWN_PRODUCT_TOKENS contains 'c64u', 'u64', 'u64e', 'u64e2'
+        // When these are passed as targetType (not 'real-device'), they return themselves
+        expect(mapTargetDisplayLabel('c64u')).toBe('c64u');
+        expect(mapTargetDisplayLabel('u64')).toBe('u64');
+        expect(mapTargetDisplayLabel('u64e')).toBe('u64e');
+        expect(mapTargetDisplayLabel('u64e2')).toBe('u64e2');
+    });
 });

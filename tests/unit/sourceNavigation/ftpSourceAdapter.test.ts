@@ -250,4 +250,89 @@ describe('ftpSourceAdapter', () => {
     const results = await source.listFilesRecursive('/');
     expect(results).toHaveLength(1);
   });
+
+  it('falls back to empty entries object when parsed cache has no entries key', async () => {
+    // Covers parsed.entries ?? {} (line 37: ?? {} branch)
+    localStorage.setItem('c64u_ftp_cache:v1', JSON.stringify({ order: ['/'] }));
+    listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+    const source = createUltimateSourceLocation();
+    const result = await source.listEntries('/');
+    expect(result).toEqual([]);
+  });
+
+  it('handles listFtpDirectory result with no entries key (falsy entries)', async () => {
+    // Covers result.entries || [] (line 112: || [] branch when entries is absent)
+    listFtpDirectoryMock.mockResolvedValue({} as any);
+    const source = createUltimateSourceLocation();
+    const result = await source.listEntries('/');
+    expect(result).toEqual([]);
+  });
+
+  it('uses root path when listEntries called with empty string', async () => {
+    // Covers path && path !== '' ? path : '/' (line 101 FALSE → '/')
+    // and also: path || '/' in listFilesRecursive (line 124)
+    listFtpDirectoryMock.mockResolvedValue({
+      entries: [{ type: 'file', name: 'a.sid', path: '/a.sid', size: 10, modifiedAt: 'x' }],
+    });
+    const source = createUltimateSourceLocation();
+    const result = await source.listEntries('');
+    expect(result).toHaveLength(1);
+    // Verify the FTP call was made with '/'
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/' }),
+    );
+  });
+
+  it('uses root path when listFilesRecursive called with empty string', async () => {
+    // Covers path || '/' (line 124: || '/' branch when path is empty)
+    listFtpDirectoryMock.mockResolvedValue({ entries: [] });
+    const source = createUltimateSourceLocation();
+    const results = await source.listFilesRecursive('');
+    expect(results).toEqual([]);
+    expect(listFtpDirectoryMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/' }),
+    );
+  });
+
+  it('treats expired cache entry as miss and re-fetches', async () => {
+    // Covers Date.now() - record.updatedAt > CACHE_TTL_MS (line 74: TTL expired branch)
+    const expiredEntry = { entries: [], updatedAt: Date.now() - 20 * 60 * 1000 };
+    localStorage.setItem('c64u_ftp_cache:v1', JSON.stringify({
+      entries: { 'c64u:21:/': expiredEntry },
+      order: ['c64u:21:/'],
+    }));
+    listFtpDirectoryMock.mockResolvedValue({
+      entries: [{ type: 'file', name: 'fresh.sid', path: '/fresh.sid', size: 5, modifiedAt: 'now' }],
+    });
+    const source = createUltimateSourceLocation();
+    const result = await source.listEntries('/');
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('fresh.sid');
+    // Should have fetched from FTP (cache was expired)
+    expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
+  });
+
+  describe('normalizeFtpHost', () => {
+    it('removes port from plain hostname', () => {
+      expect(normalizeFtpHost('example.com:21')).toBe('example.com');
+    });
+
+    it('returns empty for empty host', () => {
+      expect(normalizeFtpHost('')).toBe('');
+    });
+
+    it('handles IPv6 address in brackets', () => {
+      // Covers `if (host.startsWith('['))` branch
+      expect(normalizeFtpHost('[::1]:21')).toBe('[::1]');
+    });
+
+    it('handles IPv6 address without port', () => {
+      expect(normalizeFtpHost('[2001:db8::1]')).toBe('[2001:db8::1]');
+    });
+
+    it('handles IPv6 with unclosed bracket', () => {
+      // `indexOf(']')` returns -1 → fallback to split(':')[0]
+      expect(normalizeFtpHost('[::1')).toBe('[');
+    });
+  });
 });

@@ -60,6 +60,8 @@ import {
     ensureNotCancelledWith,
     downloadArchive,
     readArchiveBuffer,
+    resolveCachedArchive,
+    getCacheStatusInternal,
 } from '@/lib/hvsc/hvscDownload';
 import { Filesystem } from '@capacitor/filesystem';
 
@@ -214,6 +216,10 @@ describe('hvscDownload', () => {
         it('strips update/ prefix for library paths', () => {
             expect(normalizeUpdateLibraryPath('update/DOCUMENTS/Songlengths.md5')).toBe('/DOCUMENTS/Songlengths.md5');
         });
+
+        it('strips updated/ prefix for library paths (BRDA:226)', () => {
+            expect(normalizeUpdateLibraryPath('updated/DOCUMENTS/Songlengths.md5')).toBe('/DOCUMENTS/Songlengths.md5');
+        });
     });
 
     // ── isDeletionList ──
@@ -337,6 +343,20 @@ describe('hvscDownload', () => {
                 percent: undefined,
             });
         });
+
+
+        it('emits with undefined downloadedBytes when null (BRDA:261,263)', () => {
+            const emitProgress = vi.fn();
+            emitDownloadProgress(emitProgress, 'test.7z', null, 100);
+            expect(emitProgress).toHaveBeenCalledWith({
+                stage: 'download',
+                message: 'Downloading test.7z…',
+                archiveName: 'test.7z',
+                downloadedBytes: undefined,
+                totalBytes: 100,
+                percent: 0,
+            });
+        });
     });
 
     // ── ensureNotCancelledWith ──
@@ -378,6 +398,92 @@ describe('hvscDownload', () => {
             const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
 
             expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
+        });
+
+        it('proceeds when stat.size is undefined (BRDA:333)', async () => {
+            vi.mocked(Filesystem.stat).mockResolvedValue({} as any);
+            vi.mocked(Filesystem.readFile).mockResolvedValue({ data: 'AQIDBA==' } as any);
+            const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+            expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
+        });
+
+        it('throws when stat.size exceeds MAX_BRIDGE_READ_BYTES (BRDA:340)', async () => {
+            vi.mocked(Filesystem.stat).mockResolvedValue({ size: 10 * 1024 * 1024 } as any);
+            await expect(readArchiveBuffer('hvsc-baseline-84.7z')).rejects.toThrow('HVSC bridge read blocked');
+        });
+
+        it('continues when stat throws during size check (BRDA:334)', async () => {
+            vi.mocked(Filesystem.stat).mockRejectedValue(new Error('stat failed'));
+            vi.mocked(Filesystem.readFile).mockResolvedValue({ data: 'AQIDBA==' } as any);
+            const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+            expect(decoded).toEqual(new Uint8Array([1, 2, 3, 4]));
+        });
+
+        it('decodes empty base64 string returning empty Uint8Array (BRDA:107)', async () => {
+            vi.mocked(Filesystem.stat).mockResolvedValue({ size: 0 } as any);
+            vi.mocked(Filesystem.readFile).mockResolvedValue({ data: '' } as any);
+            const decoded = await readArchiveBuffer('hvsc-baseline-84.7z');
+            expect(decoded).toEqual(new Uint8Array(0));
+        });
+    });
+
+    describe('resolveCachedArchive', () => {
+        it('returns null when stat finds file type but marker is null (BRDA:279,281)', async () => {
+            vi.mocked(Filesystem.stat).mockResolvedValue({ type: 'file' } as any);
+            const result = await resolveCachedArchive('hvsc-baseline', 84);
+            expect(result).toBeNull();
+        });
+
+        it('returns null when all stat calls throw', async () => {
+            vi.mocked(Filesystem.stat).mockRejectedValue(new Error('not found'));
+            const result = await resolveCachedArchive('hvsc-baseline', 84);
+            expect(result).toBeNull();
+        });
+
+        it('returns name when stat finds directory type and marker is set (BRDA:279)', async () => {
+            vi.mocked(Filesystem.stat).mockResolvedValue({ type: 'directory' } as any);
+            const { readCachedArchiveMarker } = await import('@/lib/hvsc/hvscFilesystem');
+            vi.mocked(readCachedArchiveMarker).mockResolvedValue({ version: 84 } as any);
+            const result = await resolveCachedArchive('hvsc-baseline', 84);
+            expect(result).toBe('hvsc-baseline-84');
+        });
+    });
+
+    describe('getCacheStatusInternal', () => {
+        it('parses baseline and update versions from readdir (BRDA:299,307)', async () => {
+            vi.mocked(Filesystem.readdir).mockResolvedValue({
+                files: [
+                    'hvsc-baseline-84.complete.json',
+                    'hvsc-update-85.complete.json',
+                ],
+            } as any);
+            const status = await getCacheStatusInternal();
+            expect(status.baselineVersion).toBe(84);
+            expect(status.updateVersions).toEqual([85]);
+        });
+
+        it('returns empty status when readdir throws', async () => {
+            vi.mocked(Filesystem.readdir).mockRejectedValue(new Error('no dir'));
+            const status = await getCacheStatusInternal();
+            expect(status.baselineVersion).toBeNull();
+            expect(status.updateVersions).toEqual([]);
+        });
+
+        it('handles object entries with undefined name (BRDA:307)', async () => {
+            vi.mocked(Filesystem.readdir).mockResolvedValue({
+                files: [
+                    { name: 'hvsc-baseline-84.complete.json' },
+                    { name: undefined },
+                ],
+            } as any);
+            const status = await getCacheStatusInternal();
+            expect(status.baselineVersion).toBe(84);
+        });
+
+        it('handles files undefined in readdir result (BRDA:299)', async () => {
+            vi.mocked(Filesystem.readdir).mockResolvedValue({} as any);
+            const status = await getCacheStatusInternal();
+            expect(status.baselineVersion).toBeNull();
         });
     });
 
