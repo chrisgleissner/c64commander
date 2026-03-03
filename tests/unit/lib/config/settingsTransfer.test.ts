@@ -19,7 +19,7 @@ vi.mock('@/lib/config/appSettings', () => ({
     loadBackgroundRediscoveryIntervalMs: vi.fn(),
     loadDiscoveryProbeTimeoutMs: vi.fn(),
     loadDiskAutostartMode: vi.fn(),
-    
+
     saveDebugLoggingEnabled: vi.fn(),
     saveConfigWriteIntervalMs: vi.fn(),
     saveAutomaticDemoModeEnabled: vi.fn(),
@@ -36,7 +36,7 @@ vi.mock('@/lib/config/appSettings', () => ({
 
 vi.mock('@/lib/config/deviceSafetySettings', () => ({
     loadDeviceSafetyConfig: vi.fn(),
-    
+
     saveDeviceSafetyMode: vi.fn(),
     saveRestMaxConcurrency: vi.fn(),
     saveFtpMaxConcurrency: vi.fn(),
@@ -108,7 +108,7 @@ describe('settingsTransfer', () => {
         it('imports valid payload', () => {
             const result = importSettingsJson(JSON.stringify(validPayload));
             expect(result).toEqual({ ok: true });
-            
+
             expect(appSettings.saveDebugLoggingEnabled).toHaveBeenCalledWith(true);
             expect(deviceSafetySettings.saveDeviceSafetyMode).toHaveBeenCalledWith('BALANCED');
         });
@@ -128,13 +128,13 @@ describe('settingsTransfer', () => {
         });
 
         it('validates appSettings types', () => {
-             const invalid = { ...validPayload, appSettings: { ...validPayload.appSettings, debugLoggingEnabled: 'true' } };
-             expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'debugLoggingEnabled must be boolean.' });
+            const invalid = { ...validPayload, appSettings: { ...validPayload.appSettings, debugLoggingEnabled: 'true' } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'debugLoggingEnabled must be boolean.' });
         });
-        
+
         it('validates deviceSafety types', () => {
-             const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, mode: 'EXTREME' } };
-             expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'deviceSafety.mode is invalid.' });
+            const invalid = { ...validPayload, deviceSafety: { ...validPayload.deviceSafety, mode: 'EXTREME' } };
+            expect(importSettingsJson(JSON.stringify(invalid))).toEqual({ ok: false, error: 'deviceSafety.mode is invalid.' });
         });
 
         it('rejects non-object appSettings', () => {

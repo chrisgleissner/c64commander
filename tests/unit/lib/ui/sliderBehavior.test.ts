@@ -37,6 +37,10 @@ describe('sliderBehavior', () => {
         it('handles zero range', () => {
              expect(resolveMidpointSnap({ value: 5, min: 10, max: 10, midpoint: 10 })).toBe(5);
         });
+
+        it('returns value when explicit snapRange is 0 (line 37 TRUE)', () => {
+            expect(resolveMidpointSnap({ value: 55, min: 0, max: 100, midpoint: 50, snapRange: 0 })).toBe(55);
+        });
     });
 
     describe('resolveMidpointPercent', () => {
@@ -48,6 +52,10 @@ describe('sliderBehavior', () => {
         it('clamps result', () => {
              expect(resolveMidpointPercent(150, 0, 100)).toBe(100);
              expect(resolveMidpointPercent(-50, 0, 100)).toBe(0);
+        });
+
+        it('returns 0 when min equals max (line 45 range===0)', () => {
+            expect(resolveMidpointPercent(5, 10, 10)).toBe(0);
         });
     });
 
@@ -65,6 +73,10 @@ describe('sliderBehavior', () => {
 
         it('ignores if stale', () => {
              expect(shouldTriggerMidpointHaptic({ ...base, previous: 49, next: 51, lastTriggerMs: 900 })).toBe(false);
+        });
+
+        it('returns false when previous is null and next is not midpoint (line 60 FALSE)', () => {
+            expect(shouldTriggerMidpointHaptic({ ...base, previous: null, next: 55 })).toBe(false);
         });
     });
 
@@ -103,6 +115,41 @@ describe('sliderBehavior', () => {
              // Wait... Vitest might need explicit run?
              
              // queueMicrotask is async.
+        });
+
+        it('commit falls back to onChange when onCommit absent (line 103 FALSE)', async () => {
+            const onChange = vi.fn();
+            const queue = createSliderAsyncQueue({ onChange });
+
+            queue.commit(7);
+            await Promise.resolve();
+
+            expect(onChange).toHaveBeenCalledWith(7);
+        });
+
+        it('commit is no-op when neither onCommit nor onChange provided (line 104 TRUE)', async () => {
+            const queue = createSliderAsyncQueue({});
+            // Should not throw
+            queue.commit(3);
+            await Promise.resolve();
+        });
+
+        it('cancel is no-op when no timer is running (line 110 FALSE)', () => {
+            const onChange = vi.fn();
+            const queue = createSliderAsyncQueue({ onChange });
+            // No schedule → timer = null
+            queue.cancel();
+            // Should not throw, no timer to clear
+        });
+
+        it('cancel clears a pending scheduled call', () => {
+            const onChange = vi.fn();
+            const queue = createSliderAsyncQueue({ onChange, throttleMs: 100 });
+
+            queue.schedule(1);
+            queue.cancel();
+            vi.advanceTimersByTime(200);
+            expect(onChange).not.toHaveBeenCalled();
         });
     });
 });

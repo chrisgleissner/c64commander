@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@capacitor/filesystem', () => ({
   Directory: { Data: 'DATA' },
@@ -21,10 +21,13 @@ vi.mock('@capacitor/filesystem', () => ({
 import { Filesystem } from '@capacitor/filesystem';
 import {
   buildHvscBrowseIndexFromEntries,
+  clearHvscBrowseIndexSnapshot,
   getHvscFoldersWithParent,
   getHvscSongFromBrowseIndex,
   listFolderFromBrowseIndex,
   listHvscFolderTracks,
+  loadHvscBrowseIndexSnapshot,
+  saveHvscBrowseIndexSnapshot,
   verifyHvscBrowseIndexIntegrity,
 } from '@/lib/hvsc/hvscBrowseIndexStore';
 
@@ -297,5 +300,119 @@ describe('hvscBrowseIndexStore', () => {
     const result = listFolderFromBrowseIndex(snapshot, '/DEMOS/A', '', 0, 50);
     expect(result.songs.find((s: { fileName: string }) => s.fileName === 'Ghost.sid')).toBeUndefined();
     expect(result.songs.find((s: { fileName: string }) => s.fileName === 'One.sid')).toBeDefined();
+  });
+});
+
+describe('hvscBrowseIndexStore branch coverage', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+  });
+
+  it('normalizePath adds leading slash when missing (line 42 FALSE)', () => {
+    // path without leading slash → normalizePath prepends '/'
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: 'DEMOS/song.sid', name: 'song.sid', type: 'sid' },
+    ]);
+    expect(snapshot.songs['/DEMOS/song.sid']).toBeDefined();
+  });
+
+  it('parseSnapshot returns empty snapshot for JSON null (line 155 TRUE)', async () => {
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('not found'));
+    localStorage.setItem('c64u_hvsc_browse_index:v1', JSON.stringify(null));
+    const result = await loadHvscBrowseIndexSnapshot();
+    // normalizeSnapshot(null) → createEmptyHvscBrowseIndexSnapshot
+    expect(result).not.toBeNull();
+    expect(Object.keys(result?.songs ?? {})).toHaveLength(0);
+  });
+
+  it('normalizeSnapshot uses getFileName when song.fileName is empty (line 162)', async () => {
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('not found'));
+    const fakeSnapshot = {
+      schemaVersion: 1,
+      updatedAt: new Date().toISOString(),
+      songs: { '/DEMOS/test.sid': { virtualPath: '/DEMOS/test.sid', fileName: '', durationSeconds: null, sidMetadata: null, trackSubsongs: null } },
+      folders: {},
+    };
+    localStorage.setItem('c64u_hvsc_browse_index:v1', JSON.stringify(fakeSnapshot));
+    const result = await loadHvscBrowseIndexSnapshot();
+    // fileName was empty → falls back to getFileName → 'test.sid'
+    expect(result?.songs['/DEMOS/test.sid']?.fileName).toBe('test.sid');
+  });
+
+  it('normalizeSnapshot treats null songs as empty object (line 180)', async () => {
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('not found'));
+    const fakeSnapshot = {
+      schemaVersion: 1,
+      updatedAt: new Date().toISOString(),
+      songs: null,
+      folders: {},
+    };
+    localStorage.setItem('c64u_hvsc_browse_index:v1', JSON.stringify(fakeSnapshot));
+    const result = await loadHvscBrowseIndexSnapshot();
+    expect(result).not.toBeNull();
+    expect(Object.keys(result?.songs ?? {})).toHaveLength(0);
+  });
+
+  it('parseSnapshot returns null for invalid JSON in localStorage (line 187 catch)', async () => {
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('not found'));
+    localStorage.setItem('c64u_hvsc_browse_index:v1', 'NOT VALID JSON {{{');
+    const result = await loadHvscBrowseIndexSnapshot();
+    expect(result).toBeNull();
+  });
+
+  it('clearHvscBrowseIndexSnapshot handles first deleteFile throw (line 198)', async () => {
+    (Filesystem as Record<string, unknown>).deleteFile = vi.fn()
+      .mockRejectedValueOnce(new Error('delete1 fail'))
+      .mockResolvedValue(undefined);
+    await clearHvscBrowseIndexSnapshot();
+    // Should not throw
+  });
+
+  it('clearHvscBrowseIndexSnapshot handles second deleteFile throw (line 206)', async () => {
+    (Filesystem as Record<string, unknown>).deleteFile = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('delete2 fail'));
+    await clearHvscBrowseIndexSnapshot();
+    // Should not throw
+  });
+
+  it('readLocalStorageSnapshot returns null when localStorage undefined (line 250)', async () => {
+    vi.stubGlobal('localStorage', undefined);
+    vi.mocked(Filesystem.readFile).mockRejectedValue(new Error('not found'));
+    const result = await loadHvscBrowseIndexSnapshot();
+    expect(result).toBeNull();
+  });
+
+  it('loadHvscBrowseIndexSnapshot returns filesystem snapshot when available (line 277 TRUE)', async () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([]);
+    const json = JSON.stringify(snapshot);
+    const bytes = new TextEncoder().encode(json);
+    const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('');
+    const encoded = btoa(binary);
+    vi.mocked(Filesystem.readFile).mockResolvedValueOnce({ data: encoded } as never);
+    const result = await loadHvscBrowseIndexSnapshot();
+    expect(result).not.toBeNull();
+    expect(result?.schemaVersion).toBe(snapshot.schemaVersion);
+  });
+
+  it('loadHvscBrowseIndexSnapshot uses localStorage when window undefined (line 279)', async () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/test2.sid', name: 'test2.sid', type: 'sid' },
+    ]);
+    localStorage.setItem('c64u_hvsc_browse_index:v1', JSON.stringify(snapshot));
+    vi.stubGlobal('window', undefined);
+    const result = await loadHvscBrowseIndexSnapshot();
+    expect(result?.songs['/test2.sid']).toBeDefined();
+  });
+
+  it('saveHvscBrowseIndexSnapshot skips localStorage writes when localStorage undefined (lines 255, 260)', async () => {
+    vi.mocked(Filesystem.mkdir).mockResolvedValue(undefined as never);
+    vi.mocked(Filesystem.writeFile).mockRejectedValue(new Error('disk error'));
+    vi.stubGlobal('localStorage', undefined);
+    const snapshot = buildHvscBrowseIndexFromEntries([]);
+    // Should not throw even without localStorage
+    await saveHvscBrowseIndexSnapshot(snapshot);
   });
 });

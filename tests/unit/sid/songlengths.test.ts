@@ -260,4 +260,17 @@ describe('parseSonglengths', () => {
     const data = parseSonglengths('/song.sid badtiming');
     expect(data.pathToSeconds.size).toBe(0);
   });
+
+  it('ignores legacy format lines where value is empty after path (line 151 TRUE)', () => {
+    // Line like "path   " has a space but the value after the split is empty
+    const data = parseSonglengths('path  ');
+    expect(data.pathToSeconds.size).toBe(0);
+  });
+
+  it('resolveSonglengthsSeconds handles out-of-range songNr (line 27)', () => {
+    const data = parseSonglengths('; /test.sid\nabc=0:30 0:45');
+    // songNr=10 is beyond the 2-element durations array
+    const result = resolveSonglengthsSeconds(data, '/test.sid', 'abc', 10);
+    expect(result).toBeNull();
+  });
 });

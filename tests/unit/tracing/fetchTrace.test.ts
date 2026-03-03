@@ -277,4 +277,24 @@ describe('fetchTrace', () => {
         const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as { body: { type: string } };
         expect(payload.body.type).toBe('form-data');
     });
+
+    it('registerFetchTrace returns early when window is undefined (line 115 TRUE)', () => {
+        vi.stubGlobal('window', undefined);
+        // Should not throw
+        registerFetchTrace();
+        vi.unstubAllGlobals();
+    });
+
+    it('Blob body with empty type returns null mimeType (line 97 FALSE)', async () => {
+        registerFetchTrace();
+        const emptyTypeBlob = new Blob(['data']);  // no type → type = ''
+
+        await window.fetch('/api/rest/v1/upload', {
+            method: 'POST',
+            body: emptyTypeBlob,
+        });
+
+        const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as { body: { mimeType: null } };
+        expect(payload.body.mimeType).toBeNull();
+    });
 });

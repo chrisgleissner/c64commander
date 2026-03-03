@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { classifyError } from '@/lib/tracing/failureTaxonomy';
+import { LocalSourceListingError } from '@/lib/sourceNavigation/localSourceErrors';
 
 describe('failureTaxonomy', () => {
   it('classifies user cancellation', () => {
@@ -49,5 +50,34 @@ describe('failureTaxonomy', () => {
 
   it('classifies metadata absent', () => {
     expect(classifyError(new Error('No songlength entry found')).failureClass).toBe('metadata-absent');
+  });
+
+  it('classifyError with null input wraps in Error (lines 42, 93)', () => {
+    const result = classifyError(null);
+    expect(result.failureClass).toBe('unknown');
+  });
+
+  it('classifyError with string input wraps in Error (lines 43, 93)', () => {
+    const result = classifyError('aborted');
+    // 'aborted' matches /aborted|canceled|cancelled/i → user-cancellation
+    expect(result.failureClass).toBe('user-cancellation');
+  });
+
+  it('normalizeMessage returns empty string for non-string message property (line 46)', () => {
+    const result = classifyError({ message: 42 });
+    expect(result.failureClass).toBe('unknown');
+  });
+
+  it('classifies LocalSourceListingError with saf- code as permission-denied (lines 85, 135)', () => {
+    const err = new LocalSourceListingError('Cannot list', 'saf-listing-unavailable');
+    const result = classifyError(err);
+    expect(result.failureClass).toBe('permission-denied');
+    expect(result.errorType).toContain('LocalSourceListingError');
+  });
+
+  it('classifies LocalSourceListingError with non-saf code as io-read-failure (line 136 FALSE)', () => {
+    const err = new LocalSourceListingError('Cannot list', 'local-entries-missing');
+    const result = classifyError(err);
+    expect(result.failureClass).toBe('io-read-failure');
   });
 });

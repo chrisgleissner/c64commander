@@ -170,9 +170,11 @@ describe('HvscMediaIndexAdapter', () => {
 
   it('queryFolderPage clamps negative offset and limit', async () => {
     const listings: Record<string, HvscFolderListing> = {
-      '/': { path: '/', folders: [], songs: [
-        { id: 1, virtualPath: '/test.sid', fileName: 'test.sid', durationSeconds: 10 },
-      ]},
+      '/': {
+        path: '/', folders: [], songs: [
+          { id: 1, virtualPath: '/test.sid', fileName: 'test.sid', durationSeconds: 10 },
+        ]
+      },
     };
 
     const adapter = new HvscMediaIndexAdapter(
@@ -322,11 +324,11 @@ describe('HvscMediaIndexAdapter', () => {
     // even without explicit load() call on the adapter
     const mockEntries = [{ path: '/a.sid', name: 'a.sid', type: 'sid' as const, durationSeconds: 5 }];
     const mockIndex = {
-      load: async () => {},
-      save: async () => {},
-      scan: async () => {},
+      load: async () => { },
+      save: async () => { },
+      scan: async () => { },
       getAll: () => mockEntries,
-      setEntries: () => {},
+      setEntries: () => { },
       queryByType: () => mockEntries,
       queryByPath: (p: string) => mockEntries.find((e) => e.path === p) ?? null,
     };
@@ -344,14 +346,16 @@ describe('HvscMediaIndexAdapter', () => {
   });
 
   it('scan without explicit paths starts from root', async () => {
-    let scannedPaths: string[] = [];
+    const scannedPaths: string[] = [];
     const adapter = new HvscMediaIndexAdapter(
       new JsonMediaIndex(createMemoryStorage()),
       async (path) => {
         scannedPaths.push(path);
-        return { path, folders: [], songs: [
-          { id: 1, virtualPath: `${path}/a.sid`, fileName: 'a.sid', durationSeconds: 5 },
-        ]};
+        return {
+          path, folders: [], songs: [
+            { id: 1, virtualPath: `${path}/a.sid`, fileName: 'a.sid', durationSeconds: 5 },
+          ]
+        };
       },
     );
 

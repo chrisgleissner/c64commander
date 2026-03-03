@@ -66,4 +66,26 @@ describe('audio mixer solo routing', () => {
     const reset = soloReducer(active, { type: 'reset' });
     expect(reset.soloItem).toBeNull();
   });
+
+  it('resolveAudioMixerMuteValue returns OFF for empty options (line 36)', () => {
+    expect(resolveAudioMixerMuteValue([])).toBe('OFF');
+    expect(resolveAudioMixerMuteValue()).toBe('OFF');
+  });
+
+  it('resolveAudioMixerMuteValue falls back to first option when none are numeric (line 32 FALSE)', () => {
+    expect(resolveAudioMixerMuteValue(['ON', 'HIGH', 'LOW'])).toBe('ON');
+  });
+
+  it('resolveAudioMixerMuteValue picks lower numeric option (line 48 FALSE branch)', () => {
+    // '5' starts as min; '10' is compared and 10<5 is FALSE, keeping 5 as min
+    expect(resolveAudioMixerMuteValue(['5', '10'])).toBe('5');
+  });
+
+  it('buildSoloRoutingUpdates skips non-SID-volume items (line 69)', () => {
+    const updates = buildSoloRoutingUpdates(
+      [{ name: 'master', value: '0 dB', options: ['0 dB', '-6 dB'] }],
+      null,
+    );
+    expect(Object.keys(updates)).toHaveLength(0);
+  });
 });

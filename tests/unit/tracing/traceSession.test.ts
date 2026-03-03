@@ -387,7 +387,7 @@ describe('traceSession', () => {
 
   it('suppresses non-error events when diagnostics side effects are suppressed', () => {
     shouldSuppressMock.mockReturnValue(true);
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordActionStart(action);
     // non-error events should be suppressed
     expect(getTraceEvents()).toHaveLength(0);
@@ -395,7 +395,7 @@ describe('traceSession', () => {
 
   it('does not suppress error events even when diagnostics side effects are suppressed', () => {
     shouldSuppressMock.mockReturnValue(true);
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordTraceError(action, new Error('forced error'));
     expect(getTraceEvents().some((e) => e.type === 'error')).toBe(true);
   });
@@ -413,7 +413,7 @@ describe('traceSession', () => {
       } as any,
       device: null,
     });
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordActionStart(action);
     const events = getTraceEvents();
     expect(events.some((e) => e.type === 'action-start')).toBe(true);
@@ -422,7 +422,7 @@ describe('traceSession', () => {
   });
 
   it('records ftp operation with error message', () => {
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     recordFtpOperation(action, {
       operation: 'download',
       path: '/demo.sid',
@@ -446,7 +446,7 @@ describe('traceSession', () => {
   });
 
   it('evicts oldest events when event count exceeds limit', () => {
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     const { MAX_EVENT_COUNT } = TRACE_SESSION;
     // Fill events array beyond the limit
     const events = Array.from({ length: MAX_EVENT_COUNT + 2 }, (_, i) => ({
@@ -464,7 +464,7 @@ describe('traceSession', () => {
   });
 
   it('evicts events with NaN timestamps during expired check', () => {
-    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class { } });
     // Insert an event with a non-parseable timestamp to exercise NaN path in evictExpired
     const malformed = [{
       id: 'trace-nan',
