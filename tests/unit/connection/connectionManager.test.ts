@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as logging from '../../../src/lib/logging';
 import { getFuzzMockBaseUrl, isFuzzModeEnabled } from '../../../src/lib/fuzz/fuzzMode';
 import { loadAutomaticDemoModeEnabled, loadDiscoveryProbeTimeoutMs, loadStartupDiscoveryWindowMs } from '../../../src/lib/config/appSettings';
-import { isSmokeModeEnabled, recordSmokeStatus } from '../../../src/lib/smoke/smokeMode';
+import { getSmokeConfig, isSmokeModeEnabled, recordSmokeStatus } from '../../../src/lib/smoke/smokeMode';
 
 vi.mock('../../../src/lib/config/appSettings', () => ({
   loadAutomaticDemoModeEnabled: vi.fn(() => true),
@@ -111,6 +111,8 @@ describe('connectionManager', () => {
     vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(600);
     vi.mocked(isSmokeModeEnabled).mockReturnValue(false);
     vi.mocked(recordSmokeStatus).mockResolvedValue(undefined);
+    vi.mocked(getSmokeConfig as any).mockReturnValue(null);
+    startMockServer.mockImplementation(async () => { throw new Error('Mock C64U server is only available on native platforms.'); });
     startMockServer.mockClear();
     stopMockServer.mockClear();
     getActiveMockBaseUrl.mockClear();
@@ -1079,6 +1081,149 @@ describe('connectionManager', () => {
     // getConnectionSnapshot should return the current state
     expect(getConnectionSnapshot().state).toBeDefined();
     unsubscribe();
+  });
+
+  it('dismissDemoInterstitial handles sessionStorage.setItem throwing', async () => {
+    const { dismissDemoInterstitial, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    await initializeConnectionManager();
+    const throwing = {
+      getItem: () => null,
+      setItem: () => { throw new DOMException('QuotaExceededError'); },
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    };
+    vi.stubGlobal('sessionStorage', throwing);
+    expect(() => dismissDemoInterstitial()).not.toThrow();
+    expect(getConnectionSnapshot().demoInterstitialVisible).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('probeOnce returns false when response has no content-type header', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    // null body → no content-type header → parseProbePayload returns null → isProbePayloadHealthy(null) = false
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 200 }));
+    await expect(probeOnce()).resolves.toBe(false);
+  });
+
+  it('initializeConnectionManager logs warning when stopDemoServer throws', async () => {
+    stopMockServer.mockRejectedValueOnce(new Error('stop failed'));
+    const { initializeConnectionManager } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    await expect(initializeConnectionManager()).resolves.toBeUndefined();
+  });
+
+  it('background probe ok logs smoke info when smoke mode enabled', async () => {
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    // Reach DEMO_ACTIVE with smoke off (autoDemoEnabled = true)
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    // Enable smoke mode before the background probe succeeds
+    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'U64' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    await discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
+  it('background probe fail logs smoke warn when smoke mode enabled', async () => {
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(200);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    // Reach DEMO_ACTIVE with smoke off
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+
+    // Enable smoke mode before the background probe (which also fails)
+    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
+    await discoverConnection('background');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+  });
+
+  it('startup discovery logs smoke info when probe succeeds in smoke mode', async () => {
+    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ product: 'U64' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe('REAL_CONNECTED');
+  });
+
+  it('startup discovery logs smoke warn when probe fails in smoke mode', async () => {
+    const { isSmokeModeEnabled } = await import('../../../src/lib/smoke/smokeMode');
+    vi.mocked(isSmokeModeEnabled).mockReturnValue(true);
+    vi.mocked(loadAutomaticDemoModeEnabled).mockReturnValue(false);
+    vi.mocked(loadStartupDiscoveryWindowMs).mockReturnValue(300);
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(getConnectionSnapshot().state).toBe('OFFLINE_NO_DEMO');
+  });
+
+  it('transitionToDemoActive: shouldStartDemoServer false when demoServerStartedThisSession', async () => {
+    startMockServer.mockResolvedValue({ baseUrl: 'http://127.0.0.1:7777', ftpPort: 2121 });
+    getActiveMockBaseUrl.mockReturnValue('http://127.0.0.1:7777');
+    getActiveMockFtpPort.mockReturnValue(2121);
+
+    localStorage.setItem('c64u_device_host', '127.0.0.1:1');
+    vi.mocked(fetch).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const { discoverConnection, getConnectionSnapshot, initializeConnectionManager } =
+      await import('../../../src/lib/connection/connectionManager');
+
+    await initializeConnectionManager();
+    void discoverConnection('startup');
+    await vi.advanceTimersByTimeAsync(800);
+    expect(getConnectionSnapshot().state).toBe('DEMO_ACTIVE');
+    // Demo server was started; second transition should skip startMockServer
+    const callCount = startMockServer.mock.calls.length;
+    void discoverConnection('manual');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(startMockServer.mock.calls.length).toBe(callCount);
   });
 });
 

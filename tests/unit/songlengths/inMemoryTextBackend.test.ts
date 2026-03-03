@@ -352,5 +352,45 @@ describe('InMemoryTextBackend', () => {
             const result = backend.resolve({ fileName: '   ' });
             expect(result.strategy).toBe('not-found');
         });
+
+        it('normalizes whitespace-only partialPath to null via normalizePath (BRDA:49)', async () => {
+            // normalizePath('   ') → normalized = '' → !normalized → returns '/'
+            // normalizePartialPath('   ') → normalizePath returns '/' → returns null
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:30'));
+            const result = backend.resolve({ fileName: 'song.sid', partialPath: '   ' });
+            expect(result.strategy).toBe('filename-unique');
+        });
+
+        it('rejects md5 line with empty duration payload (BRDA:134)', async () => {
+            // "abc=" has valid md5 but empty duration portion → onRejectedLine called for invalid duration
+            const rejected: Array<{ reason: string }> = [];
+            const backend = new InMemoryTextBackend({ onRejectedLine: (r) => rejected.push(r) });
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc='));
+            expect(rejected).toHaveLength(1);
+            expect(rejected[0].reason).toBe('invalid duration payload');
+        });
+
+        it('resolves subsong duration via songNr > 1 (BRDA:299)', async () => {
+            // songNr=2 → index=1 → second duration
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:30 2:00'));
+            const result = backend.resolve({ md5: 'abc', songNr: 2 });
+            expect(result.durationSeconds).toBe(120);
+        });
+
+        it('returns ambiguous strategy when filename matches multiple paths with same partial match (BRDA:352,382)', async () => {
+            // Set up two songs with the same filename in different directories
+            const onAmbiguous = vi.fn();
+            const backend = new InMemoryTextBackend({ onAmbiguous });
+            await backend.load(makeInput(
+                '; /DEMOS/Dir1/Song.sid\naaa=1:00\n; /DEMOS/Dir2/Song.sid\nbbb=2:00'
+            ));
+            // Both songs have filename "song.sid" → duplicates
+            // Providing a partialPath that matches both → candidates.length > 1 → pendingAmbiguity
+            const result = backend.resolve({ fileName: 'song.sid', partialPath: '/DEMOS' });
+            expect(result.strategy).toBe('ambiguous');
+            expect(onAmbiguous).toHaveBeenCalledOnce();
+        });
     });
 });

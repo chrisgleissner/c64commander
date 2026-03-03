@@ -124,4 +124,32 @@ describe('networkSnapshot', () => {
         const resOnly = snapshot.requests.find((entry) => entry.method === 'GET' && entry.httpStatus === 204);
         expect(resOnly?.timestamp).toBe('2026-03-02T10:00:00.900Z');
     });
+
+    it('returns empty string timestamp when both request and response have no timestamp (BRDA:102)', () => {
+        vi.mocked(getTraceEvents).mockReturnValue([
+            {
+                id: '1',
+                // No timestamp property on request
+                relativeMs: 1,
+                type: 'rest-request',
+                origin: 'user',
+                correlationId: 'no-ts',
+                data: { ...ctx, url: 'http://localhost:8080/api', method: 'GET' },
+            },
+            {
+                id: '2',
+                // No timestamp property on response
+                relativeMs: 2,
+                type: 'rest-response',
+                origin: 'user',
+                correlationId: 'no-ts',
+                data: { ...ctx, status: 200 },
+            },
+        ] as any);
+
+        const snapshot = buildNetworkSnapshot();
+        expect(snapshot.requests).toHaveLength(1);
+        // Both request.timestamp and response.timestamp are undefined → falls back to ''
+        expect(snapshot.requests[0].timestamp).toBe('');
+    });
 });

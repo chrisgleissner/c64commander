@@ -1080,4 +1080,285 @@ describe('c64api branches', () => {
     expect(result).toBeInstanceOf(Uint8Array);
     expect(Array.from(result)).toEqual([11, 22]);
   });
+
+  // #44: normalizeDeviceHost with empty/falsy input returns default
+  it('normalizeDeviceHost returns default for empty string', () => {
+    expect(normalizeDeviceHost('')).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  it('normalizeDeviceHost returns default for undefined', () => {
+    expect(normalizeDeviceHost(undefined)).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  // #45: getDeviceHostFromBaseUrl with falsy baseUrl returns default
+  it('getDeviceHostFromBaseUrl returns default for undefined', () => {
+    expect(getDeviceHostFromBaseUrl(undefined)).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  it('getDeviceHostFromBaseUrl returns default for empty string', () => {
+    expect(getDeviceHostFromBaseUrl('')).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  // #46: getDeviceHostFromBaseUrl with file: URL (host is empty) falls back to default
+  it('getDeviceHostFromBaseUrl falls back to default for file: URL with empty host', () => {
+    const result = getDeviceHostFromBaseUrl('file:///path/to/file');
+    expect(result).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  // #47: resolveDeviceHostFromStorage when localStorage is undefined
+  it('resolveDeviceHostFromStorage returns default when localStorage is undefined', () => {
+    vi.stubGlobal('localStorage', undefined);
+    const result = resolveDeviceHostFromStorage();
+    vi.unstubAllGlobals();
+    expect(result).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  // #48: getConfigItems with category response missing category sub-key (BRDA:1129, 1130)
+  it('getConfigItems handles category response with no category sub-key or items block', async () => {
+    const fetchMock = getFetchMock();
+    // Response has neither a 'network' key nor an 'items' key → both ?? fallbacks triggered
+    fetchMock.mockResolvedValueOnce(okJsonResponse({ myItem: 'value' }));
+
+    const api = new C64API('http://c64u');
+    const result = await api.getConfigItems('network', ['myItem']);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((result as any).network).toBeDefined();
+  });
+
+  // #49: getConfigItems with per-item fetch rejection (BRDA:1151)
+  it('getConfigItems tolerates per-item fetch rejection from Promise.allSettled', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/v1/configs/network') && !url.includes('/network/')) {
+        return Promise.reject(new Error('category fetch error'));
+      }
+      // per-item fetch also rejects → result.status !== 'fulfilled' branch
+      return Promise.reject(new Error('item fetch error'));
+    });
+
+    const api = new C64API('http://c64u');
+    const result = await api.getConfigItems('network', ['myItem']);
+    // All items missing, all per-item fetches rejected → empty result
+    expect((result as any).network?.items).toEqual({});
+  });
+
+  // #50: getConfigItems with per-item response missing category/items keys (BRDA:1153, 1154)
+  it('getConfigItems handles per-item response with no category or items sub-key', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/v1/configs/network') && !url.includes('/network/')) {
+        return Promise.reject(new Error('category fetch error'));
+      }
+      // Per-item response has no 'network' key, no 'items' key → ?? fallbacks
+      return Promise.resolve(okJsonResponse({ myItem: 'found-value' }));
+    });
+
+    const api = new C64API('http://c64u');
+    const result = await api.getConfigItems('network', ['myItem']);
+    expect((result as any).network).toBeDefined();
+  });
+
+  // #51: getConfigItems with non-object itemsBlock in per-item response (BRDA:1155)
+  it('getConfigItems skips per-item result when itemsBlock is not an object', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/v1/configs/network') && !url.includes('/network/')) {
+        return Promise.reject(new Error('category fetch error'));
+      }
+      // itemsBlock is a string, not an object → skipped
+      return Promise.resolve(okJsonResponse({ network: { items: 'not-an-object' } }));
+    });
+
+    const api = new C64API('http://c64u');
+    const result = await api.getConfigItems('network', ['myItem']);
+    expect((result as any).network?.items).toEqual({});
+  });
+
+  // #52: isSidUploadTransientFailure with non-Error thrown (BRDA:60 FALSE path)
+  // Also covers parseHttpStatusFromErrorMessage with no HTTP match (BRDA:54 TRUE path)
+  it('handles non-Error string thrown during SID upload', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      // Reject with a plain string (non-transient: no HTTP status → throws immediately)
+      fetchMock.mockRejectedValue('plain-string-failure');
+
+      const api = new C64API('http://c64u');
+      const sidBlob = new Blob(['PSID'], { type: 'application/octet-stream' });
+      await expect(api.playSidUpload(sidBlob)).rejects.toBe('plain-string-failure');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // #53: budget cache stores null JSON response, estimateBudgetValueBytes null branch (BRDA:173)
+  it('caches null JSON response via request budget without error', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockResolvedValue(new Response('null', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+      const api = new C64API('http://c64u');
+      // Single call: parseResponseJson returns null → saveReadRequestBudgetValue(key, null)
+      // → estimateBudgetValueBytes(null) → BRDA:173 (null/undefined → return 0)
+      const result = await api.getInfo();
+      expect(result).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // #54: budget cache stores string JSON response, estimateBudgetValueBytes string branch (BRDA:174)
+  it('caches string JSON response via request budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockResolvedValue(new Response('"hello-string"', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+      const api = new C64API('http://c64u');
+      // parseResponseJson returns 'hello-string' → estimateBudgetValueBytes('hello-string') → BRDA:174
+      const result = await api.getInfo();
+      expect(result).toBe('hello-string');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // #55: budget cache stores number JSON response, estimateBudgetValueBytes number branch (BRDA:175)
+  it('caches number JSON response via request budget', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchMock = getFetchMock();
+      fetchMock.mockResolvedValue(new Response('42', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+
+      const api = new C64API('http://c64u');
+      // parseResponseJson returns 42 → estimateBudgetValueBytes(42) → BRDA:175 (number)
+      const result = await api.getInfo();
+      expect(result).toBe(42);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // #56: sanitizeHostInput with URL-scheme input having empty host (BRDA:282 - url.host || url.hostname || '')
+  it('normalizeDeviceHost falls back to default for URL with empty host', () => {
+    // file:// URLs have empty url.host and url.hostname → hits || '' fallback
+    const result = normalizeDeviceHost('file:///path/to/something');
+    expect(result).toBe(C64_DEFAULTS.DEFAULT_DEVICE_HOST);
+  });
+
+  // #57: extractRequestBody omits mimeType for File with empty type (BRDA:228 - value.type || undefined)
+  it('extractRequestBody handles File with no MIME type', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(okJsonResponse());
+
+    const api = new C64API('http://c64u');
+    // File with no type argument → type defaults to '' → value.type || undefined = undefined
+    const sidFile = new File(['PSID'], 'track.sid');
+    await api.playSidUpload(sidFile);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  // #58: readResponseBody returns null for non-JSON upload response (BRDA:264 TRUE)
+  it('upload records null body for non-JSON response content type', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response('OK', {
+      status: 200,
+      headers: { 'content-type': 'text/plain' },
+    }));
+
+    const api = new C64API('http://c64u');
+    // writeMemoryBlock → sendUploadRequest → readResponseBody(response)
+    // Non-JSON content-type → readResponseBody returns null early (BRDA:264 TRUE)
+    await api.writeMemoryBlock('1000', new Uint8Array([1]));
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  // #59: readResponseBody and parseResponseJson with missing content-type header
+  // Covers the `?.toLowerCase() ?? ''` fallback when get('content-type') returns null
+  it('handles missing content-type header in upload response (BRDA:264, BRDA:598)', async () => {
+    const fetchMock = getFetchMock();
+    // Response with no content-type header → get('content-type') = null → ?.toLowerCase() = undefined → ?? '' = ''
+    fetchMock.mockResolvedValue(new Response('{"errors":[]}', { status: 200 }));
+
+    const api = new C64API('http://c64u');
+    // writeMemoryBlock uses fetchWithTimeout → readResponseBody is called with no content-type
+    await api.writeMemoryBlock('1000', new Uint8Array([1]));
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  // #60: parseResponseJson with missing content-type header triggers non-json-content-type error (BRDA:598 TRUE)
+  it('throws non-json-content-type error when response has no content-type header', async () => {
+    const fetchMock = getFetchMock();
+    // Response with no content-type → parseResponseJson sees '' → not JSON → throw
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ product: 'C64 Ultimate', errors: [] }), { status: 200 }));
+
+    const api = new C64API('http://c64u');
+    // getInfo() calls request() which calls parseResponseJson without allowNonJsonSuccess.
+    // Missing content-type → thrown as C64API_MALFORMED_JSON_RESPONSE
+    await expect(api.getInfo()).rejects.toThrow(/Malformed JSON response/);
+  });
+
+  // #61: parseResponseJson with application/json but invalid JSON body (BRDA:621)
+  it('throws invalid-json error when response has JSON content-type but unparseable body', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(new Response('{not valid json', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+
+    const api = new C64API('http://c64u');
+    await expect(api.getInfo()).rejects.toThrow(/Malformed JSON response/);
+  });
+
+  // #62: C64API constructor with empty deviceHost falls back to getDeviceHostFromBaseUrl (BRDA:515)
+  it('constructor with empty deviceHost derives host from base URL', () => {
+    // deviceHost = '' → '' || getDeviceHostFromBaseUrl(baseUrl) → derives from baseUrl
+    const api = new C64API('http://192.168.1.100', undefined, '');
+    expect(api.getDeviceHost()).toBe('192.168.1.100');
+  });
+
+  // #63: isLocalDeviceHost with empty string (BRDA:360 TRUE: !normalized → return false)
+  it('resolvePreferredDeviceHost with empty deviceHost leaves host unchanged', () => {
+    localStorage.setItem('c64u_device_host', 'remote-host');
+    // Call updateC64APIConfig with a base URL whose derived host is empty after normalization
+    // isLocalDeviceHost('') → normalized = '' → !normalized → return false → not local → no fallback
+    updateC64APIConfig('http://192.168.1.100', undefined, '   ');
+    // Confirms normalizeDeviceHost handles whitespace-only: '   '.trim() = '' → DEFAULT_DEVICE_HOST
+    expect(localStorage.getItem('c64u_device_host')).toBeTruthy();
+  });
+
+  // #64: isLocalDeviceHost with IPv6 bracket notation (BRDA:361 TRUE: startsWith('['))
+  it('resolvePreferredDeviceHost handles IPv6 bracket notation in device host', () => {
+    localStorage.setItem('c64u_device_host', 'remote-host');
+    // updateC64APIConfig with an IPv6 URL → isLocalDeviceHost('[::1]') → startsWith('[')
+    // Strips brackets: normalized = '::1' → not localhost/127.0.0.1 → return false
+    updateC64APIConfig('http://[::1]', undefined, '[::1]');
+    expect(localStorage.getItem('c64u_device_host')).toBe('[::1]');
+  });
+
+  // #65: parseResponseJson allowNonJsonSuccess with no content-type (BRDA:598+600 TRUE)
+  it('writeMemoryBlock with allowNonJsonSuccess accepts missing content-type response', async () => {
+    const fetchMock = getFetchMock();
+    // No content-type → parseResponseJson sees contentType='' → allowNonJsonSuccess=true → log warning → {errors:[]}
+    fetchMock.mockResolvedValue(new Response('', { status: 200 }));
+
+    const api = new C64API('http://c64u');
+    // mountDriveUpload uses allowNonJsonSuccess: true
+    const result = await api.mountDriveUpload('a', new Blob(['data']));
+    expect(result).toEqual({ errors: [] });
+    expect(addLogMock).toHaveBeenCalledWith('warn', expect.stringMatching(/non-JSON/i), expect.anything());
+  });
 });

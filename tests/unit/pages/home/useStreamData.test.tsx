@@ -366,4 +366,67 @@ describe('useStreamData', () => {
 
         expect(mockStartStream).not.toHaveBeenCalled();
     });
+
+    // 16. handleStreamStop with no matching entry returns early (BRDA:109)
+    it('handleStreamStop with no matching entry returns early', async () => {
+        withStreamConfig();
+        const { result } = renderHook(() =>
+            useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
+        );
+
+        await act(async () => {
+            await result.current.handleStreamStop('nonexistent' as StreamKey);
+        });
+
+        expect(mockStopStream).not.toHaveBeenCalled();
+    });
+
+    // 17. handleStreamEditOpen with no matching entry returns early (BRDA:148)
+    it('handleStreamEditOpen with no matching entry is a no-op', () => {
+        withStreamConfig();
+        const { result } = renderHook(() =>
+            useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
+        );
+
+        act(() => {
+            result.current.handleStreamEditOpen('nonexistent' as StreamKey);
+        });
+
+        expect(result.current.activeStreamEditorKey).toBeNull();
+    });
+
+    // 18. handleStreamEditCancel when key differs from active editor keeps active editor (BRDA:174)
+    it('handleStreamEditCancel keeps active editor when canceling a different key', () => {
+        withStreamConfig();
+        const { result } = renderHook(() =>
+            useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
+        );
+
+        // Open 'vic' editor
+        act(() => {
+            result.current.handleStreamEditOpen('vic');
+        });
+        expect(result.current.activeStreamEditorKey).toBe('vic');
+
+        // Cancel 'audio' (different from active 'vic') → active stays 'vic'
+        act(() => {
+            result.current.handleStreamEditCancel('audio');
+        });
+        expect(result.current.activeStreamEditorKey).toBe('vic');
+    });
+
+    // 19. handleStreamCommit with no matching entry returns false (BRDA:179)
+    it('handleStreamCommit with no matching entry returns false', async () => {
+        withStreamConfig();
+        const { result } = renderHook(() =>
+            useStreamData(defaultProps.isConnected, defaultProps.configWritePending, defaultProps.updateConfigValue),
+        );
+
+        let committed: boolean | undefined;
+        await act(async () => {
+            committed = await result.current.handleStreamCommit('nonexistent' as StreamKey);
+        });
+
+        expect(committed).toBe(false);
+    });
 });

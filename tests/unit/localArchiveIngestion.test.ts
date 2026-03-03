@@ -11,6 +11,25 @@ import { zipSync } from 'fflate';
 import { ingestLocalArchives, isSupportedLocalArchive } from '@/lib/sources/localArchiveIngestion';
 import type { LocalSidFile } from '@/lib/sources/LocalFsSongSource';
 
+// We use globalThis to share state between the vi.mock factory (hoisted before imports)
+// and the test cases (run after module setup). The factory captures the real unzipSync
+// and stores it on globalThis.
+vi.mock('fflate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fflate')>();
+  (globalThis as any).__fflateReal = actual.unzipSync;
+  return {
+    ...actual,
+    unzipSync: (...args: any[]) => {
+      const override = (globalThis as any).__fflateOverrideOnce;
+      if (override) {
+        (globalThis as any).__fflateOverrideOnce = null;
+        return override(...args);
+      }
+      return (globalThis as any).__fflateReal(...args);
+    },
+  };
+});
+
 vi.mock('7z-wasm', () => {
   const moduleFactory = () => {
     const FS = {
@@ -101,5 +120,22 @@ describe('localArchiveIngestion', () => {
     expect(result.files[0].name).toBe('track.sid');
     const buffer = await result.files[0].arrayBuffer();
     expect(new TextDecoder().decode(buffer)).toBe('SIDDATA');
+  });
+
+  it('wraps non-Error thrown by unzipSync using String() instead of .message (BRDA:69)', async () => {
+    // Make unzipSync throw a non-Error string to cover the String(error) branch
+    (globalThis as any).__fflateOverrideOnce = () => {
+      throw 'non-error-string-from-unzip';
+    };
+
+    const archiveFile: LocalSidFile = {
+      name: 'bad.zip',
+      lastModified: Date.now(),
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    };
+
+    await expect(ingestLocalArchives([archiveFile])).rejects.toThrow(
+      'Failed to extract bad.zip: non-error-string-from-unzip',
+    );
   });
 });
