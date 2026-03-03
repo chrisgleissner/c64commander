@@ -23,6 +23,12 @@ describe('uiPreferences', () => {
     expect(clampListPreviewLimit(22.9)).toBe(23);
   });
 
+  it('returns default limit for non-finite values (NaN, Infinity)', () => {
+    // Covers the !Number.isFinite(value) guard branch in clampLimit
+    expect(clampListPreviewLimit(NaN)).toBe(DEFAULT_LIST_PREVIEW_LIMIT);
+    expect(clampListPreviewLimit(Infinity)).toBe(DEFAULT_LIST_PREVIEW_LIMIT);
+  });
+
   it('returns defaults when localStorage is unavailable', () => {
     const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
     Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });

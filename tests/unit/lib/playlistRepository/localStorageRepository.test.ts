@@ -241,6 +241,28 @@ describe('localStorage playlist repository', () => {
         expect(categoryFiltered.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(['item-a', 'item-b']);
     });
 
+    it('searches across tracks including those with null category', async () => {
+        // Covers rowSearchText: `row.track.category ?? ''` when category is null
+        const repository = getLocalStoragePlaylistDataRepository();
+        const noCategoryTrack: TrackRecord = {
+            ...buildTrack({ trackId: 'track-nocat', title: 'NoCatSong', path: '/nocat.sid', sourceLocator: '/nocat.sid' }),
+            category: null,
+        };
+        await repository.upsertTracks([noCategoryTrack]);
+        await repository.replacePlaylistItems('playlist-default', [
+            buildPlaylistItem({ playlistItemId: 'item-nocat', trackId: 'track-nocat', sortKey: '0001' }),
+        ]);
+
+        const result = await repository.queryPlaylist({
+            playlistId: 'playlist-default',
+            query: 'nocat',
+            offset: 0,
+            limit: 10,
+        });
+        expect(result.rows).toHaveLength(1);
+        expect(result.rows[0].track.category).toBeNull();
+    });
+
     it('handles random-session edge cases when order is missing or cursor is out of range', async () => {
         const repository = getLocalStoragePlaylistDataRepository();
 
@@ -359,12 +381,12 @@ describe('localStorage playlist repository', () => {
         expect(result.rows.length).toBe(1);
     });
 
-      it('createSession without explicit seed generates a stable hash seed (BRDA:199 FALSE)', async () => {
-          const repository = getLocalStoragePlaylistDataRepository();
-          // No seed provided → typeof seed !== 'number' → stableHash used
-          const session = await repository.createSession('pl-hash', ['x', 'y', 'z']);
-          expect(typeof session.seed).toBe('number');
-          expect(session.order).toHaveLength(3);
-      });
+    it('createSession without explicit seed generates a stable hash seed (BRDA:199 FALSE)', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        // No seed provided → typeof seed !== 'number' → stableHash used
+        const session = await repository.createSession('pl-hash', ['x', 'y', 'z']);
+        expect(typeof session.seed).toBe('number');
+        expect(session.order).toHaveLength(3);
+    });
 
 });

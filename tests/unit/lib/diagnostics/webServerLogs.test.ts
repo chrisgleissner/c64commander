@@ -65,6 +65,29 @@ describe('webServerLogs bridge', () => {
         dispose();
     });
 
+    it('returns no-op when VITE_WEB_PLATFORM is not set', () => {
+        // Covers the isWebPlatformServerMode() false branch — early return without polling
+        (import.meta.env as any).VITE_WEB_PLATFORM = '0';
+        const fetchSpy = vi.fn();
+        globalThis.fetch = fetchSpy as any;
+        const dispose = startWebServerLogBridge();
+        expect(fetchSpy).not.toHaveBeenCalled();
+        dispose();
+    });
+
+    it('ignores non-ok non-401 responses without updating logs', async () => {
+        // Covers the missing else branch for a 500 response
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: false,
+            status: 500,
+        } as any);
+        const dispose = startWebServerLogBridge();
+        await vi.advanceTimersByTimeAsync(10);
+        // setExternalLogs should NOT have been called (no 401, no ok)
+        expect(setExternalLogs).not.toHaveBeenCalled();
+        dispose();
+    });
+
     it('rate-limits poll error logs to once per minute', async () => {
         const nowSpy = vi.spyOn(Date, 'now');
         nowSpy.mockReturnValue(61_000);
@@ -87,5 +110,61 @@ describe('webServerLogs bridge', () => {
 
         dispose();
         nowSpy.mockRestore();
+    });
+
+    it('uses String() when a non-Error value is thrown during poll', async () => {
+        // Covers the `error instanceof Error ? ... : String(error)` false branch
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(61_000);
+        globalThis.fetch = vi.fn().mockRejectedValue('plain string error');
+
+        const dispose = startWebServerLogBridge();
+        await vi.advanceTimersByTimeAsync(10);
+        await Promise.resolve();
+
+        expect(addLog).toHaveBeenCalledWith(
+            'warn',
+            'Web server log bridge poll failed',
+            expect.objectContaining({ error: 'plain string error' }),
+        );
+        dispose();
+        nowSpy.mockRestore();
+    });
+
+    it('filters out log entries with non-string id or timestamp', async () => {
+        // Covers normalizeLogs filter branches for invalid id and invalid timestamp
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({
+                logs: [
+                    { id: 42, timestamp: '2026-03-01T00:00:00Z', level: 'info', message: 'id-is-number' },
+                    { id: 'ok', timestamp: null, level: 'info', message: 'ts-is-null' },
+                    { id: 'valid', timestamp: '2026-03-01T00:00:00Z', level: 'info', message: 'good' },
+                ],
+            }),
+        } as any);
+
+        const dispose = startWebServerLogBridge();
+        await vi.advanceTimersByTimeAsync(10);
+
+        expect(setExternalLogs).toHaveBeenCalledWith([
+            expect.objectContaining({ id: 'server-valid', message: 'good' }),
+        ]);
+        dispose();
+    });
+
+    it('uses empty logs array when response is ok but payload has no logs key', async () => {
+        // Covers the payload.logs ?? [] branch when the logs key is absent
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: async () => ({}),
+        } as any);
+
+        const dispose = startWebServerLogBridge();
+        await vi.advanceTimersByTimeAsync(10);
+
+        expect(setExternalLogs).toHaveBeenCalledWith([]);
+        dispose();
     });
 });

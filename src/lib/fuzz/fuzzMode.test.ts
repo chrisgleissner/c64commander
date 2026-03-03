@@ -165,5 +165,41 @@ describe('fuzzMode', () => {
             expect(localStorageMock.setItem).toHaveBeenCalledWith('c64u_debug_logging_enabled', '1');
             expect(localStorageMock.setItem).toHaveBeenCalledWith('c64u_automatic_demo_mode_enabled', '1');
         });
+
+        it('returns early when localStorage is undefined even if fuzz mode is enabled via window flag', async () => {
+            // Covers the if (typeof localStorage === 'undefined') return branch in applyFuzzModeDefaults
+            (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
+            Object.defineProperty(global, 'localStorage', { value: undefined, writable: true, configurable: true });
+
+            const { applyFuzzModeDefaults } = await import('./fuzzMode');
+            expect(() => applyFuzzModeDefaults()).not.toThrow();
+
+            // Restore
+            Object.defineProperty(global, 'localStorage', { value: localStorageMock, writable: true, configurable: true });
+        });
+    });
+
+    describe('platform edge cases', () => {
+        it('readStorageValue returns null when localStorage is undefined', async () => {
+            // Covers: if (typeof localStorage === 'undefined') return null in readStorageValue
+            Object.defineProperty(global, 'localStorage', { value: undefined, writable: true, configurable: true });
+
+            const { getFuzzMockBaseUrl } = await import('./fuzzMode');
+            expect(getFuzzMockBaseUrl()).toBeNull();
+
+            // Restore
+            Object.defineProperty(global, 'localStorage', { value: localStorageMock, writable: true, configurable: true });
+        });
+
+        it('isFuzzModeEnabled returns false when window is undefined', async () => {
+            // Covers: if (typeof window === 'undefined') return false in isFuzzModeEnabled
+            const savedWindow = globalThis.window;
+            Object.defineProperty(globalThis, 'window', { value: undefined, writable: true, configurable: true });
+
+            const { isFuzzModeEnabled } = await import('./fuzzMode');
+            expect(isFuzzModeEnabled()).toBe(false);
+
+            Object.defineProperty(globalThis, 'window', { value: savedWindow, writable: true, configurable: true });
+        });
     });
 });
