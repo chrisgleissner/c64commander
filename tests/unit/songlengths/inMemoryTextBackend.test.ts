@@ -392,5 +392,72 @@ describe('InMemoryTextBackend', () => {
             expect(result.strategy).toBe('ambiguous');
             expect(onAmbiguous).toHaveBeenCalledOnce();
         });
+
+        it('md5 lookup false branch: md5 provided but not present in index', async () => {
+            // Covers the inner false branch of `if (typeof md5EntryId === 'number')` at the md5 check.
+            // An entry exists (prevents early 'unavailable'), but the md5 query does not match it.
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:00'));
+            const result = backend.resolve({ fileName: 'missing.sid', md5: 'nonexistent-md5' });
+            // fileName 'missing.sid' not in index, md5 'nonexistent-md5' not in md5ToEntryId
+            expect(result.strategy).toBe('not-found');
+        });
+
+        it('ambiguous resolution without onAmbiguous handler does not throw', async () => {
+            // Covers the `onAmbiguous?.({})` optional chain — no handler, so the call is silently skipped.
+            const backend = new InMemoryTextBackend(); // no onAmbiguous callback
+            await backend.load(makeInput(
+                '; /demos/dir1/Song.sid\naaa=1:00\n; /demos/dir2/Song.sid\nbbb=2:00',
+            ));
+            // Both have filename 'song.sid'; partialPath '/demos' matches both → pendingAmbiguity
+            // No virtualPath or md5 to resolve before pendingAmbiguity block
+            const result = backend.resolve({ fileName: 'song.sid', partialPath: '/demos' });
+            expect(result.strategy).toBe('ambiguous');
+        });
+
+        it('duplicate fullPath: second occurrence is not overwritten in fullPathToEntryId', async () => {
+            // Covers the outer false branch of `if (!this.fullPathToEntryId.has(...))` in load().
+            // Two separate files that have the same virtual path should only keep the first mapping.
+            const backend = new InMemoryTextBackend();
+            await backend.load({
+                sourceLabel: 'test',
+                files: [
+                    { path: 'a.md5', content: '; /DEMOS/Song.sid\nabc=1:00' },
+                    { path: 'b.md5', content: '; /DEMOS/Song.sid\ndef=3:00' },
+                ],
+            });
+            // First file's entry wins for full-path lookup
+            const result = backend.resolve({ virtualPath: '/DEMOS/Song.sid' });
+            expect(result.strategy).toBe('full-path');
+            expect(result.durationSeconds).toBe(60);
+        });
+
+        it('md5 entries: second occurrence for same md5 is not overwritten', async () => {
+            // Covers the outer false branch of `if (entry.md5 && !this.md5ToEntryId.has(entry.md5))`.
+            const backend = new InMemoryTextBackend();
+            await backend.load({
+                sourceLabel: 'test',
+                files: [
+                    { path: 'a.md5', content: '; /DEMOS/A.sid\nshared=1:00' },
+                    { path: 'b.md5', content: '; /DEMOS/B.sid\nshared=3:00' },
+                ],
+            });
+            // First mapped md5 entry wins
+            const result = backend.resolve({ md5: 'shared' });
+            expect(result.strategy).toBe('md5');
+            expect(result.durationSeconds).toBe(60);
+        });
+
+        it('space-separated entries produce null md5 in index (does not add to md5ToEntryId)', async () => {
+            // `md5: null` path in load() — covers the `entry.md5 &&` false arm.
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('/DEMOS/Song.sid 1:30'));
+            // Resolve by md5 yields not-found (space-sep entries have md5=null, not indexed by md5)
+            const result = backend.resolve({ md5: 'anythinghere' });
+            expect(result.strategy).toBe('not-found');
+            // But resolving by filename still works
+            const byFile = backend.resolve({ fileName: 'song.sid' });
+            expect(byFile.strategy).toBe('filename-unique');
+        });
     });
 });

@@ -375,4 +375,49 @@ describe('localSourceAdapter', () => {
     expect(result.length).toBe(1);
     expect(before).toBeLessThanOrEqual(after);
   });
+
+  it('coerceSafEntries accepts object with nested entries array', async () => {
+    // Covers the `value && typeof value === 'object'` path in coerceSafEntries
+    // (when FolderPicker returns { entries: { entries: [...] } } nested structure)
+    const source = buildAndroidSource();
+    const innerEntries = [
+      { type: 'file', name: 'track.sid', path: '/track.sid' },
+    ];
+    listChildrenMock.mockResolvedValue({ entries: { entries: innerEntries } });
+
+    const location = createLocalSourceLocation(source);
+    const result = await location.listEntries('/');
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('track.sid');
+  });
+
+  it('normalizeSafEntry rejects entries with unrecognized type', async () => {
+    // Covers `entry.type !== 'file' && entry.type !== 'dir'` → return null in normalizeSafEntry
+    const source = buildAndroidSource();
+    listChildrenMock.mockResolvedValue({
+      entries: [
+        { type: 'symlink', name: 'foo.sid', path: '/foo.sid' },
+        { type: 'file', name: 'ok.sid', path: '/ok.sid' },
+      ],
+    });
+
+    const location = createLocalSourceLocation(source);
+    // symlink entry is invalid → throws LocalSourceListingError
+    await expect(location.listEntries('/')).rejects.toBeInstanceOf(LocalSourceListingError);
+  });
+
+  it('listFilesRecursive on web source with no abort signal', async () => {
+    // Covers options?.signal?.aborted path when signal is not provided
+    platform = 'web';
+    nativePlatform = false;
+    const source = buildWebSource({
+      entries: [
+        { name: 'song.sid', relativePath: 'music/song.sid', sizeBytes: 100, modifiedAt: null },
+      ],
+    });
+    const location = createLocalSourceLocation(source);
+    const result = await location.listFilesRecursive('/');
+    expect(result.length).toBe(1);
+    expect(result[0].name).toBe('song.sid');
+  });
 });

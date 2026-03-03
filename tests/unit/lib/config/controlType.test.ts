@@ -144,4 +144,23 @@ describe('inferControlKind', () => {
         expect(inferControlKind({ name: 'Vol Main', currentValue: '50', possibleValues: ['0', '25', '50', '75', '100'] }))
             .toBe('slider');
     });
+
+    it('returns slider for MHz values list when all values are numeric (line 75 TRUE)', () => {
+        // hasMhz=true AND isAllNumericLike is true → slider
+        const values = ['1.0MHz', '1.5MHz', '2.0MHz'];
+        expect(inferControlKind({ name: 'CPU Speed', currentValue: '1.0MHz', possibleValues: values }))
+            .toBe('slider');
+    });
+
+    it('isOffLowMediumHigh: only matches when all four are present', () => {
+        // Subset of Off/Low/Medium/High — should NOT return slider via that path
+        // Instead falls through to other checks
+        expect(inferControlKind({ name: 'Speed', currentValue: 'Low', possibleValues: ['Off', 'Low', 'Medium'] }))
+            .toBe('select');
+    });
+
+    it('getCheckboxMapping returns undefined when only one distinct value', () => {
+        // Neither Enabled/Disabled nor On/Off has length 2 distinct
+        expect(getCheckboxMapping(['Same', 'Same', 'Same'])).toBeUndefined();
+    });
 });

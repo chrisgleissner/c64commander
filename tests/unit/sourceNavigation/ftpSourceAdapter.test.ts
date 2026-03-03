@@ -311,4 +311,28 @@ describe('ftpSourceAdapter', () => {
     // Should have fetched from FTP (cache was expired)
     expect(listFtpDirectoryMock).toHaveBeenCalledTimes(1);
   });
+
+  describe('normalizeFtpHost', () => {
+    it('removes port from plain hostname', () => {
+      expect(normalizeFtpHost('example.com:21')).toBe('example.com');
+    });
+
+    it('returns empty for empty host', () => {
+      expect(normalizeFtpHost('')).toBe('');
+    });
+
+    it('handles IPv6 address in brackets', () => {
+      // Covers `if (host.startsWith('['))` branch
+      expect(normalizeFtpHost('[::1]:21')).toBe('[::1]');
+    });
+
+    it('handles IPv6 address without port', () => {
+      expect(normalizeFtpHost('[2001:db8::1]')).toBe('[2001:db8::1]');
+    });
+
+    it('handles IPv6 with unclosed bracket', () => {
+      // `indexOf(']')` returns -1 → fallback to split(':')[0]
+      expect(normalizeFtpHost('[::1')).toBe('[');
+    });
+  });
 });

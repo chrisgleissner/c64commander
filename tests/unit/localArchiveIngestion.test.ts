@@ -138,4 +138,18 @@ describe('localArchiveIngestion', () => {
       'Failed to extract bad.zip: non-error-string-from-unzip',
     );
   });
+
+  it('uses cached 7z WASM module on second extraction (no re-initialization)', async () => {
+    // Covers the false branch of `if (!sevenZipModulePromise)` in getSevenZipModule.
+    // The first 7z test initialises the module; this second call reuses the cached promise.
+    const archiveFile: LocalSidFile = {
+      name: 'second.7z',
+      lastModified: Date.now(),
+      arrayBuffer: async () => new Uint8Array(Buffer.from('SEVENZ2')).buffer,
+    };
+
+    const result = await ingestLocalArchives([archiveFile]);
+    expect(result.archiveCount).toBe(1);
+    expect(result.extractedCount).toBe(1);
+  });
 });
