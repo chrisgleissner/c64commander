@@ -8,8 +8,17 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const getTraceContextSnapshotMock = vi.hoisted(() => vi.fn(() => ({
+  ui: { route: '/', query: '' }, platform: 'web' as const, featureFlags: {}, playback: null, device: null,
+})));
+
 vi.mock('@/lib/tracing/traceContext', () => ({
-  getTraceContextSnapshot: () => ({ ui: { route: '/', query: '' }, platform: 'web', featureFlags: {}, playback: null, device: null }),
+  getTraceContextSnapshot: () => getTraceContextSnapshotMock(),
+}));
+
+const shouldSuppressMock = vi.hoisted(() => vi.fn(() => false));
+vi.mock('@/lib/diagnostics/diagnosticsOverlayState', () => ({
+  shouldSuppressDiagnosticsSideEffects: () => shouldSuppressMock(),
 }));
 
 vi.mock('@/lib/tracing/traceTargets', () => ({
@@ -45,7 +54,8 @@ import {
   resetTraceSession,
   persistTracesToSession,
   restoreTracesFromSession,
-  recordDeviceGuard
+  recordDeviceGuard,
+  TRACE_SESSION,
 } from '@/lib/tracing/traceSession';
 import { getCurrentTraceIdCounters, setTraceIdCounters } from '@/lib/tracing/traceIds';
 import type { TraceActionContext } from '@/lib/tracing/types';
@@ -56,6 +66,10 @@ describe('traceSession', () => {
   beforeEach(() => {
     resetTraceSession(0, 0);
     clearTraceEvents();
+    shouldSuppressMock.mockReturnValue(false);
+    getTraceContextSnapshotMock.mockReturnValue({
+      ui: { route: '/', query: '' }, platform: 'web' as const, featureFlags: {}, playback: null, device: null,
+    });
   });
 
   afterEach(() => {
@@ -369,5 +383,119 @@ describe('traceSession', () => {
     const resp = events.find((e) => e.type === 'rest-response');
     expect((resp?.data as Record<string, unknown>)?.status).toBeNull();
     expect((resp?.data as Record<string, unknown>)?.error).toBe('network error');
+  });
+
+  it('suppresses non-error events when diagnostics side effects are suppressed', () => {
+    shouldSuppressMock.mockReturnValue(true);
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    recordActionStart(action);
+    // non-error events should be suppressed
+    expect(getTraceEvents()).toHaveLength(0);
+  });
+
+  it('does not suppress error events even when diagnostics side effects are suppressed', () => {
+    shouldSuppressMock.mockReturnValue(true);
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    recordTraceError(action, new Error('forced error'));
+    expect(getTraceEvents().some((e) => e.type === 'error')).toBe(true);
+  });
+
+  it('records events with non-null playback context fields', () => {
+    getTraceContextSnapshotMock.mockReturnValue({
+      ui: { route: '/music', query: '' },
+      platform: 'web' as const,
+      featureFlags: {},
+      playback: {
+        sourceKind: 'local',
+        localAccessMode: 'web',
+        trackInstanceId: 'track-abc',
+        playlistItemId: 'item-123',
+      } as any,
+      device: null,
+    });
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    recordActionStart(action);
+    const events = getTraceEvents();
+    expect(events.some((e) => e.type === 'action-start')).toBe(true);
+    const evt = events.find((e) => e.type === 'action-start');
+    expect((evt?.data as Record<string, unknown>)?.sourceKind).toBe('local');
+  });
+
+  it('records ftp operation with error message', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    recordFtpOperation(action, {
+      operation: 'download',
+      path: '/demo.sid',
+      result: 'failure',
+      error: new Error('connection refused'),
+    });
+    const events = getTraceEvents();
+    const ftpEvent = events.find((e) => e.type === 'ftp-operation');
+    expect((ftpEvent?.data as Record<string, unknown>)?.error).toBe('connection refused');
+  });
+
+  it('persistTracesToSession is a no-op when sessionStorage is unavailable', () => {
+    // In node test environment, sessionStorage is undefined unless stubbed
+    vi.unstubAllGlobals();
+    expect(() => persistTracesToSession()).not.toThrow();
+  });
+
+  it('restoreTracesFromSession is a no-op when sessionStorage is unavailable', () => {
+    vi.unstubAllGlobals();
+    expect(() => restoreTracesFromSession()).not.toThrow();
+  });
+
+  it('evicts oldest events when event count exceeds limit', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    const { MAX_EVENT_COUNT } = TRACE_SESSION;
+    // Fill events array beyond the limit
+    const events = Array.from({ length: MAX_EVENT_COUNT + 2 }, (_, i) => ({
+      id: `trace-over-${i}`,
+      type: 'error' as const,
+      timestamp: new Date().toISOString(),
+      origin: 'user' as const,
+      correlationId: 'COR-OVER',
+      data: {},
+    }));
+    replaceTraceEvents(events as any);
+    // Adding one more event triggers enforceLimits
+    recordActionStart(action);
+    expect(getTraceEvents().length).toBeLessThanOrEqual(MAX_EVENT_COUNT + 1);
+  });
+
+  it('evicts events with NaN timestamps during expired check', () => {
+    vi.stubGlobal('window', { dispatchEvent: vi.fn(), setTimeout: vi.fn(), CustomEvent: class {} });
+    // Insert an event with a non-parseable timestamp to exercise NaN path in evictExpired
+    const malformed = [{
+      id: 'trace-nan',
+      type: 'error' as const,
+      timestamp: 'not-a-date',
+      origin: 'user' as const,
+      correlationId: 'COR-NAN',
+      data: {},
+    }];
+    replaceTraceEvents(malformed as any);
+    // Trigger appendEvent (calls evictExpired)
+    recordActionStart(action);
+    // The NaN-timestamp event has NaN eventMs, so it skips eviction at the NaN check (breaks loop)
+    expect(getTraceEvents().length).toBeGreaterThan(0);
+  });
+
+  it('buildAppMetadata uses defined __APP_VERSION__, __GIT_SHA__, __BUILD_TIME__', () => {
+    vi.stubGlobal('__APP_VERSION__', '2.0.0');
+    vi.stubGlobal('__GIT_SHA__', 'deadbeef');
+    vi.stubGlobal('__BUILD_TIME__', '2024-01-01T00:00:00Z');
+    const meta = buildAppMetadata();
+    expect(meta.appVersion).toBe('2.0.0');
+    expect(meta.gitSha).toBe('deadbeef');
+    expect(meta.buildTime).toBe('2024-01-01T00:00:00Z');
+    vi.unstubAllGlobals();
+  });
+
+  it('buildAppMetadata uses navigator.userAgent when navigator is defined', () => {
+    vi.stubGlobal('navigator', { userAgent: 'TestBrowser/1.0' });
+    const meta = buildAppMetadata();
+    expect(meta.userAgent).toBe('TestBrowser/1.0');
+    vi.unstubAllGlobals();
   });
 });

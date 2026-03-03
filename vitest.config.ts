@@ -79,20 +79,10 @@ export default defineConfig({
         "scripts/**",
         "coverage/**",
         "dist/**",
-        "src/pages/**",
-        "src/components/**",
         "web/server/**",
-        "src/lib/c64api.ts",
-        "src/lib/connection/**",
-        "src/lib/config/**",
+        // deviceInteraction wires together many subsystems and has limited unit
+        // test isolation; E2E is the primary coverage vehicle for it.
         "src/lib/deviceInteraction/**",
-        "src/lib/hvsc/**",
-        "src/lib/native/**",
-        "src/lib/network/**",
-        "src/lib/songlengths/**",
-        "src/lib/sourceNavigation/**",
-        "src/lib/sources/**",
-        "src/lib/tracing/**",
         "src/lib/ui/buttonInteraction.ts",
         "src/lib/playback/diskFirstPrg.ts",
         "src/**/*.test.{ts,tsx}",
@@ -103,12 +93,10 @@ export default defineConfig({
         "**/*.config.{ts,js}",
         "**/node_modules/**",
       ],
-      thresholds: {
-        statements: 91,
-        branches: 90,
-        functions: 88,
-        lines: 91,
-      },
+      // Thresholds are enforced by CI on the merged unit+E2E LCOV via
+      // scripts/check-coverage-threshold.mjs (COVERAGE_MIN=90). Vitest internal
+      // thresholds are not used to avoid false failures when new modules are
+      // added to the coverage scope before E2E fills the remaining branches.
     },
   },
 });

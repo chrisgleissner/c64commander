@@ -204,4 +204,60 @@ describe('parseSonglengths', () => {
     const data = parseSonglengths('/just/path.sid');
     expect(data.pathToSeconds.size).toBe(0);
   });
+
+  it('returns null for empty durations array via manual data construction', () => {
+    const data = {
+      pathToSeconds: new Map([['/x.sid', [] as number[]]]),
+      md5ToSeconds: new Map<string, number[]>(),
+    };
+    expect(resolveSonglengthsSeconds(data, '/x.sid', null, 1)).toBeNull();
+  });
+
+  it('defaults negative songNr to first entry', () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30 0:45');
+    expect(resolveSonglengthsSeconds(data, '/demo.sid', null, -1)).toBe(30);
+  });
+
+  it('returns null when file.arrayBuffer throws during md5 resolution', async () => {
+    const data = parseSonglengths('; /other.sid\nabc=0:30');
+    const file = {
+      name: 'test.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => {
+        throw new Error('read error');
+      },
+    };
+    const duration = await resolveSonglengthsDurationMs(data, '/missing.sid', file, 1);
+    expect(duration).toBeNull();
+  });
+
+  it('returns null when path not found and file is null', async () => {
+    const data = parseSonglengths('; /demo.sid\nabc=0:30');
+    const result = await resolveSonglengthsDurationMs(data, '/missing.sid', null, 1);
+    expect(result).toBeNull();
+  });
+
+  it('normalizes empty path string to slash in resolveSonglengthsSeconds', () => {
+    const data = parseSonglengths('');
+    const result = resolveSonglengthsSeconds(data, '', null, 1);
+    expect(result).toBeNull();
+  });
+
+  it('logs null songNr when arrayBuffer throws and songNr is undefined', async () => {
+    const data = parseSonglengths('; /miss.sid\nabc=0:30');
+    const file = {
+      name: 'test.sid',
+      lastModified: Date.now(),
+      arrayBuffer: async () => {
+        throw new Error('read error');
+      },
+    };
+    const result = await resolveSonglengthsDurationMs(data, '/missing.sid', file, undefined);
+    expect(result).toBeNull();
+  });
+
+  it('ignores legacy format lines with unrecognized duration tokens', () => {
+    const data = parseSonglengths('/song.sid badtiming');
+    expect(data.pathToSeconds.size).toBe(0);
+  });
 });

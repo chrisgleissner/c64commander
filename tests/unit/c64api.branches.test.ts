@@ -980,4 +980,104 @@ describe('c64api branches', () => {
     );
     consoleSpy.mockRestore();
   });
+
+  // #38: readMemory response not OK
+  it('throws when readMemory response is not ok', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response('fail', { status: 404, statusText: 'Not Found' }),
+    );
+
+    const api = new C64API('http://c64u');
+    await expect(api.readMemory('0400', 4)).rejects.toThrow('readMemory failed: HTTP 404');
+  });
+
+  // #39: readMemory null content-type falls through to JSON path with no data
+  it('returns empty Uint8Array when readMemory JSON payload has no data field', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        // Intentionally no content-type header → null → coalesces to ''
+        headers: {},
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    const result = await api.readMemory('0400', 4);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result.length).toBe(0);
+  });
+
+  // #40: readMemory JSON payload with base64 string data
+  it('decodes base64 string data from readMemory JSON response', async () => {
+    const fetchMock = getFetchMock();
+    // btoa('\x00\x01\x02') → 'AAEC'
+    const encoded = btoa(String.fromCharCode(0, 1, 2));
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ data: encoded }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    const result = await api.readMemory('0400', 3);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result[0]).toBe(0);
+    expect(result[1]).toBe(1);
+    expect(result[2]).toBe(2);
+  });
+
+  // #41: readMemory JSON payload with number array data
+  it('returns Uint8Array from readMemory JSON number array data', async () => {
+    const fetchMock = getFetchMock();
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ data: [10, 20, 30] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    const result = await api.readMemory('0400', 3);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result[0]).toBe(10);
+    expect(result[1]).toBe(20);
+    expect(result[2]).toBe(30);
+  });
+
+  // #42: readMemory octet-stream binary response
+  it('returns binary data from readMemory octet-stream response', async () => {
+    const fetchMock = getFetchMock();
+    const bytes = new Uint8Array([5, 6, 7, 8]);
+    fetchMock.mockResolvedValue(
+      new Response(bytes.buffer, {
+        status: 200,
+        headers: { 'content-type': 'application/octet-stream' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    const result = await api.readMemory('0400', 4);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result)).toEqual([5, 6, 7, 8]);
+  });
+
+  // #43: readMemory application/binary response
+  it('returns binary data from readMemory application/binary response', async () => {
+    const fetchMock = getFetchMock();
+    const bytes = new Uint8Array([11, 22]);
+    fetchMock.mockResolvedValue(
+      new Response(bytes.buffer, {
+        status: 200,
+        headers: { 'content-type': 'application/binary' },
+      }),
+    );
+
+    const api = new C64API('http://c64u');
+    const result = await api.readMemory('0400', 2);
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result)).toEqual([11, 22]);
+  });
 });

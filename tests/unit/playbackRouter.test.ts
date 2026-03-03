@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildPlayPlan, executePlayPlan } from '@/lib/playback/playbackRouter';
+import { buildPlayPlan, executePlayPlan, tryFetchUltimateSidBlob } from '@/lib/playback/playbackRouter';
 import { readFtpFile } from '@/lib/ftp/ftpClient';
 import { getC64APIConfigSnapshot } from '@/lib/c64api';
 import { addErrorLog } from '@/lib/logging';
@@ -513,6 +513,29 @@ describe('playbackRouter', () => {
     await executePlayPlan(api as any, plan);
     const blob = api.playSidUpload.mock.calls[0][0] as Blob;
     expect(blob.size).toBe(1024);
+  });
+
+  it('tryFetchUltimateSidBlob normalizes path without leading slash', async () => {
+    // Covers normalizeUltimatePath FALSE branch: path without leading '/' → prepend '/'
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa('\x00'), sizeBytes: 1 } as any);
+    const result = await tryFetchUltimateSidBlob('MUSIC/DEMO.SID');
+    expect(result).toBeInstanceOf(Blob);
+    expect(vi.mocked(readFtpFile)).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/MUSIC/DEMO.SID' }),
+    );
+  });
+
+  it('tryFetchUltimateSidBlob returns null on FTP failure', async () => {
+    vi.mocked(readFtpFile).mockRejectedValue(new Error('connection refused'));
+    const result = await tryFetchUltimateSidBlob('MUSIC/DEMO.SID');
+    expect(result).toBeNull();
+  });
+
+  it('tryFetchUltimateSidBlob returns null and warns on size mismatch', async () => {
+    // Mock readFtpFile to return base64 of 1 byte but claim sizeBytes=99
+    vi.mocked(readFtpFile).mockResolvedValue({ data: btoa('\x00'), sizeBytes: 99 } as any);
+    const result = await tryFetchUltimateSidBlob('/MUSIC/DEMO.SID');
+    expect(result).toBeNull();
   });
 
   it('local file arrayBuffer is stable across repeated reads', async () => {

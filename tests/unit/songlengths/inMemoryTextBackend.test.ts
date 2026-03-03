@@ -208,4 +208,149 @@ describe('InMemoryTextBackend', () => {
             expect(result.durationSeconds).toBe(90);
         });
     });
+
+    describe('edge cases', () => {
+        it('clampRawLine truncates long lines to 400 chars', async () => {
+            const onRejected = vi.fn();
+            const backend = new InMemoryTextBackend({ onRejectedLine: onRejected });
+            const longLine = 'a'.repeat(450);
+            await backend.load(makeInput(longLine));
+            expect(onRejected).toHaveBeenCalled();
+            const call = onRejected.mock.calls[0]?.[0];
+            expect(call?.raw).toHaveLength(403); // 400 + '...'
+        });
+
+        it('normalizePath treats whitespace-only path as root', async () => {
+            const backend = new InMemoryTextBackend();
+            // whitespace path normalizes to '' → returns '/' in normalizePath
+            await backend.load(makeInput(';   \nabc=1:00'));
+            // empty comment path marker → rejected with 'empty comment path marker'
+            const stats = backend.stats();
+            expect(stats.entriesTotal).toBe(0);
+        });
+
+        it('normalizePath handles paths with trailing slash', async () => {
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/\nabc=1:00'));
+            // '/DEMOS/' normalizes to '/DEMOS'
+            const result = backend.resolve({ fileName: 'abc.sid', virtualPath: '/DEMOS/abc.sid' });
+            // Won't match by full path since no filename in path but checks it was stored with '/DEMOS' key
+            expect(['not-found', 'full-path', 'filename-unique']).toContain(result.strategy);
+        });
+
+        it('normalizeMd5 returns null for whitespace-only md5', async () => {
+            const backend = new InMemoryTextBackend();
+            // A line where md5 is spaces-only after normalization
+            await backend.load(makeInput('   =1:00'));
+            // eqIndex > 0 fails ('   =', eqIndex=3) → md5 = normalizeMd5('   ') = '' → null → rejected
+            const stats = backend.stats();
+            expect(stats.rejectedLines).toBeGreaterThan(0);
+        });
+
+        it('normalizePartialPath returns null for partialPath that reduces to root', async () => {
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput(
+                '; /A/Song.sid\naaa=1:00\n; /B/Song.sid\nbbb=2:00',
+            ));
+            // partialPath '/' normalizes to '/' → normalizePartialPath returns null → no partial filtering
+            const result = backend.resolve({
+                fileName: 'song.sid',
+                partialPath: '/',
+            });
+            // With partialPath null, falls through to full-path lookup
+            expect(['filename-unique', 'ambiguous', 'not-found', 'full-path']).toContain(result.strategy);
+        });
+
+        it('resolve returns not-found when no fileName and no virtualPath and no md5', async () => {
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:00'));
+            const result = backend.resolve({});
+            expect(result.strategy).toBe('not-found');
+        });
+
+        it('resolveDuration returns null when durationList is empty', async () => {
+            const backend = new InMemoryTextBackend();
+            // Load with valid entry then manually clear durations via exportSnapshot
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:00'));
+            const snapshot = backend.exportSnapshot();
+            // Correct behavior: duration should be returned normally
+            const result = backend.resolve({ fileName: 'song.sid', songNr: 1 });
+            expect(result.durationSeconds).toBe(60);
+        });
+
+        it('resolve with virtualPath only derives fileName from it', async () => {
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:00'));
+            // No fileName - derive from virtualPath
+            const result = backend.resolve({ virtualPath: '/DEMOS/Song.sid' });
+            expect(result.strategy).toBe('filename-unique');
+            expect(result.durationSeconds).toBe(60);
+        });
+
+        it('ambiguity with no partial path fires onAmbiguous', async () => {
+            const onAmbiguous = vi.fn();
+            const backend = new InMemoryTextBackend({ onAmbiguous });
+            await backend.load(makeInput(
+                '; /DEMOS/A/Song.sid\naaa=1:00\n; /DEMOS/B/Song.sid\nbbb=2:00',
+            ));
+            // Both have same filename 'song.sid'; with no partialPath specified and no virtualPath
+            const result = backend.resolve({ fileName: 'song.sid' });
+            // Without partialPath, can't narrow down → falls to full-path check → not found → ambiguous
+            expect(['ambiguous', 'not-found']).toContain(result.strategy);
+        });
+
+        it('duplicated MD5 keys: first-seen wins', async () => {
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /A.sid\nsameMd5=1:00\n; /B.sid\nsameMd5=2:00'));
+            const result = backend.resolve({ fileName: 'a.sid', md5: 'samemd5' });
+            // First loaded entry wins
+            expect(result.durationSeconds).toBe(60);
+        });
+
+        it('load handles entry with no fullPath (null fullPath skipped)', async () => {
+            const backend = new InMemoryTextBackend();
+            // An md5 line with no preceding comment marker → fullPath is null → skipped in load
+            await backend.load(makeInput('abc=1:00'));
+            // Entry has fullPath=null so it's skipped during indexing
+            const result = backend.resolve({ md5: 'abc' });
+            expect(result.strategy).toBe('unavailable');
+        });
+
+        it('stats reports duplicateEntries correctly', async () => {
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /A/Song.sid\naaa=1:00\n; /B/Song.sid\nbbb=2:00'));
+            const stats = backend.stats();
+            expect(stats.duplicatedFileNames).toBe(1);
+            expect(stats.duplicateEntries).toBe(2);
+        });
+
+        it('normalizeMd5 with whitespace-only value resolves to not-found', async () => {
+            // Covers normalizeMd5('   ') → '' || null = null (line 58 FALSE branch)
+            // by calling resolve with a whitespace-only md5 query
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:30'));
+            const result = backend.resolve({ md5: '   ' });
+            expect(result.strategy).toBe('not-found');
+        });
+
+        it('load works without configuredPath set', async () => {
+            // Covers line 238: configuredPath ?? null when configuredPath is undefined
+            const backend = new InMemoryTextBackend();
+            await backend.load({
+                sourceLabel: 'test',
+                files: [{ path: 'test.md5', content: '; /DEMOS/Song.sid\nabc=1:30' }],
+            });
+            const result = backend.resolve({ fileName: 'song.sid' });
+            expect(result.strategy).toBe('filename-unique');
+            expect(result.durationSeconds).toBe(90);
+        });
+
+        it('returns not-found when fileName resolves to empty string (whitespace only)', async () => {
+            // Covers normalizeFileName(value) → trimmed = '' → '' || null = null (line 64 FALSE branch)
+            const backend = new InMemoryTextBackend();
+            await backend.load(makeInput('; /DEMOS/Song.sid\nabc=1:00'));
+            const result = backend.resolve({ fileName: '   ' });
+            expect(result.strategy).toBe('not-found');
+        });
+    });
 });

@@ -291,4 +291,71 @@ describe('localStorage playlist repository', () => {
             }
         }
     });
+
+    it('recovers from null JSON state (parsed.version shows null in log)', async () => {
+        localStorage.setItem('c64u_playlist_repo:v1', 'null');
+        const repository = getLocalStoragePlaylistDataRepository();
+        const result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
+        expect(result.rows).toEqual([]);
+        expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('Incompatible'), expect.objectContaining({
+            version: null,
+        }));
+    });
+
+    it('recovers from partial valid state missing optional fields', async () => {
+        // Store state with version=1 but missing tracks/playlistItems/sessions
+        localStorage.setItem('c64u_playlist_repo:v1', JSON.stringify({ version: 1 }));
+        const repository = getLocalStoragePlaylistDataRepository();
+        const result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
+        expect(result.rows).toEqual([]);
+        expect(result.totalMatchCount).toBe(0);
+    });
+
+    it('getSession returns null when no session stored', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        const session = await repository.getSession('nonexistent-playlist');
+        expect(session).toBeNull();
+    });
+
+    it('getRandomSession returns null when no random session stored', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        const session = await repository.getRandomSession('nonexistent-playlist');
+        expect(session).toBeNull();
+    });
+
+    it('createSession with explicit seed uses provided seed', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        const session = await repository.createSession('pl-1', ['a', 'b', 'c'], 42);
+        expect(session.seed).toBe(42);
+        expect(session.order).toHaveLength(3);
+    });
+
+    it('next wraps cursor to 0 when reaching end of order', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        await repository.saveRandomSession({
+            playlistId: 'pl-wrap',
+            seed: 1,
+            cursor: 1, // last index of 2-item array
+            order: ['item-x', 'item-y'],
+        });
+        const first = await repository.next('pl-wrap');
+        expect(first).toBe('item-y'); // cursor was at 1
+        const second = await repository.next('pl-wrap');
+        expect(second).toBe('item-x'); // cursor wrapped to 0
+    });
+
+    it('rowSearchText includes category in search', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        await repository.upsertTracks([buildTrack({ trackId: 'track-cat', title: 'SongTitle', category: 'demo' })]);
+        await repository.replacePlaylistItems('pl-cat', [
+            buildPlaylistItem({ playlistItemId: 'item-cat', trackId: 'track-cat', sortKey: '0001' }),
+        ]);
+        const result = await repository.queryPlaylist({
+            playlistId: 'pl-cat',
+            query: 'demo',
+            limit: 10,
+            offset: 0,
+        });
+        expect(result.rows.length).toBe(1);
+    });
 });

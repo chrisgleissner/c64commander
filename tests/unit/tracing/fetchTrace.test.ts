@@ -224,4 +224,57 @@ describe('fetchTrace', () => {
 
         expect(recordRestRequestMock).toHaveBeenCalled();
     });
+
+    it('returns early without patching when already registered', () => {
+        // First registration (flag cleared in beforeEach)
+        registerFetchTrace();
+        const patchedFetch = window.fetch;
+
+        // Second registration should be a no-op (uses already-installed guard)
+        registerFetchTrace();
+
+        expect(window.fetch).toBe(patchedFetch);
+    });
+
+    it('extracts headers from Headers instance as init.headers', async () => {
+        registerFetchTrace();
+
+        await window.fetch('/api/rest/v1/info', {
+            method: 'GET',
+            headers: new Headers({ 'x-token': 'abc', 'accept': 'application/json' }),
+        });
+
+        const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as { headers: Record<string, string> };
+        expect(payload.headers['x-token']).toBe('abc');
+    });
+
+    it('handles Blob body in fetch request', async () => {
+        registerFetchTrace();
+        const blob = new Blob(['blob content'], { type: 'text/plain' });
+
+        await window.fetch('/api/rest/v1/upload', {
+            method: 'POST',
+            body: blob,
+        });
+
+        const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as { body: { type: string; sizeBytes: number } };
+        expect(payload.body.type).toBe('blob');
+        expect(payload.body.sizeBytes).toBeGreaterThan(0);
+    });
+
+    it('handles empty-type Blob body in FormData', async () => {
+        registerFetchTrace();
+        const formData = new FormData();
+        const noTypeBlob = new Blob(['bytes']);
+        formData.append('file', noTypeBlob);
+        formData.append('empty-blob', new Blob(['more'], { type: '' }));
+
+        await window.fetch('/api/rest/v1/info', {
+            method: 'POST',
+            body: formData,
+        });
+
+        const payload = recordRestRequestMock.mock.calls.at(-1)?.[1] as { body: { type: string } };
+        expect(payload.body.type).toBe('form-data');
+    });
 });

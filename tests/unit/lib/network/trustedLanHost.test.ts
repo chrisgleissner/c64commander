@@ -34,4 +34,51 @@ describe('trustedLanHost', () => {
         expect(isTrustedLanDeviceHost('example.com')).toBe(false);
         expect(isTrustedLanDeviceHost('2606:4700:4700::1111')).toBe(false);
     });
+
+    it('handles non-string input gracefully', () => {
+        expect(isTrustedLanDeviceHost(undefined as unknown as string)).toBe(true);
+        expect(isTrustedLanDeviceHost(null as unknown as string)).toBe(true);
+    });
+
+    it('treats empty or whitespace-only input as the default c64u host', () => {
+        expect(isTrustedLanDeviceHost('')).toBe(true);
+        expect(isTrustedLanDeviceHost('  ')).toBe(true);
+    });
+
+    it('handles host:port notation', () => {
+        expect(isTrustedLanDeviceHost('c64u:8080')).toBe(true);
+        expect(isTrustedLanDeviceHost('192.168.1.10:1234')).toBe(true);
+        expect(isTrustedLanDeviceHost('8.8.8.8:80')).toBe(false);
+    });
+
+    it('rejects IPv4 addresses with out-of-range octets', () => {
+        expect(isTrustedLanDeviceHost('256.0.0.1')).toBe(false);
+        expect(isTrustedLanDeviceHost('192.168.0.300')).toBe(false);
+    });
+
+    it('accepts link-local IPv4 addresses', () => {
+        expect(isTrustedLanDeviceHost('169.254.1.5')).toBe(true);
+        expect(isTrustedLanDeviceHost('127.0.0.2')).toBe(true);
+    });
+
+    it('accepts IPv6 unique-local (fc00::/7) addresses', () => {
+        expect(isTrustedLanDeviceHost('fd12::1234')).toBe(true);
+        expect(isTrustedLanDeviceHost('fc00::1')).toBe(true);
+    });
+
+    it('rejects IPv6 with non-hex first segment', () => {
+        expect(isTrustedLanDeviceHost('xyz::1')).toBe(false);
+    });
+
+    it('rejects malformed bracket notation without closing bracket', () => {
+        expect(isTrustedLanDeviceHost('[c64u')).toBe(false);
+    });
+
+    it('rejects IPv6 with empty first segment (double-colon prefix)', () => {
+        expect(isTrustedLanDeviceHost('::1234:5678')).toBe(false);
+    });
+
+    it('rejects host:non-numeric-port (treated as opaque)', () => {
+        expect(isTrustedLanDeviceHost('myhost:notaport')).toBe(false);
+    });
 });
