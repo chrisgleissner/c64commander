@@ -1225,5 +1225,42 @@ describe('connectionManager', () => {
     await vi.advanceTimersByTimeAsync(100);
     expect(startMockServer.mock.calls.length).toBe(callCount);
   });
+
+  it('probeOnce with timeoutMs:0 skips AbortController and timeout (controller=null paths)', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    // timeoutMs=0 makes probeWithFetch: controller=null, timeoutId=null
+    // Covers BRDA FALSE branches for: timeoutMs ternaries (lines 121, 130)
+    // and the `if (timeoutId) clearTimeout(timeoutId)` FALSE branch (line 144)
+    // and the `controller ? {...} : outerSignal ? {...} : {}` empty-spread path (line 133)
+    await expect(probeOnce({ timeoutMs: 0 })).resolves.toBe(true);
+  });
+
+  it('probeOnce with timeoutMs:0 and outerSignal covers outerSignal branch when controller is null', async () => {
+    const { probeOnce } = await import('../../../src/lib/connection/connectionManager');
+    localStorage.setItem('c64u_device_host', '127.0.0.1:9999');
+    localStorage.removeItem('c64u_has_password');
+
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(JSON.stringify({ errors: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const outerAbort = new AbortController();
+    // controller=null (timeoutMs=0), outerSignal is set → covers
+    // `controller ? {...} : outerSignal ? { signal: outerSignal } : {}` TRUE for outerSignal (line 133)
+    await expect(probeOnce({ timeoutMs: 0, signal: outerAbort.signal })).resolves.toBe(true);
+  });
 });
 

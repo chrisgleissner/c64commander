@@ -14,6 +14,9 @@ import {
     normalizeLocalPath,
     getLocalFilePath,
     parseDurationInput,
+    tryAcquireSingleFlight,
+    releaseSingleFlight,
+    resolvePlayTargetIndex,
     clampDurationSeconds,
     formatDurationSeconds,
     durationSecondsToSlider,
@@ -113,6 +116,23 @@ describe('playFilesUtils', () => {
             expect(parseDurationInput('invalid')).toBeUndefined();
             expect(parseDurationInput('1:invalid')).toBeUndefined();
             expect(parseDurationInput('1:100')).toBeUndefined(); // Seconds >= 60 invalid in strict time?
+        });
+        it('returns undefined for empty or whitespace input (BRDA:73 TRUE)', () => {
+            expect(parseDurationInput('')).toBeUndefined();
+            expect(parseDurationInput('   ')).toBeUndefined();
+        });
+    });
+
+    describe('tryAcquireSingleFlight (playFilesUtils)', () => {
+        it('acquires flight when ref is false, then rejects when already acquired', () => {
+            // Importing from playFilesUtils to cover BRDA:105/107 in that module
+            const ref = { current: false };
+            expect(tryAcquireSingleFlight(ref)).toBe(true);
+            expect(ref.current).toBe(true);
+            expect(tryAcquireSingleFlight(ref)).toBe(false);
+            releaseSingleFlight(ref);
+            expect(ref.current).toBe(false);
+            expect(tryAcquireSingleFlight(ref)).toBe(true);
         });
     });
 

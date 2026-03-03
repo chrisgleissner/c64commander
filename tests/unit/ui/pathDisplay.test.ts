@@ -113,5 +113,14 @@ describe('pathDisplay', () => {
             const result = fitPathToWidth('///', 2, charMeasure, 'start-and-filename');
             expect(typeof result).toBe('string');
         });
+
+        it('returns empty string when ELLIPSIS does not fit maxWidth (BRDA:35 TRUE)', () => {
+            // '...' has length 3; maxWidth=2 → measure('...') = 3 > 2 → trimFromStartToFit returns ''
+            // To enter trimFromStartToFit: path='abc', maxWidth=2
+            //  fitFilenameFallback: measure('/abc')=4>2, fileName='abc', measure('abc')=3>2
+            //  → trimFromStartToFit('abc', 2): non-empty, 3>2 (FALSE), measure('...')=3>2 (TRUE) → ''
+            const result = fitPathToWidth('/abc', 2, charMeasure, 'filename-fallback');
+            expect(result).toBe('');
+        });
     });
 });

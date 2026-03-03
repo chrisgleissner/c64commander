@@ -56,6 +56,13 @@ describe('ramDumpFolderStore', () => {
             
             expect(deriveRamDumpFolderDisplayPath('tree/primary%', 'fallback')).toBe('primary%/fallback');
         });
+
+        it('handles volume with colon-only path (BRDA:57 FALSE — normalizedPath empty, no fallback)', () => {
+            // treeUri matches tree/primary: → treeId='primary:', parts=['primary',''], rawPath=''
+            // normalizedPath is empty, fallback (rootName) is null → returns volumeLabel only
+            expect(deriveRamDumpFolderDisplayPath('content://tree/primary:', null)).toBe('Internal storage');
+            expect(deriveRamDumpFolderDisplayPath('content://tree/primary:')).toBe('Internal storage');
+        });
     });
 
     describe('loadRamDumpFolderConfig', () => {
@@ -78,6 +85,12 @@ describe('ramDumpFolderStore', () => {
 
         it('returns null if config is valid JSON but invalid structure', () => {
             vi.mocked(localStorage.getItem).mockReturnValue(JSON.stringify({ bad: 'data' }));
+            expect(loadRamDumpFolderConfig()).toBeNull();
+        });
+
+        it('returns null when JSON parses to non-object value (BRDA:21 second condition)', () => {
+            // JSON.parse('42') = 42 (number): !42=false, typeof 42!=='object'=true → returns false
+            vi.mocked(localStorage.getItem).mockReturnValue('42');
             expect(loadRamDumpFolderConfig()).toBeNull();
         });
 
