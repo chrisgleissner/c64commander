@@ -142,4 +142,23 @@ describe('traceTargets', () => {
     expect(result.target).toBe('real-device');
     expect(result.reason).toBe('reachable');
   });
+
+  it('skips window probe check when window is not defined (BRDA:16)', () => {
+    // Covers: if (typeof window !== 'undefined') false branch in isTestProbeEnabled
+    stickyLockMock.mockReturnValue(false);
+    connectionSnapshotMock.mockReturnValue({ state: 'REAL_CONNECTED' });
+    apiConfigSnapshotMock.mockReturnValue({ baseUrl: 'http://device' });
+    activeMockBaseUrlMock.mockReturnValue(null);
+
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    Object.defineProperty(globalThis, 'window', { value: undefined, configurable: true });
+    try {
+      const result = resolveBackendTarget();
+      expect(result.target).toBe('real-device');
+    } finally {
+      if (original) {
+        Object.defineProperty(globalThis, 'window', original);
+      }
+    }
+  });
 });

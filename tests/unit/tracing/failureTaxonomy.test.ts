@@ -86,4 +86,11 @@ describe('failureTaxonomy', () => {
     const result = classifyError(err);
     expect(result.failureClass).toBe('io-read-failure');
   });
+
+  it('classifies metadata-absent error by message (line 139)', () => {
+    // Covers: isMetadataAbsentError branch — message matches /no duration/i
+    // Does not match storage (no "not found"/"filesystem"), write, parse, or integration patterns.
+    const result = classifyError(new Error('no duration available for this track'));
+    expect(result.failureClass).toBe('metadata-absent');
+  });
 });

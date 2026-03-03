@@ -73,4 +73,16 @@ describe('appConfigStore', () => {
     localStorage.setItem('c64u_app_configs', 'not-json');
     expect(loadAppConfigs()).toEqual([]);
   });
+
+  it('uses Date.now fallback ID when crypto is not available (lines 83-84)', () => {
+    // Covers: left side of || in createAppConfigEntry is falsy → fallback `${Date.now()}-...`
+    vi.stubGlobal('crypto', undefined);
+    try {
+      const entry = createAppConfigEntry('http://device', 'FallbackTest', { Audio: { errors: [] } });
+      // ID must be the Date.now-based fallback format, not a UUID
+      expect(entry.id).toMatch(/^\d+-\d+$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

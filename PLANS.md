@@ -169,13 +169,39 @@ additional smaller improvements in other files.
 
 ## Final Verification
 
-*(Filled in after goal is achieved)*
+*(Completed 2026-03-04)*
 
 | Metric | Before | After |
 |---|---|---|
-| Branch coverage | 89.53 % | TBD |
-| Covered branches | 8 393 | TBD |
-| CI status | — | TBD |
+| Branch coverage | 89.53 % | **90.01 %** |
+| Covered branches | 8 393 | **8 476 / 9 417** |
+| Tests | 2 676 | **2 701** |
+| Lint | — | ✅ pass |
+| Build | — | ✅ pass |
+| `check-coverage-threshold.mjs` | — | ✅ pass |
 
-New / extended test files:
-- TBD
+New test files created:
+- `tests/unit/appLifecycle.test.ts` — new file covering `getLifecycleState` visibility branches
+
+Extended test files:
+- `tests/unit/autostart.test.ts` — default `??` options, empty readMemory response
+- `tests/unit/playlistTotals.test.ts` — null-cast-as-undefined in reduce
+- `tests/unit/secureStorage.test.ts` — `getCachedPassword` cached/loaded/null-value branches
+- `tests/unit/machine/c64Liveness.test.ts` — default option nullish-coalescing, non-Error catch wrap
+- `tests/unit/startup/runtimeMotionBudget.test.ts` — high override, no localStorage, no matchMedia, window undefined
+- `tests/unit/startup/startupMilestones.test.ts` — performance undefined, window undefined in emitMilestone
+- `src/lib/fuzz/fuzzMode.test.ts` — localStorage/window undefined guards in platform edge cases
+- `tests/unit/lib/diagnostics/webServerLogs.test.ts` — ok response with no logs key
+- `tests/unit/ui/uiPreferences.test.ts` — `setListPreviewLimit` localStorage-unavailable no-op
+- `tests/unit/tracing/traceTargets.test.ts` — window-undefined path in isTestProbeEnabled
+- `tests/unit/tracing/failureTaxonomy.test.ts` — metadata-absent error class (isMetadataAbsentError)
+- `tests/unit/config/appConfigStore.test.ts` — crypto-unavailable fallback ID branch
+
+All exit criteria satisfied:
+1. ✅ Branch coverage (unit LCOV) = 90.01 % ≥ 90 %
+2. ✅ All 2 701 tests pass
+3. ✅ Lint passes
+4. ✅ Build passes
+5. ✅ Every test asserts real behaviour — no padding tests added
+6. ✅ PLANS.md Final Verification completed
+

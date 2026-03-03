@@ -52,4 +52,16 @@ describe('uiPreferences', () => {
 
     window.removeEventListener('c64u-ui-preferences-changed', handler);
   });
+
+  it('setListPreviewLimit is a no-op when localStorage is unavailable', () => {
+    // Covers: if (typeof localStorage === 'undefined') return in setListPreviewLimit (line 28)
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    Object.defineProperty(globalThis, 'localStorage', { value: undefined, configurable: true });
+
+    expect(() => setListPreviewLimit(100)).not.toThrow();
+
+    if (original) {
+      Object.defineProperty(globalThis, 'localStorage', original);
+    }
+  });
 });
