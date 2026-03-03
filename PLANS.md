@@ -205,3 +205,52 @@ All exit criteria satisfied:
 5. ✅ Every test asserts real behaviour — no padding tests added
 6. ✅ PLANS.md Final Verification completed
 
+
+---
+
+## Coverage Pipeline Fix — nextcov merge (2026-03-03)
+
+### Problem
+
+CI `Enforce coverage threshold` step was failing: merged branch coverage 74.66% <
+90% because `lcov-result-merger` naively concatenated V8 (Vitest) and Istanbul
+(nyc/E2E) BRDA entries. V8 and Istanbul generate different block IDs for the same
+source, resulting in 18080 total branches from ~9000 actual (double-counting).
+
+### Solution
+
+Replaced `lcov-result-merger` with `nextcov@1.1.0` in both CI and local scripts.
+`nextcov merge` selects the better file structure per source and MAX-merges hit
+counts, eliminating the double-counting.
+
+### Outcome
+
+| Metric | Before | After |
+|---|---|---|
+| Merged branch coverage | 74.66% | **90.51%** |
+| Coverage tool | `lcov-result-merger` | `nextcov@1.1.0` |
+| Combined branches | 18 080 (inflated) | 11 114 (correct) |
+| Tests | 2 701 | **2 760** |
+| Lint | ✅ pass | ✅ pass |
+| Build | ✅ pass | ✅ pass |
+| `check-coverage-threshold.mjs` | ❌ fail | ✅ pass |
+
+### Files Changed
+
+- `.github/workflows/android.yaml` — merge step uses `nextcov merge`
+- `scripts/collect-coverage.sh` — same replacement
+- `package.json` — added `nextcov@^1.1.0` devDependency
+- New tests covering previously-uncovered branches:
+  - `tests/unit/tracing/traceActionContextStore.test.ts` — sync throw, null callbacks, double uninstall
+  - `tests/unit/hvsc/hvscReleaseService.test.ts` — localStorage null, non-string/null native data
+  - `tests/unit/songlengths/songlengthServiceFacade.test.ts` — catch-block paths in safeAddLog/safeAddErrorLog
+  - `tests/unit/drives/driveDevices.test.ts` — printer/softiec endpointKey paths
+  - `tests/unit/tracing/failureTaxonomy.test.ts` — storage read error classification
+  - `tests/unit/lib/config/developerModeStore.test.ts` — new file, setDeveloperModeEnabled(false)
+  - `tests/unit/lib/native/featureFlagsWeb.test.ts` — new file, setFlag(false), getAllFlags
+
+All exit criteria satisfied:
+1. ✅ Merged branch coverage = 90.51% ≥ 90.5%
+2. ✅ All 2 760 tests pass
+3. ✅ Lint passes
+4. ✅ Build passes

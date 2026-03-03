@@ -93,4 +93,12 @@ describe('failureTaxonomy', () => {
     const result = classifyError(new Error('no duration available for this track'));
     expect(result.failureClass).toBe('metadata-absent');
   });
+
+  it('classifies storage read error as io-read-failure (line 138 FALSE branch)', () => {
+    // isStorageError("filesystem error reading config") = true (has "filesystem")
+    // isWriteError("filesystem error reading config") = false (no write keywords)
+    // This hits the else-if(isStorageError) block → io-read-failure
+    const result = classifyError(new Error('filesystem error reading config'));
+    expect(result.failureClass).toBe('io-read-failure');
+  });
 });

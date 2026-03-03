@@ -164,4 +164,21 @@ describe('drive device normalization', () => {
     expect(result.devices[0]?.imageFile).toBe('disk.d64');
     expect(result.devices[0]?.imagePath).toBe('/mnt/disk.d64');
   });
+
+  it('resolves printer endpointKey to "printer" for multi-word apiKey (BRDA:81)', () => {
+    // 'Printer Emulation' has a space so fails the alphanumeric regex.
+    // resolveEndpointKey then falls through to the PRINTER branch at line 81.
+    const result = normalizeDriveDevices({
+      drives: [{ 'Printer Emulation': { enabled: true, bus_id: 4 } }],
+    });
+    expect(result.devices[0]?.endpointKey).toBe('printer');
+  });
+
+  it('resolves soft IEC endpointKey to "softiec" for multi-word apiKey (BRDA:80)', () => {
+    // 'IEC Drive' also fails the alphanumeric regex, exercising the SOFT_IEC_DRIVE branch.
+    const result = normalizeDriveDevices({
+      drives: [{ 'IEC Drive': { enabled: true, bus_id: 11 } }],
+    });
+    expect(result.devices[0]?.endpointKey).toBe('softiec');
+  });
 });

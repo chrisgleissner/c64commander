@@ -28,13 +28,13 @@ npx nyc report \
   --temp-dir .nyc_output \
   --report-dir coverage/e2e \
   --reporter=lcov \
+  --reporter=json \
   --reporter=text-summary
 
-# 6. Merge unit + E2E LCOV for Codecov
-echo "==> Merging LCOV reports for Codecov..."
-npx lcov-result-merger \
-  "coverage/{lcov.info,e2e/lcov.info}" \
-  coverage/lcov-merged.info
+# 6. Merge unit + E2E coverage with nextcov
+echo "==> Merging coverage reports with nextcov..."
+npx nextcov merge coverage coverage/e2e -o coverage/merged --reporters lcov,text-summary
+cp coverage/merged/lcov.info coverage/lcov-merged.info
 
 echo ""
 echo "==> Coverage collection complete!"

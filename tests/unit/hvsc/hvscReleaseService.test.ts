@@ -29,7 +29,7 @@ describe('hvscReleaseService', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn());
     vi.stubGlobal('localStorage', { getItem: vi.fn() });
-    
+
     vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false);
     vi.mocked(CapacitorHttp.request).mockReset();
   });
@@ -102,12 +102,12 @@ describe('hvscReleaseService', () => {
 
   it('handles native platform check exception', async () => {
     vi.mocked(Capacitor.isNativePlatform).mockImplementationOnce(() => {
-        throw new Error('explode');
+      throw new Error('explode');
     });
     // Should fallback to fetch (non-native)
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(new Response('<html></html>', { status: 200 }));
-    
+
     await fetchLatestHvscVersions('http://foo.com');
     // If it didn't crash, it caught the error and returned false (web)
     expect(fetchMock).toHaveBeenCalled();
@@ -117,13 +117,13 @@ describe('hvscReleaseService', () => {
     // Stub localStorage
     const getItem = vi.fn().mockReturnValue('https://stored.com/hvsc');
     vi.stubGlobal('localStorage', { getItem });
-    
+
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(new Response('<html></html>', { status: 200 }));
-    
+
     // Pass empty/undefined url to trigger lookup
     const result = await fetchLatestHvscVersions();
-    
+
     expect(result.baseUrl).toBe('https://stored.com/hvsc/');
     expect(fetchMock).toHaveBeenCalledWith('https://stored.com/hvsc/', expect.anything());
   });
@@ -138,5 +138,44 @@ describe('hvscReleaseService', () => {
     });
 
     await expect(fetchLatestHvscVersions('http://foo.com')).rejects.toThrow('HVSC release fetch failed: 404');
+  });
+
+  it('falls back to default URL when localStorage has no stored value', async () => {
+    // getItem returns null → covers the if(stored) FALSE branch in resolveHvscBaseUrl
+    vi.stubGlobal('localStorage', { getItem: vi.fn().mockReturnValue(null) });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(new Response('<html></html>', { status: 200 }));
+
+    const result = await fetchLatestHvscVersions(); // no override arg
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.baseUrl).toBeDefined();
+  });
+
+  it('handles native response with non-string data', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    // Return object instead of string → covers the ternary FALSE branch (line 68)
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: { nested: '<a href="HVSC_91-all-of-them.7z">link</a>' },
+      headers: {},
+      url: 'https://example.com/hvsc/',
+    });
+
+    const result = await fetchLatestHvscVersions('https://example.com/hvsc/');
+    expect(result).toHaveProperty('baselineVersion');
+  });
+
+  it('handles native response with null data (nullish coalescing branch)', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    // null data → JSON.stringify(null ?? '') = JSON.stringify('') → covers the ?? branch (line 68)
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({
+      status: 200,
+      data: null,
+      headers: {},
+      url: 'https://example.com/hvsc/',
+    });
+
+    const result = await fetchLatestHvscVersions('https://example.com/hvsc/');
+    expect(result).toHaveProperty('baselineVersion');
   });
 });
