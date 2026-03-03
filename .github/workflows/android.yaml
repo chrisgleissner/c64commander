@@ -438,7 +438,7 @@ jobs:
         with:
           files: ./coverage/lcov-merged.info
           disable_search: true
-          flags: unittests,e2etests
+          flags: web
           name: c64-commander-web-coverage
           use_pypi: true
           fail_ci_if_error: true
