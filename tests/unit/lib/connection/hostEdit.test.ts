@@ -67,6 +67,18 @@ describe('hostEdit', () => {
     }
   });
 
+  it('returns default host and logs when localStorage throws a non-Error value (BRDA:25)', () => {
+    const getItemSpy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw 'storage-error-string'; // non-Error throw to cover hostEdit.ts BRDA:25 FALSE branch
+    });
+    try {
+      expect(getConfiguredHost()).toBe('c64u');
+      expect(addLog).toHaveBeenCalledWith('warn', 'Failed to read configured host from storage', expect.any(Object));
+    } finally {
+      getItemSpy.mockRestore();
+    }
+  });
+
   it('saves host and retries with default trigger', () => {
     const host = saveConfiguredHostAndRetry(' 10.0.0.7 ', 'c64u');
     expect(host).toBe('10.0.0.7');

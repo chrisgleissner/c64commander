@@ -98,4 +98,9 @@ describe('appSettings', () => {
     saveDiskAutostartMode('kernal');
     expect(loadDiskAutostartMode()).toBe('kernal');
   });
+
+  it('returns fallback when localStorage has a non-numeric value for a number setting (BRDA:60)', () => {
+    localStorage.setItem(APP_SETTINGS_KEYS.CONFIG_WRITE_INTERVAL_KEY, 'not-a-number');
+    expect(loadConfigWriteIntervalMs()).toBe(DEFAULT_CONFIG_WRITE_INTERVAL_MS);
+  });
 });

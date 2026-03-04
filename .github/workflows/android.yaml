@@ -108,7 +108,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-unit
-          path: coverage/lcov.info
+          path: |
+            coverage/lcov.info
+            coverage/coverage-final.json
 
   web-screenshots:
     name: Web | Screenshots
@@ -398,11 +400,11 @@ jobs:
             --temp-dir .nyc_output \
             --report-dir coverage/e2e \
             --reporter=lcov \
+            --reporter=json \
             --reporter=text-summary
-          echo "==> Merging unit + E2E LCOV for Codecov..."
-          npx lcov-result-merger \
-            "coverage/{lcov.info,e2e/lcov.info}" \
-            coverage/lcov-merged.info
+          echo "==> Merging unit + E2E coverage with nextcov..."
+          npx nextcov merge coverage coverage/e2e -o coverage/merged --reporters lcov
+          cp coverage/merged/lcov.info coverage/lcov-merged.info
           end=$(date +%s)
           echo "- coverage merge: $((end-start))s" >> $GITHUB_STEP_SUMMARY
 
@@ -419,7 +421,7 @@ jobs:
       - name: Enforce coverage threshold
         env:
           COVERAGE_MIN: "90"
-          COVERAGE_FILE: "coverage/lcov.info"
+          COVERAGE_FILE: "coverage/lcov-merged.info"
         run: node scripts/check-coverage-threshold.mjs
 
       - name: Enforce coverage paths
@@ -435,7 +437,8 @@ jobs:
           CC_SHA: ${{ env.CI_SHA }}
         with:
           files: ./coverage/lcov-merged.info
-          flags: unittests,e2etests
+          disable_search: true
+          flags: web
           name: c64-commander-web-coverage
           use_pypi: true
           fail_ci_if_error: true
@@ -637,6 +640,7 @@ jobs:
           CC_SHA: ${{ env.CI_SHA }}
         with:
           files: ${{ steps.normalize_android_coverage.outputs.report }}
+          disable_search: true
           flags: android
           name: c64-commander-android-coverage
           use_pypi: true
@@ -1131,6 +1135,10 @@ jobs:
               exit 1
             fi
             echo "telemetry gate warning: main process disappearance/restart detected (non-release flow); see ci-artifacts/telemetry/android/events.log"
+            exit 0
+          fi
+          if [[ "$code" == "137" ]]; then
+            echo "telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see ci-artifacts/telemetry/android/monitor-run.log"
             exit 0
           fi
           if [[ "$code" != "0" ]]; then

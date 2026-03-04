@@ -230,4 +230,39 @@ describe('smokeMode', () => {
     const config = await initializeSmokeMode();
     expect(config?.host).toBeUndefined();
   });
+
+  it('handles filesystem read error thrown as plain string', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem('c64u_smoke_mode_enabled', '1');
+    // Use a plain string rejection — exercises typeof error === 'string' in getErrorMessage
+    vi.mocked(Filesystem.readFile).mockRejectedValue('File does not exist');
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    // String 'File does not exist' matches isMissingFileError → debug log
+    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+  });
+
+  it('handles filesystem read error as object with nested error string', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem('c64u_smoke_mode_enabled', '1');
+    // Object without .message but with .error — exercises the 'error' in error branch
+    vi.mocked(Filesystem.readFile).mockRejectedValue({ error: 'File not found' });
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    // 'not found' matches isMissingFileError → debug log
+    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+  });
+
+  it('handles filesystem read error as object with nested error.message', async () => {
+    vi.mocked(Capacitor.isNativePlatform).mockReturnValue(true);
+    localStorage.setItem('c64u_smoke_mode_enabled', '1');
+    // Object with nested {error: {message: '...'}} — exercises the innermost message extraction
+    vi.mocked(Filesystem.readFile).mockRejectedValue({ error: { message: 'no such file' } });
+
+    const config = await initializeSmokeMode();
+    expect(config).toBeNull();
+    expect(addLog).toHaveBeenCalledWith('debug', expect.stringContaining('not found'), expect.any(Object));
+  });
 });

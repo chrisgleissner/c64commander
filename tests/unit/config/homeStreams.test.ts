@@ -55,4 +55,14 @@ describe('homeStreams', () => {
     expect(parseStreamEndpoint('239.0.1.64:11000')).toEqual({ ip: '239.0.1.64', port: '11000', error: null });
     expect(parseStreamEndpoint('239.0.1.64')).toMatchObject({ error: 'Enter endpoint as IPv4:port.' });
   });
+
+  it('buildStreamEndpointLabel handles missing host or port (BRDA:128,129,130)', () => {
+    expect(buildStreamEndpointLabel('', '')).toBe('—');
+    expect(buildStreamEndpointLabel('', '4444')).toBe('—:4444');
+    expect(buildStreamEndpointLabel('192.168.1.1', '')).toBe('192.168.1.1:—');
+  });
+
+  it('validateStreamHost returns required error for empty input (BRDA:102)', () => {
+    expect(validateStreamHost('')).toBe('IPv4 address is required.');
+  });
 });

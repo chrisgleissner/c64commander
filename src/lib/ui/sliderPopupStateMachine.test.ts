@@ -20,10 +20,8 @@ describe('sliderPopupStateMachine', () => {
         expect(state).toBe('Hidden');
     });
 
-    it('re-activates from idle when interaction resumes', () => {
-        let state: SliderPopupState = 'VisibleIdle';
-        state = reduceSliderPopupState(state, 'interaction-update');
-        expect(state).toBe('VisibleActive');
+    it('re-activates VisibleActive when interaction-start or interaction-update received in VisibleActive', () => {
+        expect(reduceSliderPopupState('VisibleActive', 'interaction-update')).toBe('VisibleActive');
     });
 
     it('computes close delay bounded by both idle and minimum visible windows', () => {
@@ -32,5 +30,21 @@ describe('sliderPopupStateMachine', () => {
         const now = 1_250;
         const delay = resolveSliderPopupCloseDelayMs(openedAt, lastInteractionAt, now);
         expect(delay).toBe(Math.max((openedAt + SLIDER_POPUP_MIN_VISIBLE_MS) - now, (lastInteractionAt + SLIDER_POPUP_IDLE_CLOSE_MS) - now));
+    });
+
+    it('VisibleActive transitions to Closing on idle-timeout (BRDA:26)', () => {
+        expect(reduceSliderPopupState('VisibleActive', 'idle-timeout')).toBe('Closing');
+    });
+
+    it('VisibleIdle re-activates on interaction-start short-circuit (BRDA:33)', () => {
+        expect(reduceSliderPopupState('VisibleIdle', 'interaction-start')).toBe('VisibleActive');
+    });
+
+    it('VisibleIdle stays in VisibleIdle on interaction-end (BRDA:34)', () => {
+        expect(reduceSliderPopupState('VisibleIdle', 'interaction-end')).toBe('VisibleIdle');
+    });
+
+    it('VisibleIdle returns unchanged state for unrecognized event (BRDA:36)', () => {
+        expect(reduceSliderPopupState('VisibleIdle', 'unknown-event' as any)).toBe('VisibleIdle');
     });
 });

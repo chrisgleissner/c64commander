@@ -86,4 +86,28 @@ describe('mockConfig', () => {
         const payload = await getMockConfigPayload();
         expect(payload.general.deviceType).toBe('TestDevice');
     });
+
+    it('handles null return from custom loader (line 144 ?? fallback)', async () => {
+        setMockConfigLoader(() => null as unknown as string);
+        const payload = await getMockConfigPayload();
+        expect(payload.categories).toEqual({});
+    });
+
+    it('handles empty string from loader → yaml.load returns null (line 142 ?? fallback)', async () => {
+        setMockConfigLoader(() => '');
+        const payload = await getMockConfigPayload();
+        expect(payload.categories).toEqual({});
+    });
+
+    it('handles category with no items property (line 171 ?? fallback)', async () => {
+        setMockConfigLoader(() => ({
+            config: {
+                categories: {
+                    EmptyCat: {} as Record<string, unknown>,
+                },
+            },
+        }));
+        const payload = await getMockConfigPayload();
+        expect(payload.categories.EmptyCat).toEqual({});
+    });
 });

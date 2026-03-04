@@ -146,4 +146,53 @@ describe('runtimeMotionBudget', () => {
       expect.objectContaining({ error: 'storage unavailable' }),
     );
   });
+
+  it('uses standard mode when override is set to a high-performance alias', async () => {
+    // Covers the normalized === 'standard' || 'full' || 'high' branch in parseOverride
+    const { resolveRuntimeMotionMode } = await import('@/lib/startup/runtimeMotionBudget');
+    const resolution = resolveRuntimeMotionMode({
+      localStorage: { getItem: () => 'high' },
+      navigator: { hardwareConcurrency: 8, userAgent: '', deviceMemory: 8 },
+      matchMedia: () => ({ matches: false }),
+    });
+    expect(resolution.mode).toBe('standard');
+    expect(resolution.reason).toBe('user-override');
+  });
+
+  it('returns null override when environment has no localStorage', async () => {
+    // Covers the if (!storage) return null branch in readMotionOverride
+    // and navigator?.hardwareConcurrency optional chain when navigator is also absent
+    const { resolveRuntimeMotionMode } = await import('@/lib/startup/runtimeMotionBudget');
+    const resolution = resolveRuntimeMotionMode({
+      matchMedia: () => ({ matches: false }),
+    });
+    expect(resolution.mode).toBe('standard');
+    expect(resolution.reason).toBe('default');
+  });
+
+  it('returns false for prefersReducedMotion when matchMedia is absent from environment', async () => {
+    // Covers the if (!environment.matchMedia) return false branch
+    const { resolveRuntimeMotionMode } = await import('@/lib/startup/runtimeMotionBudget');
+    const resolution = resolveRuntimeMotionMode({
+      localStorage: { getItem: () => null },
+      navigator: { hardwareConcurrency: 8, userAgent: '', deviceMemory: 8 },
+      // matchMedia intentionally omitted
+    });
+    expect(resolution.mode).toBe('standard');
+    expect(resolution.reason).toBe('default');
+  });
+
+  it('returns empty environment when window is not defined', async () => {
+    // Covers the if (typeof window === 'undefined') return {} branch in defaultEnvironment
+    const savedWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', { value: undefined, configurable: true, writable: true });
+
+    const { resolveRuntimeMotionMode } = await import('@/lib/startup/runtimeMotionBudget');
+    // Calls resolveRuntimeMotionMode() with no args -> defaultEnvironment() -> returns {}
+    const resolution = resolveRuntimeMotionMode();
+    expect(resolution).toBeDefined();
+    expect(resolution.mode).toBe('standard');
+
+    Object.defineProperty(globalThis, 'window', { value: savedWindow, configurable: true, writable: true });
+  });
 });

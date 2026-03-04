@@ -121,4 +121,16 @@ describe('checkC64Liveness', () => {
             checkC64Liveness(badApi as any, { jiffyWaitMs: 0, rasterAttempts: 1, rasterDelayMs: 0 }),
         ).rejects.toThrow('Liveness check failed');
     });
+
+    it('uses default jiffyWaitMs, rasterAttempts and rasterDelayMs when no options provided', async () => {
+        // Covers the options.jiffyWaitMs ?? DEFAULT_JIFFY_WAIT_MS and similar ?? fallback branches
+        const api = buildApi({
+            '00A2:3': [new Uint8Array([1, 0, 0]), new Uint8Array([2, 0, 0])],
+            'D012:1': [new Uint8Array([10]), new Uint8Array([10])],
+        });
+
+        // No options argument — all three ?? defaults fire
+        const result = await checkC64Liveness(api as any);
+        expect(result.decision).toBe('healthy');
+    });
 });

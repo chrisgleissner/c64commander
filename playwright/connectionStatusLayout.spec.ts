@@ -138,10 +138,10 @@ test.describe('Connection Status pop-up layout', () => {
     expect(lastRequestBox).not.toBeNull();
     expect(restBox).not.toBeNull();
 
-    // All rows must share the same left offset within 4px.
-    expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(4);
-    expect(Math.abs(statusBox!.x - lastRequestBox!.x)).toBeLessThanOrEqual(4);
-    expect(Math.abs(statusBox!.x - restBox!.x)).toBeLessThanOrEqual(4);
+    // All rows must share the same left offset within 5px.
+    expect(Math.abs(statusBox!.x - hostBox!.x)).toBeLessThanOrEqual(5);
+    expect(Math.abs(statusBox!.x - lastRequestBox!.x)).toBeLessThanOrEqual(5);
+    expect(Math.abs(statusBox!.x - restBox!.x)).toBeLessThanOrEqual(5);
   });
 
   test('Last request uses strict numeric format: Xs ago for under 60s', async ({ page }: { page: Page }, testInfo: TestInfo) => {

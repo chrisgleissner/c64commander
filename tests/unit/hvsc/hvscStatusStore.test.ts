@@ -328,5 +328,34 @@ describe('hvscStatusStore', () => {
       expect(summary.extraction.status).toBe('failure');
       expect(summary.extraction.errorCategory).toBe('storage');
     });
+
+    it('upgrades in-progress statuses to success on complete event (BRDA:170 FALSE, BRDA:175 FALSE)', () => {
+      const initial = getDefaultHvscStatusSummary();
+      initial.download.status = 'in-progress';
+      initial.extraction.status = 'in-progress';
+
+      const result = applyHvscProgressEventToSummary(initial, { stage: 'complete', message: 'done' });
+      expect(result.download.status).toBe('success');
+      expect(result.extraction.status).toBe('success');
+    });
+
+    it('classifies error without lastStage context (BRDA:183 ?? null)', () => {
+      const initial = getDefaultHvscStatusSummary();
+      // lastStage omitted → undefined → ?? null fires at line 183
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: 'error',
+        message: 'Unclassified error',
+      });
+      expect(result.extraction.status).toBe('failure');
+    });
+
+    it('uses event.message as errorMessage when errorCause is absent (BRDA:184)', () => {
+      const initial = getDefaultHvscStatusSummary();
+      const result = applyHvscProgressEventToSummary(initial, {
+        stage: 'error',
+        message: 'Fallback message used',
+      }, 'archive_extraction');
+      expect(result.extraction.errorMessage).toBe('Fallback message used');
+    });
   });
 });

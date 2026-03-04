@@ -74,6 +74,17 @@ describe('startupMilestones', () => {
     }));
   });
 
+  it('does not skip first meaningful interaction for empty label', async () => {
+    const { markFirstMeaningfulInteraction } = await import('@/lib/startup/startupMilestones');
+    markFirstMeaningfulInteraction('click', '');
+
+    expect(addLog).toHaveBeenCalledWith(
+      'info',
+      'First meaningful interaction',
+      expect.objectContaining({ action: 'click', label: '' }),
+    );
+  });
+
   it('ignores diagnostics open actions as first meaningful interaction', async () => {
     const { markFirstMeaningfulInteraction } = await import('@/lib/startup/startupMilestones');
 
@@ -113,15 +124,37 @@ describe('startupMilestones', () => {
     expect(addLog).not.toHaveBeenCalledWith('info', 'First meaningful interaction', expect.anything());
   });
 
-  it('does not skip empty label and proceeds normally', async () => {
-    const { markFirstMeaningfulInteraction } = await import('@/lib/startup/startupMilestones');
+  it('falls back to Date.now when performance is unavailable at module load and in elapsed calculation', async () => {
+    const savedPerformance = globalThis.performance;
+    Object.defineProperty(globalThis, 'performance', { value: undefined, configurable: true, writable: true });
 
-    markFirstMeaningfulInteraction('click', '');
-    // Empty label is NOT skipped — the interaction is recorded
+    vi.mocked(addLog).mockReset();
+    vi.mocked(runWithImplicitAction).mockReset();
+    vi.mocked(runWithImplicitAction).mockImplementation(async (_n: string, fn: () => Promise<void>) => fn());
+
+    const { markStartupBootstrapComplete } = await import('@/lib/startup/startupMilestones');
+    markStartupBootstrapComplete();
+
     expect(addLog).toHaveBeenCalledWith(
       'info',
-      'First meaningful interaction',
-      expect.objectContaining({ action: 'click', label: '' }),
+      'Startup bootstrap complete',
+      expect.objectContaining({ elapsedMs: expect.any(Number) }),
     );
+
+    Object.defineProperty(globalThis, 'performance', { value: savedPerformance, configurable: true, writable: true });
+  });
+
+  it('emitMilestone no-ops when window is not available', async () => {
+    const savedWindow = globalThis.window;
+    Object.defineProperty(globalThis, 'window', { value: undefined, configurable: true, writable: true });
+
+    vi.mocked(addLog).mockReset();
+    vi.mocked(runWithImplicitAction).mockReset();
+    vi.mocked(runWithImplicitAction).mockImplementation(async (_n: string, fn: () => Promise<void>) => fn());
+
+    const { markStartupBootstrapComplete } = await import('@/lib/startup/startupMilestones');
+    expect(() => markStartupBootstrapComplete()).not.toThrow();
+
+    Object.defineProperty(globalThis, 'window', { value: savedWindow, configurable: true, writable: true });
   });
 });

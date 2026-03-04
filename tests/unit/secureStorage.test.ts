@@ -9,6 +9,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearPassword,
+  getCachedPassword,
   getPassword,
   resetStoredPasswordCache,
   setPassword,
@@ -69,5 +70,33 @@ describe('secureStorage', () => {
 
     expect(localStorage.getItem('c64u_has_password')).toBeNull();
     expect(SecureStorage.clearPassword).toHaveBeenCalled();
+  });
+
+  it('getCachedPassword returns the password value once loaded', async () => {
+    // Covers the passwordLoaded ? cachedPassword : null true branch (line 32)
+    await setPassword('my-secret');
+    expect(getCachedPassword()).toBe('my-secret');
+  });
+
+  it('returns cached password on second call without re-fetching from native storage', async () => {
+    // Covers the if (passwordLoaded) return cachedPassword branch (line 45)
+    localStorage.setItem('c64u_has_password', '1');
+    vi.mocked(SecureStorage.getPassword).mockResolvedValueOnce({ value: 'cached-pw' });
+
+    const first = await getPassword();
+    const second = await getPassword();
+
+    expect(first).toBe('cached-pw');
+    expect(second).toBe('cached-pw');
+    expect(SecureStorage.getPassword).toHaveBeenCalledOnce();
+  });
+
+  it('returns null when native secure storage has no password value', async () => {
+    // Covers value ?? null when SecureStorage.getPassword returns { value: null }
+    localStorage.setItem('c64u_has_password', '1');
+    // Default mock returns { value: null }
+    const value = await getPassword();
+    expect(value).toBeNull();
+    expect(SecureStorage.getPassword).toHaveBeenCalledOnce();
   });
 });

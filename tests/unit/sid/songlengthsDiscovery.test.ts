@@ -51,7 +51,8 @@ describe('songlengthsDiscovery', () => {
       const paths = buildSonglengthsSearchPaths('Music/demo.sid');
       const normalized = normalize(paths);
       SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
-        expect(normalized.some((p) => p.endsWith(`/${fileName}`))).toBe(true);
+        expect(normalized).toContain(`/Music/${fileName}`);
+        expect(normalized).toContain(`/${fileName}`);
       });
     });
 
@@ -60,13 +61,19 @@ describe('songlengthsDiscovery', () => {
       const normalized = normalize(paths);
       SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
         expect(normalized).toContain(`/Music/DEMOS/${fileName}`);
+        expect(normalized).toContain(`/Music/${fileName}`);
+        expect(normalized).toContain(`/${fileName}`);
       });
     });
 
-    it('handles empty or falsy path gracefully', () => {
+    it('handles empty path as root and returns root-level search paths', () => {
       const paths = buildSonglengthsSearchPaths('');
-      expect(Array.isArray(paths)).toBe(true);
-      expect(paths.length).toBeGreaterThan(0);
+      const normalized = normalize(paths);
+      SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+        expect(normalized).toContain(`/${fileName}`);
+        expect(normalized).toContain(`/${DOCUMENTS_FOLDER}/${fileName}`);
+      });
+      expect(paths.length).toBe(SONGLENGTHS_FILE_NAMES.length * 2);
     });
   });
 

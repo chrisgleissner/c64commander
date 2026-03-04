@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addErrorLog,
   addLog,
@@ -15,6 +15,7 @@ import {
   formatLogsForShare,
   getErrorLogs,
   getLogs,
+  setExternalLogs,
 } from '@/lib/logging';
 import { shouldSuppressDiagnosticsSideEffects } from '@/lib/diagnostics/diagnosticsOverlayState';
 import { installConsoleDiagnosticsBridge, logger } from '@/lib/diagnostics/logger';
@@ -279,5 +280,47 @@ describe('logging', () => {
     expect(logs[0].id).toMatch(/^\d+-\d+$/);
 
     globalThis.crypto = originalCrypto;
+  });
+
+  it('readLogs returns empty when localStorage is undefined (line 36 TRUE)', () => {
+    vi.stubGlobal('localStorage', undefined);
+    expect(getLogs()).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
+  it('addLog returns early when window is undefined (line 53 TRUE)', () => {
+    vi.stubGlobal('window', undefined);
+    addLog('info', 'should-not-store');
+    vi.unstubAllGlobals();
+    expect(getLogs()).toHaveLength(0);
+  });
+
+  it('clearLogs returns early when window is undefined (line 123 TRUE)', () => {
+    addLog('info', 'persisted');
+    expect(getLogs()).toHaveLength(1);
+    vi.stubGlobal('window', undefined);
+    clearLogs();
+    vi.unstubAllGlobals();
+    expect(getLogs()).toHaveLength(1);
+  });
+
+  it('trimStack returns null for undefined stack (line 73 TRUE)', () => {
+    const error = new Error('no-stack');
+    error.stack = undefined;
+    const details = buildErrorLogDetails(error);
+    expect(details.errorStack).toBeNull();
+  });
+
+  it('mergeLogs deduplicates entries with the same id (line 107 TRUE)', () => {
+    addLog('info', 'original');
+    const logs = getLogs();
+    expect(logs).toHaveLength(1);
+    setExternalLogs(logs);
+    const merged = getLogs();
+    expect(merged).toHaveLength(1);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 });

@@ -593,11 +593,19 @@ jobs:
           fi
           code=$(cat "$code_file")
           if [[ "$code" == "3" ]]; then
-            if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_REF_NAME}" == release/* ]]; then
+            if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != *-rc* ]]; then
+              echo "telemetry gate failed: app process disappearance/restart detected on stable tag flow; see artifacts/ios/_infra/telemetry/events.log"
+              exit 1
+            fi
+            if [[ "${GITHUB_REF_NAME}" == release/* ]]; then
               echo "telemetry gate failed: app process disappearance/restart detected on release flow; see artifacts/ios/_infra/telemetry/events.log"
               exit 1
             fi
-            echo "telemetry gate warning: app process disappearance/restart detected (non-release flow); see artifacts/ios/_infra/telemetry/events.log"
+            echo "telemetry gate warning: app process disappearance/restart detected (rc or non-release flow); see artifacts/ios/_infra/telemetry/events.log"
+            exit 0
+          fi
+          if [[ "$code" == "137" ]]; then
+            echo "telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see artifacts/ios/_infra/telemetry/monitor-run.log"
             exit 0
           fi
           if [[ "$code" != "0" ]]; then

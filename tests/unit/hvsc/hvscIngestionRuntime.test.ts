@@ -945,4 +945,79 @@ describe('hvscIngestionRuntime', () => {
     );
     expect(vi.mocked(saveHvscStatusSummary as any)).toHaveBeenCalled();
   });
+
+  // Coverage: checkForHvscUpdates returns [] when already up-to-date (BRDA:212 empty array branch)
+  it('returns empty requiredUpdates when already at latest version', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 84,
+      updateVersion: 86,
+    } as any);
+    // installedVersion === updateVersion → neither condition is true → []
+    vi.mocked(updateHvscState).mockReturnValue({ installedVersion: 86 } as any);
+
+    const result = await checkForHvscUpdates();
+
+    expect(result.requiredUpdates).toEqual([]);
+  });
+
+  // Coverage: formatPathListPreview with ≤10 paths (BRDA:154 FALSE branch — plain preview without "+N more")
+  it('formats deletion failure preview without truncation for few paths', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    // Only 3 deletion failures — formatPathListPreview called with paths.length <= previewLimit (10)
+    const deletionList = ['demo-1.sid', 'demo-2.sid', 'demo-3.sid'].join('\n');
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/DELETE.TXT', new TextEncoder().encode(deletionList));
+    });
+    vi.mocked(deleteLibraryFile).mockRejectedValue(new Error('cannot delete'));
+
+    await expect(installOrUpdateHvsc('token-short-deletion')).rejects.toThrow(/cleanup failed/i);
+    expect(vi.mocked(addErrorLog)).toHaveBeenCalledWith(
+      'HVSC deletion manifest',
+      expect.objectContaining({ failureCount: 3 }),
+    );
+  });
+
+  // Coverage: recoverStaleIngestionState returns false when activeIngestionRunning (BRDA:170 TRUE)
+  it('recoverStaleIngestionState returns false when ingestion is active', async () => {
+    vi.mocked(fetchLatestHvscVersions).mockResolvedValue({
+      baselineVersion: 5,
+      updateVersion: 5,
+      baseUrl: 'https://example.com',
+    } as any);
+    vi.mocked(loadHvscState).mockReturnValue({
+      ingestionState: 'idle',
+      ingestionError: null,
+      installedVersion: 0,
+      installedBaselineVersion: null,
+    } as any);
+    vi.mocked(updateHvscState).mockReturnValue({
+      ingestionState: 'ready',
+      ingestionError: null,
+      installedVersion: 5,
+      installedBaselineVersion: 5,
+    } as any);
+    vi.mocked(extractArchiveEntries).mockImplementation(async ({ onEntry }) => {
+      await onEntry?.('HVSC/C64Music/Demo/demo.sid', new Uint8Array([1, 2, 3]));
+    });
+
+    // installOrUpdateHvsc sets activeIngestionRunning=true synchronously before first await
+    const ingestionPromise = installOrUpdateHvsc('token-for-recovery-check');
+
+    // At this point, activeIngestionRunning is true — recoverStaleIngestionState should return false
+    const recovered = recoverStaleIngestionState();
+    expect(recovered).toBe(false);
+
+    // Complete the ingestion
+    await ingestionPromise.catch(() => undefined);
+  });
 });

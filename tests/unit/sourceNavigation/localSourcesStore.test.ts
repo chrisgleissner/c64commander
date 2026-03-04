@@ -256,6 +256,11 @@ describe('localSourcesStore', () => {
       expect(loadLocalSources()).toEqual([]);
     });
 
+    it('returns empty array when localStorage contains valid JSON but non-array (BRDA:93)', () => {
+      localStorage.setItem('c64u_local_sources:v1', '{}');
+      expect(loadLocalSources()).toEqual([]);
+    });
+
     it('normalizes SAF sources by removing entries and ensuring rootPath /', () => {
       const raw = [{
         id: 'saf1',
@@ -362,6 +367,28 @@ describe('localSourcesStore', () => {
       ] as any);
 
       await expect(validateSource('local-ok')).resolves.toBe(true);
+    });
+
+    it('returns false when SAF listChildren throws an error (BRDA:258)', async () => {
+      const listChildrenMock = FolderPicker.listChildren as unknown as ReturnType<typeof vi.fn>;
+      listChildrenMock.mockRejectedValueOnce(new Error('Permission denied'));
+
+      saveLocalSources([
+        {
+          id: 'saf-fail',
+          name: 'SAF Source',
+          rootName: 'Phone',
+          rootPath: '/',
+          createdAt: new Date().toISOString(),
+          android: {
+            treeUri: 'content://tree/primary%3AMusic',
+            rootName: 'Phone',
+            permissionGrantedAt: new Date().toISOString(),
+          },
+        },
+      ] as any);
+
+      await expect(validateSource('saf-fail')).resolves.toBe(false);
     });
   });
 

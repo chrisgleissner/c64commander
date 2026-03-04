@@ -13,12 +13,25 @@ describe('telemetry release gate workflow rules', () => {
         expect(workflow).toContain('telemetry gate warning: main process disappearance/restart detected (non-release flow)');
     });
 
-    it('hard-fails iOS telemetry on monitor exit code 3 for release/tag flows', () => {
+    it('treats Android monitor exit code 137 as infra warning', () => {
+        const workflow = readWorkflow('android.yaml');
+        expect(workflow).toContain('if [[ "$code" == "137" ]]; then');
+        expect(workflow).toContain('telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see ci-artifacts/telemetry/android/monitor-run.log');
+    });
+
+    it('hard-fails iOS telemetry on monitor exit code 3 for stable tag and release branch flows', () => {
         const workflow = readWorkflow('ios.yaml');
         expect(workflow).toContain('if [[ "$code" == "3" ]]; then');
-        expect(workflow).toContain('if [[ "${GITHUB_REF_TYPE}" == "tag" || "${GITHUB_REF_NAME}" == release/* ]]; then');
+        expect(workflow).toContain('if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" != *-rc* ]]; then');
+        expect(workflow).toContain('telemetry gate failed: app process disappearance/restart detected on stable tag flow');
         expect(workflow).toContain('telemetry gate failed: app process disappearance/restart detected on release flow');
-        expect(workflow).toContain('telemetry gate warning: app process disappearance/restart detected (non-release flow)');
+        expect(workflow).toContain('telemetry gate warning: app process disappearance/restart detected (rc or non-release flow)');
+    });
+
+    it('treats iOS monitor exit code 137 as infra warning', () => {
+        const workflow = readWorkflow('ios.yaml');
+        expect(workflow).toContain('if [[ "$code" == "137" ]]; then');
+        expect(workflow).toContain('telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see artifacts/ios/_infra/telemetry/monitor-run.log');
     });
 
     it('uploads iOS telemetry and diagnostics artifacts on failure', () => {

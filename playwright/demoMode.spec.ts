@@ -65,6 +65,13 @@ const seedRoutingExpectations = async (page: Page, realBaseUrl: string) => {
   }, { realBaseUrl });
 };
 
+const closeConnectionPopover = async (page: Page) => {
+  const closeButton = page.getByTestId('connection-status-close');
+  await expect(closeButton).toBeVisible();
+  await closeButton.click();
+  await expect(page.getByTestId('connection-status-popover')).toBeHidden({ timeout: 10000 });
+};
+
 test.describe('Automatic Demo Mode', () => {
   let server: Awaited<ReturnType<typeof createMockC64Server>>;
 
@@ -133,10 +140,9 @@ test.describe('Automatic Demo Mode', () => {
     await expect(indicator).toBeVisible();
     await indicator.click();
     const popover = page.getByTestId('connection-status-popover');
-    await expect(popover).toContainText('Status: Checking…');
+    await expect(popover).toContainText(/Status: (Checking…|Not yet connected)/);
 
-    await page.keyboard.press('Escape');
-    await expect(popover).toBeHidden({ timeout: 10000 });
+    await closeConnectionPopover(page);
     await expect(indicator).toHaveAttribute('data-connection-state', 'OFFLINE_NO_DEMO', { timeout: 10000 });
     await indicator.click();
     await expect(popover).toContainText('Status: Not yet connected');

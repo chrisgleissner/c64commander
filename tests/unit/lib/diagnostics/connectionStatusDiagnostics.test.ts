@@ -61,4 +61,35 @@ describe('connectionStatusDiagnostics', () => {
     expect(medium.rest.severity).toBe('medium');
     expect(medium.logIssues.severity).toBe('low');
   });
+
+  it('counts REST status as null and uses error string to mark failure (BRDA:33 FALSE, BRDA:34 TRUE)', () => {
+    const traceEvents: TraceEvent[] = [
+      createTraceEvent('rest-response', { status: 'not-a-number', error: null }),
+      createTraceEvent('rest-response', { status: 'not-a-number', error: 'timeout reached' }),
+    ];
+    const summary = buildConnectionDiagnosticsSummary(traceEvents, [], []);
+    // first event: status=null, no error → not failed
+    // second event: status=null, error string present → failed
+    expect(summary.rest.total).toBe(2);
+    expect(summary.rest.failed).toBe(1);
+  });
+
+  it('counts FTP hasError as failure when result is not failure (BRDA:48 TRUE)', () => {
+    const traceEvents: TraceEvent[] = [
+      createTraceEvent('ftp-operation', { result: 'success', error: 'disk full' }),
+    ];
+    const summary = buildConnectionDiagnosticsSummary(traceEvents, [], []);
+    expect(summary.ftp.total).toBe(1);
+    expect(summary.ftp.failed).toBe(1);
+  });
+
+  it('uses null for FTP result when it is not a string (BRDA:48 FALSE)', () => {
+    const traceEvents: TraceEvent[] = [
+      createTraceEvent('ftp-operation', { result: 42, error: null }),
+    ];
+    const summary = buildConnectionDiagnosticsSummary(traceEvents as any, [], []);
+    // result not a string → null, no error → not failed
+    expect(summary.ftp.total).toBe(1);
+    expect(summary.ftp.failed).toBe(0);
+  });
 });

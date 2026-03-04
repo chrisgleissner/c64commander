@@ -1,4 +1,10 @@
-# CI Remediation and Release Candidate Plan
+# Fuzz Results Stabilisation & Report Correctness Plan
+
+## Previous plan
+
+The prior CI remediation content is below this section. This section takes priority.
+
+---
 
 ## Scope
 

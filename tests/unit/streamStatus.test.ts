@@ -60,4 +60,40 @@ describe('streamStatus', () => {
       port: '11000',
     });
   });
+
+  it('returns all OFF when payload is undefined', () => {
+    const result = buildStreamStatusEntries(undefined);
+    expect(result).toHaveLength(3);
+    for (const entry of result) {
+      expect(entry.state).toBe('OFF');
+    }
+  });
+
+  it('reads stream targets from flat payload without Data Streams wrapper', () => {
+    // Exercises the `payload['Data Streams'] ?? payload` fallback branch
+    const result = buildStreamStatusEntries({
+      'Stream VIC to': { selected: '10.0.0.1:11000' },
+      'Stream Audio to': { selected: 'off' },
+      'Stream Debug to': { selected: '0.0.0.0:0' },
+    });
+
+    expect(result[0]).toEqual({ key: 'vic', label: 'VIC', state: 'ON', ip: '10.0.0.1', port: '11000' });
+    expect(result[1].state).toBe('OFF');
+    expect(result[2].state).toBe('OFF');
+  });
+
+  it('reads stream targets from Data Streams category without items key', () => {
+    // Exercises the `category?.items ?? category` fallback branch
+    const result = buildStreamStatusEntries({
+      'Data Streams': {
+        'Stream VIC to': { selected: '192.168.0.5:11000' },
+        'Stream Audio to': { selected: 'none' },
+        'Stream Debug to': { selected: '0.0.0.0' },
+      },
+    });
+
+    expect(result[0]).toEqual({ key: 'vic', label: 'VIC', state: 'ON', ip: '192.168.0.5', port: '11000' });
+    expect(result[1].state).toBe('OFF');
+    expect(result[2].state).toBe('OFF');
+  });
 });

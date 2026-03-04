@@ -190,5 +190,121 @@ describe('HvscSongSource', () => {
             expect(result.path).toBe('/DEMOS/0-9/35_Years.sid');
             expect(result.durationMs).toBe(161000);
         });
+
+        it('falls back to entry.path when payload has no virtualPath (line 76 FALSE)', async () => {
+            vi.mocked(getHvscSong).mockResolvedValue({
+                id: 6006,
+                virtualPath: '/DEMOS/Fallback.sid',
+                fileName: 'Fallback.sid',
+                durationSeconds: 60,
+                durationsSeconds: null,
+                subsongCount: null,
+                md5: null,
+                dataBase64: 'AQID',
+            });
+
+            const entry = {
+                id: '6006',
+                path: '/DEMOS/Fallback.sid',
+                title: 'Fallback.sid',
+                durationMs: 60000,
+                songNr: 1,
+                subsongCount: 1,
+                source: 'hvsc',
+                payload: undefined,
+            };
+
+            const result = await HvscSongSource.getSong(entry);
+            expect(getHvscSong).toHaveBeenCalledWith({ virtualPath: '/DEMOS/Fallback.sid' });
+            expect(result.durationMs).toBe(60000);
+        });
+
+        it('resolves durationMs from song when entry.durationMs is undefined (line 79)', async () => {
+            vi.mocked(getHvscSong).mockResolvedValue({
+                id: 7007,
+                virtualPath: '/DEMOS/NoDuration.sid',
+                fileName: 'NoDuration.sid',
+                durationSeconds: null,
+                durationsSeconds: null,
+                subsongCount: null,
+                md5: null,
+                dataBase64: 'AQID',
+            });
+
+            const entry = {
+                id: '7007',
+                path: '/DEMOS/NoDuration.sid',
+                title: 'NoDuration.sid',
+                durationMs: undefined,
+                songNr: 1,
+                subsongCount: 1,
+                source: 'hvsc',
+                payload: { id: 7007, virtualPath: '/DEMOS/NoDuration.sid' },
+            };
+
+            const result = await HvscSongSource.getSong(entry);
+            expect(result.durationMs).toBeUndefined();
+        });
+    });
+
+    it('listFolders uses folder as name when path ends in slash (line 17 OR fallback)', async () => {
+        vi.mocked(getHvscFolderListing).mockResolvedValue({
+            path: '/',
+            folders: ['/DEMOS/'],
+            songs: [],
+        });
+
+        const folders = await HvscSongSource.listFolders('/');
+        expect(folders[0].name).toBe('/DEMOS/');
+    });
+
+    it('listSongs where resolution provides durations but null subsongCount (line 38)', async () => {
+        vi.mocked(getHvscFolderListing).mockResolvedValue({
+            path: '/DEMOS',
+            folders: [],
+            songs: [{
+                id: 8008,
+                virtualPath: '/DEMOS/Multi.sid',
+                fileName: 'Multi.sid',
+                durationSeconds: null,
+                durationsSeconds: null,
+                subsongCount: null,
+            }],
+        });
+        vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
+            durationSeconds: null,
+            durations: [30, 60],
+            subsongCount: null,
+        });
+
+        const songs = await HvscSongSource.listSongs('/DEMOS');
+        expect(songs).toHaveLength(2);
+        expect(songs[0].durationMs).toBe(30000);
+    });
+
+    it('listSongs multi-subsong with zero-duration entry (line 63 FALSE)', async () => {
+        vi.mocked(getHvscFolderListing).mockResolvedValue({
+            path: '/DEMOS',
+            folders: [],
+            songs: [{
+                id: 9009,
+                virtualPath: '/DEMOS/ZeroDuration.sid',
+                fileName: 'ZeroDuration.sid',
+                durationSeconds: null,
+                durationsSeconds: null,
+                subsongCount: null,
+            }],
+        });
+        vi.mocked(resolveHvscSonglengthDuration).mockResolvedValue({
+            durationSeconds: null,
+            durations: [30, 0, 60],
+            subsongCount: 3,
+        });
+
+        const songs = await HvscSongSource.listSongs('/DEMOS');
+        expect(songs).toHaveLength(3);
+        expect(songs[1].durationMs).toBeUndefined();
+        expect(songs[0].durationMs).toBe(30000);
+        expect(songs[2].durationMs).toBe(60000);
     });
 });

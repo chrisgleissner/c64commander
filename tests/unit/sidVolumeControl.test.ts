@@ -167,4 +167,32 @@ describe('sid volume control helpers', () => {
     const updates = buildEnabledSidRestoreUpdates(items, { socket1: true, socket2: true, ultiSid1: true, ultiSid2: true }, null, null);
     expect(updates).toEqual({});
   });
+
+  it('handles category payload without items wrapper (BRDA:60 block 17)', () => {
+    // categoryData without .items → itemsData = categoryData (right side of ??)
+    // Also tests itemConfig===undefined (BRDA:63 block 22) when item key missing
+    const sockets = {
+      'SID Sockets Configuration': {
+        'SID Socket 1': { selected: 'SID socket' },
+        // 'SID Socket 2' intentionally absent → covers BRDA:63 (itemConfig===undefined)
+      },
+    };
+    const addressing = {
+      'SID Addressing': {
+        'UltiSID 1 Address': { selected: 'Unmapped' },
+        'UltiSID 2 Address': { selected: '$D500' },
+      },
+    };
+
+    const result = buildSidEnablement(
+      sockets as any,
+      addressing as any,
+    );
+
+    // SID Socket 1 found (via no-items path), SID Socket 2 == undefined (missing key branch)
+    expect(result.socket1).toBe(true);
+    expect(result.socket2).toBeUndefined();
+    expect(result.ultiSid1).toBe(false);
+    expect(result.ultiSid2).toBe(true);
+  });
 });

@@ -46,4 +46,32 @@ describe('autostart', () => {
     await vi.runAllTimersAsync();
     await assertion;
   });
+
+  it('uses default poll interval and max attempts when options not provided', async () => {
+    // Covers the options.pollIntervalMs ?? 120 and options.maxAttempts ?? 20 fallback branches
+    const api = createApiMock();
+    api.readMemory.mockResolvedValue(new Uint8Array([0]));
+    api.writeMemory.mockResolvedValue({ errors: [] });
+
+    // Call without any options — triggers both ?? default branches
+    const task = injectAutostart(api as any);
+    await vi.runAllTimersAsync();
+    await task;
+
+    expect(api.writeMemory).toHaveBeenCalledWith('0277', AUTOSTART_SEQUENCE);
+  });
+
+  it('treats empty readMemory response as buffer-length zero via nullish coalescing', async () => {
+    // Covers data[0] ?? 0 when readMemory returns an empty Uint8Array
+    const api = createApiMock();
+    // Return empty array: data[0] is undefined, ?? 0 makes it 0 (buffer clear)
+    api.readMemory.mockResolvedValue(new Uint8Array(0));
+    api.writeMemory.mockResolvedValue({ errors: [] });
+
+    const task = injectAutostart(api as any, AUTOSTART_SEQUENCE, { pollIntervalMs: 10, maxAttempts: 3 });
+    await vi.runAllTimersAsync();
+    await task;
+
+    expect(api.writeMemory).toHaveBeenCalledWith('0277', AUTOSTART_SEQUENCE);
+  });
 });

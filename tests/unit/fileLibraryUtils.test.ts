@@ -109,4 +109,48 @@ describe('fileLibraryUtils', () => {
     expect(request.path).toBe(entry.path);
     expect(request.file).toBe(runtimeFile);
   });
+
+  it('falls back to localUri-based file when no runtime file (BRDA:73)', () => {
+    const entry: FileLibraryEntry = {
+      id: 'local:/path/demo.sid',
+      source: 'local',
+      name: 'demo.sid',
+      path: '/path/demo.sid',
+      category: 'sid',
+      localUri: 'content://uri/demo.sid',
+      addedAt: new Date().toISOString(),
+    };
+    // runtimeFiles has no entry for this id → runtime=undefined → || right side
+    const request = resolvePlayRequestFromLibrary(entry, {});
+    expect(request.source).toBe('local');
+    expect(request.file).toBeDefined();
+  });
+
+  it('uses undefined file when no runtime and no localUri (BRDA:74)', () => {
+    const entry: FileLibraryEntry = {
+      id: 'local:/path/demo.sid',
+      source: 'local',
+      name: 'demo.sid',
+      path: '/path/demo.sid',
+      category: 'sid',
+      addedAt: new Date().toISOString(),
+    };
+    const request = resolvePlayRequestFromLibrary(entry, {});
+    expect(request.source).toBe('local');
+    expect(request.file).toBeUndefined();
+  });
+
+  it('resolves hvsc play request with runtime file when available (BRDA:75 hvsc)', () => {
+    const entry: FileLibraryEntry = {
+      id: 'hvsc:/DEMOS/Song.sid',
+      source: 'hvsc',
+      name: 'Song.sid',
+      path: '/DEMOS/Song.sid',
+      category: 'sid',
+      addedAt: new Date().toISOString(),
+    };
+    const request = resolvePlayRequestFromLibrary(entry, {});
+    expect(request.source).toBe('hvsc');
+    expect(request.path).toBe(entry.path);
+  });
 });

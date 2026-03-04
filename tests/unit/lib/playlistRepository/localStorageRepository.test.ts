@@ -241,6 +241,28 @@ describe('localStorage playlist repository', () => {
         expect(categoryFiltered.rows.map((row) => row.playlistItem.playlistItemId)).toEqual(['item-a', 'item-b']);
     });
 
+    it('searches across tracks including those with null category', async () => {
+        // Covers rowSearchText: `row.track.category ?? ''` when category is null
+        const repository = getLocalStoragePlaylistDataRepository();
+        const noCategoryTrack: TrackRecord = {
+            ...buildTrack({ trackId: 'track-nocat', title: 'NoCatSong', path: '/nocat.sid', sourceLocator: '/nocat.sid' }),
+            category: null,
+        };
+        await repository.upsertTracks([noCategoryTrack]);
+        await repository.replacePlaylistItems('playlist-default', [
+            buildPlaylistItem({ playlistItemId: 'item-nocat', trackId: 'track-nocat', sortKey: '0001' }),
+        ]);
+
+        const result = await repository.queryPlaylist({
+            playlistId: 'playlist-default',
+            query: 'nocat',
+            offset: 0,
+            limit: 10,
+        });
+        expect(result.rows).toHaveLength(1);
+        expect(result.rows[0].track.category).toBeNull();
+    });
+
     it('handles random-session edge cases when order is missing or cursor is out of range', async () => {
         const repository = getLocalStoragePlaylistDataRepository();
 
@@ -291,4 +313,80 @@ describe('localStorage playlist repository', () => {
             }
         }
     });
+
+    it('recovers from null JSON state (parsed.version shows null in log)', async () => {
+        localStorage.setItem('c64u_playlist_repo:v1', 'null');
+        const repository = getLocalStoragePlaylistDataRepository();
+        const result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
+        expect(result.rows).toEqual([]);
+        expect(addLog).toHaveBeenCalledWith('warn', expect.stringContaining('Incompatible'), expect.objectContaining({
+            version: null,
+        }));
+    });
+
+    it('recovers from partial valid state missing optional fields', async () => {
+        // Store state with version=1 but missing tracks/playlistItems/sessions
+        localStorage.setItem('c64u_playlist_repo:v1', JSON.stringify({ version: 1 }));
+        const repository = getLocalStoragePlaylistDataRepository();
+        const result = await repository.queryPlaylist({ playlistId: 'playlist-default', limit: 10, offset: 0 });
+        expect(result.rows).toEqual([]);
+        expect(result.totalMatchCount).toBe(0);
+    });
+
+    it('getSession returns null when no session stored', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        const session = await repository.getSession('nonexistent-playlist');
+        expect(session).toBeNull();
+    });
+
+    it('getRandomSession returns null when no random session stored', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        const session = await repository.getRandomSession('nonexistent-playlist');
+        expect(session).toBeNull();
+    });
+
+    it('createSession with explicit seed uses provided seed', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        const session = await repository.createSession('pl-1', ['a', 'b', 'c'], 42);
+        expect(session.seed).toBe(42);
+        expect(session.order).toHaveLength(3);
+    });
+
+    it('next wraps cursor to 0 when reaching end of order', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        await repository.saveRandomSession({
+            playlistId: 'pl-wrap',
+            seed: 1,
+            cursor: 1, // last index of 2-item array
+            order: ['item-x', 'item-y'],
+        });
+        const first = await repository.next('pl-wrap');
+        expect(first).toBe('item-y'); // cursor was at 1
+        const second = await repository.next('pl-wrap');
+        expect(second).toBe('item-x'); // cursor wrapped to 0
+    });
+
+    it('rowSearchText includes category in search', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        await repository.upsertTracks([buildTrack({ trackId: 'track-cat', title: 'SongTitle', category: 'demo' })]);
+        await repository.replacePlaylistItems('pl-cat', [
+            buildPlaylistItem({ playlistItemId: 'item-cat', trackId: 'track-cat', sortKey: '0001' }),
+        ]);
+        const result = await repository.queryPlaylist({
+            playlistId: 'pl-cat',
+            query: 'demo',
+            limit: 10,
+            offset: 0,
+        });
+        expect(result.rows.length).toBe(1);
+    });
+
+    it('createSession without explicit seed generates a stable hash seed (BRDA:199 FALSE)', async () => {
+        const repository = getLocalStoragePlaylistDataRepository();
+        // No seed provided → typeof seed !== 'number' → stableHash used
+        const session = await repository.createSession('pl-hash', ['x', 'y', 'z']);
+        expect(typeof session.seed).toBe('number');
+        expect(session.order).toHaveLength(3);
+    });
+
 });
