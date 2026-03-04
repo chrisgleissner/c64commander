@@ -6,7 +6,7 @@
  * See <https://www.gnu.org/licenses/> for details.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/hooks/use-toast', () => ({
   toast: vi.fn(),
@@ -14,13 +14,18 @@ vi.mock('@/hooks/use-toast', () => ({
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { reportUserError } from '@/lib/uiErrors';
 
 describe('reportUserError', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('logs and shows a destructive toast', () => {
     const error = new Error('Boom');
     reportUserError({
@@ -42,5 +47,21 @@ describe('reportUserError', () => {
       description: 'Something went wrong',
       variant: 'destructive',
     }));
+  });
+
+  it('uses warn log for recoverable connectivity errors', () => {
+    reportUserError({
+      operation: 'HOME_ACTION',
+      title: 'Error',
+      description: 'Request timed out',
+      error: new Error('Host unreachable'),
+    });
+
+    expect(addErrorLog).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      'HOME_ACTION: Error',
+      expect.objectContaining({ recoverableConnectivityIssue: true }),
+    );
   });
 });

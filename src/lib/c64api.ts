@@ -883,7 +883,11 @@ export class C64API {
             recordTraceError(action, error as Error, failure);
           }
           if (!fuzzBlocked && intent !== 'system') {
-            addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
+            const isTransientFailure = isAbort
+              || isNetworkFailure
+              || /service unavailable|http 503|host unreachable/i.test(rawMessage)
+              || /service unavailable|http 503|host unreachable/i.test(normalizedError);
+            const failureDetails = buildErrorLogDetails(error as Error, {
               path,
               url,
               requestId,
@@ -898,7 +902,12 @@ export class C64API {
               error: normalizedError,
               rawError: rawMessage,
               errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
-            }));
+            });
+            if (isTransientFailure) {
+              addLog('warn', 'C64 API request failed', failureDetails);
+            } else {
+              addErrorLog('C64 API request failed', failureDetails);
+            }
             console.info('C64U_HTTP_FAILURE', JSON.stringify({
               requestId,
               method,
@@ -1047,7 +1056,8 @@ export class C64API {
         const failure = classifyError(error);
         recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
         recordTraceError(action, error as Error, failure);
-        addErrorLog('C64 API upload failed', buildErrorLogDetails(error as Error, {
+        const transientUploadFailure = isAbort || isNetworkFailure || /service unavailable|http 503|host unreachable/i.test(rawMessage);
+        const uploadFailureDetails = buildErrorLogDetails(error as Error, {
           url,
           requestId,
           method,
@@ -1058,7 +1068,12 @@ export class C64API {
           durationMs,
           error: normalizedError,
           rawError: rawMessage,
-        }));
+        });
+        if (transientUploadFailure) {
+          addLog('warn', 'C64 API upload failed', uploadFailureDetails);
+        } else {
+          addErrorLog('C64 API upload failed', uploadFailureDetails);
+        }
         console.info('C64U_HTTP_FAILURE', JSON.stringify({
           requestId,
           method,

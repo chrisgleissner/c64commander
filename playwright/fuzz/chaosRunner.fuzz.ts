@@ -297,7 +297,6 @@ const pickVisibleElement = async (
       // Element removed from DOM between query and check (e.g. toast auto-dismiss).
       // Treat as ineligible rather than propagating a spurious fuzz issue.
       if (isElementDetachedError(e)) {
-        console.warn('[fuzz] pickVisibleElement: element detached mid-scan, skipping');
         continue;
       }
       throw e;

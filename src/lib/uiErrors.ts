@@ -7,7 +7,7 @@
  */
 
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 
 export type UiErrorReport = {
   operation: string;
@@ -35,6 +35,12 @@ const buildErrorDetails = (error?: unknown) => {
   return { message: String(error) };
 };
 
+const isRecoverableConnectivityError = (description: string, error?: unknown) => {
+  const details = buildErrorDetails(error) as { message?: string } | undefined;
+  const message = `${description} ${details?.message ?? ''}`.toLowerCase();
+  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(message);
+};
+
 export const reportUserError = ({
   operation,
   title,
@@ -42,12 +48,21 @@ export const reportUserError = ({
   error,
   context,
 }: UiErrorReport) => {
-  addErrorLog(`${operation}: ${title}`, {
+  const logPayload = {
     operation,
     description,
     ...context,
     error: buildErrorDetails(error),
-  });
+  };
+
+  if (isRecoverableConnectivityError(description, error)) {
+    addLog('warn', `${operation}: ${title}`, {
+      ...logPayload,
+      recoverableConnectivityIssue: true,
+    });
+  } else {
+    addErrorLog(`${operation}: ${title}`, logPayload);
+  }
 
   toast({
     title,

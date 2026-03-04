@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { reportUserError } from '@/lib/uiErrors';
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 
 // Mock dependencies
 vi.mock('@/hooks/use-toast', () => ({
@@ -18,6 +18,7 @@ vi.mock('@/hooks/use-toast', () => ({
 
 vi.mock('@/lib/logging', () => ({
   addErrorLog: vi.fn(),
+  addLog: vi.fn(),
 }));
 
 describe('uiErrors', () => {
@@ -119,5 +120,21 @@ describe('uiErrors', () => {
         error: { message: '42' },
       }));
     });
+  });
+
+  it('downgrades recoverable connectivity errors to warn logs', () => {
+    reportUserError({
+      operation: 'HOME_CPU_SPEED',
+      title: 'Update failed',
+      description: 'Host unreachable',
+      error: new Error('HTTP 503: Service Unavailable'),
+    });
+
+    expect(addErrorLog).not.toHaveBeenCalled();
+    expect(addLog).toHaveBeenCalledWith(
+      'warn',
+      'HOME_CPU_SPEED: Update failed',
+      expect.objectContaining({ recoverableConnectivityIssue: true }),
+    );
   });
 });
