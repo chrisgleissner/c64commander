@@ -74,4 +74,51 @@ describe('checkC64Liveness', () => {
             checkC64Liveness(api as any, { jiffyWaitMs: 0, rasterAttempts: 1, rasterDelayMs: 0 }),
         ).rejects.toThrow('read returned 0 byte(s); expected 3');
     });
+
+    it('reports irq-stalled when raster changes on second attempt', async () => {
+        const api = buildApi({
+            '00A2:3': [new Uint8Array([1, 0, 0]), new Uint8Array([1, 0, 0])],
+            // rasterStart=10, attempt0=10 (no change), attempt1=20 (changed)
+            'D012:1': [new Uint8Array([10]), new Uint8Array([10]), new Uint8Array([20])],
+        });
+
+        const result = await checkC64Liveness(api as any, { jiffyWaitMs: 0, rasterAttempts: 2, rasterDelayMs: 0 });
+
+        expect(result.decision).toBe('irq-stalled');
+        expect(result.rasterChanged).toBe(true);
+        expect(result.rasterEnd).toBe(20);
+    });
+
+    it('uses default rasterAttempts when option is omitted', async () => {
+        const api = buildApi({
+            '00A2:3': [new Uint8Array([5, 0, 0]), new Uint8Array([6, 0, 0])],
+            'D012:1': [new Uint8Array([10])],
+        });
+
+        const result = await checkC64Liveness(api as any, { jiffyWaitMs: 0, rasterDelayMs: 0 });
+
+        // rasterAttempts defaults to 3; jiffy advanced → healthy regardless
+        expect(result.decision).toBe('healthy');
+    });
+
+    it('clamps rasterAttempts to 1 when zero is passed', async () => {
+        const api = buildApi({
+            '00A2:3': [new Uint8Array([1, 0, 0]), new Uint8Array([2, 0, 0])],
+            'D012:1': [new Uint8Array([10])],
+        });
+
+        const result = await checkC64Liveness(api as any, { jiffyWaitMs: 0, rasterAttempts: 0, rasterDelayMs: 0 });
+
+        expect(result.decision).toBe('healthy');
+    });
+
+    it('wraps non-Error thrown during readMemory', async () => {
+        const badApi = {
+            readMemory: async () => { throw 'unexpected failure'; },
+        };
+
+        await expect(
+            checkC64Liveness(badApi as any, { jiffyWaitMs: 0, rasterAttempts: 1, rasterDelayMs: 0 }),
+        ).rejects.toThrow('Liveness check failed');
+    });
 });
