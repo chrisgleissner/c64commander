@@ -12,11 +12,11 @@
  * @returns {string} Formatted timestamp, e.g. "01:23.456".
  */
 export const formatFuzzTimestamp = (ms) => {
-  const totalMs = Math.max(0, Math.round(ms));
-  const minutes = Math.floor(totalMs / 60000);
-  const seconds = Math.floor((totalMs % 60000) / 1000);
-  const millis = totalMs % 1000;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+    const totalMs = Math.max(0, Math.round(ms));
+    const minutes = Math.floor(totalMs / 60000);
+    const seconds = Math.floor((totalMs % 60000) / 1000);
+    const millis = totalMs % 1000;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
 };
 
 /**
@@ -26,10 +26,10 @@ export const formatFuzzTimestamp = (ms) => {
  * @returns {string} Markdown link with optional timestamp suffix.
  */
 export const videoMarkdownLink = (video, sessionOffsetMs) => {
-  const link = `[${video}](${video})`;
-  return (typeof sessionOffsetMs === 'number' && Number.isFinite(sessionOffsetMs))
-    ? `${link} @ ${formatFuzzTimestamp(sessionOffsetMs)}`
-    : link;
+    const link = `[${video}](${video})`;
+    return (typeof sessionOffsetMs === 'number' && Number.isFinite(sessionOffsetMs))
+        ? `${link} @ ${formatFuzzTimestamp(sessionOffsetMs)}`
+        : link;
 };
 
 /**
@@ -39,9 +39,9 @@ export const videoMarkdownLink = (video, sessionOffsetMs) => {
  * @returns {Array} New sorted array (original is not mutated).
  */
 export const sortIssueGroups = (issueGroups) =>
-  [...issueGroups].sort((a, b) => {
-    const totalA = Object.values(a.severityCounts || {}).reduce((sum, v) => sum + (v || 0), 0);
-    const totalB = Object.values(b.severityCounts || {}).reduce((sum, v) => sum + (v || 0), 0);
-    if (totalB !== totalA) return totalB - totalA;
-    return (a.issue_group_id || '').localeCompare(b.issue_group_id || '');
-  });
+    [...issueGroups].sort((a, b) => {
+        const totalA = Object.values(a.severityCounts || {}).reduce((sum, v) => sum + (v || 0), 0);
+        const totalB = Object.values(b.severityCounts || {}).reduce((sum, v) => sum + (v || 0), 0);
+        if (totalB !== totalA) return totalB - totalA;
+        return (a.issue_group_id || '').localeCompare(b.issue_group_id || '');
+    });
