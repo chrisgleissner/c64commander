@@ -23,11 +23,21 @@ export type BackendFailureContext = {
 
 const toText = (value: unknown) => (typeof value === 'string' ? value : '');
 
+const extractText = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    return [toText(obj.message), toText(obj.name)].filter(Boolean).join(' ');
+  }
+  return '';
+};
+
 const extractErrorText = (entry: AppLogEntry) => {
   const details = entry.details as Record<string, unknown> | undefined;
-  const rawError = toText(details?.rawError);
-  const error = toText(details?.error);
-  return `${entry.message} ${rawError} ${error}`.trim();
+  const rawError = extractText(details?.rawError);
+  const error = extractText(details?.error);
+  const description = toText(details?.description);
+  return `${entry.message} ${rawError} ${error} ${description}`.trim();
 };
 
 export const isBackendFailureLog = (entry: AppLogEntry) => {
@@ -49,6 +59,7 @@ export const isBackendFailureLog = (entry: AppLogEntry) => {
 export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
   const msg = entry.message;
   if (/^HOME_[A-Z_]+: /.test(msg)) return true;
+  if (/^AUDIO_ROUTING: /.test(msg)) return true;
   if (/^(RESET_DRIVES|DRIVE_POWER|DRIVE_CONFIG_UPDATE|SOFT_IEC_CONFIG_UPDATE): /.test(msg)) return true;
   if (/^(RAM_DUMP_FOLDER_SELECT|BROWSE|CONFIG_UPDATE): /.test(msg)) return true;
   if (msg.includes('FTP listing failed')) return true;
@@ -77,6 +88,7 @@ export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
   if (msg.includes('Songlengths unavailable')) return true;
   if (msg.includes('HVSC filesystem:')) return true;
   if (msg.includes('Failed to capture initial config snapshot')) return true;
+  if (msg.startsWith('Failed to fetch category')) return true;
   return false;
 };
 

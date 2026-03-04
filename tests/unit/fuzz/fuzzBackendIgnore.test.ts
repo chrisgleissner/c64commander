@@ -38,6 +38,8 @@ describe('isAlwaysExpectedFuzzBehavior', () => {
         'Songlengths unavailable: HVSC not found',
         'HVSC filesystem: cannot read path',
         'Failed to capture initial config snapshot',
+        'Failed to fetch category 42: HTTP 503',
+        'Failed to fetch category Sounds: network error',
     ])('returns true for "%s"', (msg) => {
         expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(true);
     });
@@ -74,6 +76,8 @@ describe('isDeviceOperationFailure', () => {
         'HVSC paged folder listing failed; falling back to runtime',
         'HVSC songlengths directory bootstrap failed',
         'HVSC progress interrupted by new request',
+        'AUDIO_ROUTING: Audio routing error',
+        'AUDIO_ROUTING: Solo routing update failed',
     ])('returns true for "%s"', (msg) => {
         expect(isDeviceOperationFailure(makeEntry(msg))).toBe(true);
     });
@@ -163,6 +167,26 @@ describe('shouldIgnoreBackendFailure', () => {
             level: 'error',
             message: 'C64 API request failed',
             details: { rawError: 'net::ERR_CONNECTION_REFUSED' },
+        };
+        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
+    });
+
+    it('ignores device operation failure when details.error is an object with HTTP 503 message', () => {
+        const entry: AppLogEntry = {
+            id: 'z',
+            level: 'error',
+            message: 'HOME_MACHINE_PAUSE_RESUME: Machine action failed',
+            details: { error: { name: 'Error', message: 'HTTP 503: Service Unavailable', stack: 'Error...' } },
+        };
+        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
+    });
+
+    it('ignores device operation failure when details.description contains service unavailable', () => {
+        const entry: AppLogEntry = {
+            id: 'a1',
+            level: 'error',
+            message: 'AUDIO_ROUTING: Audio routing error',
+            details: { description: 'HTTP 503: Service Unavailable' },
         };
         expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
     });

@@ -182,8 +182,8 @@ All three most recent nightly fuzz runs passed. No new application errors or rep
 
 ### iOS CI Failure Analysis
 
-**Failing run:** `22666503934` (triggered by tag `0.5.5`, 2026-03-04 11:01 UTC)  
-**Failing jobs:** `iOS | Maestro group-1`, `iOS | Maestro group-4`  
+**Failing run:** `22666503934` (triggered by tag `0.5.5`, 2026-03-04 11:01 UTC)
+**Failing jobs:** `iOS | Maestro group-1`, `iOS | Maestro group-4`
 **Failing step in both:** `Enforce iOS telemetry gates`
 
 **Root cause identified:**
