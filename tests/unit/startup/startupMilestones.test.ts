@@ -96,4 +96,32 @@ describe('startupMilestones', () => {
       expect.objectContaining({ action: 'click', label: 'Play' }),
     );
   });
+
+  it('also skips "open diagnostics" exact label', async () => {
+    const { markFirstMeaningfulInteraction } = await import('@/lib/startup/startupMilestones');
+
+    markFirstMeaningfulInteraction('click', 'Open Diagnostics');
+
+    expect(addLog).not.toHaveBeenCalledWith('info', 'First meaningful interaction', expect.anything());
+  });
+
+  it('skips labels that include the word diagnostics', async () => {
+    const { markFirstMeaningfulInteraction } = await import('@/lib/startup/startupMilestones');
+
+    markFirstMeaningfulInteraction('click', 'Show Diagnostics Panel');
+
+    expect(addLog).not.toHaveBeenCalledWith('info', 'First meaningful interaction', expect.anything());
+  });
+
+  it('does not skip empty label and proceeds normally', async () => {
+    const { markFirstMeaningfulInteraction } = await import('@/lib/startup/startupMilestones');
+
+    markFirstMeaningfulInteraction('click', '');
+    // Empty label is NOT skipped — the interaction is recorded
+    expect(addLog).toHaveBeenCalledWith(
+      'info',
+      'First meaningful interaction',
+      expect.objectContaining({ action: 'click', label: '' }),
+    );
+  });
 });

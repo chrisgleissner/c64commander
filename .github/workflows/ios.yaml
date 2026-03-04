@@ -83,7 +83,42 @@ jobs:
         run: |
           set -euo pipefail
           cd ios/native-tests
-          swift test
+          swift test --enable-code-coverage
+
+      - name: Export Swift coverage to lcov
+        run: |
+          set -euo pipefail
+          PROFDATA="ios/native-tests/.build/debug/codecov/default.profdata"
+          XCTEST=$(find ios/native-tests/.build/debug -maxdepth 1 -name "*.xctest" 2>/dev/null | head -1)
+          if [[ -z "$XCTEST" ]]; then
+            echo "No .xctest bundle found; skipping lcov export"
+            exit 0
+          fi
+          BUNDLE_NAME=$(basename "$XCTEST" .xctest)
+          BINARY="$XCTEST/Contents/MacOS/$BUNDLE_NAME"
+          if [[ ! -f "$BINARY" || ! -f "$PROFDATA" ]]; then
+            echo "Binary ($BINARY) or profdata ($PROFDATA) not found; skipping lcov export"
+            exit 0
+          fi
+          xcrun llvm-cov export \
+            -format=lcov \
+            -instr-profile "$PROFDATA" \
+            "$BINARY" \
+            > ios/native-tests/swift-lcov.info
+          echo "Swift lcov generated: $(wc -l < ios/native-tests/swift-lcov.info) lines"
+
+      - name: Upload Swift coverage to Codecov
+        uses: codecov/codecov-action@v5
+        env:
+          CODECOV_SHA: ${{ env.CI_SHA }}
+          CC_SHA: ${{ env.CI_SHA }}
+        with:
+          files: ios/native-tests/swift-lcov.info
+          flags: swift
+          name: c64-commander-swift-coverage
+          use_pypi: true
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build web assets
         run: npm run build

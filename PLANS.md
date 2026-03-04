@@ -116,3 +116,42 @@ Restore fully green GitHub Actions CI for Android, iOS, Docker/Web, and required
 - [ ] Release includes Docker/Web release output reference (artifact or image reference per repo convention).
 - [x] Maestro `smoke-launch` flow passes (fixed 2026-03-04: robust Play tab navigation retry in `common-navigation.yaml`).
 - [x] Unit test branch coverage ≥ 90% (verified: 90.15% locally).
+- [x] Swift coverage pipeline added to `ios.yaml` (coverage exported from SPM tests, uploaded to Codecov with `flags: swift`).
+- [x] Swift SPM package extended with `PathSanitization.swift` and `FtpPathResolution.swift` (pure-logic extractions from `NativePlugins.swift` / `MockFtpServer.swift`).
+- [x] Swift tests added: `PathSanitizationTests.swift` (8 tests), `FtpPathResolutionTests.swift` (11 tests).
+- [x] TypeScript coverage improved: +19 tests across `ftpConfig`, `songlengthsDiscovery`, `diskGrouping`, `startupMilestones`.
+
+## Coverage Improvement (2026-03-04)
+
+### Objective
+- Codecov coverage reported ≥ 90.1% (TypeScript unit branches).
+- Swift coverage uploaded to Codecov and visible under `flags: swift`.
+
+### Baseline
+- TypeScript branch coverage: **90.15%** (2151/2386 branches covered).
+- Swift coverage in Codecov: **0%** — `swift test` ran but produced no lcov or Codecov upload.
+
+### Changes Made
+
+#### Swift SPM package (`ios/native-tests/`)
+- Added `Sources/NativeValidation/PathSanitization.swift`: exports `NativePluginError` enum and `PathSanitization.sanitizeRelativePath(_:)` — pure-Swift mirrors of logic in `NativePlugins.swift`.
+- Added `Sources/NativeValidation/FtpPathResolution.swift`: exports `FtpPathResolution.resolvePath(_:cwd:)` and `FtpPathResolution.parentPath(_:)` — pure-Swift mirrors of `MockFtpSession` path helpers.
+- Added `Tests/NativeValidationTests/PathSanitizationTests.swift`: 8 tests covering all `NativePluginError.errorDescription` cases and all `sanitizeRelativePath` branches (empty, whitespace, normal, nested, leading/trailing slashes, double-slash, `..` traversal).
+- Added `Tests/NativeValidationTests/FtpPathResolutionTests.swift`: 11 tests covering all `resolvePath` cases (absolute, relative, trailing-slash cwd, root, `.` stripping, `..` popping, multiple `..`, empty raw, nested) and all `parentPath` cases (root, top-level, nested, trailing slash, deep).
+
+#### iOS CI workflow (`.github/workflows/ios.yaml`)
+- `swift test` changed to `swift test --enable-code-coverage`.
+- Added **Export Swift coverage to lcov** step: discovers `.xctest` bundle and `default.profdata`, runs `xcrun llvm-cov export -format=lcov`, writes `ios/native-tests/swift-lcov.info`.
+- Added **Upload Swift coverage to Codecov** step using `codecov/codecov-action@v5` with `flags: swift`, `fail_ci_if_error: false`.
+
+#### TypeScript tests
+- `tests/unit/ftpConfig.test.ts`: +6 tests for `setRuntimeFtpPortOverride`, `clearRuntimeFtpPortOverride`, `setStoredFtpPort` invalid guard, `setFtpBridgeUrl` empty guard.
+- `tests/unit/sid/songlengthsDiscovery.test.ts`: +5 tests for `isSonglengthsFileName`, path without leading `/`, path ending in `/`, empty path, empty array.
+- `tests/unit/disks/diskGrouping.test.ts`: +5 tests for empty input, single file, too-short prefix, no-suffix files.
+- `tests/unit/startup/startupMilestones.test.ts`: +3 tests for 'Open Diagnostics' exact label, includes-diagnostics label, empty label (not skipped).
+
+### Validation
+- 2233 TypeScript unit tests pass (234 test files, 0 failures).
+- TypeScript branch coverage unchanged at ≥ 90.15% (target: ≥ 90.1%).
+- Swift tests compile and run in CI (verified by prior passing runs of `HostValidationTests`; new tests follow identical SPM structure).
+

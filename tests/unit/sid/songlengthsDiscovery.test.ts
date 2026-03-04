@@ -7,34 +7,85 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildSonglengthsSearchPaths, collectSonglengthsSearchPaths, DOCUMENTS_FOLDER, SONGLENGTHS_FILE_NAMES } from '@/lib/sid/songlengthsDiscovery';
+import {
+  buildSonglengthsSearchPaths,
+  collectSonglengthsSearchPaths,
+  DOCUMENTS_FOLDER,
+  isSonglengthsFileName,
+  SONGLENGTHS_FILE_NAMES,
+} from '@/lib/sid/songlengthsDiscovery';
 
 const normalize = (paths: string[]) => paths.map((path) => path.replace(/\\/g, '/'));
 
 describe('songlengthsDiscovery', () => {
-  it('builds upward and DOCUMENTS search paths', () => {
-    const paths = buildSonglengthsSearchPaths('/Music/DEMOS/demo.sid');
-    const normalized = normalize(paths);
-    SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
-      expect(normalized).toContain(`/Music/DEMOS/${fileName}`);
-      expect(normalized).toContain(`/Music/DEMOS/${DOCUMENTS_FOLDER}/${fileName}`);
-      expect(normalized).toContain(`/Music/${fileName}`);
-      expect(normalized).toContain(`/Music/${DOCUMENTS_FOLDER}/${fileName}`);
-      expect(normalized).toContain(`/${fileName}`);
-      expect(normalized).toContain(`/${DOCUMENTS_FOLDER}/${fileName}`);
+  describe('isSonglengthsFileName', () => {
+    it('accepts recognised file names case-insensitively', () => {
+      expect(isSonglengthsFileName('songlengths.md5')).toBe(true);
+      expect(isSonglengthsFileName('SONGLENGTHS.MD5')).toBe(true);
+      expect(isSonglengthsFileName('songlengths.txt')).toBe(true);
+      expect(isSonglengthsFileName('  SONGLENGTHS.TXT  ')).toBe(true);
+    });
+
+    it('rejects non-songlengths file names', () => {
+      expect(isSonglengthsFileName('songlengths.json')).toBe(false);
+      expect(isSonglengthsFileName('other.md5')).toBe(false);
+      expect(isSonglengthsFileName('')).toBe(false);
     });
   });
 
-  it('collects unique normalized paths across inputs', () => {
-    const paths = collectSonglengthsSearchPaths([
-      '/Music/DEMOS/demo.sid',
-      '/Music/DEMOS/demo2.sid',
-    ]);
-    SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
-      const matches = paths.filter((path) => path.endsWith(`/${fileName}`));
-      const unique = new Set(matches);
-      expect(unique.size).toBeGreaterThan(0);
-      expect(unique.size).toBe(matches.length);
+  describe('buildSonglengthsSearchPaths', () => {
+    it('builds upward and DOCUMENTS search paths', () => {
+      const paths = buildSonglengthsSearchPaths('/Music/DEMOS/demo.sid');
+      const normalized = normalize(paths);
+      SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+        expect(normalized).toContain(`/Music/DEMOS/${fileName}`);
+        expect(normalized).toContain(`/Music/DEMOS/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/Music/${fileName}`);
+        expect(normalized).toContain(`/Music/${DOCUMENTS_FOLDER}/${fileName}`);
+        expect(normalized).toContain(`/${fileName}`);
+        expect(normalized).toContain(`/${DOCUMENTS_FOLDER}/${fileName}`);
+      });
+    });
+
+    it('handles path without leading slash', () => {
+      const paths = buildSonglengthsSearchPaths('Music/demo.sid');
+      const normalized = normalize(paths);
+      SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+        expect(normalized.some((p) => p.endsWith(`/${fileName}`))).toBe(true);
+      });
+    });
+
+    it('handles directory path ending with slash', () => {
+      const paths = buildSonglengthsSearchPaths('/Music/DEMOS/');
+      const normalized = normalize(paths);
+      SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+        expect(normalized).toContain(`/Music/DEMOS/${fileName}`);
+      });
+    });
+
+    it('handles empty or falsy path gracefully', () => {
+      const paths = buildSonglengthsSearchPaths('');
+      expect(Array.isArray(paths)).toBe(true);
+      expect(paths.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('collectSonglengthsSearchPaths', () => {
+    it('collects unique normalized paths across inputs', () => {
+      const paths = collectSonglengthsSearchPaths([
+        '/Music/DEMOS/demo.sid',
+        '/Music/DEMOS/demo2.sid',
+      ]);
+      SONGLENGTHS_FILE_NAMES.forEach((fileName) => {
+        const matches = paths.filter((path) => path.endsWith(`/${fileName}`));
+        const unique = new Set(matches);
+        expect(unique.size).toBeGreaterThan(0);
+        expect(unique.size).toBe(matches.length);
+      });
+    });
+
+    it('returns empty array for empty input', () => {
+      expect(collectSonglengthsSearchPaths([])).toEqual([]);
     });
   });
 });
