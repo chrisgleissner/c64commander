@@ -525,13 +525,26 @@ test.describe('Home header and diagnostics overlay', () => {
                 return raw ? JSON.parse(raw).length : 0;
             });
 
-        const beforeOpenTraces = await getTraceCount();
+        const getStableTraceCount = async () => {
+            let previous = -1;
+            for (let attempt = 0; attempt < 12; attempt += 1) {
+                const current = await getTraceCount();
+                if (current === previous) {
+                    return current;
+                }
+                previous = current;
+                await page.waitForTimeout(50);
+            }
+            return previous;
+        };
+
+        const beforeOpenTraces = await getStableTraceCount();
 
         await page.getByRole('button', { name: 'Diagnostics', exact: true }).click();
         const dialog = page.getByRole('dialog', { name: /Diagnostics/i });
         await expect(dialog).toBeVisible();
 
-        const afterOpenTraces = await getTraceCount();
+        const afterOpenTraces = await getStableTraceCount();
         expect(afterOpenTraces).toBe(beforeOpenTraces);
 
         const baselineLogs = await getLogCount();
