@@ -230,6 +230,9 @@ The same code (commit `a49983b6`) passed on the PR branch run (`22666191032`, 10
 - `npm run lint`: **PASS** (no errors)
 
 ### Current Status
-- Fuzz: last 3 runs all passing — no action required
+- Fuzz: last 3 CI runs all passing — no action required
+- Fuzz (local deterministic, seed 4242): fixed two remaining gaps
+  - HVSC operational messages (`paged folder listing failed`, `songlengths directory bootstrap failed`, `progress interrupted`) were only in `isDeviceOperationFailure` but not `isAlwaysExpectedFuzzBehavior`; `shouldIgnoreBackendFailure` is not called for `warn`-level entries, so these appeared as issues. Fixed by also adding them to `isAlwaysExpectedFuzzBehavior`.
+  - Local non-CI visual stagnation threshold (10s) was too strict for browser-based OPFS initialisation (~16.5s on first HVSC filesystem access). Raised to 25s and always propagated to child processes.
 - iOS CI: root cause identified (simulator infra instability on tag run) and fix implemented
 - Fix classifies `simctl`-unavailable disappearances as warnings rather than hard failures, preserving all genuine-crash detection
