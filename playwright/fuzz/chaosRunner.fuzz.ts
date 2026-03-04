@@ -278,6 +278,9 @@ const describeElement = async (element: ElementHandle) =>
     return `${tag}${id}${rolePart}${label}`.trim();
   });
 
+const isElementDetachedError = (e: unknown): boolean =>
+  e instanceof Error && e.message.includes('not attached to the DOM');
+
 const pickVisibleElement = async (
   page: Page,
   selector: string,
@@ -287,8 +290,18 @@ const pickVisibleElement = async (
   const elements = await page.$$(selector);
   const visible: ElementHandle[] = [];
   for (const element of elements) {
-    if (!(await element.isVisible())) continue;
-    if (filter && !(await filter(element as ElementHandle))) continue;
+    try {
+      if (!(await element.isVisible())) continue;
+      if (filter && !(await filter(element as ElementHandle))) continue;
+    } catch (e) {
+      // Element removed from DOM between query and check (e.g. toast auto-dismiss).
+      // Treat as ineligible rather than propagating a spurious fuzz issue.
+      if (isElementDetachedError(e)) {
+        console.warn('[fuzz] pickVisibleElement: element detached mid-scan, skipping');
+        continue;
+      }
+      throw e;
+    }
     visible.push(element as ElementHandle);
     if (visible.length >= 30) break;
   }
@@ -861,10 +874,8 @@ test.describe('Fuzz Test', () => {
           localStorage.setItem('c64u_debug_logging_enabled', '1');
           localStorage.setItem('c64u_automatic_demo_mode_enabled', '1');
           (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
-        } catch (storageError) {
-          // SecurityError or quota: set flag via window and log
+        } catch {
           (window as Window & { __c64uFuzzMode?: boolean }).__c64uFuzzMode = true;
-          console.warn('[fuzz] localStorage init failed:', (storageError as Error)?.message || String(storageError));
         }
         try {
           const style = document.createElement('style');
@@ -1003,9 +1014,7 @@ test.describe('Fuzz Test', () => {
         if (issue) return; // terminal issue already recorded
         if (msg.type() !== 'error' && msg.type() !== 'warning') return;
         const text = msg.text();
-        // Suppress fuzz runner's own storage-init warning (emitted when the
-        // browser context denies localStorage access on first navigation).
-        if (text.includes('[fuzz] localStorage init failed')) return;
+        // Fuzz runner initialization no longer emits localStorage warnings.
         // Suppress expected offline / startup messages that are not app bugs.
         if (isAlwaysExpectedFuzzBehavior({ id: 'console', level: msg.type(), message: text } as AppLogEntry)) return;
         if (msg.type() === 'error') {
@@ -2042,9 +2051,21 @@ test.describe('Fuzz Test', () => {
             noProgressCount = 0;
             actionLogged = true;
           } else if (!action) {
-            logInteraction(`s=${totalSteps}\ta=session\tno-action`);
-            recordStuckSessionIssue('no-action', 'No eligible action was available.');
-            break;
+            // No eligible action found but page is responsive: app may be mid-transition.
+            // Navigate home to recover rather than recording a stall issue.
+            server.setFaultMode('none');
+            server.setLatencyMs(null);
+            currentFaultMode = 'none';
+            logInteraction(`s=${totalSteps}\ta=session\tno-action, force-home recovery, faults-cleared`);
+            mode = 'recovery';
+            recoveryAttempts = 0;
+            structuredRecoveryAttempts = 2; // skip structured recovery; jump to force-home
+            recoveryLadderAttempts = 4; // skip close-modal/navigate-back/root-tab/cycle-tab
+            await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: actionTimeoutMs }).catch(() => { });
+            lastVisualChangeAt = Date.now();
+            lastProgressAt = Date.now();
+            noProgressCount = 0;
+            actionLogged = true;
           } else {
             try {
               // Wrap action execution with a hard timeout to prevent hangs

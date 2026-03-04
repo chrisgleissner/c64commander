@@ -254,9 +254,13 @@ export function useC64AllConfig() {
       for (const cat of cats.categories) {
         try {
           configs[cat] = await api.getCategory(cat);
-        } catch (e) {
-          console.warn(`Failed to fetch category ${cat}:`, e);
+        } catch {
+          // Ignore per-category fetch failures here; callers can render partial config safely.
         }
+      }
+
+      if (cats.categories.length > 0 && Object.keys(configs).length === 0) {
+        throw new Error('Failed to fetch configuration data for all categories');
       }
 
       return configs;

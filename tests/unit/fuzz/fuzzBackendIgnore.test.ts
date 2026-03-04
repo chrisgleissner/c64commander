@@ -31,26 +31,17 @@ const nominalContext = (): BackendFailureContext => ({
 
 describe('isAlwaysExpectedFuzzBehavior', () => {
     it.each([
-        'DiagnosticsBridge unavailable',
-        'Category config fetch failed: network error',
-        'API device host changed to 192.168.1.1',
-        'C64 API retry scheduled in 5s',
-        'Songlengths unavailable: HVSC not found',
-        'HVSC filesystem: cannot read path',
-        'HVSC paged folder listing failed; falling back to runtime',
-        'HVSC songlengths directory bootstrap failed',
-        'HVSC progress interrupted by new request',
-        'Failed to capture initial config snapshot',
-        'Failed to fetch category 42: HTTP 503',
-        'Failed to fetch category Sounds: network error',
+        'Fuzz mode blocked request',
+        'fuzz mode blocked real device request',
+        // Device operation failures are always expected in fuzz (mock server returns HTTP 404)
+        'HOME_CPU_SPEED: Update failed',
+        'RESET_DRIVES: Drive reset failed',
+        'C64 API request failed',
     ])('returns true for "%s"', (msg) => {
         expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(true);
     });
 
     it.each([
-        'HOME_CPU_SPEED: Update failed',
-        'RESET_DRIVES: Drive reset failed',
-        'C64 API request failed',
         'Some unrelated log message',
     ])('returns false for "%s"', (msg) => {
         expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(false);
@@ -95,9 +86,9 @@ describe('isDeviceOperationFailure', () => {
 });
 
 describe('shouldIgnoreBackendFailure', () => {
-    it('ignores always-expected fuzz behavior regardless of nominal context', () => {
+    it('ignores explicit fuzz safety block logs regardless of nominal context', () => {
         expect(
-            shouldIgnoreBackendFailure(makeEntry('DiagnosticsBridge unavailable'), nominalContext()),
+            shouldIgnoreBackendFailure(makeEntry('Fuzz mode blocked request'), nominalContext()),
         ).toBe(true);
     });
 
@@ -107,7 +98,7 @@ describe('shouldIgnoreBackendFailure', () => {
                 ...nominalContext(),
                 faultMode: 'timeout',
             }),
-        ).toBe(true);
+        ).toBe(false);
     });
 
     it('ignores device operation failure when server is unreachable', () => {
@@ -116,7 +107,7 @@ describe('shouldIgnoreBackendFailure', () => {
                 ...nominalContext(),
                 serverReachable: false,
             }),
-        ).toBe(true);
+        ).toBe(false);
     });
 
     it('ignores device operation failure when network is offline', () => {
@@ -125,7 +116,7 @@ describe('shouldIgnoreBackendFailure', () => {
                 ...nominalContext(),
                 networkOffline: true,
             }),
-        ).toBe(true);
+        ).toBe(false);
     });
 
     it('ignores device operation failure within the post-outage grace window', () => {
@@ -138,7 +129,7 @@ describe('shouldIgnoreBackendFailure', () => {
                 faultMode: 'none',
                 lastOutageAt: now - 5000, // 5 s ago — inside 60-second window
             }),
-        ).toBe(true);
+        ).toBe(false);
     });
 
     it('does not ignore device operation failure with fully nominal context', () => {
@@ -153,43 +144,43 @@ describe('shouldIgnoreBackendFailure', () => {
         ).toBe(false);
     });
 
-    it('ignores c64 api request failed with HTTP 503 text', () => {
+    it('does not ignore c64 api request failed with HTTP 503 text', () => {
         const entry: AppLogEntry = {
             id: 'x',
             level: 'error',
             message: 'C64 API request failed',
             details: { rawError: 'HTTP 503 service unavailable' },
         };
-        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
+        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(false);
     });
 
-    it('ignores c64 api request failed with net::ERR text', () => {
+    it('does not ignore c64 api request failed with net::ERR text', () => {
         const entry: AppLogEntry = {
             id: 'y',
             level: 'error',
             message: 'C64 API request failed',
             details: { rawError: 'net::ERR_CONNECTION_REFUSED' },
         };
-        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
+        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(false);
     });
 
-    it('ignores device operation failure when details.error is an object with HTTP 503 message', () => {
+    it('does not ignore device operation failure when details.error is an object with HTTP 503 message', () => {
         const entry: AppLogEntry = {
             id: 'z',
             level: 'error',
             message: 'HOME_MACHINE_PAUSE_RESUME: Machine action failed',
             details: { error: { name: 'Error', message: 'HTTP 503: Service Unavailable', stack: 'Error...' } },
         };
-        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
+        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(false);
     });
 
-    it('ignores device operation failure when details.description contains service unavailable', () => {
+    it('does not ignore device operation failure when details.description contains service unavailable', () => {
         const entry: AppLogEntry = {
             id: 'a1',
             level: 'error',
             message: 'AUDIO_ROUTING: Audio routing error',
             details: { description: 'HTTP 503: Service Unavailable' },
         };
-        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(true);
+        expect(shouldIgnoreBackendFailure(entry, nominalContext())).toBe(false);
     });
 });

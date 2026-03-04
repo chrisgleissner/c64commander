@@ -73,40 +73,12 @@ export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
   return false;
 };
 
-/**
- * Returns true for app log entries that represent structural or expected-startup
- * behaviors in the fuzz environment, regardless of fault mode or server state.
- * These messages should never be emitted as fuzz issues because they reflect
- * normal fuzz operating conditions (no native bridge, host cycling, HVSC absent).
- */
 export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
-  const msg = entry.message;
-  if (msg.includes('DiagnosticsBridge unavailable')) return true;
-  if (msg.includes('Category config fetch failed')) return true;
-  if (msg.includes('API device host changed')) return true;
-  if (msg.includes('C64 API retry scheduled')) return true;
-  if (msg.includes('Songlengths unavailable')) return true;
-  if (msg.includes('HVSC filesystem:')) return true;
-  if (msg.includes('HVSC paged folder listing failed')) return true;
-  if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
-  if (msg.includes('HVSC progress interrupted')) return true;
-  if (msg.includes('Failed to capture initial config snapshot')) return true;
-  if (msg.startsWith('Failed to fetch category')) return true;
-  return false;
+  return entry.message.toLowerCase().includes('fuzz mode blocked');
 };
 
-export const shouldIgnoreBackendFailure = (entry: AppLogEntry, context: BackendFailureContext) => {
-  if (isAlwaysExpectedFuzzBehavior(entry)) return true;
-  const isKnownFailure = isBackendFailureLog(entry) || isDeviceOperationFailure(entry);
-  if (!isKnownFailure) return false;
-  const text = extractErrorText(entry).toLowerCase();
-  if (text.includes('http 503') || text.includes('service unavailable')) return true;
-  if (text.includes('failed to fetch') || text.includes('net::err') || text.includes('host unreachable')) return true;
-  if (!context.serverReachable) return true;
-  if (context.networkOffline) return true;
-  if (context.faultMode !== 'none') return true;
-  if (context.lastOutageAt > 0 && context.now - context.lastOutageAt < 60000) return true;
-  return false;
+export const shouldIgnoreBackendFailure = (entry: AppLogEntry, _context: BackendFailureContext) => {
+  return isAlwaysExpectedFuzzBehavior(entry);
 };
 
 type BackendFailureTracker = {
