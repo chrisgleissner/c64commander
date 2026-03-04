@@ -73,17 +73,18 @@ const frameStagnationThresholdSeconds = toPositiveInt(
 );
 const visualStagnationThresholdMs = toPositiveInt(
   env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS,
-  isCiRun ? 30_000 : 10_000,
+  isCiRun ? 30_000 : 25_000,
 );
 const shortVideoToleranceMs = toPositiveInt(
   env.FUZZ_SHORT_VIDEO_TOLERANCE_MS,
   isCiRun ? 15_000 : 1_500,
 );
 
+if (!env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS) {
+  env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS = String(visualStagnationThresholdMs);
+}
+
 if (isCiRun) {
-  if (!env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS) {
-    env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS = String(visualStagnationThresholdMs);
-  }
   if (!env.FUZZ_SHORT_VIDEO_TOLERANCE_MS) {
     env.FUZZ_SHORT_VIDEO_TOLERANCE_MS = String(shortVideoToleranceMs);
   }

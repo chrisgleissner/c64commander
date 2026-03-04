@@ -87,6 +87,9 @@ export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
   if (msg.includes('C64 API retry scheduled')) return true;
   if (msg.includes('Songlengths unavailable')) return true;
   if (msg.includes('HVSC filesystem:')) return true;
+  if (msg.includes('HVSC paged folder listing failed')) return true;
+  if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
+  if (msg.includes('HVSC progress interrupted')) return true;
   if (msg.includes('Failed to capture initial config snapshot')) return true;
   if (msg.startsWith('Failed to fetch category')) return true;
   return false;

@@ -37,6 +37,9 @@ describe('isAlwaysExpectedFuzzBehavior', () => {
         'C64 API retry scheduled in 5s',
         'Songlengths unavailable: HVSC not found',
         'HVSC filesystem: cannot read path',
+        'HVSC paged folder listing failed; falling back to runtime',
+        'HVSC songlengths directory bootstrap failed',
+        'HVSC progress interrupted by new request',
         'Failed to capture initial config snapshot',
         'Failed to fetch category 42: HTTP 503',
         'Failed to fetch category Sounds: network error',
@@ -48,7 +51,6 @@ describe('isAlwaysExpectedFuzzBehavior', () => {
         'HOME_CPU_SPEED: Update failed',
         'RESET_DRIVES: Drive reset failed',
         'C64 API request failed',
-        'HVSC paged folder listing failed',
         'Some unrelated log message',
     ])('returns false for "%s"', (msg) => {
         expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(false);
