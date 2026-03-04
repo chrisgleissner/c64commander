@@ -89,7 +89,7 @@ export class SongLengthServiceFacade {
         this.unavailableReason = 'songlengths unavailable';
         this.loadDurationMs = Date.now() - startedAtMs;
         this.lastLoadedAtIso = new Date().toISOString();
-        safeAddLog('warn', 'Songlengths unavailable', {
+        safeAddLog('info', 'Songlengths unavailable', {
           service: this.options.serviceId,
           trigger,
           configuredPath: configuredPathOrDefault,

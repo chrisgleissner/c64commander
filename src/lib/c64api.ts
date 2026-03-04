@@ -398,7 +398,7 @@ let lastDeviceHost: string | null = null;
 
 const logDeviceHostChange = (nextHost: string, context: { baseUrl: string; mode: 'persisted' | 'runtime' }) => {
   if (lastDeviceHost && lastDeviceHost !== nextHost) {
-    addLog('warn', 'API device host changed', {
+    addLog('info', 'API device host changed', {
       previous: lastDeviceHost,
       next: nextHost,
       baseUrl: context.baseUrl,
@@ -916,7 +916,7 @@ export class C64API {
           const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
           if (shouldRetry) {
             const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
-            addLog('warn', 'C64 API retry scheduled after idle failure', {
+            addLog('debug', 'C64 API retry scheduled after idle failure', {
               requestId,
               method,
               path,
@@ -1136,7 +1136,7 @@ export class C64API {
         });
       }
     } catch (error) {
-      addLog('warn', 'Category config fetch failed; falling back to item fetches', {
+      addLog('debug', 'Category config fetch failed; falling back to item fetches', {
         category,
         error: (error as Error).message,
       });

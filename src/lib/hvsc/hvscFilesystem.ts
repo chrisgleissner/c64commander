@@ -25,7 +25,7 @@ export const MAX_BRIDGE_READ_BYTES = 5 * 1024 * 1024;
 const normalizeFilePath = (path: string) => (path.startsWith('/') ? path : `/${path}`);
 
 const logFilesystemWarning = (message: string, details?: Record<string, unknown>) => {
-  addLog('warn', `HVSC filesystem: ${message}`, details);
+  addLog('debug', `HVSC filesystem: ${message}`, details);
 };
 
 const uint8ToBase64 = (data: Uint8Array) => {

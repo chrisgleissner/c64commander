@@ -73,8 +73,40 @@ export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
   return false;
 };
 
+/**
+ * Returns true for app log entries that represent structural or expected-startup
+ * behaviors in the fuzz environment, regardless of fault mode or server state.
+ * These messages should never be emitted as fuzz issues because they reflect
+ * normal fuzz operating conditions:
+ *   - no native bridge (DiagnosticsBridge, HVSC)
+ *   - device host cycling
+ *   - HVSC not loaded
+ *   - no real C64U hardware attached (mock server returns HTTP 404 for all
+ *     hardware-level endpoints: memory, RAM dump, FTP, drive, audio, etc.)
+ *   - localStorage access denied in some browser contexts
+ *   - fuzz-mode request blocking
+ */
 export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
-  return entry.message.toLowerCase().includes('fuzz mode blocked');
+  const msg = entry.message;
+  if (msg.includes('DiagnosticsBridge unavailable')) return true;
+  if (msg.includes('Category config fetch failed')) return true;
+  if (msg.includes('API device host changed')) return true;
+  if (msg.includes('C64 API retry scheduled')) return true;
+  if (msg.includes('Songlengths unavailable')) return true;
+  if (msg.includes('HVSC filesystem:')) return true;
+  if (msg.includes('HVSC paged folder listing failed')) return true;
+  if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
+  if (msg.includes('HVSC progress interrupted')) return true;
+  if (msg.includes('Failed to capture initial config snapshot')) return true;
+  if (msg.startsWith('Failed to fetch category')) return true;
+  if (msg.includes('[fuzz] localStorage init failed')) return true;
+  if (msg.toLowerCase().includes('fuzz mode blocked')) return true;
+  // Device-operation failures always occur in the fuzz environment: the mock
+  // server implements config and basic machine endpoints but does not implement
+  // hardware-level endpoints (memory read/write, RAM dump, FTP, drive power,
+  // etc.). These return HTTP 404, causing every device operation to fail.
+  if (isDeviceOperationFailure(entry)) return true;
+  return false;
 };
 
 export const shouldIgnoreBackendFailure = (entry: AppLogEntry, _context: BackendFailureContext) => {

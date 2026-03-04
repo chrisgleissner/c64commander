@@ -547,7 +547,7 @@ describe('c64api', () => {
       await expect(pending).resolves.toEqual(expect.objectContaining({ errors: [] }));
       expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(addLogMock).toHaveBeenCalledWith(
-        'warn',
+        'debug',
         'C64 API retry scheduled after idle failure',
         expect.objectContaining({ wasIdle: true }),
       );

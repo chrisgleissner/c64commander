@@ -73,7 +73,7 @@ export const startNativeDiagnosticsBridge = async () => {
             });
         });
     } catch (error) {
-        logger.warn('DiagnosticsBridge unavailable; native diagnostics mirroring disabled', {
+        logger.info('DiagnosticsBridge unavailable; native diagnostics mirroring disabled', {
             details: {
                 origin: 'native',
                 error,
