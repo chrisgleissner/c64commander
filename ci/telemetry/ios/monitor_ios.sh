@@ -160,7 +160,9 @@ running=1
 main_seen_once=0
 main_disappeared=0
 main_disappeared_during_flow=0
+main_disappeared_during_flow_simctl_unreliable=0
 last_app_pid=""
+last_process_source_at_appearance="simulator"
 last_vmmap_ts=0
 run_start_ts="$(date -u +%s)"
 process_source="simulator"
@@ -198,7 +200,17 @@ while (( running == 1 )); do
       main_disappeared=1
       if [[ -f "$FLOW_ACTIVE_FLAG" && ! -f "$FLOW_COMPLETE_FLAG" ]]; then
         main_disappeared_during_flow=1
-        log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "crash during active flow"
+        if [[ "$process_source" == "host" ]]; then
+          # Disappearance detected via host ps fallback (simctl unavailable).
+          # Appearance source: $last_process_source_at_appearance.
+          # When simctl was unavailable at detection time, host ps may not
+          # reliably list simulator-internal processes, so classify this as
+          # an infra-level event rather than a confirmed app crash.
+          main_disappeared_during_flow_simctl_unreliable=1
+          log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "crash during active flow (simctl unavailable at detection)"
+        else
+          log_event "process_disappeared_during_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "crash during active flow"
+        fi
       else
         log_event "process_disappeared_after_flow" "$PACKAGE_BUNDLE_ID:event" "$last_app_pid" "expected teardown"
       fi
@@ -211,6 +223,7 @@ while (( running == 1 )); do
       log_event "process_restarted" "$PACKAGE_BUNDLE_ID:event" "$app_pid" "previous_pid=$last_app_pid"
     fi
     last_app_pid="$app_pid"
+    last_process_source_at_appearance="$process_source"
     main_seen_once=1
 
     if metrics="$(read_ps_metrics "$app_pid" || true)"; then
@@ -302,11 +315,16 @@ cat > "$META_PATH" <<EOF
   "end_timestamp": ${run_end_ts},
   "main_seen_once": ${main_seen_once},
   "main_disappeared": ${main_disappeared},
-  "main_disappeared_during_flow": ${main_disappeared_during_flow}
+  "main_disappeared_during_flow": ${main_disappeared_during_flow},
+  "main_disappeared_during_flow_simctl_unreliable": ${main_disappeared_during_flow_simctl_unreliable}
 }
 EOF
 
 if [[ "$EXPECT_MAIN_PID" == "1" && "$main_seen_once" == "1" && "$main_disappeared_during_flow" == "1" ]]; then
+  if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then
+    echo "telemetry(ios): app process disappeared during active flow (simctl unavailable at detection; reliability reduced)" >&2
+    exit 4
+  fi
   echo "telemetry(ios): app process disappeared during active flow" >&2
   exit 3
 fi

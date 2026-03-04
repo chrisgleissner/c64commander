@@ -604,6 +604,10 @@ jobs:
             echo "telemetry gate warning: app process disappearance/restart detected (rc or non-release flow); see artifacts/ios/_infra/telemetry/events.log"
             exit 0
           fi
+          if [[ "$code" == "4" ]]; then
+            echo "telemetry gate warning: app process disappearance detected but simctl was unavailable at detection time (reduced reliability; likely simulator infra issue); see artifacts/ios/_infra/telemetry/events.log"
+            exit 0
+          fi
           if [[ "$code" == "137" ]]; then
             echo "telemetry gate warning: monitor exited with code 137 (likely infra resource kill); see artifacts/ios/_infra/telemetry/monitor-run.log"
             exit 0

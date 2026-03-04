@@ -16,8 +16,12 @@ decide_exit_code() {
   local expect_main_pid="$1"
   local main_seen_once="$2"
   local main_disappeared_during_flow="$3"
+  local main_disappeared_during_flow_simctl_unreliable="${4:-0}"
 
   if [[ "$expect_main_pid" == "1" && "$main_seen_once" == "1" && "$main_disappeared_during_flow" == "1" ]]; then
+    if [[ "$main_disappeared_during_flow_simctl_unreliable" == "1" ]]; then
+      return 4
+    fi
     return 3
   fi
   return 0
@@ -110,6 +114,28 @@ echo "Test 7: EXPECT_MAIN_PID=0 → exit 0 even with crash"
 code=0
 decide_exit_code "0" "1" "1" || code=$?
 assert_eq "exit code" "0" "$code"
+
+# --- Test 8: PID disappearance during flow, simctl unavailable → exit 4 ---
+echo "Test 8: PID disappearance during flow (simctl unreliable) → exit 4"
+flag_dir="$TEST_DIR/test8"
+mkdir -p "$flag_dir"
+touch "$flag_dir/flow-active.flag"
+classify_disappearance "$flag_dir/flow-active.flag" "$flag_dir/flow-complete.flag"
+assert_eq "classified as during-flow" "1" "$RESULT_DURING_FLOW"
+code=0
+decide_exit_code "1" "1" "$RESULT_DURING_FLOW" "1" || code=$?
+assert_eq "exit code" "4" "$code"
+
+# --- Test 9: PID disappearance during flow, simctl available → still exit 3 ---
+echo "Test 9: PID disappearance during flow (simctl available) → exit 3"
+flag_dir="$TEST_DIR/test9"
+mkdir -p "$flag_dir"
+touch "$flag_dir/flow-active.flag"
+classify_disappearance "$flag_dir/flow-active.flag" "$flag_dir/flow-complete.flag"
+assert_eq "classified as during-flow" "1" "$RESULT_DURING_FLOW"
+code=0
+decide_exit_code "1" "1" "$RESULT_DURING_FLOW" "0" || code=$?
+assert_eq "exit code" "3" "$code"
 
 # --- Summary ---
 echo ""
