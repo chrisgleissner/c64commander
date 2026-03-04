@@ -20,7 +20,7 @@ import { normalizeSourcePath } from '@/lib/sourceNavigation/paths';
 import { createHvscMediaIndex } from './hvscMediaIndex';
 import { loadHvscRoot } from './hvscRootLocator';
 import type { SongLengthResolveQuery, SongLengthResolution } from '@/lib/songlengths';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 import { loadHvscBrowseIndexSnapshot, verifyHvscBrowseIndexIntegrity } from './hvscBrowseIndexStore';
 import {
   addHvscProgressListener as addRuntimeListener,
@@ -225,7 +225,7 @@ export const getHvscFolderListingPaged = async (options: {
     return pageRuntimeListing(runtimeListing, query, offset, limit);
   } catch (error) {
     const err = error as Error;
-    addErrorLog('HVSC paged folder listing failed; falling back to runtime', {
+    addLog('warn', 'HVSC paged folder listing failed; falling back to runtime', {
       path,
       query,
       offset,

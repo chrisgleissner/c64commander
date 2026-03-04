@@ -3,6 +3,7 @@ import os from 'node:os';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { sortIssueGroups, videoMarkdownLink } from './fuzzReportUtils.mjs';
 
 const args = process.argv.slice(2);
 
@@ -598,13 +599,13 @@ const mergeReports = async () => {
   if (!merged.issueGroups.length) {
     summaryLines.push('No issues detected.');
   } else {
-    for (const group of merged.issueGroups) {
+    // Sort deterministically: total count descending, issue_group_id ascending for ties.
+    const sortedGroups = sortIssueGroups(merged.issueGroups);
+    for (const group of sortedGroups) {
       const totalCount = Object.values(group.severityCounts || {}).reduce((sum, value) => sum + (value || 0), 0);
-      const exampleVideos = (group.examples || []).map((example) => example.video).filter(Boolean).slice(0, 3);
-      const exampleScreens = (group.examples || []).map((example) => example.screenshot).filter(Boolean).slice(0, 3);
-      const exampleShards = (group.examples || [])
-        .map((example) => example.shardIndex)
-        .filter((value) => Number.isFinite(value));
+      const examples = group.examples || [];
+      const exampleVideos = examples.map((example) => example.video).filter(Boolean).slice(0, 3);
+      const exampleScreens = examples.map((example) => example.screenshot).filter(Boolean).slice(0, 3);
       summaryLines.push(`## ${group.issue_group_id}`);
       summaryLines.push('');
       summaryLines.push(`- Exception: ${group.signature?.exception || 'n/a'}`);
@@ -616,21 +617,20 @@ const mergeReports = async () => {
       );
       summaryLines.push(`- Platforms: ${(group.platforms || []).join(', ')}`);
       if (exampleVideos.length) {
-        summaryLines.push(`- Videos: ${exampleVideos.map((video) => `[${video}](${video})`).join(', ')}`);
+        const videoLinks = exampleVideos.map((video, i) => {
+          const example = examples.filter((e) => e.video).at(i);
+          return videoMarkdownLink(video, example?.sessionOffsetMs);
+        });
+        summaryLines.push(`- Videos: ${videoLinks.join(', ')}`);
       }
       if (exampleScreens.length) {
         summaryLines.push(`- Screenshots: ${exampleScreens.map((shot) => `[${shot}](${shot})`).join(', ')}`);
-      }
-      if (exampleShards.length) {
-        const shardLinks = Array.from(new Set(exampleShards)).map((shard) => `[shard-${shard}](shard-${shard}/fuzz-issue-summary.md)`);
-        summaryLines.push(`- Shards: ${shardLinks.join(', ')}`);
       }
       summaryLines.push('');
     }
   }
 
   const summaryContent = summaryLines.join('\n');
-  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryContent, 'utf8');
   await fs.writeFile(path.join(outputRoot, 'README.md'), summaryContent, 'utf8');
 
   const runMetrics = {
@@ -668,7 +668,6 @@ const mergeReports = async () => {
   const requiredTopLevel = [
     'sessions',
     'videos',
-    'fuzz-issue-summary.md',
     'fuzz-issue-report.json',
     'README.md',
     'fuzz-run-metrics.json',
