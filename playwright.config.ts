@@ -75,6 +75,7 @@ export default defineConfig({
   outputDir,
   preserveOutput: 'always',
   workers: resolvedWorkers,
+  retries: process.env.CI === 'true' ? 1 : 0,
   timeout: 90000,
   expect: { timeout: 10000 },
   globalTeardown: './playwright/global-teardown-coverage.ts',

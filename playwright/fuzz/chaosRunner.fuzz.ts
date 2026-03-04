@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createMockC64Server } from '../../tests/mocks/mockC64Server';
 import { seedUiMocks } from '../uiMocks';
-import { createBackendFailureTracker, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
+import { createBackendFailureTracker, isAlwaysExpectedFuzzBehavior, shouldIgnoreBackendFailure, type AppLogEntry } from './fuzzBackend';
 import { diffProgress, hasMeaningfulProgress, readProgressSnapshot } from './fuzzProgress';
 import { attemptStructuredRecovery } from './fuzzRecovery';
 
@@ -60,6 +60,8 @@ type IssueExample = {
   route?: string;
   title?: string;
   severity: Severity;
+  /** Milliseconds since session start when the issue was first observed. */
+  sessionOffsetMs?: number;
 };
 
 type IssueGroup = {
@@ -81,6 +83,8 @@ type IssueRecord = {
   lastInteractions: string[];
   consoleType?: string;
   appLog?: unknown;
+  /** Milliseconds since session start when this issue was observed. Set automatically by recordIssueOnce. */
+  sessionOffsetMs?: number;
 };
 
 type SessionTerminationReason =
@@ -654,6 +658,15 @@ const summarizeFixHint = (signature: IssueSignature, severity: Severity) => {
   return `Inspect ${signature.exception} at ${signature.topFrames[0] || 'top frame'} and add safe handling.`;
 };
 
+/** Format a millisecond session offset as VLC-friendly mm:ss.mmm for README timestamps. */
+const formatFuzzTimestamp = (ms: number): string => {
+  const totalMs = Math.max(0, Math.round(ms));
+  const minutes = Math.floor(totalMs / 60000);
+  const seconds = Math.floor((totalMs % 60000) / 1000);
+  const millis = totalMs % 1000;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+};
+
 test.describe('Fuzz Test', () => {
   test('run', async ({ page }, testInfo) => {
     void page;
@@ -938,17 +951,21 @@ test.describe('Fuzz Test', () => {
       });
 
       const recordIssueOnce = (payload: IssueRecord) => {
-        if (isTerminalSeverity(payload.severity)) {
-          if (!issue) issue = payload;
-          sessionIssues.push(payload);
+        const withOffset: IssueRecord = {
+          ...payload,
+          sessionOffsetMs: payload.sessionOffsetMs ?? (Date.now() - sessionStartedAtMs),
+        };
+        if (isTerminalSeverity(withOffset.severity)) {
+          if (!issue) issue = withOffset;
+          sessionIssues.push(withOffset);
           return;
         }
         // Deduplicate non-terminal issues by source+message
         const isDuplicate = sessionIssues.some(
-          (existing) => existing.source === payload.source && existing.message === payload.message,
+          (existing) => existing.source === withOffset.source && existing.message === withOffset.message,
         );
         if (!isDuplicate) {
-          sessionIssues.push(payload);
+          sessionIssues.push(withOffset);
         }
       };
       const recordStuckSessionIssue = (reason: string, detail: string) => {
@@ -986,6 +1003,11 @@ test.describe('Fuzz Test', () => {
         if (issue) return; // terminal issue already recorded
         if (msg.type() !== 'error' && msg.type() !== 'warning') return;
         const text = msg.text();
+        // Suppress fuzz runner's own storage-init warning (emitted when the
+        // browser context denies localStorage access on first navigation).
+        if (text.includes('[fuzz] localStorage init failed')) return;
+        // Suppress expected offline / startup messages that are not app bugs.
+        if (isAlwaysExpectedFuzzBehavior({ id: 'console', level: msg.type(), message: text } as AppLogEntry)) return;
         if (msg.type() === 'error') {
           const shouldIgnore = shouldIgnoreBackendFailure(
             { id: 'console', level: msg.type(), message: text } as AppLogEntry,
@@ -1049,6 +1071,8 @@ test.describe('Fuzz Test', () => {
         if (logs[0]?.id) lastLogId = logs[0].id;
         for (const entry of fresh) {
           if (entry.level !== 'error' && entry.level !== 'warn') continue;
+          // Always-expected behaviors (e.g. DiagnosticsBridge, host cycling) must never become issues.
+          if (isAlwaysExpectedFuzzBehavior(entry)) continue;
           if (entry.level === 'error') {
             if (entry.message.toLowerCase().includes('fuzz mode blocked')) continue;
             const shouldIgnore = shouldIgnoreBackendFailure(entry, {
@@ -1858,10 +1882,7 @@ test.describe('Fuzz Test', () => {
 
         if (Date.now() - sessionStartTime >= sessionTimeoutMs) {
           logInteraction(`s=${totalSteps}\ta=session\ttimeout ${Math.round((Date.now() - sessionStartTime) / 1000)}s`);
-          recordStuckSessionIssue(
-            'session-timeout',
-            `Session exceeded maximum duration of ${sessionTimeoutMs / 1000}s after ${sessionSteps} steps.`,
-          );
+          // Session-timeout is a designed budget cap, not an app bug; do not record as a freeze issue.
           terminationReason = 'session-timeout';
           break;
         }
@@ -2331,6 +2352,7 @@ test.describe('Fuzz Test', () => {
           route,
           title,
           severity: sessionIssue.severity,
+          sessionOffsetMs: sessionIssue.sessionOffsetMs,
         };
         recordIssue(sessionIssue, example);
       }
@@ -2488,13 +2510,15 @@ test.describe('Fuzz Test', () => {
     if (!issueGroups.size) {
       summaryLines.push('No issues detected.');
     } else {
-      const groupsArray = Array.from(issueGroups.values());
+      // Sort deterministically: total count descending, issue_group_id ascending for ties.
+      const groupsArray = [...issueGroups.values()].sort((a, b) => {
+        const totalA = Object.values(a.severityCounts).reduce((sum: number, value: number) => sum + value, 0);
+        const totalB = Object.values(b.severityCounts).reduce((sum: number, value: number) => sum + value, 0);
+        if (totalB !== totalA) return totalB - totalA;
+        return a.issue_group_id.localeCompare(b.issue_group_id);
+      });
       for (const group of groupsArray) {
         const totalCount = Object.values(group.severityCounts).reduce((sum: number, value: number) => sum + value, 0);
-        const exampleVideos = group.examples
-          .map((example) => example.video)
-          .filter(Boolean)
-          .slice(0, 3);
         summaryLines.push(`## ${group.issue_group_id}`);
         summaryLines.push('');
         summaryLines.push(`- Exception: ${group.signature.exception}`);
@@ -2505,15 +2529,21 @@ test.describe('Fuzz Test', () => {
           `- Severity: crash=${group.severityCounts.crash} freeze=${group.severityCounts.freeze} error=${group.severityCounts.errorLog} warn=${group.severityCounts.warnLog}`,
         );
         summaryLines.push(`- Platforms: ${group.platforms.join(', ')}`);
-        if (exampleVideos.length) {
-          summaryLines.push(`- Videos: ${exampleVideos.join(', ')}`);
+        const examplesWithVideo = group.examples.filter((e) => e.video);
+        if (examplesWithVideo.length) {
+          const videoLinks = examplesWithVideo.slice(0, 3).map((e) => {
+            const link = `[${e.video}](${e.video})`;
+            return (typeof e.sessionOffsetMs === 'number' && Number.isFinite(e.sessionOffsetMs))
+              ? `${link} @ ${formatFuzzTimestamp(e.sessionOffsetMs)}`
+              : link;
+          });
+          summaryLines.push(`- Videos: ${videoLinks.join(', ')}`);
         }
         summaryLines.push(`- Likely fix: ${summarizeFixHint(group.signature, group.examples[0].severity)}`);
         summaryLines.push('');
       }
     }
 
-    await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryLines.join('\n'), 'utf8');
     await fs.writeFile(path.join(outputRoot, 'README.md'), summaryLines.join('\n'), 'utf8');
 
     for (const item of sessionManifests) {

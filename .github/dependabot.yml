@@ -2,8 +2,7 @@ version: 2
 
 multi-ecosystem-groups:
   all-dependencies:
-    schedule:
-      interval: weekly
+    applies-to: version-updates
 
 updates:
   - package-ecosystem: npm

@@ -48,6 +48,38 @@ describe('assignDiskGroupsByPrefix', () => {
     expect(result.get('/Other/foo2.d64')).toBeUndefined();
   });
 
+  it('returns empty Map for empty input', () => {
+    const result = assignDiskGroupsByPrefix([]);
+    expect(result.size).toBe(0);
+  });
+
+  it('does not group a single file even when it has a numeric suffix', () => {
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/foo1.d64', name: 'foo1.d64' },
+    ]);
+    expect(result.get('/Games/foo1.d64')).toBeUndefined();
+  });
+
+  it('does not group files whose prefix is too short to be meaningful', () => {
+    // 'A1' and 'A2' have prefix 'A' which is length 1 — below the minimum of 2
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/A1.d64', name: 'A1.d64' },
+      { path: '/Games/A2.d64', name: 'A2.d64' },
+    ]);
+    expect(result.get('/Games/A1.d64')).toBeUndefined();
+    expect(result.get('/Games/A2.d64')).toBeUndefined();
+  });
+
+  it('does not group files without a detectable suffix', () => {
+    // Files with no numeric or single-letter suffix are left ungrouped
+    const result = assignDiskGroupsByPrefix([
+      { path: '/Games/action.d64', name: 'action.d64' },
+      { path: '/Games/adventure.d64', name: 'adventure.d64' },
+    ]);
+    expect(result.get('/Games/action.d64')).toBeUndefined();
+    expect(result.get('/Games/adventure.d64')).toBeUndefined();
+  });
+
   it('handles names without file extension (line 13 TRUE)', () => {
     // Names without a dot trigger the idx<=0 branch in stripExtension
     const result = assignDiskGroupsByPrefix([

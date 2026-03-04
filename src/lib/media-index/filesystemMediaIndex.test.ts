@@ -88,5 +88,63 @@ describe('filesystemMediaIndex', () => {
             expect(mockMkdir).toHaveBeenCalled();
             expect(mockWriteFile).toHaveBeenCalled();
         });
+
+        it('returns null when decoded data is empty (safeParse !raw branch)', async () => {
+            // Empty string data decodes to empty string → safeParse(!raw) → null
+            mockReadFile.mockResolvedValue({ data: '' });
+
+            const { FilesystemMediaIndexStorage } = await import('./filesystemMediaIndex');
+            const storage = new FilesystemMediaIndexStorage();
+            const result = await storage.read();
+
+            expect(result).toBeNull();
+        });
+
+        it('encodes using Buffer when btoa is unavailable', async () => {
+            vi.stubGlobal('btoa', undefined);
+
+            const snapshot = { version: 1 as const, updatedAt: '2024-01-01T00:00:00.000Z', entries: [] };
+            const { FilesystemMediaIndexStorage } = await import('./filesystemMediaIndex');
+            const storage = new FilesystemMediaIndexStorage();
+            await storage.write(snapshot);
+
+            expect(mockWriteFile).toHaveBeenCalled();
+            const writeArg = mockWriteFile.mock.calls[0][0];
+            expect(typeof writeArg.data).toBe('string');
+
+            vi.unstubAllGlobals();
+        });
+
+        it('decodes using Buffer when atob is unavailable', async () => {
+            vi.stubGlobal('atob', undefined);
+
+            const snapshot = { version: 1 as const, updatedAt: '2024-01-01T00:00:00.000Z', entries: [{ path: '/a.sid', name: 'a.sid', type: 'sid' as const }] };
+            const base64 = Buffer.from(JSON.stringify(snapshot), 'utf-8').toString('base64');
+            mockReadFile.mockResolvedValue({ data: base64 });
+
+            const { FilesystemMediaIndexStorage } = await import('./filesystemMediaIndex');
+            const storage = new FilesystemMediaIndexStorage();
+            const result = await storage.read();
+
+            expect(result).not.toBeNull();
+            expect(result?.entries).toHaveLength(1);
+
+            vi.unstubAllGlobals();
+        });
+
+        it('returns original value when atob throws (decodeUtf8Base64 catch branch)', async () => {
+            vi.stubGlobal('atob', () => { throw new Error('atob failed'); });
+
+            mockReadFile.mockResolvedValue({ data: 'notvalidbase64' });
+
+            const { FilesystemMediaIndexStorage } = await import('./filesystemMediaIndex');
+            const storage = new FilesystemMediaIndexStorage();
+            // catch returns raw value → safeParse fails → null
+            const result = await storage.read();
+
+            expect(result).toBeNull();
+
+            vi.unstubAllGlobals();
+        });
     });
 });

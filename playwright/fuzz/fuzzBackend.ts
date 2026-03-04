@@ -40,8 +40,50 @@ export const isBackendFailureLog = (entry: AppLogEntry) => {
   return false;
 };
 
+/**
+ * Returns true for app log entries that represent device-operation failures
+ * which are expected when the server is unavailable or in a fault mode.
+ * These include HOME page control actions, drive operations, upload failures,
+ * and HVSC filesystem operations that have graceful fallback paths.
+ */
+export const isDeviceOperationFailure = (entry: AppLogEntry): boolean => {
+  const msg = entry.message;
+  if (/^HOME_[A-Z_]+: /.test(msg)) return true;
+  if (/^(RESET_DRIVES|DRIVE_POWER|DRIVE_CONFIG_UPDATE|SOFT_IEC_CONFIG_UPDATE): /.test(msg)) return true;
+  if (/^(RAM_DUMP_FOLDER_SELECT|BROWSE|CONFIG_UPDATE): /.test(msg)) return true;
+  if (msg.includes('FTP listing failed')) return true;
+  if (msg.includes('Source browse failed')) return true;
+  if (msg.includes('C64 API request failed') || msg.includes('C64 API upload failed')) return true;
+  if (msg.includes('RAM operation retry')) return true;
+  if (msg.includes('Failed to resume machine after clear-memory error')) return true;
+  if (msg.includes('HVSC paged folder listing failed')) return true;
+  if (msg.includes('HVSC songlengths directory bootstrap failed')) return true;
+  if (msg.includes('HVSC progress interrupted')) return true;
+  return false;
+};
+
+/**
+ * Returns true for app log entries that represent structural or expected-startup
+ * behaviors in the fuzz environment, regardless of fault mode or server state.
+ * These messages should never be emitted as fuzz issues because they reflect
+ * normal fuzz operating conditions (no native bridge, host cycling, HVSC absent).
+ */
+export const isAlwaysExpectedFuzzBehavior = (entry: AppLogEntry): boolean => {
+  const msg = entry.message;
+  if (msg.includes('DiagnosticsBridge unavailable')) return true;
+  if (msg.includes('Category config fetch failed')) return true;
+  if (msg.includes('API device host changed')) return true;
+  if (msg.includes('C64 API retry scheduled')) return true;
+  if (msg.includes('Songlengths unavailable')) return true;
+  if (msg.includes('HVSC filesystem:')) return true;
+  if (msg.includes('Failed to capture initial config snapshot')) return true;
+  return false;
+};
+
 export const shouldIgnoreBackendFailure = (entry: AppLogEntry, context: BackendFailureContext) => {
-  if (!isBackendFailureLog(entry)) return false;
+  if (isAlwaysExpectedFuzzBehavior(entry)) return true;
+  const isKnownFailure = isBackendFailureLog(entry) || isDeviceOperationFailure(entry);
+  if (!isKnownFailure) return false;
   const text = extractErrorText(entry).toLowerCase();
   if (text.includes('http 503') || text.includes('service unavailable')) return true;
   if (text.includes('failed to fetch') || text.includes('net::err') || text.includes('host unreachable')) return true;

@@ -95,7 +95,7 @@ const ensureSonglengthDirectory = async (path: string) => {
       });
       return;
     }
-    addErrorLog('HVSC songlengths directory bootstrap failed', {
+    addLog('warn', 'HVSC songlengths directory bootstrap failed', {
       service: 'hvsc-songlengths',
       path,
       error: {
