@@ -49,7 +49,7 @@ describe('reportUserError', () => {
     }));
   });
 
-  it('uses info log for recoverable connectivity errors', () => {
+  it('uses warn log for recoverable connectivity errors', () => {
     reportUserError({
       operation: 'HOME_ACTION',
       title: 'Error',
@@ -59,7 +59,7 @@ describe('reportUserError', () => {
 
     expect(addErrorLog).not.toHaveBeenCalled();
     expect(addLog).toHaveBeenCalledWith(
-      'info',
+      'warn',
       'HOME_ACTION: Error',
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );

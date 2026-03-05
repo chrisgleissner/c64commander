@@ -874,7 +874,7 @@ describe('c64api branches', () => {
     const result = await api.getConfigItems('Audio Mixer', ['Vol UltiSid 1']);
     expect(result['Audio Mixer']?.items?.['Vol UltiSid 1']).toBeDefined();
     expect(addLogMock).toHaveBeenCalledWith(
-      'info',
+      'warn',
       'Category config fetch failed; falling back to item fetches',
       expect.objectContaining({ category: 'Audio Mixer' }),
     );

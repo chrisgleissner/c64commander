@@ -56,7 +56,7 @@ export const reportUserError = ({
   };
 
   if (isRecoverableConnectivityError(description, error)) {
-    addLog('info', `${operation}: ${title}`, {
+    addLog('warn', `${operation}: ${title}`, {
       ...logPayload,
       recoverableConnectivityIssue: true,
     });
