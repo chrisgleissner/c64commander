@@ -761,9 +761,9 @@ const mergeReports = async () => {
           .split(/\r?\n/g)
           .map((line) => line.trim())
           .filter(Boolean)).catch((readError) => {
-          console.warn('[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:', interactionLogAbsolutePath, readError);
-          return [];
-        });
+            console.warn('[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:', interactionLogAbsolutePath, readError);
+            return [];
+          });
         activityCount = logLines.filter((line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat')).length;
       }
 
