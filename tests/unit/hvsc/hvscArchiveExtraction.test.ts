@@ -8,7 +8,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { zipSync } from 'fflate';
-import { extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
+import { archiveNameHash, extractArchiveEntries } from '@/lib/hvsc/hvscArchiveExtraction';
 import {
   ensureHvscUpdateArchive,
   hasMockFixture,
@@ -271,5 +271,29 @@ describe('hvscArchiveExtraction', () => {
       onEntry: async () => { entryCount += 1; },
     });
     expect(entryCount).toBe(1);
+  });
+});
+
+// P0-C: working directory name is deterministic (no Date.now()/Math.random())
+describe('archiveNameHash determinism (P0-C)', () => {
+  it('returns the same hash for the same archive name regardless of when it is called', () => {
+    const name = 'HVSC_Update_84.7z';
+    const first = archiveNameHash(name);
+    const second = archiveNameHash(name);
+    expect(first).toBe(second);
+    expect(typeof first).toBe('string');
+    expect(first.length).toBeGreaterThan(0);
+  });
+
+  it('returns different hashes for different archive names', () => {
+    expect(archiveNameHash('HVSC_Update_84.7z')).not.toBe(archiveNameHash('HVSC_Update_85.7z'));
+    expect(archiveNameHash('a.7z')).not.toBe(archiveNameHash('b.7z'));
+  });
+
+  it('output is a fixed-length hex string regardless of input length', () => {
+    const short = archiveNameHash('a.7z');
+    const long = archiveNameHash('HVSC_Update_84_very_long_archive_name_for_testing.7z');
+    expect(short).toMatch(/^[0-9a-f]{8}$/);
+    expect(long).toMatch(/^[0-9a-f]{8}$/);
   });
 });

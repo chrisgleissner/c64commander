@@ -30,14 +30,14 @@ All coverage reports are aggregated and submitted to [Codecov](https://codecov.i
 - `html` - Human-readable HTML report (`coverage/index.html`)
 - `json` - Machine-readable JSON report (`coverage/coverage-final.json`)
 
-**Coverage thresholds** (baseline, aim to increase):
+**Coverage thresholds** (enforced by `scripts/check-coverage-threshold.mjs` in CI):
 
 ```typescript
 {
-  statements: 10,
-  branches: 55,
-  functions: 35,
-  lines: 10
+  statements: 90,
+  branches: 90,
+  functions: 90,
+  lines: 90
 }
 ```
 

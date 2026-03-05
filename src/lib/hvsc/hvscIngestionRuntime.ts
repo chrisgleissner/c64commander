@@ -263,6 +263,87 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
 
 // ── Shared ingestion core ─────────────────────────────────────────
 
+/**
+ * Shared helper: format the canonical failure message for both native and non-native paths.
+ * Both paths must use this function so the message format and ingestionState transitions
+ * are identical at the facade boundary.
+ */
+export const buildIngestionFailureMessage = (failedSongs: number, totalSongs: number, failedPaths: string[]) =>
+  `HVSC ingestion failed: ${failedSongs} of ${totalSongs} songs could not be ingested (${failedPaths.slice(0, 10).join(', ')})`;
+
+/**
+ * Shared helper: apply the canonical success state.  Both native and non-native paths
+ * must call this so the `ingestionSummary` shape and `ingestionState` = 'ready' contract
+ * are enforced at the facade boundary.
+ */
+export const applyIngestionSuccess = ({
+  plan,
+  baselineInstalled,
+  archiveName,
+  totalSongs,
+  ingestedSongs,
+  failedSongs,
+  failedPaths,
+}: {
+  plan: { type: 'baseline' | 'update'; version: number };
+  baselineInstalled: number | null;
+  archiveName: string;
+  totalSongs: number;
+  ingestedSongs: number;
+  failedSongs: number;
+  failedPaths: string[];
+}) => {
+  updateHvscState({
+    installedBaselineVersion: baselineInstalled,
+    installedVersion: plan.version,
+    ingestionState: 'ready',
+    ingestionError: null,
+    ingestionSummary: {
+      totalSongs,
+      ingestedSongs,
+      failedSongs,
+      songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
+      failedPaths,
+      completedAt: new Date().toISOString(),
+      archiveName,
+    },
+  });
+};
+
+/**
+ * Shared helper: apply the canonical failure state and throw.  Both native and non-native
+ * paths must call this so the error shape is identical at the facade boundary.
+ */
+export const applyIngestionFailureAndThrow = ({
+  archiveName,
+  totalSongs,
+  ingestedSongs,
+  failedSongs,
+  failedPaths,
+}: {
+  archiveName: string;
+  totalSongs: number;
+  ingestedSongs: number;
+  failedSongs: number;
+  failedPaths: string[];
+}): never => {
+  const failedMessage = buildIngestionFailureMessage(failedSongs, totalSongs, failedPaths);
+  updateHvscState({
+    ingestionState: 'error',
+    ingestionError: failedMessage,
+    ingestionSummary: {
+      totalSongs,
+      ingestedSongs,
+      failedSongs,
+      songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
+      failedPaths,
+      completedAt: new Date().toISOString(),
+      archiveName,
+    },
+  });
+  throw new Error(failedMessage);
+};
+
 export type IngestArchiveBufferOptions = {
   plan: { type: 'baseline' | 'update'; version: number };
   archiveName: string;
@@ -482,31 +563,25 @@ export const ingestArchiveBuffer = async (options: IngestArchiveBufferOptions): 
   ingestionSummary.songlengthSyntaxErrors = getHvscSonglengthsStats().backendStats.rejectedLines;
 
   if (ingestionSummary.failedSongs > 0) {
-    const failedMessage = `HVSC ingestion failed: ${ingestionSummary.failedSongs} of ${ingestionSummary.totalSongs} songs could not be ingested (${ingestionSummary.failedPaths.slice(0, 10).join(', ')})`;
-    updateHvscState({
-      ingestionState: 'error',
-      ingestionError: failedMessage,
-      ingestionSummary: {
-        ...ingestionSummary,
-        completedAt: new Date().toISOString(),
-        archiveName,
-      },
+    applyIngestionFailureAndThrow({
+      archiveName,
+      totalSongs: ingestionSummary.totalSongs,
+      ingestedSongs: ingestionSummary.ingestedSongs,
+      failedSongs: ingestionSummary.failedSongs,
+      failedPaths: ingestionSummary.failedPaths,
     });
-    throw new Error(failedMessage);
   }
 
   await browseIndex.finalize();
 
-  updateHvscState({
-    installedBaselineVersion: baselineInstalled,
-    installedVersion: plan.version,
-    ingestionState: 'ready',
-    ingestionError: null,
-    ingestionSummary: {
-      ...ingestionSummary,
-      completedAt: new Date().toISOString(),
-      archiveName,
-    },
+  applyIngestionSuccess({
+    plan,
+    baselineInstalled,
+    archiveName,
+    totalSongs: ingestionSummary.totalSongs,
+    ingestedSongs: ingestionSummary.ingestedSongs,
+    failedSongs: ingestionSummary.failedSongs,
+    failedPaths: ingestionSummary.failedPaths,
   });
   if (plan.type === 'update') {
     markUpdateApplied(plan.version, 'success');
@@ -591,37 +666,23 @@ const ingestArchivePathNative = async (options: {
     await clearHvscBrowseIndexSnapshot();
 
     if (result.failedSongs > 0) {
-      const failedMessage = `HVSC ingestion failed: ${result.failedSongs} of ${result.songsIngested + result.failedSongs} songs could not be ingested (${result.failedPaths.slice(0, 10).join(', ')})`;
-      updateHvscState({
-        ingestionState: 'error',
-        ingestionError: failedMessage,
-        ingestionSummary: {
-          totalSongs: result.songsIngested + result.failedSongs,
-          ingestedSongs: result.songsIngested,
-          failedSongs: result.failedSongs,
-          songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
-          failedPaths: result.failedPaths,
-          completedAt: new Date().toISOString(),
-          archiveName,
-        },
-      });
-      throw new Error(failedMessage);
-    }
-
-    updateHvscState({
-      installedBaselineVersion: baselineInstalled,
-      installedVersion: plan.version,
-      ingestionState: 'ready',
-      ingestionError: null,
-      ingestionSummary: {
-        totalSongs: result.metadataRows,
+      applyIngestionFailureAndThrow({
+        archiveName,
+        totalSongs: result.songsIngested + result.failedSongs,
         ingestedSongs: result.songsIngested,
         failedSongs: result.failedSongs,
-        songlengthSyntaxErrors: getHvscSonglengthsStats().backendStats.rejectedLines,
         failedPaths: result.failedPaths,
-        completedAt: new Date().toISOString(),
-        archiveName,
-      },
+      });
+    }
+
+    applyIngestionSuccess({
+      plan,
+      baselineInstalled,
+      archiveName,
+      totalSongs: result.metadataRows,
+      ingestedSongs: result.songsIngested,
+      failedSongs: result.failedSongs,
+      failedPaths: result.failedPaths,
     });
 
     if (plan.type === 'update') {

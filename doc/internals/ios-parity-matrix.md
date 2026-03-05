@@ -8,7 +8,7 @@
 | FtpClientPlugin | Apache FTPClient | CFStream/socket FTP | **Parity** |
 | SecureStoragePlugin | EncryptedSharedPreferences | Keychain | **Parity** |
 | FeatureFlagsPlugin | SharedPreferences | UserDefaults | **Parity** |
-| BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | **No-op stub** — start/stop/setDueAtMs log and resolve immediately | **Gap** |
+| BackgroundExecutionPlugin | Full foreground service + WakeLock + auto-skip alarm | `AVAudioSession` category set + `beginBackgroundTask` + main-queue due timer (fires `onBackgroundAutoSkipDue` when elapsed) — partial implementation: timer may expire before song end under iOS background-task limits | **Partial** |
 | DiagnosticsBridgePlugin | BroadcastReceiver → JS | NotificationCenter → JS + debug HTTP server | **Parity** |
 | MockC64UPlugin | Mock HTTP + FTP servers | NWListener + Darwin sockets | **Parity** |
 | AppLogger | Broadcast-based structured logger | IOSDiagnostics with os_log + NotificationCenter | **Functional parity** |

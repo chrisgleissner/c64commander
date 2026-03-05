@@ -1,6 +1,6 @@
 # Architecture Overview
 
-C64 Commander is a React + Vite + Capacitor app that controls a C64 Ultimate device via its REST API. It runs as a web app in a Capacitor shell on Android with optional native bridges (FTP, folder picker). HVSC ingestion and indexing run in TypeScript with the app filesystem as the source of truth.
+C64 Commander is a React + Vite + Capacitor app that controls a C64 Ultimate device via its REST API. It runs as a web app in a Capacitor shell on Android with optional native bridges (FTP, folder picker). HVSC ingestion and indexing run in TypeScript by default; on Android a native `HvscIngestionPlugin` (Kotlin) is selected at runtime when the Capacitor plugin is available (`resolveHvscIngestionMode` in `src/lib/hvsc/hvscIngestionRuntime.ts`). The TypeScript path remains the sole path on Web and iOS.
 
 ## Stack and Layers
 

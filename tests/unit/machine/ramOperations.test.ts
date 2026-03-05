@@ -203,7 +203,8 @@ describe('ramOperations', () => {
                 rasterChanged: true,
             } as any);
 
-            const image = await dumpFullRamImage(api as any);
+            // Must opt-in to recoveryMode to exercise recoverFromLivenessFailure on retry
+            const image = await dumpFullRamImage(api as any, { recoveryMode: true });
             expect(image).toBeInstanceOf(Uint8Array);
         });
 
@@ -222,7 +223,8 @@ describe('ramOperations', () => {
                 return { decision: 'healthy', jiffyAdvanced: true, rasterChanged: true } as any;
             });
 
-            await expect(dumpFullRamImage(api as any)).rejects.toThrow('liveness check crashed');
+            // Must opt-in to recoveryMode to exercise recoverFromLivenessFailure on retry
+            await expect(dumpFullRamImage(api as any, { recoveryMode: true })).rejects.toThrow('liveness check crashed');
         });
     });
 });

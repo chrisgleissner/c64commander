@@ -170,7 +170,7 @@ describe('ramOperations', () => {
   it('reports liveness check failure but proceeds if not explicitly wedged/unknown', async () => {
     livenessMock.checkC64Liveness.mockRejectedValue(new Error('Liveness check failed'));
     const api = buildApi();
-    // It should throw the error because recoverFromLivenessFailure logic rethrows
+    // ensureLiveness runs the pre-check; it re-throws, so dumpFullRamImage rejects.
     await expect(dumpFullRamImage(api as any)).rejects.toThrow('Liveness check failed');
   });
 
@@ -184,5 +184,53 @@ describe('ramOperations', () => {
 
     await expect(dumpFullRamImage(api as any)).rejects.toThrow(/Save RAM failed: Read RAM chunk at \$0000 failed after 2 attempt/);
     expect(loggingMock.addErrorLog).toHaveBeenCalledTimes(1); // 1 retry recorded for 2 attempts
+  });
+
+  // P0-D: verify that default mode never calls machineReset/machineReboot on retry
+  it('does not call machineReset or machineReboot on retry in default mode (P0-D)', async () => {
+    const api = buildApi();
+    let failed = false;
+    const originalRead = api.readMemory.getMockImplementation();
+    api.readMemory.mockImplementation(async (address: string, length: number) => {
+      if (address === '0000' && !failed) {
+        failed = true;
+        throw new Error('transient read error');
+      }
+      return originalRead ? originalRead(address, length) : new Uint8Array(length);
+    });
+
+    const image = await dumpFullRamImage(api as any);
+
+    expect(image.length).toBe(FULL_RAM_SIZE_BYTES);
+    expect(failed).toBe(true);
+    expect(api.machineReset).not.toHaveBeenCalled();
+    expect(api.machineReboot).not.toHaveBeenCalled();
+  });
+
+  // P0-D: recovery mode calls machineReset when C64 is wedged during retry
+  it('calls machineReset in recovery mode when C64 is wedged on retry (P0-D)', async () => {
+    const api = buildApi();
+    let readAttempts = 0;
+    const originalRead = api.readMemory.getMockImplementation();
+    api.readMemory.mockImplementation(async (address: string, length: number) => {
+      if (address === '0000') {
+        readAttempts += 1;
+        if (readAttempts === 1) {
+          throw new Error('transient read error');
+        }
+      }
+      return originalRead ? originalRead(address, length) : new Uint8Array(length);
+    });
+    // On retry, liveness check returns wedged → machineReset is called → liveness recovers
+    livenessMock.checkC64Liveness
+      .mockResolvedValueOnce({ decision: 'ok' })   // ensureLiveness pre-check
+      .mockResolvedValueOnce({ decision: 'wedged' }) // retry onRetry: wedged
+      .mockResolvedValueOnce({ decision: 'ok' });    // retry onRetry: after reset — recovered
+
+    const image = await dumpFullRamImage(api as any, { recoveryMode: true });
+
+    expect(image.length).toBe(FULL_RAM_SIZE_BYTES);
+    expect(api.machineReset).toHaveBeenCalledTimes(1);
+    expect(api.machineReboot).not.toHaveBeenCalled();
   });
 });

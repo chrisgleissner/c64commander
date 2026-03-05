@@ -129,10 +129,19 @@ const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractA
   });
 };
 
+// Deterministic working directory name derived from archive identity.
+// Using stable hash of archiveName avoids Date.now()/Math.random() nondeterminism
+// while still producing a unique path per archive file name.
+// Exported for unit tests only.
+export const archiveNameHash = (name: string) =>
+  Math.abs(Array.from(name).reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) | 0, 0))
+    .toString(16)
+    .padStart(8, '0');
+
 const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
   const heapBefore = readHeapUsageBytes();
   const module = await getSevenZipModule();
-  const workingDir = `/work-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  const workingDir = `/work-${archiveNameHash(archiveName)}`;
   const archivePath = `${workingDir}/${normalizePath(archiveName) || `archive${SEVEN_Z_EXTENSION}`}`;
   const outputDir = `${workingDir}/out`;
 
