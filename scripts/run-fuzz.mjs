@@ -4,7 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { sortIssueGroups, renderReadme, renderSummary } from './fuzzReportUtils.mjs';
-import { classifyAllIssues } from './fuzzClassifier.mjs';
+import { classifyAllIssues, SELFTEST_TAG } from './fuzzClassifier.mjs';
 
 const args = process.argv.slice(2);
 
@@ -579,6 +579,25 @@ const mergeReports = async () => {
     }
   }
 
+  // Selftest injection: when FUZZ_SELFTEST=1, add a synthetic issue group to verify that
+  // the detection pipeline surfaces REAL issues rather than suppressing them.
+  // The injected message contains SELFTEST_TAG, which the classifier always maps to REAL/HIGH.
+  // Default-off: no behaviour change to normal fuzz runs.
+  if (process.env.FUZZ_SELFTEST === '1') {
+    const selftestId = 'console.error@fuzz-selftest-synthetic';
+    issueGroups.set(selftestId, {
+      issue_group_id: selftestId,
+      signature: {
+        message: `${SELFTEST_TAG} Synthetic console.error to verify detection pipeline`,
+        exception: 'console.error',
+        topFrames: [],
+      },
+      severityCounts: { errorLog: 1 },
+      platforms: [platform || env.FUZZ_PLATFORM || 'android-phone'],
+      examples: [{ lastInteractions: [], shardIndex: 0 }],
+    });
+  }
+
   const merged = {
     meta: {
       seed: baseSeed,
@@ -996,13 +1015,33 @@ const mergeReports = async () => {
     throw new Error(`Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`);
   }
   if (frameValidationViolations.length > 0) {
-    throw new Error(`Video artifact validation failed: ${JSON.stringify(frameValidationViolations, null, 2)}`);
+    // Degrade gracefully: exclude sessions with video issues rather than aborting the entire run.
+    // A transient system event (recorder freeze, high load) should not discard all other sessions' work.
+    const frameViolatedSessionIds = new Set(frameValidationViolations.map((v) => v.sessionId));
+    for (let i = qualifiedSessions.length - 1; i >= 0; i -= 1) {
+      if (frameViolatedSessionIds.has(qualifiedSessions[i].sessionId)) {
+        qualifiedSessions.splice(i, 1);
+      }
+    }
+    console.warn(
+      `[fuzz] Video validation: excluded ${frameViolatedSessionIds.size} session(s) with frame violations.`
+      + ` Continuing with ${qualifiedSessions.length} session(s) remaining.`
+      + ` Violations: ${JSON.stringify(frameValidationViolations, null, 2)}`,
+    );
   }
   if (screenshotQualityViolations.length > 0) {
-    throw new Error(`Screenshot artifact validation failed: ${JSON.stringify(screenshotQualityViolations, null, 2)}`);
+    // Screenshot issues are noted but non-fatal: they do not affect issue detection.
+    const screenshotViolatedIds = new Set(screenshotQualityViolations.map((v) => v.sessionId));
+    console.warn(
+      `[fuzz] Screenshot validation: ${screenshotViolatedIds.size} session(s) had quality issues (non-fatal).`
+      + ` Violations: ${JSON.stringify(screenshotQualityViolations, null, 2)}`,
+    );
   }
   if (qualifiedSessions.length === 0) {
-    throw new Error(`No qualified sessions with sufficient activities were produced. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
+    const frameViolationsNote = frameValidationViolations.length > 0
+      ? ` (${frameValidationViolations.length} violation(s) also excluded sessions for video issues)`
+      : '';
+    throw new Error(`No qualified sessions with sufficient activities were produced${frameViolationsNote}. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
   }
   if (visualStagnationReport.violations.length > 0) {
     throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);

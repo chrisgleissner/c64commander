@@ -28,6 +28,13 @@ export const CLASSIFICATIONS = /** @type {const} */ (['REAL', 'UNCERTAIN', 'EXPE
 
 export const CONFIDENCE_LEVELS = /** @type {const} */ (['HIGH', 'MEDIUM', 'LOW']);
 
+/**
+ * Tag that identifies a synthetic issue injected by the selftest harness (FUZZ_SELFTEST=1).
+ * Messages containing this tag are always classified as REAL to verify end-to-end detection.
+ * Do NOT add this tag to FUZZ_INFRASTRUCTURE_PATTERNS — it must surface as REAL.
+ */
+export const SELFTEST_TAG = '[fuzz-selftest]';
+
 // ---------------------------------------------------------------------------
 // Internal pattern sets
 // ---------------------------------------------------------------------------
@@ -63,12 +70,16 @@ const DEVICE_ACTION_PREFIXES = [
     /^RAM_DUMP_FOLDER_SELECT/,
     /^BROWSE: /,
     /^CONFIG_UPDATE/,
+    // audio/video streaming operations: STREAM_VALIDATE, STREAM_START, STREAM_STOP etc.
+    /^STREAM_/,
 ];
 
 const DEVICE_ACTION_SUBSTRINGS = [
     'RAM operation retry',
     'Failed to resume machine after clear-memory error',
     'Machine pause/resume failed',
+    // config write queue cascade: always a device-config operation failure in fuzz (mock server absent)
+    'Config write queue',
 ];
 
 /** Network-failure message substrings. */
@@ -248,6 +259,21 @@ export const classifyIssue = (group) => {
     const chaosPresent = hasChaosEvidence(lastInteractions);
     const rawMsg = signature?.message || '';
     const rawExc = signature?.exception || '';
+
+    // --- SELFTEST: always REAL regardless of other rules ---
+    // Messages tagged with SELFTEST_TAG are injected by the selftest harness to verify
+    // that the detection pipeline surfaces REAL issues and does not suppress them.
+    if (rawMsg.includes(SELFTEST_TAG)) {
+        return {
+            classification: 'REAL',
+            domain: 'FUZZ_INFRASTRUCTURE',
+            confidence: 'HIGH',
+            explanation:
+                'Synthetic selftest issue injected to verify the detection pipeline. ' +
+                'This entry confirms that REAL issues are correctly surfaced and not suppressed. ' +
+                'Remove FUZZ_SELFTEST=1 from the environment to restore normal behaviour.',
+        };
+    }
 
     // --- EXPECTED: terminal severity never qualifies as EXPECTED ---
 

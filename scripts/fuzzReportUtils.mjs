@@ -33,6 +33,30 @@ export const videoMarkdownLink = (video, sessionOffsetMs) => {
 };
 
 /**
+ * Strip ANSI CSI escape sequences and collapse newlines in a string destined for a
+ * Markdown list field.
+ *
+ * Rationale:
+ * - ANSI escape codes (e.g. colour/bold codes from terminal output captured in logs)
+ *   appear as garbled characters in a Markdown document.
+ * - Embedded newlines in a `- Key: value` list item break the Markdown list structure.
+ *
+ * @param {unknown} value - The raw value from an issue field.
+ * @returns {string} Sanitised single-line string safe for embedding in a Markdown list item.
+ */
+export const sanitizeMarkdownText = (value) => {
+    if (value == null) return '';
+    const text = typeof value === 'string' ? value : String(value);
+    return text
+        // Strip ANSI CSI sequences (e.g. \x1b[31m, \x1b[0m, \x1b[2K …)
+        .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+        // Strip remaining standalone ESC characters
+        .replace(/\x1b/g, '')
+        // Collapse any remaining line-break variants into a single space
+        .replace(/\r\n|\r|\n/g, ' ');
+};
+
+/**
  * Sort issue groups deterministically: total count descending, issue_group_id ascending for ties.
  * Ensures README output is stable given the same input JSON.
  * @param {Array} issueGroups - Array of IssueGroup objects from fuzz-issue-report.json.
@@ -64,22 +88,22 @@ export const renderIssueEntry = (group, classification) => {
     const exampleScreens = examples.map((e) => e.screenshot).filter(Boolean).slice(0, 3);
     const shardIndices = [...new Set(examples.map((e) => e.shardIndex).filter((s) => typeof s === 'number'))].sort((a, b) => a - b);
 
-    lines.push(`## ${group.issue_group_id}`);
+    lines.push(`## ${sanitizeMarkdownText(group.issue_group_id)}`);
     lines.push('');
-    lines.push(`- Message: ${group.signature?.message || 'n/a'}`);
+    lines.push(`- Message: ${sanitizeMarkdownText(group.signature?.message || 'n/a')}`);
     lines.push(`- Domain: ${classification.domain}`);
     if (classification.confidence) {
         lines.push(`- Confidence: ${classification.confidence}`);
     }
-    lines.push(`- Exception: ${group.signature?.exception || 'n/a'}`);
+    lines.push(`- Exception: ${sanitizeMarkdownText(group.signature?.exception || 'n/a')}`);
     lines.push(`- Total: ${totalCount}`);
     lines.push(
         `- Severity: crash=${group.severityCounts?.crash || 0} freeze=${group.severityCounts?.freeze || 0} error=${group.severityCounts?.errorLog || 0} warn=${group.severityCounts?.warnLog || 0}`,
     );
     lines.push(`- Platforms: ${(group.platforms || []).join(', ') || 'n/a'}`);
-    lines.push(`- Top frames: ${(group.signature?.topFrames || []).join(' | ') || 'n/a'}`);
+    lines.push(`- Top frames: ${(group.signature?.topFrames || []).map(sanitizeMarkdownText).join(' | ') || 'n/a'}`);
     if (classification.explanation) {
-        lines.push(`- Explanation: ${classification.explanation}`);
+        lines.push(`- Explanation: ${sanitizeMarkdownText(classification.explanation)}`);
     }
     if (exampleVideos.length) {
         const videoLinks = exampleVideos.map((video, i) => {

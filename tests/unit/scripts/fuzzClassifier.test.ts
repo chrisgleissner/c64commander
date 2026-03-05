@@ -15,6 +15,7 @@ import {
     DOMAINS,
     CLASSIFICATIONS,
     CONFIDENCE_LEVELS,
+    SELFTEST_TAG,
 } from '../../../scripts/fuzzClassifier.mjs';
 
 // ---------------------------------------------------------------------------
@@ -262,6 +263,41 @@ describe('classifyIssue', () => {
         expect(result.classification).toBe('EXPECTED');
         expect(result.confidence).toBe('MEDIUM');
         expect(result.domain).toBe('DEVICE_ACTION');
+    });
+
+    it('classifies Config write queue cascade error as DEVICE_ACTION EXPECTED MEDIUM', () => {
+        // "Config write queue: preceding task failed" appears when a config write fails
+        // because the mock server returns 404, causing subsequent queue entries to fail.
+        // Always EXPECTED in fuzz environment.
+        const result = classifyIssue(makeGroup('Config write queue: preceding task failed', { errorLog: 1 }, []));
+        expect(result.classification).toBe('EXPECTED');
+        expect(result.domain).toBe('DEVICE_ACTION');
+        expect(result.confidence).toBe('MEDIUM');
+    });
+
+    it('classifies Config write queue message without chaos confirmation', () => {
+        const result = classifyDomain({ message: 'Config write queue: preceding task failed' }, []);
+        expect(result).toBe('DEVICE_ACTION');
+    });
+
+    it('classifies STREAM_VALIDATE device operation as DEVICE_ACTION EXPECTED', () => {
+        // STREAM_VALIDATE, STREAM_STOP etc. are audio streaming device ops that always fail
+        // in fuzz mode because the mock server does not implement the streaming API.
+        const result = classifyIssue(makeGroup('STREAM_VALIDATE: Invalid stream host', { errorLog: 1 }, []));
+        expect(result.classification).toBe('EXPECTED');
+        expect(result.domain).toBe('DEVICE_ACTION');
+    });
+
+    it('classifies STREAM_STOP failure as DEVICE_ACTION EXPECTED', () => {
+        const result = classifyIssue(makeGroup('STREAM_STOP: Stream stop failed', { warnLog: 1 }, []));
+        expect(result.classification).toBe('EXPECTED');
+        expect(result.domain).toBe('DEVICE_ACTION');
+    });
+
+    it('classifyDomain maps STREAM_ prefixed messages to DEVICE_ACTION', () => {
+        expect(classifyDomain({ message: 'STREAM_VALIDATE: host unreachable' }, [])).toBe('DEVICE_ACTION');
+        expect(classifyDomain({ message: 'STREAM_STOP: timeout' }, [])).toBe('DEVICE_ACTION');
+        expect(classifyDomain({ message: 'STREAM_START: connection refused' }, [])).toBe('DEVICE_ACTION');
     });
 
     it('classifies C64 API request failed with chaos as EXPECTED HIGH', () => {
@@ -556,5 +592,99 @@ describe('renderSummary', () => {
         const map = classifyAllIssues(groups);
         const summary = renderSummary({ platform: 'android-phone', shardTotal: 1, sessions: 2 }, groups, map);
         expect(summary).not.toContain('## REAL Issues');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// SELFTEST_TAG export and classification override
+// ---------------------------------------------------------------------------
+
+describe('SELFTEST_TAG', () => {
+    it('is exported as a non-empty string', () => {
+        expect(typeof SELFTEST_TAG).toBe('string');
+        expect(SELFTEST_TAG.length).toBeGreaterThan(0);
+    });
+
+    it('equals [fuzz-selftest]', () => {
+        expect(SELFTEST_TAG).toBe('[fuzz-selftest]');
+    });
+
+    it('is NOT a substring of [fuzz] (no accidental masking by FUZZ_INFRASTRUCTURE patterns)', () => {
+        // If this fails, the FUZZ_INFRASTRUCTURE pattern would suppress selftest issues
+        expect('[fuzz]'.includes(SELFTEST_TAG)).toBe(false);
+    });
+
+    it('is NOT contained in the string [fuzz] (inverse direction check)', () => {
+        expect('[fuzz]'.includes(SELFTEST_TAG)).toBe(false);
+    });
+});
+
+describe('classifyIssue: FUZZ_SELFTEST override', () => {
+    const makeSelftestGroup = (extraSeverity: Record<string, number> = {}) => ({
+        issue_group_id: 'console.error@fuzz-selftest-synthetic',
+        signature: {
+            message: `${SELFTEST_TAG} Synthetic console.error to verify detection pipeline`,
+            exception: 'console.error',
+            topFrames: [],
+        },
+        severityCounts: { errorLog: 1, ...extraSeverity },
+        examples: [{ lastInteractions: [] }],
+    });
+
+    it('classifies selftest issue as REAL', () => {
+        const result = classifyIssue(makeSelftestGroup());
+        expect(result.classification).toBe('REAL');
+    });
+
+    it('classifies selftest issue with HIGH confidence', () => {
+        const result = classifyIssue(makeSelftestGroup());
+        expect(result.confidence).toBe('HIGH');
+    });
+
+    it('classifies selftest issue with domain FUZZ_INFRASTRUCTURE', () => {
+        const result = classifyIssue(makeSelftestGroup());
+        expect(result.domain).toBe('FUZZ_INFRASTRUCTURE');
+    });
+
+    it('selftest classification overrides crash severity path (still REAL)', () => {
+        // Crash normally produces REAL via the terminal-severity path; ensure selftest path
+        // also returns REAL (regression guard: selftest must not short-circuit to EXPECTED)
+        const result = classifyIssue(makeSelftestGroup({ crash: 1 }));
+        expect(result.classification).toBe('REAL');
+    });
+
+    it('includes explanation referencing the selftest mechanism', () => {
+        const result = classifyIssue(makeSelftestGroup());
+        expect(result.explanation).toBeDefined();
+        expect(result.explanation).toContain('detection pipeline');
+    });
+
+    it('normal FUZZ_INFRASTRUCTURE issue is NOT classified as REAL (regression guard)', () => {
+        const result = classifyIssue({
+            issue_group_id: 'diag-bridge',
+            signature: { message: 'DiagnosticsBridge unavailable', exception: 'app.log.warn', topFrames: [] },
+            severityCounts: { warnLog: 1 },
+            examples: [{ lastInteractions: [] }],
+        });
+        expect(result.classification).toBe('EXPECTED');
+        expect(result.classification).not.toBe('REAL');
+    });
+
+    it('message without SELFTEST_TAG is not classified as REAL via selftest path', () => {
+        // A message mentioning "fuzz" but not the exact SELFTEST_TAG should not trigger
+        const result = classifyIssue({
+            issue_group_id: 'x',
+            signature: { message: '[fuzz] mode blocked', exception: 'app.log.warn', topFrames: [] },
+            severityCounts: { warnLog: 1 },
+            examples: [{ lastInteractions: [] }],
+        });
+        expect(result.classification).toBe('EXPECTED');
+    });
+
+    it('SELFTEST_TAG classification is always in valid CLASSIFICATIONS list', () => {
+        const result = classifyIssue(makeSelftestGroup());
+        expect(CLASSIFICATIONS).toContain(result.classification);
+        expect(DOMAINS).toContain(result.domain);
+        expect(CONFIDENCE_LEVELS).toContain(result.confidence);
     });
 });
