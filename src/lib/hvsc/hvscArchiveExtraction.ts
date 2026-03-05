@@ -133,10 +133,15 @@ const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractA
 // Using stable hash of archiveName avoids Date.now()/Math.random() nondeterminism
 // while still producing a unique path per archive file name.
 // Exported for unit tests only.
-export const archiveNameHash = (name: string) =>
-  Math.abs(Array.from(name).reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) | 0, 0))
-    .toString(16)
-    .padStart(8, '0');
+export const archiveNameHash = (name: string) => {
+  // 64-bit rolling hash using BigInt to reduce collision risk versus a 32-bit integer hash.
+  let hash = 0n;
+  const MOD64 = (1n << 64n) - 1n;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 131n + BigInt(name.charCodeAt(i))) & MOD64;
+  }
+  return hash.toString(16).padStart(16, '0');
+};
 
 const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
   const heapBefore = readHeapUsageBytes();

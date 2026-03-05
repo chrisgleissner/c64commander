@@ -1042,6 +1042,13 @@ describe('ingestion shared helpers (P0-E)', () => {
     expect(msg).toMatch(/b\.sid/);
   });
 
+  it('buildIngestionFailureMessage emits readable placeholder when failedPaths is empty', () => {
+    const msg = buildIngestionFailureMessage(5, 100, []);
+    expect(msg).toMatch(/5 of 100/);
+    expect(msg).toContain('no paths reported');
+    expect(msg).not.toContain('()');
+  });
+
   it('buildIngestionFailureMessage truncates path list to 10 entries', () => {
     const paths = Array.from({ length: 15 }, (_, i) => `track${i}.sid`);
     const msg = buildIngestionFailureMessage(15, 200, paths);

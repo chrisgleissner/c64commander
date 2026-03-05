@@ -290,10 +290,10 @@ describe('archiveNameHash determinism (P0-C)', () => {
     expect(archiveNameHash('a.7z')).not.toBe(archiveNameHash('b.7z'));
   });
 
-  it('output is a fixed-length hex string regardless of input length', () => {
+  it('output is a fixed-length 16-char hex string regardless of input length', () => {
     const short = archiveNameHash('a.7z');
     const long = archiveNameHash('HVSC_Update_84_very_long_archive_name_for_testing.7z');
-    expect(short).toMatch(/^[0-9a-f]{8}$/);
-    expect(long).toMatch(/^[0-9a-f]{8}$/);
+    expect(short).toMatch(/^[0-9a-f]{16}$/);
+    expect(long).toMatch(/^[0-9a-f]{16}$/);
   });
 });

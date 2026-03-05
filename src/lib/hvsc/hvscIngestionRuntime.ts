@@ -268,8 +268,13 @@ export const checkForHvscUpdates = async (): Promise<HvscUpdateStatus> => {
  * Both paths must use this function so the message format and ingestionState transitions
  * are identical at the facade boundary.
  */
-export const buildIngestionFailureMessage = (failedSongs: number, totalSongs: number, failedPaths: string[]) =>
-  `HVSC ingestion failed: ${failedSongs} of ${totalSongs} songs could not be ingested (${failedPaths.slice(0, 10).join(', ')})`;
+export const buildIngestionFailureMessage = (failedSongs: number, totalSongs: number, failedPaths: string[]) => {
+  const base = `HVSC ingestion failed: ${failedSongs} of ${totalSongs} songs could not be ingested`;
+  if (!failedPaths.length) {
+    return `${base} (no paths reported)`;
+  }
+  return `${base} (${failedPaths.slice(0, 10).join(', ')})`;
+};
 
 /**
  * Shared helper: apply the canonical success state.  Both native and non-native paths
