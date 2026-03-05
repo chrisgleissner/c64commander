@@ -11,6 +11,9 @@ import { Filesystem } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import {
   addHvscProgressListener,
+  applyIngestionFailureAndThrow,
+  applyIngestionSuccess,
+  buildIngestionFailureMessage,
   cancelHvscInstall,
   checkForHvscUpdates,
   recoverStaleIngestionState,
@@ -1019,5 +1022,75 @@ describe('hvscIngestionRuntime', () => {
 
     // Complete the ingestion
     await ingestionPromise.catch(() => undefined);
+  });
+});
+
+// P0-E: shared ingestion helper functions have identical state contract at facade boundary
+describe('ingestion shared helpers (P0-E)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(updateHvscState).mockReturnValue({} as any);
+    vi.mocked(getHvscSonglengthsStats).mockReturnValue({
+      backendStats: { rejectedLines: 0 },
+    } as any);
+  });
+
+  it('buildIngestionFailureMessage formats message with count and path preview', () => {
+    const msg = buildIngestionFailureMessage(3, 100, ['a.sid', 'b.sid', 'c.sid']);
+    expect(msg).toMatch(/3 of 100/);
+    expect(msg).toMatch(/a\.sid/);
+    expect(msg).toMatch(/b\.sid/);
+  });
+
+  it('buildIngestionFailureMessage emits readable placeholder when failedPaths is empty', () => {
+    const msg = buildIngestionFailureMessage(5, 100, []);
+    expect(msg).toMatch(/5 of 100/);
+    expect(msg).toContain('no paths reported');
+    expect(msg).not.toContain('()');
+  });
+
+  it('buildIngestionFailureMessage truncates path list to 10 entries', () => {
+    const paths = Array.from({ length: 15 }, (_, i) => `track${i}.sid`);
+    const msg = buildIngestionFailureMessage(15, 200, paths);
+    expect(msg).not.toContain('track10.sid');
+    expect(msg).toContain('track9.sid');
+  });
+
+  it('applyIngestionSuccess calls updateHvscState with ingestionState ready', () => {
+    applyIngestionSuccess({
+      plan: { type: 'update', version: 84 },
+      baselineInstalled: 74,
+      archiveName: 'HVSC_Update_84.7z',
+      totalSongs: 100,
+      ingestedSongs: 100,
+      failedSongs: 0,
+      failedPaths: [],
+    });
+    expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ingestionState: 'ready',
+        ingestionError: null,
+        installedVersion: 84,
+        installedBaselineVersion: 74,
+      }),
+    );
+  });
+
+  it('applyIngestionFailureAndThrow calls updateHvscState with ingestionState error and throws', () => {
+    expect(() =>
+      applyIngestionFailureAndThrow({
+        archiveName: 'HVSC_Update_84.7z',
+        totalSongs: 100,
+        ingestedSongs: 80,
+        failedSongs: 20,
+        failedPaths: ['bad.sid'],
+      }),
+    ).toThrow(/20 of 100/);
+    expect(vi.mocked(updateHvscState)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ingestionState: 'error',
+        ingestionError: expect.stringMatching(/20 of 100/),
+      }),
+    );
   });
 });

@@ -129,7 +129,7 @@ const recoverFromLivenessFailure = async (api: C64API, operation: string) => {
   recordRamTrace({ operation, status: 'liveness-recovered', decision: afterReboot.decision });
 };
 
-const readRanges = async (api: C64API, ranges: RamRange[]) => {
+const readRanges = async (api: C64API, ranges: RamRange[], onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>) => {
   const image = new Uint8Array(FULL_RAM_SIZE_BYTES);
   for (const range of ranges) {
     for (let address = range.start; address < range.endExclusive; address += READ_CHUNK_SIZE_BYTES) {
@@ -144,7 +144,7 @@ const readRanges = async (api: C64API, ranges: RamRange[]) => {
         `Read RAM chunk at $${toHexAddress(address)}`,
         () => api.readMemory(toHexAddress(address), chunkSize),
         DEFAULT_RETRY_ATTEMPTS,
-        async () => recoverFromLivenessFailure(api, 'Save RAM'),
+        onRetry,
       );
       if (chunk.length !== chunkSize) {
         recordRamTrace({
@@ -171,7 +171,7 @@ const readRanges = async (api: C64API, ranges: RamRange[]) => {
   return image;
 };
 
-const writeFullImage = async (api: C64API, image: Uint8Array) => {
+const writeFullImage = async (api: C64API, image: Uint8Array, onRetry?: (error: Error, attempt: number, maxAttempts: number) => Promise<void>) => {
   recordRamTrace({
     operation: 'ram-write',
     status: 'start',
@@ -182,7 +182,7 @@ const writeFullImage = async (api: C64API, image: Uint8Array) => {
     'Write full RAM image at $0000',
     () => api.writeMemoryBlock(toHexAddress(0), image),
     DEFAULT_RETRY_ATTEMPTS,
-    async () => recoverFromLivenessFailure(api, 'Load RAM'),
+    onRetry,
   );
   recordRamTrace({
     operation: 'ram-write',
@@ -265,20 +265,26 @@ const runPaused = async <T,>(
   return result as T;
 };
 
-export const dumpFullRamImage = async (api: C64API): Promise<Uint8Array> => {
+export const dumpFullRamImage = async (api: C64API, options?: { recoveryMode?: boolean }): Promise<Uint8Array> => {
   await ensureLiveness(api, 'Save RAM');
-  return runPaused(api, 'Save RAM', async () => readRanges(api, FULL_RAM_RANGE));
+  const onRetry = options?.recoveryMode
+    ? async () => recoverFromLivenessFailure(api, 'Save RAM')
+    : undefined;
+  return runPaused(api, 'Save RAM', async () => readRanges(api, FULL_RAM_RANGE, onRetry));
 };
 
-export const loadFullRamImage = async (api: C64API, image: Uint8Array) => {
+export const loadFullRamImage = async (api: C64API, image: Uint8Array, options?: { recoveryMode?: boolean }) => {
   if (image.length !== FULL_RAM_SIZE_BYTES) {
     throw new Error(
       `Invalid RAM image size: expected ${FULL_RAM_SIZE_BYTES} bytes, got ${image.length} bytes`,
     );
   }
   await ensureLiveness(api, 'Load RAM');
+  const onRetry = options?.recoveryMode
+    ? async () => recoverFromLivenessFailure(api, 'Load RAM')
+    : undefined;
   await runPaused(api, 'Load RAM', async () => {
-    await writeFullImage(api, image);
+    await writeFullImage(api, image, onRetry);
   });
 };
 

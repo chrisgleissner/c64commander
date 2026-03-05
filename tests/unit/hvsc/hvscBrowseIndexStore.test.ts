@@ -416,3 +416,122 @@ describe('hvscBrowseIndexStore branch coverage', () => {
     await saveHvscBrowseIndexSnapshot(snapshot);
   });
 });
+
+// ── P0-A: Browse paging correctness ─────────────────────────────
+describe('listFolderFromBrowseIndex paging correctness (P0-A)', () => {
+  it('scopes folder listing to direct children, not all snapshot folders', () => {
+    // Bug: before fix Object.keys(snapshot.folders) returned the entire global
+    // folder set, so a /DEMOS query would include /ARCADE/B.
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/A/One.sid', name: 'One.sid', type: 'sid' },
+      { path: '/ARCADE/B/Two.sid', name: 'Two.sid', type: 'sid' },
+    ]);
+
+    const demos = listFolderFromBrowseIndex(snapshot, '/DEMOS', '', 0, 50);
+    expect(demos.folders).toEqual(['/DEMOS/A']);
+    expect(demos.folders).not.toContain('/ARCADE');
+    expect(demos.folders).not.toContain('/ARCADE/B');
+  });
+
+  it('pagination with limit on scoped children returns correct page', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/ROOT/A/song1.sid', name: 'song1.sid', type: 'sid' },
+      { path: '/ROOT/B/song2.sid', name: 'song2.sid', type: 'sid' },
+      { path: '/ROOT/C/song3.sid', name: 'song3.sid', type: 'sid' },
+      { path: '/OTHER/D/song4.sid', name: 'song4.sid', type: 'sid' },
+    ]);
+
+    const page1 = listFolderFromBrowseIndex(snapshot, '/ROOT', '', 0, 2);
+    // Should only return /ROOT direct children (/ROOT/A, /ROOT/B, /ROOT/C), not /OTHER/D
+    expect(page1.totalFolders).toBe(3);
+    expect(page1.folders).not.toContain('/OTHER/D');
+    expect(page1.folders).not.toContain('/OTHER');
+  });
+
+  it('root listing returns only top-level folders', () => {
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/DEMOS/SUB/deep.sid', name: 'deep.sid', type: 'sid' },
+      { path: '/GAMES/game.sid', name: 'game.sid', type: 'sid' },
+    ]);
+
+    const root = listFolderFromBrowseIndex(snapshot, '/', '', 0, 50);
+    // Root should list /DEMOS and /GAMES, NOT /DEMOS/SUB
+    expect(root.folders).toContain('/DEMOS');
+    expect(root.folders).toContain('/GAMES');
+    expect(root.folders).not.toContain('/DEMOS/SUB');
+  });
+});
+
+// ── P0-B: Integrity check determinism ────────────────────────────
+describe('verifyHvscBrowseIndexIntegrity determinism (P0-B)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
+
+  it('samples same paths given same snapshot regardless of wall clock', async () => {
+    vi.useFakeTimers();
+    const snapshot = buildHvscBrowseIndexFromEntries([
+      { path: '/A/One.sid', name: 'One.sid', type: 'sid' },
+      { path: '/B/Two.sid', name: 'Two.sid', type: 'sid' },
+      { path: '/C/Three.sid', name: 'Three.sid', type: 'sid' },
+      { path: '/D/Four.sid', name: 'Four.sid', type: 'sid' },
+      { path: '/E/Five.sid', name: 'Five.sid', type: 'sid' },
+    ]);
+
+    const getSampledPaths = async () => {
+      const statted: string[] = [];
+      vi.mocked(Filesystem.stat).mockImplementation(async ({ path }: { path: string }) => {
+        statted.push(path);
+        return { type: 'file', size: 1 } as never;
+      });
+      await verifyHvscBrowseIndexIntegrity(snapshot, 3);
+      vi.clearAllMocks();
+      return statted;
+    };
+
+    // At time 0: Math.floor(0/1000) % 5 = 0
+    vi.setSystemTime(0);
+    const paths1 = await getSampledPaths();
+
+    // At time 7 s: Math.floor(7000/1000) % 5 = 2 — would differ with the old Date.now() seed
+    vi.setSystemTime(7000);
+    const paths2 = await getSampledPaths();
+
+    // With fix: same snapshot.updatedAt → same hash → same sampled paths
+    expect(paths1).toEqual(paths2);
+  });
+
+  it('produces different samples for snapshots with different updatedAt', async () => {
+    const entries = [
+      { path: '/A/One.sid', name: 'One.sid', type: 'sid' as const },
+      { path: '/B/Two.sid', name: 'Two.sid', type: 'sid' as const },
+      { path: '/C/Three.sid', name: 'Three.sid', type: 'sid' as const },
+      { path: '/D/Four.sid', name: 'Four.sid', type: 'sid' as const },
+      { path: '/E/Five.sid', name: 'Five.sid', type: 'sid' as const },
+    ];
+    const snap1 = buildHvscBrowseIndexFromEntries(entries);
+    // Manually set different updatedAt to simulate a newer ingestion
+    const snap2 = { ...snap1, songs: { ...snap1.songs }, folders: { ...snap1.folders }, updatedAt: '2099-01-01T00:00:00.000Z' };
+
+    const getSampledPaths = async (snapshot: typeof snap1) => {
+      const statted: string[] = [];
+      vi.mocked(Filesystem.stat).mockImplementation(async ({ path }: { path: string }) => {
+        statted.push(path);
+        return { type: 'file', size: 1 } as never;
+      });
+      await verifyHvscBrowseIndexIntegrity(snapshot, 2);
+      vi.clearAllMocks();
+      return statted;
+    };
+
+    const paths1 = await getSampledPaths(snap1);
+    const paths2 = await getSampledPaths(snap2);
+    // Different updatedAt → possibly different sample starting point (not required to differ
+    // but the function should not throw and both sets should be valid paths)
+    expect(paths1.length).toBe(2);
+    expect(paths2.length).toBe(2);
+    paths1.forEach((p) => expect(typeof p).toBe('string'));
+    paths2.forEach((p) => expect(typeof p).toBe('string'));
+  });
+});

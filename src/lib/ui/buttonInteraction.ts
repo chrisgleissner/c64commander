@@ -73,6 +73,9 @@ export const handlePointerButtonClick = (event: { detail: number; currentTarget:
   const target = resolveInteractiveElement(event.currentTarget)
     ?? (event.currentTarget instanceof HTMLElement ? event.currentTarget : null);
   if (!target) return;
+  // Skip when the global pointerup handler already applied the flash for this interaction
+  // (pointerup fires before click, so the attribute is already set if global handler ran).
+  if (target.hasAttribute(CTA_HIGHLIGHT_ATTR)) return;
   applyPointerButtonInteraction(target);
 };
 

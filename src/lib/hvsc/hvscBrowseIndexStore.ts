@@ -353,8 +353,7 @@ export const listFolderFromBrowseIndex = (
   const normalizedQuery = query.trim().toLowerCase();
   const row = snapshot.folders[normalizedPath] ?? { path: normalizedPath, folders: [], songs: [] };
 
-  const folders = Object.keys(snapshot.folders)
-    .filter((folder) => folder !== '/')
+  const folders = row.folders
     .filter((folder) => normalizedQuery.length === 0 || folder.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => a.localeCompare(b));
 
@@ -400,7 +399,9 @@ export const verifyHvscBrowseIndexIntegrity = async (snapshot: HvscBrowseIndexSn
     };
   }
   const sampled = Math.min(sampleSize, paths.length);
-  const offsetSeed = Math.floor(Date.now() / 1000) % paths.length;
+  // Deterministic seed derived from snapshot identity so the same dataset always
+  // samples the same paths, making integrity decisions reproducible across runs.
+  const offsetSeed = Math.abs(hashPath(snapshot.updatedAt)) % paths.length;
   const missingPaths: string[] = [];
   for (let index = 0; index < sampled; index += 1) {
     const path = paths[(offsetSeed + index) % paths.length];

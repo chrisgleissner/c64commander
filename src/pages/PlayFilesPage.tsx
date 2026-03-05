@@ -552,6 +552,12 @@ export default function PlayFilesPage() {
     setPlayedMs(playedClockRef.current.current(now));
     const guard = autoAdvanceGuardRef.current;
     if (guard && !guard.autoFired && !guard.userCancelled && now >= guard.dueAtMs) {
+      addLog('debug', 'Auto-advance due guard fired on timeline reconciliation', {
+        trackInstanceId: guard.trackInstanceId,
+        dueAtMs: guard.dueAtMs,
+        nowMs: now,
+        overdueMs: now - guard.dueAtMs,
+      });
       void handleNext('auto', guard.trackInstanceId);
     }
   }, [currentIndex, handleNext, isPaused, isPlaying, playedClockRef]);
@@ -698,9 +704,19 @@ export default function PlayFilesPage() {
     const applyUpdates = async () => {
       const updated = await applySonglengthsToItems(snapshot);
       if (cancelled) return;
-      const changed = updated.some((item, index) => item.durationMs !== snapshot[index]?.durationMs);
-      if (!changed) return;
-      setPlaylist((prev) => (prev === snapshot ? updated : prev));
+      // ID-based merge: apply enriched durations to items still in the playlist even
+      // if the playlist reference changed (e.g. new items added) during async enrichment.
+      // Only overwrites durations that were absent (null/undefined) to avoid stale clobber.
+      setPlaylist((prev) => {
+        const durationById = new Map(updated.map((item) => [item.id, item.durationMs]));
+        const merged = prev.map((item) => {
+          if (item.durationMs !== undefined && item.durationMs !== null) return item;
+          const enrichedDuration = durationById.get(item.id);
+          if (enrichedDuration === undefined || enrichedDuration === null) return item;
+          return { ...item, durationMs: enrichedDuration };
+        });
+        return merged.some((item, index) => item !== prev[index]) ? merged : prev;
+      });
     };
     void applyUpdates();
     return () => {

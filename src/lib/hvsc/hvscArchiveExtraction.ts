@@ -129,10 +129,24 @@ const extractZip = async ({ buffer, onEntry, onProgress, onEnumerate }: ExtractA
   });
 };
 
+// Deterministic working directory name derived from archive identity.
+// Using stable hash of archiveName avoids Date.now()/Math.random() nondeterminism
+// while still producing a unique path per archive file name.
+// Exported for unit tests only.
+export const archiveNameHash = (name: string) => {
+  // 64-bit rolling hash using BigInt to reduce collision risk versus a 32-bit integer hash.
+  let hash = 0n;
+  const MOD64 = (1n << 64n) - 1n;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 131n + BigInt(name.charCodeAt(i))) & MOD64;
+  }
+  return hash.toString(16).padStart(16, '0');
+};
+
 const extractSevenZ = async ({ archiveName, buffer, onEntry, onProgress, onEnumerate }: ExtractArchiveOptions) => {
   const heapBefore = readHeapUsageBytes();
   const module = await getSevenZipModule();
-  const workingDir = `/work-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+  const workingDir = `/work-${archiveNameHash(archiveName)}`;
   const archivePath = `${workingDir}/${normalizePath(archiveName) || `archive${SEVEN_Z_EXTENSION}`}`;
   const outputDir = `${workingDir}/out`;
 
