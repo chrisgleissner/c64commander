@@ -225,7 +225,7 @@ export const getHvscFolderListingPaged = async (options: {
     return pageRuntimeListing(runtimeListing, query, offset, limit);
   } catch (error) {
     const err = error as Error;
-    addLog('debug', 'HVSC paged folder listing failed; falling back to runtime', {
+    addLog('info', 'HVSC paged folder listing failed; falling back to runtime', {
       path,
       query,
       offset,

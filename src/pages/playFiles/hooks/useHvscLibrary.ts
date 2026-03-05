@@ -254,7 +254,7 @@ export const useHvscLibrary = (): HvscLibraryState => {
         : prev.extraction,
       lastUpdatedAt: now,
     }));
-    addLog('warn', 'HVSC progress interrupted', {
+    addLog('info', 'HVSC progress interrupted', {
       ingestionState: hvscStatus.ingestionState,
       downloadStatus: hvscStatusSummary.download.status,
       extractionStatus: hvscStatusSummary.extraction.status,

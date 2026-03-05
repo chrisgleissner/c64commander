@@ -122,7 +122,7 @@ describe('uiErrors', () => {
     });
   });
 
-  it('downgrades recoverable connectivity errors to warn logs', () => {
+  it('downgrades recoverable connectivity errors to info logs', () => {
     reportUserError({
       operation: 'HOME_CPU_SPEED',
       title: 'Update failed',
@@ -132,7 +132,7 @@ describe('uiErrors', () => {
 
     expect(addErrorLog).not.toHaveBeenCalled();
     expect(addLog).toHaveBeenCalledWith(
-      'warn',
+      'info',
       'HOME_CPU_SPEED: Update failed',
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );

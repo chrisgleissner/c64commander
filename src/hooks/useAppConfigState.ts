@@ -64,7 +64,8 @@ const fetchAllConfig = async () => {
   for (const category of cats.categories) {
     try {
       configs[category] = await api.getCategory(category);
-    } catch {
+    } catch (catError) {
+      addLog('debug', 'Config category fetch failed; will retry individually', { category, error: (catError as Error).message });
       failedCategories.push(category);
     }
   }

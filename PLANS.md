@@ -1,50 +1,118 @@
-# FUZZ Fix Plan
+# PLANS.md — Fuzz Defect Elimination Plan
 
-## Phases and Gates
+## Metadata
+- **Branch**: fix/resolve-fuzz-errors
+- **Base (main)**: 7d729b58d89b
+- **HEAD at plan creation**: 967a4d23b89c962225501b417d6c6fcf0364dc7a
+- **Date**: 2026-03-04
+- **Node**: v24.11.0 / npm 11.6.1
 
-### Phase 0 - Setup and Baseline
+## Authoritative Fuzz Artifact Sources
 
-Gate: PLANS.md exists, FUZZ_FIX_LOG.md baseline captured, README inventory recorded.
+| Directory | Run ID | Type |
+|-----------|--------|------|
+| `.tmp/ci-fuzz/fuzz-deterministic-artifacts/` | 4242 | Deterministic |
+| `.tmp/ci-fuzz/fuzz-deterministic-artifacts (1)/` | 4242 | Deterministic |
+| `.tmp/ci-fuzz/fuzz-deterministic-artifacts (2)/` | 4242 | Deterministic |
+| `.tmp/ci-fuzz/fuzz-deterministic-artifacts (3)/` | 4242 | Deterministic |
+| `.tmp/ci-fuzz/fuzz-test-artifacts/` | 22654225266 | CI Android |
+| `.tmp/ci-fuzz/fuzz-test-artifacts (1)/` | 22654225266 | CI Android |
+| `.tmp/ci-fuzz/fuzz-test-artifacts (2)/` | 22607476207 | CI Android |
+| `.tmp/ci-fuzz/fuzz-test-artifacts (3)/` | 22568614276 | CI Android |
 
-### Phase 1 - Extraction and Normalization
+All README.md files under these directories are authoritative.
 
-Gate: issues.json includes all issues from all fuzz README files with source anchors/excerpts.
+## Deterministic Test Commands
 
-### Phase 2 - Deduplication and Stable IDs
+```bash
+npm run lint
+npm run test
+npm run build
+```
 
-Gate: deduplicated issues created with stable FUZZ IDs and consolidated registry mapped to all occurrences.
+Coverage check (required pre-completion):
+```bash
+npm run test:coverage
+```
 
-### Phase 3 - Root Cause Mapping (No Fixes)
+## Fingerprint Algorithm for Deduplication
 
-Gate: each FUZZ issue mapped to exact code path with evidence-backed root-cause hypothesis.
+Issues are deduplicated by:
+1. Message pattern (normalized: strip URLs, numbers, hashes)
+2. Exception type (app.log.error, app.log.warn, console.warning, session.stalled)
+3. Exact message text (primary key)
 
-### Phase 4 - Controlled Fix Rollout
+Two issues with the same `Exception` + normalized `Message` are the same FUZZ-###.
 
-Gate: each issue closed one at a time using full fix protocol and proof logged.
+## Phases
 
-### Phase 5 - Re-run and Consistency
+### PHASE 0 — SETUP AND BASELINE
+- [x] Create PLANS.md
+- [x] Create `.tmp/ci-fuzz/FUZZ_FIX_LOG.md`
+- [x] Create `.tmp/ci-fuzz/LOGGING_AUDIT.md`
+- [x] Enumerate all README.md files under `.tmp/ci-fuzz`
+- [x] Record baseline state
 
-Gate: all issues closed, logs complete, commits present, termination conditions satisfied.
+### PHASE 1 — BRANCH-TO-MAIN DIFF AND LOGGING AUDIT
+- [x] Fetch origin main
+- [x] Generate patch `.tmp/ci-fuzz/_audit/current_vs_main.patch`
+- [x] Identify all logging-related changes
+- [x] Populate LOGGING_AUDIT.md
+- [ ] Revert inappropriate logging suppression
+- [ ] Commit reverts
 
-## Issue Inventory Status
+### PHASE 2 — ISSUE EXTRACTION AND NORMALIZATION
+- [ ] Parse all README.md files
+- [ ] Extract issues.json
+- [ ] Validate parsing
 
-- README inventory: 16 files
-- Raw extracted issues: 474
-- Deduplicated issues: 92
-- Root-cause mapped: 75/92 direct code matches, 17 pending targeted instrumentation/search
+### PHASE 3 — DEDUPLICATION AND STABLE IDS
+- [ ] Deduplicate by message signature
+- [ ] Assign FUZZ-001…FUZZ-NNN stable IDs
+- [ ] Generate CONSOLIDATED_FUZZ_ISSUES.md
 
-## Current Task Pointer
+### PHASE 4 — ROOT CAUSE MAPPING (NO FIXES YET)
+- [ ] Map every FUZZ-### to code paths
+- [ ] Update registry with evidence
 
-- Phase 4 controlled rollout, active issue: FUZZ-005 (session.stalled session-timeout/no-action family)
+### PHASE 5 — CONTROLLED FIX ROLLOUT
+Priority order: crashes > unhandled exceptions > data corruption > functional > performance > cosmetic
 
-## Risks and Mitigations
+- [ ] FUZZ-001 through FUZZ-NNN — fix one by one
 
-- Risk: nondeterministic fuzz traces; Mitigation: build deterministic harnesses per issue.
-- Risk: duplicate reports; Mitigation: deterministic fingerprinting across message/stack/path.
+### PHASE 6 — GLOBAL RECHECK AND PROOF COMPLETENESS
+- [ ] Re-run parsing and dedup
+- [ ] Verify every FUZZ-### has pre/post evidence, commit, test
+- [ ] Ensure branch coverage ≥ 90%
 
-## Verification Transcript Pointers
+## Root Cause Categories
 
-- See .tmp/ci-fuzz/FUZZ_FIX_LOG.md
-- Parsed artifacts: .tmp/ci-fuzz/_parsed/issues.json
-- Deduplicated artifacts: .tmp/ci-fuzz/_parsed/deduplicated_issues.json
-- Root cause mapping: .tmp/ci-fuzz/_parsed/root_cause_mapping.json
+### CAT-A: Connectivity failure errors (device/network unreachable)
+Operations that fail because the C64U is temporarily unreachable.
+Fix: `isRecoverableConnectivityError` in `uiErrors.ts` (KEEP as correct reclassification).
+Evidence: IoT devices frequently become transiently unreachable; toast shown to user; classification is bounded and explicit.
+
+### CAT-B: Optional capability absent
+DiagnosticsBridge, songlengths, HVSC — these are optional features that may not be installed or configured.
+Fix: Reclassify from warn/error to info (KEEP with evidence below).
+
+### CAT-C: Expected startup-time degradation
+Initial config snapshot, first-run states.
+Fix: Reclassify to debug (KEEP with evidence).
+
+### CAT-D: HVSC not configured
+HVSC paged listing fallback, songlength bootstrap — expected when HVSC not set up.
+Fix: Reclassify to info (CHANGE from prior agent's debug).
+
+### CAT-E: Informational state change
+API device host changed — normal initialization event.
+Fix: Reclassify from warn to info (KEEP).
+
+### CAT-F: Suppression violations to revert
+`C64 API retry scheduled after idle failure`: must remain warn — important diagnostic.
+`Category config fetch failed; falling back to item fetches`: must remain warn — marks degraded state.
+Fix: REVERT these to warn.
+
+### CAT-G: Silent catch violations to fix
+`useC64Connection.ts` and `useAppConfigState.ts` silently drop per-category fetch exceptions.
+Fix: Add debug-level logs.

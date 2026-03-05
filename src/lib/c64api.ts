@@ -904,7 +904,7 @@ export class C64API {
               errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
             });
             if (isTransientFailure) {
-              addLog('warn', 'C64 API request failed', failureDetails);
+              addLog('info', 'C64 API request failed', failureDetails);
             } else {
               addErrorLog('C64 API request failed', failureDetails);
             }
@@ -925,7 +925,7 @@ export class C64API {
           const shouldRetry = !callerAborted && attempt < maxAttempts && (isAbort || isNetworkFailure);
           if (shouldRetry) {
             const retryDelayMs = NETWORK_RETRY_DELAY_MS * attempt;
-            addLog('debug', 'C64 API retry scheduled after idle failure', {
+            addLog('info', 'C64 API retry scheduled after idle failure', {
               requestId,
               method,
               path,
@@ -1070,7 +1070,7 @@ export class C64API {
           rawError: rawMessage,
         });
         if (transientUploadFailure) {
-          addLog('warn', 'C64 API upload failed', uploadFailureDetails);
+          addLog('info', 'C64 API upload failed', uploadFailureDetails);
         } else {
           addErrorLog('C64 API upload failed', uploadFailureDetails);
         }
@@ -1151,7 +1151,7 @@ export class C64API {
         });
       }
     } catch (error) {
-      addLog('debug', 'Category config fetch failed; falling back to item fetches', {
+      addLog('info', 'Category config fetch failed; falling back to item fetches', {
         category,
         error: (error as Error).message,
       });
