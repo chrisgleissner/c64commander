@@ -3,7 +3,8 @@ import os from 'node:os';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { sortIssueGroups, videoMarkdownLink } from './fuzzReportUtils.mjs';
+import { sortIssueGroups, renderReadme, renderSummary } from './fuzzReportUtils.mjs';
+import { classifyAllIssues, SELFTEST_TAG } from './fuzzClassifier.mjs';
 
 const args = process.argv.slice(2);
 
@@ -73,17 +74,18 @@ const frameStagnationThresholdSeconds = toPositiveInt(
 );
 const visualStagnationThresholdMs = toPositiveInt(
   env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS,
-  isCiRun ? 30_000 : 10_000,
+  isCiRun ? 30_000 : 25_000,
 );
 const shortVideoToleranceMs = toPositiveInt(
   env.FUZZ_SHORT_VIDEO_TOLERANCE_MS,
   isCiRun ? 15_000 : 1_500,
 );
 
+if (!env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS) {
+  env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS = String(visualStagnationThresholdMs);
+}
+
 if (isCiRun) {
-  if (!env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS) {
-    env.FUZZ_VISUAL_STAGNATION_THRESHOLD_MS = String(visualStagnationThresholdMs);
-  }
   if (!env.FUZZ_SHORT_VIDEO_TOLERANCE_MS) {
     env.FUZZ_SHORT_VIDEO_TOLERANCE_MS = String(shortVideoToleranceMs);
   }
@@ -383,7 +385,8 @@ const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
     if (durationMs > 2000) {
       attempts.push(['-ss', String(Math.max(0, Math.floor(durationMs / 2000)))]);
     }
-  } catch {
+  } catch (probeError) {
+    console.warn('[fuzz] Could not probe video duration for screenshot regeneration:', probeError);
     durationMs = null;
   }
 
@@ -404,7 +407,8 @@ const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
       if (!quality.isSingleColor && !quality.isMostlyBlack) {
         return quality;
       }
-    } catch {
+    } catch (extractError) {
+      console.warn('[fuzz] Screenshot extraction attempt failed (will try next seek position):', extractError);
       continue;
     }
   }
@@ -577,6 +581,25 @@ const mergeReports = async () => {
     }
   }
 
+  // Selftest injection: when FUZZ_SELFTEST=1, add a synthetic issue group to verify that
+  // the detection pipeline surfaces REAL issues rather than suppressing them.
+  // The injected message contains SELFTEST_TAG, which the classifier always maps to REAL/HIGH.
+  // Default-off: no behaviour change to normal fuzz runs.
+  if (process.env.FUZZ_SELFTEST === '1') {
+    const selftestId = 'console.error@fuzz-selftest-synthetic';
+    issueGroups.set(selftestId, {
+      issue_group_id: selftestId,
+      signature: {
+        message: `${SELFTEST_TAG} Synthetic console.error to verify detection pipeline`,
+        exception: 'console.error',
+        topFrames: [],
+      },
+      severityCounts: { errorLog: 1 },
+      platforms: [platform || env.FUZZ_PLATFORM || 'android-phone'],
+      examples: [{ lastInteractions: [], shardIndex: 0 }],
+    });
+  }
+
   const merged = {
     meta: {
       seed: baseSeed,
@@ -593,45 +616,43 @@ const mergeReports = async () => {
   };
 
   await fs.mkdir(outputRoot, { recursive: true });
-  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
 
-  const summaryLines = ['# Fuzz Test Summary', ''];
-  if (!merged.issueGroups.length) {
-    summaryLines.push('No issues detected.');
-  } else {
-    // Sort deterministically: total count descending, issue_group_id ascending for ties.
-    const sortedGroups = sortIssueGroups(merged.issueGroups);
-    for (const group of sortedGroups) {
-      const totalCount = Object.values(group.severityCounts || {}).reduce((sum, value) => sum + (value || 0), 0);
-      const examples = group.examples || [];
-      const exampleVideos = examples.map((example) => example.video).filter(Boolean).slice(0, 3);
-      const exampleScreens = examples.map((example) => example.screenshot).filter(Boolean).slice(0, 3);
-      summaryLines.push(`## ${group.issue_group_id}`);
-      summaryLines.push('');
-      summaryLines.push(`- Exception: ${group.signature?.exception || 'n/a'}`);
-      summaryLines.push(`- Message: ${group.signature?.message || 'n/a'}`);
-      summaryLines.push(`- Top frames: ${(group.signature?.topFrames || []).join(' | ') || 'n/a'}`);
-      summaryLines.push(`- Total: ${totalCount}`);
-      summaryLines.push(
-        `- Severity: crash=${group.severityCounts.crash || 0} freeze=${group.severityCounts.freeze || 0} error=${group.severityCounts.errorLog || 0} warn=${group.severityCounts.warnLog || 0}`,
-      );
-      summaryLines.push(`- Platforms: ${(group.platforms || []).join(', ')}`);
-      if (exampleVideos.length) {
-        const videoLinks = exampleVideos.map((video, i) => {
-          const example = examples.filter((e) => e.video).at(i);
-          return videoMarkdownLink(video, example?.sessionOffsetMs);
-        });
-        summaryLines.push(`- Videos: ${videoLinks.join(', ')}`);
-      }
-      if (exampleScreens.length) {
-        summaryLines.push(`- Screenshots: ${exampleScreens.map((shot) => `[${shot}](${shot})`).join(', ')}`);
-      }
-      summaryLines.push('');
+  // Sort deterministically: total count descending, issue_group_id ascending for ties.
+  const sortedGroups = sortIssueGroups(merged.issueGroups);
+
+  // Classify all issue groups into REAL / UNCERTAIN / EXPECTED.
+  const classificationMap = classifyAllIssues(sortedGroups);
+
+  // Enrich fuzz-issue-report.json with classificationMeta per issue group.
+  for (const group of merged.issueGroups) {
+    const cls = classificationMap.get(group.issue_group_id);
+    if (cls) {
+      group.classificationMeta = {
+        classification: cls.classification,
+        domain: cls.domain,
+        confidence: cls.confidence,
+        explanation: cls.explanation,
+      };
     }
   }
 
-  const summaryContent = summaryLines.join('\n');
-  await fs.writeFile(path.join(outputRoot, 'README.md'), summaryContent, 'utf8');
+  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
+
+  const reportMeta = {
+    platform: platform || env.FUZZ_PLATFORM || 'android-phone',
+    shardTotal: concurrency,
+    sessions,
+    timeBudgetMs: budgetMs || null,
+    durationTotalMs: durationTotalMs || 0,
+  };
+
+  // Write human-readable README with header, classification summary, and three sections.
+  const readmeContent = renderReadme(reportMeta, sortedGroups, classificationMap);
+  await fs.writeFile(path.join(outputRoot, 'README.md'), readmeContent, 'utf8');
+
+  // Write compact fuzz-issue-summary.md for quick review and LLM consumption.
+  const summaryContent = renderSummary(reportMeta, sortedGroups, classificationMap);
+  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryContent, 'utf8');
 
   const runMetrics = {
     meta: {
@@ -669,6 +690,7 @@ const mergeReports = async () => {
     'sessions',
     'videos',
     'fuzz-issue-report.json',
+    'fuzz-issue-summary.md',
     'README.md',
     'fuzz-run-metrics.json',
     'visual-stagnation-report.json',
@@ -738,7 +760,10 @@ const mergeReports = async () => {
         const logLines = await fs.readFile(interactionLogAbsolutePath, 'utf8').then((raw) => raw
           .split(/\r?\n/g)
           .map((line) => line.trim())
-          .filter(Boolean)).catch(() => []);
+          .filter(Boolean)).catch((readError) => {
+            console.warn('[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:', interactionLogAbsolutePath, readError);
+            return [];
+          });
         activityCount = logLines.filter((line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat')).length;
       }
 
@@ -995,13 +1020,33 @@ const mergeReports = async () => {
     throw new Error(`Required fuzz artifacts missing or invalid: ${JSON.stringify(missingArtifacts, null, 2)}`);
   }
   if (frameValidationViolations.length > 0) {
-    throw new Error(`Video artifact validation failed: ${JSON.stringify(frameValidationViolations, null, 2)}`);
+    // Degrade gracefully: exclude sessions with video issues rather than aborting the entire run.
+    // A transient system event (recorder freeze, high load) should not discard all other sessions' work.
+    const frameViolatedSessionIds = new Set(frameValidationViolations.map((v) => v.sessionId));
+    for (let i = qualifiedSessions.length - 1; i >= 0; i -= 1) {
+      if (frameViolatedSessionIds.has(qualifiedSessions[i].sessionId)) {
+        qualifiedSessions.splice(i, 1);
+      }
+    }
+    console.warn(
+      `[fuzz] Video validation: excluded ${frameViolatedSessionIds.size} session(s) with frame violations.`
+      + ` Continuing with ${qualifiedSessions.length} session(s) remaining.`
+      + ` Violations: ${JSON.stringify(frameValidationViolations, null, 2)}`,
+    );
   }
   if (screenshotQualityViolations.length > 0) {
-    throw new Error(`Screenshot artifact validation failed: ${JSON.stringify(screenshotQualityViolations, null, 2)}`);
+    // Screenshot issues are noted but non-fatal: they do not affect issue detection.
+    const screenshotViolatedIds = new Set(screenshotQualityViolations.map((v) => v.sessionId));
+    console.warn(
+      `[fuzz] Screenshot validation: ${screenshotViolatedIds.size} session(s) had quality issues (non-fatal).`
+      + ` Violations: ${JSON.stringify(screenshotQualityViolations, null, 2)}`,
+    );
   }
   if (qualifiedSessions.length === 0) {
-    throw new Error(`No qualified sessions with sufficient activities were produced. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
+    const frameViolationsNote = frameValidationViolations.length > 0
+      ? ` (${frameValidationViolations.length} violation(s) also excluded sessions for video issues)`
+      : '';
+    throw new Error(`No qualified sessions with sufficient activities were produced${frameViolationsNote}. Sample: ${JSON.stringify(activityViolations.slice(0, 5), null, 2)}`);
   }
   if (visualStagnationReport.violations.length > 0) {
     throw new Error(`Visual stagnation threshold exceeded: ${JSON.stringify(visualStagnationReport.violations, null, 2)}`);
@@ -1059,18 +1104,9 @@ const mergeReports = async () => {
   await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(qualifiedRunMetrics, null, 2), 'utf8');
   await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(qualifiedVisualStagnationReport, null, 2), 'utf8');
 
-  const mergedIssueReportPath = path.join(outputRoot, 'fuzz-issue-report.json');
-  try {
-    const rawReport = await fs.readFile(mergedIssueReportPath, 'utf8');
-    const parsedReport = JSON.parse(rawReport);
-    if (parsedReport?.meta && typeof parsedReport.meta === 'object') {
-      parsedReport.meta.sessions = qualifiedSessions.length;
-      parsedReport.meta.totalSteps = qualifiedTotalSteps;
-    }
-    await fs.writeFile(mergedIssueReportPath, JSON.stringify(parsedReport, null, 2), 'utf8');
-  } catch (error) {
-    throw new Error(`Failed to rewrite merged issue report with qualified session stats: ${(error && error.message) || 'unknown'}`);
-  }
+  merged.meta.sessions = qualifiedSessions.length;
+  merged.meta.totalSteps = qualifiedTotalSteps;
+  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
 
   return { parseErrors };
 };

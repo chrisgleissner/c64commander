@@ -31,25 +31,33 @@ const nominalContext = (): BackendFailureContext => ({
 
 describe('isAlwaysExpectedFuzzBehavior', () => {
     it.each([
-        'DiagnosticsBridge unavailable',
-        'Category config fetch failed: network error',
-        'API device host changed to 192.168.1.1',
-        'C64 API retry scheduled in 5s',
-        'Songlengths unavailable: HVSC not found',
-        'HVSC filesystem: cannot read path',
-        'Failed to capture initial config snapshot',
-        'Failed to fetch category 42: HTTP 503',
-        'Failed to fetch category Sounds: network error',
+        // Fuzz-mode blocking
+        'Fuzz mode blocked request',
+        'fuzz mode blocked real device request',
+        // Infrastructure noise — no native bridge, host cycling, HVSC absent
+        'DiagnosticsBridge unavailable; native diagnostics mirroring disabled',
+        'Category config fetch failed; falling back to item fetches',
+        'API device host changed',
+        'C64 API retry scheduled after idle failure',
+        'Songlengths unavailable',
+        'HVSC filesystem: Filesystem read directory failed',
+        'HVSC paged folder listing failed; falling back to runtime',
+        'HVSC songlengths directory bootstrap failed',
+        'HVSC progress interrupted',
+        'Failed to capture initial config snapshot: Error: Host unreachable',
+        'Failed to fetch category C64 and Cartridge Settings: Error: HTTP 503',
+        '[fuzz] localStorage init failed: access denied',
+        // Device operation failures — mock server returns HTTP 404 for hardware endpoints
+        'HOME_CPU_SPEED: Update failed',
+        'RESET_DRIVES: Drive reset failed',
+        'C64 API request failed',
     ])('returns true for "%s"', (msg) => {
         expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(true);
     });
 
     it.each([
-        'HOME_CPU_SPEED: Update failed',
-        'RESET_DRIVES: Drive reset failed',
-        'C64 API request failed',
-        'HVSC paged folder listing failed',
         'Some unrelated log message',
+        'User tapped the pause button',
     ])('returns false for "%s"', (msg) => {
         expect(isAlwaysExpectedFuzzBehavior(makeEntry(msg))).toBe(false);
     });
@@ -93,13 +101,13 @@ describe('isDeviceOperationFailure', () => {
 });
 
 describe('shouldIgnoreBackendFailure', () => {
-    it('ignores always-expected fuzz behavior regardless of nominal context', () => {
+    it('ignores explicit fuzz safety block logs regardless of nominal context', () => {
         expect(
-            shouldIgnoreBackendFailure(makeEntry('DiagnosticsBridge unavailable'), nominalContext()),
+            shouldIgnoreBackendFailure(makeEntry('Fuzz mode blocked request'), nominalContext()),
         ).toBe(true);
     });
 
-    it('ignores device operation failure when fault mode is timeout', () => {
+    it('ignores device operation failure regardless of fault mode', () => {
         expect(
             shouldIgnoreBackendFailure(makeEntry('HOME_CPU_SPEED: Update failed'), {
                 ...nominalContext(),
@@ -108,7 +116,7 @@ describe('shouldIgnoreBackendFailure', () => {
         ).toBe(true);
     });
 
-    it('ignores device operation failure when server is unreachable', () => {
+    it('ignores device operation failure regardless of server reachability', () => {
         expect(
             shouldIgnoreBackendFailure(makeEntry('C64 API request failed'), {
                 ...nominalContext(),
@@ -117,7 +125,7 @@ describe('shouldIgnoreBackendFailure', () => {
         ).toBe(true);
     });
 
-    it('ignores device operation failure when network is offline', () => {
+    it('ignores device operation failure regardless of network state', () => {
         expect(
             shouldIgnoreBackendFailure(makeEntry('RESET_DRIVES: Drive reset failed'), {
                 ...nominalContext(),
@@ -126,7 +134,7 @@ describe('shouldIgnoreBackendFailure', () => {
         ).toBe(true);
     });
 
-    it('ignores device operation failure within the post-outage grace window', () => {
+    it('ignores device operation failure regardless of post-outage window', () => {
         const now = Date.now();
         expect(
             shouldIgnoreBackendFailure(makeEntry('DRIVE_POWER: Drive power toggle failed'), {
@@ -134,15 +142,15 @@ describe('shouldIgnoreBackendFailure', () => {
                 serverReachable: true,
                 networkOffline: false,
                 faultMode: 'none',
-                lastOutageAt: now - 5000, // 5 s ago — inside 60-second window
+                lastOutageAt: now - 5000,
             }),
         ).toBe(true);
     });
 
-    it('does not ignore device operation failure with fully nominal context', () => {
+    it('ignores device operation failure with fully nominal context', () => {
         expect(
             shouldIgnoreBackendFailure(makeEntry('HOME_CPU_SPEED: Update failed'), nominalContext()),
-        ).toBe(false);
+        ).toBe(true);
     });
 
     it('does not ignore unknown log with nominal context', () => {

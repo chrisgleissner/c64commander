@@ -200,7 +200,7 @@ describe('hvscFilesystem', () => {
     const song = await getHvscSongByVirtualPath('/missing.sid');
     expect(song).toBeNull();
     expect(warnSpy).toHaveBeenCalledWith(
-      'warn',
+      'debug',
       'HVSC filesystem: Failed to read HVSC song by path',
       expect.objectContaining({
         virtualPath: '/missing.sid',

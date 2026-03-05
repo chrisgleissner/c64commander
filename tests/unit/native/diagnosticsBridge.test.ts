@@ -114,13 +114,13 @@ describe('native diagnostics bridge', () => {
         expect(removeMock).toHaveBeenCalledTimes(1);
     });
 
-    it('logs warning when native DiagnosticsBridge is unavailable', async () => {
+    it('logs info when native DiagnosticsBridge is unavailable', async () => {
         addListenerMock.mockRejectedValue(new Error('plugin unavailable'));
         const { startNativeDiagnosticsBridge } = await import('@/lib/native/diagnosticsBridge');
 
         await startNativeDiagnosticsBridge();
 
-        expect(loggerMocks.warn).toHaveBeenCalledWith(
+        expect(loggerMocks.info).toHaveBeenCalledWith(
             'DiagnosticsBridge unavailable; native diagnostics mirroring disabled',
             expect.objectContaining({
                 component: 'native',

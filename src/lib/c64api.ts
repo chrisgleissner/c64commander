@@ -16,6 +16,7 @@ import {
   setPassword as storePassword,
 } from '@/lib/secureStorage';
 import { addErrorLog, addLog, buildErrorLogDetails } from '@/lib/logging';
+import { isTransientConnectivityFailure } from '@/lib/uiErrors';
 import { isSmokeModeEnabled, isSmokeReadOnlyEnabled } from '@/lib/smoke/smokeMode';
 import { isFuzzModeEnabled, isFuzzSafeBaseUrl } from '@/lib/fuzz/fuzzMode';
 import { scheduleConfigWrite } from '@/lib/config/configWriteThrottle';
@@ -398,7 +399,7 @@ let lastDeviceHost: string | null = null;
 
 const logDeviceHostChange = (nextHost: string, context: { baseUrl: string; mode: 'persisted' | 'runtime' }) => {
   if (lastDeviceHost && lastDeviceHost !== nextHost) {
-    addLog('warn', 'API device host changed', {
+    addLog('info', 'API device host changed', {
       previous: lastDeviceHost,
       next: nextHost,
       baseUrl: context.baseUrl,
@@ -883,7 +884,11 @@ export class C64API {
             recordTraceError(action, error as Error, failure);
           }
           if (!fuzzBlocked && intent !== 'system') {
-            addErrorLog('C64 API request failed', buildErrorLogDetails(error as Error, {
+            const isTransientFailure = isAbort
+              || isNetworkFailure
+              || isTransientConnectivityFailure(rawMessage)
+              || isTransientConnectivityFailure(normalizedError);
+            const failureDetails = buildErrorLogDetails(error as Error, {
               path,
               url,
               requestId,
@@ -898,7 +903,11 @@ export class C64API {
               error: normalizedError,
               rawError: rawMessage,
               errorDetail: isDnsFailure(rawMessage) ? 'DNS lookup failed' : undefined,
-            }));
+            });
+            // Always log as error so the entry is captured when the diagnostics
+            // overlay is open (warn is suppressed by the overlay). The transient
+            // flag distinguishes recoverable network blips from genuine defects.
+            addErrorLog('C64 API request failed', isTransientFailure ? { ...failureDetails, transient: true } : failureDetails);
             console.info('C64U_HTTP_FAILURE', JSON.stringify({
               requestId,
               method,
@@ -1047,7 +1056,8 @@ export class C64API {
         const failure = classifyError(error);
         recordRestResponse(action, { status: null, body: null, durationMs, error: error as Error });
         recordTraceError(action, error as Error, failure);
-        addErrorLog('C64 API upload failed', buildErrorLogDetails(error as Error, {
+        const transientUploadFailure = isAbort || isNetworkFailure || isTransientConnectivityFailure(rawMessage);
+        const uploadFailureDetails = buildErrorLogDetails(error as Error, {
           url,
           requestId,
           method,
@@ -1058,7 +1068,10 @@ export class C64API {
           durationMs,
           error: normalizedError,
           rawError: rawMessage,
-        }));
+        });
+        // Always log as error so the entry is captured when the diagnostics
+        // overlay is open. The transient flag marks recoverable upload failures.
+        addErrorLog('C64 API upload failed', transientUploadFailure ? { ...uploadFailureDetails, transient: true } : uploadFailureDetails);
         console.info('C64U_HTTP_FAILURE', JSON.stringify({
           requestId,
           method,

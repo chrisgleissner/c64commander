@@ -223,7 +223,7 @@ describe('useC64Connection', () => {
     const { result } = renderHook(() => useC64AllConfig(), { wrapper });
     await waitFor(() => expect(result.current.data?.Audio).toBeDefined());
     expect(result.current.data?.Video).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 

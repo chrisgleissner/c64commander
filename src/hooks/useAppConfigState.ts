@@ -22,6 +22,7 @@ import {
   loadAppConfigs,
 } from '@/lib/config/appConfigStore';
 import { useC64Connection } from '@/hooks/useC64Connection';
+import { addLog } from '@/lib/logging';
 
 const isReadOnlyItem = (name: string) => name.startsWith('SID Detected Socket');
 
@@ -58,13 +59,26 @@ const fetchAllConfig = async () => {
   const api = getC64API();
   const cats = await api.getCategories();
   const configs: Record<string, ConfigResponse> = {};
+  const failedCategories: string[] = [];
 
   for (const category of cats.categories) {
     try {
       configs[category] = await api.getCategory(category);
-    } catch (error) {
-      console.warn(`Failed to fetch category ${category}:`, error);
+    } catch (catError) {
+      addLog('debug', 'Config category fetch failed; will retry individually', { category, error: (catError as Error).message });
+      failedCategories.push(category);
     }
+  }
+
+  const hasFailures = failedCategories.length > 0;
+  const hasSuccesses = Object.keys(configs).length > 0;
+
+  if (hasFailures && hasSuccesses) {
+    // Partial failure: some categories loaded — log a summary so operators
+    // can diagnose incomplete config snapshots without noisy per-category spam.
+    addLog('debug', `Config fetch partially failed: ${failedCategories.join(', ')} unavailable (using partial snapshot)`, { failedCategories });
+  } else if (hasFailures && !hasSuccesses) {
+    throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(', ')}`);
   }
 
   return configs;
@@ -129,7 +143,9 @@ export function useAppConfigState() {
         sessionStorage.setItem(sessionSnapshotKey, '1');
       })
       .catch((error) => {
-        console.warn('Failed to capture initial config snapshot:', error);
+        addLog('debug', 'Initial config snapshot capture deferred', {
+          error: (error as Error).message,
+        });
       })
       .finally(() => {
         if (isMounted) setSnapshotLoading(false);

@@ -7,7 +7,7 @@
  */
 
 import { toast } from '@/hooks/use-toast';
-import { addErrorLog } from '@/lib/logging';
+import { addErrorLog, addLog } from '@/lib/logging';
 
 export type UiErrorReport = {
   operation: string;
@@ -35,6 +35,19 @@ const buildErrorDetails = (error?: unknown) => {
   return { message: String(error) };
 };
 
+// Exported so c64api.ts and other modules can reuse the same detection logic
+// instead of duplicating transient-failure pattern strings.
+export const isTransientConnectivityFailure = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return /host unreachable|service unavailable|http 503|failed to fetch|net::err|request timed out|networkerror|dns/.test(normalized);
+};
+
+const isRecoverableConnectivityError = (description: string, error?: unknown) => {
+  const details = buildErrorDetails(error) as { message?: string } | undefined;
+  const message = `${description} ${details?.message ?? ''}`;
+  return isTransientConnectivityFailure(message);
+};
+
 export const reportUserError = ({
   operation,
   title,
@@ -42,11 +55,20 @@ export const reportUserError = ({
   error,
   context,
 }: UiErrorReport) => {
-  addErrorLog(`${operation}: ${title}`, {
+  const logPayload = {
     operation,
     description,
     ...context,
     error: buildErrorDetails(error),
+  };
+
+  // Always log as error so the entry is captured even when the diagnostics
+  // overlay is open (addLog at warn level is suppressed by the overlay).
+  // The recoverableConnectivityIssue flag distinguishes transient failures
+  // from persistent defects so callers can filter or present them differently.
+  addErrorLog(`${operation}: ${title}`, {
+    ...logPayload,
+    ...(isRecoverableConnectivityError(description, error) ? { recoverableConnectivityIssue: true } : {}),
   });
 
   toast({

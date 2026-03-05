@@ -25,6 +25,7 @@ import { getActiveBaseUrl, updateHasChanges, loadInitialSnapshot } from '@/lib/c
 import { useConnectionState } from '@/hooks/useConnectionState';
 import { invalidateForConnectionSettingsChange } from '@/lib/query/c64QueryInvalidation';
 import { getInfoRefreshMinIntervalMs, shouldRunRateLimited } from '@/lib/query/c64PollingGovernance';
+import { addLog } from '@/lib/logging';
 
 export interface ConnectionStatus {
   state: 'UNKNOWN' | 'DISCOVERING' | 'REAL_CONNECTED' | 'DEMO_ACTIVE' | 'OFFLINE_NO_DEMO';
@@ -254,9 +255,14 @@ export function useC64AllConfig() {
       for (const cat of cats.categories) {
         try {
           configs[cat] = await api.getCategory(cat);
-        } catch (e) {
-          console.warn(`Failed to fetch category ${cat}:`, e);
+        } catch (catError) {
+          // Per-category failures are tolerated; callers can render partial config safely.
+          addLog('debug', 'Config category fetch failed; partial config in use', { category: cat, error: (catError as Error).message });
         }
+      }
+
+      if (cats.categories.length > 0 && Object.keys(configs).length === 0) {
+        throw new Error('Failed to fetch configuration data for all categories');
       }
 
       return configs;

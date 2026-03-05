@@ -107,14 +107,75 @@ Platform and interaction traces are secondary metadata only.
 
 Every run emits:
 
-- `fuzz-issue-report.json` (grouped, compact, machine-readable)
-- `fuzz-issue-summary.md` (short human summary)
+- `README.md` (canonical human report: header, classification summary, REAL / UNCERTAIN / EXPECTED sections)
+- `fuzz-issue-summary.md` (compact summary of REAL and UNCERTAIN issues for quick review)
+- `fuzz-issue-report.json` (grouped, compact, machine-readable; includes `classificationMeta` per group)
 
-Both are designed to be pasted directly into an LLM prompt.
+All three are designed to be pasted directly into an LLM prompt.
+
+### README.md structure
+
+```
+# Fuzz Test Summary
+Duration / Budget / Platforms / Shards / Sessions / Unique signatures
+
+## Issue Classification Summary
+- Total issues / REAL / UNCERTAIN / EXPECTED counts
+
+# REAL Issues        ← confirmed application defects
+# UNCERTAIN Issues   ← require investigation
+# EXPECTED Issues    ← fuzz-induced artifacts
+```
+
+Each issue entry uses this field order:
+
+```
+- Message
+- Domain
+- Confidence
+- Exception
+- Total
+- Severity
+- Platforms
+- Top frames
+- Explanation
+- Videos
+- Screenshots
+- Shards
+```
+
+### Classification
+
+Issues are classified by `scripts/fuzzClassifier.mjs` during report generation.
+Application log severity (WARN / ERROR) is never modified.
+Issue grouping signatures are unchanged.
+
+| Class | Meaning |
+|-------|---------|
+| REAL | Confirmed application defect (crash, freeze, TypeError/logic error) |
+| UNCERTAIN | Cannot be confidently classified; requires developer review |
+| EXPECTED | Fuzz artifact: fuzz infrastructure noise, chaos-induced network failure, device-op failure on mock server |
+
+Domains: `NETWORK`, `UI`, `DEVICE_ACTION`, `FILESYSTEM`, `FUZZ_INFRASTRUCTURE`, `BACKEND`, `UNKNOWN`
+
+`DEVICE_ACTION` also includes machine control failures such as `Machine pause/resume failed`,
+which are expected in fuzz/mock contexts when machine-control endpoints are unavailable.
+
+Stale-element interaction errors originating from the fuzz runner stack (for example
+`Element is not attached` with top frames in `playwright/fuzz/chaosRunner.fuzz.ts`) are treated as
+`FUZZ_INFRASTRUCTURE` and therefore classified as EXPECTED.
+
+Confidence levels: `HIGH`, `MEDIUM`, `LOW`
+
+**Chaos event evidence**: if the `lastInteractions` of an issue example contain `a=network-offline`,
+`a=connection-flap`, or `a=latency-spike`, classification confidence is raised to HIGH for EXPECTED network
+and device-action failures.
 
 ### LLM usage
 
-Paste `fuzz-issue-summary.md` first, then attach `fuzz-issue-report.json` for structured details. Ask the LLM to propose fixes per issue group ID, using the top frame and last interaction trace for context.
+Paste `fuzz-issue-summary.md` first for a compact overview, then attach `fuzz-issue-report.json` for
+structured details. Ask the LLM to propose fixes per issue group ID, using the top frame and last
+interaction trace for context.
 
 ## Reproducing issues
 
@@ -167,9 +228,9 @@ It contains:
 
 - `sessions/` (merged session logs)
 - `videos/` (merged videos)
-- `fuzz-issue-summary.md` (merged summary)
-- `README.md` (merged summary)
-- `fuzz-issue-report.json` (merged report)
+- `README.md` (classified human report with REAL / UNCERTAIN / EXPECTED sections)
+- `fuzz-issue-summary.md` (compact triage summary)
+- `fuzz-issue-report.json` (merged report with classificationMeta)
 
 Failing sessions are always retained. By default, the **last 10 successful sessions** are also kept.
 
