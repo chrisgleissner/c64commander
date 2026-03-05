@@ -429,12 +429,16 @@ export const classifyIssue = (group) => {
     }
 
     // --- UNCERTAIN: everything else ---
+    // This fallthrough fires for FILESYSTEM issues that don't match known fuzz patterns,
+    // UI issues that are not TypeErrors, and UNKNOWN domain issues.
 
     return {
         classification: 'UNCERTAIN',
         domain,
         confidence: domain === 'UNKNOWN' ? 'LOW' : 'MEDIUM',
-        explanation: null,
+        explanation:
+            `An issue in the ${domain} domain was detected that does not match any known fuzz-expected pattern. ` +
+            'Inspect the top stack frames and interaction log to determine whether this is a fuzz artifact or a genuine defect.',
     };
 };
 

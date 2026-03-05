@@ -385,7 +385,8 @@ const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
     if (durationMs > 2000) {
       attempts.push(['-ss', String(Math.max(0, Math.floor(durationMs / 2000)))]);
     }
-  } catch {
+  } catch (probeError) {
+    console.warn('[fuzz] Could not probe video duration for screenshot regeneration:', probeError);
     durationMs = null;
   }
 
@@ -406,7 +407,8 @@ const regenerateScreenshotFromVideo = async (videoPath, screenshotPath) => {
       if (!quality.isSingleColor && !quality.isMostlyBlack) {
         return quality;
       }
-    } catch {
+    } catch (extractError) {
+      console.warn('[fuzz] Screenshot extraction attempt failed (will try next seek position):', extractError);
       continue;
     }
   }
@@ -758,7 +760,10 @@ const mergeReports = async () => {
         const logLines = await fs.readFile(interactionLogAbsolutePath, 'utf8').then((raw) => raw
           .split(/\r?\n/g)
           .map((line) => line.trim())
-          .filter(Boolean)).catch(() => []);
+          .filter(Boolean)).catch((readError) => {
+          console.warn('[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:', interactionLogAbsolutePath, readError);
+          return [];
+        });
         activityCount = logLines.filter((line) => /\bs=\d+\s+a=/.test(line) && !line.includes('a=heartbeat')).length;
       }
 

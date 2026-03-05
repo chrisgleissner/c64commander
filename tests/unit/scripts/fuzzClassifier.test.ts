@@ -688,3 +688,80 @@ describe('classifyIssue: FUZZ_SELFTEST override', () => {
         expect(CONFIDENCE_LEVELS).toContain(result.confidence);
     });
 });
+
+describe('classifyIssue: UNCERTAIN fallthrough — non-null explanation (Bug D regression)', () => {
+    // Bug D: the final UNCERTAIN fallthrough previously returned explanation: null,
+    // leaving users with no actionable information on how to investigate the issue.
+    // Fixed: explanation is now always a non-empty string for all UNCERTAIN cases.
+
+    const makeGroup = (
+        message: string,
+        severityCounts: Record<string, number> = { errorLog: 1 },
+        lastInteractions: string[] = [],
+        exception = 'app.log.error',
+    ) => ({
+        issue_group_id: 'test-group',
+        signature: { message, exception, topFrames: [] },
+        severityCounts,
+        examples: [{ lastInteractions }],
+    });
+
+    it('UNKNOWN domain fallthrough has non-null explanation', () => {
+        const result = classifyIssue(makeGroup('Something entirely unrecognised happened'));
+        expect(result.classification).toBe('UNCERTAIN');
+        expect(result.domain).toBe('UNKNOWN');
+        expect(result.explanation).toBeTruthy();
+        expect(typeof result.explanation).toBe('string');
+    });
+
+    it('UNKNOWN domain fallthrough explanation mentions the domain name', () => {
+        const result = classifyIssue(makeGroup('Something entirely unrecognised happened'));
+        expect(result.explanation).toContain('UNKNOWN');
+    });
+
+    it('FILESYSTEM fallthrough (no known EXPECTED substring) has non-null explanation', () => {
+        // A filesystem-domain message that does NOT match any of the known EXPECTED substrings
+        // (HVSC paged folder, HVSC songlengths, HVSC progress, RAM dump) falls through to the
+        // generic UNCERTAIN return — which previously had explanation: null.
+        // 'disk image' triggers FILESYSTEM domain; it is not in the EXPECTED list.
+        const result = classifyIssue(makeGroup('disk image integrity failure'));
+        expect(result.classification).toBe('UNCERTAIN');
+        expect(result.domain).toBe('FILESYSTEM');
+        expect(result.explanation).toBeTruthy();
+        expect(typeof result.explanation).toBe('string');
+    });
+
+    it('FILESYSTEM fallthrough explanation mentions the FILESYSTEM domain', () => {
+        const result = classifyIssue(makeGroup('disk image integrity failure'));
+        expect(result.explanation).toContain('FILESYSTEM');
+    });
+
+    it('FILESYSTEM fallthrough confidence is MEDIUM (not LOW)', () => {
+        // FILESYSTEM is a known domain, so confidence should be MEDIUM rather than LOW
+        const result = classifyIssue(makeGroup('disk image integrity failure'));
+        expect(result.confidence).toBe('MEDIUM');
+    });
+
+    it('explanation always non-null for every domain in the fallthrough set', () => {
+        // Exhaustive check: all reachable fallthrough cases now return a non-null explanation
+        const fallThroughCases = [
+            makeGroup('Something entirely unrecognised happened'),  // UNKNOWN domain
+            makeGroup('disk image integrity failure'),              // FILESYSTEM domain (no known EXPECTED substr)
+        ];
+        for (const group of fallThroughCases) {
+            const result = classifyIssue(group);
+            expect(result.explanation).toBeTruthy();
+        }
+    });
+
+    it('BACKEND and NETWORK UNCERTAIN cases also have non-null explanation (regression guard)', () => {
+        // These were already non-null before the fix; ensure they remain so
+        const backendResult = classifyIssue(makeGroup('JSON parse error in config response', { errorLog: 2 }));
+        expect(backendResult.classification).toBe('UNCERTAIN');
+        expect(backendResult.explanation).toBeTruthy();
+
+        const networkResult = classifyIssue(makeGroup('ECONNREFUSED to device', { errorLog: 1 }, []));
+        expect(networkResult.classification).toBe('UNCERTAIN');
+        expect(networkResult.explanation).toBeTruthy();
+    });
+});

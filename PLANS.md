@@ -482,3 +482,55 @@ All seeds: UNCLASSIFIED=0, reporter never crashed ✅
 | Markdown robustness (sanitizeMarkdownText + 27 unit tests) | ✅ |
 | Selftest (FUZZ_SELFTEST=1 → REAL≥1 with correct ID) | ✅ |
 | Fuzz sanity (5 seeds × 10m + 30m budget, UNCLASSIFIED=0 throughout) | ✅ |
+
+---
+
+## Phase 3 — Deep Code Audit (MANDATORY exception handling + classifier correctness)
+
+### Bugs found
+
+**Bug A+B (MANDATORY violation)** — `regenerateScreenshotFromVideo` in `scripts/run-fuzz.mjs`
+
+Two bare `catch {}` blocks with no logging:
+1. `catch { durationMs = null; }` (line ~388): ffprobe failure during screenshot regeneration was silently swallowed. If the video probe failed, the fact was invisible — the function simply skipped the mid-video seek attempt without any trace.
+2. `catch { continue; }` (line ~409): ffmpeg frame extraction failure was silently swallowed. Each extraction attempt that failed left no diagnostic information.
+
+**Bug C (MANDATORY violation)** — interaction log read in `scripts/run-fuzz.mjs`
+
+`.catch(() => [])` on `fs.readFile` for the interaction log: if an I/O error occurred reading the log (e.g., corrupted file, transient FS error), `logLines` became `[]`, `activityCount` became 0, and the session was silently dropped as "insufficient-activities". The log file had already been validated to exist via `ensureFile`, but a second-phase I/O failure after that check would be completely invisible.
+
+**Bug D (classifier correctness)** — UNCERTAIN fallthrough in `scripts/fuzzClassifier.mjs`
+
+The final `return { ..., explanation: null }` in `classifyIssue` fires for:
+- FILESYSTEM domain with messages that don't match any of the four known EXPECTED substrings (e.g., `"disk image integrity failure"`)
+- UNKNOWN domain issues
+
+With `explanation: null`, the rendered report entry had no explanation at all — users had no guidance on why the issue was UNCERTAIN or what to investigate. For UNKNOWN/LOW confidence issues this was especially problematic.
+
+### Fixes applied
+
+**C8 — `scripts/run-fuzz.mjs`: log errors in `regenerateScreenshotFromVideo`**
+- `catch { durationMs = null; }` → `catch (probeError) { console.warn('[fuzz] Could not probe video duration for screenshot regeneration:', probeError); durationMs = null; }`
+- `catch { continue; }` → `catch (extractError) { console.warn('[fuzz] Screenshot extraction attempt failed (will try next seek position):', extractError); continue; }`
+
+**C9 — `scripts/run-fuzz.mjs`: log error in interaction log read catch**
+- `.catch(() => [])` → `.catch((readError) => { console.warn('[fuzz] Interaction log read failed — activity count will be 0, session may be dropped:', interactionLogAbsolutePath, readError); return []; })`
+
+**C10 — `scripts/fuzzClassifier.mjs`: non-null explanation for UNCERTAIN fallthrough**
+- Changed `explanation: null` to a domain-specific generic explanation mentioning the domain name and directing users to inspect stack frames and the interaction log.
+- Tests: 7 regression tests added in `fuzzClassifier.test.ts`:
+  - UNKNOWN domain fallthrough has non-null explanation
+  - UNKNOWN domain fallthrough explanation mentions the domain name
+  - FILESYSTEM fallthrough has non-null explanation (MEDIUM confidence)
+  - FILESYSTEM fallthrough explanation mentions 'FILESYSTEM'
+  - FILESYSTEM fallthrough confidence is MEDIUM (not LOW)
+  - Explanation always non-null for all fallthrough cases
+  - BACKEND and NETWORK explanation non-null (regression guard that these were already correct)
+
+### Post-fix state
+
+- `npm run lint`: ✅ 0 errors
+- `npm run test`: ✅ 2992 tests (86 fuzzClassifier + 134 fuzzReportUtils = 220 in fuzz test files)
+- `npm run build`: ✅ clean
+- `npm run test:coverage`: ✅ branch 90.22% ≥ 90%
+
