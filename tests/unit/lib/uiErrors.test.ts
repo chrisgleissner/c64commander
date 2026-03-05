@@ -122,7 +122,7 @@ describe('uiErrors', () => {
     });
   });
 
-  it('downgrades recoverable connectivity errors to warn logs', () => {
+  it('uses error log with recoverableConnectivityIssue flag for connectivity errors', () => {
     reportUserError({
       operation: 'HOME_CPU_SPEED',
       title: 'Update failed',
@@ -130,11 +130,10 @@ describe('uiErrors', () => {
       error: new Error('HTTP 503: Service Unavailable'),
     });
 
-    expect(addErrorLog).not.toHaveBeenCalled();
-    expect(addLog).toHaveBeenCalledWith(
-      'warn',
+    expect(addErrorLog).toHaveBeenCalledWith(
       'HOME_CPU_SPEED: Update failed',
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
+    expect(addLog).not.toHaveBeenCalledWith('warn', expect.anything(), expect.anything());
   });
 });

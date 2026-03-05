@@ -49,7 +49,7 @@ describe('reportUserError', () => {
     }));
   });
 
-  it('uses warn log for recoverable connectivity errors', () => {
+  it('uses error log with recoverableConnectivityIssue flag for connectivity errors', () => {
     reportUserError({
       operation: 'HOME_ACTION',
       title: 'Error',
@@ -57,11 +57,10 @@ describe('reportUserError', () => {
       error: new Error('Host unreachable'),
     });
 
-    expect(addErrorLog).not.toHaveBeenCalled();
-    expect(addLog).toHaveBeenCalledWith(
-      'warn',
+    expect(addErrorLog).toHaveBeenCalledWith(
       'HOME_ACTION: Error',
       expect.objectContaining({ recoverableConnectivityIssue: true }),
     );
+    expect(addLog).not.toHaveBeenCalledWith('warn', expect.anything(), expect.anything());
   });
 });

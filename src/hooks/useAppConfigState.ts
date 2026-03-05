@@ -70,7 +70,14 @@ const fetchAllConfig = async () => {
     }
   }
 
-  if (failedCategories.length > 0 && Object.keys(configs).length === 0) {
+  const hasFailures = failedCategories.length > 0;
+  const hasSuccesses = Object.keys(configs).length > 0;
+
+  if (hasFailures && hasSuccesses) {
+    // Partial failure: some categories loaded — log a summary so operators
+    // can diagnose incomplete config snapshots without noisy per-category spam.
+    addLog('debug', `Config fetch partially failed: ${failedCategories.join(', ')} unavailable (using partial snapshot)`, { failedCategories });
+  } else if (hasFailures && !hasSuccesses) {
     throw new Error(`Failed to fetch configuration categories: ${failedCategories.join(', ')}`);
   }
 
