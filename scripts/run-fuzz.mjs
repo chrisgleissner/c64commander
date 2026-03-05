@@ -3,7 +3,8 @@ import os from 'node:os';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { sortIssueGroups, videoMarkdownLink } from './fuzzReportUtils.mjs';
+import { sortIssueGroups, renderReadme, renderSummary } from './fuzzReportUtils.mjs';
+import { classifyAllIssues } from './fuzzClassifier.mjs';
 
 const args = process.argv.slice(2);
 
@@ -594,45 +595,43 @@ const mergeReports = async () => {
   };
 
   await fs.mkdir(outputRoot, { recursive: true });
-  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
 
-  const summaryLines = ['# Fuzz Test Summary', ''];
-  if (!merged.issueGroups.length) {
-    summaryLines.push('No issues detected.');
-  } else {
-    // Sort deterministically: total count descending, issue_group_id ascending for ties.
-    const sortedGroups = sortIssueGroups(merged.issueGroups);
-    for (const group of sortedGroups) {
-      const totalCount = Object.values(group.severityCounts || {}).reduce((sum, value) => sum + (value || 0), 0);
-      const examples = group.examples || [];
-      const exampleVideos = examples.map((example) => example.video).filter(Boolean).slice(0, 3);
-      const exampleScreens = examples.map((example) => example.screenshot).filter(Boolean).slice(0, 3);
-      summaryLines.push(`## ${group.issue_group_id}`);
-      summaryLines.push('');
-      summaryLines.push(`- Exception: ${group.signature?.exception || 'n/a'}`);
-      summaryLines.push(`- Message: ${group.signature?.message || 'n/a'}`);
-      summaryLines.push(`- Top frames: ${(group.signature?.topFrames || []).join(' | ') || 'n/a'}`);
-      summaryLines.push(`- Total: ${totalCount}`);
-      summaryLines.push(
-        `- Severity: crash=${group.severityCounts.crash || 0} freeze=${group.severityCounts.freeze || 0} error=${group.severityCounts.errorLog || 0} warn=${group.severityCounts.warnLog || 0}`,
-      );
-      summaryLines.push(`- Platforms: ${(group.platforms || []).join(', ')}`);
-      if (exampleVideos.length) {
-        const videoLinks = exampleVideos.map((video, i) => {
-          const example = examples.filter((e) => e.video).at(i);
-          return videoMarkdownLink(video, example?.sessionOffsetMs);
-        });
-        summaryLines.push(`- Videos: ${videoLinks.join(', ')}`);
-      }
-      if (exampleScreens.length) {
-        summaryLines.push(`- Screenshots: ${exampleScreens.map((shot) => `[${shot}](${shot})`).join(', ')}`);
-      }
-      summaryLines.push('');
+  // Sort deterministically: total count descending, issue_group_id ascending for ties.
+  const sortedGroups = sortIssueGroups(merged.issueGroups);
+
+  // Classify all issue groups into REAL / UNCERTAIN / EXPECTED.
+  const classificationMap = classifyAllIssues(sortedGroups);
+
+  // Enrich fuzz-issue-report.json with classificationMeta per issue group.
+  for (const group of merged.issueGroups) {
+    const cls = classificationMap.get(group.issue_group_id);
+    if (cls) {
+      group.classificationMeta = {
+        classification: cls.classification,
+        domain: cls.domain,
+        confidence: cls.confidence,
+        explanation: cls.explanation,
+      };
     }
   }
 
-  const summaryContent = summaryLines.join('\n');
-  await fs.writeFile(path.join(outputRoot, 'README.md'), summaryContent, 'utf8');
+  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
+
+  const reportMeta = {
+    platform: platform || env.FUZZ_PLATFORM || 'android-phone',
+    shardTotal: concurrency,
+    sessions,
+    timeBudgetMs: budgetMs || null,
+    durationTotalMs: durationTotalMs || 0,
+  };
+
+  // Write human-readable README with header, classification summary, and three sections.
+  const readmeContent = renderReadme(reportMeta, sortedGroups, classificationMap);
+  await fs.writeFile(path.join(outputRoot, 'README.md'), readmeContent, 'utf8');
+
+  // Write compact fuzz-issue-summary.md for quick review and LLM consumption.
+  const summaryContent = renderSummary(reportMeta, sortedGroups, classificationMap);
+  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-summary.md'), summaryContent, 'utf8');
 
   const runMetrics = {
     meta: {
@@ -670,6 +669,7 @@ const mergeReports = async () => {
     'sessions',
     'videos',
     'fuzz-issue-report.json',
+    'fuzz-issue-summary.md',
     'README.md',
     'fuzz-run-metrics.json',
     'visual-stagnation-report.json',
@@ -1060,18 +1060,9 @@ const mergeReports = async () => {
   await fs.writeFile(path.join(outputRoot, 'fuzz-run-metrics.json'), JSON.stringify(qualifiedRunMetrics, null, 2), 'utf8');
   await fs.writeFile(path.join(outputRoot, 'visual-stagnation-report.json'), JSON.stringify(qualifiedVisualStagnationReport, null, 2), 'utf8');
 
-  const mergedIssueReportPath = path.join(outputRoot, 'fuzz-issue-report.json');
-  try {
-    const rawReport = await fs.readFile(mergedIssueReportPath, 'utf8');
-    const parsedReport = JSON.parse(rawReport);
-    if (parsedReport?.meta && typeof parsedReport.meta === 'object') {
-      parsedReport.meta.sessions = qualifiedSessions.length;
-      parsedReport.meta.totalSteps = qualifiedTotalSteps;
-    }
-    await fs.writeFile(mergedIssueReportPath, JSON.stringify(parsedReport, null, 2), 'utf8');
-  } catch (error) {
-    throw new Error(`Failed to rewrite merged issue report with qualified session stats: ${(error && error.message) || 'unknown'}`);
-  }
+  merged.meta.sessions = qualifiedSessions.length;
+  merged.meta.totalSteps = qualifiedTotalSteps;
+  await fs.writeFile(path.join(outputRoot, 'fuzz-issue-report.json'), JSON.stringify(merged, null, 2), 'utf8');
 
   return { parseErrors };
 };

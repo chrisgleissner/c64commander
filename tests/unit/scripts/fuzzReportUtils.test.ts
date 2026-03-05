@@ -11,6 +11,7 @@ import {
     formatFuzzTimestamp,
     videoMarkdownLink,
     sortIssueGroups,
+    renderIssueEntry,
 } from '../../../scripts/fuzzReportUtils.mjs';
 
 describe('formatFuzzTimestamp', () => {
@@ -128,15 +129,106 @@ describe('sortIssueGroups', () => {
     });
 });
 
-describe('fuzz-issue-summary.md no longer generated', () => {
-    it('run-fuzz.mjs does not reference fuzz-issue-summary.md as an output', async () => {
+describe('fuzz-issue-summary.md is generated as compact summary', () => {
+    it('run-fuzz.mjs references fuzz-issue-summary.md as an output', async () => {
         const { readFileSync } = await import('node:fs');
         const { fileURLToPath } = await import('node:url');
         const { resolve, dirname } = await import('node:path');
         const dir = dirname(fileURLToPath(import.meta.url));
         const src = readFileSync(resolve(dir, '../../../scripts/run-fuzz.mjs'), 'utf8');
-        // The file must not write 'fuzz-issue-summary.md'
-        const writePattern = /writeFileSync[^)]*fuzz-issue-summary\.md/;
-        expect(writePattern.test(src)).toBe(false);
+        // The file must write 'fuzz-issue-summary.md'
+        expect(src).toContain('fuzz-issue-summary.md');
+    });
+});
+
+describe('renderIssueEntry', () => {
+    const baseGroup = {
+        issue_group_id: 'app.log.error@test-abc123',
+        signature: { exception: 'app.log.error', message: 'C64 API request failed', topFrames: ['src/lib/c64api.ts:42'] },
+        severityCounts: { crash: 0, freeze: 0, errorLog: 7, warnLog: 0 },
+        platforms: ['android-phone'],
+        examples: [],
+    };
+    const baseCls = { domain: 'NETWORK', confidence: 'HIGH', explanation: 'Network disruption.' };
+
+    it('starts with issue_group_id as h2 heading', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        expect(lines[0]).toBe('## app.log.error@test-abc123');
+    });
+
+    it('Message appears before Exception', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        const msgIdx = lines.findIndex((l: string) => l.startsWith('- Message:'));
+        const excIdx = lines.findIndex((l: string) => l.startsWith('- Exception:'));
+        expect(msgIdx).toBeGreaterThan(-1);
+        expect(excIdx).toBeGreaterThan(-1);
+        expect(msgIdx).toBeLessThan(excIdx);
+    });
+
+    it('Domain appears before Exception', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        const domIdx = lines.findIndex((l: string) => l.startsWith('- Domain:'));
+        const excIdx = lines.findIndex((l: string) => l.startsWith('- Exception:'));
+        expect(domIdx).toBeLessThan(excIdx);
+    });
+
+    it('Confidence appears when provided', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Confidence: HIGH'))).toBe(true);
+    });
+
+    it('Explanation appears when provided', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Explanation:'))).toBe(true);
+    });
+
+    it('Explanation is omitted when null', () => {
+        const lines = renderIssueEntry(baseGroup, { domain: 'UNKNOWN', confidence: 'LOW', explanation: null });
+        expect(lines.some((l: string) => l.startsWith('- Explanation:'))).toBe(false);
+    });
+
+    it('Videos line is omitted when no examples have videos', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Videos:'))).toBe(false);
+    });
+
+    it('Videos line is included when example has video', () => {
+        const group = {
+            ...baseGroup,
+            examples: [{ video: 'videos/session-1.webm', screenshot: undefined, sessionOffsetMs: 5000 }],
+        };
+        const lines = renderIssueEntry(group, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Videos:'))).toBe(true);
+        expect(lines.some((l: string) => l.includes('01:23') || l.includes('00:05'))).toBe(true);
+    });
+
+    it('Screenshots line is included when example has screenshot', () => {
+        const group = {
+            ...baseGroup,
+            examples: [{ screenshot: 'screenshots/s1.png' }],
+        };
+        const lines = renderIssueEntry(group, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Screenshots:'))).toBe(true);
+    });
+
+    it('Shards line is included when example has shardIndex', () => {
+        const group = {
+            ...baseGroup,
+            examples: [{ shardIndex: 2 }],
+        };
+        const lines = renderIssueEntry(group, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Shards:'))).toBe(true);
+        expect(lines.some((l: string) => l.includes('2'))).toBe(true);
+    });
+
+    it('Shards line is omitted when no shardIndex present', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        expect(lines.some((l: string) => l.startsWith('- Shards:'))).toBe(false);
+    });
+
+    it('total count is sum of severityCounts', () => {
+        const lines = renderIssueEntry(baseGroup, baseCls);
+        const totalLine = lines.find((l: string) => l.startsWith('- Total:'));
+        expect(totalLine).toBe('- Total: 7');
     });
 });
